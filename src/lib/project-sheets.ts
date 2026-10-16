@@ -5,7 +5,7 @@
 import { randomUUID } from "crypto"
 import prisma from "@/lib/prisma"
 import { checkProjectAccess } from "@/lib/rbac"
-import type { ProjectRole } from "@/generated/prisma/client"
+import type { Prisma, ProjectRole } from "@/generated/prisma/client"
 import {
   detectInput, isFormulaCell, isTypedCell, parseDateText, parseLocaleNumber, serialToIso,
   type FormulaCell, type TypedCell,
@@ -693,7 +693,7 @@ export async function ensureProjectSheet(projectId: string, userId?: string | nu
   })
 }
 
-type AccessOk = { allowed: true; sheet: { id: string; projectId: string; name: string; columns: SheetColumn[]; settings: SheetSettings } }
+type AccessOk = { allowed: true; sheet: { id: string; projectId: string; name: string; columns: SheetColumn[]; settings: SheetSettings; structureVersion: number } }
 type AccessNo = { allowed: false; status: 403 | 404; error: string }
 
 /**
@@ -711,7 +711,7 @@ export async function resolveSheetAccess(
   await ensureSheetFormattingColumns()
   const sheet = await prisma.projectSheet.findUnique({
     where: { id: sheetId },
-    select: { id: true, projectId: true, name: true, columns: true, settings: true },
+    select: { id: true, projectId: true, name: true, columns: true, settings: true, structureVersion: true },
   })
   if (!sheet) return { allowed: false, status: 404, error: "Sheet-nya nggak ketemu." }
   const { allowed } = await checkProjectAccess(userId, sheet.projectId, roles)
@@ -752,7 +752,11 @@ export function readColumns(raw: unknown): SheetColumn[] {
  * Columns arriving without an id are new — the SERVER mints it, never the client, because that id
  * becomes a permanent key inside every row's `cells`.
  */
-export function normalizeColumns(raw: unknown, existing: SheetColumn[]): { columns: SheetColumn[] } | { error: string } {
+export function normalizeColumns(
+  raw: unknown,
+  existing: SheetColumn[],
+  opts: { keepMissing?: boolean; dropIds?: ReadonlySet<string> } = {},
+): { columns: SheetColumn[] } | { error: string } {
   if (!Array.isArray(raw)) return { error: "columns harus berupa array." }
   if (raw.length > MAX_COLUMNS) return { error: `Maksimal ${MAX_COLUMNS} kolom.` }
 
@@ -766,6 +770,8 @@ export function normalizeColumns(raw: unknown, existing: SheetColumn[]): { colum
     const name = String(o.name ?? "").trim()
     const type = SHEET_COLUMN_TYPES.includes(o.type as SheetColumnType) ? (o.type as SheetColumnType) : "text"
     const id = typeof o.id === "string" && o.id ? o.id : `c_${randomUUID().slice(0, 12)}`
+    // A column someone deleted while this client still showed it: not brought back (keepMissing mode).
+    if (opts.dropIds?.has(id)) continue
     if (seen.has(id)) return { error: "Ada id kolom yang dobel." }
     seen.add(id)
     out.push({
@@ -787,10 +793,53 @@ export function normalizeColumns(raw: unknown, existing: SheetColumn[]): { colum
   // Dropping a column also has to wipe its values from every row, so it goes through the explicit
   // DELETE route. Silently accepting a shorter array here would orphan data instead.
   const missing = existing.filter((c) => !seen.has(c.id))
+  if (missing.length && opts.keepMissing) {
+    // A client that sent no structureVersion (an app from before 16 Oct 2026) and did not have these
+    // columns yet — someone added them while it was open (race audit H6). They go back at their place.
+    for (const c of missing) {
+      if (out.length >= MAX_COLUMNS) break
+      out.splice(Math.min(existing.indexOf(c), out.length), 0, c)
+    }
+    return { columns: out }
+  }
   if (missing.length) {
     return { error: `Kolom "${missing[0].name}" nggak bisa dihapus dari sini — pakai tombol hapus kolom.` }
   }
   return { columns: out }
+}
+
+// ── Concurrent structure writes (race audit 16 Oct 2026, H6) ────────────────────────────────────────
+
+/** What a structure writer re-reads under the sheet's row lock. */
+export type LockedSheet = { id: string; projectId: string; name: string; columns: SheetColumn[]; settings: SheetSettings; structureVersion: number }
+
+/**
+ * SELECT … FOR UPDATE on the sheet, inside the caller's transaction: every writer of `columns` /
+ * `settings` (structure PATCH, column delete, import, the Audit restore of a column) takes it, so each
+ * one starts from what the previous one committed instead of from the copy it read before. null when
+ * the sheet is gone.
+ */
+export async function lockSheetStructure(tx: Prisma.TransactionClient, sheetId: string): Promise<LockedSheet | null> {
+  const rows = await tx.$queryRaw<{ id: string; projectId: string; name: string; columns: unknown; settings: unknown; structureVersion: number }[]>`
+    SELECT "id", "projectId", "name", "columns", "settings", "structureVersion" FROM "ProjectSheet" WHERE "id" = ${sheetId} FOR UPDATE`
+  const r = rows[0]
+  if (!r) return null
+  return { ...r, columns: readColumns(r.columns), settings: readSheetSettings(r.settings), structureVersion: Number(r.structureVersion) }
+}
+
+/** The 409 a structure write gets when it was based on columns someone else has changed since. */
+export const SHEET_STRUCTURE_CHANGED = {
+  code: "SHEET_STRUCTURE_CHANGED",
+  error: "Someone else changed this sheet's columns just now. The latest version is shown; please make your change again.",
+} as const
+
+/**
+ * One lock per sheet for everything that PICKS ROW POSITIONS (insert, move, sort, renumber): two appends
+ * that read the same "last position" both took last + 1, and the rows' order was then a tie (race audit
+ * H6, the row position lock). Cell writes never take it.
+ */
+export async function lockSheetRows(tx: Prisma.TransactionClient, sheetId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sheetrows|${sheetId}`})::int8)`
 }
 
 /**

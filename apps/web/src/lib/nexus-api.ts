@@ -215,6 +215,8 @@ export type NexusSheetRow = {
 export type NexusSheet = {
   id: string; projectId: string; name: string;
   columns: NexusSheetColumn[];
+  /** Bumped by every column write; sent back with a columns PATCH (409 SHEET_STRUCTURE_CHANGED when stale). */
+  structureVersion?: number;
   settings?: NexusSheetSettings;
   rows: NexusSheetRow[];
   /** Resolved server-side — never re-derive role rules in the client. */
@@ -3102,8 +3104,8 @@ export const nexusApi = {
   createSheet: (projectId: string, name?: string) =>
     apiFetch<{ id: string; name: string; position: number }>(`/api/projects/${projectId}/sheets`, { method: "POST", body: JSON.stringify({ name }) }),
   deleteSheet: (sheetId: string) => apiFetch<{ ok: true }>(`/api/sheets/${sheetId}`, { method: "DELETE" }),
-  updateSheet: (sheetId: string, payload: { name?: string; columns?: NexusSheetColumn[]; settings?: { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null } }) =>
-    apiFetch<{ id: string; name: string; columns: NexusSheetColumn[]; settings: NexusSheetSettings }>(`/api/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateSheet: (sheetId: string, payload: { name?: string; columns?: NexusSheetColumn[]; structureVersion?: number; settings?: { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null } }) =>
+    apiFetch<{ id: string; name: string; columns: NexusSheetColumn[]; settings: NexusSheetSettings; structureVersion?: number }>(`/api/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   /** Per-cell formatting: { rowId, values: { [columnId]: style | null } }[]. One request (≤ 500 rows). */
   setSheetStyles: (sheetId: string, styles: { rowId: string; values: Record<string, NexusSheetCellStyle | null> }[]) =>
     apiFetch<{ updated: number; rows: NexusSheetRow[] }>(`/api/sheets/${sheetId}/cells`, { method: "PATCH", body: JSON.stringify({ styles }) }),
