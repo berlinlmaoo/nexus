@@ -12,7 +12,7 @@ class PeopleTest {
 
     @Test fun competitionRanksTiesByNameAndSearch() {
         // 1, 1, 1, 4 (web competition-rank.ts); inside a tie by name A–Z.
-        val r = PeopleLogic.ranks(listOf(BoardRow("z", "Zaki", totalXp = 1000), BoardRow("a", "ani", totalXp = 1000), BoardRow("b", "Budi", totalXp = 1000), BoardRow("d", "Dewi", totalXp = 500)))
+        val r = PeopleLogic.ranks(listOf(BoardRow("z", "Zara", totalXp = 1000), BoardRow("a", "ani", totalXp = 1000), BoardRow("b", "Budi", totalXp = 1000), BoardRow("d", "Dewi", totalXp = 500)))
         assertEquals(listOf(1 to "a", 1 to "b", 1 to "z", 4 to "d"), r.map { it.first to it.second.userId })
         // Search keeps the board's ranks.
         assertEquals(listOf(4 to "d"), PeopleLogic.search(r, " dew ").map { it.first to it.second.userId })

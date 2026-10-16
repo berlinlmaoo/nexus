@@ -11,8 +11,8 @@ import {
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 
 /**
- * System messages: the log lines a GROUP keeps of its own changes, like WhatsApp's "Najmi added
- * ~Yuda" (SYSTEM-MESSAGES contract, owner 8 Oct 2026). Written at exactly four points, each in the
+ * System messages: the log lines a GROUP keeps of its own changes, like WhatsApp's "Nadia added
+ * ~Yoga" (SYSTEM-MESSAGES contract, owner 8 Oct 2026). Written at exactly four points, each in the
  * same transaction as the change it records:
  *
  *   POST   /api/conversations                 type GROUP   → group_created

@@ -144,8 +144,8 @@ class CalendarCoreTest {
 
     @Test fun filters() {
         val all = items("2026-09-18", "bod")
-        val hary = person("Person 19")
-        val ctx = CalendarCore.FilterContext(ix, hary.userId, hary.homeUnitIds, today, now, window)
+        val viewer = person("Person 19")
+        val ctx = CalendarCore.FilterContext(ix, viewer.userId, viewer.homeUnitIds, today, now, window)
         fun f(x: CalendarCore.Filters) = CalendarCore.filterItems(all, x, ctx).size
         val none = CalendarCore.NO_FILTERS
         assertEquals(8, f(none))

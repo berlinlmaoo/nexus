@@ -6,7 +6,7 @@ import { isMonth, outletToday } from "@/lib/outlet-sales"
 import { canManageOutletTargets, loadOutletMonth, outletGate } from "@/lib/outlet-sales-server"
 
 /**
- * An Outlet Sales Dashboard project's month (owner, 10 Oct 2026, for Ryan): the month's target and
+ * An Outlet Sales Dashboard project's month (owner, 10 Oct 2026, for the outlet team): the month's target and
  * summary (sales / pax vs target), its events with their reports, older nights still waiting for a
  * report, and the default form. `?month=YYYY-MM`, default this month (WIB). Spec:
  * ~/handoff/chat/OUTLET-SALES.md.

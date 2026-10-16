@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * Outlet Sales Dashboard, owner's revisions of 14 Oct 2026 (after the meeting with Ryan): the per-outlet
+ * Outlet Sales Dashboard, owner's revisions of 14 Oct 2026 (after the meeting with the outlet team): the per-outlet
  * report breakdown (sums, archive instead of delete, the mapping to the seven original columns that released
  * apps send and read) and the daily targets (a date's own target, else the month's share, per metric).
  */

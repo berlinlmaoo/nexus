@@ -7,7 +7,7 @@ import type { OutletGuestLine, OutletGuests } from "@/lib/outlet-sales-api";
 import { count, monthLabel } from "./outlet-ui";
 
 /**
- * The Overview's Guest overview (owner, 14 Oct 2026, after a meeting with Ryan): for the month shown, RSVP
+ * The Overview's Guest overview (owner, 14 Oct 2026, after a meeting with the outlet team): for the month shown, RSVP
  * total with its items, Hosting total with its items, and Communities — the grand total and each
  * community's, a Breakdown community opening onto its own items. The numbers are the server's
  * (summarizeGuests in lib/outlet-sales.ts); the items and their order are the outlet's Report settings.

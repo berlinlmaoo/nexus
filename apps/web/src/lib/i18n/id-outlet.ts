@@ -1,8 +1,8 @@
 /**
- * English → Indonesian for the Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan; components/outlet-sales).
+ * English → Indonesian for the Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team; components/outlet-sales).
  * Keys must be unique across all id-*.ts files (i18n.test.mjs). The form's questions are not here: they come
- * from the server in both languages (lib/outlet-sales.ts OUTLET_FORM), in Ryan's words. Sales, Pax, RSVP and
- * Hosting stay as Ryan wrote them.
+ * from the server in both languages (lib/outlet-sales.ts OUTLET_FORM), in the outlet team's words. Sales, Pax, RSVP and
+ * Hosting stay as the outlet team wrote them.
  */
 export const ID_OUTLET: Record<string, string> = {
   // Picking the type
@@ -97,7 +97,7 @@ export const ID_OUTLET: Record<string, string> = {
   "It goes back to its outlet with its whole report, and counts in its month's totals again.":
     "Kembali ke outlet-nya dengan laporan lengkap, dan dihitung lagi di total bulannya.",
 
-  // Owner's revisions after the meeting with Ryan (14 Oct 2026): report settings, guest overview, daily targets
+  // Owner's revisions after the meeting with the outlet team (14 Oct 2026): report settings, guest overview, daily targets
   "Report settings": "Pengaturan laporan",
   "Guests · {month}": "Tamu · {month}",
   "No guest numbers for {month} yet": "Belum ada angka tamu untuk {month}",

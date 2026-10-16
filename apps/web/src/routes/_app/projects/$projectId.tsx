@@ -221,7 +221,7 @@ const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"] 
 const SPECIAL_TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   // A Pipeline Dashboard project's main view (owner, 9 Oct 2026); task projects never show it.
   { id: "pipeline", label: "Pipeline", icon: Filter },
-  // An Outlet Sales Dashboard project's views (owner, 10 Oct 2026, for Ryan); one OutletSalesView behind them.
+  // An Outlet Sales Dashboard project's views (owner, 10 Oct 2026, for the outlet team); one OutletSalesView behind them.
   { id: "os-overview", label: "Overview", icon: Activity },
   { id: "os-calendar", label: "Calendar", icon: CalIcon },
   { id: "os-board", label: "Board", icon: LayoutGrid },

@@ -12,9 +12,13 @@ object NexusConfig {
     const val LAN_HOST = "lan.nexus.znetworks.id"
     const val PUBLIC_BASE = "https://$PUBLIC_HOST"
 
-    /** The redesign's DEV server (DEV-REDESIGN.md, 12 Oct 2026): Tailscale only, a copy of the prod database. */
-    const val DEV_HOST = "nexus-prod.tail765d02.ts.net"
-    const val DEV_BASE = "https://$DEV_HOST:8443"
+    /**
+     * The redesign's DEV server (DEV-REDESIGN.md, 12 Oct 2026): private network only, a copy of the prod database.
+     * Its host comes from the build (gradle property `nexusDevHost`, see README); the committed default is a
+     * placeholder that never resolves.
+     */
+    val DEV_HOST: String = BuildConfig.DEV_HOST
+    val DEV_BASE: String = "https://$DEV_HOST:8443"
 
     /**
      * Which server this process talks to. Read once at start (ServerEnvStore.load, before the

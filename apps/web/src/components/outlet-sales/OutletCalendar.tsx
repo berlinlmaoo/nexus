@@ -22,9 +22,9 @@ function monthDays(month: string): string[] {
 }
 
 /**
- * The outlet's month (Ryan, 10 Oct 2026: "ketika pencet sebuah tanggal, di bawah muncul details"): a
+ * The outlet's month (the outlet team, 10 Oct 2026: "ketika pencet sebuah tanggal, di bawah muncul details"): a
  * Monday-first grid with each day's events (names on a wide screen, dots on a phone, coloured by status),
- * and below it the chosen day's events in Ryan's order, each with Fill / Edit report. A day of the
+ * and below it the chosen day's events in the outlet team's order, each with Fill / Edit report. A day of the
  * previous or next month switches to that month.
  */
 export function OutletCalendar({

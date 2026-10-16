@@ -98,7 +98,7 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   if (vals.length === 0) return null;
   if (def.kind === "date") {
     // A date field holding a name, not a date: Notion imports filled "Request by" (a Created-time field) with
-    // who asked. That name is text, not a NEXUS person: it reads "Request by: Sifal" with the text glyph, never as
+    // who asked. That name is text, not a NEXUS person: it reads "Request by: Sinta" with the text glyph, never as
     // an assignee-looking chip (UI tour run 19, R19-WB-2, decision 5: the person glyph is for real people only).
     if (Number.isNaN(new Date(vals[0]).getTime())) return <TextProp label={def.label} value={vals[0]} />;
     const overdue = def.key === "due" && !isDoneStatus(task.status) && new Date(vals[0]).getTime() < new Date().setHours(0, 0, 0, 0);
@@ -149,7 +149,7 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}>{vals[0]}</span>;
 }
 
-/** A text property on a card: its field name and the text, with the text glyph ("Request by: Sifal"), so it never
+/** A text property on a card: its field name and the text, with the text glyph ("Request by: Sinta"), so it never
  *  reads as a person (UI tour run 19, R19-WB-2, decision 5). */
 function TextProp({ label, value }: { label: string; value: string }) {
   return (
@@ -266,7 +266,7 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
     <>
       {lead}
       {/* Any other date names its field ("Request by: 24 May"): beside the due date's clock a second bare date
-          could not be told apart (UI tour run 19, R19-WD-4). With a colon, as a text property's "Request by: Sifal"
+          could not be told apart (UI tour run 19, R19-WD-4). With a colon, as a text property's "Request by: Sinta"
           (one pattern, UI tour run 20, R20-WD-8). */}
       {shownOthers.map((text) => (
         // The one part that gives way in a narrow slot: its field name truncates, never the due date and its clock

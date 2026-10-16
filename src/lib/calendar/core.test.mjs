@@ -94,7 +94,7 @@ test("18 Sep (owner 12 Oct 2026): the 3 tasks without a PIC are gone; FA 4 (PM 1
   assert.equal(inUnit("PATS Entertainment"), 0)
   assert.equal(inSection("Suwara"), 1)
   assert.ok(items.every((i) => i.placedBy === "pic"), "never placed by its project")
-  assert.equal(items.filter((i) => i.unplacedIds.length > 0).length, 1, "Fortunatus, beside placed PICs")
+  assert.equal(items.filter((i) => i.unplacedIds.length > 0).length, 1, "the member outside the chart, beside placed PICs")
 })
 test("no guessing: PICs all outside the Bagan → no placements, PICs in unplacedIds; no PIC → null", () => {
   const r = { ...rows("2026-09-18")[0], assigneeIds: ["not-in-the-bagan"] }

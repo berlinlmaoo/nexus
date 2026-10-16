@@ -16,9 +16,9 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /*
- * Outlet Sales Dashboard (agents:~/handoff/chat/OUTLET-SALES.md, owner 10 Oct 2026): one project = one outlet,
+ * Outlet Sales Dashboard (the OUTLET-SALES handoff spec, owner 10 Oct 2026): one project = one outlet,
  * events per night with a report, and the month's typed targets. The server works out every total, percent and
- * status; this file only reads them (leniently, like the pipeline) and writes them the way Ryan asked.
+ * status; this file only reads them (leniently, like the pipeline) and writes them the way the outlet team asked.
  */
 
 internal fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content
@@ -165,7 +165,7 @@ data class OutletForm(val sections: List<OutletSection>) {
     }
 }
 
-/** Numbers, rupiah, days and months in Ryan's shapes (§6), in the app's language. */
+/** Numbers, rupiah, days and months in the outlet team's shapes (§6), in the app's language. */
 object OutletFormat {
     fun isId(locale: Locale = Locale.getDefault()) = locale.language == "in" || locale.language == "id"
     private fun loc(id: Boolean) = if (id) Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS

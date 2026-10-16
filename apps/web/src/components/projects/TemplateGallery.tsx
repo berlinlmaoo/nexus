@@ -67,7 +67,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 const CATEGORY_ORDER = ["marketing", "projects", "docs", "planning", "operations", "dashboards"];
 
 const DASHBOARDS: { type: DashboardType; icon: typeof Store; title: string; body: string }[] = [
-  // Owner, 10 Oct 2026 (for Ryan). One project = one outlet.
+  // Owner, 10 Oct 2026 (for the outlet team). One project = one outlet.
   { type: "OUTLET_SALES", icon: Store, title: "Outlet Sales Dashboard", body: "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night." },
   // Owner, 14 Oct 2026: per day and platform the team's views, likes, comments, shares and posts.
   // A megaphone, as in the apps (UI tour run 13, W-B18: a heart read as "likes" only).

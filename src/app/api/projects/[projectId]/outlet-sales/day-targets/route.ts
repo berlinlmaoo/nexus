@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth"
 import { canManageOutletTargets, outletGate, putOutletDayTarget } from "@/lib/outlet-sales-server"
 
 /**
- * A date's own target (owner, 14 Oct 2026, after a meeting with Ryan). PUT { date, salesTarget?,
+ * A date's own target (owner, 14 Oct 2026, after a meeting with the outlet team). PUT { date, salesTarget?,
  * paxTarget? }: sales only, pax only or both; null clears a part, which then falls back to the month's
  * target split over its days. The month's answer (GET …/outlet-sales) carries every day's target in force
  * (`days`). Same people as the monthly target (canManageOutletTargets); anyone else 403 TARGETS_FORBIDDEN.

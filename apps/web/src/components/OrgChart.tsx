@@ -998,8 +998,8 @@ function groupsTogether(list: OrgUnit[]): OrgUnit[] {
 function rowOf(u: OrgUnit, g: Group): string[] {
   if (u.kind === "GROUP") return [...g.led, ...groupsTogether(g.free)].map((k) => `u:${k.id}`);
   // Led sub-units and "di bawah" boxes together, in the order of their leaders in the card's boxes, so
-  // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: Adam's line to Mira crossed
-  // Gerald's and Henryca's).
+  // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: one leader's line to a sub-unit crossed
+  // two neighbours' lines).
   const byLeader = [
     ...g.led.map((k) => ({ key: `u:${k.id}`, at: g.leaderIdx.get(k.leadUserId!) ?? 0, box: 0 })),
     ...g.rt.map(([id]) => ({ key: `b:${u.id}:rt:${id}`, at: g.leaderIdx.get(id) ?? 0, box: 1 })),

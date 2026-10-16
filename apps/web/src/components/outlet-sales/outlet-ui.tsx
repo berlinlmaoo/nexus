@@ -7,9 +7,9 @@ import { formatCount, formatRupiah } from "@/lib/number-format";
 import { monthTitle } from "@/lib/month-title";
 
 /**
- * Shared bits of the Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): number and date formats in
- * Ryan's shape ("Rp 8.000.000 / Rp 20.000.000 (40%)", "Minggu 4 Okt"), the status pill, the month
- * switcher, and the event's detail as Ryan listed it. Labels of the form come from the server (`form`).
+ * Shared bits of the Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team): number and date formats in
+ * The outlet team's shape ("Rp 8.000.000 / Rp 20.000.000 (40%)", "Minggu 4 Okt"), the status pill, the month
+ * switcher, and the event's detail as the outlet team listed it. Labels of the form come from the server (`form`).
  */
 
 // id-ID grouping in both languages (12 Oct 2026: "Rp100,000,000" in English read like dollars), and a
@@ -28,7 +28,7 @@ export function count(n: number | null | undefined, _lang: Lang): string {
 }
 
 /**
- * Ryan's "actual / target (pct%)": "Rp 8.000.000 / Rp 20.000.000 (40%)". No target → the actual alone;
+ * The outlet team's "actual / target (pct%)": "Rp 8.000.000 / Rp 20.000.000 (40%)". No target → the actual alone;
  * a target but nothing filled → "— / Rp 20.000.000". pct comes from the server (rounded down).
  */
 export function vsTarget(actual: number | null, target: number | null, pct: number | null, fmt: (n: number | null) => string): string {
@@ -41,7 +41,7 @@ function dateOf(iso: string): Date {
 }
 
 /**
- * "Minggu 4 Okt" / "Sunday 4 Oct" — Ryan's Hari/Tanggal and the day headers, in the app's one day-header
+ * "Minggu 4 Okt" / "Sunday 4 Oct" — the outlet team's Hari/Tanggal and the day headers, in the app's one day-header
  * format (UI tour run 13: "Wednesday 14 Oct", no comma, short month, as the Calendar). The year only when
  * it is not this one.
  */
@@ -260,7 +260,7 @@ function Answer({ text }: { text: string }) {
 }
 
 /**
- * One event exactly as Ryan listed it: Nama event, Hari/Tanggal, Sales, Pax, RSVP total and its four
+ * One event exactly as the outlet team listed it: Nama event, Hari/Tanggal, Sales, Pax, RSVP total and its four
  * parts, Hosting total and its three, Hal yang berhasil (Apa / Kenapa berhasil / Gimana biar bisa
  * terulang lagi), Hal yang gagal (Apa / Kenapa gagal / Gimana biar tidak kejadian lagi). Labels from the
  * server's form, in the interface language.

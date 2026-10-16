@@ -496,7 +496,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Bagan Approval — rantai bebas. Tepi boleh dari siapa pun ke siapa pun di workspace yang
-    // sama, apa pun perannya (owner: willy → gerro → riri). Dua hal yang dijaga di sini: bukan
+    // sama, apa pun perannya (owner: A → B → C). Dua hal yang dijaga di sini: bukan
     // diri sendiri, dan tidak melingkar — lingkaran berarti sebuah request yang tidak pernah
     // sampai ke siapa pun.
     if (approverId !== undefined) {

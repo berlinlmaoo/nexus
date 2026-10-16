@@ -15,7 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.YearMonth
 
-/** OUTLET-SALES.md (owner, 10 Oct 2026): Ryan's formats, the server's wire, the form draft, the project's tabs. */
+/** OUTLET-SALES.md (owner, 10 Oct 2026): the outlet team's formats, the server's wire, the form draft, the project's tabs. */
 class OutletSalesTest {
     private fun month(json: String) = OutletMonth(NexusJson.parseToJsonElement(json).jsonObject)
     private fun event(json: String) = OutletEvent(NexusJson.parseToJsonElement(json).jsonObject)

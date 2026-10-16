@@ -76,7 +76,7 @@ const PEOPLE: { key: string; name: string; email: string; role: Role; approver?:
   { key: "owner", name: "Nadia Kusuma", email: OWNER_EMAIL, role: "ONE_ABOVE_ALL", xp: 0 },
   { key: "bod", name: "Arief Santoso", email: "demo.bod@example.com", role: "BOD", xp: 0 },
   { key: "creative", name: "Maya Lestari", email: "demo.manager@example.com", role: "MANAGER", xp: 140 },
-  { key: "sales", name: "Dimas Prasetyo", email: "demo.sales@example.com", role: "MANAGER", xp: 95 },
+  { key: "sales", name: "Doni Prasetyo", email: "demo.sales@example.com", role: "MANAGER", xp: 95 },
   { key: "designer", name: "Rina Wulandari", email: "demo.designer@example.com", role: "STAFF", approver: "creative", xp: 210 },
   { key: "producer", name: "Yoga Firmansyah", email: "demo.producer@example.com", role: "STAFF", approver: "creative", xp: 60 },
   { key: "content", name: "Sinta Maharani", email: "demo.content@example.com", role: "STAFF", approver: "creative", xp: 175 },

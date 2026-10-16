@@ -4030,7 +4030,7 @@ model PipelinePaymentTerm {
 }
 
 /// Monthly target of an Outlet Sales Dashboard project (Project.type "OUTLET_SALES", owner 10 Oct 2026,
-/// for Ryan): sales in rupiah and pax for one calendar month "YYYY-MM". Null = no target for that part
+/// for the outlet team): sales in rupiah and pax for one calendar month "YYYY-MM". Null = no target for that part
 /// (clients show "—" and no percentage). Set by the project lead, Manager, BoD or One Above All. A target
 /// is never deleted: clearing it stores nulls, and the audit row keeps the values before.
 /// Rules: src/lib/outlet-sales.ts. SQL: prisma/sql/2026-10-10-outlet-sales.sql.
@@ -4049,7 +4049,7 @@ model OutletSalesTarget {
   @@unique([projectId, month])
 }
 
-/// A date's own target of an outlet (owner, 14 Oct 2026, after a meeting with Ryan): sales, pax, or both;
+/// A date's own target of an outlet (owner, 14 Oct 2026, after a meeting with the outlet team): sales, pax, or both;
 /// null = that part falls back to the month's target split evenly over its days. A row whose two parts are
 /// both cleared is deleted (the audit row keeps what it was). SQL: prisma/sql/2026-10-14-outlet-custom-report.sql.
 model OutletSalesDayTarget {
@@ -4143,7 +4143,7 @@ model SocialMediaDayTarget {
   @@unique([projectId, date, platformId])
 }
 
-/// One event (night) of an outlet and its report: Ryan's form (owner, 10 Oct 2026). A date may hold
+/// One event (night) of an outlet and its report: the outlet team's form (owner, 10 Oct 2026). A date may hold
 /// several events. Every actual is nullable: null = not filled yet (0 is a real zero). The totals (RSVP,
 /// hosting) are never stored; the server adds them up (src/lib/outlet-sales.ts), and the status
 /// (UPCOMING / WAITING_REPORT / REPORTED) is derived from the date and what has been filled.

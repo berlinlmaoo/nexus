@@ -96,7 +96,7 @@ const countFor = (counts: Record<string, number>, tab: Tab) =>
 // From xl, not lg: at 1024 with the sidebar open the fixed columns took all ~700px and the Subject column
 // collapsed to 0 (QA 13 Oct 2026, iPad portrait). Below xl every ticket is the two-line row.
 // From is wider and wraps to two lines; Category gave up the width it did not use (UI tour run 15, R15-WD-6:
-// "Mohamad Okta Fir…" beside ~60 px of free Category column).
+// "Muhammad Rafi Fir…" beside ~60 px of free Category column).
 const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_13rem_6.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
 const ROW_GRID_MINE = "xl:grid xl:grid-cols-[minmax(0,1fr)_7.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
 

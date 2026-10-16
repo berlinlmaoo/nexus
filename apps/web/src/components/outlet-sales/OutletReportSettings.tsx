@@ -15,7 +15,7 @@ import {
 } from "@/lib/outlet-sales-api";
 
 /**
- * Report settings / Pengaturan laporan (owner, 14 Oct 2026, after a meeting with Ryan): each outlet sets up
+ * Report settings / Pengaturan laporan (owner, 14 Oct 2026, after a meeting with the outlet team): each outlet sets up
  * the breakdown its team reports — RSVP items, Hosting items and Communities (a community counts one
  * number, "Total only", or its own items, "Breakdown"). Add, rename, remove, reorder. An item keeps its id
  * when renamed, so no report loses a figure; removing one that holds figures archives it (asked first) and

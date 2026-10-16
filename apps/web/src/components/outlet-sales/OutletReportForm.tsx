@@ -37,10 +37,10 @@ function errorOf(error: unknown): { text: string | null; field: string | null; c
 const PLAN_KEYS = new Set(["name", "date", "salesTarget", "paxTarget"]);
 
 /**
- * The default report form (Ryan, 10 Oct 2026: "form dengan pertanyaan yang diatas, supaya team nya tinggal
+ * The default report form (the outlet team, 10 Oct 2026: "form dengan pertanyaan yang diatas, supaya team nya tinggal
  * isi form nya. Data nya otomatis masuk ke nexus"). One form for both jobs: a new event (name and date,
  * the rest when known) and the report of an existing one. The questions, their order and their labels
- * come from the server's `form` (lib/outlet-sales.ts OUTLET_FORM), in Ryan's words. Totals and the
+ * come from the server's `form` (lib/outlet-sales.ts OUTLET_FORM), in the outlet team's words. Totals and the
  * percentages are worked out as you type; the server keeps its own count.
  */
 export function OutletReportForm({

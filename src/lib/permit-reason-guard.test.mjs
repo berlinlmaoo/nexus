@@ -45,7 +45,7 @@ const cases = [
   ["day off", "dayoff"],
   ["DAYOFF", "dayoff"],
   ["Dayy off twizzound", "dayoff"],
-  ["libur ya bang udah ijin sama dava dan mimiw", "dayoff"],
+  ["libur ya bang udah ijin sama dodi dan mira", "dayoff"],
   ["cuti dulu ya", "dayoff"],
   ["off dulu hari ini", "dayoff"],
   ["jatah day off aku udah abis", "dayoff"],

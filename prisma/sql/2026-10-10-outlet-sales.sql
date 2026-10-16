@@ -1,4 +1,4 @@
--- Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026, for Ryan): monthly targets and
+-- Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026, for the outlet team): monthly targets and
 -- the events (nights) of an outlet with their reports. One project = one outlet; there can be many.
 -- Additive and idempotent: run it as many times as you like; it only creates what is missing and never
 -- drops or rewrites a row. Apply BEFORE deploying the image whose Prisma client reads these tables:

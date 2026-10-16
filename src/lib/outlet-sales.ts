@@ -1,12 +1,12 @@
 /**
- * Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026, for Ryan): the rules, without a
+ * Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026, for the outlet team): the rules, without a
  * database. One project = one outlet. An outlet has monthly targets (sales in rupiah, pax) and events
- * (nights) with a report each — Ryan's form, in his order and words (OUTLET_FORM below).
+ * (nights) with a report each — the outlet team's form, in their order and words (OUTLET_FORM below).
  *
  * Everything a client shows that is not typed in is decided here, so web, iOS and Android say the same:
  * the totals (RSVP, hosting), the percentages, the event's status and the month's summary. Database side
  * and wire format: lib/outlet-sales-server.ts. Routes: src/app/api/projects/[projectId]/outlet-sales.
- * Spec for the apps: agents:~/handoff/chat/OUTLET-SALES.md.
+ * Spec for the apps: the OUTLET-SALES handoff spec.
  */
 
 /** The company's day (WIB, UTC+7), "YYYY-MM-DD" — the same clock as the pipeline's. */
@@ -150,7 +150,7 @@ export function summarizeMonth(
   }
 }
 
-// ── The default form (Ryan, 10 Oct 2026) ───────────────────────────────────────────────────────────────
+// ── The default form (the outlet team, 10 Oct 2026) ───────────────────────────────────────────────────────────────
 
 export type OutletFieldType = "text" | "date" | "money" | "count" | "longtext"
 export type Bilingual = { en: string; id: string }
@@ -159,7 +159,7 @@ export type OutletFormField = {
   type: OutletFieldType
   label: Bilingual
   required?: boolean
-  /** A short note under the field (Ryan's definitions, 10 Oct 2026). */
+  /** A short note under the field (the outlet team's definitions, 10 Oct 2026). */
   hint?: Bilingual
   /** Text: at most this many characters. Numbers: at most this value. */
   max: number
@@ -179,7 +179,7 @@ export const MONEY_MAX = 1e12
 export const COUNT_MAX = 1_000_000
 
 /**
- * Ryan's questions, in his order and with his words (Indonesian), plus their English. Sent in the GET
+ * The outlet team's questions, in their order and with their words (Indonesian), plus their English. Sent in the GET
  * responses as `form` so the apps can draw the form from it; a client that has its own copy may keep it.
  * The keys are the event's fields. Adding a question later = a new nullable column + an entry here.
  */
@@ -198,7 +198,7 @@ export const OUTLET_FORM: { version: number; sections: OutletFormSection[] } = {
       key: "sales",
       title: { en: "Sales", id: "Sales" },
       fields: [
-        // Ryan (10 Oct 2026): the outlet's total revenue of the night, every transaction, after tax,
+        // The outlet team (10 Oct 2026): the outlet's total revenue of the night, every transaction, after tax,
         // service charge and discounts. One number, not split.
         {
           key: "sales", type: "money", label: { en: "Sales", id: "Sales" }, max: MONEY_MAX,
@@ -263,7 +263,7 @@ export const OUTLET_FIELDS: Record<string, OutletFormField> = Object.fromEntries
   OUTLET_FORM.sections.flatMap((s) => s.fields).map((f) => [f.key, f]),
 )
 
-// ── Daily targets (owner, 14 Oct 2026, after a meeting with Ryan) ─────────────────────────────────────
+// ── Daily targets (owner, 14 Oct 2026, after a meeting with the outlet team) ─────────────────────────────────────
 //
 // A date may have its own target for sales, for pax, or both; each part on its own. A part a date does not
 // set falls back to the month's target for that part split evenly over the month's days (the monthly
@@ -352,7 +352,7 @@ export function buildMonthDays(
   })
 }
 
-// ── The report's breakdown, per outlet (owner, 14 Oct 2026, after a meeting with Ryan) ────────────────
+// ── The report's breakdown, per outlet (owner, 14 Oct 2026, after a meeting with the outlet team) ────────────────
 //
 // Each outlet project sets up its own RSVP items, Hosting items and Communities (Project.outletReportConfig,
 // JSON). The report's figures for them live per event by the item's stable id: the seven items every outlet
@@ -377,7 +377,7 @@ export function isLegacyItemId(id: string): boolean {
   return LEGACY_ITEM_IDS.includes(id)
 }
 
-/** The labels of the seven original items: Ryan's words, the same in both languages. */
+/** The labels of the seven original items: the outlet team's words, the same in both languages. */
 export const LEGACY_LABELS: Record<string, string> = {
   rsvpWalkIn: "Walk-in RSVP",
   rsvpTeam: "RSVP Team",

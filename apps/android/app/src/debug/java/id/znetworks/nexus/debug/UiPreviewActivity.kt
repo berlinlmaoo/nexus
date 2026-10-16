@@ -53,8 +53,8 @@ class UiPreviewActivity : ComponentActivity() {
                             fun p(i: String, n: String) = id.znetworks.nexus.feature.chat.ChatSystemEvent.Person(i, n)
                             listOf(
                                 id.znetworks.nexus.feature.chat.ChatSystemEvent("group_created", p("b", "Budi Santoso"), listOf(p("m", "Mira")), name = "Tim Kreatif"),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("members_added", p("b", "Budi Santoso"), listOf(p("me", "Me"), p("y", "Yuda"), p("a", "Anita"))),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_removed", p("me", "Me"), listOf(p("y", "Yuda"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("members_added", p("b", "Budi Santoso"), listOf(p("me", "Me"), p("y", "Yoga"), p("a", "Anita"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_removed", p("me", "Me"), listOf(p("y", "Yoga"))),
                                 id.znetworks.nexus.feature.chat.ChatSystemEvent("member_left", p("a", "Anita")),
                                 id.znetworks.nexus.feature.chat.ChatSystemEvent("group_renamed", p("b", "Budi Santoso"), name = "Tim Kreatif 2026"),
                             ).forEachIndexed { i, e ->
@@ -74,7 +74,7 @@ class UiPreviewActivity : ComponentActivity() {
                         }
                         "addpeople" -> id.znetworks.nexus.feature.chat.AddPeopleDialog(
                             id.znetworks.nexus.feature.chat.Conversation("c", "GROUP", "Tim Kreatif", members = listOf(id.znetworks.nexus.feature.chat.ChatMember(userId = "u1", user = id.znetworks.nexus.feature.chat.ChatUser("u1", "Rina")))),
-                            listOf("u1" to "Rina", "u2" to "Dimas Pratama", "u3" to "Sari Wulandari", "u4" to "Bayu").map { (k, n) -> id.znetworks.nexus.feature.projects.RosterMember(userId = k, name = n) },
+                            listOf("u1" to "Rina", "u2" to "Doni Pratama", "u3" to "Sari Wulandari", "u4" to "Bayu").map { (k, n) -> id.znetworks.nexus.feature.projects.RosterMember(userId = k, name = n) },
                             "me", onDismiss = {}, onAdd = {})
                         "board" -> SubmissionBoardView(sampleBoard, onOpen = {})
                         "composer" -> id.znetworks.nexus.feature.admin.AnnouncementComposer(
@@ -166,8 +166,8 @@ class UiPreviewActivity : ComponentActivity() {
         val j = id.znetworks.nexus.core.net.NexusJson
         val structure0 = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalStructure.serializer(),
             assets.open("calendar/structure.json").bufferedReader().readText().trim().let { "{\"access\":\"all\",${it.substring(1)}" })
-        val gerald = structure0.people.first { it.name == "Person 17" }
-        val structure = structure0.copy(me = id.znetworks.nexus.feature.calendar.CalMe(gerald.userId, gerald.role, gerald.homeUnitIds))
+        val viewer = structure0.people.first { it.name == "Person 17" }
+        val structure = structure0.copy(me = id.znetworks.nexus.feature.calendar.CalMe(viewer.userId, viewer.role, viewer.homeUnitIds))
         val sep = screen == "cal-person" || screen == "cal-people"
         val file = if (sep) "items-2026-09-18.bod.json" else "items-2026-10-03.staff.json"
         val day = if (sep) "2026-09-18" else "2026-10-03"
@@ -214,14 +214,14 @@ private fun Nav8Preview() {
         androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
         id.znetworks.nexus.ui.shell.ShellBar(id.znetworks.nexus.ui.shell.ShellTabs.routes(false).map { r -> Tab.entries.first { it.route == r } }, Tab.HOME,
             { if (it == Tab.INBOX) id.znetworks.nexus.core.Badges.label(inbox) else null }, rail = false) {}
-        id.znetworks.nexus.feature.attendance.history.Grid(listOf(member("a", "Rina", true), member("b", "Dimas", false)), days, today, { _, _ -> }, compact = false,
+        id.znetworks.nexus.feature.attendance.history.Grid(listOf(member("a", "Rina", true), member("b", "Doni", false)), days, today, { _, _ -> }, compact = false,
             modifier = Modifier.padding(12.dp).height(110.dp))
         id.znetworks.nexus.feature.inbox.InboxRow(id.znetworks.nexus.feature.inbox.InboxItem("i1", "attendance_outside_approver",
             "Rina is outside the office", "Since 10:12 · 2 hours", createdAt = java.time.Instant.now().toString())) {}
         id.znetworks.nexus.feature.chat.ConversationRow(conv("c1", "Tim Kreatif", 3, false, "📷 Foto"), "me") {}
         id.znetworks.nexus.feature.chat.ConversationRow(conv("c2", "Pengumuman kantor", 9, true, "Rapat jam 3"), "me") {}
         Box(Modifier.padding(12.dp).background(Nx.colors.card, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp)) {
-            androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Dimas cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
+            androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Doni cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
         }
         Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, onItem = {}, onSearch = {}, tabs = emptySet()) }
     }

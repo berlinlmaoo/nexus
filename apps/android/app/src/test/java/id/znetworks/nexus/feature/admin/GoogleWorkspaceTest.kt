@@ -8,7 +8,7 @@ import org.junit.Test
 
 class GoogleWorkspaceTest {
     @Test fun guessesFromTheNexusName() {
-        assertEquals(Triple("Muhammad", "Omar Karim", "muhammad"), GoogleLogic.guess(" Muhammad  Omar Karim "))
+        assertEquals(Triple("Muhammad", "Oskar Karim", "muhammad"), GoogleLogic.guess(" Muhammad  Oskar Karim "))
         assertEquals(Triple("Ana", "-", "ana"), GoogleLogic.guess("Ana")) // Google requires a last name
         assertEquals("jos", GoogleLogic.guess("Jo's X").third)
     }

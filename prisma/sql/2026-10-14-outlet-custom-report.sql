@@ -1,4 +1,4 @@
--- Outlet Sales Dashboard, owner's revisions after the meeting with Ryan (14 Oct 2026):
+-- Outlet Sales Dashboard, owner's revisions after the meeting with the outlet team (14 Oct 2026):
 --  1. Daily targets: a date may set its own sales target, pax target, or both ("OutletSalesDayTarget").
 --     A date without one falls back to the month's target split evenly (server: lib/outlet-sales.ts).
 --  2. A report breakdown per outlet: Project."outletReportConfig" (JSON: RSVP items, Hosting items,

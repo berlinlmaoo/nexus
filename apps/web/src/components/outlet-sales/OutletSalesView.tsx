@@ -27,9 +27,9 @@ export function errorText(error: unknown, fallback: string): string {
 }
 
 /**
- * An Outlet Sales Dashboard project (owner, 10 Oct 2026, for Ryan): one outlet, its month at a glance
+ * An Outlet Sales Dashboard project (owner, 10 Oct 2026, for the outlet team): one outlet, its month at a glance
  * (Overview: sales and pax against the month's target), its nights on a Calendar (a day opens the
- * night's report below, in Ryan's order), a Board by status (Upcoming · Waiting report · Reported,
+ * night's report below, in the outlet team's order), a Board by status (Upcoming · Waiting report · Reported,
  * derived, not dragged), and the report Form the team fills after each night. The four are tabs of the
  * project page sharing one month; a colleague's change arrives live (`outlet-sales-changed`).
  */
@@ -298,7 +298,7 @@ function Overview({
   );
 }
 
-/** Ryan's reading: "2.000.000 / 2.000.000 (100%)", with its bar. No target: the actual and "—". */
+/** The outlet team's reading: "2.000.000 / 2.000.000 (100%)", with its bar. No target: the actual and "—". */
 function Gauge({ title, hint, actual, target, pct }: { title: string; hint?: string; actual: string; target: string | null; pct: number | null }) {
   const { t } = useLang();
   return (
