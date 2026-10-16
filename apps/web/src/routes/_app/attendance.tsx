@@ -546,7 +546,8 @@ function Attendance() {
             label={tr("Public holidays")}
             // Zero over zero says nothing (run 19 decision 10, R19-B-13): say there are none this month.
             value={(today.data?.redDateQuota ?? 0) === 0 && (today.data?.redDateUsedThisMonth ?? 0) === 0
-              ? tr("No public holidays this month")
+              // "None this month" under the "Public holidays" label: the full sentence was cut at two lines.
+              ? tr("None this month")
               : tr("{used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
             helper={tr("See public holidays used")}
             tone="rose"
