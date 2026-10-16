@@ -317,6 +317,34 @@ async function capture(page, dir, id) {
     // A page resting on its last snap point shows everything not yet seen: it is the last one.
     if (moved < MIN_PAGE_STEP || snapped) break;
   }
+  // Run 20 tour request 4: a content scroller inside the page (the Table's rows above its Calculate footer, the
+  // Timeline's late rows) that is still short of its end when the paging stops is brought to its end once and
+  // shot, so its last rows are seen. Only scrollers of a fifth of the viewport or more, not the navigation, and
+  // only when that end shows at least MIN_LAST_STEP of the viewport as new.
+  const tail = await page.evaluate((MIN_LAST_STEP_IN) => {
+    const vw = innerWidth, vh = innerHeight;
+    let any = false;
+    for (const el of document.body.querySelectorAll("*")) {
+      if (el.scrollHeight <= el.clientHeight + 4 || el.clientHeight < 120) continue;
+      if (!/(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY)) continue;
+      if (el.closest("nav, [role='navigation'], [data-sidebar]")) continue;
+      const r = el.getBoundingClientRect();
+      const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      if (w * h < vw * vh * 0.2) continue;
+      const max = el.scrollHeight - el.clientHeight;
+      // What the end brings in, as a share of the VIEWPORT (as `fresh` in the paging): no near-duplicate page.
+      if (Math.min(1, (max - el.scrollTop) / el.clientHeight) * ((w * h) / (vw * vh)) < MIN_LAST_STEP_IN) continue;
+      el.scrollTop = max;
+      any = true;
+    }
+    return any;
+  }, MIN_LAST_STEP).catch(() => false);
+  if (tail && pages < MAX_PAGES + 1) {
+    await page.waitForTimeout(700);
+    pages += 1;
+    await shot(pages);
+  }
   return { pages };
 }
 

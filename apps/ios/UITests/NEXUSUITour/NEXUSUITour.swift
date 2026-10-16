@@ -63,6 +63,9 @@ final class NEXUSUITour: XCTestCase {
         /// How many sideways shots (half a view each) a board or table gets; 1 by default (run 17, T-2: the
         /// iPad Table never reached its Priority / Status columns).
         let sideways: Int?
+        /// "trailing": after the page itself, the scroll pane right of it is paged too (run 20, T-4: the Mac
+        /// Calendar's day panel scrolls on its own and was never shot below its first screen).
+        let pane: String?
     }
 
     private struct Outcome: Encodable {
@@ -193,8 +196,13 @@ final class NEXUSUITour: XCTestCase {
                 dismissSystemAlerts()
                 windowBehind = false
                 let first = snap(screen.id)
-                let more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
+                var more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
                                          pages: screen.pages, sideways: screen.sideways)
+                if screen.pane == "trailing", let main = scrollTarget(in: app, web: false),
+                   let pane = scrollTarget(in: app, web: false, rightOf: main.visible) {
+                    more += snapMorePages(screen.id, prefix: "tour-", first: takeShot(app), in: app, web: false,
+                                          pages: screen.pages, sideways: 0, target: pane, pageOffset: 1 + more)
+                }
                 let ok = status == "ready:\(screen.id)"
                 var line = ok ? (settled ? "ok" : "ok, spinner still visible after 25 s") : status
                 if windowBehind { line += "; NEXUS window was not frontmost for a shot (another window may show)" }
@@ -809,11 +817,13 @@ final class NEXUSUITour: XCTestCase {
     /// for columns clipped on the right. Returns the number of extra shots.
     @MainActor
     private func snapMorePages(_ id: String, prefix: String, first: XCUIScreenshot,
-                               in root: XCUIApplication, web: Bool, pages: Int? = nil, sideways: Int? = nil) -> Int {
+                               in root: XCUIApplication, web: Bool, pages: Int? = nil, sideways: Int? = nil,
+                               target chosen: ScrollTarget? = nil, pageOffset: Int = 0) -> Int {
         let globalMax = Int(env["TOUR_MAX_PAGES"] ?? "") ?? 6
-        let maxPages = max(globalMax, pages ?? 0)
-        guard maxPages > 1, let target = scrollTarget(in: root, web: web) else { return 0 }
-        var page = 1
+        // `pageOffset`: pages already taken of this screen (a second pane continues their numbering).
+        let maxPages = max(globalMax, pages ?? 0) + pageOffset
+        guard maxPages > 1, let target = chosen ?? scrollTarget(in: root, web: web) else { return 0 }
+        var page = 1 + pageOffset
         var last = first.pngRepresentation
         #if targetEnvironment(macCatalyst)
         // The scroll wheel puts the pointer on a row, and its hover highlight alone made "page 2" differ
@@ -843,14 +853,14 @@ final class NEXUSUITour: XCTestCase {
         // 8-43 were never shot). Not the Timeline: its sideways shot only moved the date strip on (the same
         // rows, no bars, the today line gone) on every platform in runs 15-17 (run 17, iPhone R17-I-01); its
         // tasks outside the range are named in its own hint.
-        if id.hasSuffix("-board") || id.hasSuffix("-table") {
+        if (id.hasSuffix("-board") || id.hasSuffix("-table")) && sideways != 0 {
             var swiped = 0
             var seen = last
             while swiped < max(1, sideways ?? 1) && page < maxPages {
                 drag(target, dx: -0.5, dy: 0)
                 swiped += 1
                 let shot = takeShot(root)
-                if navigatedAway() { return page - 1 }
+                if navigatedAway() { return page - 1 - pageOffset }
                 let data = shot.pngRepresentation
                 if data == seen { break }
                 // Run 20 (iPhone R20-I-01): the last swipe did not move the board (it was at its right edge), and
@@ -889,6 +899,9 @@ final class NEXUSUITour: XCTestCase {
             attachShot(p.shot, "\(prefix)\(id)-\(page)")
             pending = nil
         }
+        var retriedInMiddle = false
+        /// The retried drag moved the page (see `retriedInMiddle`).
+        var retryMoved = false
         // `page` counts the pending page too, so the cap holds.
         while page < maxPages {
             // Run 20 (R20-I-05, T-3, decision 29): the step ends in the gap between two rows, so the next page
@@ -896,8 +909,8 @@ final class NEXUSUITour: XCTestCase {
             drag(target, dx: 0, dy: -restingStep(last, target: target, window: root.windows.firstMatch.frame))
             if navigatedAway() { break }
             if !web { _ = waitForSpinnersToStop(timeout: 4) }
-            let shot = takeShot(root)
-            let data = shot.pngRepresentation
+            var shot = takeShot(root)
+            var data = shot.pngRepresentation
             #if targetEnvironment(macCatalyst)
             // First scroll changed nothing: maybe the wheel goes the other way on this Mac. Once.
             // (Not `page == 1`: a board's sideways shot already made it 2, and the flip never came.)
@@ -907,9 +920,26 @@ final class NEXUSUITour: XCTestCase {
                 continue
             }
             #endif
-            if data == last { break }
-            // Run 20 (R20-I-01): nothing scrolled (0 pt), only a pixel or two redrew: never a page.
-            if unmoved(last, data, target.compare, root) { break }
+            let stayed = data == last || unmoved(last, data, target.compare, root)
+            #if !targetEnvironment(macCatalyst)
+            // Run 20 (T-4): the iPad Home's first drag down the left gutter moved nothing and the screen got one
+            // page, its Leaderboard cut mid-row. Once per screen, before giving up, the drag is tried again in the
+            // middle of the view (a row it starts on and opens is handled by `navigatedAway`).
+            if stayed && !retriedInMiddle && savedShots.count == 1 {
+                retriedInMiddle = true
+                drag(target, dx: 0, dy: -restingStep(last, target: target, window: root.windows.firstMatch.frame), inMiddle: true)
+                if navigatedAway() { break }
+                _ = waitForSpinnersToStop(timeout: 4)
+                let again = takeShot(root)
+                if again.pngRepresentation != last && !unmoved(last, again.pngRepresentation, target.compare, root) {
+                    retryMoved = true
+                    shot = again
+                    data = again.pngRepresentation
+                }
+            }
+            #endif
+            if stayed && !retryMoved { break }
+            retryMoved = false
             // Too little new on it: the end of the scroll, or nothing moved at all and only a clock or a
             // hover changed (UI tour run 13, F-08 / M-27; run 15, R15-I-20 / T-1). A page is dropped only when
             // about 90% of its content rows are already on the page before. Run 16 (R16-I-04): the run 15
@@ -980,7 +1010,7 @@ final class NEXUSUITour: XCTestCase {
             pending = (shot, rows)
         }
         flush()
-        return page - 1
+        return page - 1 - pageOffset
     }
 
     /// The share of the pixels of `rect` (right 10 pt left out) whose grey level differs by more than 24 between
@@ -1107,19 +1137,37 @@ final class NEXUSUITour: XCTestCase {
                     var median = 0, seen = 0
                     while median < 255 && seen + hist[median] <= w / 2 { seen += hist[median]; median += 1 }
                     let inBand = y >= h - d
-                    var rowNew = 0
+                    var rowNew = 0, inPlaceInk = 0, periodicInk = 0
                     for x in 0..<w {
                         let v = Int(pb[y * w + x])
                         guard abs(v - median) > ink else { continue }
                         func near(_ yy: Int) -> Bool { yy >= 0 && yy < h && abs(Int(pa[yy * w + x]) - v) <= ink }
                         let inPlace = near(y - 1) || near(y) || near(y + 1)
                         if inBand {
-                            if !inPlace { rowNew += 1 }
+                            if !inPlace {
+                                rowNew += 1
+                            } else {
+                                inPlaceInk += 1
+                                // The old page repeats itself one shift up here (look-alike rows one pitch apart),
+                                // and not merely along a vertical line: the "in place" ink is the next row looking
+                                // like the last, not a floating overlay.
+                                let o = Int(pa[y * w + x])
+                                func oldNear(_ yy: Int) -> Bool { yy >= 0 && yy < h && abs(Int(pa[yy * w + x]) - o) <= ink }
+                                let periodic = oldNear(y - d - 1) || oldNear(y - d) || oldNear(y - d + 1)
+                                let vertical = oldNear(y - 3) && oldNear(y + 3)
+                                if periodic && !vertical { periodicInk += 1 }
+                            }
                         } else if !inPlace && !near(y + d - 1) && !near(y + d) && !near(y + d + 1) {
                             outLeft += 1
                         }
                         if !inBand { outInk += 1 }
                     }
+                    // Run 20 (T-4): a list of look-alike rows ("[TEST] seq SURAT…", leaderboard rows) whose last scroll
+                    // moved exactly one row pitch had its new row "in place" over the old last row, so the page that
+                    // brought in a real row (the iPad Legal archive's pager, the Home leaderboard's last rows) was
+                    // dropped as shift-only. Such a row's in-place ink counts as new. Offline: no decision of runs
+                    // 16-20 changes; a synthetic one-pitch end page of iPad legal-archive-4 is now kept (10-15 pt).
+                    if inPlaceInk >= 10 && periodicInk * 100 >= inPlaceInk * 85 { rowNew += inPlaceInk }
                     if rowNew >= 3 { bandRows += 1 }
                 }
             }
@@ -1414,9 +1462,14 @@ final class NEXUSUITour: XCTestCase {
     /// left gutter (6 pt in) landed on the sidebar list; pages 2–6 of the dashboard, attendance, Legal
     /// and most other screens scrolled the sidebar and showed the same page.
     @MainActor
-    private func scrollTarget(in root: XCUIApplication, web: Bool) -> ScrollTarget? {
+    private func scrollTarget(in root: XCUIApplication, web: Bool, rightOf main: CGRect? = nil) -> ScrollTarget? {
         let screen = root.windows.firstMatch.frame
         var window = screen
+        // A pane right of the page's own scroll area (Screen.pane): only that part of the window.
+        if let main {
+            guard main.maxX < screen.maxX - 120 else { return nil }
+            window = CGRect(x: main.maxX - 2, y: screen.minY, width: screen.maxX - main.maxX + 2, height: screen.height)
+        }
         if web {
             let page = root.webViews.firstMatch
             guard page.exists else { return nil }
@@ -1424,7 +1477,7 @@ final class NEXUSUITour: XCTestCase {
             return ScrollTarget(element: page, visible: shown, compare: shown)
         }
         let sidebar = sidebarFrame(in: root, window: window)
-        if let sidebar, sidebar.maxX < window.maxX - 80 {
+        if let sidebar, sidebar.maxX < window.maxX - 80, sidebar.maxX > window.minX {
             window = CGRect(x: sidebar.maxX, y: window.minY, width: window.maxX - sidebar.maxX, height: window.height)
         }
         // iPhone: the floating tab bar hides the bottom of the page. Left in the rect, what sat under it on
@@ -1526,7 +1579,7 @@ final class NEXUSUITour: XCTestCase {
     /// dy < 0 scrolls the content up (finger moves up), dx < 0 scrolls it left. Distances are fractions
     /// of the VISIBLE part of the target, and every point is inside it.
     @MainActor
-    private func drag(_ target: ScrollTarget, dx: CGFloat, dy: CGFloat) {
+    private func drag(_ target: ScrollTarget, dx: CGFloat, dy: CGFloat, inMiddle: Bool = false) {
         let frame = target.element.frame
         let rect = target.visible
         // Absolute screen points, expressed from the element's own origin (XCUICoordinate's way).
@@ -1546,8 +1599,9 @@ final class NEXUSUITour: XCTestCase {
         #else
         // Vertical drags run down the left gutter (6 pt in), beside the cards and rows rather than on
         // them: a drag starting on a row could open it (run 5, leaderboard → a profile).
-        let x0: CGFloat = dx == 0 ? rect.minX + 6 : rect.midX - dx * rect.width / 2
-        let x1: CGFloat = dx == 0 ? rect.minX + 6 : rect.midX + dx * rect.width / 2
+        let gutter = inMiddle ? rect.midX : rect.minX + 6
+        let x0: CGFloat = dx == 0 ? gutter : rect.midX - dx * rect.width / 2
+        let x1: CGFloat = dx == 0 ? gutter : rect.midX + dx * rect.width / 2
         let start = at(x0, rect.midY - dy * rect.height / 2)
         let end = at(x1, rect.midY + dy * rect.height / 2)
         start.press(forDuration: 0.05, thenDragTo: end,

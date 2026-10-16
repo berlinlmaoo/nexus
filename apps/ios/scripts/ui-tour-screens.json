@@ -7,7 +7,7 @@
     { "id": "login",            "title": "Login",                "web": "/login",                           "app": "login" },
     { "id": "dashboard",        "title": "Dashboard",            "web": "/dashboard",                       "app": "nexus://dashboard" },
     { "id": "my-tasks",         "title": "My Tasks",             "web": "/my-tasks",                        "app": "nexus://tasks" },
-    { "id": "calendar",         "title": "Calendar",             "web": "/calendar",                        "app": "nexus://teamCalendar" },
+    { "id": "calendar",         "title": "Calendar",             "web": "/calendar",                        "app": "nexus://teamCalendar", "pane": "trailing" },
     { "id": "messages",         "title": "Messages",             "web": "/messages",                        "app": "nexus://messages" },
     { "id": "gideon",           "title": "GIDEON",               "web": "/gideon",                          "app": "nexus://gideon" },
     { "id": "notifications",    "title": "Notifications",        "web": "/inbox",                           "app": "nexus://inbox", "pages": 10 },
