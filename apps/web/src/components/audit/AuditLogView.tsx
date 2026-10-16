@@ -442,6 +442,7 @@ const RESTORE_FAILURE: Record<string, string> = {
   ALREADY_RESTORED: "Someone has restored this already.",
   ALREADY_EXISTS: "It's already back.",
   NOT_RESTORABLE: "No copy of this delete was kept, so it can't be restored.",
+  RESTORE_FORBIDDEN: "Only BoD and One Above All can restore.",
 };
 
 function failureText(payload: { code?: string; parent?: string | null } | null, entityType: string, soft: boolean): string {
@@ -561,9 +562,11 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
 }
 
 /** The Restore block of a delete that kept a copy: what comes back, then one confirmed tap. */
-function RestoreSection({ entryId, entityType, entityId, entityName, restore }: {
+function RestoreSection({ entryId, entityType, entityId, entityName, restore, canRestore = true }: {
   entryId: string; entityType: string; entityId: string | null; entityName: string | null;
   restore: NonNullable<NexusAuditEntryDetail["restore"]>;
+  /** BoD and One Above All only (owner, 16 Oct 2026); a Manager reads what would come back, without the button. */
+  canRestore?: boolean;
 }) {
   const L = useLang();
   const { t } = L;
@@ -622,11 +625,13 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
 
   return (
     <section className="rounded-xl border border-primary/25 bg-primary/[0.04] px-3 py-3">
-      <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Bring it back")}</h3>
+      <h3 className="text-sm font-semibold text-foreground">{t("Bring it back")}</h3>
       <p className="mt-1.5 text-sm">{explanation}</p>
       {note && <p className="mt-1 text-xs text-muted-foreground">{t(note)}</p>}
       {failure && <p role="alert" className="mt-2 text-sm font-medium text-rose-600 dark:text-rose-300">{failure}</p>}
-      {!confirming ? (
+      {!canRestore ? (
+        <p className="mt-2 text-xs text-muted-foreground">{t("Only BoD and One Above All can restore.")}</p>
+      ) : !confirming ? (
         <button type="button" onClick={() => setConfirming(true)} disabled={run.isPending}
           className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.98] disabled:opacity-60">
           <RotateCcw className="h-4 w-4" aria-hidden /> {t(RESTORE_BUTTON[entityType] ?? "Restore")}
@@ -713,7 +718,7 @@ function AuditEntryDrawer({ id, row, onClose }: { id: string; row: NexusAuditLog
           )}
 
           {d?.restore && entry && (
-            <RestoreSection entryId={id} entityType={entry.entityType} entityId={entry.entityId} entityName={entry.entityName} restore={d.restore} />
+            <RestoreSection entryId={id} entityType={entry.entityType} entityId={entry.entityId} entityName={entry.entityName} restore={d.restore} canRestore={d.canRestore !== false} />
           )}
           {d && !d.restore && deletable && (
             <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

@@ -13,8 +13,9 @@ import { emitAuditChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 /**
  * Restore what a delete removed (owner, 8 Oct 2026; every kind of delete since the same day — the list
- * is lib/deletion-entities.ts RESTORABLE). Who may: whoever may see the entry in Control Room → Audit
- * (same rule as GET /api/audit/[id]; an entry outside the caller's scope is a 404).
+ * is lib/deletion-entities.ts RESTORABLE). Who may: BoD and One Above All only (owner, 16 Oct 2026), for an entry
+ * they may see in Control Room → Audit (an entry outside the caller's audit scope is a 404). A Manager, who
+ * can read the audit, gets 403 { code: "RESTORE_FORBIDDEN" }. GET /api/audit(/[id]) say so in `canRestore`.
  *
  * 200 { ok, entityType, entityId, entityLabel, projectId, open,
  *       restored: { lists, tasks, files, comments, folders, items } }
@@ -46,6 +47,12 @@ export async function POST(
       where: { AND: [{ id }, access.scope] },
       select: { id: true, action: true },
     })
+    const mayRestore = row && access.restoreScope
+      ? Boolean(await prisma.auditLog.findFirst({ where: { AND: [{ id: row.id }, access.restoreScope] }, select: { id: true } }))
+      : false
+    if (row && !mayRestore) {
+      return NextResponse.json({ error: "Only BoD and One Above All can restore.", code: "RESTORE_FORBIDDEN" }, { status: 403 })
+    }
     // Any entry with a copy: deletes, and the few deletes logged under their own verb (a revoke).
     if (!row) {
       return NextResponse.json({ error: "There is no copy of this to restore.", code: "NOT_RESTORABLE" }, { status: 404 })

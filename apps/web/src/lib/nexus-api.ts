@@ -1824,6 +1824,8 @@ export type NexusAuditEntryDetail = {
     restoredBy: { id: string; name: string | null } | null;
     counts: NexusRestoreCounts;
   }) | null;
+  /** Whether the viewer may restore this entry (BoD and One Above All, 16 Oct 2026). Absent on older servers. */
+  canRestore?: boolean;
 };
 
 export type NexusNotificationPrefs = {
