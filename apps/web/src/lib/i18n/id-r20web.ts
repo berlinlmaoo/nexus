@@ -23,4 +23,9 @@ export const ID_R20WEB: Record<string, string> = {
   // Edge arrows on sideways scrollers (R20-WM-6)
   "Show earlier": "Tampilkan sebelumnya",
   "Show more": "Tampilkan lainnya",
+  // Legal request cards (R20-WM-8)
+  "Requested by {name}": "Diajukan oleh {name}",
+  // XP numbers (decision 9, B-06): the period score and where it comes from, one line (same copy on iOS)
+  "Starts at {base} on the 28th · +{gained} gained · {lost} lost": "Mulai dari {base} tiap tanggal 28 · +{gained} didapat · {lost} hilang",
+  "{n} XP this period": "{n} XP periode ini",
 };

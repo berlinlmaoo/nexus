@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Lock, Loader2, Mail, MessageSquare, ScrollText, Undo2, UserRound, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { formatCount } from "@/lib/number-format";
+import { PERIOD_BASELINE_XP } from "@/lib/levels";
 import { ZoomableAvatar } from "@/components/PhotoLightbox";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
@@ -226,7 +227,12 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
           <Stat label={tr("Absent")} value={counts.absent} tone={sCls.absent} />
           <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
           <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
-          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">{tr("+{n} XP gained", { n: formatCount(xp.gained) })}</span> <span className="text-muted-foreground">·</span> <span className="text-rose-600 dark:text-rose-400">{tr("{n} XP lost", { n: formatCount(Math.abs(xp.lost)) })}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the board", { n: xp.removed }) : undefined} />
+          {/* The period's score first, then where it comes from, in one line: every period starts at the baseline,
+              so "1.000" beside "+0 gained" is not a contradiction (decision 9, UI tour run 20, B-06; same copy on iOS). */}
+          <Stat label={tr("XP this period")} value={<span className="block">
+            <span>{formatCount(PERIOD_BASELINE_XP + xp.net)} XP</span>
+            <span className="mt-0.5 block text-[11px] font-medium text-muted-foreground">{tr("Starts at {base} on the 28th · +{gained} gained · {lost} lost", { base: formatCount(PERIOD_BASELINE_XP), gained: formatCount(xp.gained), lost: formatCount(Math.abs(xp.lost)) })}</span>
+          </span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the board", { n: xp.removed }) : undefined} />
         </div>
       </div>
       {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Days off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
