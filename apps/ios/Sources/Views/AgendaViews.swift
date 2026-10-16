@@ -139,7 +139,7 @@ struct RoomBookingView: View {
 
     private var monthRow: some View {
         HStack(spacing: 4) {
-            Text(ProjDate.fmt("MMMM yyyy").string(from: month))
+            Text(AppDateLocale.monthTitle(month))
                 .font(NXFont.display(pageRoot ? 20 : 18, .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .accessibilityAddTraits(.isHeader)

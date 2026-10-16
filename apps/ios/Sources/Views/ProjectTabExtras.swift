@@ -405,7 +405,8 @@ struct TableHeaderRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            cell(T("Name"), icon: "textformat", width: cols.name, first: true)
+            // The web's "T" text-field icon, not Notion's "Aa" (parity outranks Notion; UI tour run 19, R19-I-18).
+            cell(T("Name"), icon: "character", width: cols.name, first: true)
                 .background(NX.card)
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
@@ -512,6 +513,8 @@ struct ProjectTableRow: View {
             .modifier(TableCell(width: cols.open, height: rowH, inset: 0))
             .accessibilityLabel(T("Open"))
         }
+        // Every cell as tall as the row's tallest (a wrapped name).
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(selecting && selected ? NX.violet.opacity(0.10) : Color.clear)
         .overlay(alignment: .bottom) { TableHairline() }
@@ -535,20 +538,22 @@ struct ProjectTableRow: View {
                 if task.isSubtask {
                     Image(systemName: "arrow.turn.down.right").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 }
-                // Two lines before an ellipsis, as the web's Table (R14-WB-12): one line cut "reimburse transport
-                // take content pe…" while the row had room for the rest (UI tour run 15, Q-IA25 / Q-M14).
+                // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NAZHWA ROSI
+                // - 22…" (UI tour run 19, R19-I-18). The row grows with it.
                 Text(UntitledText.wrapped(task.title))
                     .font(NXFont.text(15, .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 if task.hasQuest { QuestXPChip(xp: task.questXP) }
+                // No "›" in the name: the row's own open column at the end is the one open affordance, as the
+                // web's (UI tour run 19, Mac R19-M-06).
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium)).foregroundStyle(NX.mutedFg.opacity(0.6))
             }
-            .padding(.leading, task.isSubtask ? 26 : 14).padding(.trailing, 10)
-            .frame(width: cols.name, height: rowH, alignment: .leading)
+            .padding(.leading, task.isSubtask ? 26 : 14).padding(.trailing, 10).padding(.vertical, 8)
+            .frame(width: cols.name, alignment: .leading)
+            .frame(minHeight: rowH, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -758,7 +763,9 @@ struct TableCell: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, inset)
-            .frame(width: width, height: height, alignment: .leading)
+            // At least the row's height, and as tall as its row: a name may wrap to more lines (R19-I-18).
+            .frame(width: width, alignment: .leading)
+            .frame(minHeight: height, maxHeight: .infinity)
             // A pill wider than its column stays in it (a status menu's chevron drew over the next cell).
             .clipped()
             .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }

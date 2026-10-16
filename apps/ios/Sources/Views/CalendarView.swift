@@ -846,7 +846,7 @@ struct CalendarView: View {
             let monday = CalDays.mondayOf(selected)
             return "\(CalFormat.day(monday, "dMMM")) – \(CalFormat.day(CalDays.addDays(monday, 6), "dMMMyyyy"))"
         }
-        return CalFormat.day(month + "-01", "MMMMyyyy")
+        return AppDateLocale.monthTitle(key: month)
     }
 
     /// Month / People, and whose tasks: on screen, one tap, the way the web header has it. "Mine"
@@ -1190,7 +1190,7 @@ struct CalendarView: View {
         let days = monthDays
         let cells = monthCells(days)
         let facts = monthFacts
-        let monthName = CalFormat.day(month + "-01", "MMMMyyyy")
+        let monthName = AppDateLocale.monthTitle(key: month)
         let shownThisMonth = loaded ? monthVisibleCount : 0
         // Only a load the person is waiting for dims the grid. The poll used to drop it to 60% for
         // every round trip, a blink a minute while someone was reading it.

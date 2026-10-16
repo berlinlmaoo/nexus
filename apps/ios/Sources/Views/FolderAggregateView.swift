@@ -269,7 +269,7 @@ private struct FolderCalendar: View {
                 HStack {
                     Button { goMonth(-1) } label: { Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 34, height: 34) }
                     Spacer()
-                    Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                    Text(AppDateLocale.monthTitle(monthDate)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
                     Spacer()
                     Button { goMonth(1) } label: { Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 34, height: 34) }
                 }

@@ -641,9 +641,14 @@ struct ProjectDetailView: View {
             SidebarReopenButton()
             // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
             if isPresented {
+                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14).
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(NX.foreground)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
+                        .frame(width: 44, height: 44)
+                        .background(.regularMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border.opacity(0.7), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)

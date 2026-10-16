@@ -767,7 +767,10 @@ enum OutletFormat {
     /// "Oktober 2026" / "October 2026" for "2026-10".
     static func monthLabel(_ month: String) -> String {
         guard let p = parts(month + "-01") else { return month }
-        return "\((isID ? monthsID : monthsEN)[p.m - 1]) \(p.y)"
+        // The current year is left out, as on every other date (decision 2 of run 19, R19-I-40).
+        let year = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "Asia/Jakarta")!, from: Date()).year
+        let name = (isID ? monthsID : monthsEN)[p.m - 1]
+        return p.y == year ? name : "\(name) \(p.y)"
     }
 
     /// "2026-10" moved by `by` months.
