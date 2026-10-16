@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma"
 import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import type { Prisma } from "@/generated/prisma/client"
+import { randomUUID } from "crypto"
+import { attendanceDayBlockedTx, attendanceDayOfReason, lockAttendanceDay, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
 
 // ===== Levels (mirror apps/web/src/lib/levels.ts) =====
 // Period-based scoring: every user starts each period at PERIOD_BASELINE_XP (1000 =
@@ -94,14 +96,18 @@ export function priorityBonus(priority?: string | null): number {
 export async function applyXpDelta(tx: Prisma.TransactionClient, userId: string, delta: number) {
   const agg = await tx.xpTransaction.aggregate({ _sum: { amount: true }, where: { userId, createdAt: { gte: getLeaderboardPeriodStart() } } })
   const level = levelForXp(PERIOD_BASELINE_XP + (agg._sum.amount ?? 0)).level
-  const ux = await tx.userXp.upsert({
-    where: { userId },
-    create: { userId, totalXp: delta, currentLevel: level },
-    update: { totalXp: { increment: delta } },
-  })
-  if (level !== ux.currentLevel) {
-    await tx.userXp.update({ where: { userId }, data: { currentLevel: level } })
-  }
+  // One statement, not a Prisma upsert: with the pg driver adapter the upsert is a SELECT then an
+  // INSERT, so the first two awards for a user with no UserXp row yet raced to the INSERT and the loser
+  // threw P2002 — inside a try/catch at check-in, so that XP was lost silently (race audit addendum).
+  // ON CONFLICT makes the first insert and every later increment the same atomic write. The id is only
+  // used when the row is new; any unique string is a valid UserXp id.
+  await tx.$executeRaw`
+    INSERT INTO "UserXp" ("id", "userId", "totalXp", "currentLevel", "updatedAt")
+    VALUES (${randomUUID()}, ${userId}, ${delta}, ${level}, NOW())
+    ON CONFLICT ("userId") DO UPDATE
+      SET "totalXp" = "UserXp"."totalXp" + EXCLUDED."totalXp",
+          "currentLevel" = EXCLUDED."currentLevel",
+          "updatedAt" = NOW()`
 }
 
 /** The period level of a user right now (what UserXp.currentLevel holds, recomputed: a new period resets it). */
@@ -112,10 +118,14 @@ export async function periodLevelOf(userId: string): Promise<number> {
 /** Award XP to a user and log a transaction. `amount` may be NEGATIVE (a BoD adjustment). */
 export async function awardXp(userId: string, amount: number, reason: string, taskId?: string) {
   if (!userId || amount === 0) return
-  await prisma.$transaction(async (tx) => {
-    await tx.xpTransaction.create({ data: { userId, amount, reason, taskId: taskId ?? null } })
-    await applyXpDelta(tx, userId, amount)
-  })
+  await prisma.$transaction((tx) => awardXpTx(tx, userId, amount, reason, taskId))
+}
+
+/** awardXp inside a caller's transaction, so the award commits (or not) with the caller's own writes. */
+export async function awardXpTx(tx: Prisma.TransactionClient, userId: string, amount: number, reason: string, taskId?: string) {
+  if (!userId || amount === 0) return
+  await tx.xpTransaction.create({ data: { userId, amount, reason, taskId: taskId ?? null } })
+  await applyXpDelta(tx, userId, amount)
 }
 
 /**
@@ -128,12 +138,19 @@ export async function awardXp(userId: string, amount: number, reason: string, ta
  * same reason serialize on that lock, so the second sees the first's committed row and returns false —
  * no duplicate ledger row, no double XP. (Without it the old check-then-act TOCTOU let both award.)
  */
-export async function awardXpOnce(userId: string, amount: number, reason: string): Promise<boolean> {
+export async function awardXpOnce(userId: string, amount: number, reason: string, opts?: { guard?: AttendanceDayGuard }): Promise<boolean> {
   if (!userId || amount === 0) return false
   return await prisma.$transaction(async (tx) => {
+    // An attendance penalty also takes the member-day lock first (lib/attendance-day-lock.ts), so it
+    // serializes with the pardon/refund of that day, not only with writers of the same reason.
+    const dayKey = attendanceDayOfReason(reason)
+    if (dayKey) await lockAttendanceDay(tx, userId, dayKey)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
     const already = await tx.xpTransaction.findFirst({ where: { userId, reason }, select: { id: true } })
     if (already) return false
+    // The caller's own exemption checks, made again under the lock: a waiver, a check-in or a request
+    // that landed after the caller looked now wins instead of being overwritten (race audit H1/H2).
+    if (dayKey && opts?.guard && (await attendanceDayBlockedTx(tx, userId, dayKey, opts.guard))) return false
     await tx.xpTransaction.create({ data: { userId, amount, reason } })
     await applyXpDelta(tx, userId, amount)
     return true
@@ -146,13 +163,18 @@ export async function awardXpOnce(userId: string, amount: number, reason: string
  * `attendance:late:DATE` ledger entry — so the per-minute accrual job can grow the
  * penalty (-1/min, capped) live as the user stays late & unchecked-in.
  */
-export async function setLatePenalty(userId: string, dateKey: string, targetAmount: number) {
+export async function setLatePenalty(userId: string, dateKey: string, targetAmount: number, opts?: { guard?: AttendanceDayGuard }) {
   if (!userId) return
   const reason = `attendance:late:${dateKey}`
   await prisma.$transaction(async (tx) => {
-    // Serialize against the per-minute accrual job + any concurrent check-in/refund touching this same
-    // day's penalty row, so the read-compute-write of `delta` can't race (lost update on totalXp).
+    // Serialize against the per-minute accrual job + any concurrent check-in/refund/pardon touching this
+    // same member-day, so the read-compute-write of `delta` can't race (lost update on totalXp).
+    await lockAttendanceDay(tx, userId, dateKey)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
+    // The live accrual passes { requireNoCheckIn, covered, ... }: it read "not checked in, not covered,
+    // not pardoned" before taking the lock, and a check-in that committed since then has already frozen
+    // (or cleared) this penalty — writing the accrual's figure now would overwrite it (race audit H1).
+    if (opts?.guard && (await attendanceDayBlockedTx(tx, userId, dateKey, opts.guard))) return
     const existing = await tx.xpTransaction.findFirst({ where: { userId, reason }, select: { id: true, amount: true } })
     // The BoD removed this day's late penalty from the member record (lib/xp-refund): it stays at 0.
     // Without this the live accrual and the check-in would write it straight back.
@@ -174,6 +196,8 @@ export async function setLatePenalty(userId: string, dateKey: string, targetAmou
  *  and can't double-credit. */
 export async function refundXpByReasonTx(tx: Prisma.TransactionClient, userId: string, reason: string): Promise<number> {
   if (!userId) return 0
+  const dayKey = attendanceDayOfReason(reason)
+  if (dayKey) await lockAttendanceDay(tx, userId, dayKey)
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
   const rows = await tx.xpTransaction.findMany({ where: { userId, reason }, select: { amount: true } })
   if (rows.length === 0) return 0

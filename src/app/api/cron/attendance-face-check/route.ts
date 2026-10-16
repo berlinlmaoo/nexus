@@ -6,6 +6,7 @@ import { isCronRequest } from "@/lib/cron-auth"
 import { attendancePeriodKey } from "@/lib/attendance"
 import { periodBounds } from "@/lib/day-off-bonus"
 import { countFaces } from "@/lib/face-check"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Face check on attendance selfies (lib/face-check.ts). Every 5 minutes (crontab on the server host,
 // cron/nexus-cron.sh): the selfies not checked yet, newest first, at most LIMIT records a run, from
@@ -34,49 +35,52 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const since = periodBounds(prevPeriodKey(attendancePeriodKey())).start
-    const records = await prisma.attendanceRecord.findMany({
-      where: {
-        attendanceDate: { gte: since },
-        OR: [
-          { checkInPhotoUrl: { not: null }, checkInFaceCount: null },
-          { checkOutPhotoUrl: { not: null }, checkOutFaceCount: null },
-        ],
-      },
-      select: { id: true, checkInPhotoUrl: true, checkInFaceCount: true, checkOutPhotoUrl: true, checkOutFaceCount: true },
-      orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }],
-      take: LIMIT,
-    })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("attendance-face-check", { fromCron: true }, async () => {
+      const since = periodBounds(prevPeriodKey(attendancePeriodKey())).start
+      const records = await prisma.attendanceRecord.findMany({
+        where: {
+          attendanceDate: { gte: since },
+          OR: [
+            { checkInPhotoUrl: { not: null }, checkInFaceCount: null },
+            { checkOutPhotoUrl: { not: null }, checkOutFaceCount: null },
+          ],
+        },
+        select: { id: true, checkInPhotoUrl: true, checkInFaceCount: true, checkOutPhotoUrl: true, checkOutFaceCount: true },
+        orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }],
+        take: LIMIT,
+      })
 
-    const started = Date.now()
-    let checked = 0, noFace = 0, failed = 0, skipped = 0
-    let next = 0
-    const worker = async () => {
-      while (next < records.length) {
-        const r = records[next++]
-        if (Date.now() - started > BUDGET_MS) { skipped++; continue }
-        const inCount = r.checkInPhotoUrl && r.checkInFaceCount == null ? await countFaces(r.checkInPhotoUrl) : null
-        const outCount = r.checkOutPhotoUrl && r.checkOutFaceCount == null ? await countFaces(r.checkOutPhotoUrl) : null
-        const wantedIn = Boolean(r.checkInPhotoUrl && r.checkInFaceCount == null)
-        const wantedOut = Boolean(r.checkOutPhotoUrl && r.checkOutFaceCount == null)
-        if ((wantedIn && inCount == null) || (wantedOut && outCount == null)) failed++
-        if (inCount == null && outCount == null) continue
-        if (inCount === 0 || outCount === 0) noFace++
-        await prisma.$executeRaw`
-          UPDATE "AttendanceRecord"
-          SET "checkInFaceCount" = COALESCE(${inCount}::int, "checkInFaceCount"),
-              "checkOutFaceCount" = COALESCE(${outCount}::int, "checkOutFaceCount"),
-              "faceCheckedAt" = NOW()
-          WHERE "id" = ${r.id}`
-        checked++
+      const started = Date.now()
+      let checked = 0, noFace = 0, failed = 0, skipped = 0
+      let next = 0
+      const worker = async () => {
+        while (next < records.length) {
+          const r = records[next++]
+          if (Date.now() - started > BUDGET_MS) { skipped++; continue }
+          const inCount = r.checkInPhotoUrl && r.checkInFaceCount == null ? await countFaces(r.checkInPhotoUrl) : null
+          const outCount = r.checkOutPhotoUrl && r.checkOutFaceCount == null ? await countFaces(r.checkOutPhotoUrl) : null
+          const wantedIn = Boolean(r.checkInPhotoUrl && r.checkInFaceCount == null)
+          const wantedOut = Boolean(r.checkOutPhotoUrl && r.checkOutFaceCount == null)
+          if ((wantedIn && inCount == null) || (wantedOut && outCount == null)) failed++
+          if (inCount == null && outCount == null) continue
+          if (inCount === 0 || outCount === 0) noFace++
+          await prisma.$executeRaw`
+            UPDATE "AttendanceRecord"
+            SET "checkInFaceCount" = COALESCE(${inCount}::int, "checkInFaceCount"),
+                "checkOutFaceCount" = COALESCE(${outCount}::int, "checkOutFaceCount"),
+                "faceCheckedAt" = NOW()
+            WHERE "id" = ${r.id}`
+          checked++
+        }
       }
-    }
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker))
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker))
 
-    // ok:false when the detector answered nothing at all: the quiet cron caller then logs the run,
-    // which is how a dead sidecar gets noticed.
-    const ok = records.length === 0 || checked > 0 || failed === 0
-    return NextResponse.json({ ok, candidates: records.length, checked, noFace, failed, skipped, ms: Date.now() - started })
+      // ok:false when the detector answered nothing at all: the quiet cron caller then logs the run,
+      // which is how a dead sidecar gets noticed.
+      const ok = records.length === 0 || checked > 0 || failed === 0
+      return NextResponse.json({ ok, candidates: records.length, checked, noFace, failed, skipped, ms: Date.now() - started })
+    })
   } catch (error) {
     console.error("attendance face check failed:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

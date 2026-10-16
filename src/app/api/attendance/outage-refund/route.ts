@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getAttendanceWorkspaceContext, parseDateOnlyToUtc } from "@/lib/attendance"
 import { refundOutageDay, type OutageRefundResult } from "@/lib/attendance-absence"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Refund attendance penalties wrongly applied on a SYSTEM-OUTAGE day (listrik mati / NEXUS down):
 // for the given date, give back the late/no-checkout/alpha XP and restore any auto-cut day-off, for
@@ -50,43 +51,46 @@ export async function POST(req: NextRequest) {
     }
 
     if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (!body?.date) return NextResponse.json({ error: "Tanggal wajib diisi (date: YYYY-MM-DD)." }, { status: 400 })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("outage-refund", { fromCron: adminUserId === null }, async () => {
+      if (!body?.date) return NextResponse.json({ error: "Tanggal wajib diisi (date: YYYY-MM-DD)." }, { status: 400 })
 
-    let date: Date
-    try {
-      date = parseDateOnlyToUtc(body.date)
-    } catch {
-      return NextResponse.json({ error: "Format tanggal tidak valid (YYYY-MM-DD)." }, { status: 400 })
-    }
-    if (isNaN(date.getTime())) {
-      return NextResponse.json({ error: "Format tanggal tidak valid (YYYY-MM-DD)." }, { status: 400 })
-    }
+      let date: Date
+      try {
+        date = parseDateOnlyToUtc(body.date)
+      } catch {
+        return NextResponse.json({ error: "Format tanggal tidak valid (YYYY-MM-DD)." }, { status: 400 })
+      }
+      if (isNaN(date.getTime())) {
+        return NextResponse.json({ error: "Format tanggal tidak valid (YYYY-MM-DD)." }, { status: 400 })
+      }
 
-    const dryRun = body.dryRun ?? false
-    const perWorkspace: OutageRefundResult[] = []
-    for (const wid of workspaceIds) {
-      perWorkspace.push(await refundOutageDay({
-        workspaceId: wid, date, dryRun, adminUserId, request: req,
-        // Optional: a partial outage — one that only reached some shifts — is refunded to the
-        // people it actually reached rather than to the whole day.
-        userIds: Array.isArray(body?.userIds) ? body.userIds.filter((x): x is string => typeof x === "string") : undefined,
-      }))
-    }
+      const dryRun = body.dryRun ?? false
+      const perWorkspace: OutageRefundResult[] = []
+      for (const wid of workspaceIds) {
+        perWorkspace.push(await refundOutageDay({
+          workspaceId: wid, date, dryRun, adminUserId, request: req,
+          // Optional: a partial outage — one that only reached some shifts — is refunded to the
+          // people it actually reached rather than to the whole day.
+          userIds: Array.isArray(body?.userIds) ? body.userIds.filter((x): x is string => typeof x === "string") : undefined,
+        }))
+      }
 
-    // Merge (single workspace for the admin/button path; possibly many on the cron path).
-    const merged = {
-      ok: true as const,
-      date: perWorkspace[0]?.date ?? body.date,
-      dryRun,
-      refundedMembers: perWorkspace.reduce((s, r) => s + r.refundedMembers, 0),
-      excludedMembers: perWorkspace.reduce((s, r) => s + r.excludedMembers, 0),
-      totalXpRefunded: perWorkspace.reduce((s, r) => s + r.totalXpRefunded, 0),
-      totalDayOffsRestored: perWorkspace.reduce((s, r) => s + r.totalDayOffsRestored, 0),
-      failed: perWorkspace.reduce((s, r) => s + r.failed, 0),
-      entries: perWorkspace.flatMap((r) => r.entries),
-    }
+      // Merge (single workspace for the admin/button path; possibly many on the cron path).
+      const merged = {
+        ok: true as const,
+        date: perWorkspace[0]?.date ?? body.date,
+        dryRun,
+        refundedMembers: perWorkspace.reduce((s, r) => s + r.refundedMembers, 0),
+        excludedMembers: perWorkspace.reduce((s, r) => s + r.excludedMembers, 0),
+        totalXpRefunded: perWorkspace.reduce((s, r) => s + r.totalXpRefunded, 0),
+        totalDayOffsRestored: perWorkspace.reduce((s, r) => s + r.totalDayOffsRestored, 0),
+        failed: perWorkspace.reduce((s, r) => s + r.failed, 0),
+        entries: perWorkspace.flatMap((r) => r.entries),
+      }
 
-    return NextResponse.json(merged)
+      return NextResponse.json(merged)
+    })
   } catch (error) {
     console.error("attendance outage-refund error:", error)
     return NextResponse.json(

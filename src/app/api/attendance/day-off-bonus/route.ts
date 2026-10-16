@@ -133,15 +133,48 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // A period is ~30 days: more than 31 extra days for one person in one period is a typo.
-    const existing = await prisma.dayOffBonus.groupBy({
-      by: ["userId"],
-      where: { workspaceId: g.workspaceId, periodKey, userId: { in: userIds }, revokedAt: null },
-      _sum: { days: true },
+    // The limit check and the inserts run in one transaction, under one lock per person and period
+    // (race audit H3): the bonus is additive, so a double click whose requests overlapped both passed
+    // the "≤ 31 days" check and granted twice. Inside the lock, an identical grant by the same BoD in
+    // the last 10 s is that double click: it is handed back instead of being granted again.
+    const outcome = await prisma.$transaction(async (tx) => {
+      for (const userId of [...userIds].sort()) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dayoffbonus|${userId}|${periodKey}`})::int8)`
+      }
+      const recent = await tx.dayOffBonus.findMany({
+        where: {
+          workspaceId: g.workspaceId, periodKey, userId: { in: userIds }, days, reason, grantedById: g.userId,
+          revokedAt: null, createdAt: { gte: new Date(Date.now() - 10_000) },
+        },
+        select: DAY_OFF_BONUS_SELECT,
+        orderBy: { createdAt: "asc" },
+      })
+      const repeatOf = new Map<string, (typeof recent)[number]>()
+      for (const r of recent) if (!repeatOf.has(r.userId)) repeatOf.set(r.userId, r)
+      const fresh = userIds.filter((id) => !repeatOf.has(id))
+
+      // A period is ~30 days: more than 31 extra days for one person in one period is a typo.
+      const existing = await tx.dayOffBonus.groupBy({
+        by: ["userId"],
+        where: { workspaceId: g.workspaceId, periodKey, userId: { in: fresh }, revokedAt: null },
+        _sum: { days: true },
+      })
+      const already = new Map(existing.map((e) => [e.userId, e._sum.days ?? 0]))
+      const overLimit = fresh.filter((id) => (already.get(id) ?? 0) + days > DAY_OFF_BONUS_MAX_DAYS)
+      if (overLimit.length > 0) return { overLimit, created: null, fresh: null }
+
+      const made = []
+      for (const userId of fresh) {
+        made.push(await tx.dayOffBonus.create({
+          data: { workspaceId: g.workspaceId, userId, periodKey, days, reason, grantedById: g.userId },
+          select: DAY_OFF_BONUS_SELECT,
+        }))
+      }
+      const byUser = new Map(made.map((m) => [m.userId, m]))
+      return { overLimit: null, created: userIds.map((id) => byUser.get(id) ?? repeatOf.get(id)!), fresh }
     })
-    const already = new Map(existing.map((e) => [e.userId, e._sum.days ?? 0]))
-    const overLimit = userIds.filter((id) => (already.get(id) ?? 0) + days > DAY_OFF_BONUS_MAX_DAYS)
-    if (overLimit.length > 0) {
+    if (outcome.overLimit) {
+      const { overLimit } = outcome
       const names = members.filter((m) => overLimit.includes(m.userId)).map((m) => m.user?.name ?? m.userId)
       return NextResponse.json(
         {
@@ -152,15 +185,11 @@ export async function POST(req: NextRequest) {
         { status: 422 },
       )
     }
-
-    const created = await prisma.$transaction(
-      userIds.map((userId) =>
-        prisma.dayOffBonus.create({
-          data: { workspaceId: g.workspaceId, userId, periodKey, days, reason, grantedById: g.userId },
-          select: DAY_OFF_BONUS_SELECT,
-        }),
-      ),
-    )
+    const { created, fresh } = outcome
+    if (fresh.length === 0) {
+      // The whole batch was the repeat of a grant made seconds ago: nothing new, nobody re-notified.
+      return NextResponse.json({ ...periodInfo(periodKey), days, notified: 0, grants: created.map(serializeDayOffBonus), duplicate: true }, { status: 201 })
+    }
 
     try {
       await logAudit({
@@ -175,9 +204,9 @@ export async function POST(req: NextRequest) {
           periodKey,
           days,
           note: reason,
-          people: userIds.length,
-          targetUserIds: userIds,
-          grantIds: created.map((c) => c.id),
+          people: fresh.length,
+          targetUserIds: fresh,
+          grantIds: created.filter((c) => fresh.includes(c.userId)).map((c) => c.id),
         },
       })
     } catch { /* audit best-effort */ }
@@ -185,12 +214,12 @@ export async function POST(req: NextRequest) {
     // Tell each person. After the commit and best-effort: a failed push never undoes a grant.
     const notice = bonusGrantTexts(days, periodKey, reason)
     const sent = await Promise.allSettled(
-      userIds.map((userId) =>
+      fresh.map((userId) =>
         createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: "/attendance", push: true }),
       ),
     )
     const notified = sent.filter((r) => r.status === "fulfilled").length
-    if (notified < userIds.length) console.error("[day-off-bonus] notify failed for", userIds.length - notified, "people")
+    if (notified < fresh.length) console.error("[day-off-bonus] notify failed for", fresh.length - notified, "people")
 
     return NextResponse.json({ ...periodInfo(periodKey), days, notified, grants: created.map(serializeDayOffBonus) }, { status: 201 })
   } catch (error) {

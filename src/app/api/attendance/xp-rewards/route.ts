@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { getAttendanceWorkspaceContext, formatAttendanceDateKey } from "@/lib/attendance"
 import { applyMonthlyXpRewards } from "@/lib/period-rewards"
 import { logAudit } from "@/lib/audit"
+import { runCronJob } from "@/lib/cron-lock"
 
 // GET → the caller's recent period rewards (tier + perk per month).
 export async function GET() {
@@ -40,24 +41,27 @@ export async function POST(req: NextRequest) {
       actorId = session.user.id
     }
 
-    const body = await req.json().catch(() => ({}))
-    const monthKey: string = typeof body?.monthKey === "string" && /^\d{4}-\d{2}$/.test(body.monthKey)
-      ? body.monthKey
-      : formatAttendanceDateKey(new Date()).slice(0, 7)
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("xp-rewards", { fromCron: isCron }, async () => {
+      const body = await req.json().catch(() => ({}))
+      const monthKey: string = typeof body?.monthKey === "string" && /^\d{4}-\d{2}$/.test(body.monthKey)
+        ? body.monthKey
+        : formatAttendanceDateKey(new Date()).slice(0, 7)
 
-    // Cron with no explicit workspace → run all workspaces that have office locations.
-    if (isCron && !workspaceId) {
-      const ws = await import("@/lib/prisma").then((m) => m.default.workspace.findMany({ select: { id: true } }))
-      const results = []
-      for (const w of ws) results.push(await applyMonthlyXpRewards(w.id, monthKey))
-      return NextResponse.json({ monthKey, results })
-    }
+      // Cron with no explicit workspace → run all workspaces that have office locations.
+      if (isCron && !workspaceId) {
+        const ws = await import("@/lib/prisma").then((m) => m.default.workspace.findMany({ select: { id: true } }))
+        const results = []
+        for (const w of ws) results.push(await applyMonthlyXpRewards(w.id, monthKey))
+        return NextResponse.json({ monthKey, results })
+      }
 
-    const result = await applyMonthlyXpRewards(workspaceId!, monthKey)
-    if (actorId !== "cron") {
-      logAudit({ action: "grant", entityType: "period_rewards", entityId: workspaceId!, entityName: `period-rewards:${monthKey}`, userId: actorId, request: req, metadata: { ...result } })
-    }
-    return NextResponse.json(result)
+      const result = await applyMonthlyXpRewards(workspaceId!, monthKey)
+      if (actorId !== "cron") {
+        logAudit({ action: "grant", entityType: "period_rewards", entityId: workspaceId!, entityName: `period-rewards:${monthKey}`, userId: actorId, request: req, metadata: { ...result } })
+      }
+      return NextResponse.json(result)
+    })
   } catch (error) {
     console.error("Period rewards error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

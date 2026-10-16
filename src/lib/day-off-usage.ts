@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { attendancePeriodKey, attendancePeriodRange, enumerateAttendanceDates, formatAttendanceDateKey } from "@/lib/attendance"
 import { combineDayOffQuota, sumBonusDays, type EffectiveDayOffQuota } from "@/lib/day-off-bonus"
 
@@ -44,6 +45,7 @@ export function dayOffPeriodOf(date: Date): string {
 /** Map of `dayOffUsageKey(userId, periodKey)` → day-off days used. Absent key = 0. */
 export async function dayOffUsedByPeriod(
   wanted: ReadonlyArray<{ userId: string; periodKey: string }>,
+  db: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, number>> {
   const used = new Map<string, number>()
   if (wanted.length === 0) return used
@@ -51,7 +53,7 @@ export async function dayOffUsedByPeriod(
   const userIds = Array.from(new Set(wanted.map((w) => w.userId)))
   const windows = Array.from(new Set(wanted.map((w) => w.periodKey))).map((k) => attendancePeriodRange(k))
 
-  const rows = await prisma.attendanceRequest.findMany({
+  const rows = await db.attendanceRequest.findMany({
     where: {
       userId: { in: userIds },
       type: "DAY_OFF",
@@ -94,17 +96,18 @@ export interface EffectiveDayOffQuotaDetail extends EffectiveDayOffQuota {
 export async function effectiveDayOffQuotas(
   workspaceId: string,
   wanted: ReadonlyArray<{ userId: string; periodKey: string }>,
+  db: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, EffectiveDayOffQuotaDetail>> {
   const out = new Map<string, EffectiveDayOffQuotaDetail>()
   if (wanted.length === 0) return out
   const userIds = Array.from(new Set(wanted.map((w) => w.userId)))
   const periodKeys = Array.from(new Set(wanted.map((w) => w.periodKey)))
   const [members, bonuses] = await Promise.all([
-    prisma.workspaceMember.findMany({
+    db.workspaceMember.findMany({
       where: { workspaceId, userId: { in: userIds } },
       select: { userId: true, dayOffQuota: true },
     }),
-    prisma.dayOffBonus.findMany({
+    db.dayOffBonus.findMany({
       where: { workspaceId, userId: { in: userIds }, periodKey: { in: periodKeys }, revokedAt: null },
       select: { id: true, userId: true, periodKey: true, days: true, reason: true, revokedAt: true },
       orderBy: { createdAt: "asc" },
@@ -114,7 +117,7 @@ export async function effectiveDayOffQuotas(
   // Only asked for when someone has no member row — the usual call is all current members.
   const notMembers = userIds.filter((id) => !baseByUser.has(id))
   if (notMembers.length > 0) {
-    const formers = await prisma.formerMember.findMany({
+    const formers = await db.formerMember.findMany({
       where: { workspaceId, userId: { in: notMembers } },
       select: { userId: true, dayOffQuota: true },
     })

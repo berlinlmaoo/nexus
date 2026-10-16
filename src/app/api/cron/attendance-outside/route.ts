@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { isCronRequest } from "@/lib/cron-auth"
 import { advanceOutsideClock, recordsOutsideNow, type ClockResult } from "@/lib/attendance-location"
+import { runCronJob } from "@/lib/cron-lock"
 
 /**
  * The outside-the-office clock. Every minute, from the nexus-cron-menit systemd service:
@@ -21,41 +22,44 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    type CronBody = { dryRun?: boolean }
-    let body: CronBody | null = null
-    try {
-      body = (await req.json()) as CronBody
-    } catch {
-      /* tanpa body */
-    }
-    const q = req.nextUrl.searchParams.get("dryRun")
-    const dryRun = body?.dryRun === true || q === "1" || q === "true"
-
-    const now = new Date()
-    const ids = await recordsOutsideNow()
-    const results: ClockResult[] = []
-    const errors: { recordId: string; error: string }[] = []
-    // One at a time: a handful of records a minute, and each may push to APNs.
-    for (const id of ids) {
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("attendance-outside", { fromCron: true }, async () => {
+      type CronBody = { dryRun?: boolean }
+      let body: CronBody | null = null
       try {
-        results.push(await advanceOutsideClock(id, { now, dryRun }))
-      } catch (error) {
-        errors.push({ recordId: id, error: error instanceof Error ? error.message : String(error) })
+        body = (await req.json()) as CronBody
+      } catch {
+        /* tanpa body */
       }
-    }
-    if (errors.length) console.error("attendance-outside: some records failed", errors.slice(0, 5))
+      const q = req.nextUrl.searchParams.get("dryRun")
+      const dryRun = body?.dryRun === true || q === "1" || q === "true"
 
-    const fired = results.filter((r) => r.fired)
-    return NextResponse.json({
-      // false only when something failed, so NEXUS_CRON_QUIET logs the run that needs looking at.
-      ok: errors.length === 0,
-      dryRun,
-      now: now.toISOString(),
-      outside: ids.length,
-      due: results.filter((r) => r.due).length,
-      fired: fired.map((r) => ({ recordId: r.recordId, name: r.name, stage: r.stage, stale: r.stale })),
-      ...(dryRun ? { records: results } : {}),
-      errors,
+      const now = new Date()
+      const ids = await recordsOutsideNow()
+      const results: ClockResult[] = []
+      const errors: { recordId: string; error: string }[] = []
+      // One at a time: a handful of records a minute, and each may push to APNs.
+      for (const id of ids) {
+        try {
+          results.push(await advanceOutsideClock(id, { now, dryRun }))
+        } catch (error) {
+          errors.push({ recordId: id, error: error instanceof Error ? error.message : String(error) })
+        }
+      }
+      if (errors.length) console.error("attendance-outside: some records failed", errors.slice(0, 5))
+
+      const fired = results.filter((r) => r.fired)
+      return NextResponse.json({
+        // false only when something failed, so NEXUS_CRON_QUIET logs the run that needs looking at.
+        ok: errors.length === 0,
+        dryRun,
+        now: now.toISOString(),
+        outside: ids.length,
+        due: results.filter((r) => r.due).length,
+        fired: fired.map((r) => ({ recordId: r.recordId, name: r.name, stage: r.stage, stale: r.stale })),
+        ...(dryRun ? { records: results } : {}),
+        errors,
+      })
     })
   } catch (error) {
     console.error("Error running the attendance-outside clock:", error)

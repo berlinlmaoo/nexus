@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { mkdir, writeFile } from "fs/promises"
+import { mkdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -263,63 +263,89 @@ export async function POST(request: NextRequest) {
       simulated,
     })
 
-    const record = await prisma.attendanceRecord.create({
-      data: {
-        userId: session.user.id,
-        workspaceId: context.workspace.id,
-        officeLocationId: nearest.office.id,
-        attendanceDate,
-        checkInAt,
-        effectiveShiftSource: derived.effectiveShiftSource,
-        effectiveTeamId: derived.effectiveTeamId,
-        effectiveTeamName: derived.effectiveTeamName,
-        effectiveShiftStartTime: derived.effectiveShiftStartTime,
-        effectiveShiftEndTime: derived.effectiveShiftEndTime,
-        checkInStatus: derived.checkInStatus,
-        checkOutStatus: derived.checkOutStatus,
-        lateMinutes: derived.lateMinutes,
-        earlyLeaveMinutes: derived.earlyLeaveMinutes,
-        workedMinutes: derived.workedMinutes,
-        attendanceFlexi: derived.attendanceFlexi,
-        checkInOffline,
-        checkInAccuracyM: accuracyM,
-        checkInAltitudeM: altitudeM,
-        checkInSimulated: simulated,
-        checkInSuspect: integrity.suspect,
-        checkInSuspectReason: integrity.reason,
-        checkInImpliedKmh: integrity.impliedKmh,
-        checkInDeviceUptimeSec: checkInOffline ? deviceUptimeSec : null,
-        checkInClientId: clientId,
-        checkInClient,
-        // A browser cannot report a location trail; the board shows "Web check-in · location not tracked".
-        locationTrackingState: checkInClient === "web" ? "web" : null,
-        checkInLat: validation.data.lat,
-        checkInLng: validation.data.lng,
-        checkInAddress: reverseGeocode.displayName,
-        checkInPhotoUrl: photoUrl,
-        checkInDistanceMeters: Number(nearest.distanceMeters.toFixed(2)),
-        notes,
-        status: derived.status,
-      },
-      include: {
-        officeLocation: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
+    // The "already checked in" read above and this insert are two statements: a double tap (or a live
+    // tap racing its own offline replay) gets both requests past the read, and the loser hits the unique
+    // (userId, workspaceId, attendanceDate) or checkInClientId. That used to surface as a 500 — which the
+    // apps read as "server unreachable" and queue — plus an orphan selfie. Now the loser answers exactly
+    // what a sequential repeat would have: the replay of its own clientId, else the known 409.
+    let record
+    try {
+      record = await prisma.attendanceRecord.create({
+        data: {
+          userId: session.user.id,
+          workspaceId: context.workspace.id,
+          officeLocationId: nearest.office.id,
+          attendanceDate,
+          checkInAt,
+          effectiveShiftSource: derived.effectiveShiftSource,
+          effectiveTeamId: derived.effectiveTeamId,
+          effectiveTeamName: derived.effectiveTeamName,
+          effectiveShiftStartTime: derived.effectiveShiftStartTime,
+          effectiveShiftEndTime: derived.effectiveShiftEndTime,
+          checkInStatus: derived.checkInStatus,
+          checkOutStatus: derived.checkOutStatus,
+          lateMinutes: derived.lateMinutes,
+          earlyLeaveMinutes: derived.earlyLeaveMinutes,
+          workedMinutes: derived.workedMinutes,
+          attendanceFlexi: derived.attendanceFlexi,
+          checkInOffline,
+          checkInAccuracyM: accuracyM,
+          checkInAltitudeM: altitudeM,
+          checkInSimulated: simulated,
+          checkInSuspect: integrity.suspect,
+          checkInSuspectReason: integrity.reason,
+          checkInImpliedKmh: integrity.impliedKmh,
+          checkInDeviceUptimeSec: checkInOffline ? deviceUptimeSec : null,
+          checkInClientId: clientId,
+          checkInClient,
+          // A browser cannot report a location trail; the board shows "Web check-in · location not tracked".
+          locationTrackingState: checkInClient === "web" ? "web" : null,
+          checkInLat: validation.data.lat,
+          checkInLng: validation.data.lng,
+          checkInAddress: reverseGeocode.displayName,
+          checkInPhotoUrl: photoUrl,
+          checkInDistanceMeters: Number(nearest.distanceMeters.toFixed(2)),
+          notes,
+          status: derived.status,
+        },
+        include: {
+          officeLocation: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true,
+            },
+          },
+          correctedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        correctedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    })
+      })
+    } catch (createErr) {
+      if ((createErr as { code?: string })?.code !== "P2002") throw createErr
+      await unlink(path.join(uploadDir, safeName)).catch(() => {})
+      if (clientId) {
+        const replay = await prisma.attendanceRecord.findUnique({
+          where: { checkInClientId: clientId },
+          include: { officeLocation: true, user: true },
+        })
+        if (replay) return NextResponse.json({ record: serializeAttendanceRecord(replay), duplicate: true })
+      }
+      const winner = await prisma.attendanceRecord.findUnique({
+        where: { userId_workspaceId_attendanceDate: { userId: session.user.id, workspaceId: context.workspace.id, attendanceDate } },
+        select: { checkInAt: true },
+      })
+      if (winner?.checkInAt) {
+        return NextResponse.json({ error: "You have already checked in today." }, { status: 409 })
+      }
+      throw createErr
+    }
 
     // Finalize the late penalty at the exact check-in lateness: -1 XP/minute (max 120).
     // setLatePenalty overwrites any value the per-minute accrual job set while the user was
@@ -355,7 +381,9 @@ export async function POST(request: NextRequest) {
           await setLatePenalty(
             session.user.id,
             formatAttendanceDateKey(attendanceDate),
-            -Math.min(derived.lateMinutes, 120)
+            -Math.min(derived.lateMinutes, 120),
+            // The waiver read above, made again under the member-day lock (race audit H2).
+            { guard: { workspaceId: context.workspace.id, date: attendanceDate } },
           )
         } else {
           // Checked in ON TIME (within grace) → refund any penalty the per-minute accrual job may

@@ -13,7 +13,7 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForDate, isAutoDeduction, grantAttendanceWaiver } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, isAutoDeduction, lockAttendanceRequests } from "@/lib/attendance-absence"
 import { notifyAttendanceOverride } from "@/lib/attendance-review-notify"
 
 type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
@@ -77,13 +77,14 @@ export async function POST(req: NextRequest) {
 
     // Every action wipes the day's penalties: refunds late/no-checkout/alpha XP and removes the
     // cron's auto-deducted day-off (quota restored).
-    const refunded = await cancelAttendancePenaltiesForDate(targetUserId, workspaceId, date, dateKey)
+    // CLEAR_PENALTY: without a waiver the refund would NOT stick: the nightly cron re-derives penalties
+    // for every day in its window and would re-cut the XP/day-off. The waiver makes the pardon permanent
+    // (crons + check-in all skip penalty work for a waived member-day) without touching the status. It is
+    // written in the refund's own transaction (race audit H2): written after it, the per-minute accrual
+    // could re-penalise the day in between.
+    const refunded = await cancelAttendancePenaltiesForDate(targetUserId, workspaceId, date, dateKey, action === "CLEAR_PENALTY" ? { waive: "always" } : undefined)
 
     if (action === "CLEAR_PENALTY") {
-      // Without a waiver the refund would NOT stick: the nightly cron re-derives penalties for every
-      // day in its window and would re-cut the XP/day-off. The waiver makes the pardon permanent
-      // (crons + check-in all skip penalty work for a waived member-day) without touching the status.
-      await grantAttendanceWaiver(targetUserId, dateKey)
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))
@@ -170,67 +171,79 @@ export async function POST(req: NextRequest) {
 
     // LEAVE / SICK / DAY_OFF → an APPROVED covering request for that single day. The crons treat a
     // reviewer-stamped request as a real covering → skip + keep penalties refunded.
-    const covering = await prisma.attendanceRequest.findMany({
-      where: { userId: targetUserId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
-      select: { id: true, type: true, status: true, startDate: true, endDate: true, reason: true, reviewedById: true, approvalSource: true },
+    //
+    // Read-decide-write under the person's request lock (race audit H3): a double click, or a status
+    // change racing a request being filed, used to read "nothing covers this day" twice and create two.
+    const primary = await getPrimaryAttendanceTeam(targetUserId, workspaceId)
+    const outcome = await prisma.$transaction(async (tx) => {
+      await lockAttendanceRequests(tx, targetUserId)
+      const covering = await tx.attendanceRequest.findMany({
+        where: { userId: targetUserId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
+        select: { id: true, type: true, status: true, startDate: true, endDate: true, reason: true, reviewedById: true, approvalSource: true },
+      })
+      const real = covering.filter((r) => !isAutoDeduction(r))
+      // A different-type request covering this day: cancel it if single-day (we're replacing the status);
+      // refuse on multi-day so a week's leave isn't silently mangled from a one-day board click. Checked
+      // FIRST so a refusal makes no changes.
+      const conflicting = real.filter((r) => r.type !== action || r.status !== "APPROVED")
+      const multiDayConflict = conflicting.find((r) => r.startDate.getTime() !== r.endDate.getTime())
+      if (multiDayConflict) return { kind: "multiDay" as const, type: multiDayConflict.type }
+
+      // Close any OPEN (no check-out) attendance record for this day. A leave/day-off must not leave a
+      // dangling "pending check-out" — the staff can't check out (the day is now covered by the request)
+      // AND the open record blocks their next day's check-in. Runs even when the day is ALREADY this status
+      // (the common case: BoD changed the status mid-shift, and we're now cleaning up the stuck record).
+      // Not for PERMIT (owner, 28 Sep 2026): a permit is a working day elsewhere, so a check-in already made
+      // that day is part of it and stays.
+      const closed = action === "PERMIT"
+        ? { count: 0 }
+        : await tx.attendanceRecord.deleteMany({
+            where: { userId: targetUserId, workspaceId, attendanceDate: date, checkOutAt: null },
+          })
+
+      const sameTypeApproved = real.find((r) => r.type === action && r.status === "APPROVED")
+      if (sameTypeApproved) return { kind: "already" as const, closed }
+
+      if (conflicting.length > 0) {
+        await tx.attendanceRequest.updateMany({
+          where: { id: { in: conflicting.map((r) => r.id) } },
+          data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh direksi dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+        })
+      }
+
+      // NOTE: a DAY_OFF created here intentionally BYPASSES the monthly quota cap — same policy as a
+      // BoD grant (isGrant) in the requests route. The BoD is explicitly rewriting the day's status.
+      await tx.attendanceRequest.create({
+        data: {
+          userId: targetUserId,
+          workspaceId,
+          teamId: primary?.teamId ?? null,
+          type: action,
+          status: "APPROVED",
+          startDate: date,
+          endDate: date,
+          reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh direksi dari papan absensi.`,
+          reviewNote: "Diubah oleh direksi dari papan absensi.",
+          approvalSource: "ADMIN",
+          reviewedAt: new Date(),
+          reviewedById: session.user.id,
+        },
+      })
+      return { kind: "created" as const, closed, conflicting }
     })
-    const real = covering.filter((r) => !isAutoDeduction(r))
-    // A different-type request covering this day: cancel it if single-day (we're replacing the status);
-    // refuse on multi-day so a week's leave isn't silently mangled from a one-day board click. Checked
-    // FIRST so a refusal makes no changes.
-    const conflicting = real.filter((r) => r.type !== action || r.status !== "APPROVED")
-    const multiDayConflict = conflicting.find((r) => r.startDate.getTime() !== r.endDate.getTime())
-    if (multiDayConflict) {
+
+    if (outcome.kind === "multiDay") {
       return NextResponse.json(
-        { error: `Tanggal ini bagian dari request ${multiDayConflict.type} multi-hari — atur request itu dulu di bagian Requests.` },
+        { error: `Tanggal ini bagian dari request ${outcome.type} multi-hari — atur request itu dulu di bagian Requests.` },
         { status: 409 },
       )
     }
-
-    // Close any OPEN (no check-out) attendance record for this day. A leave/day-off must not leave a
-    // dangling "pending check-out" — the staff can't check out (the day is now covered by the request)
-    // AND the open record blocks their next day's check-in. Runs even when the day is ALREADY this status
-    // (the common case: BoD changed the status mid-shift, and we're now cleaning up the stuck record).
-    // Not for PERMIT (owner, 28 Sep 2026): a permit is a working day elsewhere, so a check-in already made
-    // that day is part of it and stays.
-    const closed = action === "PERMIT"
-      ? { count: 0 }
-      : await prisma.attendanceRecord.deleteMany({
-          where: { userId: targetUserId, workspaceId, attendanceDate: date, checkOutAt: null },
-        })
-
-    const sameTypeApproved = real.find((r) => r.type === action && r.status === "APPROVED")
-    if (sameTypeApproved) {
+    const { closed } = outcome
+    if (outcome.kind === "already") {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, alreadyCovered: true, closedAttendance: closed.count })
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, alreadyCovered: true, closedAttendance: closed.count })
     }
-
-    if (conflicting.length > 0) {
-      await prisma.attendanceRequest.updateMany({
-        where: { id: { in: conflicting.map((r) => r.id) } },
-        data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh direksi dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
-      })
-    }
-
-    // NOTE: a DAY_OFF created here intentionally BYPASSES the monthly quota cap — same policy as a
-    // BoD grant (isGrant) in the requests route. The BoD is explicitly rewriting the day's status.
-    const primary = await getPrimaryAttendanceTeam(targetUserId, workspaceId)
-    await prisma.attendanceRequest.create({
-      data: {
-        userId: targetUserId,
-        workspaceId,
-        teamId: primary?.teamId ?? null,
-        type: action,
-        status: "APPROVED",
-        startDate: date,
-        endDate: date,
-        reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh direksi dari papan absensi.`,
-        reviewNote: "Diubah oleh direksi dari papan absensi.",
-        approvalSource: "ADMIN",
-        reviewedAt: new Date(),
-        reviewedById: session.user.id,
-      },
-    })
+    const { conflicting } = outcome
 
     await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
     notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })

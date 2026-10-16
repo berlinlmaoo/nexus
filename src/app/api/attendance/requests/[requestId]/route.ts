@@ -76,11 +76,19 @@ export async function PATCH(
         return NextResponse.json({ error: "Only pending attendance requests can be canceled." }, { status: 409 })
       }
 
-      const updated = await prisma.attendanceRequest.update({
-        where: { id: attendanceRequest.id },
+      // Only while still PENDING (race audit M4): a cancel racing an approval used to overwrite the
+      // APPROVED decision with CANCELED after its refund had already run.
+      const claimed = await prisma.attendanceRequest.updateMany({
+        where: { id: attendanceRequest.id, status: "PENDING" },
         data: {
           status: "CANCELED",
         },
+      })
+      if (claimed.count === 0) {
+        return NextResponse.json({ error: "Only pending attendance requests can be canceled." }, { status: 409 })
+      }
+      const updated = await prisma.attendanceRequest.findUniqueOrThrow({
+        where: { id: attendanceRequest.id },
         include: {
           user: { select: { id: true, name: true, email: true, avatar: true } },
           reviewedBy: { select: { id: true, name: true, email: true } },

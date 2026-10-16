@@ -4,6 +4,12 @@ import { enumerateAttendanceDates, FLEXI_WINDOW_END, formatAttendanceDateKey, ge
 import { awardXpOnce, setLatePenalty, clearLatePenalty, refundXpByReason, refundXpByReasonTx } from "@/lib/gamification"
 import { getHolidayKeys, isHoliday } from "@/lib/holidays"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { attendanceDayBlockedTx, attendanceWaiverReason, isAutoDeduction, lockAttendanceDay, lockAttendanceRequests, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
+import type { Prisma } from "@/generated/prisma/client"
+
+// Defined next to the member-day lock (lib/attendance-day-lock.ts), which the XP ledger also needs;
+// re-exported so every existing import from here keeps working.
+export { attendanceWaiverReason, isAutoDeduction, lockAttendanceRequests }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 // Don't auto-deduct (or apply ANY attendance XP penalty) for days before the policy went live — avoids
@@ -116,16 +122,25 @@ export interface AttendancePenaltyRefund {
 }
 
 /**
+ * Pardon in the same transaction as the refund (race audit H2). "always" = waive the day whatever was
+ * undone (BoD Clear penalty, a deleted record, a clean ticket correction, the outage refund); "ifChanged" =
+ * only when something was actually refunded (the BoD record correction). Written refund-and-waiver under
+ * the member-day lock, the crons — which check the waiver under that same lock — see both or neither.
+ */
+export type AttendanceWaive = "always" | "ifChanged"
+
+/**
  * Cancel EVERY attendance penalty for a date — used when a real (manually-filed) leave/day-off covers
  * it. Refunds the late, no-checkout, and alpha XP, and drops the cron's own auto-deduction day-off so
  * the user's real leave isn't double-counted against their quota.
  */
-export async function cancelAttendancePenaltiesForDateDetailed(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<AttendancePenaltyRefund> {
+export async function cancelAttendancePenaltiesForDateDetailed(userId: string, workspaceId: string, date: Date, dateKey: string, opts?: { waive?: AttendanceWaive }): Promise<AttendancePenaltyRefund> {
   // All-or-nothing: the three XP refunds + the auto day-off drop happen in ONE transaction, so a crash
   // mid-way can't leave the member with (say) the late XP back but the alpha penalty still applied. Each
   // refund is advisory-locked on its (userId, reason), so a concurrent BoD override + cron amnesty can't
   // double-credit.
   return await prisma.$transaction(async (tx) => {
+    await lockAttendanceDay(tx, userId, dateKey)
     const late = await refundXpByReasonTx(tx, userId, `attendance:late:${dateKey}`)
     const noCheckout = await refundXpByReasonTx(tx, userId, `attendance:nocheckout:${dateKey}`)
     const alpha = await refundXpByReasonTx(tx, userId, `attendance:alpha:${dateKey}`)
@@ -133,13 +148,15 @@ export async function cancelAttendancePenaltiesForDateDetailed(userId: string, w
       where: { userId, workspaceId, type: "DAY_OFF", reviewedById: null, approvalSource: "ADMIN", reason: { startsWith: "Auto:" }, startDate: { lte: date }, endDate: { gte: date } },
     })
     // Did this actually undo a penalty? (used by the outage amnesty to count only real refunds)
-    return { xp: late + noCheckout + alpha, changed: late > 0 || noCheckout > 0 || alpha > 0 || dropped.count > 0 }
+    const changed = late > 0 || noCheckout > 0 || alpha > 0 || dropped.count > 0
+    if (opts?.waive === "always" || (opts?.waive === "ifChanged" && changed)) await grantAttendanceWaiverTx(tx, userId, dateKey)
+    return { xp: late + noCheckout + alpha, changed }
   })
 }
 
 /** Boolean form, for callers that only need "did anything change". */
-export async function cancelAttendancePenaltiesForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<boolean> {
-  return (await cancelAttendancePenaltiesForDateDetailed(userId, workspaceId, date, dateKey)).changed
+export async function cancelAttendancePenaltiesForDate(userId: string, workspaceId: string, date: Date, dateKey: string, opts?: { waive?: AttendanceWaive }): Promise<boolean> {
+  return (await cancelAttendancePenaltiesForDateDetailed(userId, workspaceId, date, dateKey, opts)).changed
 }
 
 /**
@@ -168,9 +185,6 @@ export async function cancelAttendancePenaltiesForRange(userId: string, workspac
  * (re-)applied for that member-day: without it, a penalty refund would not stick — the nightly cron
  * re-derives penalties for every day in its 14-day window and would simply re-cut the XP/day-off.
  */
-export function attendanceWaiverReason(dateKey: string) {
-  return `attendance:waiver:${dateKey}`
-}
 export async function hasAttendanceWaiver(userId: string, dateKey: string): Promise<boolean> {
   const row = await prisma.xpTransaction.findFirst({
     where: { userId, reason: attendanceWaiverReason(dateKey) },
@@ -179,8 +193,14 @@ export async function hasAttendanceWaiver(userId: string, dateKey: string): Prom
   return Boolean(row)
 }
 export async function grantAttendanceWaiver(userId: string, dateKey: string) {
-  if (await hasAttendanceWaiver(userId, dateKey)) return
-  await prisma.xpTransaction.create({
+  await prisma.$transaction((tx) => grantAttendanceWaiverTx(tx, userId, dateKey))
+}
+/** The waiver write, under the member-day lock so two pardons cannot both insert one. */
+export async function grantAttendanceWaiverTx(tx: Prisma.TransactionClient, userId: string, dateKey: string) {
+  await lockAttendanceDay(tx, userId, dateKey)
+  const existing = await tx.xpTransaction.findFirst({ where: { userId, reason: attendanceWaiverReason(dateKey) }, select: { id: true } })
+  if (existing) return
+  await tx.xpTransaction.create({
     data: { userId, amount: 0, reason: attendanceWaiverReason(dateKey) },
   })
 }
@@ -205,16 +225,6 @@ export async function findCoveringAttendanceRequests(userId: string, workspaceId
     },
     orderBy: { createdAt: "asc" },
   })
-}
-
-/**
- * True if a covering request is the cron's own auto-deduction (NOT a real user-filed leave). These
- * are PENALTIES (e.g. ">120 min late → −1 day-off token", or auto-absence), so attendance flows
- * (check-in/check-out) and the report must NOT treat them like a real day-off: they should never block
- * a present staffer from completing attendance, nor hide their actual present record.
- */
-export function isAutoDeduction(r: { reason: string | null; reviewedById: string | null; approvalSource: string | null }) {
-  return r.approvalSource === "ADMIN" && r.reviewedById === null && (r.reason ?? "").startsWith("Auto:")
 }
 
 /**
@@ -356,7 +366,8 @@ export async function rederiveLatePenaltyForDate(userId: string, workspaceId: st
   if (lateMin <= grace) return 0
 
   const amount = -Math.min(lateMin, 120)
-  await awardXpOnce(userId, amount, `attendance:late:${dateKey}`)
+  // Waiver + a real covering request re-checked under the member-day lock (race audit H2).
+  await awardXpOnce(userId, amount, `attendance:late:${dateKey}`, { guard: { workspaceId, date, covered: "real" } })
   return amount
 }
 
@@ -398,7 +409,7 @@ export async function clearLeaveCoveredOpenRecords(userId: string, workspaceId: 
 /**
  * Create the cron's auto "potong jatah day-off" request for one member-day, but ONLY if no PENDING/
  * APPROVED day-off already covers that date — idempotently. The re-check + create run inside one
- * transaction guarded by a (userId, dateKey) advisory lock, so two overlapping deduction runs (e.g. the
+ * transaction guarded by the per-person request lock (attreq|user), so two overlapping deduction runs (e.g. the
  * 02:00 cron and a manual "run now") can't both pass a stale duplicate-check and double-cut the quota.
  * Returns the new request id, or null if one already existed.
  */
@@ -410,10 +421,18 @@ async function createAutoDayOffOnce(opts: {
   dateKey: string
   reason: string
   reviewNote: string
+  /** The caller's exemption reads, made again under the member-day lock (always includes the waiver). */
+  guard: AttendanceDayGuard
 }): Promise<string | null> {
   const { userId, workspaceId, teamId, date, dateKey, reason, reviewNote } = opts
   return await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`autodayoff|${userId}|${dateKey}`})::int8)`
+    // The per-person request lock (race audit H3; it was autodayoff|user|date, which serialized two cron
+    // runs but not the cron against a request being filed for the same day).
+    await lockAttendanceRequests(tx, userId)
+    // A BoD pardon, a correction or a real request that landed after the cron's reads (race audit H2):
+    // the pardon dropped the auto day-offs that existed then, so this one must not appear after it.
+    await lockAttendanceDay(tx, userId, dateKey)
+    if (await attendanceDayBlockedTx(tx, userId, dateKey, opts.guard)) return null
     const dup = await tx.attendanceRequest.findFirst({
       where: { userId, workspaceId, type: "DAY_OFF", status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
       select: { id: true },
@@ -581,7 +600,8 @@ export async function refundOutageDay(opts: {
       if (!hasSomething) continue // nothing was cut for this member → skip silently
 
       if (!dryRun) {
-        await cancelAttendancePenaltiesForDate(userId, workspaceId, date, dateKey)
+        // Refund and waiver in one transaction (race audit H2): see below for why the waiver is needed.
+        await cancelAttendancePenaltiesForDate(userId, workspaceId, date, dateKey, { waive: "always" })
         // Without this the refund does not survive the night.
         //
         // The nightly cron re-derives penalties for every day in its 14-day window, so a day whose
@@ -590,7 +610,6 @@ export async function refundOutageDay(opts: {
         // away with it only because the two dates it had ever been used on were registered with
         // `blocksCheckIn: true`, which makes the cron skip them for a different reason entirely.
         // The first partial refund would have evaporated overnight with nobody able to say why.
-        await grantAttendanceWaiver(userId, dateKey)
       }
       result.refundedMembers++
       result.totalXpRefunded += xpRefund
@@ -761,7 +780,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
               const grace = Math.max(0, dayOffice.lateGraceMinutes ?? 0)
               if (lateMin > grace) {
                 // -1 XP/menit, maks 120.
-                await awardXpOnce(userId, -Math.min(lateMin, 120), `attendance:late:${dateKey}`)
+                await awardXpOnce(userId, -Math.min(lateMin, 120), `attendance:late:${dateKey}`, { guard: { workspaceId, date, covered: "real" } })
                 // Telat > 120 menit → potong jatah day-off (sekali, idempoten & aman dari run paralel).
                 if (lateMin > 120) {
                   const primaryLate = await getPrimaryAttendanceTeam(userId, workspaceId)
@@ -769,6 +788,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
                     userId, workspaceId, teamId: primaryLate?.teamId ?? null, date, dateKey,
                     reason: `Auto: telat >120 menit pada ${dateKey} (potong jatah day-off)`,
                     reviewNote: "Auto: telat >120 menit",
+                    guard: { workspaceId, date, covered: "real" },
                   })
                 }
               }
@@ -818,13 +838,16 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
         // Alpha GANTIIN akrual telat: hapus dulu penalti telat yang udah nyicil hari itu
         // supaya nggak ditumpuk (-150 jadi satu-satunya potongan hari itu).
         await clearLatePenalty(userId, dateKey)
-        await awardXpOnce(userId, -150, `attendance:alpha:${dateKey}`)
+        // Re-checked under the member-day lock: no check-in/correction, no covering request, no waiver
+        // appeared since the reads above (race audit H2).
+        await awardXpOnce(userId, -150, `attendance:alpha:${dateKey}`, { guard: { workspaceId, date, requireNoRecordFacts: true, covered: "any" } })
 
         const primary = await getPrimaryAttendanceTeam(userId, workspaceId)
         const createdId = await createAutoDayOffOnce({
           userId, workspaceId, teamId: primary?.teamId ?? null, date, dateKey,
           reason: `Auto: tidak check-in/out pada ${dateKey} (potong jatah day-off)`,
           reviewNote: "Auto-deducted: bolos (tanpa absen & tanpa izin)",
+          guard: { workspaceId, date, requireNoRecordFacts: true, covered: "real" },
         })
         if (!createdId) {
           // A covering day-off appeared concurrently → don't double-count.
@@ -940,7 +963,9 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
       if (elapsed <= grace) continue // within grace → not late yet, no penalty
 
       const target = -Math.min(elapsed, 120)
-      await setLatePenalty(userId, dateKey, target)
+      // The three reads above, made again under the member-day lock: a check-in, a request or a pardon
+      // that committed since then wins (race audit H1).
+      await setLatePenalty(userId, dateKey, target, { guard: { workspaceId, date: today, requireNoCheckIn: true, covered: "any" } })
       result.accrued++
       result.totalPenaltyXp += target
     }

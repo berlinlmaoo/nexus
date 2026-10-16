@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
-import { awardXp, periodLevelOf } from "@/lib/gamification"
+import { awardXpTx, periodLevelOf } from "@/lib/gamification"
 
 const MAX_ABS = 1000
 
@@ -48,16 +48,22 @@ export async function POST(req: NextRequest) {
 
     // Idempotency: ignore an identical adjustment that landed in the last 10s (double-click /
     // network retry). Intentional repeats just need a >10s gap or a different note/amount.
-    const dup = await prisma.xpTransaction.findFirst({
-      where: { userId, reason, amount, createdAt: { gte: new Date(Date.now() - 10_000) } },
-      select: { id: true },
+    // The check and the insert run in one transaction under a (userId, reason) advisory lock (race audit
+    // H4): as two statements, a double-click whose requests overlapped passed the check twice.
+    const duplicate = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
+      const dup = await tx.xpTransaction.findFirst({
+        where: { userId, reason, amount, createdAt: { gte: new Date(Date.now() - 10_000) } },
+        select: { id: true },
+      })
+      if (dup) return true
+      await awardXpTx(tx, userId, amount, reason)
+      return false
     })
-    if (dup) {
+    if (duplicate) {
       const cur = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true } })
       return NextResponse.json({ ok: true, duplicate: true, totalXp: cur?.totalXp ?? null, currentLevel: cur ? await periodLevelOf(userId) : null })
     }
-
-    await awardXp(userId, amount, reason)
 
     // currentLevel = this period's level, as the leaderboard and the profile show it (owner, 16 Oct 2026).
     const xp = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true } })

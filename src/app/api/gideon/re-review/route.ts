@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { isGideonTicketCategory, reviewSupportTicket } from "@/lib/gideon-ticket"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Re-run GIDEON's review on tickets it has ALREADY answered.
 //
@@ -46,50 +47,53 @@ export async function POST(req: NextRequest) {
     }
     if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Either an explicit list, or every ticket in a status. No "all tickets" default on purpose —
-    // an accidental empty body must sweep nothing, not everything.
-    const ids = Array.isArray(body?.complaintIds) ? body!.complaintIds!.filter((s) => typeof s === "string") : []
-    let targets: { id: string; subject: string; category: string }[] = []
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("gideon-re-review", { fromCron: workspaceId === null }, async () => {
+      // Either an explicit list, or every ticket in a status. No "all tickets" default on purpose —
+      // an accidental empty body must sweep nothing, not everything.
+      const ids = Array.isArray(body?.complaintIds) ? body!.complaintIds!.filter((s) => typeof s === "string") : []
+      let targets: { id: string; subject: string; category: string }[] = []
 
-    if (ids.length > 0) {
-      targets = await prisma.complaint.findMany({
-        where: { id: { in: ids }, ...(workspaceId ? { workspaceId } : {}) },
-        select: { id: true, subject: true, category: true },
-      })
-    } else if (body?.status) {
-      targets = await prisma.complaint.findMany({
-        where: { status: body.status as never, ...(workspaceId ? { workspaceId } : {}) },
-        orderBy: { createdAt: "asc" },
-        take: Math.min(Math.max(body.limit ?? 25, 1), 50),
-        select: { id: true, subject: true, category: true },
-      })
-    } else {
-      return NextResponse.json({ error: "Kasih complaintIds[] atau status." }, { status: 400 })
-    }
-
-    // GIDEON only handles some categories; asking it about the rest wastes a call and confuses the thread.
-    const eligible = targets.filter((t) => isGideonTicketCategory(t.category as never))
-    const skipped = targets.filter((t) => !isGideonTicketCategory(t.category as never)).map((t) => t.id)
-
-    if (body?.dryRun) {
-      return NextResponse.json({ ok: true, dryRun: true, wouldReview: eligible.map((t) => ({ id: t.id, subject: t.subject })), skipped })
-    }
-
-    const done: string[] = []
-    const failed: { id: string; error: string }[] = []
-    for (const t of eligible) {
-      try {
-        await reviewSupportTicket(t.id, { force: true })
-        done.push(t.id)
-      } catch (err) {
-        failed.push({ id: t.id, error: err instanceof Error ? err.message : String(err) })
+      if (ids.length > 0) {
+        targets = await prisma.complaint.findMany({
+          where: { id: { in: ids }, ...(workspaceId ? { workspaceId } : {}) },
+          select: { id: true, subject: true, category: true },
+        })
+      } else if (body?.status) {
+        targets = await prisma.complaint.findMany({
+          where: { status: body.status as never, ...(workspaceId ? { workspaceId } : {}) },
+          orderBy: { createdAt: "asc" },
+          take: Math.min(Math.max(body.limit ?? 25, 1), 50),
+          select: { id: true, subject: true, category: true },
+        })
+      } else {
+        return NextResponse.json({ error: "Kasih complaintIds[] atau status." }, { status: 400 })
       }
-      // One at a time, with a breath between: the shim spawns a Hermes process per request, and
-      // thirteen at once is how you turn a fix into an outage.
-      await new Promise((r) => setTimeout(r, 1500))
-    }
 
-    return NextResponse.json({ ok: true, reviewed: done.length, failedCount: failed.length, done, failed, skipped })
+      // GIDEON only handles some categories; asking it about the rest wastes a call and confuses the thread.
+      const eligible = targets.filter((t) => isGideonTicketCategory(t.category as never))
+      const skipped = targets.filter((t) => !isGideonTicketCategory(t.category as never)).map((t) => t.id)
+
+      if (body?.dryRun) {
+        return NextResponse.json({ ok: true, dryRun: true, wouldReview: eligible.map((t) => ({ id: t.id, subject: t.subject })), skipped })
+      }
+
+      const done: string[] = []
+      const failed: { id: string; error: string }[] = []
+      for (const t of eligible) {
+        try {
+          await reviewSupportTicket(t.id, { force: true })
+          done.push(t.id)
+        } catch (err) {
+          failed.push({ id: t.id, error: err instanceof Error ? err.message : String(err) })
+        }
+        // One at a time, with a breath between: the shim spawns a Hermes process per request, and
+        // thirteen at once is how you turn a fix into an outage.
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+
+      return NextResponse.json({ ok: true, reviewed: done.length, failedCount: failed.length, done, failed, skipped })
+    })
   } catch (error) {
     console.error("gideon re-review error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })

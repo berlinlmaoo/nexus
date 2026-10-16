@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { accrueLatePenalties } from "@/lib/attendance-absence"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Per-minute cron: live-accrue the late penalty (-1 XP/min, capped 120) for members past
 // their shift start who haven't checked in yet — so XP ticks down in real time without
@@ -26,8 +27,11 @@ export async function POST(req: NextRequest) {
     }
     if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const result = await accrueLatePenalties()
-    return NextResponse.json(result)
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("accrue-late", { fromCron: Boolean(cronSecret && bearer && bearer === cronSecret) }, async () => {
+      const result = await accrueLatePenalties()
+      return NextResponse.json(result)
+    })
   } catch (error) {
     console.error("accrue-late error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

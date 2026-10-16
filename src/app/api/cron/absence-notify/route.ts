@@ -8,6 +8,7 @@ import { attendanceWaiverReason, getOutageDateKeys, isAutoDeduction } from "@/li
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey } from "@/lib/day-off-usage"
 import { notifyAttendanceAbsentRecorded } from "@/lib/notification-service"
+import { runCronJob } from "@/lib/cron-lock"
 
 /**
  * Tell each person, once, that a day was recorded as absent and cost them a day off.
@@ -41,123 +42,126 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    type Body = { dryRun?: boolean }
-    let body: Body | null = null
-    try { body = (await req.json()) as Body } catch { /* tanpa body */ }
-    const q = req.nextUrl.searchParams.get("dryRun")
-    const dryRun = body?.dryRun === true || q === "1" || q === "true"
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("absence-notify", { fromCron: true }, async () => {
+      type Body = { dryRun?: boolean }
+      let body: Body | null = null
+      try { body = (await req.json()) as Body } catch { /* tanpa body */ }
+      const q = req.nextUrl.searchParams.get("dryRun")
+      const dryRun = body?.dryRun === true || q === "1" || q === "true"
 
-    const since = new Date(Date.now() - WINDOW_MS)
-    const rows = await prisma.attendanceRequest.findMany({
-      where: {
-        type: "DAY_OFF",
-        status: "APPROVED",
-        approvalSource: "ADMIN",
-        reviewedById: null,
-        reason: { startsWith: "Auto: tidak check-in" },
-        createdAt: { gte: since },
-      },
-      select: {
-        id: true, userId: true, workspaceId: true, startDate: true, endDate: true, createdAt: true,
-        reason: true, reviewedById: true, approvalSource: true,
-        user: { select: { email: true, name: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    })
-
-    const skipped: Skip[] = []
-    // One row is one day (createAutoDayOffOnce writes startDate = endDate); the date is read off the row.
-    const candidates = rows
-      .filter((r) => isAutoDeduction(r))
-      .map((r) => ({ ...r, dateKey: formatAttendanceDateKey(r.startDate) }))
-
-    const live = candidates.filter((r) => {
-      if (isDeletedAccountEmail(r.user?.email)) { skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "deleted_account" }); return false }
-      return true
-    })
-    const dateKeys = Array.from(new Set(live.map((r) => r.dateKey)))
-    const userIds = Array.from(new Set(live.map((r) => r.userId)))
-
-    // Outage register. If it cannot be read, send nothing: the next morning's run (still inside the
-    // 36-hour window) tries again, and silence is the safe failure for this particular sentence.
-    let outageKeys: Set<string>
-    try {
-      const recorded = dateKeys.length
-        ? await prisma.attendanceOutage.findMany({ where: { dateKey: { in: dateKeys } }, select: { dateKey: true } })
-        : []
-      outageKeys = new Set([...Array.from(getOutageDateKeys()), ...recorded.map((o) => o.dateKey)])
-    } catch (err) {
-      console.error("[absence-notify] outage register unreadable — nothing sent this run", err)
-      return NextResponse.json({ error: "Outage register unreadable" }, { status: 503 })
-    }
-
-    const [waivers, checkedIn] = await Promise.all([
-      userIds.length
-        ? prisma.xpTransaction.findMany({
-            where: { userId: { in: userIds }, reason: { in: dateKeys.map(attendanceWaiverReason) } },
-            select: { userId: true, reason: true },
-          })
-        : Promise.resolve([] as { userId: string; reason: string }[]),
-      userIds.length
-        ? prisma.attendanceRecord.findMany({
-            where: {
-              userId: { in: userIds },
-              attendanceDate: { in: live.map((r) => r.startDate) },
-              OR: [{ checkInAt: { not: null } }, { checkOutAt: { not: null } }],
-            },
-            select: { userId: true, workspaceId: true, attendanceDate: true },
-          })
-        : Promise.resolve([] as { userId: string; workspaceId: string; attendanceDate: Date }[]),
-    ])
-    const waived = new Set(waivers.map((w) => `${w.userId}|${w.reason}`))
-    const present = new Set(checkedIn.map((c) => `${c.userId}|${c.workspaceId}|${formatAttendanceDateKey(c.attendanceDate)}`))
-
-    const eligible = live.filter((r) => {
-      let reason: string | null = null
-      if (outageKeys.has(r.dateKey)) reason = "outage_recorded"
-      else if (waived.has(`${r.userId}|${attendanceWaiverReason(r.dateKey)}`)) reason = "waiver"
-      else if (present.has(`${r.userId}|${r.workspaceId}|${r.dateKey}`)) reason = "checked_in"
-      if (reason) skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason })
-      return !reason
-    })
-
-    // Balances: one pair of queries per workspace, whatever the number of people.
-    const byWorkspace = new Map<string, typeof eligible>()
-    for (const r of eligible) byWorkspace.set(r.workspaceId, [...(byWorkspace.get(r.workspaceId) ?? []), r])
-
-    const results: Array<{ id: string; userId: string; name: string | null; dateKey: string; sent: boolean; skipped?: string; push: boolean; title: string; message: string }> = []
-    for (const [workspaceId, list] of Array.from(byWorkspace.entries())) {
-      const members = await prisma.workspaceMember.findMany({
-        where: { workspaceId, userId: { in: list.map((r) => r.userId) } },
-        select: { userId: true },
+      const since = new Date(Date.now() - WINDOW_MS)
+      const rows = await prisma.attendanceRequest.findMany({
+        where: {
+          type: "DAY_OFF",
+          status: "APPROVED",
+          approvalSource: "ADMIN",
+          reviewedById: null,
+          reason: { startsWith: "Auto: tidak check-in" },
+          createdAt: { gte: since },
+        },
+        select: {
+          id: true, userId: true, workspaceId: true, startDate: true, endDate: true, createdAt: true,
+          reason: true, reviewedById: true, approvalSource: true,
+          user: { select: { email: true, name: true } },
+        },
+        orderBy: { createdAt: "asc" },
       })
-      const isMember = new Set(members.map((m) => m.userId))
-      const stillHere = list.filter((r) => {
-        if (isMember.has(r.userId)) return true
-        skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "not_member" })
-        return false
+
+      const skipped: Skip[] = []
+      // One row is one day (createAutoDayOffOnce writes startDate = endDate); the date is read off the row.
+      const candidates = rows
+        .filter((r) => isAutoDeduction(r))
+        .map((r) => ({ ...r, dateKey: formatAttendanceDateKey(r.startDate) }))
+
+      const live = candidates.filter((r) => {
+        if (isDeletedAccountEmail(r.user?.email)) { skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "deleted_account" }); return false }
+        return true
       })
-      const balances = await dayOffBalances(workspaceId, stillHere.map((r) => ({ userId: r.userId, periodKey: dayOffPeriodOf(r.startDate) })))
-      for (const r of stillHere) {
-        const b = balances.get(dayOffUsageKey(r.userId, dayOffPeriodOf(r.startDate)))
-        if (!b) continue
-        try {
-          const out = await notifyAttendanceAbsentRecorded({ userId: r.userId, dateKey: r.dateKey, quota: b.quota, used: b.used, dryRun })
-          results.push({ id: r.id, userId: r.userId, name: r.user?.name ?? null, dateKey: r.dateKey, sent: out.sent, skipped: out.skipped, push: out.push, title: out.title, message: out.message })
-        } catch (err) {
-          console.error("[absence-notify] send failed", { id: r.id, userId: r.userId, dateKey: r.dateKey, err })
-          skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "send_failed" })
+      const dateKeys = Array.from(new Set(live.map((r) => r.dateKey)))
+      const userIds = Array.from(new Set(live.map((r) => r.userId)))
+
+      // Outage register. If it cannot be read, send nothing: the next morning's run (still inside the
+      // 36-hour window) tries again, and silence is the safe failure for this particular sentence.
+      let outageKeys: Set<string>
+      try {
+        const recorded = dateKeys.length
+          ? await prisma.attendanceOutage.findMany({ where: { dateKey: { in: dateKeys } }, select: { dateKey: true } })
+          : []
+        outageKeys = new Set([...Array.from(getOutageDateKeys()), ...recorded.map((o) => o.dateKey)])
+      } catch (err) {
+        console.error("[absence-notify] outage register unreadable — nothing sent this run", err)
+        return NextResponse.json({ error: "Outage register unreadable" }, { status: 503 })
+      }
+
+      const [waivers, checkedIn] = await Promise.all([
+        userIds.length
+          ? prisma.xpTransaction.findMany({
+              where: { userId: { in: userIds }, reason: { in: dateKeys.map(attendanceWaiverReason) } },
+              select: { userId: true, reason: true },
+            })
+          : Promise.resolve([] as { userId: string; reason: string }[]),
+        userIds.length
+          ? prisma.attendanceRecord.findMany({
+              where: {
+                userId: { in: userIds },
+                attendanceDate: { in: live.map((r) => r.startDate) },
+                OR: [{ checkInAt: { not: null } }, { checkOutAt: { not: null } }],
+              },
+              select: { userId: true, workspaceId: true, attendanceDate: true },
+            })
+          : Promise.resolve([] as { userId: string; workspaceId: string; attendanceDate: Date }[]),
+      ])
+      const waived = new Set(waivers.map((w) => `${w.userId}|${w.reason}`))
+      const present = new Set(checkedIn.map((c) => `${c.userId}|${c.workspaceId}|${formatAttendanceDateKey(c.attendanceDate)}`))
+
+      const eligible = live.filter((r) => {
+        let reason: string | null = null
+        if (outageKeys.has(r.dateKey)) reason = "outage_recorded"
+        else if (waived.has(`${r.userId}|${attendanceWaiverReason(r.dateKey)}`)) reason = "waiver"
+        else if (present.has(`${r.userId}|${r.workspaceId}|${r.dateKey}`)) reason = "checked_in"
+        if (reason) skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason })
+        return !reason
+      })
+
+      // Balances: one pair of queries per workspace, whatever the number of people.
+      const byWorkspace = new Map<string, typeof eligible>()
+      for (const r of eligible) byWorkspace.set(r.workspaceId, [...(byWorkspace.get(r.workspaceId) ?? []), r])
+
+      const results: Array<{ id: string; userId: string; name: string | null; dateKey: string; sent: boolean; skipped?: string; push: boolean; title: string; message: string }> = []
+      for (const [workspaceId, list] of Array.from(byWorkspace.entries())) {
+        const members = await prisma.workspaceMember.findMany({
+          where: { workspaceId, userId: { in: list.map((r) => r.userId) } },
+          select: { userId: true },
+        })
+        const isMember = new Set(members.map((m) => m.userId))
+        const stillHere = list.filter((r) => {
+          if (isMember.has(r.userId)) return true
+          skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "not_member" })
+          return false
+        })
+        const balances = await dayOffBalances(workspaceId, stillHere.map((r) => ({ userId: r.userId, periodKey: dayOffPeriodOf(r.startDate) })))
+        for (const r of stillHere) {
+          const b = balances.get(dayOffUsageKey(r.userId, dayOffPeriodOf(r.startDate)))
+          if (!b) continue
+          try {
+            const out = await notifyAttendanceAbsentRecorded({ userId: r.userId, dateKey: r.dateKey, quota: b.quota, used: b.used, dryRun })
+            results.push({ id: r.id, userId: r.userId, name: r.user?.name ?? null, dateKey: r.dateKey, sent: out.sent, skipped: out.skipped, push: out.push, title: out.title, message: out.message })
+          } catch (err) {
+            console.error("[absence-notify] send failed", { id: r.id, userId: r.userId, dateKey: r.dateKey, err })
+            skipped.push({ id: r.id, userId: r.userId, dateKey: r.dateKey, reason: "send_failed" })
+          }
         }
       }
-    }
 
-    const sent = results.filter((r) => r.sent).length
-    const wouldSend = dryRun ? results.filter((r) => r.skipped === "dry_run").length : 0
-    const already = results.filter((r) => r.skipped === "already_sent").length
-    if (sent > 0 || skipped.length > 0) {
-      console.log("[absence-notify]", JSON.stringify({ dryRun, since, candidates: candidates.length, sent, already, skipped: skipped.length }))
-    }
-    return NextResponse.json({ ok: true, dryRun, since, candidates: candidates.length, sent, wouldSend, alreadySent: already, results, skipped })
+      const sent = results.filter((r) => r.sent).length
+      const wouldSend = dryRun ? results.filter((r) => r.skipped === "dry_run").length : 0
+      const already = results.filter((r) => r.skipped === "already_sent").length
+      if (sent > 0 || skipped.length > 0) {
+        console.log("[absence-notify]", JSON.stringify({ dryRun, since, candidates: candidates.length, sent, already, skipped: skipped.length }))
+      }
+      return NextResponse.json({ ok: true, dryRun, since, candidates: candidates.length, sent, wouldSend, alreadySent: already, results, skipped })
+    })
   } catch (error) {
     console.error("[absence-notify]", error)
     return NextResponse.json({ error: "Absence notify failed" }, { status: 500 })
