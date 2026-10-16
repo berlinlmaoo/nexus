@@ -254,7 +254,9 @@ function SeriesRow({ s, canEdit }: { s: LegalSeries; canEdit: boolean }) {
             {SEQ:3} (UI tour run 13, W-M4: "{YY / YY}"). */}
         {/* Each "·" is held to the word before it by a no-break space, so a wrapped line never starts with the
             separator (UI tour run 14, R14-WM-21: "· Work agreement (SPK) · Yearly"). */}
-        <div className="font-medium [overflow-wrap:anywhere]">{s.label}<span className="text-xs font-normal text-muted-foreground">{"\u00a0· "}{docTypeLabel(s.docType)}{"\u00a0· "}{s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
+        {/* Phone: the type and period on a line of their own under the name, not wrapped over three lines beside it
+            (UI tour run 20, R20-WM-12). */}
+        <div className="font-medium [overflow-wrap:anywhere]">{s.label}<span className="text-xs font-normal text-muted-foreground max-sm:block"><span className="max-sm:hidden">{"\u00a0· "}</span>{docTypeLabel(s.docType)}{"\u00a0· "}{s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
         <div className="mt-0.5 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
           {s.format.split("/").map((part, i, all) => (
             <Fragment key={i}>{part}{i < all.length - 1 && <>/<wbr /></>}</Fragment>

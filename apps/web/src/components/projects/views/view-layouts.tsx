@@ -191,7 +191,9 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
           const content = d.key === firstDateKey
             ? <><DateChips task={task} items={dateItems} fit />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</>
             : <PropValue task={task} def={d} ctx={ctx} />;
-          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", listSlotWidth(d))}>{content}</span>;
+          // Phone: the dates first and the people right after them, so a wrapped line never leaves an avatar alone
+          // on a third line (UI tour run 20, R20-WM-12).
+          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d))}>{content}</span>;
         })}
       </div>
     );
