@@ -45,7 +45,12 @@ struct ServerSwitchCard: View {
                 Text(T("Dev needs Tailscale on this device. Switching signs you out, because the two servers have separate sessions."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
             }
-            .nexusCard()
+            // The Settings cards' own chrome: flat, 24 pt inside, so its text starts where theirs does (UI tour
+            // run 19, R19-B-12: a shadow and a different inset on this card only).
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
             .alert(T("Switch server?"), isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
                 Button(T("Cancel"), role: .cancel) { pending = nil }
                 Button(T("Switch and sign out")) {

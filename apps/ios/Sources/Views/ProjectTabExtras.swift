@@ -217,14 +217,32 @@ struct ProjectTableTab: View {
         .overlay(alignment: .topTrailing) {
             // Whole columns only, so the cue for more is a "›" in the header row.
             if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > stickyX + 1 {
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
-                    .frame(width: 22, height: 40)
-                    .background(NX.card.opacity(0.9))
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                // iPad / Mac: the "›" heads a plain strip as tall as the table that covers whatever part of the
+                // next column the viewport cuts, so no sliver of digits ("4", "1(9)") or a cut "On F" status
+                // shows at the right edge, on the first page or after a swipe (UI tour run 19, Mac R19-M-02).
+                let cut = compact ? 22 : partialWidth(cols, visibleWidth: visibleWidth)
+                VStack(spacing: 0) {
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .frame(width: max(22, cut), height: 40)
+                    if !compact { Spacer(minLength: 0) }
+                }
+                .frame(width: max(22, cut))
+                .frame(maxHeight: compact ? 40 : .infinity, alignment: .top)
+                .background(NX.card.opacity(compact ? 0.9 : 1))
+                .overlay(alignment: .leading) { if !compact { Rectangle().fill(NX.border).frame(width: 1) } }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+    }
+
+    /// How much of the viewport's right edge shows a column only in part (at least the 22 pt of the "›").
+    private func partialWidth(_ cols: TableColumns, visibleWidth: CGFloat) -> CGFloat {
+        let right = stickyX + visibleWidth
+        let ends = cols.columnStarts.map { cols.name + $0 }
+        let lastWhole = ends.last { $0 <= right - 22 + 0.5 } ?? (right - 22)
+        return max(22, right - lastWhole)
     }
 
     // MARK: groups

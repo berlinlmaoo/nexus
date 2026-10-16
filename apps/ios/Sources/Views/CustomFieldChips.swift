@@ -129,10 +129,13 @@ struct CFChipView: View {
             // Show as Bar / Ring: the number (unless hidden) and a short bar or a ring, no pill.
             CFNumberValue(text: chip.label, style: n.style, fill: n.fill, font: NXFont.text(10, .semibold), color: NX.mutedFg, barWidth: 40)
         } else if chip.isPerson {
-            Label(chip.label, systemImage: "person").font(NXFont.text(10, .semibold)).lineLimit(1)
+            // A text value that names someone ("Request by" holding "Sifal") is text, not a person: the text
+            // glyph and the field's name, never an assignee-looking chip (decision 5 of run 19, R19-M-05).
+            Label(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label, systemImage: "text.alignleft")
+                .font(NXFont.text(10, .medium)).lineLimit(1)
                 .labelStyle(CFPersonLabelStyle())
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .foregroundStyle(NX.mutedFg).background(NX.muted, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .padding(.vertical, 3)
+                .foregroundStyle(NX.mutedFg)
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
         } else if chip.isDate {
             // A date field wears the calendar; the clock is the due date's alone (web PropValue / DateChips,

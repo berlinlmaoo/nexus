@@ -263,6 +263,28 @@ struct DashboardView: View {
 
     private var singleColumn: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
+            if hSize == .regular {
+                // iPad / Mac mirror the web desktop Home: greeting with the level pill, GIDEON and the bell; the
+                // three tiles; XP rules; Calendar and Your schedule; the profile card; Messages; Leaderboard.
+                // No search field (the sidebar has one), quick tiles, pinned projects (the sidebar pins them),
+                // agenda strip, Attendance card or passkey nudge (Settings › Security) (decision 11 of run 19,
+                // R19-B-07). The iPhone Home stays as it is (owner rule).
+                wideGreeting
+                statCards
+                xpRulesCard
+                calendarAndSchedule
+                profileCard
+                messagesCard
+                leaderboardCard
+            } else {
+                phoneColumn
+            }
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    private var phoneColumn: some View {
+        Group {
             greeting
             attendanceBar
             levelCard
@@ -275,14 +297,7 @@ struct DashboardView: View {
             quickActions
             projectShortcuts
             dailyCalendarCard
-            // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
-            if hSize == .regular {
-                calendarAndSchedule
-                messagesCard
-                leaderboardCard
-            }
             profileCard
-            Color.clear.frame(height: 8)
         }
     }
 
@@ -315,66 +330,53 @@ struct DashboardView: View {
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
     private var wideColumns: some View {
         VStack(alignment: .leading, spacing: 18) {
-            greeting
+            wideGreeting
             HStack(alignment: .top, spacing: 18) {
-                // The web dashboard's order: the stat tiles, XP rules right under them, then the
-                // calendar; the person (level, profile) in the rail on the right.
+                // The web desktop Home (decision 11 of run 19, R19-B-07): the tiles, XP rules under them, then
+                // Calendar and Your schedule; the profile card, Messages and Leaderboard in the rail.
                 VStack(alignment: .leading, spacing: 18) {
-                    attendanceBar
-                    searchRow
                     statCards
                     xpRulesCard
-                    dailyCalendarCard
-                    calendarAndSchedule
-                    quickActions
-                    projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
-                    levelCard
                     profileCard
-                    if showPasskeyNudge { passkeyNudge }
                     messagesCard
                     leaderboardCard
                 }
                 .frame(width: 340)
             }
+            // Calendar beside Your schedule across the page: in the left column of a default Mac window they
+            // stacked, the empty schedule ~320 pt tall for one line (UI tour run 19, Mac R19-M-07).
+            calendarAndSchedule
             Color.clear.frame(height: 8)
+        }
+    }
+
+    /// iPad / Mac: the greeting, then the level pill (once on the page, as the web's header), GIDEON and the bell.
+    private var wideGreeting: some View {
+        HStack(alignment: .center, spacing: 12) {
+            greeting
+            Spacer(minLength: 8)
+            Button { Haptics.tap(); toggleLevel(true) } label: {
+                Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(NX.accentBg, in: Capsule())
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .morphSource("level", in: morphSpace, store: morphFrames)
+            .opacity(activeLevel && morphShowModal ? 0 : 1)
+            gideonButton
+            bellButton
         }
     }
 
     /// Mac, very wide (full screen, sidebar hidden): the day's work, then projects and agenda, then
     /// the person.
-    private var threeColumns: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            greeting
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 18) {
-                    attendanceBar
-                    searchRow
-                    statCards
-                    quickActions
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 18) {
-                    dailyCalendarCard
-                    calendarAndSchedule
-                    projectShortcuts
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 18) {
-                    levelCard
-                    profileCard
-                    if showPasskeyNudge { passkeyNudge }
-                    xpRulesCard
-                    messagesCard
-                    leaderboardCard
-                }
-                .frame(width: 380)
-            }
-            Color.clear.frame(height: 8)
-        }
-    }
+    /// Mac, very wide: the same blocks as the two-column Home, so one Home on every wide window.
+    private var threeColumns: some View { wideColumns }
 
     // MARK: greeting
 
@@ -564,35 +566,38 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
 
-            // iPad / Mac: GIDEON beside the search field, as on the web's sidebar search; the phone keeps its
-            // floating button (owner rule: the iPhone Home layout stays as it is).
-            if hSize == .regular {
-                Button { Haptics.tap(); showGideon = true } label: {
-                    Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
-                        .overlay(
-                            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                                .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("GIDEON")
-                .help("GIDEON")
-            }
-
-            Button { Haptics.tap(); toggleBell(true) } label: {
-                ZStack(alignment: .topTrailing) {
-                    Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
-                        .overlay(Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(NX.foreground))
-                    if unread > 0 {
-                        Text("\(unread)").font(NXFont.text(9, .bold)).foregroundStyle(.white)
-                            .padding(4).background(NX.danger, in: Circle()).offset(x: 3, y: -3)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .morphSource("bell", in: morphSpace, store: morphFrames)
-            .opacity(activeBell && morphShowModal ? 0 : 1)
+            bellButton
         }
+    }
+
+    /// GIDEON beside the bell on iPad / Mac (the phone keeps its floating button: owner rule).
+    private var gideonButton: some View {
+        Button { Haptics.tap(); showGideon = true } label: {
+            Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
+                .overlay(
+                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("GIDEON")
+        .help("GIDEON")
+    }
+
+    private var bellButton: some View {
+        Button { Haptics.tap(); toggleBell(true) } label: {
+            ZStack(alignment: .topTrailing) {
+                Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
+                    .overlay(Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(NX.foreground))
+                if unread > 0 {
+                    Text("\(unread)").font(NXFont.text(9, .bold)).foregroundStyle(.white)
+                        .padding(4).background(NX.danger, in: Circle()).offset(x: 3, y: -3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .morphSource("bell", in: morphSpace, store: morphFrames)
+        .opacity(activeBell && morphShowModal ? 0 : 1)
     }
 
     // MARK: stat cards
@@ -1335,7 +1340,8 @@ struct DashboardView: View {
             HStack(spacing: 14) {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
-                    if let game { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
+                    // iPad / Mac: the level is the header's pill, said once (decision 11); the phone keeps it here.
+                    if let game, hSize != .regular { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
                     // "XP" like everything else on Home, on one line (UI tour run 14, N-37 / P-I16 / P-M10).
                     row(T("XP this period"), AppNumber.int(game?.xp.totalXp ?? 0))
                 }

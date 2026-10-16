@@ -771,10 +771,14 @@ struct SocialDaySheet: View {
             .navigationTitle(OutletFormat.dayLong(date, thisYear: store.thisYear))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                // iPad / Mac with the footer: Cancel sits there beside Save, the same pattern as Platforms &
+                // targets and Report settings (UI tour run 19, R19-B-16); a read-only day keeps Close on top.
+                if !(wide && editable) {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                    }
+                    .nxPlainOnMac()
                 }
-                .nxPlainOnMac()
                 if editable && !wide {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: {
@@ -789,8 +793,10 @@ struct SocialDaySheet: View {
         // platform's footer reads as "more below" instead of cut (UI tour run 16, R16-B-19 / R16-I-24).
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if wide && editable && ready {
-                HStack {
+                HStack(spacing: 10) {
                     Spacer(minLength: 0)
+                    Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                        .buttonStyle(.nxBordered)
                     Button { Task { await save() } } label: {
                         HStack(spacing: 6) {
                             if saving { ProgressView().controlSize(.small) }

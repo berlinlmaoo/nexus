@@ -76,8 +76,10 @@ struct OutletCalendarView: View {
                             // One line and "…", as the web's chip: a chip must not grow its cell (UI tour run 17, iPad
                             // R17-I-11; decision 14 is for names in rows, not chips in a calendar cell). The day
                             // panel names the event in full.
+                            // Two short lines inside the cell's fixed height, so "ZZ temp night" is not "ZZ temp…" on a
+                            // portrait iPad (UI tour run 19, iPad R19-I-10); two chips still fit the 104 pt cell.
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(1).truncationMode(.tail)
+                                .lineLimit(2).truncationMode(.tail).minimumScaleFactor(0.9)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)

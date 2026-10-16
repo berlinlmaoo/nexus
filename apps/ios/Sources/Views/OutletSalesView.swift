@@ -519,7 +519,9 @@ struct OutletHeader: View {
                 row(labelled: true)
                 VStack(alignment: .leading, spacing: 8) {
                     OutletMonthSwitcher(store: store)
-                    HStack(spacing: 6) { actions(labelled: true, tight: true); Spacer(minLength: 0) }
+                    // The three share the row to the cards' edge: left-aligned they stopped ~30 pt short of it, a
+                    // ragged right margin (UI tour run 19, R19-I-23).
+                    HStack(spacing: 6) { actions(labelled: true, tight: true, fill: true) }
                 }
                 row(labelled: false, primary: true)
                 row(labelled: false)
@@ -537,7 +539,7 @@ struct OutletHeader: View {
     }
 
     /// `tight`: 13 pt words and 10 pt sides, so the three named buttons share a phone's row.
-    @ViewBuilder private func actions(labelled: Bool, primary: Bool = false, tight: Bool = false) -> some View {
+    @ViewBuilder private func actions(labelled: Bool, primary: Bool = false, tight: Bool = false, fill: Bool = false) -> some View {
             let size: CGFloat = tight ? 13 : 14
             let side: CGFloat = tight ? 10 : 14
             if store.canManageSettings {
@@ -548,7 +550,7 @@ struct OutletHeader: View {
                     }
                     .foregroundStyle(NX.foreground)
                     .padding(.horizontal, labelled ? side : 0)
-                    .frame(minWidth: 40, minHeight: 40)
+                    .frame(minWidth: 40, maxWidth: fill ? .infinity : nil, minHeight: 40)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -564,7 +566,7 @@ struct OutletHeader: View {
                 }
                 .foregroundStyle(NX.foreground)
                 .padding(.horizontal, labelled ? side : 0)
-                .frame(minWidth: 40, minHeight: 40)
+                .frame(minWidth: 40, maxWidth: fill ? .infinity : nil, minHeight: 40)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -582,7 +584,7 @@ struct OutletHeader: View {
                 }
                 .foregroundStyle(NX.background)
                 .padding(.horizontal, labelled || primary ? side : 0)
-                .frame(minWidth: 40, minHeight: 40)
+                .frame(minWidth: 40, maxWidth: fill ? .infinity : nil, minHeight: 40)
                 .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }

@@ -19,9 +19,10 @@ extension AppLanguage {
         // Audit: restore is BoD and One Above All only (owner, 16 Oct 2026)
         "Only BoD and One Above All can restore.": "Hanya BoD dan One Above All yang bisa memulihkan.",
         // Attendance: no zero over zero (decision 10)
-        "No public holidays this month": "Tidak ada libur nasional bulan ini",
+        "No public holidays this month": "Tidak ada tanggal merah bulan ini",
         "Where you can check in": "Tempat kamu bisa check-in",
         "{n} other sessions": "{n} sesi lain",
+        "Posts": "Postingan",
         // Profile (UI tour run 19, R19-I-39)
         "%@ XP gained · %@ XP lost": "%@ XP didapat · %@ XP hilang",
         "XP comes from quests and is lost to attendance penalties — late, no check-out, absent.": "XP datang dari quest dan hilang karena penalti absensi — telat, lupa check-out, TK.",

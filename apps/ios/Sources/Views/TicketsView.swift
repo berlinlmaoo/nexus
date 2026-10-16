@@ -585,13 +585,20 @@ struct TicketsView: View {
             }
             markers(t)
             HStack(spacing: 8) {
+                // Meta in neutral chips, so the status is the one accent on the card; the reply count as the web's
+                // Replies column (UI tour run 19, R19-I-33).
                 if let c = t.category, !c.isEmpty {
-                    NexusChip(text: ticketCategoryName(c), tone: .accent, systemImage: "tag.fill")
+                    NexusChip(text: ticketCategoryName(c), tone: .neutral, systemImage: "tag.fill")
                 }
                 if let n = t.reporter?.name, !n.isEmpty {
                     Label(n, systemImage: "person.fill").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
+                if let m = t.messageCount {
+                    Label(AppNumber.int(m), systemImage: "bubble.left").font(NXFont.text(13)).monospacedDigit()
+                        .foregroundStyle(NX.mutedFg)
+                        .accessibilityLabel(String(format: T("%d replies"), m))
+                }
                 // The date the list is SORTED by. Stamping the row with `createdAt` instead made a
                 // correctly ordered list look shuffled as soon as an old ticket got a new reply.
                 if let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) {
@@ -616,7 +623,7 @@ struct TicketsView: View {
                 // rather than two statuses (owner rule 13 Oct 2026; UI tour run 11, IP-1). One chip style
                 // everywhere the marker appears.
                 if t.showsDecisionMarker {
-                    NexusChip(text: T("Correction awaiting decision"), tone: .accent,
+                    NexusChip(text: T("Correction awaiting decision"), tone: .neutral,
                               systemImage: "calendar.badge.clock")
                 }
                 if t.hasGideonReply { gideonMarker }
@@ -635,8 +642,8 @@ struct TicketsView: View {
             Text(T("GIDEON replied")).font(NXFont.text(11, .bold))
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .foregroundStyle(NX.violetText)
-        .background(NX.violetText.opacity(0.16), in: Capsule())
+        .foregroundStyle(NX.mutedFg)
+        .background(NX.muted, in: Capsule())
     }
 
     /// A decision nobody has made outranks everything else in the queue; inside each group the

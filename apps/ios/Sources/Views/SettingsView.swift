@@ -499,7 +499,8 @@ struct SettingsView: View {
 
     /// Logout, which the web keeps in its sidebar footer: a card of its own here, after Delete account.
     private var webLogoutCard: some View {
-        NXCard(padding: 20) {
+        // 24 pt inside like Profile and Delete account, so the three cards' text shares one left edge (R19-B-12).
+        NXCard(padding: 24) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(AppLanguage.signOutOwn).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)

@@ -2408,25 +2408,28 @@ struct BoardCard: View {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
-                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, .bold))
-                    .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
+                // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
+                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
+                    .foregroundStyle(task.isDone ? NX.mutedFg.opacity(0.8) : NX.foreground)
                     // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
                     // PEKANB…" (UI tour run 15, Q-M11).
                     .strikethrough(task.isDone)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let p = task.priority, p.uppercased() != "NONE" {
-                    PriorityPill(priority: p)
-                }
             }
+            // The priority on the meta line with the values, as the web's card, not beside the title (R19-B-03).
             if hasMeta {
-                CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                HStack(alignment: .top, spacing: 6) {
+                    priorityPill
+                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                }
                 metaRow
             } else {
                 // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
                 // near-empty third row; a card with neither ends under its chips (UI tour run 16, R16-B-07 /
                 // R16-I-17: uneven empty bands under the chips).
                 HStack(alignment: .top, spacing: 8) {
+                    priorityPill
                     CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
                     if !task.assigneeAvatars.isEmpty {
                         Spacer(minLength: 0)
@@ -2444,6 +2447,10 @@ struct BoardCard: View {
                 .nexusShadowSoft()
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         }
+    }
+
+    @ViewBuilder private var priorityPill: some View {
+        if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p).fixedSize() }
     }
 
     /// Something besides the avatars for the bottom row: a due date, subtasks, a quest or comments.

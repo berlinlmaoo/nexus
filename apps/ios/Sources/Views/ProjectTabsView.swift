@@ -1246,7 +1246,9 @@ struct CalendarTab: View {
                         dayPanel
                     }
                     if !rest.isEmpty && (!emptyMonth || showUndated) { undatedBox(rest, leading: false).id("undated") }
-                }.padding(16)
+                }
+                // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
+                .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)
             }
         }
         // Today's day is picked on the current month, so the panel under the grid says what today holds,
