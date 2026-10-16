@@ -1036,6 +1036,8 @@ export type NexusAdminQuest = {
   teamIds?: string[];
   /** IP & Division Chart units (13 Oct 2026); empty = everyone. */
   unitIds?: string[];
+  /** Chosen people (16 Oct 2026); empty = not per person. */
+  userIds?: string[];
   /** Pointed at deleted teams and was moved to everyone. */
   teamsRetired?: boolean;
   deadline?: string | null;
@@ -2626,7 +2628,7 @@ export const nexusApi = {
     return apiFetch<NexusXpAuditResponse>(`/api/gamification/xp-transactions${s ? `?${s}` : ""}`);
   },
   adminQuests: (workspaceId?: string) => apiFetch<{ quests: NexusAdminQuest[] }>(`/api/gamification/quests/admin${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; unitIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
+  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; unitIds?: string[]; userIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
   deleteAdminQuest: (id: string) => apiFetch<{ success?: boolean }>(`/api/gamification/quests/admin?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- Tasks (detail surface) ---

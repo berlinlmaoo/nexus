@@ -2660,6 +2660,9 @@ model Quest {
   teamIds         String[] @default([]) // legacy Crew Hub teams (retired); empty = semua crew (ignored for specific_tasks)
   /// IP & Division Chart units the quest is for (13 Oct 2026); empty = everyone. Members of a unit or any unit below it.
   unitIds         String[] @default([])
+  /// People the quest is for, one by one (owner, 16 Oct 2026). Empty = not per person. With unitIds: a person sees
+  /// the quest when in one of the units OR listed here. Ignored for specific_tasks, like the units.
+  userIds         String[] @default([])
   /// Pointed at deleted teams and was moved to "everyone" by 2026-10-13-qafix-perm-quest-units.sql.
   teamsRetired    Boolean  @default(false)
   taskIds         String[] @default([]) // specific_tasks quest: exact tasks to finish; visible to those tasks' project members, XP to whoever completes them
