@@ -853,6 +853,13 @@ final class NEXUSUITour: XCTestCase {
                 if navigatedAway() { return page - 1 }
                 let data = shot.pngRepresentation
                 if data == seen { break }
+                // Run 20 (iPhone R20-I-01): the last swipe did not move the board (it was at its right edge), and
+                // the md5 differed only through noise in one pixel column, so the same page was kept twice.
+                // Run 20 (R20-I-26): a swipe that only brings in empty columns (the frozen Name column and blank
+                // cells) changes almost nothing either. Both go.
+                let window = root.windows.firstMatch.frame
+                if let share = changedShare(from: seen, to: data, in: target.compare, window: window),
+                   share < minSidewaysChange { break }
                 page += 1
                 attachShot(shot, "\(prefix)\(id)-\(page)")
                 seen = data
@@ -892,13 +899,15 @@ final class NEXUSUITour: XCTestCase {
             #if targetEnvironment(macCatalyst)
             // First scroll changed nothing: maybe the wheel goes the other way on this Mac. Once.
             // (Not `page == 1`: a board's sideways shot already made it 2, and the flip never came.)
-            if data == last && !scrolled && !flipped {
+            if (data == last || unmoved(last, data, target.compare, root)) && !scrolled && !flipped {
                 flipped = true
                 macWheelSign = -macWheelSign
                 continue
             }
             #endif
             if data == last { break }
+            // Run 20 (R20-I-01): nothing scrolled (0 pt), only a pixel or two redrew: never a page.
+            if unmoved(last, data, target.compare, root) { break }
             // Too little new on it: the end of the scroll, or nothing moved at all and only a clock or a
             // hover changed (UI tour run 13, F-08 / M-27; run 15, R15-I-20 / T-1). A page is dropped only when
             // about 90% of its content rows are already on the page before. Run 16 (R16-I-04): the run 15
@@ -971,6 +980,35 @@ final class NEXUSUITour: XCTestCase {
         flush()
         return page - 1
     }
+
+    /// The share of the pixels of `rect` (right 10 pt left out) whose grey level differs by more than 24 between
+    /// the two pictures; nil when they cannot be compared.
+    private func changedShare(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
+        guard let a = greyRect(old, rect: rect, window: window), let b = greyRect(new, rect: rect, window: window),
+              a.width == b.width, a.height == b.height, !a.pixels.isEmpty else { return nil }
+        var changed = 0
+        a.pixels.withUnsafeBufferPointer { pa in
+            b.pixels.withUnsafeBufferPointer { pb in
+                for i in 0..<pa.count where abs(Int(pa[i]) - Int(pb[i])) > 24 { changed += 1 }
+            }
+        }
+        return CGFloat(changed) / CGFloat(a.pixels.count)
+    }
+
+    /// True when the page did not move at all: almost no pixel changed. Measured offline on every consecutive
+    /// page pair of runs 17-20 (drag rects from the logs): the identical iPhone project-board-4/-5 of run 20
+    /// change 0.000; the lowest real vertical page (Mac project-timeline-5, rows of look-alike Done tasks) 0.004.
+    private func unmoved(_ old: Data, _ new: Data, _ rect: CGRect, _ root: XCUIApplication) -> Bool {
+        guard let share = changedShare(from: old, to: new, in: rect, window: root.windows.firstMatch.frame)
+        else { return false }
+        return share < minVerticalChange
+    }
+
+    private var minVerticalChange: CGFloat { CGFloat(Double(env["TOUR_MIN_VERTICAL_CHANGE"] ?? "") ?? 0.001) }
+    /// A sideways page that changes less than this share of the pixels adds nothing: run 20 iPhone project-board-5
+    /// 0.000, project-table-2 0.002 (only empty columns came in); the lowest real sideways page 0.013 (iPhone
+    /// project-table-3, runs 18-20).
+    private var minSidewaysChange: CGFloat { CGFloat(Double(env["TOUR_MIN_SIDEWAYS_CHANGE"] ?? "") ?? 0.005) }
 
     /// A page is a repeat when less than this share of its content rows (`fineRows`) is on no earlier page.
     private var minUnseen: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN"] ?? "") ?? 0.01) }
