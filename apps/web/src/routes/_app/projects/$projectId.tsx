@@ -11,6 +11,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo,
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { SnapTail } from "@/components/SnapTail";
+import { EdgeArrows } from "@/components/EdgeArrows";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
@@ -1094,6 +1095,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // scrolled board starts with whole lane headers, not "On Progress 12" cut in half under the chips (UI tour
   // run 17, R17-WB-1, project-board-2). Lanes cannot be the page's snap points: the board scroller holds them.
   const chipRowRef = useRef<HTMLDivElement>(null);
+  const chipStripRef = useRef<HTMLDivElement>(null);
   const [phoneBoard, setPhoneBoard] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
@@ -1393,7 +1395,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           (R16-WM-7: "SPECIAL BUSINESS U…" ended hard at the screen edge). */}
       {lanes.length > 1 && (
         <div ref={chipRowRef} className="sticky top-[var(--page-sticky-top,0px)] z-20 bg-card pb-1 sm:hidden">
-        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden">
+        <div ref={chipStripRef} role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden">
           {lanes.map((g) => {
             const tone = COLOR_PRESETS[laneColor(g)];
             return (
@@ -1413,6 +1415,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </button>
           ))}
         </div>
+        {/* An arrow on a solid fade where more chips lie (UI tour run 20, R20-WM-6), as the tab strips. */}
+        <EdgeArrows target={chipStripRef} className="bottom-1 top-3" />
         </div>
       )}
       <div ref={boardRef} data-touch-drag-root="" data-snap-row={phoneBoard && lanes.length > 1 ? "" : undefined} className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
@@ -2652,9 +2656,14 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                                 ))}
                               </div>
                             )}
-                            <span className="truncate text-xs font-bold text-white drop-shadow-sm">{task.title}</span>
+                            {!shortBar(width, people.length) && <span className="truncate text-xs font-bold text-white drop-shadow-sm">{task.title}</span>}
                             {endW && canMove && <span aria-hidden onPointerDown={(e) => beginBarDrag(e, task, "end")} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r-lg hover:bg-white/30" />}
                           </button>
+                          )}
+                          {/* A bar too short for its title: the title beside it, as Notion does (UI tour run 20, R20-WM-3:
+                              a one-day bar read "RE…" and nothing named it). */}
+                          {win && shortBar(width, people.length) && (
+                            <span aria-hidden className="pointer-events-none absolute top-1.5 flex h-8 items-center whitespace-nowrap text-xs font-semibold text-foreground" style={{ left: left + width + 6 }}>{task.title}</span>
                           )}
                         </div>
                       </div>
@@ -2677,6 +2686,11 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   );
 }
 
+
+/** A timeline bar too short to show its title inside: under ~6 characters of room after its avatars. */
+function shortBar(width: number, people: number): boolean {
+  return width - 12 - (people ? 20 + (people - 1) * 14 + 6 : 0) < 56;
+}
 
 function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: NexusDoc) => void }) {
   const docs = useQuery({ queryKey: ["nexus", "project-docs", project.id], queryFn: () => nexusApi.projectDocs(project.id), retry: false });

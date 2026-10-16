@@ -14,4 +14,13 @@ export const ID_R20WEB: Record<string, string> = {
   "{n} tasks done": "{n} task selesai",
   // Project tabs: one row, the rest in "N more" (R20-WD-6)
   "{n} more tabs": "{n} tab lainnya",
+  // Legal versions: the template revision named as such (R20-WB-12)
+  "Template rev {n}": "Revisi template {n}",
+  // Settings › Security: the unnamed sessions group (R20-WB-14)
+  "Older app versions and tools that don't report a device.": "Versi app lama dan alat yang tidak menyebut perangkatnya.",
+  // New project dialog: neutral subtitle (R20-WD-11)
+  "Choose a starting point. The project opens as soon as it's ready.": "Pilih titik awalnya. Project langsung terbuka begitu siap.",
+  // Edge arrows on sideways scrollers (R20-WM-6)
+  "Show earlier": "Tampilkan sebelumnya",
+  "Show more": "Tampilkan lainnya",
 };

@@ -37,6 +37,7 @@ import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { useProjectCanEdit } from "@/components/projects/project-access";
+import { EdgeArrows } from "@/components/EdgeArrows";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -227,6 +228,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
       {/* Rows snap whole under the pinned column names (UI tour run 15, R15-WB-1 / R15-WM-3); the header row
           has a set height so the snap offset is exact. */}
+      <div className="relative">
+      {/* The header's right end says when more columns lie that way (UI tour run 20, R20-WM-6: a glyph sliver of
+          the third column's name sat at the edge); the rows keep their fade. */}
+      <EdgeArrows target={scrollRef} sides="right" className="right-px top-px h-[35px] rounded-tr-lg" />
       <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
@@ -306,6 +311,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
             <div />
           </div>
         </div>
+      </div>
       </div>
 
       {addingField && (
