@@ -248,7 +248,9 @@ function SectionCard({ node, own = false, collapsed, toggle, mine, lens, common 
   const closed = collapsed.has(key);
   const count = own ? new Set([...node.items.map((i) => i.key), ...node.people.flatMap((p) => p.items.map((i) => i.key))]).size : node.count;
   return (
-    <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="snap-start overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+    // overflow-clip, not hidden: an overflow-hidden card is a scroll container of its own, so the task snap points
+    // inside it never belonged to the panel and the panel rested mid-task (UI tour run 20, R20-WB-2 wd calendar-2).
+    <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="snap-start overflow-clip rounded-2xl border border-border bg-card shadow-soft">
       <Heading level={3}>
         <button type="button" onClick={() => toggle(key)} aria-expanded={!closed}
           className={cn("flex w-full items-center gap-[10px] px-[12px] py-2.5 text-left hover:bg-muted/50", FOCUS_ROW)}>

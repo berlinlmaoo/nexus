@@ -35,6 +35,7 @@ import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import { formatCount } from "@/lib/number-format";
 import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
+import { SnapTail } from "@/components/SnapTail";
 import { monthTitle } from "@/lib/month-title";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
@@ -558,7 +559,10 @@ function Attendance() {
         </section>
         </div>
 
-        <div data-snap-row className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
+        {/* overflow-clip, not hidden: an overflow-hidden box is a scroll container, so the controls row and the board
+            inside it were snap points of this card, not of the page; the browser, SnapTail and the UI tour never
+            rested on them (UI tour run 20, R20-WB-2 wm attendance-3: the Search / Export row cut in half). */}
+        <div data-snap-row className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
@@ -699,7 +703,7 @@ function Attendance() {
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? tr("No one matches “{q}”.", { q: memberQuery.trim() }) : tr("No attendance data for this month yet.")}</td></tr>
                 )}
                 {memberRows.map((u) => (
-                  <tr key={u.id} className="border-b border-border [scroll-snap-align:start_none] last:border-0 hover:bg-muted/20">
+                  <tr key={u.id} data-snap-row="" className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="sticky left-0 z-10 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-card px-1.5 py-2 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4 sm:py-2.5">
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
@@ -864,6 +868,9 @@ function Attendance() {
                 )}
               </tbody>
             </table>
+            {/* Scrolled to its end, the board starts on a whole member row under its head, not on the tail of one
+                (UI tour run 20, R20-WB-2: the box's last screen began with a cut row). */}
+            <SnapTail scroller="parent" />
           </div>
           {/* About a day column wide and solid at the edge, so a column cut there is covered instead of showing
               "T" / "1" fragments (UI tour run 13, W-M3). */}
