@@ -638,7 +638,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {mention && <MentionPicker query={mention.query} onPick={addRef} onClose={() => setMention(null)} />}
-        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)] transition-colors focus-within:border-foreground/25">
+        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
           <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
             {pageContext && (
@@ -759,7 +759,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
                 onClick={stop}
                 aria-label={t("Stop")}
                 title={t("Stop")}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-foreground text-background transition-transform hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition-transform hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Square className="h-2.5 w-2.5 fill-current" />
               </button>
@@ -770,7 +770,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
                 disabled={!input.trim()}
                 aria-label={t("Send")}
                 title={t("Send")}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground/70"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted"
               >
                 <ArrowUp className="h-4 w-4" />
               </button>
@@ -796,12 +796,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         {waitingSection}
         <div className="flex flex-col items-center text-center">
           <span className="mb-4 grid h-16 w-16 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-8 w-8 text-foreground" /></span>
-          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-[2rem] sm:leading-tight">{greeting}</h1>
+          <h1 className="text-balance font-display text-2xl font-bold tracking-tight sm:text-[2rem] sm:leading-tight">{greeting}</h1>
         </div>
         {composerBox}
         <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
           {suggestions.map((s) => (
-            <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <s.icon className="h-4 w-4 shrink-0" /><span className="truncate">{s.text}</span>
             </button>
           ))}
@@ -824,7 +824,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           // Notion AI's panel: the greeting and the starters sit at the bottom, right above the box.
           <div className="mt-auto flex flex-col items-start px-1 pt-8">
             <span className="mb-3 grid h-11 w-11 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-6 w-6 text-foreground" /></span>
-            <p className="text-lg font-bold leading-snug tracking-tight">{greeting}</p>
+            <p className="font-display text-lg font-bold leading-snug tracking-tight">{greeting}</p>
             <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
             <div role="menu" aria-label={t("Suggestions")} className="-mx-1.5 mt-3 flex w-[calc(100%+0.75rem)] flex-col">
               {suggestions.map((s) => (
@@ -918,7 +918,7 @@ function ContextChip({ icon: Icon, mark, label, hint, onRemove }: { icon: typeof
   const { t } = useLang();
   // Notion AI's context pill inside the box: page icon, title, × on hover.
   return (
-    <span title={hint} className="group/chip inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-border/80 bg-muted/40 pl-1.5 pr-1 text-xs text-foreground/80">
+    <span title={hint} className="group/chip inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-border/80 bg-muted/40 pl-2 pr-1 text-xs text-foreground/80">
       {mark ?? <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
       <span className="max-w-[16rem] truncate">{label}</span>
       {onRemove && <button type="button" onClick={onRemove} aria-label={t("Remove this context")} title={t("Remove this context")} className="grid h-4 w-4 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-3 w-3" /></button>}
@@ -932,7 +932,7 @@ function UserTurn({ turn }: { turn: ChatTurn }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="group -mb-2 flex flex-col items-end gap-0.5">
-      <div className="max-w-[85%] rounded-[18px] bg-muted px-3.5 py-2 text-sm leading-relaxed text-foreground">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent/70 px-3.5 py-2 text-sm leading-relaxed text-foreground">
         {turn.attachments && turn.attachments.length > 0 && (
           <div className="mb-1.5 flex flex-col gap-2">
             {turn.attachments.map((a, j) => <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble />)}
@@ -1101,7 +1101,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
           <div key={g.key} className="mb-1">
             <div className="px-2 pb-1 pt-3 text-xs font-medium text-muted-foreground">{g.label}</div>
             {g.items.map((r) => (
-              <div key={r.id} className={cn("group flex h-8 items-center gap-1 rounded-md pr-1", r.id === activeId ? "bg-accent" : "hover:bg-accent/60")}>
+              <div key={r.id} className={cn("group flex h-8 items-center gap-1 rounded-md pr-1", r.id === activeId ? "bg-accent text-accent-foreground" : "hover:bg-muted")}>
                 {renaming?.id === r.id ? (
                   <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} className="mx-1 h-7 min-w-0 flex-1 rounded-md border border-ring bg-background px-2 text-sm outline-none" />
                 ) : (
@@ -1301,7 +1301,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
         <div className="text-[13px] text-muted-foreground">
           {turn.streaming && (thinking || running.length > 0) ? (
             <div className="flex items-center gap-2" role="status" aria-live="polite">
-              <GideonMark className="h-3.5 w-3.5 shrink-0 animate-pulse text-foreground/70" />
+              <GideonMark className="h-3.5 w-3.5 shrink-0 animate-pulse text-sidebar-primary" />
               <span className="gideon-shimmer truncate">{running.length > 0 ? stepText(running[running.length - 1], t) : t("Thinking…")}</span>
               {steps.length > 0 && (
                 <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="ml-auto shrink-0 rounded px-1 text-xs hover:text-foreground">
@@ -1402,7 +1402,7 @@ function SourceChip({ source, n }: { source: GideonRef; n?: number }) {
     <a
       href={source.url}
       onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(source.url); }}
-      className="inline-flex h-6 max-w-[14rem] items-center gap-1 rounded-md bg-muted/60 px-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex h-6 max-w-[14rem] items-center gap-1 rounded-full bg-muted/70 px-2 text-xs text-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={source.excerpt ? `${source.title}\n${source.excerpt}` : source.title}
     >
       {n ? <span className="tabular-nums text-muted-foreground">{n}</span> : null}
@@ -1485,7 +1485,7 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
     proposal.status === "FAILED" ? t("Couldn't apply: {reason}", { reason: proposal.error ?? "" }) :
     proposal.status === "APPLYING" ? t("Applying…") : null;
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-background", open ? "shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)]" : "opacity-90")}>
+    <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
       <ProposalHead open={open} title={title} summary={proposal.summary} />
       {open && proposal.diff.length > 0 && (
         <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
