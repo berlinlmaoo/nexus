@@ -428,8 +428,8 @@ function ProjectDetail() {
 
   // ── saved views (owner, 12 Oct 2026) ──
   const pv = useProjectViews(projectId, !!data && !isSpecial);
-  // From md the project's other tabs (Spreadsheet, Pages, Forms, Chat) open the tools row, so every view tab fits
-  // row 1 at 1440 (UI tour run 17, R17-WD-3: "2 ›" hid Forms and Chat beside ~900px of empty tools row).
+  // From md the tab strip is one row of whole tabs with a trailing "N more" menu (UI tour run 20, decision 5); a
+  // phone keeps its sideways-scrolling strip.
   const modulesInToolsRow = !useIsMobile();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 300_000 });
   const meId = me.data?.user?.id ?? null;
@@ -639,9 +639,10 @@ function ProjectDetail() {
   const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
   const viewTabs: ToolbarTab[] = visibleViews.map((v) => ({ key: v.id, label: viewName(v, tr), icon: LAYOUT_ICON[v.layout] ?? LayoutGrid, view: v }));
   const afterTabs: ToolbarTab[] = moduleTabs.filter((m) => !m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon, compact: true }));
-  const rowOneTabs = modulesInToolsRow ? [...beforeTabs, ...viewTabs] : [...beforeTabs, ...viewTabs, ...afterTabs];
-  const lastViewKey = viewTabs.length && afterTabs.length && !modulesInToolsRow ? viewTabs[viewTabs.length - 1].key : null;
-  const tabNoop = () => {};
+  // Every tab in one row, in its order; from md the tabs that do not fit go into a trailing "N more" menu (UI tour
+  // run 20, decision 5, R20-WD-6: the project's other tabs and the tools had wrapped to a second row).
+  const rowOneTabs = [...beforeTabs, ...viewTabs, ...afterTabs];
+  const lastViewKey = viewTabs.length && afterTabs.length ? viewTabs[viewTabs.length - 1].key : null;
   const activeKey = activeModule ?? activeView?.id ?? null;
   const toolbar = data && !isSpecial ? (
     <div className="pb-px">
@@ -660,6 +661,7 @@ function ProjectDetail() {
           onDelete={deleteView}
           onHide={(v) => isBuiltinTab(v) && hideBuiltin.mutate(v.builtin!)}
           divideAfter={lastViewKey}
+          overflow={modulesInToolsRow ? "menu" : "scroll"}
           addView={canEditProject ? <AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} /> : undefined}
         />
         </div>
@@ -670,27 +672,12 @@ function ProjectDetail() {
         {/* From sm the tabs share their row with Add task only; the view's tools (and the named Automations and AI
             Autofill) are a row of their own under it, on every view. With the tools beside them, the labels pushed
             project tabs behind the arrow at 1440 (UI tour run 16, R16-WD-6 follow-up: a hidden tab is a finding). */}
-        <span className="ml-1.5 hidden shrink-0 sm:inline-flex">
+        <span className="ml-1.5 hidden shrink-0 sm:inline-flex lg:order-2">
           <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
         </span>
-        <div className={cn("shrink-0 items-center gap-0.5 sm:flex sm:basis-full sm:justify-end", toolsOpen ? "flex basis-full justify-end" : "hidden")}>
-          {modulesInToolsRow && afterTabs.length > 0 && (
-            <div className="mr-auto flex min-w-0 flex-1 pr-4">
-              <ViewTabsBar
-                tabs={afterTabs}
-                activeKey={activeKey}
-                onSelect={select}
-                canEditView={() => false}
-                onReorder={tabNoop}
-                onRename={tabNoop}
-                onSettings={tabNoop}
-                onDuplicate={tabNoop}
-                onCopyLink={tabNoop}
-                onDelete={tabNoop}
-                onHide={tabNoop}
-              />
-            </div>
-          )}
+        {/* From lg the tools sit in the same row, between the tabs and Add task (one toolbar row, Notion); below lg
+            they are a row of their own under the tabs. */}
+        <div className={cn("shrink-0 items-center gap-0.5 sm:flex sm:basis-full sm:justify-end lg:order-1 lg:basis-auto", toolsOpen ? "flex basis-full justify-end" : "hidden")}>
           {cfg && activeView && !activeModule && (
             <>
               <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
@@ -2446,11 +2433,12 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
     if (el && firstWin) el.scrollTo({ left: Math.max(0, xOf(firstWin.start) - GANTT_DAY_W * 2), behavior: "smooth" });
   };
 
-  // Where the scroller opens: on today. A phone shows about six days, so when no bar falls in them it opens on the
-  // bar nearest today instead, never on a window with only off-range chips (UI tour run 19, R19-WM-3, decision 8).
+  // Where the scroller opens: on today. When no bar falls in the days it shows, it opens on the bar nearest today
+  // instead, never on a window with only off-range chips: on a phone (UI tour run 19, R19-WM-3, decision 8) and on
+  // a desktop too (UI tour run 20, R20-WD-5: the 2-week window showed no bar on any page).
   const openingLeft = (el: HTMLDivElement) => {
     const atToday = Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3));
-    if (!compact || !allWins.length) return atToday;
+    if (!allWins.length) return atToday;
     const width = Math.max(GANTT_DAY_W, el.clientWidth - leftW);
     if (allWins.some((w) => xOf(w.end) + GANTT_DAY_W > atToday && xOf(w.start) < atToday + width)) return atToday;
     const dist = (w: { start: Date; end: Date }) => Math.min(Math.abs(w.start.getTime() - today.getTime()), Math.abs(w.end.getTime() - today.getTime()));

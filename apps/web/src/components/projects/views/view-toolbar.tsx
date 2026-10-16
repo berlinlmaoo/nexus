@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Lock, Plus, Search, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLang } from "@/lib/lang";
@@ -27,7 +27,7 @@ export type ToolbarTab = {
 /** Width of the edge arrows (w-9), the zone a tab must clear to stay shown. */
 const EDGE_W = 36;
 
-export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder, onRename, onSettings, onDuplicate, onCopyLink, onDelete, onHide, addView, divideAfter }: {
+export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder, onRename, onSettings, onDuplicate, onCopyLink, onDelete, onHide, addView, divideAfter, overflow = "scroll" }: {
   tabs: ToolbarTab[];
   activeKey: string | null;
   onSelect: (key: string) => void;
@@ -42,8 +42,14 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   addView?: ReactNode;
   /** Draw a hairline before this tab key (between the views and the project's other tabs). */
   divideAfter?: string | null;
+  /**
+   * "scroll": tabs that do not fit scroll sideways behind arrows (the phone). "menu": one row of whole tabs, the
+   * rest in a trailing "N more" menu, Notion's pattern (UI tour run 20, decision 5, R20-WD-6).
+   */
+  overflow?: "scroll" | "menu";
 }) {
   const { t } = useLang();
+  const menu = useTabOverflowMenu(overflow === "menu", tabs, activeKey, divideAfter ?? null, !!addView);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -88,18 +94,20 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     order.splice(order.indexOf(targetId), 0, dragId);
     onReorder(order);
   };
+  const shownTabs = menu.on ? menu.shown : tabs;
   // `relative` makes this scroller the containing block of the compact tabs' sr-only labels (position:absolute);
   // without it they escaped to the sticky header and stretched the phone page to ~720px (audit 12 Oct 2026).
   return (
-    <div className="relative flex min-w-0 flex-1">
-    {edges.left && (
+    <div ref={menu.outerRef} className="relative flex min-w-0 flex-1">
+    {menu.on && menu.measure}
+    {!menu.on && edges.left && (
       <button type="button" tabIndex={-1} aria-label={t("Show earlier tabs")} onClick={() => nudge(-1)} className={cn(edgeBtn, "left-0 justify-start bg-gradient-to-r from-card from-60% to-transparent")}><ChevronLeft className="h-4 w-4" /></button>
     )}
-    {edges.right && (
+    {!menu.on && edges.right && (
       <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}>{edges.more > 0 && <span className="hidden text-[11px] font-semibold tabular-nums md:inline">{edges.more}</span>}<ChevronRight className="h-4 w-4" /></button>
     )}
-    <div ref={scroller} role="tablist" aria-label={t("Views")} className="relative flex min-w-0 flex-1 snap-x snap-proximity items-center gap-0.5 overflow-x-auto [scroll-padding-inline:36px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {tabs.map((tab) => {
+    <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("relative flex min-w-0 items-center gap-0.5", menu.on ? "overflow-hidden" : "flex-1 snap-x snap-proximity overflow-x-auto [scroll-padding-inline:36px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden")}>
+      {shownTabs.map((tab) => {
         const active = tab.key === activeKey;
         const v = tab.view;
         const editable = v ? canEditView(v) : false;
@@ -123,7 +131,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               // Keys typed in the rename field inside the tab are the field's (a space in a name, C-BUG-10).
               onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
               className={cn(
-                "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30",
+                TAB_PILL,
                 active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 dragId === v?.id && "opacity-40",
                 overId === v?.id && dragId !== v?.id && "ring-1 ring-[color:var(--accent-foreground)]/50",
@@ -160,9 +168,107 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
           </div>
         );
       })}
-      {!divideAfter && addView && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
+      {!menu.on && !divideAfter && addView && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
     </div>
+    {menu.on && menu.hidden.length > 0 && (
+      <MoreTabsMenu tabs={menu.hidden} onSelect={onSelect} />
+    )}
+    {menu.on && addView && <span className="inline-flex shrink-0 items-center">{addView}</span>}
     </div>
+  );
+}
+
+/** Tab pill classes, shared by the row and its measuring copy. */
+const TAB_PILL = "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30";
+const MORE_PILL = "inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground";
+/** Width of the "+" after the strip (the "N more" button is measured with the tabs). */
+const ADD_W = 36;
+const GAP = 2;
+const DIVIDER_W = 13;
+
+/**
+ * Which tabs fit one row whole, and which go into "N more". Measured from an invisible copy of every tab (so a
+ * hidden tab's width is known), against the room the row really has. The tab order never changes; the active tab
+ * is always in the row: if it would be in the menu it takes the last place in the row instead.
+ */
+function useTabOverflowMenu(on: boolean, tabs: ToolbarTab[], activeKey: string | null, divideAfter: string | null, hasAdd: boolean) {
+  const { t } = useLang();
+  const outerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<number>(tabs.length);
+  const key = tabs.map((x) => `${x.key}:${x.label}:${x.key === activeKey ? 1 : 0}`).join("|");
+  useLayoutEffect(() => {
+    if (!on) return;
+    const outer = outerRef.current, box = measureRef.current;
+    if (!outer || !box) return;
+    const read = () => {
+      const all = [...box.children].map((c) => (c as HTMLElement).getBoundingClientRect().width);
+      const moreW = all.pop() ?? 0;
+      const widths = all;
+      const room = outer.clientWidth - (hasAdd ? ADD_W : 0);
+      const cost = (i: number) => widths[i] + GAP + (divideAfter && tabs[i - 1]?.key === divideAfter ? DIVIDER_W : 0);
+      let total = 0;
+      for (let i = 0; i < tabs.length; i++) total += cost(i);
+      if (total <= room) { setFit(tabs.length); return; }
+      let used = 0, n = 0;
+      while (n < tabs.length && used + cost(n) + moreW + GAP <= room) { used += cost(n); n++; }
+      setFit(Math.max(1, n));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(outer);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [on, key, divideAfter, hasAdd]); // eslint-disable-line react-hooks/exhaustive-deps
+  let shown = tabs, hidden: ToolbarTab[] = [];
+  if (on && fit < tabs.length) {
+    shown = tabs.slice(0, fit);
+    hidden = tabs.slice(fit);
+    const ai = tabs.findIndex((x) => x.key === activeKey);
+    if (ai >= fit) {
+      // The active tab takes the row's last place; the tab it displaces leads the menu, so the order is kept.
+      const out = shown[fit - 1];
+      shown = [...shown.slice(0, fit - 1), tabs[ai]];
+      hidden = [out, ...hidden.filter((x) => x.key !== activeKey)];
+    }
+  }
+  const measure = (
+    <div ref={measureRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex h-0 items-center gap-0.5 overflow-hidden">
+      {tabs.map((tab) => (
+        <span key={tab.key} className={cn(TAB_PILL, "shrink-0", tab.key === activeKey && "font-medium")}>
+          <tab.icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="max-w-48 truncate">{tab.label}</span>
+          {tab.view && !tab.view.shared && <Lock className="h-3 w-3 shrink-0" />}
+          {tab.view && tab.key === activeKey && <span className="inline-block h-5 w-5 shrink-0" />}
+        </span>
+      ))}
+      {/* The "N more" button, with the widest count it can show. */}
+      <span className={cn(MORE_PILL, "shrink-0")}>{t("{n} more", { n: tabs.length })}<ChevronDown className="h-3.5 w-3.5" /></span>
+    </div>
+  );
+  return { on, outerRef, measure, shown, hidden };
+}
+
+/** The trailing "N more" of a one-row tab strip: the tabs that did not fit, in their order. */
+function MoreTabsMenu({ tabs, onSelect }: { tabs: ToolbarTab[]; onSelect: (key: string) => void }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={t("{n} more tabs", { n: tabs.length })} className={cn(MORE_PILL, "shrink-0")}>
+          {t("{n} more", { n: tabs.length })}<ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        {tabs.map((tab) => (
+          <button key={tab.key} type="button" onClick={() => { setOpen(false); onSelect(tab.key); }} className={menuItemCls}>
+            <tab.icon className="h-3.5 w-3.5 text-muted-foreground" /><span className="truncate">{tab.label}</span>
+            {tab.view && !tab.view.shared && <Lock className="ml-auto h-3 w-3 shrink-0 opacity-60" aria-label={t("Only you see this view")} />}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }
 

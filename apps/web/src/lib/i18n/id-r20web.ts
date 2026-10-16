@@ -12,4 +12,6 @@ export const ID_R20WEB: Record<string, string> = {
   // Projects overview: one summary line (R20-WB-8)
   "{n}% average progress": "Rata-rata progres {n}%",
   "{n} tasks done": "{n} task selesai",
+  // Project tabs: one row, the rest in "N more" (R20-WD-6)
+  "{n} more tabs": "{n} tab lainnya",
 };
