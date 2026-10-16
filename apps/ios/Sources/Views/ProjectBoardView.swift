@@ -629,7 +629,7 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
+        .padding(.leading, isPresented ? (wide ? 24 : 20) : (wide ? 24 : 14))
         .padding(.trailing, wide ? 24 : 14)
         .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
@@ -641,13 +641,14 @@ struct ProjectDetailView: View {
             SidebarReopenButton()
             // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
             if isPresented {
-                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14).
+                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14): the
+                // bar's bordered 44 pt circle, no shadow, at the bar's 20 pt inset (run 20, R20-I-07: it was a smaller
+                // shadowed circle at 6 pt).
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
                         .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border.opacity(0.7), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                        .background(NX.card, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border, lineWidth: 1))
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)

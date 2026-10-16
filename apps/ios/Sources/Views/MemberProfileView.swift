@@ -238,17 +238,20 @@ struct MemberProfileView: View {
 
     private var standingCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Named for the number under it. It said LEVEL above "1,000 XP" and a "Level 6" chip,
-            // the word twice and neither time about the big number.
-            SectionLabel(T("Total XP"))
+            // No label above the figure (decision 4 of run 20, R20-B-31): the heading says what it is, "1.000 XP this
+            // period", and the line under it where 1.000 comes from, so it no longer contradicts "0 XP gained"
+            // (R20-B-06; fix20 API copy 1). That line is the only gained / lost on the screen (R20-I-24).
             if let xp = xpTotal, let level = levelNumber {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(AppNumber.int(xp))
-                        .font(NXFont.display(28, .bold)).foregroundStyle(NX.foreground)
+                    Text(String(format: T("%@ XP this period"), AppNumber.int(xp)))
+                        .font(NXFont.display(24, .bold)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     NexusChip(text: "\(T("Level")) \(level)\(levelName.map { " · \($0)" } ?? "")", tone: .accent)
                 }
                 .accessibilityElement(children: .combine)
+                Text(baselineLine).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
                 // Only your own score arrives with the level floors around it, so the bar is drawn
                 // for you and a bare number for everybody else — an invented denominator would be
                 // worse than none.
@@ -274,6 +277,17 @@ struct MemberProfileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
+    }
+
+    /// Everyone starts each period (28th to 27th) at the server's PERIOD_BASELINE_XP, 1.000; with this period's
+    /// gains and losses when the record shown is this period's.
+    private var baselineLine: String {
+        let base = AppNumber.int(1000)
+        if let r = record, r.period.isCurrent == true, let x = r.summary?.xp {
+            return String(format: T("Starts at %@ on the 28th · +%@ gained · %@ lost"), base,
+                          AppNumber.int(x.gained ?? 0), AppNumber.int(abs(x.lost ?? 0)))
+        }
+        return String(format: T("Starts at %@ on the 28th"), base)
     }
 
     /// Why there is no score to show. The leaderboard deliberately leaves management out of the
@@ -367,21 +381,20 @@ struct MemberProfileView: View {
         let d = r.summary?.dayOff
         let xp = r.summary?.xp
         return VStack(alignment: .leading, spacing: 14) {
+            // No "This period" label above the score (decision 4 of run 20, R20-B-31): the period bar above names
+            // the period, and the day count sits on the score's line.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                SectionLabel(r.period.isCurrent == true ? T("THIS PERIOD") : T("PERIOD"))
+                if let score {
+                    (StreakBoardCard.scoreText(worked: score.totalWorked ?? score.worked, target: score.working))
+                        .font(NXFont.display(30, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Score")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                }
                 Spacer(minLength: 8)
                 if r.period.isCurrent == true, let el = r.period.daysElapsed, let all = r.period.days {
                     Text(String(format: T("Day %d of %d"), el, all)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                 }
             }
-            if let score {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    (StreakBoardCard.scoreText(worked: score.totalWorked ?? score.worked, target: score.working))
-                        .font(NXFont.display(30, .bold)).foregroundStyle(NX.foreground)
-                    Text(T("Score")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                }
-                .accessibilityElement(children: .combine)
-            }
+            .accessibilityElement(children: .combine)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 countTile(T("Present"), c?.present, AttTone.present)
                 countTile(T("Permit"), c?.permit, AttTone.permit)
@@ -407,10 +420,15 @@ struct MemberProfileView: View {
                             String(format: T("%@/%@ used · %@ left"), AppNumber.int(d.usedRaw ?? d.used ?? 0), AppNumber.int(d.quota ?? 4), AppNumber.int(d.remaining ?? 0))
                             + ((d.bonusDays ?? 0) > 0 ? " · " + String(format: T("incl. %d extra"), d.bonusDays ?? 0) : ""))
                 }
+                // This period's gained / lost is said under the XP figure above (R20-I-24); a past period keeps it here.
                 if let xp {
-                    factRow("sparkles", "XP",
-                            MemberProfileView.gainedLost(xp.gained, xp.lost)
-                            + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the board"), xp.removed ?? 0) : ""))
+                    if r.period.isCurrent != true || xpTotal == nil {
+                        factRow("sparkles", "XP",
+                                MemberProfileView.gainedLost(xp.gained, xp.lost)
+                                + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the board"), xp.removed ?? 0) : ""))
+                    } else if (xp.removed ?? 0) > 0 {
+                        factRow("sparkles", "XP", String(format: T("%d removed by the board"), xp.removed ?? 0))
+                    }
                     // Absences on the tiles and nothing lost read as a contradiction (UI tour run 14, N-32):
                     // say when an absence costs XP and when it does not.
                     if (c?.absent ?? 0) > 0 && (xp.lost ?? 0) == 0 {
@@ -553,8 +571,10 @@ struct MemberProfileView: View {
             selectedRow = row ?? AttendanceRow.emptyDay(userId: r.person.id, name: r.person.name ?? displayName, dateKey: day.date)
         } label: {
             VStack(spacing: 3) {
-                Text(T(day.weekday ?? "").uppercased()).font(NXFont.text(8, .semibold)).foregroundStyle(NX.mutedFg)
-                Text("\(day.day ?? 0)").font(NXFont.text(10, .bold)).foregroundStyle(day.isToday == true ? NX.violetText : NX.mutedFg)
+                // 11 pt, the floor for text (UI tour run 20, R20-B-08: 8 pt letters).
+                Text(T(day.weekday ?? "").uppercased()).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).fixedSize()
+                Text("\(day.day ?? 0)").font(NXFont.text(11, .bold)).foregroundStyle(day.isToday == true ? NX.violetText : NX.mutedFg)
                 ZStack(alignment: .topTrailing) {
                     // A day still to come: a dashed outline, not a near-white tile at 40% (UI tour run 17, iPhone
                     // R17-I-13: days 16-20 were all but invisible).
@@ -889,15 +909,9 @@ private struct RecordXpCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                SectionLabel(T("XP log"))
-                Spacer()
-                if let t = record.summary?.xp {
-                    // Said with its unit, not "+0 · 0" (UI tour run 15, R15-I-21).
-                    Text(MemberProfileView.gainedLost(t.gained, t.lost))
-                        .font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
-                }
-            }
+            // The gained / lost line is said once on this screen, under the XP figure, not again here (UI tour
+            // run 20, R20-I-24; fix20 API copy 1).
+            SectionLabel(T("XP log"))
             let current = record.xp?.entries ?? []
             // The empty state's own button walks back a period, while there is anything older.
             let canWalkBack = last?.hasOlder == true && older.isEmpty

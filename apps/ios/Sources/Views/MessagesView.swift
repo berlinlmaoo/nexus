@@ -839,8 +839,9 @@ struct ChatThreadView: View {
                                 else if messages.isEmpty {
                                     // No emoji as decoration: the words and the way in (decision 4 of run 19, iPad R19-I-16).
                                     EmptyState(icon: "bubble.left.and.bubble.right", title: T("No messages yet."),
-                                               actionTitle: T("Start a conversation"), actionIcon: "square.and.pencil",
-                                               action: { composerFocused = true }, compact: true)
+                                               // Web's solid "Start a conversation" (decision 13 of run 20, R20-B-15).
+                                               actionTitle: T("Start a conversation"), actionIcon: nil,
+                                               action: { composerFocused = true }, compact: true, prominent: true)
                                         .padding(.top, 40)
                                 }
                                 ForEach(messages) { m in
