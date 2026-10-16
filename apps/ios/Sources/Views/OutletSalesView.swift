@@ -668,7 +668,7 @@ struct OutletCalendarLegend: View {
     }
 
     private var target: some View {
-        Label(T("Day target"), systemImage: "target").labelStyle(LegendLabelStyle(tint: NX.violetText))
+        Label(T("Day target"), systemImage: "target").labelStyle(LegendLabelStyle(tint: NX.mutedFg)) // neutral as the mark (decision 12)
     }
 
     private var note: some View {

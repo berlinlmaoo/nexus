@@ -141,7 +141,10 @@ struct CFChipView: View {
         } else if chip.isDate {
             // A date field wears the calendar; the clock is the due date's alone (web PropValue / DateChips,
             // UI tour run 10, IP-3: both dates on a card had a clock).
-            Label(chip.label, systemImage: "calendar").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Named as web WD-4 does ("Request by 15 Apr", "Tanggal Penggunaan 4 Jul"): a bare date read like a due
+            // date, and three in a row said nothing (UI tour run 20, R20-B-03).
+            Label(chip.fieldName.map { "\($0) \(chip.label)" } ?? chip.label, systemImage: "calendar")
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 .padding(.vertical, 2)
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
         } else if let key = chip.colorKey {
@@ -149,6 +152,11 @@ struct CFChipView: View {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .foregroundStyle(sw.fg).background(sw.bg, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else if chip.number != nil {
+            // Money and other numbers as plain text on the meta line, no grey chip, as the web card (UI tour run 20,
+            // R20-B-12, decision 22).
+            Text(chip.label).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+                .padding(.vertical, 2)
         } else {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
@@ -193,11 +201,16 @@ struct CFChipRow: View {
     /// R15-I-13: "26 May 31 May ⏱ 26 May", "15 May 15 May"). nil = every date, as before.
     var capDates = false
     var due: String? = nil
+    /// A task's priority, drawn as the first item of the same flow: beside the row, the chips wrapped under its
+    /// second chip, not at the card's text edge (UI tour run 20, iPhone R20-I-08, R20-B-13).
+    var priority: String? = nil
     var body: some View {
         let all = (values ?? []).filter { only?.contains($0.customFieldId) ?? true }.compactMap(customFieldChip)
         let (chips, hidden) = capDates ? Self.capped(all, due: due) : (all, 0)
-        if !chips.isEmpty || hidden > 0 {
+        let prio = priority.flatMap { $0.uppercased() == "NONE" ? nil : $0 }
+        if !chips.isEmpty || hidden > 0 || prio != nil {
             FlowLayout(spacing: 5) {
+                if let prio { PriorityPill(priority: prio).fixedSize() }
                 ForEach(chips) { CFChipView(chip: $0) }
                 if hidden > 0 {
                     Text("+\(hidden)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)

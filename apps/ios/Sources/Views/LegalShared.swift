@@ -35,6 +35,18 @@ enum LegalLabels {
         text.replacingOccurrences(of: "/", with: "/\u{2060}").replacingOccurrences(of: "-", with: "-\u{2060}")
     }
 
+    /// A title that is a file name ("PATS_University.docx") may break after "_" and before the extension, never
+    /// mid-word ("PATS_U / niversity.docx"; UI tour run 20, iPad R20-I-07).
+    static func title(_ text: String) -> String {
+        let t = unbroken(text)
+        guard !t.contains(" ") || t.contains("_") else { return t }
+        var out = t.replacingOccurrences(of: "_", with: "_\u{200B}")
+        if let dot = out.range(of: ".", options: .backwards), out.distance(from: dot.lowerBound, to: out.endIndex) <= 6 {
+            out.replaceSubrange(dot, with: "\u{200B}.")
+        }
+        return out
+    }
+
     static let docTypes = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "ADD", "INVOICE", "PJM", "PGB", "OTHER"]
     /// An addendum: made from a signed document, numbered after it (…/ADD-n).
     static let addendumType = "ADD"

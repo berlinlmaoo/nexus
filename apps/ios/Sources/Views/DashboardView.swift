@@ -318,7 +318,8 @@ struct DashboardView: View {
             // One height for the pair: the row is as tall as the taller card and both fill it.
             .fixedSize(horizontal: false, vertical: true)
             .environment(\.homeCardFillsRow, true)
-            .frame(minWidth: 620)
+            // Side by side from 560 pt, as the web's left column (two ~280 pt cards).
+            .frame(minWidth: 560)
             VStack(alignment: .leading, spacing: 18) {
                 HomeCalendarCard { router.go(.teamCalendar) }
                 scheduleCard
@@ -334,9 +335,12 @@ struct DashboardView: View {
             HStack(alignment: .top, spacing: 18) {
                 // The web desktop Home (decision 11 of run 19, R19-B-07): the tiles, XP rules under them, then
                 // Calendar and Your schedule; the profile card, Messages and Leaderboard in the rail.
+                // Calendar and Your schedule in the left column, under XP rules, as the web (UI tour run 20, Mac
+                // R20-M-01: across the page under the rail they left a ~570 pt hole under XP rules).
                 VStack(alignment: .leading, spacing: 18) {
                     statCards
                     xpRulesCard
+                    calendarAndSchedule
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
@@ -346,9 +350,6 @@ struct DashboardView: View {
                 }
                 .frame(width: 340)
             }
-            // Calendar beside Your schedule across the page: in the left column of a default Mac window they
-            // stacked, the empty schedule ~320 pt tall for one line (UI tour run 19, Mac R19-M-07).
-            calendarAndSchedule
             Color.clear.frame(height: 8)
         }
     }
@@ -358,12 +359,30 @@ struct DashboardView: View {
         HStack(alignment: .center, spacing: 12) {
             greeting
             Spacer(minLength: 8)
+            // The web header's level chip: the tier badge, "Level 6 · Diamond" and the XP progress (decision 8 of
+            // run 20, R20-B-05; it was a bare violet pill).
             Button { Haptics.tap(); toggleLevel(true) } label: {
-                Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .background(NX.accentBg, in: Capsule())
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                HStack(spacing: 10) {
+                    TierBadge(level: game?.xp.level ?? 1, size: 32)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
+                            .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        HStack(spacing: 8) {
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(NX.muted)
+                                    Capsule().fill(NX.onyx).frame(width: geo.size.width * (game?.levelPct ?? 0))
+                                }
+                            }
+                            .frame(width: 96, height: 4)
+                            Text(xpLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().fixedSize()
+                        }
+                    }
+                }
+                .padding(.leading, 8).padding(.trailing, 14).padding(.vertical, 7)
+                .background(NX.card, in: Capsule())
+                .overlay(Capsule().strokeBorder(NX.border))
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .morphSource("level", in: morphSpace, store: morphFrames)
@@ -605,8 +624,13 @@ struct DashboardView: View {
     private var statCards: some View {
         HStack(spacing: 12) {
             ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
-                Button { toggleStat(i) } label: {
-                    StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
+                // No task at all: the tile says so and opens My Tasks, as web ("No open tasks · Open My Tasks";
+                // decision 8 of run 20, R20-I-25 / R20-B-05). It said "0/0 Tasks".
+                let noTasks = i == 1 && (d.total ?? 0) == 0
+                Button { if noTasks { router.go(.tasks) } else { toggleStat(i) } } label: {
+                    StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow,
+                                 plain: hSize == .regular,
+                                 emptyTitle: noTasks ? T("No open tasks") : nil, emptyAction: noTasks ? T("Open My Tasks") : nil)
                         .morphSource("stat-\(i)", in: morphSpace, store: morphFrames)
                 }
                 .buttonStyle(PressableCardStyle())
@@ -1069,7 +1093,7 @@ struct DashboardView: View {
     private var passkeyNudge: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "person.badge.key.fill")
+                Image(systemName: "key.fill") // The key glyph, as Settings › Security (R20-I-19)
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
                 Text(PlatformWording.biometric(faceID: "Sign in with Face ID", touchID: "Sign in with Touch ID",
                                                other: "Sign in with a passkey")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
@@ -1418,18 +1442,65 @@ struct StatCardView: View {
     let from: String
     let to: String
     let glow: String
+    /// iPad / Mac: the web's plain white tile (a tinted icon disc, the number in ink, no expand glyph; decision 8
+    /// of run 20, R20-B-05). The iPhone keeps its gradient tiles (owner rule: the iPhone Home stays).
+    var plain = false
+    /// Nothing to count: these words instead of "0/0", and the action as a link under them (R20-I-25).
+    var emptyTitle: String? = nil
+    var emptyAction: String? = nil
 
     var body: some View {
+        if plain { plainTile } else { gradientTile }
+    }
+
+    private var plainTile: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color(hex: to))
+                .frame(width: 40, height: 40)
+                .background(Color(hex: from).opacity(0.22), in: Circle())
+            if let emptyTitle {
+                Text(emptyTitle).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    .multilineTextAlignment(.center).lineLimit(2)
+                if let emptyAction {
+                    Text(emptyAction).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).underline()
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(AppNumber.int(value)).font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground)
+                    if let total { Text("/\(AppNumber.int(total))").font(NXFont.display(32, .bold)).foregroundStyle(NX.mutedFg.opacity(0.6)) }
+                }
+                Text(label).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .padding(.vertical, 16).padding(.horizontal, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(NX.card)
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(NX.border))
+        }
+    }
+
+    private var gradientTile: some View {
         VStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("\(value)").font(NXFont.display(30, .bold)).foregroundStyle(.white)
-                if let total { Text("/\(total)").font(NXFont.display(20, .bold)).foregroundStyle(.white.opacity(0.7)) }
+            if let emptyTitle {
+                Text(emptyTitle).font(NXFont.text(15, .bold)).foregroundStyle(.white)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+                if let emptyAction {
+                    Text(emptyAction).font(NXFont.text(12, .semibold)).foregroundStyle(.white.opacity(0.9)).underline()
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("\(value)").font(NXFont.display(30, .bold)).foregroundStyle(.white)
+                    if let total { Text("/\(total)").font(NXFont.display(20, .bold)).foregroundStyle(.white.opacity(0.7)) }
+                }
+                Text(label).font(NXFont.text(13, .medium)).foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
             }
-            Text(label).font(NXFont.text(13, .medium)).foregroundStyle(.white.opacity(0.9))
-                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18).padding(.horizontal, 8)

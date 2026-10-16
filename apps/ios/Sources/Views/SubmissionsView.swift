@@ -433,20 +433,7 @@ struct SubmissionsView: View {
         .nxEdgeFade(72)
     }
 
-    private func column(_ col: SubmissionColumn) -> some View {
-        let items = shown.filter { $0.columnKey == col.key }
-        let sw = StatusColor.swatch(col.colorKey)
-        return VStack(alignment: .leading, spacing: 4) {
-            // One label per column — its own stage name; the status-group label above it doubled it
-            // ("Complete" over "Done", UI tour run 11).
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    StatusPill(name: col.name, colorKey: col.colorKey)
-                    Text("\(items.count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 10).padding(.top, 10)
-                ScrollView(.vertical, showsIndicators: false) {
+    private func laneCards(_ col: SubmissionColumn, items: [MySubmission]) -> some View {
                     VStack(spacing: 8) {
                         ForEach(items) { s in
                             Button { opened = SubmissionRef(id: s.id, preview: s) } label: { card(s) }
@@ -471,10 +458,30 @@ struct SubmissionsView: View {
                         }
                     }
                     .padding(.horizontal, 8).padding(.bottom, 8)
+    }
+
+    private func column(_ col: SubmissionColumn) -> some View {
+        let items = shown.filter { $0.columnKey == col.key }
+        let sw = StatusColor.swatch(col.colorKey)
+        return VStack(alignment: .leading, spacing: 4) {
+            // One label per column — its own stage name; the status-group label above it doubled it
+            // ("Complete" over "Done", UI tour run 11).
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    StatusPill(name: col.name, colorKey: col.colorKey)
+                    Text("\(items.count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10).padding(.top, 10)
+                // The lane ends with its cards, as the web's; it scrolls only when they are taller than the page (UI
+                // tour run 20, R20-B-17: every lane's tint ran to the bottom of the window).
+                ViewThatFits(in: .vertical) {
+                    laneCards(col, items: items)
+                    ScrollView(.vertical, showsIndicators: false) { laneCards(col, items: items) }
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .top)
             .background(sw.lane, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         // One column plus a hint of the next on a phone, at most 320 wide (sized to the container,

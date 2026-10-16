@@ -2116,6 +2116,8 @@ struct StreakBoardCard: View {
     /// edges kept a half day ("N 1", "S 1") and the leave badge sat on the cut one (UI tour run 18, iPhone
     /// R18-I-04, iPad R18-I-05).
     private func alignLeadDay(_ proxy: ScrollViewProxy? = nil) {
+        // iOS 18: WholeDayStrip places the strip by its offset (see `grid`).
+        if #available(iOS 18.0, *) { return }
         guard !periodDays.isEmpty else { return }
         let key = todayKey.flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
         guard let key else { return }
@@ -2124,6 +2126,7 @@ struct StreakBoardCard: View {
     }
 
     private func scrollToToday(_ proxy: ScrollViewProxy) {
+        if #available(iOS 18.0, *) { return }
         alignLeadDay(proxy)
         guard let t = todayKey else { return }
         Task { @MainActor in
@@ -2137,6 +2140,12 @@ struct StreakBoardCard: View {
                 }
             }
         }
+    }
+
+    /// The index of `leadingDayKey`: the day WholeDayStrip puts flush with the left edge (iOS 18).
+    private var leadIndex: Int? {
+        guard let t = todayKey, let key = leadingDayKey(today: t) else { return nil }
+        return periodDays.firstIndex { $0.key == key }
     }
 
     /// The day to put flush with the strip's left edge so today lands mid-strip; nil while the strip's
@@ -2297,12 +2306,14 @@ struct StreakBoardCard: View {
                 // size change (the rows, then the pills column loading), which put the strip back at today's
                 // fraction of the period, mid-day, after the whole-day scroll: half a MON 12 column at the left,
                 // a MON 19 sliver at the right (UI tour run 19, iPhone R19-I-02, iPad R19-I-05).
-                .modifier(InitialScrollAnchor(anchor: daysAnchor, realign: { alignLeadDay(proxy) }))
-                // The day flush with the strip's left edge, by identity: the strip changes width after the
-                // first scroll (the members, then the iPad / Mac pills column load and the day width follows),
-                // and a position kept in points then sat mid-day, so both edges cut a column ("N" of SUN 11,
-                // "MO 2("; UI tour run 17, iPhone R17-I-05 / R17-I-12, iPad R17-I-07, Mac R17-M-05).
-                .scrollPosition(id: $leadDay, anchor: .leading)
+                // iOS 18 and later (UI tour run 20, iPhone R20-I-02, iPad R20-I-01, the third report): the strip is
+                // placed by its offset in points, a whole number of days, and put back on a whole day whenever the
+                // layout moves it. The id-based scrolls below never landed: in a reproduction on the iPhone 17 Pro
+                // Max simulator the strip stayed where the initial anchor had put it for the wider, not yet narrowed
+                // strip (run 20: 369 pt, 8 pt into SUN 11), whatever `scrollTo` and the bound id asked for, while an
+                // offset of 15 whole days landed exactly. iOS 17 keeps the anchor and the id (WholeDayStrip).
+                .modifier(WholeDayStrip(anchor: daysAnchor, step: cellW + gap, lead: leadIndex, leadDay: $leadDay,
+                                        realign: { alignLeadDay(proxy) }))
                 // Exactly as wide as the whole days that fit: with the scroll resting on a day, neither edge
                 // ever cuts one ("TU…" at the right, a sliver at the left; UI tour run 16, R16-I-17 /
                 // R16-M-14). The width is measured outside this frame, on the room the board leaves.
@@ -2355,7 +2366,6 @@ struct StreakBoardCard: View {
                             }
                         }
                         .frame(width: pillsW, height: cell, alignment: .leading)
-                        .modifier(HiddenUnderStickyHead(head: headerH))
                     }
                 }
             }
@@ -2421,7 +2431,6 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: gap) {
             ForEach(shownMembers) { m in
                 Self.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
-                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2476,7 +2485,6 @@ struct StreakBoardCard: View {
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: cell, alignment: .trailing)
-                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2514,7 +2522,6 @@ struct StreakBoardCard: View {
                     }
                 }
                 .frame(height: cell)
-                .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -3061,21 +3068,60 @@ private struct ExportLabelStyle: LabelStyle {
 
 
 
-/// `defaultScrollAnchor` for the first offset only (iOS 18), and a whole-day realignment whenever the content
-/// changes width; iOS 17 keeps the plain anchor (UI tour run 19, R19-I-02).
-struct InitialScrollAnchor: ViewModifier {
+/// The attendance board's day strip at rest on whole days.
+///
+/// iOS 18 and later: the strip's offset is `lead` whole days (`step` each), set when the strip appears and again
+/// whenever `lead` changes (the strip's width or the day width settled), and put back on a whole day whenever the
+/// layout leaves it mid-day while nobody is scrolling: today's day while the person has not scrolled, else the
+/// nearest whole day. `lead` nil = the period's first day (a past period, or the whole period fits).
+/// iOS 17: the anchor at today's fraction of the period plus the day flush with the edge by id (run 17-19).
+struct WholeDayStrip: ViewModifier {
     let anchor: UnitPoint
+    let step: CGFloat
+    let lead: Int?
+    @Binding var leadDay: String?
     let realign: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content
-                .defaultScrollAnchor(anchor, for: .initialOffset)
-                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentSize.width }) { old, new in
-                    if old != new { realign() }
-                }
+            content.modifier(WholeDayStripOffset(step: step, lead: lead))
         } else {
-            content.defaultScrollAnchor(anchor)
+            content
+                .defaultScrollAnchor(anchor)
+                .scrollPosition(id: $leadDay, anchor: .leading)
         }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct WholeDayStripOffset: ViewModifier {
+    let step: CGFloat
+    let lead: Int?
+    @State private var position = ScrollPosition()
+    @State private var phase: ScrollPhase = .idle
+    /// The person scrolled the strip themselves: from then on it only snaps to the nearest whole day.
+    @State private var userMoved = false
+
+    private var leadX: CGFloat { CGFloat(lead ?? 0) * step }
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onScrollPhaseChange { _, now in
+                phase = now
+                if now == .interacting || now == .tracking { userMoved = true }
+            }
+            .onScrollGeometryChange(for: [CGFloat].self, of: { [$0.contentOffset.x, $0.containerSize.width, $0.contentSize.width] }) { _, g in
+                settle(offset: g[0], container: g[1], content: g[2])
+            }
+            .onAppear { position.scrollTo(x: leadX) }
+            .onChange(of: lead) { _, _ in if !userMoved { position.scrollTo(x: leadX) } }
+    }
+
+    private func settle(offset: CGFloat, container: CGFloat, content: CGFloat) {
+        guard phase == .idle, step > 0, content > container else { return }
+        let end = content - container
+        let target = userMoved ? min((offset / step).rounded() * step, end) : min(leadX, end)
+        if abs(offset - target) > 0.5 { position.scrollTo(x: target) }
     }
 }

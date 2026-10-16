@@ -86,9 +86,11 @@ extension View {
 struct NXMonthTargetMark: View {
     var wide = false
     var body: some View {
+        // One placement and colour on every calendar (decision 12 of run 20, R20-I-21 / R20-B-29): neutral
+        // secondary grey, right after the day number on its line, never in the cell's corner.
         Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))
-            // The legend's violet, so the mark and its legend entry read as one (UI tour run 19, R19-I-27).
-            .foregroundStyle(NX.violetText)
+            .foregroundStyle(NX.mutedFg)
+            .padding(.leading, 2)
             .accessibilityHidden(true)
     }
 }

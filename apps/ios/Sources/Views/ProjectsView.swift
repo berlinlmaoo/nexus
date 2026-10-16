@@ -1164,7 +1164,8 @@ struct CreateProjectSheet: View {
     /// left ~450 pt of empty sheet under three cards (UI tour run 17, R17-B-08). The form keeps the cap.
     private var sheetHeight: CGFloat {
         guard pick == nil, galleryHeight > 0 else { return 760 }
-        return min(760, galleryHeight + 72)
+        // The inline title bar is ~50 pt: 72 left 60-90 pt of empty sheet under the cards (UI tour run 20, R20-B-27).
+        return min(760, galleryHeight + 52)
     }
 
     var body: some View {

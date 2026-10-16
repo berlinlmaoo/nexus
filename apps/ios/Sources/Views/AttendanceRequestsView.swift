@@ -442,9 +442,10 @@ struct AttendanceRequestsCard: View {
                 }
                 Spacer()
                 Button { composerPermit = false; showComposer = true } label: {
-                    // The web's near-black primary (UI tour run 15, Q-IB22).
-                    Label(T("New"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
+                    // The web's near-black primary (UI tour run 15, Q-IB22), with its words (run 20, Mac R20-M-04: "+ New").
+                    Label(T("New request"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.onyx, in: Capsule())
+                        .lineLimit(1).fixedSize()
                 }.buttonStyle(.plain)
             }
             // On the header, not the card: the card already presents the reject sheet, and two
@@ -460,7 +461,8 @@ struct AttendanceRequestsCard: View {
                            subtitle: canReview
                                ? T("Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row.")
                                : T("Leave, sick days, permits and day-offs you file show up here with their status, and your approver is told the moment you send one."),
-                           actionTitle: T("File a request"), actionIcon: "plus", action: { composerPermit = false; showComposer = true }, compact: true)
+                           // No second "File a request": "New request" sits right above (Mac R20-M-04).
+                           compact: true)
             } else {
                 filterBar
                 refineBar

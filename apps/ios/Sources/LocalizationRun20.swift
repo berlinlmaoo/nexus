@@ -35,5 +35,17 @@ extension AppLanguage {
         "1 holiday left": "Sisa 1 tanggal merah",
         "No holidays left": "Tanggal merah habis",
         "Day off left this period: {left} of {quota} (used {used})": "Sisa day off periode ini: {left} dari {quota} (terpakai {used})",
+        // Offices card (web wording, Mac R20-M-04)
+        "Offices and check-in area": "Kantor dan area check-in",
+        "Set office locations and the radius for check-in.": "Atur lokasi kantor dan radius untuk check-in.",
+        "Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.": "Hapus “{name}”? Kantor ini hilang dari daftar dan tidak bisa dipakai check-in lagi. Hari yang sudah tercatat di sana tetap memakai nama kantornya.",
+        "Couldn't delete the office": "Kantor tidak bisa dihapus",
+        // Home tiles
+        "No open tasks": "Tidak ada task terbuka",
+        // Calendar view settings (fix20 API copy 5)
+        "Show tasks by": "Tampilkan task berdasarkan",
+        // Project tab row overflow (decision 5)
+        "%d more": "%d lainnya",
+        "More views": "View lainnya",
     ]
 }

@@ -226,6 +226,8 @@ struct ListTab: View {
     @State private var collapsed: Set<String> = []
     /// iPad / Mac two-line rows: each value column as wide as its widest value, shared by every row.
     @State private var slotWidths = ListSlotWidths()
+    /// The List's width: from 760 pt (less the 64 pt of side padding) the rows keep one line (decision 6 of run 20).
+    @State private var listWidth: CGFloat = 0
 
     var body: some View {
         // Computed once per render: every row of the List draws the same columns.
@@ -239,6 +241,7 @@ struct ListTab: View {
             .padding(.horizontal, hSize == .regular ? 32 : 14)
             .padding(.vertical, 12)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
         // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
         // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
         // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
@@ -301,7 +304,7 @@ struct ListTab: View {
     @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: ListColumns.Layout, order: @escaping () -> [String]) -> some View {
         let by = groupedBy(laneId)
         let base = ListTaskRow(task: t, status: by.status && hSize != .regular ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
-                               columnLayout: columns, hidePriority: by.priority,
+                               oneLine: hSize == .regular && listWidth >= 760, columnLayout: columns, hidePriority: by.priority,
                                onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
@@ -352,6 +355,10 @@ struct TimelineTab: View {
     /// Taller with Duration / Progress, so a long name wraps to three lines instead of being cut (UI tour run
     /// 15, Q-M17).
     private var rowH: CGFloat { 60 }
+    /// A task row as tall as its whole name (decision 7 of run 20, R20-I-20 / R20-B-28: the name wraps, no "…"):
+    /// measured on the frozen name column, the chart row beside it follows.
+    @State private var lineHeights: [String: CGFloat] = [:]
+    private func height(_ line: Line) -> CGFloat { max(rowH, lineHeights[line.id] ?? rowH) }
     private let monthH: CGFloat = 32
     private let dayH: CGFloat = 42
     /// Narrower Duration / Progress on a portrait iPad, so the chart still shows ten days or more (Q-IA27).
@@ -746,9 +753,12 @@ struct TimelineTab: View {
                         // Two lines then "…" on every width, the dash kept with the word before it (decision 14 of
                         // run 17): one line on a phone cut nearly every name ("reimburse transport…", iPhone
                         // R17-I-08), and "Gaji Clippers / –Cymenggs" broke before its dash (iPad R17-I-12).
+                        // The whole name, wrapped, as the web (decision 7 of run 20, R20-I-20 / R20-B-28): two lines and
+                        // "…" cut "FEE HOSTING PR NADIA RAHMA - 22 A…"; the row grows instead.
                         Text(UntitledText.wrapped(t.title)).font(NXFont.text(showMeta ? 13 : 14, .medium))
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
-                            .strikethrough(t.isDone).lineLimit(2)
+                            .strikethrough(t.isDone)
+                            .fixedSize(horizontal: false, vertical: true)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).
                         if !showMeta {
@@ -759,6 +769,7 @@ struct TimelineTab: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, compact ? 12 : 14)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -771,7 +782,12 @@ struct TimelineTab: View {
                 progressCell(pct, tint: pct.map(Self.progressTint) ?? NX.muted)
             }
         }
-        .frame(height: rowH)
+        .frame(minHeight: rowH)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            let id = Line.task(r).id
+            if abs((lineHeights[id] ?? 0) - h) > 0.5 { lineHeights[id] = h }
+        }
         .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
     }
 
@@ -892,9 +908,9 @@ struct TimelineTab: View {
                     if after { arrowButton(before: false, r, w) { go(a) } }
                 }
                 .padding(.horizontal, 6)
-                .frame(height: rowH)
+                .frame(height: height(line))
             } else {
-                Color.clear.frame(height: rowH).allowsHitTesting(false)
+                Color.clear.frame(height: height(line)).allowsHitTesting(false)
             }
         case .group, .empty:
             Color.clear.frame(height: rowH).allowsHitTesting(false)
@@ -916,7 +932,11 @@ struct TimelineTab: View {
             }
             .foregroundStyle(NX.mutedFg)
             .padding(.horizontal, 7).frame(height: 22)
-            .background(NX.muted, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            // Opaque, so the today line passes under the pill, not through it (UI tour run 20, R20-I-09).
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(NX.card)
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(NX.muted)
+            }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -986,7 +1006,7 @@ struct TimelineTab: View {
                     bar(r, w, ax: ax)
                 }
             }
-            .frame(height: rowH)
+            .frame(height: height(line))
             .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
         case .more:
             Color.clear.frame(height: 40)

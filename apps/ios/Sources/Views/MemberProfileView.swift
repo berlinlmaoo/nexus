@@ -360,15 +360,17 @@ struct MemberProfileView: View {
     }
 
     private func periodArrow(_ icon: String, label: String, key: String?) -> some View {
+        // One control style for both arrows: a disabled one keeps its box and only its arrow fades (UI tour run
+        // 20, R20-B-34: the whole button at 35 % read as a bare "›").
         Button { Task { await switchPeriod(key) } } label: {
             Image(systemName: icon).font(.system(size: 15, weight: .bold))
+                .foregroundStyle(key == nil ? NX.mutedFg.opacity(0.45) : NX.foreground)
                 .frame(width: 44, height: 44)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         }
         .buttonStyle(.plain)
         .disabled(key == nil)
-        .opacity(key == nil ? 0.35 : 1)
         .accessibilityLabel(label)
     }
 

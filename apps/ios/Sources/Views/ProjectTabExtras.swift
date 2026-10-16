@@ -82,25 +82,17 @@ struct TableColumns: Equatable {
             return TableColumns(name: width - column, widths: mins.map { _ in column })
         }
         // Wider than the window on an iPad / Mac: Name keeps its minimum (it took half the window before,
-        // UI tour run 14, P-I12 / P-M9) and the columns that fit beside it share the rest, so the window's
-        // edge falls on a column boundary and no amount is cut mid-number ("Rp 6.842.09", run 11, PD-1).
-        var used = minName
-        var k = 0
-        // A column fits with room for the header's 22 pt "›" after it, unless it is the last one.
-        while k < mins.count && used + mins[k] <= width - (k + 1 < mins.count ? 22 : 0) { used += mins[k]; k += 1 }
-        guard k > 0 else { return TableColumns(name: max(minName, width - minCol), widths: mins) }
-        // The columns that fit share the room, so the window's edge falls on a column boundary: a column peeking
-        // in under the edge fade left a sliver of cut letters (UI tour run 17, R17-B-09). That more columns
-        // follow is said by the "›" in the header (run 15, Q-M15: "Request by" looked like the last column).
-        // The 22 pt of the header's "›" stay free while more columns follow, so it never lies on the last
-        // header's words ("Tanggal Penggunaa›", UI tour run 18, R18-M-04).
-        let peek: CGFloat = k < mins.count ? 22 : 0
-        let extra = max(0, width - used - peek)
-        let nameExtra = min(extra, 80)
-        let each = (extra - nameExtra) / CGFloat(k)
-        var widths = mins
-        for i in 0..<k { widths[i] += each }
-        return TableColumns(name: minName + nameExtra, widths: widths)
+        // UI tour run 14, P-I12 / P-M9), and EVERY column gets one width, the room beside Name shared by the k
+        // widest-header columns that fit. Each resting place (a column start, TableColumnSnap) then shows k whole
+        // columns, on the first page and after every swipe: with columns of their own widths a later page ended
+        // mid-column, and the strip covering the cut left a ~180 pt empty band before "›" (UI tour run 20, iPad
+        // R20-I-10; the cover itself came from Mac R19-M-02). The 22 pt of the header's "›" stay free (R18-M-04).
+        let peek: CGFloat = 22
+        let widest = mins.max() ?? minCol
+        let k = max(1, min(mins.count - 1, Int((width - minName - peek) / widest)))
+        let nameExtra = min(80, max(0, width - minName - peek - CGFloat(k) * widest))
+        let column = max(minCol, (width - minName - nameExtra - peek) / CGFloat(k))
+        return TableColumns(name: minName + nameExtra, widths: mins.map { _ in column })
     }
 }
 

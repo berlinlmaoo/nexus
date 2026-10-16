@@ -1273,7 +1273,9 @@ struct CalSectionCard: View {
         // "1 task", not a bare "1": the count is of distinct tasks, and one task shared by three teams of
         // the card is listed under each of them, so a bare number read as a miscount of the rows below
         // (UI tour run 14, N-38).
-        let number = Text(CalFormat.tasks(count)).font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+        // The bare count, as the web's card (UI tour run 20, iPad R20-I-12); VoiceOver still says "2 tasks".
+        let number = Text(AppNumber.int(count)).font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+            .accessibilityLabel(CalFormat.tasks(count))
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
         let chevron = Image(systemName: "chevron.down").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)

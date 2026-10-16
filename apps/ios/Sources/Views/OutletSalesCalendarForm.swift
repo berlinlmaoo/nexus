@@ -66,7 +66,7 @@ struct OutletCalendarView: View {
                 // day's number and read as that day's (UI tour run 19, R19-I-27).
                 HStack(alignment: .center, spacing: 2) {
                     NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
-                    if ownTarget && !wide { NXMonthTargetMark(wide: false) }
+                    if ownTarget { NXMonthTargetMark(wide: wide) }
                 }
                 if wide {
                     ForEach(list.prefix(2)) { e in
@@ -101,9 +101,6 @@ struct OutletCalendarView: View {
             }
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
-            .overlay(alignment: .topTrailing) {
-                if ownTarget && wide { NXMonthTargetMark(wide: wide).padding(7) }
-            }
             .nxMonthCell(inMonth: inMonth, selected: selected)
             .contentShape(Rectangle())
         }

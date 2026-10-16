@@ -466,7 +466,6 @@ struct TicketsView: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
-                .modifier(HiddenUnderStickyHead(head: wide ? headH : 0))
             }
         }
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -590,8 +589,13 @@ struct TicketsView: View {
                 if let c = t.category, !c.isEmpty {
                     NexusChip(text: ticketCategoryName(c), tone: .neutral, systemImage: "tag.fill")
                 }
+                // One line, the name cut at its end rather than wrapped inside the meta row (UI tour run 20,
+                // R20-I-13: "Mohamad / Oki Fauzan" took two lines on one card).
                 if let n = t.reporter?.name, !n.isEmpty {
                     Label(n, systemImage: "person.fill").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1).truncationMode(.tail)
+                        .layoutPriority(-1)
+                        .accessibilityLabel(n)
                 }
                 Spacer(minLength: 0)
                 if let m = t.messageCount {

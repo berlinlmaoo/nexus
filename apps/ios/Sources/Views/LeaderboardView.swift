@@ -124,39 +124,46 @@ struct LeaderboardView: View {
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
 
-                    // The web card's caption over the ranking (UI tour run 16, R16-I-25; web master over run 14 N-36).
-                    if !ranked.isEmpty {
-                        Text(T("XP ranking for everyone")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if ranked.count >= 1 {
-                        // More people share 1st than the podium has steps: one gold band with everyone tied
-                        // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
-                        // the seven out (UI tour run 15, Q-IB6).
-                        let tiedFirst = ranks.filter { $0 == 1 }.count
-                        if tiedFirst > 3 {
-                            TieRibbon(rows: Array(ranked.prefix(tiedFirst)), caption: String(format: T("%d-way tie for 1st"), tiedFirst)) { row in
-                                openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
-                            }
-                        } else {
-                            Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
-                                openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                    // One card around the caption, the podium or tie band and the ranking, as the web's (UI tour run
+                    // 20, R20-B-33: they sat on the page outside a card).
+                    VStack(alignment: .leading, spacing: 16) {
+                        // The web card's caption over the ranking (UI tour run 16, R16-I-25; web master over run 14 N-36).
+                        if !ranked.isEmpty {
+                            Text(T("XP ranking for everyone")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        if ranked.count >= 1 {
+                            // More people share 1st than the podium has steps: one gold band with everyone tied
+                            // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
+                            // the seven out (UI tour run 15, Q-IB6).
+                            let tiedFirst = ranks.filter { $0 == 1 }.count
+                            if tiedFirst > 3 {
+                                TieRibbon(rows: Array(ranked.prefix(tiedFirst)), caption: String(format: T("%d-way tie for 1st"), tiedFirst)) { row in
+                                    openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                                }
+                            } else {
+                                Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
+                                    openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                                }
                             }
                         }
-                    }
 
-                    VStack(spacing: 0) {
-                        let shared = ranks
-                        ForEach(Array(ranked.enumerated()), id: \.element.id) { idx, r in
-                            if idx > 0 { Divider().overlay(NX.border) }
-                            RankRow(rank: idx < shared.count ? shared[idx] : idx + 1, row: r) {
-                                openProfile = ProfileTarget(userId: r.userId, name: r.name, avatar: r.avatar)
+                        VStack(spacing: 0) {
+                            let shared = ranks
+                            ForEach(Array(ranked.enumerated()), id: \.element.id) { idx, r in
+                                if idx > 0 { Divider().overlay(NX.border) }
+                                RankRow(rank: idx < shared.count ? shared[idx] : idx + 1, row: r) {
+                                    openProfile = ProfileTarget(userId: r.userId, name: r.name, avatar: r.avatar)
+                                }
                             }
                         }
+                        // Hairline card like the web's, no drop shadow.
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
-                    // Hairline card like the web's, no drop shadow.
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .padding(isRoot ? 20 : 12)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
 
                     // The web's admin XP log under the ranking, BoD and up (UI tour run 18, iPhone R18-I-06).
                     if Viewer.shared.isBoD { XpAuditLogCard() }
@@ -283,15 +290,16 @@ struct TieRibbon: View {
             .multilineTextAlignment(.center)
             // Down to 70 pt a person, so seven tied fit one row on an iPad as on the web (UI tour run 16, R16-I-25:
             // "Zaki Mahmuda" alone on a second row).
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 96), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {
+            // One line per name, as the web's band (UI tour run 20, R20-B-24: "Zainal / Mahdi" took two lines while
+            // the other names took one): up to 120 pt a person, a long name steps down a little before it is cut.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 120), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {
                 ForEach(rows) { row in
                     Button { onOpen(row) } label: {
                         VStack(spacing: 5) {
                             AvatarView(url: row.avatar, initial: row.initial, size: 44)
                                 .overlay(Circle().strokeBorder(Color(hex: "#f59e0b"), lineWidth: 2))
                             Text(row.name ?? "—").font(NXFont.text(12, .semibold)).foregroundStyle(ink)
-                                .multilineTextAlignment(.center).lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8)
                         }
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())

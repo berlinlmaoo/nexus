@@ -273,7 +273,7 @@ private struct Mini: View {
     let text: String
     let color: Color
     var body: some View {
-        Text(text).font(.system(size: 8, weight: .medium)).lineLimit(1)
+        Text(text).font(.system(size: 11, weight: .medium)).lineLimit(1)
             .foregroundStyle(color)
             .padding(.horizontal, 3).padding(.vertical, 1)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
@@ -347,7 +347,7 @@ private struct TemplatePreview: View {
         return VStack(spacing: 3) {
             HStack(spacing: 3) {
                 ForEach(days, id: \.self) { d in
-                    Text(d).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(d).font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             Grid(horizontalSpacing: 3, verticalSpacing: 3) {
@@ -403,7 +403,7 @@ private struct TemplatePreview: View {
                 Text(T("Name")).lineLimit(1)
                 ForEach(shown, id: \.self) { c in Text(template.columnLabel(c)).lineLimit(1) }
             }
-            .font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
+            .font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
             Divider().overlay(NX.border).gridCellUnsizedAxes(.horizontal)
             ForEach(0..<3, id: \.self) { r in
                 GridRow {
@@ -440,7 +440,8 @@ private struct DashboardPreview: View {
 
     private func miniMeter(_ label: String, _ fill: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(NXFont.text(8, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // 11 pt, the floor for text (UI tour run 20, R20-B-27: 8 pt labels).
+            Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(NX.foreground.opacity(0.10))

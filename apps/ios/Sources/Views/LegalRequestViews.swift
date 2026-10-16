@@ -667,12 +667,20 @@ struct LegalRequestsPane: View {
     @State private var members: [LegalMember] = []
     @State private var sheet: Sheet?
     @State private var open: LegalOpenID?
+    @State private var filtersOpen = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 toolbar
-                filters
+                // Phone: one "Filters" control with the count, the dropdowns under it when opened, as Legal
+                // Documents (decision 15 of run 20, R20-I-22: four dropdowns wrapped to two rows).
+                if wide {
+                    filters
+                } else {
+                    filtersToggle
+                    if filtersOpen { filters }
+                }
                 content
             }
             .padding(.horizontal, gutter)
@@ -722,6 +730,34 @@ struct LegalRequestsPane: View {
 
     private var linksButton: some View {
         Button { sheet = .links } label: { Label(T("Request links"), systemImage: "link") }.buttonStyle(.nxBordered)
+    }
+
+    private var activeFilters: Int {
+        [query.docType, query.companyId, query.picId, query.deadline].filter { !($0 ?? "").isEmpty }.count
+    }
+
+    private var filtersToggle: some View {
+        Button { withAnimation(.snappy) { filtersOpen.toggle() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease").font(.system(size: 13, weight: .semibold))
+                Text(T("Filters")).font(NXFont.text(14, .semibold))
+                if activeFilters > 0 {
+                    Text(AppNumber.int(activeFilters)).font(NXFont.text(12, .bold)).monospacedDigit()
+                        .foregroundStyle(NX.background)
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(NX.foreground, in: Capsule())
+                }
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(filtersOpen ? 180 : 0))
+            }
+            .foregroundStyle(NX.foreground)
+            .padding(.horizontal, 12).frame(minHeight: 36)
+            .background(NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(NX.border))
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(filtersOpen ? T("Expanded") : T("Collapsed"))
     }
 
     // The filters wrap onto a second line instead of scrolling under an edge fade: every pill stays
