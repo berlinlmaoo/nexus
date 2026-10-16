@@ -22,6 +22,7 @@ export function PageHeader({
   className,
   compact,
   hero,
+  gutter,
 }: {
   title: string;
   subtitle?: string;
@@ -38,6 +39,8 @@ export function PageHeader({
   compact?: boolean;
   /** Desktop: a page-sized title (Notion's database page, 32px bold, more air above), for the project page. */
   hero?: boolean;
+  /** The project page's shared side gutters (nx-gx: 96px on wide screens), so the header lines up with the view. */
+  gutter?: boolean;
 }) {
   // Height of the pinned title bar on a phone, so the tab strip sticks right under it.
   const barRef = useRef<HTMLDivElement>(null);
@@ -95,7 +98,7 @@ export function PageHeader({
         {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
             icon buttons (UI tour run 13, W-M15), balanced, so the second line is never one orphaned word (UI tour
             run 20, R20-WM-12: "ZZ QA Social Media / Report"). */}
-        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", hero && "md:text-[32px] md:font-bold md:leading-[1.25]", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug max-sm:[text-wrap:balance]")}>{title}</h1>
+        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", hero && "font-display md:text-[32px] md:font-bold md:leading-[1.25]", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug max-sm:[text-wrap:balance]")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>
@@ -107,7 +110,7 @@ export function PageHeader({
         ref={compact ? barRef : undefined}
         data-page-header-sticky={compact ? "" : undefined}
         className={cn(
-          "px-4 md:px-8 md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3", hero && "md:pt-10 md:pb-2 md:items-center",
+          gutter ? "nx-gx" : "px-4 md:px-8", "md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3", hero && "md:pt-10 md:pb-2 md:items-center",
           // The top padding comes after pinnedBar's safe-area padding, which otherwise replaced it and left the
           // icon buttons touching the top edge (UI tour run 13, W-M6).
           compact ? cn("flex flex-row items-center justify-between gap-2 pt-3 pb-1", pinnedBar, "max-md:pt-[calc(env(safe-area-inset-top)+0.75rem)]", barEdge, className) : "max-md:contents",
@@ -138,7 +141,7 @@ export function PageHeader({
           // padding of whatever sits right above the strip: at 0.75rem it painted over the bottom of the project
           // icon and buttons, a two-line project name and a two-line page subtitle (UI tour run 14, R14-WM-1,
           // R14-WM-2, R14-WM-5).
-          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-40 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-2px_0_0_var(--page-header-bg,var(--background))]", className)}
+          className={cn("relative overflow-x-auto", gutter ? "nx-gx" : "px-4 md:px-8", "max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-40 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-2px_0_0_var(--page-header-bg,var(--background))]", className)}
         >
           {tabs}
         </div>

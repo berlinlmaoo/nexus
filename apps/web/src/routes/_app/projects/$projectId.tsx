@@ -156,7 +156,7 @@ function preloadProjectExtras() {
 
 /** A lazy piece's placeholder: the same box the skeletons use, so nothing jumps when it arrives. */
 function Pending({ children, rows = 3 }: { children: ReactNode; rows?: number }) {
-  return <Suspense fallback={<div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{Array.from({ length: rows }, (_, i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}>{children}</Suspense>;
+  return <Suspense fallback={<div className="space-y-2 nx-gx py-6" aria-busy>{Array.from({ length: rows }, (_, i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}>{children}</Suspense>;
 }
 
 export const Route = createFileRoute("/_app/projects/$projectId")({
@@ -636,6 +636,13 @@ function ProjectDetail() {
     if (!canEditProject) { toast.message(tr("You can view this project but not change it. Ask its Project Owner for Can edit access.")); return; }
     setComposerListId(sectionId ?? defaultOption(taskLists)?.id ?? null);
   };
+  // "New" on a Board or List starts the card inline at the top of its column / group (owner, 16 Oct 2026: NEXUS
+  // always did, "isi task dulu di board"); it opens only once tapped. Other views keep the composer.
+  const [inlineNew, setInlineNew] = useState<{ n: number; key?: string } | null>(null);
+  const newFromToolbar = (sectionId?: string) => {
+    if (canEditProject && !activeModule && activeView && (layout === "board" || layout === "list")) { setInlineNew({ n: Date.now(), key: sectionId }); return; }
+    addTask(sectionId);
+  };
 
   // ── the one toolbar row ──
   const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
@@ -669,13 +676,13 @@ function ProjectDetail() {
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:hidden">
           <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
-          {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("New task")} className="ml-0.5 h-7 rounded-md bg-[#2383e2] px-2.5 text-sm font-medium text-white transition-colors hover:bg-[#0077d4] pointer-coarse:h-9">{tr("New")}</button>}
+          {canEditProject && <button type="button" onClick={() => newFromToolbar()} aria-label={tr("New task")} className="ml-0.5 inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90 pointer-coarse:h-9"><Plus className="h-4 w-4" />{tr("New")}</button>}
         </div>
         {/* From sm the tabs share their row with Add task only; the view's tools (and the named Automations and AI
             Autofill) are a row of their own under it, on every view. With the tools beside them, the labels pushed
             project tabs behind the arrow at 1440 (UI tour run 16, R16-WD-6 follow-up: a hidden tab is a finding). */}
         <span className="ml-1.5 hidden shrink-0 sm:inline-flex lg:order-2">
-          <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
+          <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name, color: COLOR_PRESETS[optionColorKey(l)]?.dot ?? null }))} onAdd={newFromToolbar} onFull={!activeModule && (layout === "board" || layout === "list") ? () => addTask() : undefined} />
         </span>
         {/* From lg the tools sit in the same row, between the tabs and Add task (one toolbar row, Notion); below lg
             they are a row of their own under the tabs. */}
@@ -742,7 +749,7 @@ function ProjectDetail() {
   const emptyHint = query || filterCount > 0;
   const noTasksAtAll = allTasks.length === 0;
   const emptyState = (
-    <div className="px-4 py-10 md:px-8">
+    <div className="nx-gx py-10">
       <EmptyState
         icon={emptyHint ? Search : ClipboardList}
         tone="muted"
@@ -765,6 +772,7 @@ function ProjectDetail() {
       <PageHeader
         compact
         hero
+        gutter={!isSpecial}
         className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card [--page-header-bg:var(--card)]"
         // Notion's database page: the icon sits bare beside a 32px bold title (16 Oct 2026 pass).
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg text-[28px] leading-none md:h-10 md:w-10 md:text-[34px]"><ProjectMark icon={data?.icon} color={data?.color} type={data?.type} className="max-h-9 max-w-9 rounded-lg object-cover md:max-h-10 md:max-w-10" /></span>}
@@ -788,12 +796,12 @@ function ProjectDetail() {
         tabs={toolbar}
       />
 
-      {project.isLoading && <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
+      {project.isLoading && <div className="space-y-2 nx-gx py-6" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
       {projectFailed && (projectOffline
-        ? <div className="px-4 py-10 md:px-8"><EmptyState icon={WifiOff} tone="muted" title={tr("Couldn't load this project")} message={tr("No connection. NEXUS tries again by itself when you're back online.")} action={<Button size="sm" variant="outline" isDisabled={project.isFetching} onClick={() => void project.refetch()}>{project.isFetching ? tr("Trying again…") : tr("Try again")}</Button>} /></div>
+        ? <div className="nx-gx py-10"><EmptyState icon={WifiOff} tone="muted" title={tr("Couldn't load this project")} message={tr("No connection. NEXUS tries again by itself when you're back online.")} action={<Button size="sm" variant="outline" isDisabled={project.isFetching} onClick={() => void project.refetch()}>{project.isFetching ? tr("Trying again…") : tr("Try again")}</Button>} /></div>
         : projectMissing
-        ? <div className="px-4 py-10 md:px-8"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
-        : <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its Project Owner to add you.")} /></div>)}
+        ? <div className="nx-gx py-10"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
+        : <div className="nx-gx py-10"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its Project Owner to add you.")} /></div>)}
       {!project.isLoading && data && isPipeline && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
@@ -858,10 +866,10 @@ function ProjectDetail() {
           {activeModule === "forms" && <ProjectFormsView projectId={data.id} />}
           {activeModule === "chat" && <ProjectChat projectId={data.id} />}
           {!activeModule && !activeView && (pv.query.isLoading
-            ? <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
-            : <div className="px-4 py-10 md:px-8"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
+            ? <div className="space-y-2 nx-gx py-6" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
+            : <div className="nx-gx py-10"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
           {!activeModule && activeView && cfg && viewDataPending && (
-            <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
+            <div className="space-y-2 nx-gx py-6" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
           )}
           {!activeModule && activeView && cfg && !viewDataPending && (() => {
             const groupBy = layout === "board" ? cfg.groupBy ?? "section" : layout === "calendar" ? null : cfg.groupBy;
@@ -871,9 +879,9 @@ function ProjectDetail() {
             if (layout !== "calendar" && shown.length > 0 && groups.length === 0) return emptyState;
             switch (layout) {
               case "board":
-                return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} onCreated={keepVisible} />;
+                return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} onCreated={keepVisible} newSignal={inlineNew} />;
               case "list":
-                return <ListView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreated={keepVisible} />;
+                return <ListView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreated={keepVisible} newSignal={inlineNew} />;
               case "table":
                 return <ProjectTableView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} columns={keys} canEditColumns={canEdit} onColumnsChange={(cols) => patchConfig({ visibleProps: cols })} onCalcsChange={(columnCalcs) => patchConfig({ columnCalcs })} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask}
                   onCreateInGroup={(gKey, subKey, p) => createInline({ project: data, defs, ctx, cfg, qc: rootQc, groupBy, sub: cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null, groupKey: gKey, subKey, placement: "bottom", ...p }).then((task) => { keepVisible(task); return task; })} />;
@@ -913,7 +921,7 @@ function ProjectDetail() {
         />
       )}
       <Suspense fallback={null}>
-      {openTaskId && <TaskDetailPanel key={openTaskId} peek taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
+      {openTaskId && <TaskDetailPanel key={openTaskId} taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
       {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
@@ -1011,10 +1019,12 @@ const noDrag: CardDrag = () => {};
 
 type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
 
-function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate, onCreated }: {
+function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate, onCreated, newSignal }: {
   project: NexusProject; tasks: NexusTask[]; groupBy: string; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
   buildGroups: GroupBuilder; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreate: (listId?: string) => void;
   onCreated: (task: NexusTask | null) => void;
+  /** The toolbar's New: open the inline card at the top of that column (else the first open one). */
+  newSignal?: { n: number; key?: string } | null;
 }) {
   const qc = useQueryClient();
   const { t, tn } = useLang();
@@ -1130,8 +1140,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           const el = box.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(`linked-${lane.id}`)}"]`);
           if (!el) continue;
           const left = el.getBoundingClientRect().left - boxLeft + box.scrollLeft;
-          // The lane, the gap, the trailing spacer (md:w-6) and the board's right padding (md:px-8) must fit.
-          if (left + lanePx + 10 + 24 + 32 > box.clientWidth) next.add(lane.id);
+          // The lane, the gap, the trailing spacer (md:w-6) and the board's right padding (the page gutter) must fit.
+          if (left + lanePx + 10 + 24 + (parseFloat(getComputedStyle(box).paddingRight) || 32) > box.clientWidth) next.add(lane.id);
         }
       }
       setLinkedRail((prev) => (prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next));
@@ -1228,6 +1238,15 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     }
   };
 
+  useEffect(() => {
+    if (!newSignal || !canEditHere) return;
+    const lane = (newSignal.key && isSection ? lanes.find((g) => g.key === newSignal.key) : undefined) ?? lanes.find((g) => !collapsed.has(g.key)) ?? lanes[0];
+    if (!lane) return;
+    if (collapsed.has(lane.key)) onToggleGroup(lane.key);
+    const rowKey = sub ? buildGroups(tasks, sub, { keepHidden: true })[0]?.key ?? null : null;
+    setDraft(`${rowKey ?? ""}::${lane.key}`);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(lane.key)}"]`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" }));
+  }, [newSignal?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const renderLane = (g: TaskGroup, rowKey: string | null, laneTasks: NexusTask[], showHeader: boolean) => {
     const id = `${rowKey ?? ""}::${g.key}`;
     const isCollapsed = collapsed.has(g.key);
@@ -1301,7 +1320,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
               onDragEnd={() => setDragLaneId(null)}
               title={section ? t("Drag to reorder columns") : undefined}
-              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-px text-sm", section && "cursor-grab active:cursor-grabbing")}
+              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 font-display text-sm font-semibold", section && "cursor-grab active:cursor-grabbing")}
               style={{ backgroundColor: tone.bg, color: tone.text }}
             >
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
@@ -1423,7 +1442,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         <EdgeArrows target={chipStripRef} className="bottom-1 top-3" />
         </div>
       )}
-      <div ref={boardRef} data-touch-drag-root="" data-snap-row={phoneBoard && lanes.length > 1 ? "" : undefined} className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
+      <div ref={boardRef} data-touch-drag-root="" data-snap-row={phoneBoard && lanes.length > 1 ? "" : undefined} className={cn("overflow-x-auto overscroll-x-contain nx-gx pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4", boardFade)}>
         {/* The trailing spacer keeps the last column clear of the edge at full scroll (W-D4). */}
         <div className="flex min-w-max items-start gap-2.5 after:block after:w-2 after:shrink-0 after:content-[''] md:after:w-6">
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
@@ -1440,7 +1459,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // Sub-groups: one row (swimlane) per sub-group value, the same lanes in each row.
   const rows = buildGroups(tasks, sub, { keepHidden: true });
   return (
-    <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
+    <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain nx-gx pb-6 pt-3">
       <div className="min-w-max space-y-3">
         <div className="flex gap-2.5 pl-0.5">
           {lanes.map((g) => (
@@ -1566,7 +1585,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const filteredOut = useFilteredOut(task.id);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 10 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 12 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
       <div
         role="button"
         tabIndex={0}
@@ -1578,8 +1597,9 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
         onPointerLeave={() => prefetchTask(qc, null)}
         onKeyDown={(e) => { if (e.key === "Enter") onOpen(task); }}
         style={tint}
-        // Notion's board card: white, 10px corners, a hairline ring and a soft drop instead of a border; hover greys it.
-        className={cn("flex w-full cursor-pointer flex-col rounded-[10px] bg-card text-left shadow-[0_0_0_1px_rgba(15,15,15,0.08),0_2px_4px_rgba(15,15,15,0.06)] transition-[box-shadow,background-color] duration-150 hover:bg-muted/50 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.09)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
+        // NEXUS's soft card (owner, 16 Oct 2026: keep NEXUS's DNA): 12px corners, a hairline border and the soft
+        // shadow, lifting to the pop shadow on hover.
+        className={cn("flex w-full cursor-pointer flex-col rounded-xl border border-border/80 bg-card text-left shadow-soft transition-[box-shadow,border-color] duration-150 hover:border-ring/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50", CARD_PAD[cfg.cardSize])}
       >
         {linkedFrom && <span className="truncate text-[11px] text-muted-foreground">{t("From {name}", { name: linkedFrom })}</span>}
         {task.parentId && (
@@ -1811,13 +1831,24 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   return handle ? <div className="group/row relative">{handle}{row}</div> : row;
 });
 
-function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen, onCreated }: {
+function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen, onCreated, newSignal }: {
   project: NexusProject; groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
   collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreated: (task: NexusTask | null) => void;
+  /** The toolbar's New: open the inline row at the top of that group (else the first one). */
+  newSignal?: { n: number; key?: string } | null;
 }) {
   const { t } = useLang();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<string | null>(null);
+  useEffect(() => {
+    if (!newSignal) return;
+    if (!groupBy) { setDraft("all"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    const g = (newSignal.key && groupBy === "section" ? groups.find((x) => x.key === newSignal.key) : undefined) ?? groups[0];
+    if (!g) return;
+    if (collapsed.has(g.key)) onToggleGroup(g.key);
+    setDraft(g.key);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`section[data-group-key="${CSS.escape(g.key)}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  }, [newSignal?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
   const morph = !multi(groupBy) && !multi(subGroupBy);
   // Rows drag between groups (multi-drag, 12 Oct 2026) when the view is grouped by something a drop can write.
@@ -1847,16 +1878,16 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       </button>
     ));
   if (!groupBy) {
-    return <div data-touch-drag-root="" className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
+    return <div data-touch-drag-root="" className="nx-gx py-3">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
-    <div data-touch-drag-root="" className="space-y-5 px-4 py-3 md:px-8">
+    <div data-touch-drag-root="" className="space-y-5 nx-gx py-3">
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
         const zone = mover.dropZone(g.key, null);
         return (
-          <section key={g.key} aria-label={g.label} {...zone.props} className={cn("transition-shadow", zone.isOver && dropRing)}>
+          <section key={g.key} data-group-key={g.key} aria-label={g.label} {...zone.props} className={cn("transition-shadow", zone.isOver && dropRing)}>
             <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5" />
             {!isCollapsed && (subs ? (
               <div className="space-y-2 pl-5 pt-1.5">
@@ -2026,12 +2057,13 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   ) : null;
 
   return (
-    <div className="space-y-3 px-4 py-3 md:px-8">
+    <div className="space-y-3 nx-gx py-3">
       <div className="flex items-center gap-1">
-        <h2 className="mr-auto text-base font-semibold capitalize">{monthTitle(viewMonth, locale)}</h2>
-        <button type="button" onClick={() => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); }} className="h-8 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{t("Today")}</button>
-        <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
-        <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
+        {/* Notion's calendar head: the month on the left; ‹ Today › on the right. */}
+        <h2 className="mr-auto pl-1 font-display text-base font-bold capitalize">{monthTitle(viewMonth, locale)}</h2>
+        <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+        <button type="button" onClick={() => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); }} className="h-8 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11">{t("Today")}</button>
+        <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
       </div>
 
       {/* An empty month says why, when the tasks are waiting for a date (UI tour run 11, WD-9: an empty
@@ -2096,16 +2128,16 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         </div>
       ) : (
         <div
-          className="overflow-hidden rounded-lg border border-border"
           // A sideways swipe on a touch screen (iPad) turns the month (QA S-11).
           onTouchStart={onSwipeStart}
           onTouchEnd={onSwipeEnd}
         >
-          <div className="grid grid-cols-7 border-b border-border text-muted-foreground">
-            {/* Left, as every month grid has it (UI tour run 15, R15-WB-3); the date sits top-left under it. */}
-            {weekdays.map((d, i) => <div key={i} className={cn("px-2 py-1.5 text-left", CAPS)}>{d}</div>)}
+          {/* Notion's month: the weekday names centred over the grid, outside its frame; the grid in NEXUS's
+              rounded frame with the weekend columns shaded and each date at the cell's top right. */}
+          <div className="grid grid-cols-7 pb-1.5 text-xs text-muted-foreground">
+            {weekdays.map((d, i) => <div key={i} className="text-center">{d}</div>)}
           </div>
-          <div className="grid grid-cols-7">
+          <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-border shadow-soft">
             {days.map((day, idx) => {
               const key = dayKey(day);
               const inMonth = sameMonth(day, viewMonth);
@@ -2120,15 +2152,15 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   onDrop={(e) => { e.preventDefault(); if (inMonth) dropOn(day); setDragTaskId(null); setDropKey(null); }}
                   // A click on the day (not on a task) selects it; its tasks show under the month.
                   onClick={(e) => { if (inMonth && !(e.target as HTMLElement).closest("button")) setPickedDay(key); }}
-                  className={cn("group/cal relative min-h-28 border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
+                  className={cn("group/cal relative min-h-[7.5rem] border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth ? "bg-muted/40" : idx % 7 >= 5 && "bg-muted/20", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
-                  <div className="mb-1 flex flex-row-reverse items-center justify-between">
+                  <div className="mb-1 flex items-center justify-between">
                     {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}
-                        className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate()}</button>
+                        className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate() === 1 && !isToday ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</button>
                     ) : (
-                      <span className="grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums text-muted-foreground/50">{day.getDate()}</span>
+                      <span className="grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums text-muted-foreground/60">{day.getDate() === 1 ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</span>
                     )}
                   </div>
                   <div className="space-y-0.5">
@@ -2139,13 +2171,13 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                         <button
                           key={task.id}
                           data-morph-id={`calendar-taskcard-${task.id}`}
-                          style={{ borderRadius: 4, ...(cs && !done ? cs : {}) }}
+                          style={{ borderRadius: 6, ...(cs && !done ? cs : {}) }}
                           {...bulk.bindCard(task, () => onOpen(task))}
                           draggable={movable(task)}
                           onDragStart={(e) => startChipDrag(e, task)}
                           onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
                           title={task.title}
-                          className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", movable(task) && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
+                          className={cn("block w-full truncate px-1.5 py-1 text-left text-xs font-medium leading-tight shadow-[0_1px_1px_rgba(15,15,15,0.04)]", movable(task) && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
                         >
                           {task.parentId ? `↳ ${task.title}` : task.title}
                         </button>
@@ -2154,7 +2186,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                     {dayTasks.length > 3 && (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button type="button" className="w-full px-1 text-left text-[11px] text-muted-foreground transition hover:text-foreground">{t("{n} more", { n: dayTasks.length - 3 })}</button>
+                          <button type="button" className="w-full rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground">{t("{n} more", { n: dayTasks.length - 3 })}</button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-60 p-2">
                           <div className="mb-1.5 px-1 text-xs text-muted-foreground">{new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(day)}</div>
@@ -2357,7 +2389,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   };
 
   if (taskCount === 0) {
-    return <div className="px-4 py-10 md:px-8"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
+    return <div className="nx-gx py-10"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
   }
 
   const todayStart = startOfDay(new Date());
@@ -2468,7 +2500,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // The banner and the box share one height (UI tour run 14, WM-4): the banner used to add to the page's
   // height, so on a phone the page scrolled and left the banner half under the pinned tab strip.
   return (
-    <div className="flex max-h-[max(22rem,calc(100dvh-10.5rem))] flex-col px-4 py-3 max-md:max-h-[max(18rem,calc(100dvh-var(--tabbar-room)-7.5rem))] md:px-8">
+    <div className="flex max-h-[max(22rem,calc(100dvh-10.5rem))] flex-col nx-gx py-3 max-md:max-h-[max(18rem,calc(100dvh-var(--tabbar-room)-7.5rem))]">
       {port && inView === 0 && firstWin && (
         <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           <GanttChart className="h-4 w-4 shrink-0" aria-hidden />
@@ -2492,7 +2524,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
         el.scrollLeft = prev === null
           ? openingLeft(el)
           : Math.max(0, el.scrollLeft + Math.round((prev - first) / DAY_MS) * GANTT_DAY_W);
-      }} className="relative min-h-0 flex-1 snap-y snap-proximity overflow-auto overscroll-x-contain rounded-lg border border-border bg-card [scroll-padding-top:69px]">
+      }} className="relative min-h-0 flex-1 snap-y snap-proximity overflow-auto overscroll-x-contain rounded-xl border border-border bg-card shadow-soft [scroll-padding-top:69px]">
         {/* Rows snap under the pinned header, so a scroll never stops with half a row peeking out below it
             (UI tour run 14, WD-9). 69 px = the header's month and day rows and its border. */}
         {/* Its own vertical scroller too (UI tour run 13, W-B1): the Name / Duration / Progress header and the
@@ -2508,7 +2540,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
                 {months.map((m, i) => (
-                  <div key={i} className="flex items-center border-l border-border/40 px-2 text-xs font-bold text-foreground/70" style={{ width: m.days * GANTT_DAY_W }}><span className="sticky whitespace-nowrap" style={{ left: leftW + 8 }}>{m.label}</span></div>
+                  <div key={i} className="flex items-center border-l border-border/40 px-2 font-display text-sm font-bold capitalize text-foreground" style={{ width: m.days * GANTT_DAY_W }}><span className="sticky whitespace-nowrap" style={{ left: leftW + 8 }}>{m.label}</span></div>
                 ))}
               </div>
               <div className="flex h-9">
@@ -2517,8 +2549,8 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                   const weekend = d.getDay() === 0 || d.getDay() === 6;
                   return (
                     <div key={i} className={cn("flex flex-col items-center justify-center gap-0.5 border-l border-border/40 text-[10px] leading-none", weekend && "bg-muted/30")} style={{ width: GANTT_DAY_W }}>
-                      <span className={cn("font-semibold", isToday ? "text-primary" : "text-muted-foreground/70")}>{new Intl.DateTimeFormat(locale, { weekday: locale.startsWith("id") ? "short" : "narrow" }).format(d)}</span>
-                      <span className={cn(isToday ? "grid h-4 w-4 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground" : "font-bold text-foreground/80")}>{d.getDate()}</span>
+                      <span className={cn("font-semibold", isToday ? "text-sidebar-primary" : "text-muted-foreground/70")}>{new Intl.DateTimeFormat(locale, { weekday: locale.startsWith("id") ? "short" : "narrow" }).format(d)}</span>
+                      <span className={cn(isToday ? "grid h-5 min-w-5 place-items-center rounded-full bg-sidebar-primary px-1 text-[11px] font-bold text-white" : "text-xs font-medium text-foreground/80")}>{d.getDate()}</span>
                     </div>
                   );
                 })}
@@ -2529,8 +2561,13 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
           {/* BODY */}
           <div className="relative">
             {today >= min && today <= max && (
-              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-primary/50" style={{ left: leftW + xOf(today) + GANTT_DAY_W / 2 }} />
+              // Today: a violet line down the chart with a dot at its head (Notion's red marker, in NEXUS's colour).
+              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-sidebar-primary/60" style={{ left: leftW + xOf(today) + GANTT_DAY_W / 2 }}>
+                <span className="absolute -left-[3px] top-0 h-[7px] w-[7px] rounded-full bg-sidebar-primary" />
+              </div>
             )}
+            {/* Weekends shaded down the whole chart, as in the header (Notion). */}
+            {days.map((d, i) => (d.getDay() === 0 || d.getDay() === 6 ? <div key={`we-${i}`} aria-hidden className="pointer-events-none absolute bottom-0 top-0 bg-muted/30" style={{ left: leftW + i * GANTT_DAY_W, width: GANTT_DAY_W }} /> : null))}
             {groups.map((g) => {
               const isCollapsed = collapsed.has(g.list.id);
               const wins = g.tasks.map((t) => t.win).filter((w): w is { start: Date; end: Date } => !!w);
