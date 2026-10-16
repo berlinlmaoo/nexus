@@ -398,9 +398,9 @@ function MySubmissions() {
         {!q.isLoading && !q.isError && subs.length > 0 && (
           <>
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <button className={chip(filter === "all")} onClick={() => setFilter("all")}>{t("All")}</button>
-              {kinds.has("finance") && <button className={chip(filter === "finance")} onClick={() => setFilter("finance")}>{t("Finance")}</button>}
-              {kinds.has("multimedia") && <button className={chip(filter === "multimedia")} onClick={() => setFilter("multimedia")}>{t("Multimedia")}</button>}
+              <button className={chip(filter === "all")} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>{t("All")}</button>
+              {kinds.has("finance") && <button className={chip(filter === "finance")} aria-pressed={filter === "finance"} onClick={() => setFilter("finance")}>{t("Finance")}</button>}
+              {kinds.has("multimedia") && <button className={chip(filter === "multimedia")} aria-pressed={filter === "multimedia"} onClick={() => setFilter("multimedia")}>{t("Multimedia")}</button>}
               {projectOptions.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

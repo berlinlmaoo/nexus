@@ -802,7 +802,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
           {suggestions.map((s) => (
             <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <s.icon className="h-4 w-4 shrink-0" /><span className="truncate">{s.text}</span>
+              <s.icon className="h-4 w-4 shrink-0" /><span className="min-w-0 text-left">{s.text}</span>
             </button>
           ))}
         </div>

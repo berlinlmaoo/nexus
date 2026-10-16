@@ -124,7 +124,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const q = useQuery({ queryKey: ["nexus", "gideon-run", id], queryFn: () => gideonRunDetail(id), retry: false });
   const r = q.data?.run;
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" lang={L.lang} className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-2">

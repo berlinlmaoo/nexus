@@ -312,7 +312,7 @@ function Backdrop({ children, onClose, label, wide }: { children: React.ReactNod
   const boxRef = useRef<HTMLDivElement>(null);
   useFocusTrap(boxRef);
   return (
-    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+    <motion.div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
         className={cn("flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl border outline-none border-border bg-card shadow-pop", wide ? "max-w-lg lg:max-w-2xl" : "max-w-lg")} onClick={(e) => e.stopPropagation()}>
         {children}
@@ -957,7 +957,7 @@ function PhotoZoom({ url, onClose }: { url: string; onClose: () => void }) {
   const { t } = useLang();
   useEscape(onClose);
   return createPortal(
-    <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+    <motion.div className="fixed inset-0 z-[60] grid grid-cols-1 place-items-center bg-black/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <img src={url} alt={t("Evidence, full size")} className="max-h-full max-w-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
       <button onClick={onClose} aria-label={t("Close photo")} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"><X className="h-5 w-5" /></button>
     </motion.div>,

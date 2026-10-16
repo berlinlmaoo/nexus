@@ -1528,7 +1528,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
 
   return (
     <>
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-labelledby="oc-unit-title" onClick={(e) => e.stopPropagation()}
         className="flex max-h-[min(92vh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
@@ -1715,7 +1715,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
     .map(([unitId, leaderId]) => ({ unitId, unit: byId.get(unitId), leader: people.find((p) => p.userId === leaderId) }))
     .filter((c) => c.unit && c.leader);
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-label={label(person)} className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">

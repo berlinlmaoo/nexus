@@ -286,7 +286,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
   const place = rec?.checkInAt ? recordPlace(rec) : null;
   const where = place?.label || rec?.checkInAddress || null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>

@@ -293,7 +293,7 @@ export function LocationTrailDialog({ recordId, title, subtitle, onClose }: { re
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border bg-card p-4 shadow-pop sm:p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">

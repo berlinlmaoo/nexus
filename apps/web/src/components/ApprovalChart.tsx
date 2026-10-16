@@ -470,7 +470,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
     .map((r) => [r, rows.filter((m) => m.role === r)] as [string, ApprovalChartPerson[]])
     .filter(([, list]) => list.length > 0);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-label={t("Approver for {name}", { name: label(person) })} className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">

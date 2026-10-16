@@ -389,7 +389,7 @@ function Admin() {
         </div>
       )}
       {teamExit && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setTeamExit(null)}>
+        <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setTeamExit(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-bold">{t("Remove from {team}?", { team: teamExit.teamName })}</div>
             <p className="mt-2 text-sm text-muted-foreground"><b className="text-foreground">{teamExit.userName}</b> {t("leaves this team.")}</p>
@@ -590,7 +590,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Pemilih: daftar yang bisa dicari, bukan <select> dengan 22 opsi sepanjang satu kalimat. Yang
           sudah dipakai orang lain tetap terlihat tapi tidak bisa dipilih, lengkap dengan nama pemakainya. */}
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Google Workspace account for {name}", { name: user.name }) : t("Google Workspace account for this person")}</div>
@@ -634,7 +634,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Formulir buat mailbox baru. Modal sendiri: ini mengisi seat lisensi berbayar, dan formulir
           yang ditempel di dalam baris tabel terbaca seperti sesuatu yang boleh diisi asal-asalan. */}
       {making && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setMaking(false)}>
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setMaking(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Create a work email for {name}", { name: user.name }) : t("Create a work email for this person")}</div>

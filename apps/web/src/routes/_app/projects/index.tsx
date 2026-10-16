@@ -452,7 +452,7 @@ function ProjectsPage() {
         // Phone: a bottom sheet across the full width, as the outlet and social sheets (UI tour run 19, R19-WM-1: a
         // centred desktop modal with a grey margin on a 440 px screen). From sm: the centred dialog as before.
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm max-sm:place-items-end max-sm:px-0"
+          className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm max-sm:place-items-end max-sm:px-0"
           role="dialog"
           aria-modal="true"
           aria-label={tr("Create a new project")}
