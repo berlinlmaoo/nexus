@@ -54,7 +54,7 @@ echo "networks: $NETS(primary: $PRIMARY_NET)"
 #    is how emailed links kept pointing at a retired domain long after it was changed. Keep this list
 #    tiny and non-secret; anything not named here follows the old rule.
 # NEXUS_IOS_MIN_VERSION: floor of the minimum supported iOS version (426 gate) — an edit must take effect.
-# NEXUS_ATTENDANCE_SHEET_SHARE: who gets read access to the live attendance sheet — an edit must take effect.
+# NEXUS_ATTENDANCE_SHEET_SHARE: who gets editor access to the live attendance sheet — an edit must take effect.
 # NEXUS_ANDROID_*: the Android release facts the owner moves by hand on every release (minimum, latest,
 #   its release moment, where "update" points, the signing-cert fingerprint) — all public, none secret.
 OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT NEXUS_IOS_MIN_VERSION NEXUS_ATTENDANCE_SHEET_SHARE NEXUS_ANDROID_CERT_SHA256 NEXUS_ANDROID_MIN_VERSION NEXUS_ANDROID_LATEST_VERSION NEXUS_ANDROID_LATEST_RELEASED_AT NEXUS_ANDROID_STORE_URL"
