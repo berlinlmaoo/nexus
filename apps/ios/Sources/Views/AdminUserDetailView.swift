@@ -68,6 +68,12 @@ struct AdminUserDetailView: View {
                 if isBod { attendanceModeCard }
                 if isBod { restDaysCard }
                 if isBod { workHoursCard }
+                // One person's employment start date (owner, 16 Oct 2026: set here, no longer on Attendance).
+                if isBod, let uid = member.userId {
+                    card(T("Employment start date"), T("The basis for annual leave: eligible after 12 months of work. Not filled in = not eligible yet.")) {
+                        EmploymentStartField(userId: uid)
+                    }
+                }
                 // Not in this viewer's approval chain: approver, hours and mode arrive neutral (personal
                 // attendance data, owner 13 Oct 2026). Say so instead of drawing the neutral values.
                 if member.isPersonalHidden && !isBod {
@@ -248,7 +254,8 @@ struct AdminUserDetailView: View {
 
     private func card<Content: View>(_ title: String, _ hint: String? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased()).font(NXFont.text(10.5, .bold)).tracking(0.8).foregroundStyle(NX.mutedFg)
+            // The card's heading in sentence case, not an uppercase eyebrow (decision 1 of run 19).
+            Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             content()
             if let hint {
                 Text(hint).font(NXFont.text(10.5)).foregroundStyle(NX.mutedFg.opacity(0.85)).fixedSize(horizontal: false, vertical: true)

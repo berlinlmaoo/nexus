@@ -1,105 +1,38 @@
 import SwiftUI
 
-/// The web Attendance page's "Employment start date" section (BoD; UI tour run 15, Q-IB8): the date annual
-/// leave is counted from, per person, with who is eligible. Reads and saves through
-/// /api/attendance/employment-start, the same endpoint as the web.
-struct EmploymentStartCard: View {
-    @State private var members: [EmploymentStartMember] = []
-    @State private var quota = 12
+/// One person's employment start date, inside their Control Room › Users detail (owner, 16 Oct 2026: set
+/// per person there, no longer a crew list on Attendance; web admin.tsx `EmploymentStartField`). BoD and up,
+/// the same /api/attendance/employment-start route as before (the server checks again and audits it).
+struct EmploymentStartField: View {
+    let userId: String
+    @State private var member: EmploymentStartMember?
     @State private var loading = true
     @State private var failed = false
-    @State private var query = ""
-    @State private var missingOnly = false
     @State private var editing: EmploymentStartMember?
+    @State private var saving = false
     @State private var saveError: String?
 
-    private var filled: Int { members.filter { $0.employmentStartDate != nil }.count }
-    private var eligible: Int { members.filter(\.eligible).count }
-    private var shown: [EmploymentStartMember] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        return members.filter { m in
-            (!missingOnly || m.employmentStartDate == nil)
-                && (q.isEmpty || "\(m.name ?? "") \(m.email ?? "")".localizedCaseInsensitiveContains(q))
-        }
-    }
-
-    @State private var showAll = false
-    private static let foldAt = 8
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(T("Employment start date")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(T("The basis for annual leave ({n} days a year, reset on 1 January). Eligible after 12 months of work. Not filled in = not eligible yet.")
-                        .replacingOccurrences(of: "{n}", with: AppNumber.int(quota)))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                if !members.isEmpty {
-                    Text(T("{filled}/{total} filled in · {eligible} eligible")
-                        .replacingOccurrences(of: "{filled}", with: AppNumber.int(filled))
-                        .replacingOccurrences(of: "{total}", with: AppNumber.int(members.count))
-                        .replacingOccurrences(of: "{eligible}", with: AppNumber.int(eligible)))
-                        .font(NXFont.text(11, .bold)).foregroundStyle(NX.foreground)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(NX.muted, in: Capsule())
-                        .fixedSize()
-                }
-            }
-            if members.count > 8 {
-                HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
-                        TextField(T("Search…"), text: $query).font(NXFont.text(14)).textFieldStyle(.plain)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    }
-                    .padding(.horizontal, 10).frame(maxWidth: 320, minHeight: 36)
-                    .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
-                    Button { missingOnly.toggle() } label: {
-                        Text("\(T("Not filled in only")) (\(AppNumber.int(members.count - filled)))")
-                            .font(NXFont.text(12, .semibold))
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .nxChoiceChip(on: missingOnly)
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(missingOnly ? .isSelected : [])
-                    Spacer(minLength: 0)
-                }
-            }
-            if loading && members.isEmpty {
+        Group {
+            if loading && member == nil {
                 Text(T("Loading…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            } else if failed && members.isEmpty {
-                EmptyState(icon: "exclamationmark.triangle", title: T("Couldn't load."),
-                           actionTitle: T("Try again"), actionIcon: "arrow.clockwise",
-                           action: { Task { await load() } }, compact: true)
-            } else if shown.isEmpty {
-                Text(T("No one matches.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            } else if failed && member == nil {
+                Button { Task { await load() } } label: {
+                    Label(T("Try again"), systemImage: "arrow.clockwise")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else if let m = member {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { dateButton(m); status(m) }
+                    VStack(alignment: .leading, spacing: 6) { dateButton(m); status(m) }
+                }
             } else {
-                // The first eight, then "Show all n": 54 rows ran three screens down the page (UI tour run 16,
-                // R16-I-28). A search or "Not filled in only" shows every match.
-                let folded = !showAll && query.isEmpty && !missingOnly && shown.count > Self.foldAt
-                let rows = folded ? Array(shown.prefix(Self.foldAt)) : shown
-                VStack(spacing: 0) {
-                    ForEach(rows) { m in
-                        row(m)
-                        if m.id != rows.last?.id { Divider() }
-                    }
-                }
-                if shown.count > Self.foldAt && query.isEmpty && !missingOnly {
-                    Button { withAnimation(.snappy) { showAll.toggle() } } label: {
-                        Text(showAll ? T("Show fewer") : String(format: T("Show all %d"), shown.count))
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+                // Not in this workspace's crew list (no attendance), so there is nothing to set.
+                Text("—").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }
         }
-        .nexusCard()
         .task { await load() }
         .sheet(item: $editing) { m in
             EmploymentStartDateSheet(member: m) { date in
@@ -111,33 +44,28 @@ struct EmploymentStartCard: View {
         } message: { Text(saveError ?? "") }
     }
 
-    private func row(_ m: EmploymentStartMember) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                // Two lines then "…", the dash kept with its word (decision 14 of run 17).
-                Text(UntitledText.wrapped(m.name ?? m.email ?? "—")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                Text(statusLine(m)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Button { editing = m } label: {
+    private func dateButton(_ m: EmploymentStartMember) -> some View {
+        Button { editing = m } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
                 Text(m.employmentStartDate.flatMap(Self.dayLabel) ?? T("Pick a date"))
-                    .font(NXFont.text(13)).foregroundStyle(m.employmentStartDate == nil ? NX.mutedFg : NX.foreground)
-                    .padding(.horizontal, 10).frame(minHeight: 34)
-                    .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
-                    .contentShape(Rectangle())
+                    .font(NXFont.text(14)).foregroundStyle(m.employmentStartDate == nil ? NX.mutedFg : NX.foreground)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(T("Employment start date")), \(m.name ?? "")")
-            Text(m.eligible ? T("Eligible") : T("Not yet"))
-                .font(NXFont.text(11, .bold))
-                .foregroundStyle(m.eligible ? NX.success : NX.mutedFg)
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background((m.eligible ? NX.success : NX.mutedFg).opacity(0.12), in: Capsule())
-                .fixedSize()
+            .padding(.horizontal, 12).frame(minHeight: 40)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
+        .disabled(saving)
+        .fixedSize()
+        .accessibilityLabel(T("Employment start date"))
+        .accessibilityValue(m.employmentStartDate.flatMap(Self.dayLabel) ?? T("Pick a date"))
+    }
+
+    private func status(_ m: EmploymentStartMember) -> some View {
+        Text(statusLine(m)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func statusLine(_ m: EmploymentStartMember) -> String {
@@ -146,7 +74,7 @@ struct EmploymentStartCard: View {
         return T("Eligible from {date}").replacingOccurrences(of: "{date}", with: m.eligibleFrom.flatMap(Self.dayLabel) ?? "—")
     }
 
-    /// "14 Oct 2026" from "2026-10-14…".
+    /// "14 Oct 2026" from "2026-10-14…" (the web writes the year here too: a start date is often years back).
     static func dayLabel(_ iso: String) -> String? {
         guard let d = ProjDate.fmt("yyyy-MM-dd").date(from: String(iso.prefix(10))) else { return nil }
         return AppDateLocale.formatter("d MMM yyyy").string(from: d)
@@ -156,8 +84,7 @@ struct EmploymentStartCard: View {
         loading = true; defer { loading = false }
         do {
             let r = try await APIClient.shared.employmentStartDates()
-            members = r.members
-            quota = r.quota ?? quota
+            member = r.members.first { $0.userId == userId }
             failed = false
         } catch {
             failed = true
@@ -165,6 +92,7 @@ struct EmploymentStartCard: View {
     }
 
     private func save(_ m: EmploymentStartMember, _ date: String?) async {
+        saving = true; defer { saving = false }
         do {
             try await APIClient.shared.setEmploymentStartDate(userId: m.userId, date: date)
             await load()

@@ -138,6 +138,7 @@ struct LegalDocumentsPane: View {
     /// while its rows scroll (Mac / iPad; UI tour run 18, R18-M-09: pages 2+ had no column labels).
     @State private var pageTop: CGFloat = 0
     @State private var tableH: CGFloat = 0
+    @State private var headH: CGFloat = 0
     /// The web's table from 680 pt, so a portrait iPad gets it too, without the Counterparty column below
     /// 860 pt (UI tour run 16, R16-I-27 iPad: a card list where the web has a table).
     /// 620 since run 17: beside the open sidebar a portrait 13" iPad has ~665 pt, so 680 was never reached and
@@ -307,6 +308,7 @@ struct LegalDocumentsPane: View {
             LegalListCard {
                 if table {
                     VStack(spacing: 0) { wideHeader; Divider().overlay(NX.border) }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headH = $0 }
                         .modifier(StickyInPageScroll(limit: max(0, tableH - 120)))
                         .zIndex(1)
                 }
@@ -339,6 +341,7 @@ struct LegalDocumentsPane: View {
                             .padding(.bottom, 6)
                         }
                     }
+                    .modifier(HiddenUnderStickyHead(head: table ? headH : 0))
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tableH = $0 }

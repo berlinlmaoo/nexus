@@ -276,6 +276,7 @@ struct TicketsView: View {
     /// The page scroll's top inset and the wide table's height, for its pinned column heads (R18-M-09).
     @State private var pageTop: CGFloat = 0
     @State private var tableH: CGFloat = 0
+    @State private var headH: CGFloat = 0
     /// BoD: the queues (Inbox → In review → All). Everyone else: their tickets by status.
     private var filters: [String] { isBod ? ["OPEN", "IN_REVIEW", "ALL"] : ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"] }
     private func count(_ f: String) -> Int {
@@ -449,6 +450,7 @@ struct TicketsView: View {
                 .background(NX.card)
                 .overlay(alignment: .bottom) { Divider().overlay(NX.border) }
                 .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headH = $0 }
                 // Pinned under the page top while the rows scroll, so a scrolled page still says which column
                 // is which (UI tour run 18, R18-M-09).
                 .modifier(StickyInPageScroll(limit: max(0, tableH - 100)))
@@ -464,6 +466,7 @@ struct TicketsView: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
+                .modifier(HiddenUnderStickyHead(head: wide ? headH : 0))
             }
         }
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

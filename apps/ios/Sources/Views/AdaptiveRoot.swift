@@ -447,12 +447,14 @@ struct SidebarRoot: View {
     /// Legal for anyone not invited to it, and the Calendar while the server's `flags.calendar` holds it back.
     private var navGroups: [(title: String?, screens: [NXScreen])] {
         let calendarOn = RemoteConfig.shared.calendar
+        // A group left with no rows goes with its header: no bare "Team" over nothing (owner, 16 Oct 2026).
         return NXScreen.groups.map { g in
             (g.title, g.screens.filter {
                 (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
-                    && ($0 != .legal || viewer.canAccessLegal)
+                    && ($0 != .legal || viewer.canAccessLegal) && ($0 != .admin || viewer.canAdminister)
             })
         }
+        .filter { !$0.1.isEmpty }
     }
 
     /// The sidebar itself: the docked column, and the same list floating over the page while it peeks.
