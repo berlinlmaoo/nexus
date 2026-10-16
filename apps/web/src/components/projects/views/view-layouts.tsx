@@ -1,6 +1,6 @@
 import { NumberValue } from "@/components/projects/number-field";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, Type, UserRound } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/tasks/StatusPicker";
@@ -98,10 +98,9 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   if (vals.length === 0) return null;
   if (def.kind === "date") {
     // A date field holding a name, not a date: Notion imports filled "Request by" (a Created-time field) with
-    // who asked. It reads as that person, with a person icon, not as a date with a clock (UI tour run 7).
-    if (Number.isNaN(new Date(vals[0]).getTime())) {
-      return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}><UserRound className="h-3 w-3 shrink-0" />{vals[0]}</span>;
-    }
+    // who asked. That name is text, not a NEXUS person: it reads "Request by: Sifal" with the text glyph, never as
+    // an assignee-looking chip (UI tour run 19, R19-WB-2, decision 5: the person glyph is for real people only).
+    if (Number.isNaN(new Date(vals[0]).getTime())) return <TextProp label={def.label} value={vals[0]} />;
     const overdue = def.key === "due" && !isDoneStatus(task.status) && new Date(vals[0]).getTime() < new Date().setHours(0, 0, 0, 0);
     const label = def.builtin ? t(def.label) : def.label;
     // The two task dates read as what they are: due wears the clock, a lone start date the arrow it starts
@@ -125,8 +124,9 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (def.kind === "checkbox") return vals[0] === "true" ? <span className={cn(pill, "bg-muted text-muted-foreground")}><CircleCheck className="h-3 w-3" />{def.label}</span> : null;
   if (def.kind === "person") {
+    // A real person (a PERSON field): the person glyph (decision 5).
     const names = vals.map((id) => ctx.people.find((p) => p.id === id)?.name ?? id);
-    return <span className={cn(pill, "bg-muted text-muted-foreground")}>{names.join(", ")}</span>;
+    return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}><UserRound className="h-3 w-3 shrink-0" aria-hidden />{names.join(", ")}</span>;
   }
   if (def.kind === "select" || def.kind === "multi") {
     return (
@@ -145,7 +145,19 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
     return <span className={cn(pill, "bg-muted text-muted-foreground")}>{label}</span>;
   }
   if (def.fieldType === "FILE") return <span className={cn(pill, "bg-muted text-muted-foreground")}>{t(vals.length === 1 ? "1 file" : "{n} files", { n: vals.length })}</span>;
+  if (def.kind === "text") return <TextProp label={def.label} value={vals[0]} />;
   return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}>{vals[0]}</span>;
+}
+
+/** A text property on a card: its field name and the text, with the text glyph ("Request by: Sifal"), so it never
+ *  reads as a person (UI tour run 19, R19-WB-2, decision 5). */
+function TextProp({ label, value }: { label: string; value: string }) {
+  return (
+    <span className={cn(pill, "min-w-0 max-w-[240px] bg-muted text-muted-foreground")} title={`${label}: ${value}`}>
+      <Type className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate"><span className="opacity-80">{label}:</span> <span className="text-foreground/80">{value}</span></span>
+    </span>
+  );
 }
 
 /** The properties a card shows, in the view's order. */
@@ -202,7 +214,8 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
 /** A List row's column width for a property (sm and up), wide enough for its usual value. */
 function listSlotWidth(d: PropDef): string {
   if (d.key === "assignee") return "sm:w-[3.75rem] sm:justify-start";
-  if (d.kind === "date") return "sm:w-[9.5rem] sm:justify-end";
+  // Room for the due date and one more date with its field name ("26 May · Request by 24 May", run 19 WD-4).
+  if (d.kind === "date") return "sm:w-[12.5rem] sm:justify-end";
   if (d.kind === "number") return "sm:w-[6.5rem] sm:justify-end";
   if (d.key === "priority") return "sm:w-[4.75rem]";
   if (d.key === "status" || d.key === "section") return "sm:w-[7.5rem]";
@@ -238,11 +251,11 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   }
   const tip = (text: string) => `${(shown.get(text) ?? []).join(", ")}: ${text}`;
   const lead = startText && dueText && startText !== dueText ? (
-    <span title={`${tip(startText)} · ${tip(dueText)}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+    <span title={`${tip(startText)} · ${tip(dueText)}`} aria-label={`${tip(startText)}, ${tip(dueText)}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
       <Clock className="h-3 w-3" />{startText}<ArrowRight className="h-3 w-3 opacity-70" aria-hidden />{dueText}
     </span>
   ) : dueText || startText ? (
-    <span title={tip((dueText ?? startText)!)} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+    <span title={tip((dueText ?? startText)!)} aria-label={tip((dueText ?? startText)!)} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
       <Clock className="h-3 w-3" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 opacity-70" aria-hidden />}
     </span>
   ) : null;
@@ -252,9 +265,11 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   return (
     <>
       {lead}
+      {/* Any other date names its field ("Request by 24 May"): beside the due date's clock a second bare date
+          could not be told apart (UI tour run 19, R19-WD-4). */}
       {shownOthers.map((text) => (
-        <span key={text} title={tip(text)} className="inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
-          <CalendarDays className="h-3 w-3" />{text}
+        <span key={text} title={tip(text)} aria-label={tip(text)} className="inline-flex min-w-0 shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden /><span className="truncate opacity-80">{(shown.get(text) ?? [])[0]}</span>{text}
         </span>
       ))}
       {folded.length > 0 && (
