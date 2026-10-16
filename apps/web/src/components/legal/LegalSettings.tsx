@@ -49,9 +49,15 @@ export function LegalSettings() {
       frame = 0;
       const line = headerTop + (jumpRef.current?.offsetHeight ?? 0) + 24;
       let current = list[0]?.id ?? null;
+      // Scrolled to the end, the last cards can never reach the line: then the last company whose card is on screen
+      // is the one in view (UI tour run 19, R19-WD-1: the chip said Suwara Lokal while only TZN's card showed).
+      const doc = document.scrollingElement ?? document.documentElement;
+      const atEnd = doc.scrollTop > 0 && doc.scrollTop + window.innerHeight >= doc.scrollHeight - 2;
       for (const c of list) {
         const el = document.getElementById(`legal-co-${c.id}`);
-        if (el && el.getBoundingClientRect().top <= line) current = c.id;
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top <= line || (atEnd && top < window.innerHeight - 48)) current = c.id;
       }
       setInView(current);
     };
