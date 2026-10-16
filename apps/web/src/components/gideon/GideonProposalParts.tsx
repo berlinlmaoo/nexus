@@ -2,8 +2,8 @@ import { GideonMark } from "./GideonMark";
 import { useLang } from "@/lib/lang";
 
 /** The buttons on every approval card (Notion AI: a quiet Discard, a solid Apply). */
-export const PROPOSAL_DISCARD = "inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
-export const PROPOSAL_APPLY = "inline-flex h-7 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50";
+export const PROPOSAL_DISCARD = "inline-flex h-7 items-center rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+export const PROPOSAL_APPLY = "inline-flex h-7 items-center gap-1 rounded-full px-3.5 text-xs font-semibold transition-colors bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50";
 
 /**
  * The top of an approval card, Notion AI style: GIDEON's mark, what it wants to do, and whether it is

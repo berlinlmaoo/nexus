@@ -81,7 +81,7 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
   const landed = c.applied ?? null;
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-background", open ? "shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)]" : "opacity-90")}>
+    <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
       <ProposalHead open={open} title={open ? c.title : (isMove ? t("Move a booking") : t("Cancel a booking"))} summary={c.title} />
       <div className="space-y-2 px-3 pb-2.5 text-xs">
         <div className={cn("rounded-lg border border-border px-2.5 py-1.5", !isMove && proposal.status === "APPLIED" && "line-through opacity-70")}>
