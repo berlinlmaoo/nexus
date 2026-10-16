@@ -594,35 +594,21 @@ function ProjectsPage() {
       <div className="p-4 md:p-8 space-y-5">
         <section className="rounded-[28px] border border-border bg-card p-4 md:p-5 shadow-soft overflow-hidden relative">
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <Sparkles className="h-3.5 w-3.5" /> {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
-              </div>
-              {/* Phone: the summary stays one compact block so the list starts above the fold (audit 12 Oct 2026). */}
-              <p className="mt-2 hidden text-sm text-muted-foreground sm:block">
+            {/* One quiet summary line, not three big-number tiles, and one sentence (UI tour run 20, R20-WB-8). */}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground tabular-nums">
+                {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
+                <span className="font-normal text-muted-foreground">
+                  {" · "}{tr("{n}% average progress", { n: liveProgress })}
+                  {" · "}{tr("{n} tasks done", { n: formatCount(totalCompleted) })}
+                  {/* Distinct people, not memberships summed over projects ("972 Members" in a 54-person workspace,
+                      QA 13 Oct 2026). */}
+                  {" · "}{tr("{n} members", { n: formatCount(new Set(computedProjects.flatMap((p) => p.memberIds)).size) })}
+                </span>
+              </p>
+              <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                 {tr("Open a project to see its board, pages, calendar and timeline.")}
               </p>
-            </div>
-            {/* Shown on the phone too (UI tour 13 Oct 2026: the desktop's three numbers were missing at
-                440 px); one compact row of three keeps the list close to the fold. */}
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
-              <MiniStat
-                icon={<Target className="h-4 w-4" />}
-                label={tr("Average progress")}
-                value={`${liveProgress}%`}
-              />
-              <MiniStat
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label={tr("Tasks done")}
-                value={formatCount(totalCompleted)}
-              />
-              <MiniStat
-                icon={<Users className="h-4 w-4" />}
-                label={tr("Members")}
-                // Distinct people, not memberships summed over projects ("972 Members" in a 54-person
-                // workspace, QA 13 Oct 2026).
-                value={formatCount(new Set(computedProjects.flatMap((p) => p.memberIds)).size)}
-              />
             </div>
           </div>
 
@@ -664,9 +650,6 @@ function ProjectsPage() {
                   <X className="h-3.5 w-3.5" /> {tr("Clear filters ({n})", { n: activeFilters })}
                 </button>
               )}
-            </div>
-            <div className="hidden text-xs text-muted-foreground md:block">
-              {tr("Select a project to open it.")}
             </div>
           </div>
         </section>
