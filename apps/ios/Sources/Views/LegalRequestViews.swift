@@ -108,6 +108,8 @@ struct LegalRequestFormView: View {
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
+        // The sheet's height: the form, the Send bar under it (110, as `sendFollowsForm`) and the navigation bar.
+        .preference(key: SheetFitHeightKey.self, value: formHeight > 0 && formInfo != nil ? formHeight + 110 + 70 : nil)
         .scrollDismissesKeyboard(.interactively)
         // The sheet is shorter than the form on a Mac: Attachments and Send sat below its edge with nothing
         // saying the page went on (UI tour run 12, MC4). The indicator shows once on open, and Send stays

@@ -131,7 +131,8 @@ struct CFChipView: View {
         } else if chip.isPerson {
             // A text value that names someone ("Request by" holding "Sifal") is text, not a person: the text
             // glyph and the field's name, never an assignee-looking chip (decision 5 of run 19, R19-M-05).
-            Label(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label, systemImage: "text.alignleft")
+            // The web's "T" text glyph, as every text property (decision 2 of run 20, R20-B-11; it was "≡").
+            Label { Text(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label) } icon: { TextPropertyGlyph(size: 10) }
                 .font(NXFont.text(10, .medium)).lineLimit(1)
                 .labelStyle(CFPersonLabelStyle())
                 .padding(.vertical, 3)
@@ -157,6 +158,23 @@ struct CFChipView: View {
 }
 
 /// Icon and name close together, like web's pill (gap 4).
+/// The web's text-property glyph (lucide "Type"): a plain "T". SF Symbols has no bare T, so it is a letter drawn
+/// at the size and weight of the symbols beside it. `symbol` stands for it wherever an icon name is passed on.
+struct TextPropertyGlyph: View {
+    static let symbol = "nx.text"
+    var size: CGFloat = 12
+
+    var body: some View {
+        Text(verbatim: "T").font(.system(size: size * 1.1, weight: .medium)).frame(minWidth: size)
+            .accessibilityHidden(true)
+    }
+
+    /// The text glyph for `symbol`, else that SF Symbol.
+    @ViewBuilder static func icon(_ name: String, size: CGFloat) -> some View {
+        if name == symbol { TextPropertyGlyph(size: size) } else { Image(systemName: name).font(.system(size: size)) }
+    }
+}
+
 private struct CFPersonLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 4) { configuration.icon.imageScale(.small); configuration.title }

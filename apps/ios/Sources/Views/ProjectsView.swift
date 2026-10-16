@@ -1573,6 +1573,13 @@ struct PageWideFittedSheet: ViewModifier {
     }
 }
 
+/// How tall a sheet's content wants to be, for a sheet that hugs it (PageWideFittedSheet's cap): the Legal
+/// request form left ~190 pt of empty sheet under Send on an iPad (UI tour run 20, iPad R20-I-04).
+struct SheetFitHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
+}
+
 @available(iOS 18.0, *)
 struct PageWideCappedSizing: PresentationSizing {
     let maxHeight: CGFloat

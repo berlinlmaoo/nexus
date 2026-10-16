@@ -17,6 +17,8 @@ struct RootView: View {
     /// somebody else on the same launch skipped the warm-up entirely and left the new person
     /// looking at whatever the previous one had not wiped.
     @State private var warmedUserId: String?
+    /// The form sheet's fitted height, from SheetFitHeightKey (nil = the 860 pt cap).
+    @State private var formSheetFit: CGFloat?
 
     var body: some View {
         @Bindable var router = router
@@ -115,7 +117,9 @@ struct RootView: View {
                     // Page wide on iPad / Mac: the form sheet was half the screen and its pinned Send bar cut
                     // "Needed by" mid-line (run 15, Q-IB5); at most 860 pt tall, as page height left ~650 pt
                     // empty above the bar (UI tour run 16, R16-I-30).
-                    .modifier(PageWideFittedSheet(maxHeight: 860))
+                    // A form shorter than that hugs its content, Send right under it (UI tour run 20, iPad R20-I-04).
+                    .onPreferenceChange(SheetFitHeightKey.self) { h in formSheetFit = h }
+                    .modifier(PageWideFittedSheet(maxHeight: min(860, formSheetFit ?? 860)))
                     // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
                     .environment(auth).environment(router)
                 }

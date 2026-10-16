@@ -15,7 +15,8 @@ import SwiftUI
 // ============================================================================
 
 /// The Table's column widths for one window width: the web's grid (Name minmax(240px, 2fr), every other
-/// column minmax(140px, 1fr), a 40px open column). Wider than the window = it scrolls sideways.
+/// column minmax(140px, 1fr)). Wider than the window = it scrolls sideways. No trailing open column: every
+/// cell opens the task, and the web table ends on Status (UI tour run 20, Mac R20-M-02: a column of "›").
 ///
 /// Every column after Name has its own width (`widths`, in order: Assignee, Due date, the project's fields,
 /// Priority, Status), so a field column is at least as wide as its header: "Tanggal Penggunaan" wrapped
@@ -23,7 +24,6 @@ import SwiftUI
 struct TableColumns: Equatable {
     var name: CGFloat
     var widths: [CGFloat]
-    let open: CGFloat = 40
     /// Assignee, Due date, Priority, Status.
     static let fixedCount = 4
 
@@ -32,14 +32,14 @@ struct TableColumns: Equatable {
     func field(_ i: Int) -> CGFloat { widths[2 + i] }
     var priority: CGFloat { widths[widths.count - 2] }
     var status: CGFloat { widths[widths.count - 1] }
-    var total: CGFloat { name + widths.reduce(0, +) + open }
+    var total: CGFloat { name + widths.reduce(0, +) }
 
     /// The sideways offsets at which a column starts right after the frozen Name column: the only places
     /// the scroll comes to rest, so no column is ever half under it (see TableColumnSnap).
     var columnStarts: [CGFloat] {
         var out: [CGFloat] = [0]
         var x: CGFloat = 0
-        for w in widths + [open] { x += w; out.append(x) }
+        for w in widths { x += w; out.append(x) }
         return out
     }
 
@@ -168,7 +168,8 @@ struct ProjectTableTab: View {
     @State private var stickyX: CGFloat = 0
 
     private var compact: Bool { hSize != .regular }
-    /// Date fields that hold names ("Request by" from a Notion import): a person icon, not a calendar.
+    /// Date fields that hold names ("Request by" from a Notion import): the text glyph, not a calendar (and not a
+    /// person: only real people get that, decision 5 of run 19; decision 2 of run 20).
     private var nameFields: Set<String> {
         let tasks = lanes.flatMap { $0.tasks ?? [] }
         return Set(fields.filter { ["DATE", "CREATED"].contains($0.type.uppercased()) && cfFieldHoldsNames($0.id, in: tasks) }.map(\.id))
@@ -424,7 +425,8 @@ struct TableHeaderRow: View {
     var body: some View {
         HStack(spacing: 0) {
             // The web's "T" text-field icon, not Notion's "Aa" (parity outranks Notion; UI tour run 19, R19-I-18).
-            cell(T("Name"), icon: "character", width: cols.name, first: true)
+            // The web's "T" text glyph (UI tour run 20, R20-I-04 / R20-B-11; it was "Aa", then "A").
+            cell(T("Name"), icon: TextPropertyGlyph.symbol, width: cols.name, first: true)
                 .background(NX.card)
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
@@ -435,12 +437,10 @@ struct TableHeaderRow: View {
             // Tanggal Penggunaan…, then Priority and Status): an iPad beside the sidebar showed the four
             // built-in columns and never a field (UI tour run 10, IPD-4).
             ForEach(Array(fields.enumerated()), id: \.element.id) { i, f in
-                cell(f.name, icon: nameFields.contains(f.id) ? "person" : Self.icon(f.type), width: cols.field(i))
+                cell(f.name, icon: nameFields.contains(f.id) ? TextPropertyGlyph.symbol : Self.icon(f.type), width: cols.field(i))
             }
             cell(T("Priority"), icon: "flag", width: cols.priority)
             cell(T("Status"), icon: "rectangle.split.3x1", width: cols.status)
-            Color.clear.frame(width: cols.open, height: 44)
-                .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card)
@@ -449,7 +449,7 @@ struct TableHeaderRow: View {
 
     private func cell(_ title: String, icon: String, width: CGFloat, first: Bool = false) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 12))
+            TextPropertyGlyph.icon(icon, size: 12)
             // One line: a field's column is as wide as its header (TableColumns.headerWidth), so
             // "Tanggal Penggunaan" neither wraps (UI tour run 14, P-I12) nor cuts (F-06).
             Text(title).font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
@@ -474,7 +474,7 @@ struct TableHeaderRow: View {
         case "URL": return "link"
         case "CHECKBOX": return "checkmark.square"
         case "FILE": return "paperclip"
-        default: return "text.alignleft"
+        default: return TextPropertyGlyph.symbol
         }
     }
 }
@@ -524,12 +524,6 @@ struct ProjectTableRow: View {
             }
             priorityCell.modifier(TableCell(width: cols.priority, height: rowH))
             statusCell.modifier(TableCell(width: cols.status, height: rowH))
-            openButton {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(NX.mutedFg)
-                    .frame(maxWidth: .infinity)
-            }
-            .modifier(TableCell(width: cols.open, height: rowH, inset: 0))
-            .accessibilityLabel(T("Open"))
         }
         // Every cell as tall as the row's tallest (a wrapped name).
         .fixedSize(horizontal: false, vertical: true)
@@ -766,10 +760,11 @@ struct ProjectTableRow: View {
     }
 }
 
-/// An empty Table cell: one quiet dash, the same in every column.
+/// An empty Table cell: blank, as the web table (decision 21 of run 20, R20-I-26 / WD-7; it was a "—"). VoiceOver
+/// still says "Empty".
 struct TableEmptyMark: View {
     var body: some View {
-        Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityLabel(T("Empty"))
+        Color.clear.frame(width: 1, height: 14).accessibilityElement().accessibilityLabel(T("Empty"))
     }
 }
 

@@ -1030,12 +1030,12 @@ struct TimelineTab: View {
 
     // MARK: web rules
 
-    /// The web's tlProgress: the share of a task's subtasks that are done, else 100 for a done task, else nil
-    /// ("—": not measured). The app used to derive 50% from In Progress and 75% from In Review, numbers nobody
-    /// entered (UI tour run 19, R19-B-01, decision 8).
+    /// The web's tlProgress: the share of a task's subtasks that are done, else nil ("—": not measured). The app
+    /// used to derive 50% from In Progress and 75% from In Review, numbers nobody entered (UI tour run 19,
+    /// R19-B-01, decision 8), and still 100% from Done, where web shows "—" too (run 20, R20-B-01).
     private func progress(of t: BoardTask) -> Int? {
         if let c = subtaskTally[t.id], c.total > 0 { return Int((Double(c.done) * 100 / Double(c.total)).rounded()) }
-        return t.isDone ? 100 : nil
+        return nil
     }
 
     /// Done / all subtasks per parent task id, over every lane (the lanes include the subtasks).

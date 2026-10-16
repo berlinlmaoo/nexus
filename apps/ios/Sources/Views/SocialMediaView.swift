@@ -456,9 +456,18 @@ struct SocialOverviewView: View {
                 // targets)" to "(in…" (UI tour run 17, iPad R17-I-02).
                 // Two lines kept on every card side by side, so one card's wrapped helper does not push its
                 // sparkline and figures below the others' (UI tour run 18, R18-M-06).
-                Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2, reservesSpace: wide).minimumScaleFactor(0.9)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Run 20 (Mac R20-M-03, iPad R20-I-03): the one Text broke before "(incl. day targets)" on the Mac and
+                // cut it to "(incl. day tar…" on the iPad. Now: the whole line where it fits (12, then 11 pt, as the
+                // web keeps it), else whole phrases on their own lines, never cut.
+                let line = monthTargetLine(p)
+                ViewThatFits(in: .horizontal) {
+                    Text(line).font(NXFont.text(12)).lineLimit(1).fixedSize()
+                    Text(line).font(NXFont.text(11)).lineLimit(1).fixedSize()
+                    phraseLines(Self.phraseParts(line, atDots: false))
+                    phraseLines(Self.phraseParts(line, atDots: true))
+                }
+                .foregroundStyle(NX.mutedFg)
+                .frame(minHeight: wide ? 32 : nil, alignment: .topLeading)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -528,6 +537,25 @@ struct SocialOverviewView: View {
                 .joined(separator: " (")
         }
         .joined(separator: " · ")
+    }
+
+    /// The helper's phrases: split before "(", and also after each " · " when `atDots`.
+    static func phraseParts(_ line: String, atDots: Bool) -> [String] {
+        let flat = line.replacingOccurrences(of: "\u{00A0}", with: " ")
+        let dots = flat.components(separatedBy: " · ")
+        let groups = atDots ? dots.enumerated().map { i, g in i < dots.count - 1 ? g + " ·" : g } : [flat]
+        return groups.flatMap { g -> [String] in
+            let parts = g.components(separatedBy: " (")
+            return parts.enumerated().map { i, part in i == 0 ? part : "(" + part }
+        }
+    }
+
+    private func phraseLines(_ parts: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                Text(part).font(NXFont.text(12)).lineLimit(1).fixedSize()
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: Double?) -> some View {
