@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { ArrowDown, CalendarClock, Check, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowDown, CalendarClock, Check, ChevronRight, Loader2 } from "lucide-react";
 import { decideGideonProposal, roomAvailability, type GideonProposal } from "@/lib/gideon";
 import { roomLabel } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import { FreeSlotChips, RoomPicker } from "./GideonBookRoomCard";
 
 /**
@@ -80,15 +81,9 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
   const landed = c.applied ?? null;
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border bg-background", open ? "border-amber-500/40" : "border-border opacity-90")}>
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-        <ShieldCheck className={cn("h-4 w-4 shrink-0", open ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-semibold text-muted-foreground">{open ? t("Waiting for your approval") : isMove ? t("Move a booking") : t("Cancel a booking")}</span>
-          <span className="block truncate text-sm font-semibold" title={c.title}>{c.title}</span>
-        </span>
-      </div>
-      <div className="space-y-2 px-3 py-2 text-xs">
+    <div className={cn("overflow-hidden rounded-xl border border-border bg-background", open ? "shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)]" : "opacity-90")}>
+      <ProposalHead open={open} title={open ? c.title : (isMove ? t("Move a booking") : t("Cancel a booking"))} summary={c.title} />
+      <div className="space-y-2 px-3 pb-2.5 text-xs">
         <div className={cn("rounded-lg border border-border px-2.5 py-1.5", !isMove && proposal.status === "APPLIED" && "line-through opacity-70")}>
           {isMove && <span className="block text-[11px] font-semibold text-muted-foreground">{t("Now")}</span>}
           <span className="block font-semibold">{t(roomLabel(c.before.room))}</span>
@@ -140,8 +135,8 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
       )}
       {error && <div className="px-3 pb-2 text-xs font-medium text-destructive">{error}</div>}
       {open && (
-        <div className="flex justify-end gap-2 border-t border-border/60 px-3 py-2">
-          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent disabled:opacity-50">
+        <div className="flex justify-end gap-1.5 border-t border-border/60 px-2.5 py-2">
+          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className={PROPOSAL_DISCARD}>
             {pending === "discard" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Discard")}
           </button>
           <button
@@ -149,7 +144,7 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
             onClick={() => void decide("apply")}
             disabled={!!pending || !canApply}
             title={!canApply ? t("Choose a room") : undefined}
-            className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50", isMove ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+            className={cn(PROPOSAL_APPLY, !isMove && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
           >
             {pending === "apply" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {isMove ? t("Apply") : t("Cancel booking")}
           </button>

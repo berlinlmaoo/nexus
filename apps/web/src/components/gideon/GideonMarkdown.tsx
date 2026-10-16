@@ -108,7 +108,7 @@ function Inline({ text, onNavigate }: { text: string; onNavigate: (path: string)
   let k = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
-    if (m[1]) nodes.push(<code key={k++} className="rounded bg-foreground/10 px-1 py-0.5 font-mono text-[0.85em]">{m[1].slice(1, -1)}</code>);
+    if (m[1]) nodes.push(<code key={k++} className="rounded-[4px] bg-muted px-[0.3em] py-[0.1em] font-mono text-[0.85em] text-[#c4554d] dark:text-[#ff8f86]">{m[1].slice(1, -1)}</code>);
     else if (m[2] && m[3]) nodes.push(<Link key={k++} href={m[3]} onNavigate={onNavigate}>{m[2]}</Link>);
     else if (m[4]) nodes.push(<strong key={k++} className="font-semibold"><Inline text={m[4].slice(2, -2)} onNavigate={onNavigate} /></strong>);
     else if (m[5]) nodes.push(<em key={k++}><Inline text={m[5].slice(1, -1)} onNavigate={onNavigate} /></em>);
@@ -152,31 +152,35 @@ export function GideonMarkdown({ text, className, sources }: { text: string; cla
     TODO: t("To do"), IN_PROGRESS: t("In progress"), IN_REVIEW: t("In review"), DONE: t("Done"), CANCELLED: t("Cancelled"),
     URGENT: t("Urgent"), HIGH: t("High"), MEDIUM: t("Medium"), LOW: t("Low"), NONE: t("None"),
   };
-  const blocks = tidyBlocks(parseBlocks(text), (s) => tidyGideonText(s, sources ?? [], labels));
+  // Inline `code` stays literal too: "status != DONE" is a filter to copy, not a sentence to translate.
+  const tidy = (s: string) => s.split(/(`[^`\n]+`)/).map((part, i) => (i % 2 ? part : tidyGideonText(part, sources ?? [], labels))).join("");
+  const blocks = tidyBlocks(parseBlocks(text), tidy);
   return (
-    <div className={cn("space-y-2 break-words", className)}>
+    <div className={cn("space-y-2.5 break-words", className)}>
       {blocks.map((b, i) => {
         switch (b.kind) {
           case "h":
-            return <div key={i} className={cn("font-semibold", b.level <= 2 ? "text-[0.95rem]" : "text-sm")}><Inline text={b.text} onNavigate={go} /></div>;
+            // Notion's heading scale, a step down for a chat column.
+            return <div key={i} role="heading" aria-level={Math.min(6, b.level + 2)} className={cn("font-semibold leading-snug tracking-tight first:mt-0", b.level === 1 ? "mt-4 text-[1.3em]" : b.level === 2 ? "mt-3.5 text-[1.15em]" : "mt-3 text-[1.05em]")}><Inline text={b.text} onNavigate={go} /></div>;
           case "p":
             return <p key={i} className="whitespace-pre-wrap"><Inline text={b.text} onNavigate={go} /></p>;
           case "ul":
-            return <ul key={i} className="list-disc space-y-1 pl-5 marker:text-muted-foreground">{b.items.map((it, j) => <li key={j}><Inline text={it} onNavigate={go} /></li>)}</ul>;
+            return <ul key={i} className="list-disc space-y-1 pl-6 marker:text-foreground/70">{b.items.map((it, j) => <li key={j}><Inline text={it} onNavigate={go} /></li>)}</ul>;
           case "ol":
-            return <ol key={i} className="list-decimal space-y-1 pl-5 marker:text-muted-foreground">{b.items.map((it, j) => <li key={j}><Inline text={it} onNavigate={go} /></li>)}</ol>;
+            return <ol key={i} className="list-decimal space-y-1 pl-6 marker:text-foreground/70">{b.items.map((it, j) => <li key={j}><Inline text={it} onNavigate={go} /></li>)}</ol>;
           case "quote":
-            return <blockquote key={i} className="border-l-2 border-border pl-3 text-muted-foreground"><Inline text={b.text} onNavigate={go} /></blockquote>;
+            return <blockquote key={i} className="border-l-[3px] border-foreground pl-3.5"><Inline text={b.text} onNavigate={go} /></blockquote>;
           case "code":
-            return <pre key={i} className="overflow-x-auto rounded-lg bg-foreground/[0.06] p-2.5 font-mono text-xs leading-relaxed">{b.text}</pre>;
+            return <pre key={i} className="overflow-x-auto rounded-md bg-muted/70 px-4 py-3.5 font-mono text-[0.82em] leading-relaxed">{b.text}</pre>;
           case "hr":
             return <hr key={i} className="border-border" />;
           case "table":
             return (
+              // Notion's simple table: a full grid of hairlines and a tinted header row.
               <div key={i} className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b border-border text-left">{b.head.map((c, j) => <th key={j} className="px-2 py-1 font-semibold"><Inline text={c} onNavigate={go} /></th>)}</tr></thead>
-                  <tbody>{b.rows.map((r, j) => <tr key={j} className="border-b border-border/50 last:border-0">{r.map((c, x) => <td key={x} className="px-2 py-1 align-top"><Inline text={c} onNavigate={go} /></td>)}</tr>)}</tbody>
+                <table className="w-full border-collapse text-[0.9em]">
+                  <thead><tr className="bg-muted/50 text-left">{b.head.map((c, j) => <th key={j} className="border border-border px-2.5 py-1.5 font-medium"><Inline text={c} onNavigate={go} /></th>)}</tr></thead>
+                  <tbody>{b.rows.map((r, j) => <tr key={j}>{r.map((c, x) => <td key={x} className="border border-border px-2.5 py-1.5 align-top"><Inline text={c} onNavigate={go} /></td>)}</tr>)}</tbody>
                 </table>
               </div>
             );
