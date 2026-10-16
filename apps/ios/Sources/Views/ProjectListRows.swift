@@ -366,6 +366,7 @@ struct ListTaskRow: View {
             // (P-I10). The two-line row gives the title the whole width and lists every value under it.
             ViewThatFits(in: .horizontal) {
                 wideRow(columnLayout)
+                if columnLayout.withoutText != columnLayout { wideRow(columnLayout.withoutText) }
                 compactRow
             }
         } else {
@@ -510,12 +511,20 @@ enum ListColumns {
     /// The columns of one List, the same for every row.
     struct Layout: Equatable {
         /// `keep`: an option field (Kategori), the column a narrow window gives up last.
-        struct Field: Equatable { let id: String; let width: CGFloat; var keep = false }
+        struct Field: Equatable { let id: String; let width: CGFloat; var keep = false; var textual = false }
         var fields: [Field] = []
         var due = true
         var priority = true
         var status = true
         var people = true
+
+        /// The columns without the text-valued fields ("Request by"), which the web's List row does not show:
+        /// one line on a window too narrow for every column, before the two-line row (UI tour run 19, R19-B-02).
+        var withoutText: Layout {
+            var l = self
+            l.fields = fields.filter { !$0.textual }
+            return l
+        }
     }
 
     static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 4) -> [String] {
@@ -545,7 +554,8 @@ enum ListColumns {
         let types = Dictionary(fields.map { ($0.id, $0.type.uppercased()) }, uniquingKeysWith: { a, _ in a })
         let cols = fieldIds(fields: fields, lanes: lanes).map { id in
             Layout.Field(id: id, width: types[id] == "DATE" ? dateFieldW : fieldW,
-                         keep: ["SELECT", "MULTI_SELECT", "STATUS"].contains(types[id] ?? ""))
+                         keep: ["SELECT", "MULTI_SELECT", "STATUS"].contains(types[id] ?? ""),
+                         textual: ["TEXT", "CREATED", "URL", "EMAIL", "PHONE"].contains(types[id] ?? ""))
         }
         return Layout(
             fields: cols,
