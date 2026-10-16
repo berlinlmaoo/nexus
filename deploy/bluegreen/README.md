@@ -81,6 +81,12 @@ version against the current schema. So:
 * `apply` lints (destructive statement without the contract header ⇒ refused), dry-runs the file in a
   transaction that is rolled back and checks the resulting catalog against the Prisma schema of every running
   slot image (would break a running version ⇒ refused), then applies and records it.
+* **Big tables: `CREATE INDEX CONCURRENTLY`** (e.g. `2026-10-16-notification-dedupe-key.sql`). It cannot run in
+  a transaction, so such a file has NO `BEGIN`/`COMMIT`; `apply` sees `CONCURRENTLY`, skips the rolled-back dry
+  run (lint only) and runs the file without `-1`, statement by statement, stopping at the first error. Write it
+  so a re-run repairs a failed one: `ADD COLUMN IF NOT EXISTS` (nullable, no default), then drop an INVALID copy
+  of the index (`SELECT format('DROP INDEX CONCURRENTLY IF EXISTS %I', …) … WHERE NOT indisvalid \gexec`), then
+  `CREATE … CONCURRENTLY IF NOT EXISTS`. Afterwards check `pg_index.indisvalid` is true for it.
 * Renames = expand (new column + dual write/backfill) → release → contract (drop old) in a later release.
 * Already applied by hand: `… sql record FILE --yes`. `… sql status` lists everything.
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { CalendarClock, Check, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
-import { decideGideonProposal, roomAvailability, type GideonProposal } from "@/lib/gideon";
+import { decideGideonProposal, roomAvailability, type GideonProposal, type RoomAvailability } from "@/lib/gideon";
 import { roomLabel } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -91,49 +91,9 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
             {q.isLoading && <div className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />{t("Checking the rooms…")}</div>}
             {q.isError && <div className="text-destructive">{t("Couldn't check the rooms.")}</div>}
             {named && !named.free && <div className="text-amber-700 dark:text-amber-400">{t("{room} is booked then. Pick a free room below.", { room: t(roomLabel(named.room)) })}</div>}
-            {rooms.length > 0 && (
-              <div role="radiogroup" aria-label={t("Choose a room")} className="space-y-1">
-                {rooms.map((r) => (
-                  <button
-                    key={r.room}
-                    type="button"
-                    role="radio"
-                    aria-checked={room === r.room}
-                    disabled={!r.free || !!pending}
-                    onClick={() => { setTouched(true); setRoom(r.room); }}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-                      room === r.room && r.free ? "border-primary bg-primary/5" : "border-border",
-                      r.free ? "hover:border-primary/40" : "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-primary" : "border-muted-foreground/50")}>
-                      {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{t(roomLabel(r.room))}{r.capacity ? <span className="font-normal text-muted-foreground"> · {t("{n} seats", { n: r.capacity })}</span> : null}</span>
-                      {r.busy && <span className="block truncate text-muted-foreground">{t("Booked by {name} until {time}", { name: r.busy.by ?? t("someone"), time: time(r.busy.endsAt) })}</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <RoomPicker rooms={rooms} room={room} disabled={!!pending} onPick={(r) => { setTouched(true); setRoom(r); }} />
             {q.data && free.length === 0 && (
-              <div className="space-y-1">
-                <div className="text-muted-foreground">{t("No room is free then. Nearest free times:")}</div>
-                <div className="flex flex-wrap gap-1">
-                  {q.data.freeSlots.map((f) => (
-                    <button
-                      key={f.startsAt}
-                      type="button"
-                      onClick={() => { setTouched(false); setRoom(null); setSlot({ startsAt: f.startsAt, endsAt: f.endsAt }); }}
-                      className="rounded-full border border-border px-2 py-0.5 font-medium tabular-nums transition-colors hover:border-primary/40 hover:bg-accent"
-                    >
-                      {time(f.startsAt)}–{time(f.endsAt)}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FreeSlotChips slots={q.data.freeSlots} onPick={(f) => { setTouched(false); setRoom(null); setSlot(f); }} />
             )}
             {proposal.error && <div className="font-medium text-destructive">{proposal.error}</div>}
           </>
@@ -163,6 +123,66 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+const wibTime = (iso: string, locale: string) => new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
+
+/**
+ * Every room for one slot: free ones selectable, busy ones disabled with who holds them until when, the capacity
+ * when it is known. Shared by the book_room card and the move card (GideonBookingChangeCard).
+ */
+export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvailability["rooms"]; room: string | null; disabled?: boolean; onPick: (room: string) => void }) {
+  const { t, locale } = useLang();
+  if (rooms.length === 0) return null;
+  return (
+    <div role="radiogroup" aria-label={t("Choose a room")} className="space-y-1">
+      {rooms.map((r) => (
+        <button
+          key={r.room}
+          type="button"
+          role="radio"
+          aria-checked={room === r.room}
+          disabled={!r.free || disabled}
+          onClick={() => onPick(r.room)}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
+            room === r.room && r.free ? "border-primary bg-primary/5" : "border-border",
+            r.free ? "hover:border-primary/40" : "cursor-not-allowed opacity-60",
+          )}
+        >
+          <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-primary" : "border-muted-foreground/50")}>
+            {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{t(roomLabel(r.room))}{r.capacity ? <span className="font-normal text-muted-foreground"> · {t("{n} seats", { n: r.capacity })}</span> : null}</span>
+            {r.busy && <span className="block truncate text-muted-foreground">{t("Booked by {name} until {time}", { name: r.busy.by ?? t("someone"), time: wibTime(r.busy.endsAt, locale) })}</span>}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The nearest free slots (same day, ±2 h) when no room is free: a chip moves the card to that time. */
+export function FreeSlotChips({ slots, onPick }: { slots: RoomAvailability["freeSlots"]; onPick: (slot: { startsAt: string; endsAt: string }) => void }) {
+  const { t, locale } = useLang();
+  return (
+    <div className="space-y-1">
+      <div className="text-muted-foreground">{t("No room is free then. Nearest free times:")}</div>
+      <div className="flex flex-wrap gap-1">
+        {slots.map((f) => (
+          <button
+            key={f.startsAt}
+            type="button"
+            onClick={() => onPick({ startsAt: f.startsAt, endsAt: f.endsAt })}
+            className="rounded-full border border-border px-2 py-0.5 font-medium tabular-nums transition-colors hover:border-primary/40 hover:bg-accent"
+          >
+            {wibTime(f.startsAt, locale)}–{wibTime(f.endsAt, locale)}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

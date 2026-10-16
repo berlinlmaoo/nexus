@@ -30,6 +30,8 @@ enum GideonStepText {
         case "get_calendar": return has ? String(format: T("Reading the calendar, %@"), a) : T("Reading the calendar")
         case "list_room_bookings": return has ? String(format: T("Checking room bookings, %@"), a) : T("Checking room bookings")
         case "book_room": return has ? String(format: T("Booking %@"), a) : T("Booking a room")
+        case "move_room_booking": return has ? String(format: T("Moving booking %@"), a) : T("Moving a booking")
+        case "cancel_room_booking": return has ? String(format: T("Cancelling booking %@"), a) : T("Cancelling a booking")
         case "vision_analyze", "vision": return T("Looking at the image")
         default:
             // A tool this build does not know: the server's own label, never the snake_case name.

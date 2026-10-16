@@ -2396,13 +2396,16 @@ export const nexusApi = {
   deductAbsences: (payload?: { from?: string; to?: string }) => apiFetch<{ from: string; to: string; processedDates: string[]; created: number; skipped: number }>("/api/attendance/deduct-absences", { method: "POST", body: JSON.stringify(payload ?? {}) }),
   attendanceOutageRefund: (payload: { date: string; dryRun?: boolean }) => apiFetch<{ ok: boolean; date: string; dryRun: boolean; refundedMembers: number; excludedMembers: number; totalXpRefunded: number; totalDayOffsRestored: number; failed: number; entries: Array<{ userId: string; name: string | null; lateXp: number; noCheckoutXp: number; alphaXp: number; autoDayOffs: number; xpRefund: number; excludedReason: string | null }> }>("/api/attendance/outage-refund", { method: "POST", body: JSON.stringify(payload) }),
   attendanceRequests: (query = "scope=workspace") => apiFetch<{ requests?: NexusAttendanceRequest[] } | NexusAttendanceRequest[]>(`/api/attendance/requests?${query}`),
-  createAttendanceRequest: (payload: { type: string; startDate: string; endDate: string; reason: string; targetUserId?: string; supportingDocument?: File | null; lat?: number | null; lng?: number | null }) => {
+  // `clientRequestId` (16 Oct 2026): one key per submit, the same on a retry of it. The server stores one request per
+  // key and answers a repeat with the original (200, duplicate: true) instead of a second row or "overlaps".
+  createAttendanceRequest: (payload: { type: string; startDate: string; endDate: string; reason: string; targetUserId?: string; supportingDocument?: File | null; lat?: number | null; lng?: number | null; clientRequestId?: string }) => {
     const fd = new FormData();
     fd.set("type", payload.type); fd.set("startDate", payload.startDate); fd.set("endDate", payload.endDate); fd.set("reason", payload.reason);
+    if (payload.clientRequestId) fd.set("clientRequestId", payload.clientRequestId);
     if (payload.targetUserId) fd.set("targetUserId", payload.targetUserId);
     if (payload.supportingDocument) fd.set("supportingDocument", payload.supportingDocument);
     if (payload.lat != null && payload.lng != null) { fd.set("lat", String(payload.lat)); fd.set("lng", String(payload.lng)); }
-    return apiFetch<{ request?: NexusAttendanceRequest }>("/api/attendance/requests", { method: "POST", body: fd });
+    return apiFetch<{ request?: NexusAttendanceRequest; duplicate?: boolean }>("/api/attendance/requests", { method: "POST", body: fd });
   },
   // Attendance deductions (BoD): no userId = day-off usage for the whole crew (the table's "sisa
   // day off"); with userId = that person's XP + day-off penalty log.

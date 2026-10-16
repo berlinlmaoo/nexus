@@ -1152,6 +1152,11 @@ model Notification {
   /// Who caused it (a person), for the sender avatar on the row. Null = system, or a row from before 13 Oct 2026.
   /// No foreign key: a deleted person just loses the avatar.
   actorId   String?
+  /// A cron-driven notification's identity, type + target + period (e.g. "attendance-reminder|<user>|checkin|
+  /// 2026-10-16|15"), written with ON CONFLICT DO NOTHING so two overlapping runs store and push it once
+  /// (16 Oct 2026). Null for ad-hoc notifications. Unique WHERE NOT NULL — a partial index built CONCURRENTLY,
+  /// so it lives in prisma/sql/2026-10-16-notification-dedupe-key.sql, not here.
+  dedupeKey String?
 
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1506,6 +1511,11 @@ model AttendanceRequest {
   /// Kapan request ini dieskalasi ke BoD karena manager-nya diam melewati batas (cron
   /// attendance-escalation). Sekali saja — kolom ini yang mencegah BoD diberi tahu setiap 30 menit.
   escalatedAt           DateTime?
+  /// The key a client sent with the submit (form field clientRequestId or the Idempotency-Key header, 16 Oct
+  /// 2026): a repeat with the same key from the same person returns this request instead of storing another.
+  /// Unique per userId WHERE NOT NULL — a partial index, so it lives in
+  /// prisma/sql/2026-10-16-attendance-request-client-id.sql, not here. Null = a client that sends none.
+  clientRequestId       String?
 
   userId                String
   user                  User                      @relation("AttendanceRequestUser", fields: [userId], references: [id], onDelete: Cascade)

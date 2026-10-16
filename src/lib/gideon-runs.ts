@@ -1,7 +1,7 @@
 import { EventEmitter } from "events"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
-import { bookingView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
+import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
 import { resolveRoomName } from "@/lib/room-booking-rooms"
 
 /**
@@ -34,7 +34,7 @@ export function parseApprovalMode(value: unknown): ApprovalMode | null {
 }
 
 /** Tools that change something. Everything else is a read. */
-export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room"])
+export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking"])
 
 /**
  * Which writes wait for the person (Notion's "Always ask / Review for me / Skip approvals").
@@ -48,10 +48,14 @@ export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_co
  *  - dont_ask: nothing waits (what GIDEON did before 12 Oct 2026, and what released apps still get).
  * book_room (16 Oct 2026) waits in always_ask and review; in dont_ask it books directly — unless no single room
  * was named, because GIDEON never guesses a room: the person picks it on the card.
+ * move_room_booking / cancel_room_booking (16 Oct 2026) likewise: a card in always_ask and review, direct only in
+ * dont_ask — and a move whose named room could be more than one room is a card in every mode.
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
   if (!WRITE_ACTIONS.has(action)) return false
   if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
+  if (action === "move_room_booking") return mode !== "dont_ask" || moveNeedsPick(input)
+  if (action === "cancel_room_booking") return mode !== "dont_ask"
   if (mode === "dont_ask") return false
   if (mode === "always_ask") return true
   if (action === "update_task" || action === "add_task_comment") return true
@@ -99,6 +103,11 @@ export type GideonProposalView = {
    * sees this field and cannot apply the proposal (POST /api/gideon/proposals/:id wants the chosen room).
    */
   booking?: GideonBookingView | null
+  /**
+   * move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. A client without the
+   * card never sees this field and cannot apply the proposal (the apply route wants the booking id back).
+   */
+  bookingChange?: GideonBookingChangeView | null
 }
 export type GideonStepView = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null }
 export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[] }
@@ -227,6 +236,8 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "get_calendar": return a ? `Reading the calendar, ${a}` : "Reading the calendar"
     case "list_room_bookings": return a ? `Checking room bookings, ${a}` : "Checking room bookings"
     case "book_room": return a ? `Booking ${a}` : "Booking a room"
+    case "move_room_booking": return a ? `Moving booking ${a}` : "Moving a booking"
+    case "cancel_room_booking": return a ? `Cancelling booking ${a}` : "Cancelling a booking"
     default: return tool.replace(/_/g, " ")
   }
 }
@@ -269,6 +280,12 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
       case "book_room": {
         const room = resolveRoomName(input.room).room ?? str(input.room)
         return [room ?? "a room", str(input.date) ?? str(input.startsAt)?.slice(0, 10)].filter(Boolean).join(", ")
+      }
+      case "move_room_booking":
+      case "cancel_room_booking": {
+        const id = str(input.bookingId) ?? str(input.booking_id)
+        if (!id) return null
+        return (await prisma.roomBooking.findUnique({ where: { id }, select: { title: true } }))?.title ?? null
       }
       // The days asked about, as typed ("2026-10-19 – 2026-10-25", "Friday"); no lookup.
       case "get_calendar":
@@ -334,6 +351,7 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
       break
     // The booking just made: a "booking" source (no card: released apps would open a card's id as a task).
     case "book_room":
+    case "move_room_booking":
       if (d.booking?.id) push({ kind: "booking", id: d.booking.id, title: d.booking.title, url: `/room-booking?booking=${d.booking.id}`, excerpt: `${d.booking.room} · ${d.booking.dayLabel ?? d.booking.day} ${d.booking.start}–${d.booking.end}` })
       break
     // Calendar rows are tasks; a masked row (private project) has no id and never becomes a source.
@@ -417,6 +435,7 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     card: result && typeof result === "object" && "card" in result ? (result.card as GideonCard) : null,
     error: p.error ?? null,
     ...(p.action === "book_room" ? { booking: bookingView(p.input, (result?.booking as AnyObj | undefined)?.id ?? null) } : {}),
+    ...(p.action === "move_room_booking" || p.action === "cancel_room_booking" ? { bookingChange: bookingChangeView(p.action, p.input, result) } : {}),
   }
 }
 

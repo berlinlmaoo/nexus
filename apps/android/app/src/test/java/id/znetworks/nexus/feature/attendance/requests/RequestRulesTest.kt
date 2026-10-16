@@ -132,4 +132,16 @@ class RequestRulesTest {
         assertTrue(body.contains("-6.2") && body.contains("106.8"))
         server.close()
     }
+
+    @Test fun createSendsTheIdempotencyKeyOnlyWhenGiven() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse.Builder().code(201).body("""{"request":{"id":"r1"}}""").build())
+        server.enqueue(MockResponse.Builder().code(200).body("""{"request":{"id":"r1"},"duplicate":true}""").build())
+        val api = RequestsApi(ApiClient(server.url("/"), ClientIdentity("0.1.6", 1, 30), { Session("t", "c", "u") }, mayCarrySession = { true }))
+        api.create("DAY_OFF", "2026-10-20", "family", null, null, null)
+        assertEquals(null, server.takeRequest().headers["Idempotency-Key"])
+        api.create("DAY_OFF", "2026-10-20", "family", null, null, null, idempotencyKey = "6f1c2a90-key")
+        assertEquals("6f1c2a90-key", server.takeRequest().headers["Idempotency-Key"])
+        server.close()
+    }
 }

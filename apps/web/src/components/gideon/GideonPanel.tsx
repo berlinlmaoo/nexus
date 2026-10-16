@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
+import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
@@ -83,6 +84,8 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "get_calendar": return a ? t("Reading the calendar, {range}", { range: a }) : t("Reading the calendar");
     case "list_room_bookings": return a ? t("Checking room bookings, {range}", { range: a }) : t("Checking room bookings");
     case "book_room": return a ? t("Booking {room}", { room: a }) : t("Booking a room");
+    case "move_room_booking": return a ? t("Moving booking {name}", { name: a }) : t("Moving a booking");
+    case "cancel_room_booking": return a ? t("Cancelling booking {name}", { name: a }) : t("Cancelling a booking");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return s.label || s.tool;
   }
@@ -1252,6 +1255,8 @@ function diffDayText(label: string | null | undefined, day: string | null | unde
 function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
   // A room booking has its own card: the room picker (GideonBookRoomCard).
   if (proposal.action === "book_room" && proposal.booking) return <GideonBookRoomCard proposal={proposal} onDecided={onDecided} />;
+  // Moving / cancelling one: the booking before and after (GideonBookingChangeCard).
+  if ((proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") && proposal.bookingChange) return <GideonBookingChangeCard proposal={proposal} onDecided={onDecided} />;
   return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
 }
 
@@ -1270,7 +1275,7 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
       setPending(null);
     }
   };
-  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action === "book_room" ? t("Book a room") : proposal.action;
+  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action === "book_room" ? t("Book a room") : proposal.action === "move_room_booking" ? t("Move a booking") : proposal.action === "cancel_room_booking" ? t("Cancel a booking") : proposal.action;
   const open = proposal.status === "PENDING";
   const statusLine =
     proposal.status === "APPLIED" ? t("Applied") :

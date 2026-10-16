@@ -26,5 +26,20 @@ extension AppLanguage {
         "Booked by %@ until %@": "Dibooking %@ sampai %@",
         "No room is free then. Nearest free times:": "Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:",
         "Room booked": "Ruangan dibooking",
+
+        // Moving / cancelling a booking (move_room_booking / cancel_room_booking cards)
+        "Moving booking %@": "Memindahkan booking %@",
+        "Moving a booking": "Memindahkan booking",
+        "Cancelling booking %@": "Membatalkan booking %@",
+        "Cancelling a booking": "Membatalkan booking",
+        "Move a booking": "Pindahkan booking",
+        "Cancel a booking": "Batalkan booking",
+        "Now": "Sekarang",
+        "Moves to": "Pindah ke",
+        "Booked by %@": "Dibooking oleh %@",
+        "Booking moved": "Booking dipindahkan",
+        "Booking cancelled": "Booking dibatalkan",
+        "Cancel booking": "Batalkan booking",
+        "This frees the room for that time. A BoD can restore it from the Audit.": "Ruangannya jadi kosong di jam itu. BoD bisa memulihkannya dari Audit.",
     ]
 }

@@ -5,7 +5,9 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { cardFromResult, proposalView } from "@/lib/gideon-runs"
 import { markAiFill } from "@/lib/gideon-autofill"
-import { BOOK_ROOM_LATEST_APP, parseBookRoomChoice } from "@/lib/gideon-book-room-plan"
+import {
+  BOOK_ROOM_LATEST_APP, CANCEL_BOOKING_LATEST_APP, MOVE_BOOKING_LATEST_APP, parseBookRoomChoice, parseCancelChoice,
+  parseMoveChoice } from "@/lib/gideon-book-room-plan"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import type { Prisma } from "@/generated/prisma"
 
@@ -25,6 +27,11 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
  * answered with "open on the latest app or the web" and the proposal stays waiting. A slot taken meanwhile is
  * refused by the booking itself (re-checked, and by the database); the card stays open with the error and the
  * nearest free slots, so another room or time can be picked.
+ *
+ * move_room_booking / cancel_room_booking (16 Oct 2026) the same way: a move takes `booking: { bookingId, room,
+ * startsAt, endsAt }` (the room and slot on the card), a cancel `booking: { bookingId }`. Without it — a released
+ * app, which draws these as plain rows — the answer is "open on the latest app or the web" and the proposal stays
+ * waiting. A move into a slot taken meanwhile keeps the card open, like a booking.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -46,6 +53,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (Date.now() - proposal.createdAt.getTime() > MAX_AGE_MS) {
     const updated = await prisma.gideonProposal.update({ where: { id }, data: { status: "FAILED", error: "Expired: ask GIDEON again.", decidedAt: new Date() } })
     return NextResponse.json({ error: "Expired", proposal: proposalView(updated) }, { status: 410 })
+  }
+
+  if (proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") {
+    const stored = (proposal.input as Record<string, unknown>) ?? {}
+    const bookingId = typeof stored.bookingId === "string" ? stored.bookingId : ""
+    const isMove = proposal.action === "move_room_booking"
+    const choice = isMove ? parseMoveChoice(body.booking, bookingId) : null
+    if (!bookingId || (isMove ? !choice : !parseCancelChoice(body.booking, bookingId))) {
+      const latest = isMove ? MOVE_BOOKING_LATEST_APP : CANCEL_BOOKING_LATEST_APP
+      const view = { ...proposalView(proposal), status: "FAILED", error: latest }
+      return NextResponse.json({ error: latest, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
+    }
+    if (choice) {
+      const input: Record<string, unknown> = { ...stored, room: choice.room, startsAt: choice.startsAt, endsAt: choice.endsAt }
+      for (const k of ["date", "start", "end", "startTime", "endTime", "time", "durationMinutes"]) delete input[k]
+      const before = stored.before as { room?: string; startsAt?: string; endsAt?: string; title?: string } | undefined
+      const from = before?.startsAt && before.endsAt ? `${before.room} · ${formatBookingSlot(new Date(before.startsAt), new Date(before.endsAt), "en")}` : ""
+      const to = `${choice.room} · ${formatBookingSlot(new Date(choice.startsAt), new Date(choice.endsAt), "en")}`
+      await prisma.gideonProposal.updateMany({
+        where: { id, status: "PENDING" },
+        data: { input: input as Prisma.InputJsonValue, summary: `Move “${before?.title ?? ""}” · ${from} → ${to}`.slice(0, 300) },
+      })
+    }
   }
 
   if (proposal.action === "book_room") {
@@ -100,7 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // The room was taken between the card and the tap: refused (never double-booked), and the card stays open with
   // the reason so another room or time can be picked.
-  if (!ok && proposal.action === "book_room" && code === "ROOM_TAKEN") {
+  if (!ok && (proposal.action === "book_room" || proposal.action === "move_room_booking") && code === "ROOM_TAKEN") {
     const reopened = await prisma.gideonProposal.update({ where: { id }, data: { status: "PENDING", error: (message || "Taken").slice(0, 500) } })
     return NextResponse.json({ error: message, code, freeSlots, proposal: proposalView(reopened) }, { status: 409 })
   }
@@ -109,7 +139,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const updated = await prisma.gideonProposal.update({
     where: { id },
     data: ok
-      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(proposal.action === "book_room" ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}) } as object, error: null }
+      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(["book_room", "move_room_booking", "cancel_room_booking"].includes(proposal.action) ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}) } as object, error: null }
       : { status: "FAILED", decidedAt: new Date(), error: (message || "Failed").slice(0, 500) },
   })
   // An approved AI Autofill value keeps its ✨ marker (CustomFieldAiFill) like one written directly.

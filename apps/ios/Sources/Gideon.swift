@@ -103,6 +103,9 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     /// book_room only (16 Oct 2026): what the booking card draws. Builds before it ignore the field, and the
     /// server refuses their Apply ("open on the latest app or the web to choose a room").
     let booking: GideonBooking?
+    /// move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. Builds before it
+    /// ignore the field and draw the diff rows; the server refuses their Apply ("open on the latest app or the web").
+    let bookingChange: GideonBookingChange?
     struct Row: Decodable, Sendable, Equatable {
         let field: String?
         let from: GideonLoose?
@@ -121,11 +124,49 @@ struct GideonBooking: Decodable, Sendable, Equatable {
     let bookingId: String?
 }
 
-/// The room and slot picked on the card, sent with Apply; the server checks both again.
+/// The room and slot picked on the card, sent with Apply; the server checks both again. On a move card it also
+/// carries the booking being moved; a cancel card sends only that (`cancel(_:)`, room and slot empty).
 struct GideonBookingChoice: Sendable, Equatable {
     let room: String
     let startsAt: String
     let endsAt: String
+    var bookingId: String? = nil
+
+    static func cancel(_ bookingId: String) -> GideonBookingChoice {
+        GideonBookingChoice(room: "", startsAt: "", endsAt: "", bookingId: bookingId)
+    }
+
+    /// The `booking` object of POST /api/gideon/proposals/:id.
+    var body: [String: Any] {
+        var b: [String: Any] = [:]
+        if !room.isEmpty { b["room"] = room; b["startsAt"] = startsAt; b["endsAt"] = endsAt }
+        if let bookingId { b["bookingId"] = bookingId }
+        return b
+    }
+}
+
+/// A booking GIDEON wants to move or cancel (web GideonBookingChangeView): the booking as it was when the card was
+/// made, where a move puts it (its room nil when it is picked on the card), and once applied where it landed.
+struct GideonBookingChange: Decodable, Sendable, Equatable {
+    struct Slot: Decodable, Sendable, Equatable {
+        let room: String?
+        let startsAt: String
+        let endsAt: String
+    }
+    struct After: Decodable, Sendable, Equatable {
+        let room: String?
+        let candidates: [String]?
+        let startsAt: String
+        let endsAt: String
+    }
+    let kind: String
+    let bookingId: String
+    let title: String?
+    let bookedBy: String?
+    let before: Slot
+    let after: After?
+    let applied: Slot?
+    var isMove: Bool { kind == "move" }
 }
 
 /// GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free.
@@ -507,7 +548,7 @@ enum GideonClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["decision": apply ? "apply" : "discard"]
-        if let booking { body["booking"] = ["room": booking.room, "startsAt": booking.startsAt, "endsAt": booking.endsAt] }
+        if let booking { body["booking"] = booking.body }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
@@ -517,9 +558,11 @@ enum GideonClient {
         throw APIError.http(http.statusCode, env?.error)
     }
 
-    /// Every room for one slot, for the book_room card's picker (read live: availability changes by the minute).
-    static func roomAvailability(startsAt: String, endsAt: String) async throws -> GideonRoomAvailability {
-        var request = authed("/api/room-bookings/availability", query: "startsAt=\(enc(startsAt))&endsAt=\(enc(endsAt))")
+    /// Every room for one slot, for the book_room / move card's picker (read live: availability changes by the
+    /// minute). `excludeBookingId`: the booking a move card is moving, so its own slot does not count as taken.
+    static func roomAvailability(startsAt: String, endsAt: String, excludeBookingId: String? = nil) async throws -> GideonRoomAvailability {
+        let exclude = excludeBookingId.map { "&excludeBookingId=\(enc($0))" } ?? ""
+        var request = authed("/api/room-bookings/availability", query: "startsAt=\(enc(startsAt))&endsAt=\(enc(endsAt))\(exclude)")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await fetch(request)
         try check(response)

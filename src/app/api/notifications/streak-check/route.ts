@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           select: { id: true },
         })
         if (already) continue
-        await notifyStreakAtRisk({ userId: row.userId, currentStreak: row.currentStreak })
+        await notifyStreakAtRisk({ userId: row.userId, currentStreak: row.currentStreak, dedupeKey: `streak-at-risk|${row.userId}|${startOfToday.toISOString()}` })
         sent++
       }
 

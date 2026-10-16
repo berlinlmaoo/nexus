@@ -53,8 +53,10 @@ struct GideonBookRoomCard: View {
                     Text(String(format: T("%@ is booked then. Pick a free room below."), RoomBooking.label(named.room)))
                         .font(NXFont.text(12)).foregroundStyle(NX.warning).fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(rooms) { r in roomRow(r) }
-                if availability != nil && !rooms.contains(where: { $0.free }) { freeSlotChips }
+                GideonRoomRows(rooms: rooms, selected: room) { r in touched = true; room = r }
+                if availability != nil && !rooms.contains(where: { $0.free }) {
+                    GideonFreeSlotChips(slots: availability?.freeSlots ?? []) { f in room = nil; touched = false; startsAt = f.startsAt; endsAt = f.endsAt }
+                }
                 if let e = proposal.error, !e.isEmpty {
                     Text(e).font(NXFont.text(12, .medium)).foregroundStyle(NX.danger).fixedSize(horizontal: false, vertical: true)
                 }
@@ -78,55 +80,6 @@ struct GideonBookRoomCard: View {
         .background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.3)))
         .task(id: "\(startsAt)|\(endsAt)|\(proposal.error ?? "")") { if proposal.isPending { await load() } }
-    }
-
-    private func roomRow(_ r: GideonRoomAvailability.Room) -> some View {
-        let selected = room == r.room && r.free
-        return Button { touched = true; room = r.room } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 13)).foregroundStyle(selected ? NX.violetText : NX.mutedFg)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text(RoomBooking.label(r.room)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                        if let n = r.capacity { Text("· " + String(format: T("%d seats"), n)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-                    }
-                    if let busy = r.busy {
-                        Text(String(format: T("Booked by %@ until %@"), busy.by ?? T("someone"), clock(busy.endsAt)))
-                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(selected ? NX.violetText.opacity(0.06) : NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? NX.violetText : NX.border))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!r.free)
-        .opacity(r.free ? 1 : 0.6)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var freeSlotChips: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(T("No room is free then. Nearest free times:")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(availability?.freeSlots ?? []) { f in
-                        Button { room = nil; touched = false; startsAt = f.startsAt; endsAt = f.endsAt } label: {
-                            Text("\(clock(f.startsAt))–\(clock(f.endsAt))").font(NXFont.text(12, .medium)).monospacedDigit()
-                                .foregroundStyle(NX.foreground)
-                                .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(NX.card, in: Capsule())
-                                .overlay(Capsule().strokeBorder(NX.border))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
     }
 
     /// Reads the rooms for the slot on the card, then preselects (until the person picks): the named room if it
@@ -181,5 +134,106 @@ struct GideonBookRoomCard: View {
         if let d = f.date(from: iso) { return d }
         f.formatOptions = [.withInternetDateTime]
         return f.date(from: iso)
+    }
+}
+
+/// Every room for one slot, as rows (the book_room card and the move card): free ones selectable, busy ones
+/// disabled with who holds them until when, the capacity when it is known.
+struct GideonRoomRows: View {
+    let rooms: [GideonRoomAvailability.Room]
+    let selected: String?
+    let onPick: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(rooms) { r in row(r) }
+        }
+    }
+
+    private func row(_ r: GideonRoomAvailability.Room) -> some View {
+        let isSelected = selected == r.room && r.free
+        return Button { onPick(r.room) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 13)).foregroundStyle(isSelected ? NX.violetText : NX.mutedFg)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(RoomBooking.label(r.room)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        if let n = r.capacity { Text("· " + String(format: T("%d seats"), n)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                    }
+                    if let busy = r.busy {
+                        Text(String(format: T("Booked by %@ until %@"), busy.by ?? T("someone"), GideonSlotClock.clock(busy.endsAt)))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(isSelected ? NX.violetText.opacity(0.06) : NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(isSelected ? NX.violetText : NX.border))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!r.free)
+        .opacity(r.free ? 1 : 0.6)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// The nearest free slots (same day, ±2 h) when no room is free: a chip moves the card to that time.
+struct GideonFreeSlotChips: View {
+    let slots: [GideonRoomAvailability.Slot]
+    let onPick: (GideonRoomAvailability.Slot) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(T("No room is free then. Nearest free times:")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(slots) { f in
+                        Button { onPick(f) } label: {
+                            Text("\(GideonSlotClock.clock(f.startsAt))–\(GideonSlotClock.clock(f.endsAt))").font(NXFont.text(12, .medium)).monospacedDigit()
+                                .foregroundStyle(NX.foreground)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(NX.card, in: Capsule())
+                                .overlay(Capsule().strokeBorder(NX.border))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// WIB clock and day text for the booking cards.
+enum GideonSlotClock {
+    static let wib = TimeZone(identifier: "Asia/Jakarta") ?? .current
+    static let hm: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
+        f.timeZone = wib
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static func date(_ iso: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: iso) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: iso)
+    }
+
+    static func clock(_ iso: String?) -> String {
+        guard let iso, let d = date(iso) else { return "" }
+        return hm.string(from: d)
+    }
+
+    /// "Mon 19 Oct · 14:00–15:00" (WIB).
+    static func when(_ startsAt: String, _ endsAt: String) -> String {
+        guard let s = date(startsAt), let e = date(endsAt) else { return "" }
+        let day = AppDateLocale.formatter("EEE d MMM", timeZone: wib).string(from: s)
+        return "\(day) · \(hm.string(from: s))–\(hm.string(from: e))"
     }
 }

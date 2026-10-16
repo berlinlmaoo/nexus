@@ -245,6 +245,22 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * One idempotency key per submit (16 Oct 2026), kept while the form says the same thing: a retry after a
+     * timeout or a second tap sends the same key and gets back the request already stored; a changed form is a
+     * new submit with a new key.
+     */
+    private var submitKey: Pair<String, String>? = null
+
+    private fun keyFor(cs: ComposerState): String {
+        val form = listOf(cs.type, cs.date.toString(), cs.leaveStart?.toString().orEmpty(), cs.leaveEnd?.toString().orEmpty(), cs.reason.trim(),
+            cs.attachment?.fileName.orEmpty(), (cs.attachment?.bytes?.size ?: 0).toString()).joinToString("|")
+        submitKey?.let { (f, k) -> if (f == form) return k }
+        val key = java.util.UUID.randomUUID().toString()
+        submitKey = form to key
+        return key
+    }
+
     fun submit(onFiled: () -> Unit) {
         val cs = _state.value.composer ?: return
         val rules = rules()
@@ -254,7 +270,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val loc = if (rules.needsLocation(cs.type) || cs.type == "PERMIT") cs.location else null
-                api.create(cs.type, cs.date.toString(), cs.reason, cs.attachment, loc?.lat, loc?.lng)
+                api.create(cs.type, cs.date.toString(), cs.reason, cs.attachment, loc?.lat, loc?.lng, idempotencyKey = keyFor(cs))
                 // A request for today holds the outside-the-office clock on the server the moment it
                 // exists (PENDING counts): the countdown in the notification goes now (iOS 8a36fd2).
                 if (cs.date == OfficeTime.today()) c.workTrail.excuseFiled()
@@ -273,7 +289,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         val from = cs.leaveStart ?: return@launch
         val to = cs.leaveEnd ?: from
         try {
-            api.create("LEAVE", from.toString(), cs.reason, null, null, null, endDate = to.toString())
+            api.create("LEAVE", from.toString(), cs.reason, null, null, null, endDate = to.toString(), idempotencyKey = keyFor(cs))
             if (!from.isAfter(OfficeTime.today())) c.workTrail.excuseFiled()
             _state.update { it.copy(composer = null) }
             load()

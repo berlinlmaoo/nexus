@@ -2,26 +2,15 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import prisma from "@/lib/prisma"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
-import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { updateRoomBookingSchema, validateBody } from "@/lib/validations"
-import { createInAppNotification, roomName } from "@/lib/notification-service"
-import { bi } from "@/lib/notification-text"
-import { formatBookingSlot } from "@/lib/room-booking-format"
-import { restorableDelete } from "@/lib/deletion-snapshot"
-import { bookingInclude, findRoomConflict, isRoomOverlapViolation, roomTakenBody } from "@/lib/room-booking"
+import { deleteRoomBooking, updateRoomBooking } from "@/lib/room-booking"
 
-/** A booking can be edited/deleted by its creator, or by a workspace MANAGER/BoD/One-Above-All. */
-async function canManageBooking(userId: string, workspaceId: string, createdById: string): Promise<boolean> {
-  if (createdById === userId) return true
-  const membership = await prisma.workspaceMember.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId } },
-    select: { role: true },
-  })
-  return isWorkspaceManagerRole(membership?.role ?? null)
-}
-
+/**
+ * PATCH/DELETE one booking. The rules (who may, the conflict guard and the database's exclusion constraint,
+ * the owner told when a manager changed it, the Audit copy on delete) live in lib/room-booking.ts, shared with
+ * GIDEON's move_room_booking / cancel_room_booking (16 Oct 2026). A booking can be edited/deleted by its
+ * creator, or by a workspace MANAGER/BoD/One-Above-All.
+ */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bookingId: string }> }) {
   try {
     const session = await auth()
@@ -36,74 +25,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
       return validation.error
     }
 
-    const workspaceIds = await getUserWorkspaceIds(session.user.id)
-    const existing = await prisma.roomBooking.findFirst({
-      where: { id: bookingId, workspaceId: { in: workspaceIds } },
-    })
-    if (!existing) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
-    }
-    if (!(await canManageBooking(session.user.id, existing.workspaceId, existing.createdById))) {
-      return NextResponse.json({ error: "Cuma pembuat booking atau manager yang bisa ubah booking ini." }, { status: 403 })
-    }
-
     const data = validation.data
-    const nextRoom = data.room ?? existing.room
-    const nextStart = data.startsAt ? new Date(data.startsAt) : existing.startsAt
-    const nextEnd = data.endsAt ? new Date(data.endsAt) : existing.endsAt
-    if (nextEnd <= nextStart) {
-      return NextResponse.json({ error: "End time must be after start time" }, { status: 400 })
-    }
-
-    const nextStatus = data.status ?? existing.status
-    if (nextStatus === "ACTIVE") {
-      const conflict = await findRoomConflict(workspaceIds, nextRoom, nextStart, nextEnd, bookingId)
-      if (conflict) {
-        return NextResponse.json(await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId), { status: 409 })
-      }
-    }
-
-    let booking
-    try {
-      booking = await prisma.roomBooking.update({
-        where: { id: bookingId },
-        data: {
-          ...(data.room !== undefined ? { room: data.room } : {}),
-          ...(data.title !== undefined ? { title: data.title.trim() } : {}),
-          ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
-          ...(data.startsAt !== undefined ? { startsAt: nextStart } : {}),
-          ...(data.endsAt !== undefined ? { endsAt: nextEnd } : {}),
-          ...(data.status !== undefined ? { status: data.status } : {}),
-        },
-        include: bookingInclude,
-      })
-    } catch (error) {
-      // A move raced another booking into the same slot: the database refused it (RoomBooking_no_overlap).
-      if (isRoomOverlapViolation(error)) {
-        return NextResponse.json(await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId), { status: 409 })
-      }
-      throw error
-    }
-
-    // Changed by somebody other than the owner (a manager) → the owner is told what happened.
-    if (session.user.id !== existing.createdById) {
-      const cancelled = booking.status !== "ACTIVE"
-      await createInAppNotification({
-        userId: existing.createdById,
-        type: "booking_changed",
-        ...bi(
-          [cancelled ? `${roomName(existing.room, "en")} booking cancelled` : `${roomName(booking.room, "en")} booking changed`, cancelled
-            ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was cancelled by a manager.`
-            : `${booking.title} is now ${formatBookingSlot(booking.startsAt, booking.endsAt, "en")} in ${roomName(booking.room, "en")}.`],
-          [cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`, cancelled
-            ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
-            : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`]
-),
-        link: "/room-booking",
-        push: true,
-      }).catch(() => null)
-    }
-    return NextResponse.json({ booking })
+    const result = await updateRoomBooking({
+      userId: session.user.id,
+      bookingId,
+      patch: {
+        ...(data.room !== undefined ? { room: data.room } : {}),
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.startsAt !== undefined ? { startsAt: new Date(data.startsAt) } : {}),
+        ...(data.endsAt !== undefined ? { endsAt: new Date(data.endsAt) } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+      },
+    })
+    if (!result.ok) return NextResponse.json(result.body, { status: result.status })
+    return NextResponse.json({ booking: result.booking })
   } catch (error) {
     console.error("Room booking PATCH error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
@@ -118,40 +54,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { bookingId } = await params
-    const workspaceIds = await getUserWorkspaceIds(session.user.id)
-    const existing = await prisma.roomBooking.findFirst({
-      where: { id: bookingId, workspaceId: { in: workspaceIds } },
-      select: { id: true, workspaceId: true, createdById: true, room: true, title: true, startsAt: true, endsAt: true },
-    })
-    if (!existing) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
-    }
-    if (!(await canManageBooking(session.user.id, existing.workspaceId, existing.createdById))) {
-      return NextResponse.json({ error: "Cuma pembuat booking atau manager yang bisa hapus booking ini." }, { status: 403 })
-    }
-
-    if (session.user.id !== existing.createdById) {
-      await createInAppNotification({
-        userId: existing.createdById,
-        type: "booking_changed",
-        ...bi(
-          [`${roomName(existing.room, "en")} booking deleted`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was deleted by a manager.`],
-          [`Booking ${existing.room} dihapus`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`]
-),
-        link: "/room-booking",
-        push: true,
-      }).catch(() => null)
-    }
-    // In the audit, and kept first so Control Room → Audit can restore it (refused there if the
-    // room has been booked for that time since).
-    await restorableDelete({
-      entityType: "room_booking", entityId: bookingId,
-      entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
-      workspaceId: existing.workspaceId, userId: session.user.id, request: _req,
-      metadata: { room: existing.room, createdById: existing.createdById },
-      meta: { open: { type: "room_booking", id: bookingId } },
-      remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
-    })
+    const result = await deleteRoomBooking({ userId: session.user.id, bookingId, request: _req })
+    if (!result.ok) return NextResponse.json(result.body, { status: result.status })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Room booking DELETE error:", error)

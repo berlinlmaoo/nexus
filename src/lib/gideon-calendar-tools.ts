@@ -2,8 +2,8 @@ import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { addDays, dayDiff, dayStartUtc, inScope, mondayOf, sundayOf, subtreeOf, wibDay, type CalItem } from "@/lib/calendar/core"
 import { buildCalendarItems, calendarCallerFor, extraPeople, holidaysBetween, loadStructure, loadTaskRows, ROW_CAP } from "@/lib/calendar/server"
-import { BOOKING_ROOMS, ROOM_CAPACITY, ROOM_EN, resolveRoomName } from "@/lib/room-booking-rooms"
-import { bookingInclude, roomAvailability } from "@/lib/room-booking"
+import { BOOKING_ROOMS, ROOM_EN, resolveRoomName } from "@/lib/room-booking-rooms"
+import { bookingInclude, roomAvailability, roomCapacities } from "@/lib/room-booking"
 import { dayOf, hm, humanDay, todayWib, wibAt } from "@/lib/gideon-dates"
 
 /**
@@ -135,7 +135,8 @@ export async function gideonListRoomBookings(actorId: string, input: Record<stri
   const today = todayWib(now)
   const { from, to, capped } = readRange(input, today, "today")
   const rooms = roomsFor(input.room)
-  const roomList = BOOKING_ROOMS.map((room) => ({ room, en: ROOM_EN[room] ?? room, capacity: ROOM_CAPACITY[room] ?? null }))
+  const capacity = await roomCapacities()
+  const roomList = BOOKING_ROOMS.map((room) => ({ room, en: ROOM_EN[room] ?? room, capacity: capacity[room] ?? null }))
   const base = { today, from, to, rangeCapped: capped, rooms: roomList }
   if (!(await isCompanyMember(actorId))) return { ...base, access: "none", bookings: [], note: NOT_COMPANY }
 
@@ -201,7 +202,7 @@ export async function gideonListRoomBookings(actorId: string, input: Record<stri
     bookings,
     ...(free.length ? { freeTime: free } : {}),
     ...(slot ? { slot } : {}),
-    note: "Times are WIB. This is read only: to book, use nexus_book_room.",
+    note: "Times are WIB. This is read only: to book, use nexus_book_room; to move or cancel one of these bookings, nexus_move_room_booking / nexus_cancel_room_booking with its id.",
   }
 }
 

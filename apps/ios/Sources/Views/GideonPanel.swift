@@ -747,12 +747,17 @@ struct GideonPanel: View {
         }
     }
 
-    /// A room booking has its own card with the room picker (GideonBookRoomCard); every other change is a diff.
+    /// A room booking has its own card with the room picker (GideonBookRoomCard), and so does moving or cancelling
+    /// one (GideonBookingChangeCard, 16 Oct 2026); every other change is a diff.
     @ViewBuilder private func proposalCard(_ p: GideonProposal) -> some View {
         if p.action == "book_room", let b = p.booking {
             GideonBookRoomCard(proposal: p, booking: b,
                                onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if p.action == "move_room_booking" || p.action == "cancel_room_booking", let c = p.bookingChange {
+            GideonBookingChangeCard(proposal: p, change: c,
+                                    onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
+                                    onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else {
             changeProposalCard(p)
         }
@@ -1325,13 +1330,15 @@ extension GideonPanel {
 struct GideonDecision: Identifiable {
     let proposal: GideonProposal
     let apply: Bool
-    /// book_room: the room and slot picked on the card.
+    /// book_room / move_room_booking: the room and slot picked on the card; cancel_room_booking: the booking id.
     var booking: GideonBookingChoice? = nil
     var id: String { proposal.id + (apply ? "-apply" : "-discard") }
     var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
     /// The picked room for a booking (the server's summary was written before the room was chosen).
     var message: String {
-        if let booking { return [RoomBooking.label(booking.room), proposal.booking?.title].compactMap { $0 }.joined(separator: " · ") }
+        if let booking, !booking.room.isEmpty {
+            return [RoomBooking.label(booking.room), proposal.booking?.title ?? proposal.bookingChange?.title].compactMap { $0 }.joined(separator: " · ")
+        }
         return proposal.summary ?? ""
     }
 }

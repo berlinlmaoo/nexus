@@ -88,6 +88,10 @@ class GideonContextTest {
         // A book_room Apply carries the room and slot picked on the card (16 Oct 2026).
         assertEquals("""{"decision":"apply","booking":{"room":"Studio","startsAt":"2026-10-19T07:00:00.000Z","endsAt":"2026-10-19T08:00:00.000Z"}}""",
             GideonReview.body(true, GBookingChoice("Studio", "2026-10-19T07:00:00.000Z", "2026-10-19T08:00:00.000Z")).toString())
+        // A move card adds the booking it moves; a cancel card sends that alone (16 Oct 2026).
+        assertEquals("""{"decision":"apply","booking":{"room":"Studio","startsAt":"2026-10-19T07:00:00.000Z","endsAt":"2026-10-19T08:00:00.000Z","bookingId":"bk1"}}""",
+            GideonReview.body(true, GBookingChoice("Studio", "2026-10-19T07:00:00.000Z", "2026-10-19T08:00:00.000Z", "bk1")).toString())
+        assertEquals("""{"decision":"apply","booking":{"bookingId":"bk1"}}""", GideonReview.body(true, GBookingChoice.cancel("bk1")).toString())
         assertTrue(GideonReview.carriesProposal(200)); assertTrue(GideonReview.carriesProposal(409))
         assertTrue(GideonReview.carriesProposal(410)); assertTrue(GideonReview.carriesProposal(422))
         assertFalse(GideonReview.carriesProposal(404)); assertFalse(GideonReview.carriesProposal(500))

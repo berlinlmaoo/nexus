@@ -59,3 +59,10 @@ day, and one slot's availability). Both are read only and company-workspace only
 (`src/lib/room-booking.ts`, `src/lib/gideon-book-room.ts`). It follows the approval modes: a card in "Always ask" and
 "Review before writing", direct only in "Don't ask" — and always a card when no single room was named, where the
 person picks the room. Apply re-checks the slot; the database also refuses an overlap.
+
+`nexus_move_room_booking` (action `move_room_booking`) and `nexus_cancel_room_booking` (action `cancel_room_booking`)
+move (new time and/or room) or cancel an existing booking as the asking user, through the same code as the Room
+Booking page's PATCH / DELETE (`updateRoomBooking` / `deleteRoomBooking` in `src/lib/room-booking.ts`): only a booking
+that user may change there. Same approval modes as `nexus_book_room`; the card shows the booking before and after. A
+move re-checks the slot on Apply (the database's exclusion constraint included) and keeps the card open with the
+nearest free slots when it was taken meanwhile. A released app that does not know these cards cannot apply them.

@@ -119,6 +119,8 @@ export async function POST(req: NextRequest) {
   ),
             link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
             push: true,
+            // Once per item and person, forever: a second run that got past the claim stores nothing.
+            dedupeKey: `escalation|${kind}|${id}|${b.userId}`,
           }).catch(() => null)),
           createInAppNotification({
             userId: managerId,
@@ -129,6 +131,7 @@ export async function POST(req: NextRequest) {
   ),
             link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
             push: true,
+            dedupeKey: `escalation|${kind}|${id}|${managerId}`,
           }).catch(() => null),
         ])
       }
