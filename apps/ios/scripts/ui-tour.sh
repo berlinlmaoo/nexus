@@ -270,6 +270,12 @@ run_app() {
   [ "$what" != safari ] && collect "$export_dir" tour- "$OUT/$platform" "$platform" $rc
   [ "$what" != app ] && collect "$export_dir" safari- "$OUT/web-mobile" "web mobile (Safari)" $rc
   [ "$KEEP_XCRESULT" = 1 ] || rm -rf "$result" "$WORK/$platform-attachments" "$direct_dir"
+  # Shut this simulator down before the next phase: an idle iPad simulator left running through the Mac
+  # build doubled the load (owner, 16 Oct 2026). Only the simulator this run booted; the Mac phase has none.
+  if [ -n "${udid:-}" ]; then
+    xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
+    xcrun simctl list devices booted 2>/dev/null | grep -q Booted || osascript -e quit app Simulator >/dev/null 2>&1 || true
+  fi
 }
 
 # suspects <dir>: different screens with byte-identical first pictures = a route or tap that did not go
