@@ -41,7 +41,7 @@ import {
   Inbox,
   LayoutGrid,
   List,
-  MoreVertical,
+  MoreHorizontal,
   Plus,
   Search,
   SlidersHorizontal,
@@ -1010,7 +1010,7 @@ function FolderSection({ folder, count, collapsed, onToggle, actions, depth = 0,
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label={t("More for {name}", { name: folder.name })}>
-                <MoreVertical className="h-4 w-4" />
+                <MoreHorizontal className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">

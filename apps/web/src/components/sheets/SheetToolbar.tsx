@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import { createPortal } from "react-dom";
 import {
   AlignCenter, AlignLeft, AlignRight, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart,
-  Bold, ChartColumn, DecimalsArrowLeft, DecimalsArrowRight, EllipsisVertical, Funnel, Italic, Link2, ListFilter,
+  Bold, ChartColumn, DecimalsArrowLeft, DecimalsArrowRight, MoreHorizontal, Funnel, Italic, Link2, ListFilter,
   MessageSquarePlus, Minus, PaintBucket, PaintRoller, Percent, Plus, Printer, Redo2, RemoveFormatting, Search, Sigma,
   Strikethrough, TableCellsMerge, TableCellsSplit, Undo2,
 } from "lucide-react";
@@ -322,7 +322,7 @@ function OverflowRow({ label, moreLabel, groups }: { label: string; moreLabel: s
               moreAt && "bg-muted text-foreground",
             )}
           >
-            <EllipsisVertical className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
         </>
       )}
