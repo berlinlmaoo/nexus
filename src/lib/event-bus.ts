@@ -5,9 +5,46 @@ import { EventEmitter } from "events"
 // API routes publish events here; the socket server subscribes
 // and broadcasts to connected clients.
 
-const globalForBus = globalThis as unknown as { __eventBus?: EventEmitter }
+// Blue-green (race audit 16 Oct 2026, M19): two app processes share one database and a socket is attached to
+// only one of them, so an event emitted in one process never reached the sockets of the other (a write served
+// by the old slot just after a switch, or by the new slot while tabs were still on the old one). Every
+// BUS_EVENTS emit is therefore also handed to the cross-process bridge (lib/realtime-bridge.ts, Postgres
+// NOTIFY), which re-delivers it in the OTHER process with `deliverRemote`. A socket lives in exactly one
+// process, so each client still gets each event once. Nothing is published until the bridge installs its
+// hook (instrumentation.ts): tests and scripts stay in-process.
+type BusPublish = (event: string, data: unknown) => void
 
-export const eventBus: EventEmitter = globalForBus.__eventBus ?? new EventEmitter()
+const globalForBus = globalThis as unknown as { __eventBus?: BusEmitter; __busPublish?: BusPublish | null }
+
+const BRIDGED = new Set<string>()
+
+class BusEmitter extends EventEmitter {
+  /** True while an event from the other process is delivered here: never published back. */
+  private remote = false
+
+  emit(event: string | symbol, ...args: unknown[]): boolean {
+    const delivered = super.emit(event, ...args)
+    const publish = globalForBus.__busPublish
+    if (publish && !this.remote && typeof event === "string" && BRIDGED.has(event)) {
+      try { publish(event, args[0]) } catch { /* the bridge never fails a write */ }
+    }
+    return delivered
+  }
+
+  /** Deliver an event published by another process to this process's listeners only. */
+  deliverRemote(event: string, data: unknown): void {
+    if (!BRIDGED.has(event)) return
+    this.remote = true
+    try { super.emit(event, data) } finally { this.remote = false }
+  }
+}
+
+export const eventBus: BusEmitter = globalForBus.__eventBus ?? new BusEmitter()
+
+/** Installed by lib/realtime-bridge.ts; null turns publishing off. */
+export function setBusPublisher(fn: BusPublish | null): void {
+  globalForBus.__busPublish = fn
+}
 
 if (!globalForBus.__eventBus) {
   eventBus.setMaxListeners(50)
@@ -55,3 +92,6 @@ export const BUS_EVENTS = {
   /** A form got a response (or lost one) → `project:<id>` ("form-responses-changed", ids only). */
   FORM_RESPONSES_CHANGED: "form-responses-changed",
 } as const
+
+// Every named event crosses processes (lib/realtime-bridge.ts).
+for (const name of Object.values(BUS_EVENTS)) BRIDGED.add(name)

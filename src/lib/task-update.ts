@@ -552,8 +552,18 @@ export async function applyTaskUpdate({
     existing.taskList.projectId,
     ...existing.taskProjects.map((taskProject) => taskProject.projectId),
   ]
+  // The row as it is NOW, not as this request wrote it (race audit 16 Oct 2026, M20): the side effects
+  // above take a while, and a concurrent edit that committed and announced itself meanwhile would otherwise
+  // be overwritten on every open board by this older snapshot arriving last. Web skips an event older
+  // (updatedAt) than what it holds (apps/web/src/lib/task-cache.ts).
+  const announced = Object.keys(updateData).length > 0
+    ? (await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { assignees: { include: { user: true } }, creator: true, taskList: true, _count: { select: { subtasks: true, comments: true } } },
+      }).catch(() => null)) ?? task
+    : task
   for (const projectId of Array.from(new Set(relatedProjectIds))) {
-    emitTaskUpdated(projectId, JSON.parse(JSON.stringify(task)))
+    emitTaskUpdated(projectId, JSON.parse(JSON.stringify(announced)))
   }
 
   fireAutomations()
