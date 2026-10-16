@@ -85,6 +85,11 @@ struct LegalRequestFormView: View {
     @State private var sentId: String?
     @State private var attempt = UUID().uuidString
     @Environment(\.horizontalSizeClass) private var hSize
+    /// The form's height and the page's: a form that fits ends with Send right under it, instead of ~220 pt of
+    /// empty page above a pinned bar (UI tour run 19, iPad R19-I-12). A longer one keeps Send pinned.
+    @State private var formHeight: CGFloat = 0
+    @State private var pageHeight: CGFloat = 0
+    private var sendFollowsForm: Bool { formHeight > 0 && pageHeight > 0 && formHeight + 110 <= pageHeight }
 
     var body: some View {
         ScrollView {
@@ -96,15 +101,20 @@ struct LegalRequestFormView: View {
             }
             .padding(20)
             .frame(maxWidth: 720, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
             .frame(maxWidth: .infinity)
+            if sendFollowsForm, let info = formInfo {
+                sendBar(info).frame(maxWidth: 720).frame(maxWidth: .infinity)
+            }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
         .scrollDismissesKeyboard(.interactively)
         // The sheet is shorter than the form on a Mac: Attachments and Send sat below its edge with nothing
         // saying the page went on (UI tour run 12, MC4). The indicator shows once on open, and Send stays
         // pinned under the scrolling fields.
         .scrollIndicatorsFlash(onAppear: true)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let info = formInfo {
+            if !sendFollowsForm, let info = formInfo {
                 sendBar(info)
             }
         }
@@ -171,8 +181,14 @@ struct LegalRequestFormView: View {
                 }
                 LegalFormRow(label: T("Document type"), required: true, error: errors["templateId"]) {
                     if companyId == nil {
+                        // Reads as disabled: a dashed outline on a muted fill, no input chrome (UI tour run 19, Mac R19-M-11).
                         Text(T("Pick the company first")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity, alignment: .leading).legalInput()
+                            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                            .accessibilityAddTraits(.isStaticText)
                     } else if list.isEmpty {
                         Text(T("Legal has no document types for this company yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     } else {
@@ -258,7 +274,7 @@ struct LegalRequestFormView: View {
                 LegalFormRow(label: T("Related project or deal")) {
                     LegalLinkButton(value: link, placeholder: T("None"), ownAccess: true) { link = $0 }
                 }
-                LegalFormRow(label: T("Attachments"), hint: String(format: T("PDF, Word or photos (JPG, PNG). Up to %d files, 50 MB each."), 5)) {
+                LegalFormRow(label: T("Attachments"), hint: String(format: T("PDF, Word or photos (JPG, PNG). Up to %d files, 50 MB each."), 5).replacingOccurrences(of: "50 MB", with: "50\u{00A0}MB")) {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(files.enumerated()), id: \.offset) { i, f in
                             HStack(spacing: 8) {

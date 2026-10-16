@@ -275,14 +275,23 @@ struct NexusChip: View {
     }
 }
 
-/// Canonical section header — the small UPPERCASE muted label above a card/group.
+/// Canonical section header — the small muted label above a card/group, in sentence case.
 /// Single source of truth so every screen spaces it identically (was hand-rolled 30+ times).
+/// Since UI tour run 19 (decision 1, R19-B-15 / R19-I-32) no uppercase eyebrows: a label given in capitals
+/// ("THIS PERIOD", "EMAIL") is shown in sentence case.
 struct SectionLabel: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text.uppercased())
-            .font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+        Text(Self.sentence(text))
+            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+    }
+
+    /// "SHIFT & DAY-OFF ALLOWANCE" → "Shift & day-off allowance"; mixed case is left alone.
+    static func sentence(_ s: String) -> String {
+        guard s.contains(where: \.isLetter), s == s.uppercased(), s.count > 3 else { return s }
+        let lower = s.lowercased()
+        return lower.prefix(1).uppercased() + lower.dropFirst()
     }
 }
 
@@ -375,6 +384,26 @@ struct PageTopInsetReader: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.top } action: { _, top in inset = top }
+        } else {
+            content
+        }
+    }
+}
+
+/// A row under a `StickyInPageScroll` head: while any part of it is under the stuck head it is not drawn, so the
+/// head never sits on a sliced row ("0/14" and name halves under the attendance day row, an avatar sliver under
+/// "Who's working on what"; UI tour run 19, iPhone R19-I-05 / R19-I-31, iPad R19-I-11, Mac R19-M-04). The page
+/// shows whole rows under the head and a row's height of card at most. `head`: the stuck head's height.
+struct HiddenUnderStickyHead: ViewModifier {
+    let head: CGFloat
+    @Environment(\.pageScrollTopInset) private var top
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), head > 0 {
+            let top = self.top, head = self.head
+            content.visualEffect { view, proxy in
+                let f = proxy.frame(in: .scrollView(axis: .vertical))
+                return view.opacity(f.minY < top + head - 0.5 && f.maxY > top ? 0 : 1)
+            }
         } else {
             content
         }

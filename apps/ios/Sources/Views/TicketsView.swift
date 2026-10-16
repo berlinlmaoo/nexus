@@ -276,6 +276,7 @@ struct TicketsView: View {
     /// The page scroll's top inset and the wide table's height, for its pinned column heads (R18-M-09).
     @State private var pageTop: CGFloat = 0
     @State private var tableH: CGFloat = 0
+    @State private var headH: CGFloat = 0
     /// BoD: the queues (Inbox → In review → All). Everyone else: their tickets by status.
     private var filters: [String] { isBod ? ["OPEN", "IN_REVIEW", "ALL"] : ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"] }
     private func count(_ f: String) -> Int {
@@ -357,7 +358,7 @@ struct TicketsView: View {
         }
         .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() }.environment(auth).environment(router) }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
-        // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row
+        // reporter shown (only to the board and the reporter) and the ordering, so a locally-invented row
         // would differ from the one everybody else sees.
         .sheet(isPresented: $showCreate) { NewTicketSheet { await load() }.environment(auth).environment(router) }
     }
@@ -449,6 +450,7 @@ struct TicketsView: View {
                 .background(NX.card)
                 .overlay(alignment: .bottom) { Divider().overlay(NX.border) }
                 .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headH = $0 }
                 // Pinned under the page top while the rows scroll, so a scrolled page still says which column
                 // is which (UI tour run 18, R18-M-09).
                 .modifier(StickyInPageScroll(limit: max(0, tableH - 100)))
@@ -464,6 +466,7 @@ struct TicketsView: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
+                .modifier(HiddenUnderStickyHead(head: wide ? headH : 0))
             }
         }
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -502,7 +505,8 @@ struct TicketsView: View {
                     if let r = t.reporter {
                         AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20)
                     }
-                    Text(t.reporter?.name ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    // No anonymous tickets (owner, 16 Oct 2026): a missing reporter is someone who left.
+                    Text(t.reporter?.name ?? T("Former member")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: Col.from, alignment: .leading)
@@ -581,13 +585,20 @@ struct TicketsView: View {
             }
             markers(t)
             HStack(spacing: 8) {
+                // Meta in neutral chips, so the status is the one accent on the card; the reply count as the web's
+                // Replies column (UI tour run 19, R19-I-33).
                 if let c = t.category, !c.isEmpty {
-                    NexusChip(text: ticketCategoryName(c), tone: .accent, systemImage: "tag.fill")
+                    NexusChip(text: ticketCategoryName(c), tone: .neutral, systemImage: "tag.fill")
                 }
                 if let n = t.reporter?.name, !n.isEmpty {
                     Label(n, systemImage: "person.fill").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
+                if let m = t.messageCount {
+                    Label(AppNumber.int(m), systemImage: "bubble.left").font(NXFont.text(13)).monospacedDigit()
+                        .foregroundStyle(NX.mutedFg)
+                        .accessibilityLabel(String(format: T("%d replies"), m))
+                }
                 // The date the list is SORTED by. Stamping the row with `createdAt` instead made a
                 // correctly ordered list look shuffled as soon as an old ticket got a new reply.
                 if let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) {
@@ -612,7 +623,7 @@ struct TicketsView: View {
                 // rather than two statuses (owner rule 13 Oct 2026; UI tour run 11, IP-1). One chip style
                 // everywhere the marker appears.
                 if t.showsDecisionMarker {
-                    NexusChip(text: T("Correction awaiting decision"), tone: .accent,
+                    NexusChip(text: T("Correction awaiting decision"), tone: .neutral,
                               systemImage: "calendar.badge.clock")
                 }
                 if t.hasGideonReply { gideonMarker }
@@ -631,8 +642,8 @@ struct TicketsView: View {
             Text(T("GIDEON replied")).font(NXFont.text(11, .bold))
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .foregroundStyle(NX.violetText)
-        .background(NX.violetText.opacity(0.16), in: Capsule())
+        .foregroundStyle(NX.mutedFg)
+        .background(NX.muted, in: Capsule())
     }
 
     /// A decision nobody has made outranks everything else in the queue; inside each group the

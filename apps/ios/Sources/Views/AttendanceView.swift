@@ -207,11 +207,9 @@ struct AttendanceView: View {
                                         canReview: today?.canReviewAttendanceRequests ?? false,
                                         ready: today != nil || !loading)
                             .id(Self.crewBoardAnchor)
-                        if today?.canManageAttendance == true {
-                            // The web page's Employment start date section (iPad / Mac; UI tour run 15, Q-IB8).
-                            if hSize == .regular { EmploymentStartCard() }
-                            OfficesCard()
-                        }
+                        // The employment start date is set per person in Control Room › Users now (owner, 16 Oct
+                        // 2026), no longer as a crew list here.
+                        if today?.canManageAttendance == true { OfficesCard() }
                     }
                     .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                     .padding(.vertical, isRoot ? 24 : 16)
@@ -468,8 +466,12 @@ struct AttendanceView: View {
             GridRow {
                 FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                               helper: dayOffHelper, tint: NX.warning)
-                FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
-                              helper: T("This month's public\u{2011}holiday allowance"), tint: Color(hex: "#fb7185"))
+                // No "0/0 used", which read like a bug (decision 10 of run 19, R19-B-13).
+                let noHolidays = today?.redDateQuota == 0 && (today?.redDateUsedThisMonth ?? 0) == 0
+                FunMetricCard(icon: "calendar", label: T("Public holidays"),
+                              value: noHolidays ? T("None this month") : Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
+                              helper: noHolidays ? T("No public holidays this month") : T("This month's public\u{2011}holiday allowance"),
+                              tint: Color(hex: "#fb7185"))
             }
         }
     }
@@ -574,8 +576,9 @@ struct AttendanceView: View {
         }
         // Location-free and not in yet: no office to measure against, so not "Checking where you are…".
         // The web's wording before check-in, everywhere (UI tour run 17, decision 7).
+        // The Offices tile describes the offices, not a third "Ready to check in" (UI tour run 19, R19-B-10).
+        if showsOfficeCount { return T("Where you can check in") }
         if locationFree { return T("Ready to check in") }
-        if showsOfficeCount { return T("Ready to check in") }
         if let n = nearby {
             return n.inside
                 ? T("You're inside this office area")
@@ -1145,8 +1148,10 @@ struct AttendanceView: View {
         // (UI tour run 14, P-M3).
         // The card under the map already says "Check in from your phone": said once (UI tour run 17,
         // R17-M-11, decision 9), the chip gives the day's state like every other platform.
+        // Mac: "Not checked in yet", a state; "Ready to check in" invited a check-in the Mac cannot do, and said it a
+        // third time beside Today's status (UI tour run 19, R19-B-10).
         #if targetEnvironment(macCatalyst)
-        return T("Ready to check in")
+        return T("Not checked in yet")
         #else
         // Ready only once it is known where the person is: "Ready to check in" beside "Finding you…"
         // contradicted itself (UI tour run 15, Q-IB7).
@@ -1526,7 +1531,8 @@ struct FunMetricCard: View {
                 .padding(.bottom, 10)
             // The label first and small, the answer second and large: the eye lands on the number,
             // and the word above it says what the number is about.
-            Text(label.uppercased()).font(NXFont.text(10, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
+            // A label in sentence case, not an uppercase eyebrow (decision 1 of run 19, R19-I-32 / R19-B-15).
+            Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Text(value).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(2).minimumScaleFactor(0.6).fixedSize(horizontal: false, vertical: true)
@@ -1743,7 +1749,7 @@ struct StreakBoardCard: View {
         return ProjDate.cal.date(byAdding: .month, value: monthOffset, to: base) ?? base
     }
     private var monthKey: String { ProjDate.fmt("yyyy-MM").string(from: monthDate) }
-    private var monthLabel: String { ProjDate.fmt("MMMM yyyy").string(from: monthDate) }
+    private var monthLabel: String { AppDateLocale.monthTitle(monthDate) }
     /// The attendance PERIOD this board covers: the 28th of the previous month through the 27th of
     /// this one, which is what payroll counts and what the server returns for `month=`.
     ///
@@ -2234,7 +2240,11 @@ struct StreakBoardCard: View {
                 // — timed tries, then measuring where today's column was — never held on the phone, so
                 // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
                 // from anything that has to happen after layout. The tries below only centre it.
-                .defaultScrollAnchor(daysAnchor)
+                // iOS 18: the anchor places the FIRST offset only. By default it also re-applied on every content
+                // size change (the rows, then the pills column loading), which put the strip back at today's
+                // fraction of the period, mid-day, after the whole-day scroll: half a MON 12 column at the left,
+                // a MON 19 sliver at the right (UI tour run 19, iPhone R19-I-02, iPad R19-I-05).
+                .modifier(InitialScrollAnchor(anchor: daysAnchor, realign: { alignLeadDay(proxy) }))
                 // The day flush with the strip's left edge, by identity: the strip changes width after the
                 // first scroll (the members, then the iPad / Mac pills column load and the day width follows),
                 // and a position kept in points then sat mid-day, so both edges cut a column ("N" of SUN 11,
@@ -2253,7 +2263,7 @@ struct StreakBoardCard: View {
                 .onChange(of: periodDays) { _, _ in alignLeadDay(proxy) }
             }
             VStack(alignment: .trailing, spacing: gap) {
-                Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                Text(T("Score")).font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: headerH, alignment: .bottomTrailing)
                     .background(NX.card)
@@ -2264,7 +2274,13 @@ struct StreakBoardCard: View {
             // The web board's per-person pills, "0/4 days off" and "−590 XP" (managers, iPad / Mac; Q-IB8).
             if webTools && !deductions.isEmpty {
                 VStack(alignment: .leading, spacing: gap) {
-                    stickyBand(width: Self.pillsW)
+                    // The pills' column named like Score beside it (UI tour run 19, R19-B-19).
+                    Text("\(T("Days off")) · XP").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: Self.pillsW, height: headerH, alignment: .bottomLeading)
+                        .background(NX.card)
+                        .modifier(StickyInPageScroll(limit: stickyLimit))
+                        .zIndex(1)
                     ForEach(shownMembers) { m in
                         HStack(spacing: 4) {
                             if let d = deductions[m.id] {
@@ -2278,6 +2294,7 @@ struct StreakBoardCard: View {
                             }
                         }
                         .frame(width: Self.pillsW, height: cell, alignment: .leading)
+                        .modifier(HiddenUnderStickyHead(head: headerH))
                     }
                 }
             }
@@ -2309,10 +2326,11 @@ struct StreakBoardCard: View {
                 // Two readable lines as on the web, 9 and 11 pt (they were 7 and 8; UI tour run 17, R17-B-11).
                 // A narrow day takes the weekday's first two letters rather than shrinking it.
                 VStack(spacing: 1) {
+                    // 11 pt, the floor for text (UI tour run 19, R19-B-19: 9 pt letters).
                     Text(cellW < 24 ? String(pd.weekdayLabel.prefix(2)) : pd.weekdayLabel)
-                        .font(.system(size: 9, weight: isToday ? .bold : .medium))
+                        .font(.system(size: 11, weight: isToday ? .bold : .medium))
                         .foregroundStyle(isToday ? NX.violetText : NX.mutedFg)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                     Text("\(pd.day)").font(.system(size: 11, weight: isToday ? .bold : .medium))
                         .foregroundStyle(isToday ? Color.white : NX.foreground.opacity(0.75))
                         .lineLimit(1).minimumScaleFactor(0.8)
@@ -2335,6 +2353,7 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: gap) {
             ForEach(shownMembers) { m in
                 Self.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
+                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2382,6 +2401,7 @@ struct StreakBoardCard: View {
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: cell, alignment: .trailing)
+                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2419,6 +2439,7 @@ struct StreakBoardCard: View {
                     }
                 }
                 .frame(height: cell)
+                .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2962,3 +2983,23 @@ private struct ExportLabelStyle: LabelStyle {
     }
 }
 
+
+
+/// `defaultScrollAnchor` for the first offset only (iOS 18), and a whole-day realignment whenever the content
+/// changes width; iOS 17 keeps the plain anchor (UI tour run 19, R19-I-02).
+struct InitialScrollAnchor: ViewModifier {
+    let anchor: UnitPoint
+    let realign: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .defaultScrollAnchor(anchor, for: .initialOffset)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentSize.width }) { old, new in
+                    if old != new { realign() }
+                }
+        } else {
+            content.defaultScrollAnchor(anchor)
+        }
+    }
+}

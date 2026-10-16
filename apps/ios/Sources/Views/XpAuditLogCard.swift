@@ -33,9 +33,10 @@ struct XpAuditLogCard: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "scroll").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
+            // The web's neutral grey tile (UI tour run 19, R19-I-30).
+            Image(systemName: "scroll").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.foreground)
                 .frame(width: 36, height: 36)
-                .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(T("XP log")).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)

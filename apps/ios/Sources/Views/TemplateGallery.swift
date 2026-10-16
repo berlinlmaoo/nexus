@@ -95,7 +95,9 @@ struct TemplateGallery: View {
                 Text(T("The project starts with default sections and opens when it's ready."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                // A small label under the sheet's title, as the web's: set larger and heavier it outranked "Create a
+                // new project" (UI tour run 19, R19-B-08).
+                Text(T("What is this project for?")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                 searchField
                 categoryChips
                 // Three across where the sheet allows, as the web: at 250 pt a Mac sheet held two, with an
@@ -435,6 +437,23 @@ private struct BlankPreview: View {
 
 private struct DashboardPreview: View {
     let kind: ProjectKind
+
+    private func miniMeter(_ label: String, _ fill: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(NXFont.text(8, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(NX.foreground.opacity(0.10))
+                    Capsule().fill(NX.foreground.opacity(0.75)).frame(width: g.size.width * fill)
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding(5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+    }
+
     var body: some View {
         if kind == .pipeline {
             VStack(spacing: 6) {
@@ -450,10 +469,12 @@ private struct DashboardPreview: View {
             }
             .frame(maxHeight: .infinity)
         } else if kind == .social {
-            // A line, like the report's engagement trend (the web draws this card as a line chart, F-07 / I-11).
+            // The web's two target meters over the engagement line: blank grey tiles said nothing (UI tour run 19,
+            // R19-I-22 / R19-B-08).
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
-                    ForEach(0..<2, id: \.self) { _ in RoundedRectangle(cornerRadius: 4).fill(NX.foreground.opacity(0.07)).frame(height: 20) }
+                    miniMeter(T("Engagement"), 0.62)
+                    miniMeter(T("Posts"), 0.31)
                 }
                 SocialSparkline(values: [3, 5, 4, 7, 6, 9, 8, 11])
             }

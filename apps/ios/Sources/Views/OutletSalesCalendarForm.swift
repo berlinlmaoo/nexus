@@ -62,7 +62,12 @@ struct OutletCalendarView: View {
             if !inMonth { Task { await store.show(month: String(d.prefix(7))) } }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
+                // Phone: the ◎ right beside its own number; in the corner of a 56 pt cell it touched the next
+                // day's number and read as that day's (UI tour run 19, R19-I-27).
+                HStack(alignment: .center, spacing: 2) {
+                    NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
+                    if ownTarget && !wide { NXMonthTargetMark(wide: false) }
+                }
                 if wide {
                     ForEach(list.prefix(2)) { e in
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
@@ -71,8 +76,10 @@ struct OutletCalendarView: View {
                             // One line and "…", as the web's chip: a chip must not grow its cell (UI tour run 17, iPad
                             // R17-I-11; decision 14 is for names in rows, not chips in a calendar cell). The day
                             // panel names the event in full.
+                            // Two short lines inside the cell's fixed height, so "ZZ temp night" is not "ZZ temp…" on a
+                            // portrait iPad (UI tour run 19, iPad R19-I-10); two chips still fit the 104 pt cell.
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(1).truncationMode(.tail)
+                                .lineLimit(2).truncationMode(.tail).minimumScaleFactor(0.9)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,7 +102,7 @@ struct OutletCalendarView: View {
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
-                if ownTarget { NXMonthTargetMark(wide: wide).padding(wide ? 7 : 4) }
+                if ownTarget && wide { NXMonthTargetMark(wide: wide).padding(7) }
             }
             .nxMonthCell(inMonth: inMonth, selected: selected)
             .contentShape(Rectangle())

@@ -515,9 +515,19 @@ struct SocialOverviewView: View {
         let month = p.engagementTargetMonth
         let hasDayTargets = store.hasOwnEngagementTarget(p.id)
         if let month, hasDayTargets, base?.rounded() != month.rounded() {
-            return String(format: T("Target to date · month target %@ (incl. day targets)"), SocialFormat.count(month))
+            return Self.phrases(String(format: T("Target to date · month target %@ (incl. day targets)"), SocialFormat.count(month)))
         }
-        return String(format: T("Target to date · month target %@"), SocialFormat.count(month))
+        return Self.phrases(String(format: T("Target to date · month target %@"), SocialFormat.count(month)))
+    }
+
+    /// Breaks only between phrases (at " · " and before "("), never inside one: "month / target 62.000" and
+    /// "(incl. / day targets)" wrapped mid-phrase (UI tour run 19, iPad R19-I-09, Mac R19-M-10).
+    static func phrases(_ line: String) -> String {
+        line.components(separatedBy: " · ").map { part in
+            part.components(separatedBy: " (").map { $0.replacingOccurrences(of: " ", with: "\u{00A0}") }
+                .joined(separator: " (")
+        }
+        .joined(separator: " · ")
     }
 
     private func stat(_ label: String, _ value: Double?) -> some View {
@@ -534,21 +544,20 @@ struct SocialOverviewView: View {
         OutletCard {
             Text(T("Posts published")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             ForEach(o.platforms) { p in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(p.name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Spacer(minLength: 8)
+                // One row as the web's: the platform, its bar, then "5 / 16 posts (31%)" (UI tour run 19, R19-B-06).
+                HStack(spacing: 10) {
+                    Text(p.name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                        .frame(width: 84, alignment: .leading)
+                    OutletMeter(pct: p.postsPct, height: 6)
+                    Group {
                         if let target = p.postsTargetToDate {
-                            Text(String(format: T("%@ / %@ posts"), SocialFormat.count(p.posts), SocialFormat.count(target)))
-                                .font(NXFont.text(13)).monospacedDigit()
-                            // The same % chip as the engagement cards above (run 14, N-21).
-                            if let pct = p.postsPct { SocialPctChip(pct: pct, size: 12) }
+                            Text(String(format: T("%@ / %@ posts"), SocialFormat.count(p.posts), SocialFormat.count(target))
+                                 + (p.postsPct.map { " (\($0)%)" } ?? ""))
                         } else {
                             Text(SocialFormat.posts(p.posts))
-                                .font(NXFont.text(13)).monospacedDigit()
                         }
                     }
-                    OutletMeter(pct: p.postsPct, height: 6)
+                    .font(NXFont.text(13)).monospacedDigit().lineLimit(1).fixedSize()
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -655,8 +664,11 @@ struct SocialCalendarView: View {
                                  muted: future, wide: wide)
                 // The plain dotted figure ("2.200"), never a compact "2.2k" (owner rule R14-WB-2, N-22 / P-M22).
                 if let e = day?.engagement {
-                    Text(SocialFormat.count(e)).font(NXFont.text(wide ? 14 : 11, .semibold)).foregroundStyle(NX.foreground)
+                    // Smaller, regular weight and muted under the bold day number, so "2" over "2.200" no longer
+                    // reads as one figure (UI tour run 19, R19-B-17).
+                    Text(SocialFormat.count(e)).font(NXFont.text(wide ? 12 : 10, .regular)).foregroundStyle(NX.mutedFg)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.top, 2)
                 }
                 // The posts line on every width, as the web and the caption under the grid say (UI tour run 17,
                 // iPhone R17-I-04, decision 13).
@@ -759,10 +771,14 @@ struct SocialDaySheet: View {
             .navigationTitle(OutletFormat.dayLong(date, thisYear: store.thisYear))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                // iPad / Mac with the footer: Cancel sits there beside Save, the same pattern as Platforms &
+                // targets and Report settings (UI tour run 19, R19-B-16); a read-only day keeps Close on top.
+                if !(wide && editable) {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                    }
+                    .nxPlainOnMac()
                 }
-                .nxPlainOnMac()
                 if editable && !wide {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: {
@@ -777,8 +793,10 @@ struct SocialDaySheet: View {
         // platform's footer reads as "more below" instead of cut (UI tour run 16, R16-B-19 / R16-I-24).
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if wide && editable && ready {
-                HStack {
+                HStack(spacing: 10) {
                     Spacer(minLength: 0)
+                    Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                        .buttonStyle(.nxBordered)
                     Button { Task { await save() } } label: {
                         HStack(spacing: 6) {
                             if saving { ProgressView().controlSize(.small) }
@@ -853,14 +871,14 @@ struct SocialDaySheet: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
             }
             ForEach(platforms) { p in platformSection(p) }
-            Section(T("What worked")) {
+            Section {
                 TextField(T("e.g. the 7 pm reel, a trending sound"), text: $worked, axis: .vertical)
                     .lineLimit(3...8).disabled(!editable)
-            }
-            Section(T("What didn't work")) {
+            } header: { SheetSectionTitle(T("What worked")) }
+            Section {
                 TextField(T("e.g. carousel posted too late"), text: $didntWork, axis: .vertical)
                     .lineLimit(3...8).disabled(!editable)
-            }
+            } header: { SheetSectionTitle(T("What didn't work")) }
             if store.canManage { targetsSection }
             if let by = day?.updatedBy, let at = OutletFormat.stamp(day?.updatedAt) {
                 Section {
@@ -893,7 +911,8 @@ struct SocialDaySheet: View {
                     ForEach(SocialMetric.allCases) { m in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(m.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                            TextField("—", text: figureBinding(p.id, m))
+                            // An empty box, not a "—" placeholder that read as an entered value (R19-B-14).
+                            TextField("", text: figureBinding(p.id, m))
                                 .keyboardType(.numberPad)
                                 .monospacedDigit()
                                 .padding(.horizontal, 10).frame(minHeight: 36)
@@ -928,7 +947,7 @@ struct SocialDaySheet: View {
             }
         } header: {
             HStack {
-                Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+                SheetSectionTitle(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
                 if wide {
                     Spacer(minLength: 8)
                     Text("\(T("Engagement")) \(engagementText)").monospacedDigit().textCase(nil)
@@ -1222,7 +1241,7 @@ struct SocialSettingsSheet: View {
                     .moveDisabled(true)
                 }
             } header: {
-                Text(String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)))
+                SheetSectionTitle(String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)))
             } footer: {
                 Text(T("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target."))
             }
@@ -1253,7 +1272,7 @@ struct SocialSettingsSheet: View {
                 }
                 .moveDisabled(true)
             } header: {
-                Text(T("Platforms"))
+                SheetSectionTitle(T("Platforms"))
             } footer: {
                 // The web's note on new platforms too (UI tour run 15, Q-IB14).
                 Text(T("Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers.")

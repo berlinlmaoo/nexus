@@ -19,6 +19,8 @@ struct AdminQuest: Decodable, Identifiable, Sendable {
     var teamIds: [String]? = nil
     /// It pointed at deleted teams and was moved to everyone.
     var teamsRetired: Bool? = nil
+    /// People it is for (owner, 16 Oct 2026, "per person"); empty = not per person.
+    var userIds: [String]? = nil
 }
 
 struct QuestUnitOption: Identifiable, Hashable { let id: String; let label: String }
@@ -42,10 +44,12 @@ enum QuestUnits {
         return out
     }
     /// Who a quest is for, as the web's quest list says it.
-    static func audience(_ q: AdminQuest, paths: [String: String]) -> String {
+    static func audience(_ q: AdminQuest, paths: [String: String], names: [String: String] = [:]) -> String {
+        let people = (q.userIds ?? []).map { names[$0] ?? T("Former member") }
         if let ids = q.unitIds, !ids.isEmpty {
-            return ids.map { paths[$0] ?? T("Deleted division") }.joined(separator: ", ")
+            return (ids.map { paths[$0] ?? T("Deleted division") } + people).joined(separator: ", ")
         }
+        if !people.isEmpty { return people.joined(separator: ", ") }
         if let teams = q.teamIds, !teams.isEmpty {
             return teams.count == 1 ? T("1 team") : String(format: T("%d teams"), teams.count)
         }
@@ -165,7 +169,9 @@ struct AdminView: View {
     private var tabs: [(title: String, id: String)] {
         // Through T() like the web's tab names (they were hard-coded, half English and half Indonesian).
         var t: [(String, String)] = [(T("Users"), "users"), (T("Attendance"), "attendance"),
-                                     (T("Audit log"), "audit"), (T("Quests"), "quests")]
+                                     (T("Audit log"), "audit")]
+        // Quests are made by BoD and up (owner, 16 Oct 2026); the server refuses a Manager.
+        if viewer.isBoD { t.append((T("Quests"), "quests")) }
         if viewer.canAnnounce {
             // Same gate as the web tab: BoD and One Above All, who are also the only ones who may change it.
             t.append((T("IP & Division Chart"), "org"))
@@ -622,6 +628,8 @@ struct AdminUsersSection: View {
 // MARK: - Quests admin
 
 struct AdminQuestsSection: View {
+    /// userId → name, for quests made for people.
+    @State private var memberNames: [String: String] = [:]
     let workspaceId: String?
     @State private var quests: [AdminQuest] = []
     @State private var loading = true
@@ -671,7 +679,7 @@ struct AdminQuestsSection: View {
                     Text("+\(q.xpReward ?? 0) XP").font(NXFont.text(11, .bold)).foregroundStyle(NX.success)
                     if let d = q.deadline, let dt = ProjDate.parse(d) { Text("· s/d \(ProjDate.dayLabel(dt))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
                 }
-                Text("· " + QuestUnits.audience(q, paths: unitPaths)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                Text("· " + QuestUnits.audience(q, paths: unitPaths, names: memberNames)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
             Spacer()
             Button { Task { await deleteQuest(q) } } label: {
@@ -691,6 +699,10 @@ struct AdminQuestsSection: View {
         }
         loading = false
         if let chart = try? await APIClient.shared.orgChart() { unitPaths = QuestUnits.paths(chart.units) }
+        if let roster = try? await APIClient.shared.roster() {
+            memberNames = Dictionary((roster.members ?? []).compactMap { m in m.userId.map { ($0, m.displayName) } },
+                                     uniquingKeysWith: { a, _ in a })
+        }
     }
 }
 
@@ -712,7 +724,12 @@ struct CreateQuestSheet: View {
     @State private var unitsFailed = false
     @State private var pickedUnits: Set<String> = []
 
-    private let types: [(String, String)] = [("task_count", T("Complete N tasks")), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent"), ("has_overdue", T("Has ≥N overdue (penalty)"))]
+    // No "Have ≥N overdue (penalty)": the quest penalty path is gone (owner, 16 Oct 2026).
+    private let types: [(String, String)] = [("task_count", T("Complete N tasks")), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent")]
+    /// People it is for (owner, 16 Oct 2026); with divisions too, someone in them OR picked here gets it.
+    @State private var people: [(id: String, name: String)] = []
+    @State private var pickedPeople: Set<String> = []
+    @State private var peopleQuery = ""
 
     var body: some View {
         NavigationStack {
@@ -743,6 +760,11 @@ struct CreateQuestSheet: View {
                                 UnitTreePicker(units: units, selection: $pickedUnits, disabled: unitsLoading)
                             }
                         }
+                        f(T("People")) {
+                            Text(T("(a quest for one person, or a few · with divisions too, someone in them OR picked here gets it)"))
+                                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                            peoplePicker
+                        }
                         f("DEADLINE") {
                             Toggle(isOn: $hasDeadline.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }.tint(NX.violetText)
                             if hasDeadline { DatePicker("", selection: $deadline, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
@@ -756,7 +778,51 @@ struct CreateQuestSheet: View {
             .navigationTitle("Quest baru").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .task { await loadUnits() }
+            .task { await loadPeople() }
         }
+    }
+
+    /// The picked people as removable chips, then a search over the workspace's members.
+    @ViewBuilder private var peoplePicker: some View {
+        if !pickedPeople.isEmpty {
+            FlowLayout(spacing: 6) {
+                ForEach(people.filter { pickedPeople.contains($0.id) }, id: \.id) { p in
+                    Button { pickedPeople.remove(p.id) } label: {
+                        HStack(spacing: 4) { Text(p.name).lineLimit(1); Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(NX.muted, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(format: T("Remove %@"), p.name))
+                }
+            }
+        }
+        TextField(T("Search people to add…"), text: $peopleQuery)
+            .font(NXFont.text(15)).padding(12)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+        let q = peopleQuery.trimmingCharacters(in: .whitespaces)
+        if !q.isEmpty {
+            let hits = people.filter { !pickedPeople.contains($0.id) && $0.name.localizedCaseInsensitiveContains(q) }.prefix(8)
+            VStack(spacing: 0) {
+                ForEach(Array(hits), id: \.id) { p in
+                    Button { pickedPeople.insert(p.id); peopleQuery = "" } label: {
+                        HStack { Text(p.name).font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "plus").foregroundStyle(NX.mutedFg) }
+                            .padding(.horizontal, 12).frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Divider()
+                }
+            }
+        }
+    }
+
+    private func loadPeople() async {
+        guard let roster = try? await APIClient.shared.roster() else { return }
+        people = (roster.members ?? []).compactMap { m in m.userId.map { (id: $0, name: m.displayName) } }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     /// The whole chart: the picker draws GROUP boxes as headings (they only arrange cards, never picked).
     private func loadUnits() async {
@@ -778,8 +844,10 @@ struct CreateQuestSheet: View {
         let dl: String? = hasDeadline ? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.string(from: deadline) }() : nil
         do {
             _ = try await APIClient.shared.createAdminQuest(workspaceId: workspaceId, title: title.trimmingCharacters(in: .whitespaces), requirementType: reqType, requiredCount: Int(count) ?? 5, xpReward: min(50, max(0, Int(xp) ?? 0)), deadline: dl,
-                                                              unitIds: Array(pickedUnits))
+                                                              unitIds: Array(pickedUnits), userIds: Array(pickedPeople))
             await onCreated(); dismiss()
+        } catch APIError.http(403, _) {
+            err = T("Only BoD and up can manage quests")
         } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the quest.") }
     }
 }

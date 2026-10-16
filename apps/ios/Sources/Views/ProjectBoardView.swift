@@ -641,9 +641,14 @@ struct ProjectDetailView: View {
             SidebarReopenButton()
             // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
             if isPresented {
+                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14).
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(NX.foreground)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
+                        .frame(width: 44, height: 44)
+                        .background(.regularMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border.opacity(0.7), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
@@ -863,25 +868,28 @@ struct ProjectDetailView: View {
     /// Since run 17 (web): the module tabs (Spreadsheet, Pages, Forms, Chat) open the tools row on the left,
     /// so the first row holds only Overview … Timeline, "+" and Add task.
     @ViewBuilder private var wideTabBar: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The width the bar is offered, read off a view that takes exactly that width. Measured on the bar
-            // itself it included the overflow of a tools row that did not fit, so the module tabs stayed in that
-            // row and pushed every project view ~190 pt wider than the detail column, clipped on both sides
-            // (UI tour run 18, iPad R18-I-01).
-            Color.clear.frame(height: 0)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
-            HStack(spacing: 8) {
-                wideTabs
-                if tabsOverflow { tabOverflowMenu(wideMenuItems) }
-                wideAddButton.fixedSize()
-            }
-            .padding(.trailing, 24)
-            HStack(spacing: 8) {
-                if modulesInToolsRow { moduleTabs }
-                Spacer(minLength: 8)
-                measuredTools
+        // The bar takes exactly the width it is offered (OfferedWidth), whatever its rows ask for. A tools row
+        // that grew once the views loaded (Filter, Sort, Group, search) made the bar wider than the detail
+        // column; the page's VStack then laid EVERY child out at that wider width, the bar's own width probe
+        // included, so the module tabs never left the tools row and every task view stayed ~190 pt too wide,
+        // clipped on both sides (UI tour runs 18 and 19, iPad R19-I-01 / R19-I-02). Overview has no such tools
+        // and always fitted.
+        OfferedWidth {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    wideTabs
+                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
+                    wideAddButton.fixedSize()
+                }
+                .padding(.trailing, 24)
+                HStack(spacing: 8) {
+                    if modulesInToolsRow { moduleTabs }
+                    Spacer(minLength: 8)
+                    measuredTools
+                }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
         .background(alignment: .topLeading) { moduleTabsMeasure }
         .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
         .onChange(of: toolsWidth) { _, _ in fitToolLabels() }
@@ -2400,25 +2408,28 @@ struct BoardCard: View {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
-                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, .bold))
-                    .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
+                // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
+                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
+                    .foregroundStyle(task.isDone ? NX.mutedFg.opacity(0.8) : NX.foreground)
                     // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
                     // PEKANB…" (UI tour run 15, Q-M11).
                     .strikethrough(task.isDone)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let p = task.priority, p.uppercased() != "NONE" {
-                    PriorityPill(priority: p)
-                }
             }
+            // The priority on the meta line with the values, as the web's card, not beside the title (R19-B-03).
             if hasMeta {
-                CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                HStack(alignment: .top, spacing: 6) {
+                    priorityPill
+                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                }
                 metaRow
             } else {
                 // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
                 // near-empty third row; a card with neither ends under its chips (UI tour run 16, R16-B-07 /
                 // R16-I-17: uneven empty bands under the chips).
                 HStack(alignment: .top, spacing: 8) {
+                    priorityPill
                     CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
                     if !task.assigneeAvatars.isEmpty {
                         Spacer(minLength: 0)
@@ -2436,6 +2447,10 @@ struct BoardCard: View {
                 .nexusShadowSoft()
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         }
+    }
+
+    @ViewBuilder private var priorityPill: some View {
+        if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p).fixedSize() }
     }
 
     /// Something besides the avatars for the bottom row: a due date, subtasks, a quest or comments.

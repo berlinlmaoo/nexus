@@ -103,8 +103,11 @@ struct AuditEntryDetail: Decodable, Sendable {
     let details: [Detail]
     /// A delete that kept a copy: what comes back and whether it already did. Absent on older servers.
     let restore: AuditRestoreDetail?
+    /// Whether the viewer may restore this entry: BoD and One Above All only (owner, 16 Oct 2026). nil on an
+    /// older server, where the button shows and the server answers.
+    let canRestore: Bool?
 
-    enum CodingKeys: String, CodingKey { case entry, title, changes, details, restore }
+    enum CodingKeys: String, CodingKey { case entry, title, changes, details, restore, canRestore }
 
     /// Lenient about the two lists: an entry with nothing to diff may arrive with them missing or
     /// null, and that must still open the sheet rather than fail it.
@@ -115,6 +118,7 @@ struct AuditEntryDetail: Decodable, Sendable {
         changes = (try? c.decodeIfPresent([Change].self, forKey: .changes)) ?? []
         details = (try? c.decodeIfPresent([Detail].self, forKey: .details)) ?? []
         restore = try? c.decodeIfPresent(AuditRestoreDetail.self, forKey: .restore)
+        canRestore = try? c.decodeIfPresent(Bool.self, forKey: .canRestore)
     }
 
     struct Entry: Decodable, Sendable {

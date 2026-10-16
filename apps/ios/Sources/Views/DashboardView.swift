@@ -263,6 +263,28 @@ struct DashboardView: View {
 
     private var singleColumn: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
+            if hSize == .regular {
+                // iPad / Mac mirror the web desktop Home: greeting with the level pill, GIDEON and the bell; the
+                // three tiles; XP rules; Calendar and Your schedule; the profile card; Messages; Leaderboard.
+                // No search field (the sidebar has one), quick tiles, pinned projects (the sidebar pins them),
+                // agenda strip, Attendance card or passkey nudge (Settings › Security) (decision 11 of run 19,
+                // R19-B-07). The iPhone Home stays as it is (owner rule).
+                wideGreeting
+                statCards
+                xpRulesCard
+                calendarAndSchedule
+                profileCard
+                messagesCard
+                leaderboardCard
+            } else {
+                phoneColumn
+            }
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    private var phoneColumn: some View {
+        Group {
             greeting
             attendanceBar
             levelCard
@@ -275,14 +297,7 @@ struct DashboardView: View {
             quickActions
             projectShortcuts
             dailyCalendarCard
-            // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
-            if hSize == .regular {
-                calendarAndSchedule
-                messagesCard
-                leaderboardCard
-            }
             profileCard
-            Color.clear.frame(height: 8)
         }
     }
 
@@ -315,66 +330,53 @@ struct DashboardView: View {
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
     private var wideColumns: some View {
         VStack(alignment: .leading, spacing: 18) {
-            greeting
+            wideGreeting
             HStack(alignment: .top, spacing: 18) {
-                // The web dashboard's order: the stat tiles, XP rules right under them, then the
-                // calendar; the person (level, profile) in the rail on the right.
+                // The web desktop Home (decision 11 of run 19, R19-B-07): the tiles, XP rules under them, then
+                // Calendar and Your schedule; the profile card, Messages and Leaderboard in the rail.
                 VStack(alignment: .leading, spacing: 18) {
-                    attendanceBar
-                    searchRow
                     statCards
                     xpRulesCard
-                    dailyCalendarCard
-                    calendarAndSchedule
-                    quickActions
-                    projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
-                    levelCard
                     profileCard
-                    if showPasskeyNudge { passkeyNudge }
                     messagesCard
                     leaderboardCard
                 }
                 .frame(width: 340)
             }
+            // Calendar beside Your schedule across the page: in the left column of a default Mac window they
+            // stacked, the empty schedule ~320 pt tall for one line (UI tour run 19, Mac R19-M-07).
+            calendarAndSchedule
             Color.clear.frame(height: 8)
+        }
+    }
+
+    /// iPad / Mac: the greeting, then the level pill (once on the page, as the web's header), GIDEON and the bell.
+    private var wideGreeting: some View {
+        HStack(alignment: .center, spacing: 12) {
+            greeting
+            Spacer(minLength: 8)
+            Button { Haptics.tap(); toggleLevel(true) } label: {
+                Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(NX.accentBg, in: Capsule())
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .morphSource("level", in: morphSpace, store: morphFrames)
+            .opacity(activeLevel && morphShowModal ? 0 : 1)
+            gideonButton
+            bellButton
         }
     }
 
     /// Mac, very wide (full screen, sidebar hidden): the day's work, then projects and agenda, then
     /// the person.
-    private var threeColumns: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            greeting
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 18) {
-                    attendanceBar
-                    searchRow
-                    statCards
-                    quickActions
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 18) {
-                    dailyCalendarCard
-                    calendarAndSchedule
-                    projectShortcuts
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 18) {
-                    levelCard
-                    profileCard
-                    if showPasskeyNudge { passkeyNudge }
-                    xpRulesCard
-                    messagesCard
-                    leaderboardCard
-                }
-                .frame(width: 380)
-            }
-            Color.clear.frame(height: 8)
-        }
-    }
+    /// Mac, very wide: the same blocks as the two-column Home, so one Home on every wide window.
+    private var threeColumns: some View { wideColumns }
 
     // MARK: greeting
 
@@ -564,35 +566,38 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
 
-            // iPad / Mac: GIDEON beside the search field, as on the web's sidebar search; the phone keeps its
-            // floating button (owner rule: the iPhone Home layout stays as it is).
-            if hSize == .regular {
-                Button { Haptics.tap(); showGideon = true } label: {
-                    Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
-                        .overlay(
-                            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                                .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("GIDEON")
-                .help("GIDEON")
-            }
-
-            Button { Haptics.tap(); toggleBell(true) } label: {
-                ZStack(alignment: .topTrailing) {
-                    Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
-                        .overlay(Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(NX.foreground))
-                    if unread > 0 {
-                        Text("\(unread)").font(NXFont.text(9, .bold)).foregroundStyle(.white)
-                            .padding(4).background(NX.danger, in: Circle()).offset(x: 3, y: -3)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .morphSource("bell", in: morphSpace, store: morphFrames)
-            .opacity(activeBell && morphShowModal ? 0 : 1)
+            bellButton
         }
+    }
+
+    /// GIDEON beside the bell on iPad / Mac (the phone keeps its floating button: owner rule).
+    private var gideonButton: some View {
+        Button { Haptics.tap(); showGideon = true } label: {
+            Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
+                .overlay(
+                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("GIDEON")
+        .help("GIDEON")
+    }
+
+    private var bellButton: some View {
+        Button { Haptics.tap(); toggleBell(true) } label: {
+            ZStack(alignment: .topTrailing) {
+                Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
+                    .overlay(Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(NX.foreground))
+                if unread > 0 {
+                    Text("\(unread)").font(NXFont.text(9, .bold)).foregroundStyle(.white)
+                        .padding(4).background(NX.danger, in: Circle()).offset(x: 3, y: -3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .morphSource("bell", in: morphSpace, store: morphFrames)
+        .opacity(activeBell && morphShowModal ? 0 : 1)
     }
 
     // MARK: stat cards
@@ -834,7 +839,7 @@ struct DashboardView: View {
             }
             .opacity(morphReady ? 1 : 0)
             HStack(spacing: 10) {
-                levelStat(T("Streak"), "\(g?.streakCurrent ?? 0) 🔥")
+                levelStat(T("Streak"), "\(g?.streakCurrent ?? 0)")
                 levelStat(T("Quests claimed"), "\(g?.questsDone ?? 0)")
                 levelStat(T("Total XP"), AppNumber.int(g?.xp.totalXp ?? 0))
             }
@@ -1011,28 +1016,13 @@ struct DashboardView: View {
             if xpRulesOpen {
                 VStack(alignment: .leading, spacing: 18) {
                     Divider().overlay(NX.border)
-                    xpRulesSection(title: T("XP Penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
-                    xpRulesSection(title: T("XP Bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
-if !XpRules.tiers.isEmpty {
-                                        VStack(alignment: .leading, spacing: 6) {
-                        Text(T("Tier rewards (end of period)").uppercased())
-                            .font(NXFont.text(11, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
-                        ForEach(XpRules.tiers, id: \.label) { t in
-                            HStack(spacing: 10) {
-                                Text(t.range).font(NXFont.text(14, .black)).monospacedDigit()
-                                Text(t.label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
-                                Text(t.reward).font(NXFont.text(13, .semibold)).lineLimit(2)
-                                Spacer(minLength: 0)
-                            }
-                            .foregroundStyle(t.tone)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(t.tone.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.tone.opacity(0.25)))
-                        }
+                    xpRulesSection(title: T("XP penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
+                    xpRulesSection(title: T("XP bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(T("“Automatic” is worked out by the system from attendance. “Manual” comes from a quest or from BoD."))
+                        Text(T("Your level is this period's level: everyone starts at 1.000 XP on the 28th."))
                     }
-                    }
-                    Text(T("\"Automatic\" is calculated by the system from attendance & end of period. \"Manual\" is awarded by Head/HR/management based on their judgment."))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 14)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -1048,13 +1038,14 @@ if !XpRules.tiers.isEmpty {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Image(systemName: icon).font(.system(size: 10, weight: .bold))
-                Text(title.uppercased()).font(NXFont.text(11, .bold)).tracking(0.6)
+                // Sentence case, no uppercase eyebrow (decision 1 of run 19; the web's card).
+                Text(title).font(NXFont.text(13, .semibold))
             }
             .foregroundStyle(tone)
             ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
                 if i > 0 { Divider().overlay(NX.border.opacity(0.6)) }
                 HStack(alignment: .top, spacing: 10) {
-                    Text(r.xp).font(NXFont.text(14, .black)).monospacedDigit().foregroundStyle(tone)
+                    Text(T(r.xp)).font(NXFont.text(14, .black)).monospacedDigit().foregroundStyle(tone)
                         .frame(width: 84, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(T(r.rule)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
@@ -1263,7 +1254,7 @@ if !XpRules.tiers.isEmpty {
             HStack {
                 Text(T("Daily agenda")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
-                Text(ProjDate.fmt("MMMM yyyy").string(from: selectedDay).capitalized)
+                Text(AppDateLocale.monthTitle(selectedDay))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             // Whole days only: the chips share the card's width out evenly (as many as fit at 46 pt or
@@ -1349,7 +1340,8 @@ if !XpRules.tiers.isEmpty {
             HStack(spacing: 14) {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
-                    if let game { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
+                    // iPad / Mac: the level is the header's pill, said once (decision 11); the phone keeps it here.
+                    if let game, hSize != .regular { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
                     // "XP" like everything else on Home, on one line (UI tour run 14, N-37 / P-I16 / P-M10).
                     row(T("XP this period"), AppNumber.int(game?.xp.totalXp ?? 0))
                 }
@@ -1363,11 +1355,8 @@ if !XpRules.tiers.isEmpty {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-            // The phone's card names the person here; on iPad / Mac the greeting above already does, and the
-            // web card has no name under Edit profile (UI tour run 16, R16-B-14).
-            if hSize != .regular {
-                Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            }
+            // No name under Edit profile on any width, as on the web: on the phone it sat alone under the button,
+            // away from the avatar (UI tour run 19, iPhone R19-I-07).
         }
         .nexusCard()
     }
@@ -1379,7 +1368,8 @@ if !XpRules.tiers.isEmpty {
 
     private func row(_ label: String, _ value: String) -> some View {
         HStack(spacing: 12) {
-            SectionLabel(label).lineLimit(1).fixedSize()
+            // A field label in sentence case, not an uppercase eyebrow (UI tour run 19, R19-B-15, decision 1).
+            Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
             Text(value).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
     }
@@ -1469,13 +1459,13 @@ enum XpRules {
         Row(xp: "-25 XP", rule: "Offsite check-out rejected by your approver", note: "Per incident", auto: true),
         Row(xp: "-150 XP", rule: "No-show, no heads-up (absent)", note: "Per day", auto: true),
     ]
-    // No automatic bonus. The "+50 for a month without absence" and the Excellent/Good/Review tiers
-    // were retired on the server (src/lib/period-rewards.ts: "XP is now 100% quest-only, assigned
-    // by BoD"); the card kept promising them for months.
+    // Quests as they really are (owner, 16 Oct 2026; the web's XpRulesCard): made by BoD and up, for everyone,
+    // one person, chosen divisions or a set of tasks, worth the XP the quest sets. No more "+30 / +50 / +20".
     static let bonuses: [Row] = [
-        Row(xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false),
-        Row(xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false),
-        Row(xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false),
+        Row(xp: "Per quest", rule: "Finish a quest",
+            note: "Made by BoD and up, for everyone, one person, chosen divisions or a set of tasks. You get the XP the quest sets when you claim it.",
+            auto: false),
+        Row(xp: "± XP", rule: "Adjustment by BoD", note: "Up to 1.000 XP up or down each time, with who made it", auto: false),
     ]
     /// Empty on purpose — see `bonuses`. The section that draws these hides itself when there are none.
     static let tiers: [Tier] = []

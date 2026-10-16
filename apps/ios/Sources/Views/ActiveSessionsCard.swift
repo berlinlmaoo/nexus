@@ -369,7 +369,10 @@ struct ActiveSessionsCard: View {
                     // (run 15, R15-WM-9: one group put it inline, the others under the name).
                     Text(Self.nameText(g.name)).font(NXFont.text(13, .semibold)).lineLimit(2)
                     HStack(spacing: 6) {
-                        Text(T("{n} sessions").replacingOccurrences(of: "{n}", with: AppNumber.int(g.sessions.count)))
+                        // "29 other sessions" when this device has the same name above, so the two rows are not
+                        // read as one device listed twice (UI tour run 19, R19-I-38).
+                        let alsoThisDevice = groups.contains { $0.id.hasPrefix("current:") && $0.name == g.name }
+                        Text(T(alsoThisDevice ? "{n} other sessions" : "{n} sessions").replacingOccurrences(of: "{n}", with: AppNumber.int(g.sessions.count)))
                             .font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg).monospacedDigit()
                             .padding(.horizontal, 7).padding(.vertical, 2)
                             .background(NX.muted, in: Capsule())

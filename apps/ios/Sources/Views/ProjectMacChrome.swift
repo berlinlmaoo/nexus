@@ -279,3 +279,19 @@ extension ProjectTab {
         }
     }
 }
+
+/// Takes exactly the width it is offered and lays its content out at that width, whatever the content asks
+/// for. A stack lays every child out at its own final width, so one child that overflows (a row of fixed-size
+/// tools) widens all its siblings and the page is clipped on both sides (UI tour run 19, iPad R19-I-01).
+struct OfferedWidth: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let size = content.sizeThatFits(proposal)
+        return CGSize(width: proposal.width ?? size.width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}

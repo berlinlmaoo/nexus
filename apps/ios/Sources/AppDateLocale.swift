@@ -46,6 +46,25 @@ enum AppDateLocale {
         return formatter(thisYear ? "d MMM" : "d MMM yyyy", timeZone: timeZone).string(from: d)
     }
 
+    /// A month title: "October" in the current year, "January 2027" in any other (decision 2 of run 19,
+    /// R19-I-40: month titles hide the current year too, as every other date does).
+    static func monthTitle(_ d: Date, timeZone: TimeZone? = TimeZone(identifier: "Asia/Jakarta")) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        if let timeZone { cal.timeZone = timeZone }
+        let thisYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
+        return formatter(thisYear ? "LLLL" : "LLLL yyyy", timeZone: timeZone).string(from: d).capitalized(with: current)
+    }
+
+    /// `monthTitle` of a "yyyy-MM" (or "yyyy-MM-dd") key; the key itself when it does not parse.
+    static func monthTitle(key: String) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        f.dateFormat = "yyyy-MM"
+        guard let d = f.date(from: String(key.prefix(7))) else { return key }
+        return monthTitle(d)
+    }
+
     /// The weekday before the short date, the year again only outside the current one: "Wednesday 14 Oct",
     /// "Rabu 14 Okt", "Friday 5 Jan 2027" (UI tour run 12, IP1: the phone's Calendar day said
     /// "Wednesday, 14 Oct 2026"; the web writes "Wednesday 14 Oct").

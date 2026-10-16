@@ -1651,12 +1651,14 @@ struct APIClient {
     @discardableResult
     /// `unitIds`: IP & Division Chart units the quest is for (sub-units count too; empty = everyone). Servers
     /// from 13 Oct 2026; the retired teams are no longer offered.
-    func createAdminQuest(workspaceId: String, title: String, requirementType: String, requiredCount: Int, xpReward: Int, deadline: String?, unitIds: [String] = []) async throws -> Bool {
+    /// `userIds`: people it is for (owner, 16 Oct 2026); with units too, a person in them OR listed gets it.
+    func createAdminQuest(workspaceId: String, title: String, requirementType: String, requiredCount: Int, xpReward: Int, deadline: String?, unitIds: [String] = [], userIds: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/gamification/quests/admin", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["workspaceId": workspaceId, "title": title, "requirementType": requirementType, "requiredCount": requiredCount, "xpReward": xpReward]
         if let deadline { body["deadline"] = deadline }
         if !unitIds.isEmpty { body["unitIds"] = unitIds }
+        if !userIds.isEmpty { body["userIds"] = userIds }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
@@ -3511,6 +3513,19 @@ extension APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId, "date": date as Any])
         _ = try await run(req, decode: EmploymentStartSaved.self)
+    }
+
+    /// Whether this account may join a workspace with a code (owner, 16 Oct 2026): GET /api/workspaces/join.
+    func workspaceJoinStatus() async throws -> WorkspaceJoinStatus {
+        try await run(makeRequest("/api/workspaces/join"), decode: WorkspaceJoinStatus.self)
+    }
+
+    /// Joins the workspace of `code`; the personal workspace is deleted (POST /api/workspaces/join).
+    func joinWorkspace(code: String) async throws -> WorkspaceJoined {
+        var req = makeRequest("/api/workspaces/join", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["code": code])
+        return try await run(req, decode: WorkspaceJoined.self)
     }
 
     /// Day off, public holidays and XP per person for an attendance period (web board pills):

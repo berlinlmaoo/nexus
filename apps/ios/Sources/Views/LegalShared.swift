@@ -16,6 +16,19 @@ enum LegalLabels {
         return (parts.prefix(2) + ["…"] + parts.suffix(2)).joined(separator: "/")
     }
 
+    /// Shorter and shorter forms of a document number, folded only at "/" and always ending on its last two
+    /// parts, the sequence among them (decision 13 of run 19: "PKS/PATS-UNIV/…/2026/0…" lost the sequence,
+    /// iPad R19-I-03; "PATS/P…NIV/…" folded inside a part, R19-I-15).
+    static func numberForms(_ number: String) -> [String] {
+        let parts = number.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        var out = [number]
+        if parts.count > 4 { out.append((parts.prefix(2) + ["…"] + parts.suffix(2)).joined(separator: "/")) }
+        if parts.count > 3 { out.append((parts.prefix(1) + ["…"] + parts.suffix(2)).joined(separator: "/")) }
+        if parts.count > 2 { out.append((["…"] + parts.suffix(2)).joined(separator: "/")) }
+        if parts.count > 1 { out.append("…/" + (parts.last ?? "")) }
+        return out
+    }
+
     /// Text that never breaks inside "I/II/III" or a number like "PATS/PKS-UNIV": a word joiner after each
     /// slash and hyphen keeps the run on one line (UI tour run 16, R16-M-13 / R16-I-19 iPad).
     static func unbroken(_ text: String) -> String {
@@ -379,7 +392,15 @@ struct LegalSectionHeader<Trailing: View>: View {
     /// under the blurb (UI tour run 15, R15-I-23 / Q-IB24).
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if hSize == .regular {
+            // No title: the tab above already names the pane ("Templates" under "Templates"; UI tour run 19,
+            // iPhone R19-I-35); the blurb leads instead.
+            if hSize == .regular && title.isEmpty {
+                HStack(alignment: .center, spacing: 12) {
+                    subtitleText
+                    Spacer(minLength: 0)
+                    trailing()
+                }
+            } else if hSize == .regular {
                 HStack(alignment: .center, spacing: 12) {
                     titleText
                     Spacer(minLength: 0)
@@ -388,7 +409,7 @@ struct LegalSectionHeader<Trailing: View>: View {
                 subtitleText
             } else {
                 VStack(alignment: .leading, spacing: 3) {
-                    titleText
+                    if !title.isEmpty { titleText }
                     subtitleText
                 }
                 trailing()
@@ -739,13 +760,31 @@ struct LegalAmendsLine: View {
                     if let company { Text(company).lineLimit(1) }
                     Text(String(format: T("Amends %@"), LegalLabels.shortNumber(amends))).lineLimit(1).fixedSize()
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    if let company { Text(company).lineLimit(1) }
-                    Text(String(format: T("Amends %@"), LegalLabels.shortNumber(amends))).lineLimit(1).truncationMode(.middle)
+                ForEach(LegalLabels.numberForms(amends).dropFirst(2), id: \.self) { form in
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let company { Text(company).lineLimit(1) }
+                        Text(String(format: T("Amends %@"), form)).lineLimit(1).fixedSize()
+                    }
                 }
             }
         } else if let company {
             Text(company)
+        }
+    }
+}
+
+
+/// A document number in the widest form that fits on one line (`LegalLabels.numberForms`): folded only at
+/// "/", the sequence always shown.
+struct LegalNumberText: View {
+    let number: String
+    var font: Font = .system(size: 12, design: .monospaced)
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach(LegalLabels.numberForms(number), id: \.self) { form in
+                Text(verbatim: form).font(font).lineLimit(1).fixedSize()
+            }
+            Text(verbatim: LegalLabels.numberForms(number).last ?? number).font(font).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 }

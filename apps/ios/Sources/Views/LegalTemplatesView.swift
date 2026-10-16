@@ -20,7 +20,7 @@ struct LegalTemplatesPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                LegalSectionHeader(title: T("Templates"),
+                LegalSectionHeader(title: "",
                                    subtitle: T("Word files with {{PLACEHOLDERS}}. The form for a new document is made from them.")) {
                     // iPad / Mac: "Show archived" beside Upload, as on the web (UI tour run 15, Q-IB24); the
                     // upload arrow, not a document glyph.

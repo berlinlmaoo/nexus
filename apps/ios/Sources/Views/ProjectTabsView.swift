@@ -271,17 +271,21 @@ struct ListTab: View {
             }
             .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
             if !isCollapsed {
+                // "+ New task" right under the group's header, as the web List; an empty group shows only that
+                // row, no "No tasks" line (UI tour run 19, R19-I-17). Without Add it still says it is empty.
+                if let onAddTask {
+                    ListNewTaskRow { title in await onAddTask(lane.id, title) }
+                }
                 if (lane.tasks ?? []).isEmpty {
-                    Text(T("No tasks")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg.opacity(0.7))
-                        .padding(.horizontal, 8).padding(.vertical, 8)
+                    if onAddTask == nil {
+                        Text(T("No tasks")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                            .padding(.horizontal, 8).padding(.vertical, 8)
+                    }
                 } else {
                     let order = { (lane.tasks ?? []).map(\.id) }
                     ForEach(lane.tasks ?? []) { t in
                         row(t, laneId: lane.id, columns: columns, order: order)
                     }
-                }
-                if let onAddTask {
-                    ListNewTaskRow { title in await onAddTask(lane.id, title) }
                 }
             }
         }
@@ -491,9 +495,8 @@ struct TimelineTab: View {
         count = max(count, Int((chartWidth / dayW).rounded(.up)))
         let list = (0..<count).map { addDays(start, $0) }
         var months: [(label: String, span: Int)] = []
-        let mf = ProjLocaleDate.fmt("MMMM yyyy")
         for d in list {
-            let label = mf.string(from: d)
+            let label = AppDateLocale.monthTitle(d)
             if months.last?.label == label { months[months.count - 1].span += 1 } else { months.append((label, 1)) }
         }
         let ti = days(start, today)
@@ -554,9 +557,9 @@ struct TimelineTab: View {
     /// What the bar colours mean (the bars are coloured by priority; a lone red bar among blue ones read as
     /// an error; UI tour run 14, P-I15 / P-M13). Only the priorities that have a bar.
     @ViewBuilder private func legend(_ gs: [Group]) -> some View {
-        let used = Set(gs.flatMap { $0.rows.filter { $0.win != nil }.map { ($0.task.priority ?? "NONE").uppercased() } })
-        let shown = TaskPriorityName.all.filter { used.contains($0) }
-        if !shown.isEmpty {
+        // All four priorities, whichever have a bar in view (decision 8 of run 19: "Low" was missing, R19-I-20).
+        let shown = ["URGENT", "HIGH", "MEDIUM", "LOW"]
+        if gs.contains(where: { $0.rows.contains { $0.win != nil } }) {
             FlowLayout(spacing: 12) {
                 Text(T("Bar color by priority:")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 ForEach(shown, id: \.self) { p in
@@ -629,7 +632,7 @@ struct TimelineTab: View {
         let next = ax.days[i...].firstIndex { !cal.isDate($0, equalTo: first, toGranularity: .month) } ?? ax.days.count
         let room = CGFloat(next) * dayW - offsetX
         guard room >= 24 else { return nil }
-        return (ProjLocaleDate.fmt("MMMM yyyy").string(from: first), room)
+        return (AppDateLocale.monthTitle(first), room)
     }
 
     // MARK: left: Name | Duration | Progress
@@ -682,10 +685,10 @@ struct TimelineTab: View {
             guard let s = wins.map(\.start).min(), let e = wins.map(\.end).max() else { return 0 }
             return days(s, e) + 1
         }()
-        // Progress over the rows that have a bar; none = "—" (web: an undated row has no progress).
-        let dated = g.rows.filter { $0.win != nil }
-        let sum: Int = dated.reduce(0) { $0 + Self.progress($1.task.status) }
-        let pct: Int? = dated.isEmpty ? nil : Int((Double(sum) / Double(dated.count)).rounded())
+        // The mean over the tasks whose progress is measured (web tlProgress); none = "—". A task in progress
+        // has no measured progress: no status-derived 50% (UI tour run 19, R19-B-01, decision 8).
+        let measured = g.rows.compactMap { progress(of: $0.task) }
+        let pct: Int? = measured.isEmpty ? nil : Int((Double(measured.reduce(0, +)) / Double(measured.count)).rounded())
         return HStack(spacing: 0) {
             Button {
                 withAnimation(.snappy(duration: 0.2)) {
@@ -728,7 +731,7 @@ struct TimelineTab: View {
 
     private func leftTask(_ r: Row) -> some View {
         let t = r.task
-        let pct = Self.progress(t.status)
+        let pct = progress(of: t)
         return HStack(spacing: 0) {
             Button { onOpen(t.id) } label: {
                 HStack(spacing: 8) {
@@ -765,7 +768,7 @@ struct TimelineTab: View {
                 Text(r.win.map { Self.dayCount(days($0.start, $0.end) + 1) } ?? T("No date"))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
-                progressCell(r.win == nil ? nil : pct, tint: Self.progressTint(pct))
+                progressCell(pct, tint: pct.map(Self.progressTint) ?? NX.muted)
             }
         }
         .frame(height: rowH)
@@ -884,9 +887,9 @@ struct TimelineTab: View {
                 let before = x1 <= offsetX + 1
                 let after = x0 >= offsetX + viewport - 1
                 HStack(spacing: 0) {
-                    if before { arrowButton("arrow.left", r, w) { go(a) } }
+                    if before { arrowButton(before: true, r, w) { go(a) } }
                     Spacer(minLength: 0).allowsHitTesting(false)
-                    if after { arrowButton("arrow.right", r, w) { go(a) } }
+                    if after { arrowButton(before: false, r, w) { go(a) } }
                 }
                 .padding(.horizontal, 6)
                 .frame(height: rowH)
@@ -900,13 +903,22 @@ struct TimelineTab: View {
         }
     }
 
-    private func arrowButton(_ icon: String, _ r: Row, _ w: Win, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                .frame(width: 26, height: 26)
-                .background(NX.card, in: Circle())
-                .overlay(Circle().strokeBorder(NX.border))
-                .contentShape(Circle())
+    /// The web's dated pill, "‹ 4 Jul" before the range and "12 Nov ›" after it, not a bare arrow that said
+    /// nothing about when (UI tour run 19, R19-I-20 / R19-B-01, decision 8).
+    private func arrowButton(before: Bool, _ r: Row, _ w: Win, action: @escaping () -> Void) -> some View {
+        let tz = ProjDate.cal.timeZone
+        let day = AppDateLocale.shortDate(before ? w.end : w.start, timeZone: tz)
+        return Button(action: action) {
+            HStack(spacing: 4) {
+                if before { Image(systemName: "chevron.left").font(.system(size: 9, weight: .bold)) }
+                Text(day).font(NXFont.text(11, .medium)).lineLimit(1).fixedSize()
+                if !before { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
+            }
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 7).frame(height: 22)
+            .background(NX.muted, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
@@ -1018,14 +1030,25 @@ struct TimelineTab: View {
 
     // MARK: web rules
 
-    /// tlProgress: how far a status is (an empty bar for not started, not a red sliver).
-    static func progress(_ status: String?) -> Int {
-        switch (status ?? "").uppercased() {
-        case "DONE": return 100
-        case "IN_REVIEW": return 75
-        case "IN_PROGRESS": return 50
-        default: return 0
+    /// The web's tlProgress: the share of a task's subtasks that are done, else 100 for a done task, else nil
+    /// ("—": not measured). The app used to derive 50% from In Progress and 75% from In Review, numbers nobody
+    /// entered (UI tour run 19, R19-B-01, decision 8).
+    private func progress(of t: BoardTask) -> Int? {
+        if let c = subtaskTally[t.id], c.total > 0 { return Int((Double(c.done) * 100 / Double(c.total)).rounded()) }
+        return t.isDone ? 100 : nil
+    }
+
+    /// Done / all subtasks per parent task id, over every lane (the lanes include the subtasks).
+    private var subtaskTally: [String: (done: Int, total: Int)] {
+        var out: [String: (done: Int, total: Int)] = [:]
+        for t in lanes.flatMap({ $0.tasks ?? [] }) {
+            guard let p = t.parentId, !p.isEmpty else { continue }
+            var c = out[p] ?? (0, 0)
+            c.total += 1
+            if t.isDone { c.done += 1 }
+            out[p] = c
         }
+        return out
     }
 
     /// pctTone.
@@ -1223,7 +1246,9 @@ struct CalendarTab: View {
                         dayPanel
                     }
                     if !rest.isEmpty && (!emptyMonth || showUndated) { undatedBox(rest, leading: false).id("undated") }
-                }.padding(16)
+                }
+                // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
+                .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)
             }
         }
         // Today's day is picked on the current month, so the panel under the grid says what today holds,
@@ -1323,7 +1348,7 @@ struct CalendarTab: View {
     /// Web: the month on the left, then Today · ‹ · ›.
     private var header: some View {
         HStack(spacing: 2) {
-            Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+            Text(AppDateLocale.monthTitle(monthDate)).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(1)
             // "Plot by" rides in the month's row, a quiet menu: a purple chip on a row of its own added a
             // ~60 pt band (UI tour run 16, R16-B-09).
@@ -1387,8 +1412,9 @@ struct CalendarTab: View {
     private var weekdayRow: some View {
         NXMonthWeekdayRow(names: weekdayNames, wide: wideGrid)
     }
-    /// The days of the next month that complete the last week.
-    private var trailingDays: Int { (7 - (leadingBlanks + daysInMonth) % 7) % 7 }
+    /// The days of the next month that fill the grid to six weeks, as the web's (UI tour run 19, R19-I-19: five
+    /// rows here, six on the web).
+    private var trailingDays: Int { max(0, 42 - leadingBlanks - daysInMonth) }
     /// The day number of the previous month for a leading blank (-n … -1).
     private func previousMonthDay(_ blank: Int) -> Int {
         let prev = cal.date(byAdding: .month, value: -1, to: cal.date(from: comps) ?? monthDate) ?? monthDate

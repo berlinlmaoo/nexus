@@ -706,6 +706,12 @@ private struct AuditEntrySheet: View {
                     Text(restoreError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if detail?.canRestore == false {
+                    // Restore is BoD and One Above All only (owner, 16 Oct 2026): say so instead of a button the
+                    // server refuses.
+                    Text(T("Only BoD and One Above All can restore.")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
                 Button { confirmRestore = true } label: {
                     HStack(spacing: 6) {
                         if restoring {
@@ -722,6 +728,7 @@ private struct AuditEntrySheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(restoring)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         }

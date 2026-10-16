@@ -59,11 +59,12 @@ struct NXMonthDayNumber: View {
 }
 
 extension View {
-    /// A month-grid cell: joined hairlines, a navy outline when picked. A day outside the month has no fill,
-    /// only its grey number (`NXMonthDayNumber`), as on the web: the grey fill read as a rounded block inside
-    /// the square cell (UI tour run 17 R17-I-18, run 18 R18-I-03). `inMonth` stays for the callers' clarity.
+    /// A month-grid cell: joined hairlines, a navy outline when picked, a faint square fill outside the month.
     func nxMonthCell(inMonth: Bool, selected: Bool) -> some View {
         self
+            // The web's faint square fill on a day outside the month (bg-muted/30), the whole cell to its
+            // hairlines, never a rounded block (UI tour run 19, R19-I-19; run 18 R18-I-03).
+            .background { if !inMonth { Rectangle().fill(NX.muted.opacity(0.3)) } }
             .overlay(Rectangle().strokeBorder(NXMonthGrid.hairline, lineWidth: 0.5))
             .overlay { if selected { Rectangle().strokeBorder(NXMonthGrid.navy, lineWidth: 1.5) } }
     }
@@ -86,7 +87,8 @@ struct NXMonthTargetMark: View {
     var wide = false
     var body: some View {
         Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))
-            .foregroundStyle(NX.foreground.opacity(0.7))
+            // The legend's violet, so the mark and its legend entry read as one (UI tour run 19, R19-I-27).
+            .foregroundStyle(NX.violetText)
             .accessibilityHidden(true)
     }
 }

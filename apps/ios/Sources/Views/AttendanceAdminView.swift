@@ -47,7 +47,7 @@ enum MonthKey {
     }
     static func label(_ key: String) -> String {
         guard let d = fmt.date(from: key) else { return key }
-        return AppDateLocale.formatter("MMMM yyyy").string(from: d)
+        return AppDateLocale.monthTitle(d)
     }
 }
 

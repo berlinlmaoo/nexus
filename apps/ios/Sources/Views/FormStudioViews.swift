@@ -738,7 +738,8 @@ struct FormCanvasControl: View {
                     .padding(.horizontal, 9).padding(.vertical, 4)
                     .background(NX.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border))
-                Text(T("One or more files, up to 50 MB each")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                // "50 MB" never splits across lines (UI tour run 19, iPad R19-I-13).
+                Text(T("One or more files, up to 50 MB each").replacingOccurrences(of: "50 MB", with: "50\u{00A0}MB")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
@@ -817,8 +818,9 @@ struct FormAddQuestionMenu: View {
 struct FormPanelHint: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("Question settings").uppercased())
-                .font(NXFont.text(12, .semibold)).tracking(0.6).foregroundStyle(NX.mutedFg)
+            // A heading, not an uppercase eyebrow (decision 1 of run 19, R19-B-15).
+            Text(T("Question settings"))
+                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
             // "Tap" on an iPad, "Click" on a Mac (UI tour run 13, I-12).
             Text(PlatformWording.tapOrClick(
                 tap: "Tap a question to change its type, make it required, add logic or choose where its answer goes.",

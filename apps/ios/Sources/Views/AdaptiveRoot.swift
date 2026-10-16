@@ -447,12 +447,14 @@ struct SidebarRoot: View {
     /// Legal for anyone not invited to it, and the Calendar while the server's `flags.calendar` holds it back.
     private var navGroups: [(title: String?, screens: [NXScreen])] {
         let calendarOn = RemoteConfig.shared.calendar
+        // A group left with no rows goes with its header: no bare "Team" over nothing (owner, 16 Oct 2026).
         return NXScreen.groups.map { g in
             (g.title, g.screens.filter {
                 (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
-                    && ($0 != .legal || viewer.canAccessLegal)
+                    && ($0 != .legal || viewer.canAccessLegal) && ($0 != .admin || viewer.canAdminister)
             })
         }
+        .filter { !$0.1.isEmpty }
     }
 
     /// The sidebar itself: the docked column, and the same list floating over the page while it peeks.
@@ -539,6 +541,9 @@ struct SidebarRoot: View {
         // 13" iPad ended its nav under the account footer, "Pin a project to keep it here." half hidden on
         // every page (UI tour run 18, iPad R18-I-03; R17-I-06 and R16-I-14 before it).
         .listSectionSpacing(.compact)
+        // Group headers a little lower, so the last row clears the footer's divider by a margin and not ~2 pt
+        // (UI tour run 19, iPad R19-I-06).
+        .environment(\.defaultMinListHeaderHeight, 30)
         #endif
         // The list's end clears the fade above the footer, so its last row ("Pin a project to keep it here.")
         // is never left half under it (UI tour run 16, R16-I-14 iPad).
@@ -1033,7 +1038,9 @@ struct SidebarMoreBelow: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: Bool.self) { g in
-                g.contentOffset.y + g.containerSize.height < g.contentSize.height + g.contentInsets.bottom - 4
+                // Not the list's own 24 pt end margin: with only that left below, the fade lay over the last row
+                // ("Pin a project to keep it here." at ~1.5:1; UI tour run 19, iPad R19-I-06).
+                g.contentOffset.y + g.containerSize.height < g.contentSize.height + g.contentInsets.bottom - 28
             } action: { _, below in
                 moreBelow = below
             }

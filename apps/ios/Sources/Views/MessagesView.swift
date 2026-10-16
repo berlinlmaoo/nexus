@@ -397,7 +397,7 @@ struct ConvoRow: View {
     private var preview: String {
         guard let last = convo.lastMessage else { return T("No messages yet") }
         if last.isSystem { return last.systemSentence(meId: meId) }
-        if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("📷 Photo") }
+        if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("Photo") }
         return last.content
     }
 
@@ -837,7 +837,11 @@ struct ChatThreadView: View {
                                 if hasOlder && !messages.isEmpty { olderRow(proxy) }
                                 if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
                                 else if messages.isEmpty {
-                                    Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
+                                    // No emoji as decoration: the words and the way in (decision 4 of run 19, iPad R19-I-16).
+                                    EmptyState(icon: "bubble.left.and.bubble.right", title: T("No messages yet."),
+                                               actionTitle: T("Start a conversation"), actionIcon: "square.and.pencil",
+                                               action: { composerFocused = true }, compact: true)
+                                        .padding(.top, 40)
                                 }
                                 ForEach(messages) { m in
                                     Group {
@@ -1478,7 +1482,7 @@ struct ChatThreadView: View {
         if body.isEmpty {
             let isPicture = hasPicture || (q.attachmentUrl?.isEmpty == false)
                 || (q.attachmentType ?? "").lowercased().hasPrefix("image")
-            if isPicture { return T("📷 Photo") }
+            if isPicture { return T("Photo") }
             return q.attachmentType != nil ? T("📎 Attachment") : "…"
         }
         return body.count > 80 ? String(body.prefix(78)) + "…" : body

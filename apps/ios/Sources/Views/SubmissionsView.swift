@@ -428,8 +428,9 @@ struct SubmissionsView: View {
         }
         .scrollTargetBehavior(.viewAligned)
         // The column peeking in at the edge fades, so it reads as "more this way" (F-35); wide enough to
-        // read as a fade, not a cut (run 14, N-16).
-        .nxEdgeFade(40)
+        // read as a fade, not a cut (run 14, N-16). 72 pt as the project board's: at 40 the peeking "In Review"
+        // still read as cut fragments ("Re", "w"; UI tour run 19, R19-I-12).
+        .nxEdgeFade(72)
     }
 
     private func column(_ col: SubmissionColumn) -> some View {

@@ -755,6 +755,7 @@ private struct OverviewTeamCard: View {
 
     /// The rows' height under the head: how far the pinned head may travel.
     @State private var rowsHeight: CGFloat = 0
+    @State private var headHeight: CGFloat = 0
 
     var body: some View {
         if stats.people.isEmpty {
@@ -778,13 +779,14 @@ private struct OverviewTeamCard: View {
                     Divider().overlay(NX.border)
                 }
                 .background(NX.card)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headHeight = $0 }
                 .modifier(StickyInPageScroll(limit: rowsHeight - 40))
                 .zIndex(1)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(all ? stats.people : Array(stats.people.prefix(limit))) { p in
-                        row(p, maxOpen: maxOpen)
+                        row(p, maxOpen: maxOpen).modifier(HiddenUnderStickyHead(head: headHeight))
                     }
-                    if stats.unassigned > 0 { unassignedRow(maxOpen: maxOpen) }
+                    if stats.unassigned > 0 { unassignedRow(maxOpen: maxOpen).modifier(HiddenUnderStickyHead(head: headHeight)) }
                     if stats.people.count > limit {
                         OverviewLinkButton(title: all ? T("Show fewer") : OverviewMath.plural(stats.people.count - limit, "Show 1 more", "Show %d more")) {
                             all.toggle()
@@ -802,10 +804,13 @@ private struct OverviewTeamCard: View {
     }
 
     private func numbers<A: View, B: View, C: View>(_ a: A, _ b: B, _ c: C) -> some View {
+        // Each value centred under its column's head, the head centred over its column: right-aligned, a single
+        // digit sat ~20 pt off the middle of "Open" and the Done column ended short of its wider head (UI tour
+        // run 19, R19-I-15).
         HStack(spacing: 6) {
-            a.frame(width: 44, alignment: .trailing)
-            b.frame(width: 52, alignment: .trailing)
-            c.frame(width: 92, alignment: .trailing)
+            a.frame(width: 44, alignment: .center)
+            b.frame(width: 52, alignment: .center)
+            c.frame(width: 92, alignment: .center)
         }
     }
 
@@ -1178,14 +1183,16 @@ private struct OverviewStatusUpdatesCard: View {
     }
 
     var body: some View {
-        OverviewCard(title: T("Status updates"), icon: "text.bubble", action: {
+        // The web's sparkles and its primary (near-black) "Draft with AI", not a speech bubble and violet (UI tour
+        // run 19, R19-I-16).
+        OverviewCard(title: T("Status updates"), icon: "sparkles", action: {
             if canPost {
             Button { Task { await draft() } } label: {
                 HStack(spacing: 4) {
                     if drafting { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold)) }
                     Text(T("Draft with AI")).font(NXFont.text(12, .semibold))
                 }
-                .foregroundStyle(NX.violetText)
+                .foregroundStyle(NX.foreground)
                 .padding(.horizontal, 8).frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
