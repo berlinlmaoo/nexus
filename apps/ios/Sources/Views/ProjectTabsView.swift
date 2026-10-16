@@ -72,7 +72,7 @@ func humanizeEnum(_ raw: String) -> String {
 }
 
 func prioTone(_ p: String) -> ChipTone {
-    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .high; case "MEDIUM": return .info; default: return .neutral }
+    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .danger; case "MEDIUM": return .info; default: return .neutral }
 }
 
 /// A task's priority as a compact pill (owner, 10 Oct 2026: the NexusChip was too big beside the card
@@ -1735,7 +1735,7 @@ struct CreateTaskSheet: View {
         }
     }
     private func prioColor(_ p: String) -> Color {
-        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.priorityHigh; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
+        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.danger; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
     }
 
     // MARK: custom field rendering (port of web TaskComposer)

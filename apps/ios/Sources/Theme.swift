@@ -135,8 +135,6 @@ enum NX {
     static let accentBg    = Color(light: 0xf1eefe, dark: 0x2c2551, lightHC: 0xe9e4fd, darkHC: 0x332a63)
     static let accentFg    = Color(light: 0x6750cf, dark: 0xbfb3ff)
     static let coral       = Color(light: 0xff7f50, dark: 0xff9d76)   // "Secure Uplink Ready" pill
-    /// Priority "High", the web's orange-500 on every surface (decision 4 of run 17).
-    static let priorityHigh = Color(light: 0xf97316, dark: 0xfb923c)
     static let cream       = Color(light: 0xfdfcfb, dark: 0x0d1017)   // login background
     static let ink         = Color(hex: "#11141b")
     static let inkGradient = LinearGradient(colors: [Color(hex: "#11141b"), Color(hex: "#3a2f7a")],
@@ -199,8 +197,6 @@ extension View {
 
 enum ChipTone {
     case neutral, accent, success, warning, danger, info, coral
-    /// Priority "High": orange #f97316 on every surface, chips, pills, bars and dots (decision 4 of run 17).
-    case high
 
     /// Text and icon colour. Like `NX.violet` / `NX.violetText`, a tone is two colours because one
     /// cannot do both jobs: the bright fills read 1.9–3.3:1 as 11 pt type on their own 16% tint in
@@ -216,7 +212,6 @@ enum ChipTone {
         case .danger: return ChipText.danger
         case .info: return ChipText.info
         case .coral: return ChipText.coral
-        case .high: return ChipText.high
         }
     }
     /// The chip's wash: the bright tone, unchanged, so every chip keeps its colour.
@@ -231,7 +226,6 @@ enum ChipTone {
         case .danger: return NX.danger
         case .info: return NX.blue
         case .coral: return NX.coral
-        case .high: return NX.priorityHigh
         }
     }
 
@@ -257,7 +251,6 @@ private enum ChipText {
     static let danger  = Color(light: 0xb91c1c, dark: 0xf87171)
     static let info    = Color(light: 0x0369a1, dark: 0x38a3ff)
     static let coral   = Color(light: 0xb13c10, dark: 0xff9d76)
-    static let high    = Color(light: 0xc2410c, dark: 0xfb923c)
 }
 
 struct NexusChip: View {

@@ -845,8 +845,8 @@ struct FolderNode: View {
                 .accessibilityLabel(folder.name)
                 .accessibilityHint(isExpanded ? T("Close folder") : T("Open folder"))
                 Menu { menu } label: {
-                    // The horizontal "···" of every other overflow menu (decision 12 of run 19, R19-I-13).
                     Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(90))
                         .frame(width: 30, height: 30).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

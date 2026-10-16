@@ -696,7 +696,8 @@ struct VaultView: View {
                 Menu { menuItems(item) } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 15))
-                        // Horizontal "···" everywhere (fix19 decision 12; run 20 decision 27, R20-B-16: it was ⋮ here).
+                        // The web's ⋮ on a card.
+                        .rotationEffect(.degrees(webChrome ? 90 : 0))
                         .foregroundStyle(NX.mutedFg)
                         // 44pt of tappable area behind a 15pt glyph. The same fix the Threads delete
                         // button needed: a menu that only opens on the third try reads as a broken app.
@@ -791,6 +792,7 @@ struct VaultView: View {
                     Menu { menuItems(item) } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 13))
+                            .rotationEffect(.degrees(webChrome ? 90 : 0))
                             .foregroundStyle(NX.mutedFg)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())

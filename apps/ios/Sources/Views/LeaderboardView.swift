@@ -28,6 +28,18 @@ struct LeaderboardView: View {
     /// Standard competition ranking (web lib/competition-rank.ts, QA 13 Oct 2026): equal XP shares a rank
     /// and the next one skips (1, 1, 1, 4). Before, seven people on 1,000 XP got ranks 1–7. A BoD row that
     /// sinks to the bottom never ties with the staff above it.
+    /// The three best scores, best first, each with everyone on it (web leaderboard.tsx podiumGroups).
+    private var podiumGroups: [[LeaderboardRow]] {
+        let list = ranked, shared = ranks
+        var groups: [[LeaderboardRow]] = []
+        for (i, r) in list.enumerated() {
+            if i > 0, shared[i] == shared[i - 1], !groups.isEmpty { groups[groups.count - 1].append(r) }
+            else if groups.count < 3 { groups.append([r]) }
+            else { break }
+        }
+        return groups
+    }
+
     private var ranks: [Int] {
         let list = ranked
         var out: [Int] = []
@@ -133,18 +145,10 @@ struct LeaderboardView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         if ranked.count >= 1 {
-                            // More people share 1st than the podium has steps: one gold band with everyone tied
-                            // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
-                            // the seven out (UI tour run 15, Q-IB6).
-                            let tiedFirst = ranks.filter { $0 == 1 }.count
-                            if tiedFirst > 3 {
-                                TieRibbon(rows: Array(ranked.prefix(tiedFirst)), caption: String(format: T("%d-way tie for 1st"), tiedFirst)) { row in
-                                    openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
-                                }
-                            } else {
-                                Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
-                                    openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
-                                }
+                            // Three steps, one per score; everyone on a score shares its step (owner, 16 Oct 2026,
+                            // web leaderboard-podium 0ef5de192). It replaced the gold "7-way tie" band.
+                            Podium(groups: podiumGroups) { row in
+                                openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
                             }
                         }
 
@@ -201,22 +205,18 @@ struct LeaderboardView: View {
     }
 }
 
+/// The podium: 2nd left, 1st centre, 3rd right, one step per score (owner, 16 Oct 2026; web leaderboard-podium).
+/// A step shared by several people shows their faces stacked (three and a "+N"), how many share it, the first two
+/// names and the XP; it goes without the crown. The steps print 1 / 2 / 3; the list beneath keeps the shared ranks.
 struct Podium: View {
-    let rows: [LeaderboardRow]   // already ranked 1..3
-    /// The rank to print on each place when it differs from the place (a tie: two people on rank 1).
-    var labels: [Int] = []
+    /// The top three scores, best first.
+    let groups: [[LeaderboardRow]]
     let onOpen: (LeaderboardRow) -> Void
-    // Visual order: 2nd · 1st · 3rd. With a tie at the top every step reads "1", and 2-1-3 then looked like a
-    // different order from the list below it: tied, the steps run left to right in the list's order (web
-    // leaderboard-podium, UI tour run 9, I11).
-    private var slots: [(rank: Int, row: LeaderboardRow?)] {
-        let all: [(rank: Int, row: LeaderboardRow?)] = [(1, rows.first), (2, rows.count > 1 ? rows[1] : nil), (3, rows.count > 2 ? rows[2] : nil)]
-        let tiedTop = rows.count > 1 && label(1) == label(2)
-        return tiedTop ? all : [all[1], all[0], all[2]]
-    }
+    private static let stackMax = 3
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            ForEach(slots, id: \.rank) { slot in podium(slot.rank, slot.row) }
+            ForEach([2, 1, 3], id: \.self) { place in step(place, place - 1 < groups.count ? groups[place - 1] : []) }
         }
         // The web's podium is a centred block about 440 wide; on a Mac or iPad page the three steps
         // stretched into wide yellow slabs across the whole page (UI tour run 4). A phone is narrower.
@@ -224,19 +224,17 @@ struct Podium: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
     }
-    private func podium(_ rank: Int, _ row: LeaderboardRow?) -> some View {
-        // Tied people share a rank, so they share its step too: 1 / 1 / 1 are three gold steps of one
-        // height (web leaderboard-podium, QA BoD R2 N05). The place only decides left / middle / right.
-        let step: Int = min(3, max(1, label(rank)))
+
+    private func step(_ place: Int, _ group: [LeaderboardRow]) -> some View {
         let (barColor, ring, crown, avatar, height): (Color, Color, Color, CGFloat, CGFloat) = {
-            switch step {
+            switch place {
             case 1: return (Color(hex: "#fcd34d"), Color(hex: "#f59e0b"), Color(hex: "#f59e0b"), 70, 96)
             case 2: return (Color(hex: "#e2e8f0"), Color(hex: "#94a3b8"), Color(hex: "#94a3b8"), 56, 72)
             default: return (Color(hex: "#fdba74"), Color(hex: "#f97316"), Color(hex: "#f97316"), 56, 60)
             }
         }()
         return VStack(spacing: 6) {
-            if let row {
+            if let row = group.first, group.count == 1 {
                 // Only the person half of the tile opens a profile. The numbered bar below stays
                 // scenery, so a tap on the podium's base does not fire.
                 Button { onOpen(row) } label: {
@@ -244,74 +242,53 @@ struct Podium: View {
                         ZStack {
                             AvatarView(url: row.avatar, initial: row.initial, size: avatar)
                                 .overlay(Circle().strokeBorder(ring, lineWidth: 3))
-                            if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
+                            if place == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
-                        Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        // Two lines, never cut (owner, 16 Oct 2026).
+                        Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                            .multilineTextAlignment(.center).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         Text("\(AppNumber.int(row.totalXp)) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            } else if let top = group.first {
+                let face = (avatar * 0.6).rounded()
+                VStack(spacing: 6) {
+                    HStack(spacing: -face * 0.3) {
+                        ForEach(group.prefix(Self.stackMax)) { row in
+                            AvatarView(url: row.avatar, initial: row.initial, size: face)
+                                .overlay(Circle().strokeBorder(ring, lineWidth: 2))
+                        }
+                        if group.count > Self.stackMax {
+                            Text("+\(group.count - Self.stackMax)").font(NXFont.text(12, .semibold)).monospacedDigit()
+                                .foregroundStyle(NX.foreground)
+                                .frame(width: face, height: face)
+                                .background(NX.card, in: Circle())
+                                .overlay(Circle().strokeBorder(ring, lineWidth: 2))
+                        }
+                    }
+                    Text(String(format: T("%d tied"), group.count)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    Text(sharedNames(group)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .multilineTextAlignment(.center).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    Text("\(AppNumber.int(top.totalXp)) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                }
+                .accessibilityElement(children: .combine)
             }
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
                 // Dark on the coloured step, as the web's podium (white was hard to read on gold).
-                Text("\(label(rank))").font(NXFont.display(22, .black)).foregroundStyle(Color(hex: "#78350f").opacity(0.9)).padding(.top, 8)
+                Text("\(place)").font(NXFont.display(22, .black)).foregroundStyle(Color(hex: "#78350f").opacity(0.9)).padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
-        .opacity(row == nil ? 0 : 1)
+        .opacity(group.isEmpty ? 0 : 1)
     }
-    /// The shared rank for a podium place (1-based), else the place itself.
-    private func label(_ place: Int) -> Int {
-        place - 1 < labels.count ? labels[place - 1] : place
-    }
-}
 
-/// Everyone who shares 1st on one gold band, in the list's order (the web's LeaderboardTie). Names wrap to
-/// two lines rather than truncate (run 15, R15-WB-6).
-struct TieRibbon: View {
-    let rows: [LeaderboardRow]
-    let caption: String
-    let onOpen: (LeaderboardRow) -> Void
-    @Environment(\.colorScheme) private var scheme
-
-    private var band: Color { scheme == .dark ? Color(hex: "#fbbf24").opacity(0.25) : Color(hex: "#fcd34d") }
-    private var ink: Color { scheme == .dark ? Color(hex: "#fde68a") : Color(hex: "#78350f") }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "crown.fill").font(.system(size: 14))
-                Text(caption)
-                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp)) XP").monospacedDigit() }
-            }
-            .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
-            .multilineTextAlignment(.center)
-            // Down to 70 pt a person, so seven tied fit one row on an iPad as on the web (UI tour run 16, R16-I-25:
-            // "Zainal Mahdi" alone on a second row).
-            // One line per name, as the web's band (UI tour run 20, R20-B-24: "Zainal / Mahdi" took two lines while
-            // the other names took one): up to 120 pt a person, a long name steps down a little before it is cut.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 120), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {
-                ForEach(rows) { row in
-                    Button { onOpen(row) } label: {
-                        VStack(spacing: 5) {
-                            AvatarView(url: row.avatar, initial: row.initial, size: 44)
-                                .overlay(Circle().strokeBorder(Color(hex: "#f59e0b"), lineWidth: 2))
-                            Text(row.name ?? "—").font(NXFont.text(12, .semibold)).foregroundStyle(ink)
-                                .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity)
-        .background(band, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .contain)
+    /// "Ana, Budi +4 more": the first two names, then how many more share the step.
+    private func sharedNames(_ group: [LeaderboardRow]) -> String {
+        let names = group.prefix(2).map { $0.name ?? "—" }.joined(separator: ", ")
+        return group.count > 2 ? names + " " + String(format: T("+%d more"), group.count - 2) : names
     }
 }
 

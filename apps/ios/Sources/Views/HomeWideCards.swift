@@ -59,10 +59,8 @@ struct HomeScheduleCard: View {
     var body: some View {
         HomeWideCard(title: T("Your schedule"), onSeeAll: onOpenMyTasks) {
             if items.isEmpty {
-                // Regular muted, as web; no "Open My Tasks" here: the Tasks tile above says it already (decision 8 of
-                // run 20, R20-B-05, web WB-7).
                 EmptyState(icon: "calendar.badge.clock", title: T("No upcoming tasks with a due date."),
-                           compact: true, quietTitle: true)
+                           actionTitle: T("Open My Tasks"), actionIcon: nil, action: onOpenMyTasks, compact: true)
             } else {
                 VStack(spacing: 4) {
                     ForEach(items) { t in

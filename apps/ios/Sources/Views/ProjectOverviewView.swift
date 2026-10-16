@@ -415,7 +415,7 @@ private enum OverviewStyle {
     static func priorityBar(_ key: String) -> Color {
         switch key {
         case "URGENT": return rose
-        case "HIGH": return NX.priorityHigh
+        case "HIGH": return NX.danger
         case "MEDIUM": return sky
         case "LOW": return NX.mutedFg.opacity(0.4)
         default: return NX.mutedFg.opacity(0.25)

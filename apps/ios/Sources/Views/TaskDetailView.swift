@@ -718,7 +718,7 @@ struct TaskDetailView: View {
     }
 
     private func prioTone(_ p: String) -> ChipTone {
-        switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .high; case "MEDIUM": return .info; default: return .neutral }
+        switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .danger; case "MEDIUM": return .info; default: return .neutral }
     }
     private func dueText(_ iso: String?) -> String {
         guard let iso else { return T("No due date") }

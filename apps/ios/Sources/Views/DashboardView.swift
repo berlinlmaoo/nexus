@@ -263,32 +263,12 @@ struct DashboardView: View {
 
     private var singleColumn: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
-            if hSize == .regular {
-                // iPad / Mac mirror the web desktop Home: greeting with the level pill, GIDEON and the bell; the
-                // three tiles; XP rules; Calendar and Your schedule; the profile card; Messages; Leaderboard.
-                // No search field (the sidebar has one), quick tiles, pinned projects (the sidebar pins them),
-                // agenda strip, Attendance card or passkey nudge (Settings › Security) (decision 11 of run 19,
-                // R19-B-07). The iPhone Home stays as it is (owner rule).
-                wideGreeting
-                statCards
-                xpRulesCard
-                calendarAndSchedule
-                profileCard
-                messagesCard
-                leaderboardCard
-            } else {
-                phoneColumn
-            }
-            Color.clear.frame(height: 8)
-        }
-    }
-
-    private var phoneColumn: some View {
-        Group {
-            greeting
+            // iPad portrait / a narrow Mac window: the level chip beside the greeting, as the web below its
+            // two-column width (owner, 16 Oct 2026); the phone keeps its level card.
+            if hSize == .regular { greetingWithLevel } else { greeting }
             attendanceBar
-            levelCard
-            searchRow
+            if hSize != .regular { levelCard }
+            searchRow(bell: true)
             statCards
             // No "Your Quests" card here: the owner dropped it. It only repeated the Monthly
             // Quests stat tile above, whose modal still lists every quest with its progress.
@@ -297,7 +277,14 @@ struct DashboardView: View {
             quickActions
             projectShortcuts
             dailyCalendarCard
+            // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
+            if hSize == .regular {
+                calendarAndSchedule
+                messagesCard
+                leaderboardCard
+            }
             profileCard
+            Color.clear.frame(height: 8)
         }
     }
 
@@ -329,22 +316,31 @@ struct DashboardView: View {
     private var leaderboardCard: some View { HomeLeaderboardCard { router.go(.leaderboard) } }
 
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
+    /// The Home blocks of before fix 19 / 20 in their order (owner, 16 Oct 2026); the rail opens with the level
+    /// chip beside the bell, over the profile card (owner16 "Home: level chip in the right rail", web 4f9966b01).
     private var wideColumns: some View {
         VStack(alignment: .leading, spacing: 18) {
-            wideGreeting
+            HStack(alignment: .center, spacing: 18) {
+                greeting.frame(maxWidth: .infinity, alignment: .leading)
+                railHeader.frame(width: 340)
+            }
             HStack(alignment: .top, spacing: 18) {
-                // The web desktop Home (decision 11 of run 19, R19-B-07): the tiles, XP rules under them, then
-                // Calendar and Your schedule; the profile card, Messages and Leaderboard in the rail.
-                // Calendar and Your schedule in the left column, under XP rules, as the web (UI tour run 20, Mac
-                // R20-M-01: across the page under the rail they left a ~570 pt hole under XP rules).
+                // The web dashboard's order: the stat tiles, XP rules right under them, then the
+                // calendar; the person (level, profile) in the rail on the right.
                 VStack(alignment: .leading, spacing: 18) {
+                    attendanceBar
+                    searchRow(bell: false)
                     statCards
                     xpRulesCard
+                    dailyCalendarCard
                     calendarAndSchedule
+                    quickActions
+                    projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
                     profileCard
+                    if showPasskeyNudge { passkeyNudge }
                     messagesCard
                     leaderboardCard
                 }
@@ -354,48 +350,90 @@ struct DashboardView: View {
         }
     }
 
-    /// iPad / Mac: the greeting, then the level pill (once on the page, as the web's header), GIDEON and the bell.
-    private var wideGreeting: some View {
-        HStack(alignment: .center, spacing: 12) {
-            greeting
-            Spacer(minLength: 8)
-            // The web header's level chip: the tier badge, "Level 6 · Diamond" and the XP progress (decision 8 of
-            // run 20, R20-B-05; it was a bare violet pill).
-            Button { Haptics.tap(); toggleLevel(true) } label: {
-                HStack(spacing: 10) {
-                    TierBadge(level: game?.xp.level ?? 1, size: 32)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
-                            .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        HStack(spacing: 8) {
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(NX.muted)
-                                    Capsule().fill(NX.onyx).frame(width: geo.size.width * (game?.levelPct ?? 0))
-                                }
-                            }
-                            .frame(width: 96, height: 4)
-                            Text(xpLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().fixedSize()
-                        }
-                    }
-                }
-                .padding(.leading, 8).padding(.trailing, 14).padding(.vertical, 7)
-                .background(NX.card, in: Capsule())
-                .overlay(Capsule().strokeBorder(NX.border))
-                .frame(minHeight: 44).contentShape(Rectangle())
+    /// Mac, very wide (full screen, sidebar hidden): the day's work, then projects and agenda, then
+    /// the person.
+    private var threeColumns: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 18) {
+                greeting.frame(maxWidth: .infinity, alignment: .leading)
+                railHeader.frame(width: 380)
             }
-            .buttonStyle(.plain)
-            .morphSource("level", in: morphSpace, store: morphFrames)
-            .opacity(activeLevel && morphShowModal ? 0 : 1)
-            gideonButton
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 18) {
+                    attendanceBar
+                    searchRow(bell: false)
+                    statCards
+                    quickActions
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    dailyCalendarCard
+                    calendarAndSchedule
+                    projectShortcuts
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    profileCard
+                    if showPasskeyNudge { passkeyNudge }
+                    xpRulesCard
+                    messagesCard
+                    leaderboardCard
+                }
+                .frame(width: 380)
+            }
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    /// The rail's first row on the two- and three-column Home: the level chip filling the width, then the bell.
+    private var railHeader: some View {
+        HStack(spacing: 12) {
+            levelChip(fill: true)
             bellButton
         }
     }
 
-    /// Mac, very wide (full screen, sidebar hidden): the day's work, then projects and agenda, then
-    /// the person.
-    /// Mac, very wide: the same blocks as the two-column Home, so one Home on every wide window.
-    private var threeColumns: some View { wideColumns }
+    /// iPad portrait / narrow Mac window: the greeting with the level chip at its right.
+    private var greetingWithLevel: some View {
+        HStack(alignment: .center, spacing: 12) {
+            greeting
+            Spacer(minLength: 8)
+            levelChip(fill: false)
+        }
+    }
+
+    /// The web header's level chip: the tier badge, "Level 6 · Diamond" and the XP progress (decision 8 of
+    /// run 20, R20-B-05). `fill`: as wide as the rail (web LevelChip fill).
+    private func levelChip(fill: Bool) -> some View {
+        Button { Haptics.tap(); toggleLevel(true) } label: {
+            HStack(spacing: 10) {
+                TierBadge(level: game?.xp.level ?? 1, size: 32)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
+                        .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    HStack(spacing: 8) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(NX.muted)
+                                Capsule().fill(NX.onyx).frame(width: geo.size.width * (game?.levelPct ?? 0))
+                            }
+                        }
+                        .frame(width: 96, height: 4)
+                        Text(xpLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().fixedSize()
+                    }
+                }
+                if fill { Spacer(minLength: 0) }
+            }
+            .padding(.leading, 8).padding(.trailing, 14).padding(.vertical, 7)
+            .background(NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(NX.border))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .morphSource("level", in: morphSpace, store: morphFrames)
+        .opacity(activeLevel && morphShowModal ? 0 : 1)
+    }
 
     // MARK: greeting
 
@@ -444,10 +482,15 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(T("Attendance")).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground)
                         Text(line.text).font(NXFont.text(12, .semibold)).foregroundStyle(line.tint).lineLimit(2)
+                        // Mac: no check-in or check-out here (M-07, owner 16 Oct 2026): the status, then where to do it.
+                        if PlatformWording.isMac && !line.action.isEmpty {
+                            Text(T("Use the NEXUS app on your phone to check in")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                .lineLimit(2)
+                        }
                     }
                     Spacer(minLength: 8)
                     // "Open" is a chevron: its Indonesian key reads "Terbuka" (the adjective).
-                    if line.action.isEmpty {
+                    if line.action.isEmpty || PlatformWording.isMac {
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
                     } else {
                         Text(line.action).font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
@@ -571,7 +614,9 @@ struct DashboardView: View {
 
     // MARK: search + bell
 
-    private var searchRow: some View {
+    /// The search field, then GIDEON (iPad / Mac) and the bell. On the two-column Home the bell is in the
+    /// rail beside the level chip instead.
+    private func searchRow(bell: Bool) -> some View {
         HStack(spacing: 12) {
             NavigationLink { SearchView() } label: {
                 HStack(spacing: 8) {
@@ -585,11 +630,15 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
 
-            bellButton
+            // iPad / Mac: GIDEON beside the search field, as on the web's sidebar search; the phone keeps its
+            // floating button (owner rule: the iPhone Home layout stays as it is). In this row nothing floats
+            // over the cards (UI tour run 17, iPad R17-I-01 / R17-M-01).
+            if hSize == .regular { gideonButton }
+            if bell { bellButton }
         }
     }
 
-    /// GIDEON beside the bell on iPad / Mac (the phone keeps its floating button: owner rule).
+    /// GIDEON in the search row on iPad / Mac (the phone keeps its floating button: owner rule).
     private var gideonButton: some View {
         Button { Haptics.tap(); showGideon = true } label: {
             Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
@@ -624,26 +673,18 @@ struct DashboardView: View {
     private var statCards: some View {
         HStack(spacing: 12) {
             ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
-                // No task at all: the tile says so and opens My Tasks, as web ("No open tasks · Open My Tasks";
-                // decision 8 of run 20, R20-I-25 / R20-B-05). It said "0/0 Tasks".
-                let noTasks = i == 1 && (d.total ?? 0) == 0
-                // No quests: "No active quests · How quests work", which opens the XP rules card (fix20 API copy 6).
-                let noQuests = i == 2 && (d.total ?? 0) == 0
-                Button {
-                    if noTasks { router.go(.tasks) }
-                    else if noQuests { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { xpRulesOpen = true } }
-                    else { toggleStat(i) }
-                } label: {
-                    StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow,
-                                 plain: hSize == .regular,
-                                 emptyTitle: noTasks ? T("No open tasks") : noQuests ? T("No active quests") : nil,
-                                 emptyAction: noTasks ? T("Open My Tasks") : noQuests ? T("How quests work") : nil)
+                // "0/0" when there is nothing to count, on every Home (owner, 16 Oct 2026: fix 20's "No open tasks"
+                // and "No active quests" tiles are reverted).
+                Button { toggleStat(i) } label: {
+                    StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
                         .morphSource("stat-\(i)", in: morphSpace, store: morphFrames)
                 }
                 .buttonStyle(PressableCardStyle())
                 .opacity(activeStat == i && morphShowModal ? 0 : 1)
             }
         }
+        // One height for the three tiles: the row is as tall as the tallest and each fills it.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: stat-card morph modal
@@ -1166,7 +1207,7 @@ struct DashboardView: View {
 
     private var quickActions: some View {
         LazyVGrid(columns: quickColumns, spacing: 12) {
-            // Chat and the Calendar each have a tab, so their tiles went to Z Vault and Ticket (owner,
+            // Messages and the Calendar each have a tab, so their tiles went to Z Vault and Ticket (owner,
             // 9 Oct 2026), in the same places.
             if viewer.isCompanyMember {
                 quickTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
@@ -1449,67 +1490,19 @@ struct StatCardView: View {
     let from: String
     let to: String
     let glow: String
-    /// iPad / Mac: the web's plain white tile (a tinted icon disc, the number in ink, no expand glyph; decision 8
-    /// of run 20, R20-B-05). The iPhone keeps its gradient tiles (owner rule: the iPhone Home stays).
-    var plain = false
-    /// Nothing to count: these words instead of "0/0", and the action as a link under them (R20-I-25).
-    var emptyTitle: String? = nil
-    var emptyAction: String? = nil
-
     var body: some View {
-        if plain { plainTile } else { gradientTile }
-    }
-
-    private var plainTile: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color(hex: to))
-                .frame(width: 40, height: 40)
-                .background(Color(hex: from).opacity(0.22), in: Circle())
-            if let emptyTitle {
-                Text(emptyTitle).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                    .multilineTextAlignment(.center).lineLimit(2)
-                if let emptyAction {
-                    Text(emptyAction).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).underline()
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(AppNumber.int(value)).font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground)
-                    if let total { Text("/\(AppNumber.int(total))").font(NXFont.display(32, .bold)).foregroundStyle(NX.mutedFg.opacity(0.6)) }
-                }
-                Text(label).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .padding(.vertical, 16).padding(.horizontal, 8)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(NX.card)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(NX.border))
-        }
-    }
-
-    private var gradientTile: some View {
         VStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            if let emptyTitle {
-                Text(emptyTitle).font(NXFont.text(15, .bold)).foregroundStyle(.white)
-                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
-                if let emptyAction {
-                    Text(emptyAction).font(NXFont.text(12, .semibold)).foregroundStyle(.white.opacity(0.9)).underline()
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text("\(value)").font(NXFont.display(30, .bold)).foregroundStyle(.white)
-                    if let total { Text("/\(total)").font(NXFont.display(20, .bold)).foregroundStyle(.white.opacity(0.7)) }
-                }
-                Text(label).font(NXFont.text(13, .medium)).foregroundStyle(.white.opacity(0.9))
-                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("\(value)").font(NXFont.display(30, .bold)).foregroundStyle(.white)
+                if let total { Text("/\(total)").font(NXFont.display(20, .bold)).foregroundStyle(.white.opacity(0.7)) }
             }
+            Text(label).font(NXFont.text(13, .medium)).foregroundStyle(.white.opacity(0.9))
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 18).padding(.horizontal, 8)
         .background {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
