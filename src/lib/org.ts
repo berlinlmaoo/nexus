@@ -21,23 +21,20 @@ export async function orgRoleOf(userId: string): Promise<WorkspaceRole | null> {
  * avatar)? The account is shared by every workspace the target is in, so outranking the target in
  * ONE workspace (e.g. one the caller created and invited them into) is not enough: the caller must
  * strictly outrank them in EVERY workspace they belong to. ONE_ABOVE_ALL outranks anyone, including
- * another ONE_ABOVE_ALL. System admins are only writable by themselves.
+ * another ONE_ABOVE_ALL. The company's One Above All may write any company member's account, and
+ * their own account is writable only by themselves (both were the retired system ADMIN flag's, 16 Oct 2026).
  */
 export async function canWriteGlobalAccount(callerId: string, targetUserId: string): Promise<boolean> {
   if (callerId === targetUserId) return true
-  const [caller, target] = await Promise.all([
-    prisma.user.findUnique({ where: { id: callerId }, select: { role: true } }),
-    prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } }),
-  ])
-  if (caller?.role === "ADMIN") return true
-  if (!caller || !target || target.role === "ADMIN") return false
-
   const [targetMemberships, callerMemberships] = await Promise.all([
     prisma.workspaceMember.findMany({ where: { userId: targetUserId }, select: { workspaceId: true, role: true } }),
     prisma.workspaceMember.findMany({ where: { userId: callerId }, select: { workspaceId: true, role: true } }),
   ])
   if (targetMemberships.length === 0) return false
   const callerRoleIn = new Map(callerMemberships.map((m) => [m.workspaceId, m.role] as const))
+  const targetOrgRole = targetMemberships.find((m) => m.workspaceId === ORG_WORKSPACE_ID)?.role
+  if (targetOrgRole === "ONE_ABOVE_ALL") return false
+  if (targetOrgRole && callerRoleIn.get(ORG_WORKSPACE_ID) === "ONE_ABOVE_ALL") return true
   return targetMemberships.every((t) => {
     const mine = callerRoleIn.get(t.workspaceId)
     if (!mine) return false
@@ -48,15 +45,14 @@ export async function canWriteGlobalAccount(callerId: string, targetUserId: stri
 
 /**
  * Guard for adding / changing / removing someone's membership of `workspaceId` from the admin screens.
- * Returns an error message (403) or null when allowed. A system admin may do anything. Otherwise the
- * caller must be BoD or above IN THAT WORKSPACE (a company role does not reach other workspaces and a
- * personal-workspace role does not reach the company), may only touch memberships strictly below their
+ * Returns an error message (403) or null when allowed. The caller must be BoD or above IN THAT WORKSPACE
+ * (a company role does not reach other workspaces and a personal-workspace role does not reach the
+ * company), may only touch memberships strictly below their
  * own tier there and only grant roles strictly below it (One Above All may do anything), and may never
  * raise their own role.
  */
 export async function membershipChangeError(
   callerId: string,
-  isSystemAdmin: boolean,
   workspaceId: string,
   change: { targetUserId: string; currentRole?: WorkspaceRole | null; newRole?: WorkspaceRole | null },
 ): Promise<string | null> {
@@ -64,7 +60,6 @@ export async function membershipChangeError(
   if (targetUserId === callerId && newRole && currentRole && WORKSPACE_HIERARCHY[newRole] > WORKSPACE_HIERARCHY[currentRole]) {
     return "Kamu tidak bisa menaikkan peran kamu sendiri."
   }
-  if (isSystemAdmin) return null
   const mine = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId: callerId, workspaceId } },
     select: { role: true },
@@ -83,20 +78,13 @@ export async function membershipChangeError(
   return null
 }
 
-/** System admin, or BoD / One Above All of the company workspace. */
-export async function isAdminOrOrgBodPlus(userId: string): Promise<boolean> {
-  const [user, role] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    orgRoleOf(userId),
-  ])
-  return user?.role === "ADMIN" || role === "BOD" || role === "ONE_ABOVE_ALL"
+/** BoD / One Above All of the company workspace. */
+export async function isOrgBodPlus(userId: string): Promise<boolean> {
+  const role = await orgRoleOf(userId)
+  return role === "BOD" || role === "ONE_ABOVE_ALL"
 }
 
-/** System admin, or a member (any role) of the company workspace. */
-export async function isAdminOrOrgMember(userId: string): Promise<boolean> {
-  const [user, role] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    orgRoleOf(userId),
-  ])
-  return user?.role === "ADMIN" || role !== null
+/** A member (any role) of the company workspace. */
+export async function isOrgMember(userId: string): Promise<boolean> {
+  return (await orgRoleOf(userId)) !== null
 }

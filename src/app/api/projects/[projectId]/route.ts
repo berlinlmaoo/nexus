@@ -6,7 +6,7 @@ import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
-import { checkProjectAccess, hasProjectLevel, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import {
   normalizeAutoAssignConfig,
   ProjectAutoAssignConfigError,
@@ -15,7 +15,7 @@ import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { normalizeHiddenTabs } from "@/lib/project-tabs"
 
-// Deleting the project: Full access (lib/rbac.ts) — the Project Owner, BoD / One Above All, a system admin.
+// Deleting the project: Full access (lib/rbac.ts) — the Project Owner, BoD / One Above All.
 async function canManageProject(userId: string, projectId: string) {
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
   if (!project) return { allowed: false, reason: "Project not found" as const }

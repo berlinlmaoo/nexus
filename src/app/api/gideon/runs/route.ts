@@ -4,12 +4,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { checkProjectAccess } from "@/lib/rbac"
-import { isAdminOrOrgBodPlus } from "@/lib/org"
+import { isOrgBodPlus } from "@/lib/org"
 import { runRowView } from "@/lib/gideon-schedule-api"
 
 /**
  * GIDEON run log ("Insights", 12 Oct 2026): time, trigger, status, tools used, error.
- *  - without projectId: BoD / One Above All / system admin — every run;
+ *  - without projectId: BoD / One Above All — every run;
  *  - with projectId: that project's leads (and the above) — the runs scoped to the project.
  * Privacy as in Control Room › GIDEON: what somebody asked in a CHAT is theirs. Other people's chat runs
  * show as "Chat" with no title; mentions, digests and tickets keep theirs (those happen in shared places).
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const sp = req.nextUrl.searchParams
   const projectId = sp.get("projectId") || ""
-  const bod = await isAdminOrOrgBodPlus(session.user.id)
+  const bod = await isOrgBodPlus(session.user.id)
   if (projectId) {
     if (!bod && !(await checkProjectAccess(session.user.id, projectId, ["LEAD"])).allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   } else if (!bod) {

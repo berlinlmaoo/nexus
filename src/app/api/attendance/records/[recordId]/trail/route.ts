@@ -9,7 +9,7 @@ import { buildRecordTrail, loadRecordForTrail } from "@/lib/attendance-location"
  * GET /api/attendance/records/[recordId]/trail — the location trail of one check-in, for the map.
  *
  * Who may see it is the one scope rule the Reports use (reportableUserIds in attendance-approvers.ts):
- * BoD / One Above All / system admin — everyone in the workspace; a manager — their direct reports in
+ * BoD / One Above All — everyone in the workspace; a manager — their direct reports in
  * the Bagan Approval (one level); everyone — themselves. Anything else is 403.
  *
  * (The folder is [recordId], not [id]: Next.js requires one name per dynamic segment and

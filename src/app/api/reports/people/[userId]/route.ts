@@ -62,11 +62,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // they can open; the rest are counted together as "Other projects", their overdue tasks without title.
     let work = report.work
     if (!isSelf) {
-      const [viewerUser, viewerMember] = await Promise.all([
-        prisma.user.findUnique({ where: { id: viewerId }, select: { role: true } }),
-        prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId: viewerId, workspaceId } }, select: { role: true } }),
-      ])
-      if (viewerUser?.role !== "ADMIN" && !hasProjectWideAccess(viewerMember?.role)) {
+      const viewerMember = await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId: viewerId, workspaceId } }, select: { role: true } })
+      if (!hasProjectWideAccess(viewerMember?.role)) {
         const ids = [...new Set([...work.perProject.map((p) => p.projectId), ...work.overdueList.map((o) => o.projectId)])]
         const mine = new Set((await prisma.projectMember.findMany({ where: { userId: viewerId, projectId: { in: ids } }, select: { projectId: true } })).map((m) => m.projectId))
         const shown = work.perProject.filter((p) => mine.has(p.projectId))

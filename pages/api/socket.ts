@@ -39,10 +39,8 @@ export interface NextApiResponseWithSocket extends NextApiResponse {
  * name without a `<kind>:` prefix.
  *
  *   workspace:<id>  every workspace the user is a WorkspaceMember of
- *   workspace-all   system admins (User.role ADMIN), whose project and folder lists span every workspace
  *   audit           users who pass resolveAuditAccess, i.e. may open Control Room → Audit
  */
-const ALL_WORKSPACES_ROOM = "workspace-all"
 const AUDIT_ROOM = "audit"
 /** A burst of audit writes (a bulk action, a reorder) reaches the audit room as one ping. */
 const AUDIT_PING_COALESCE_MS = 250
@@ -276,20 +274,19 @@ export function initializeSocketServer(
 
   /**
    * The rooms this user belongs in by who they are, not by what they asked for: one per workspace
-   * they are a member of (for `workspace-changed`), every workspace for a system admin (their project
-   * list spans them all), and `audit` when they may read the audit log (for `audit-changed`).
+   * they are a member of (for `workspace-changed`), and `audit` when they may read the audit log (for
+   * `audit-changed`).
    *
    * Best effort: if the lookup fails the socket still connects, just without these rooms, and the
    * views fall back to refetching on their own (focus, navigation, the reconnect catch-up).
    */
-  async function serverAssignedRooms(userId: string, isSystemAdmin: boolean): Promise<string[]> {
+  async function serverAssignedRooms(userId: string): Promise<string[]> {
     try {
       const [memberships, audit] = await Promise.all([
         prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } }),
         resolveAuditAccess(userId),
       ])
       const rooms = memberships.map((m) => `workspace:${m.workspaceId}`)
-      if (isSystemAdmin) rooms.push(ALL_WORKSPACES_ROOM)
       if (audit.ok) rooms.push(AUDIT_ROOM)
       return rooms
     } catch (error) {
@@ -403,7 +400,7 @@ export function initializeSocketServer(
       // leftover JWT must not be allowed back into those rooms.
       const owner = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { email: true, sessionVersion: true, deactivatedAt: true, role: true, name: true, avatar: true },
+        select: { email: true, sessionVersion: true, deactivatedAt: true, name: true, avatar: true },
       })
       if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
       // Offboarded (lib/offboarding.ts): out of the company, so out of its chat rooms too.
@@ -420,7 +417,7 @@ export function initializeSocketServer(
       // Only now, after every refusal above: a deleted, offboarded or revoked session never gets here.
       // Joined synchronously on "connection" below, so the rooms are in place before the client's
       // connect event fires and nothing emitted after that can miss it.
-      socket.data.serverRooms = await serverAssignedRooms(token.id as string, owner.role === "ADMIN")
+      socket.data.serverRooms = await serverAssignedRooms(token.id as string)
       next()
     } catch {
       next(new Error("Authentication failed"))
@@ -671,7 +668,7 @@ export function initializeSocketServer(
   // in several of them (its workspace and its own user room) gets it once.
   eventBus.on(BUS_EVENTS.WORKSPACE_CHANGED, (data: { workspaceId: string | null; userIds?: string[]; payload: unknown }) => {
     const rooms = (data.userIds ?? []).map((id) => `user:${id}`)
-    if (data.workspaceId) rooms.push(`workspace:${data.workspaceId}`, ALL_WORKSPACES_ROOM)
+    if (data.workspaceId) rooms.push(`workspace:${data.workspaceId}`)
     if (rooms.length > 0) io.to(rooms).emit("workspace-changed", data.payload)
   })
 

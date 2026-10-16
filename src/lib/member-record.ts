@@ -241,7 +241,7 @@ export function periodPenaltyReasons(from: string, to: string): string[] {
   return out
 }
 
-/** The whole record for one period. `canManage` = the viewer is BoD / OAA / system admin. */
+/** The whole record for one period. `canManage` = the viewer is BoD / OAA. */
 export async function buildMemberRecord(opts: {
   workspaceId: string
   userId: string

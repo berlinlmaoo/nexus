@@ -47,7 +47,7 @@ async function main() {
       name: 'Berlin Taufik',
       email: 'berlin@patsgroup.id',
       password: hashedPassword,
-      role: 'ADMIN',
+      role: 'MEMBER',
     },
   })
 

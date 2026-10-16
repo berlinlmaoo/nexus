@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { isWorkspaceMemberOrAdmin } from '@/lib/read-access'
+import { isWorkspaceMemberOf } from '@/lib/read-access'
 import { docWriteRefusal } from '@/lib/write-access'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     if (content && !finalContent) return NextResponse.json({ error: 'content must be a document ({ type: "doc", content: [...] })' }, { status: 400 })
     if (templateId && !content) {
       const template = await prisma.docTemplate.findUnique({ where: { id: templateId } })
-      if (template?.content && (await isWorkspaceMemberOrAdmin(session.user.id, template.workspaceId))) {
+      if (template?.content && (await isWorkspaceMemberOf(session.user.id, template.workspaceId))) {
         finalContent = sanitizeDoc(template.content)
       }
     }

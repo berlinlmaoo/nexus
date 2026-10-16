@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { checkProjectAccess, hasProjectLevel, type AccessLevel } from "@/lib/rbac"
 import type { ProjectRole } from "@/generated/prisma/client"
-import { canReadProjectContent, canReadTask, isWorkspaceMemberOrAdmin, taskReadRefusal } from "@/lib/read-access"
+import { canReadProjectContent, canReadTask, isWorkspaceMemberOf, taskReadRefusal } from "@/lib/read-access"
 
 /**
  * Write access for routes that used to check only "is someone signed in" (writes batch, after the
@@ -22,8 +22,8 @@ const forbidden = () => NextResponse.json({ error: "Forbidden" }, { status: 403 
 /**
  * Work inside a project (sprints, status updates, project pages): exactly checkProjectAccess, the
  * check of the project page these live on and of the sibling project writes (sections, sheets,
- * tasks). With the default MEMBER bar: system admin, One Above All / BoD / Manager of the project's
- * workspace, and a staff member who is a member of the project. 404 for an unknown project.
+ * tasks). With the default MEMBER bar: One Above All / BoD of the project's workspace, and a member of
+ * the project with Can edit or more. 404 for an unknown project.
  */
 export async function projectWriteRefusal(
   userId: string,
@@ -79,15 +79,15 @@ export async function taskWriteRefusal(userId: string, taskId: string): Promise<
   return verdict === "ok" ? null : taskReadRefusal(verdict)
 }
 
-/** Workspace-owned items (goal, portfolio): the rule of their detail GET — workspace member or system admin. */
+/** Workspace-owned items (goal, portfolio): the rule of their detail GET — workspace member. */
 export async function workspaceItemWriteRefusal(userId: string, workspaceId: string): Promise<NextResponse | null> {
-  return (await isWorkspaceMemberOrAdmin(userId, workspaceId)) ? null : forbidden()
+  return (await isWorkspaceMemberOf(userId, workspaceId)) ? null : forbidden()
 }
 
 /**
  * Projects a caller links into a goal or portfolio of `workspaceId`: each must be a project of that
  * same workspace (what the pickers offer) or, failing that, one the caller can open
- * (checkProjectAccess VIEWER — a system admin linking across workspaces). Returns the first one
+ * (checkProjectAccess VIEWER). Returns the first one
  * refused, or null.
  */
 export async function firstUnlinkableProject(userId: string, projectIds: string[], workspaceId: string): Promise<string | null> {

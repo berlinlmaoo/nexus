@@ -38,8 +38,11 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    // `systemRole` filters on the company role since the system flag was retired (16 Oct 2026):
+    // ADMIN = the company's One Above All, MEMBER = everyone else.
     if (SYSTEM_ROLES.includes(systemRole as SystemRole)) {
-      where.role = systemRole as SystemRole
+      const oaa = { some: { workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL" as const } }
+      where.AND = [{ workspaceMembers: systemRole === "ADMIN" ? oaa : { none: oaa.some } }]
     }
 
     if ((MEMBERSHIP_FILTERS as readonly string[]).includes(membershipFilter)) {
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
       } else if (membershipFilter === "non-members") {
         where.workspaceMembers = { none: {} }
       } else if (membershipFilter === "system-admins") {
-        where.role = "ADMIN"
+        where.workspaceMembers = { some: { workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL" } }
       }
     }
 
@@ -61,7 +64,6 @@ export async function GET(request: NextRequest) {
           name: true,
           email: true,
           avatar: true,
-          role: true,
           googleWorkspaceEmail: true,
           createdAt: true,
           // Offboarding (lib/offboarding.ts). Additive.
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
           // All memberships (a person has a handful at most): the earliest gives firstJoinedAt, the
           // company workspace's gives joinedAt (the Control Room's "Joined" column). Additive.
           workspaceMembers: {
-            select: { joinedAt: true, workspaceId: true },
+            select: { joinedAt: true, workspaceId: true, role: true },
             orderBy: { joinedAt: "asc" },
           },
           _count: {
@@ -92,7 +94,8 @@ export async function GET(request: NextRequest) {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
-        role: user.role,
+        // The retired system flag's field, derived from the company role (16 Oct 2026).
+        role: user.workspaceMembers.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === "ONE_ABOVE_ALL") ? "ADMIN" : "MEMBER",
         googleWorkspaceEmail: user.googleWorkspaceEmail,
         createdAt: user.createdAt,
         firstJoinedAt: user.workspaceMembers[0]?.joinedAt ?? null,

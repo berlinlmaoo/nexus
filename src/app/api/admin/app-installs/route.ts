@@ -14,8 +14,6 @@ import { SYSTEM_USER_EMAILS } from "@/lib/system-users"
  * than as a guess.
  */
 async function isBoD(userId: string): Promise<boolean> {
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (me?.role === "ADMIN") return true
   // Company workspace only: every sign-up is One Above All of their own personal workspace.
   const role = await orgRoleOf(userId)
   return role === "BOD" || role === "ONE_ABOVE_ALL"

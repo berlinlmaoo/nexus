@@ -27,15 +27,6 @@ export function isWorkspaceManagerRole(role?: WorkspaceRole | null): boolean {
   return role === 'ONE_ABOVE_ALL' || role === 'BOD' || role === 'MANAGER'
 }
 
-export async function isSystemAdminUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  })
-
-  return user?.role === 'ADMIN'
-}
-
 // ─── Project access levels (owner decision 13 Oct 2026, Notion's model) ─────────────────────────────────
 //
 //   FULL     Full access — rename, settings, automations, statuses/columns, members, delete the project
@@ -44,13 +35,15 @@ export async function isSystemAdminUser(userId: string): Promise<boolean> {
 //   VIEW     Can view    — read only
 //
 // Who gets which:
-//   - system admin, and the roles in PROJECT_WIDE_ROLES (One Above All, BoD) → FULL on every project of
-//     their workspace (Notion's workspace owners). Not on a PIPELINE project they are not a member of.
+//   - the roles in PROJECT_WIDE_ROLES (One Above All, BoD) → FULL on every project of their workspace
+//     (Notion's workspace owners), PIPELINE projects included (owner, 16 Oct 2026: a Pipeline follows the
+//     same rules as every other project).
 //   - everyone else (Manager, Staff) → only projects they are a member of, at that membership's level.
 //     The project's Owner (ProjectMember.role LEAD — shown as "Project Owner") is FULL; otherwise
 //     ProjectMember.accessLevel (EDIT by default). Nobody else sees a project.
 // This is the ONE place that answers "what may this person do in this project"; every route asks it
-// through checkProjectAccess / projectAccessLevel.
+// through checkProjectAccess / projectAccessLevel. The workspace role is the only source of power: the
+// account flag User.role = ADMIN is retired (16 Oct 2026) and grants nothing.
 
 export type AccessLevel = 'FULL' | 'EDIT' | 'COMMENT' | 'VIEW'
 export const ACCESS_LEVELS: AccessLevel[] = ['FULL', 'EDIT', 'COMMENT', 'VIEW']
@@ -86,23 +79,18 @@ export function roleForLevel(level: AccessLevel): ProjectRole {
 
 /** The viewer's level in a project, or null for no access. */
 export async function projectAccessLevel(userId: string, projectId: string): Promise<AccessLevel | null> {
-  const [user, membership, project] = await prisma.$transaction([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+  const [membership, project] = await prisma.$transaction([
     prisma.projectMember.findUnique({ where: { userId_projectId: { userId, projectId } }, select: { role: true, accessLevel: true } }),
     prisma.project.findUnique({
       where: { id: projectId },
-      select: { type: true, workspace: { select: { members: { where: { userId }, select: { role: true }, take: 1 } } } },
+      select: { workspace: { select: { members: { where: { userId }, select: { role: true }, take: 1 } } } },
     }),
   ])
   if (!project) return null
-  if (user?.role === 'ADMIN') return 'FULL'
   const workspaceRole = project.workspace.members[0]?.role
   if (!workspaceRole) return null
-  const own = memberAccessLevel(membership)
-  // A PIPELINE project is for the people added to it and nobody else (owner, 9 Oct 2026).
-  if (project.type === 'PIPELINE') return own
   if (hasProjectWideAccess(workspaceRole)) return 'FULL'
-  return own
+  return memberAccessLevel(membership)
 }
 
 /** Required ProjectRole → level: LEAD = FULL, MEMBER = EDIT, VIEWER / GUEST = VIEW. */
@@ -136,18 +124,14 @@ export async function checkProjectAccess(
 }
 
 /**
- * Org-wide workspace access check (BoD > Manager > Staff). System ADMIN bypasses.
- * Use this instead of ad-hoc `role === 'BOD' || role === 'ADMIN'` checks.
+ * Org-wide workspace access check (One Above All > BoD > Manager > Staff), by the role IN that workspace.
+ * Use this instead of ad-hoc `role === 'BOD'` checks.
  */
 export async function checkWorkspaceAccess(
   userId: string,
   workspaceId: string,
   minRole: WorkspaceRole
 ): Promise<{ allowed: boolean; role: WorkspaceRole | null }> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === 'ADMIN') {
-    return { allowed: true, role: 'BOD' }
-  }
   const membership = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
     select: { role: true },

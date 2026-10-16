@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { firstUnlinkableProject, taskWriteRefusal, workspaceItemWriteRefusal } from '@/lib/write-access'
-import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
+import { isWorkspaceMemberOf } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ goal
     // Signed in is not enough (API.md E5): the goals list shows a workspace's goals to its members.
     const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true } })
     if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    if (!(await isWorkspaceMemberOrAdmin(session.user.id, goalRef.workspaceId))) {
+    if (!(await isWorkspaceMemberOf(session.user.id, goalRef.workspaceId))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const goal = await prisma.goal.findUnique({
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ go
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
 
-  // Signed in is not enough (writes batch): members of the goal's workspace (or a system admin), the
+  // Signed in is not enough (writes batch): members of the goal's workspace, the
   // rule of GET above. A linked project must be of the goal's workspace (or one the caller can open),
   // a linked task one the caller can open, a milestone this goal's, a parent goal of the same workspace.
   const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { id: true, workspaceId: true } })
@@ -222,7 +222,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    // Signed in is not enough (writes batch): members of the goal's workspace (or a system admin).
+    // Signed in is not enough (writes batch): members of the goal's workspace.
     const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true, title: true } })
     if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const refusal = await workspaceItemWriteRefusal(session.user.id, goalRef.workspaceId)

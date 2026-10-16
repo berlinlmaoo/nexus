@@ -79,7 +79,7 @@ export async function POST(
       return NextResponse.json({ error: `At most ${MAX_BULK} people at once` }, { status: 400 })
     }
 
-    // Adding people is Full access (the Project Owner, BoD / One Above All, a system admin).
+    // Adding people is Full access (the Project Owner, BoD / One Above All).
     const { allowed } = await checkProjectAccess(session.user.id!, projectId, ["LEAD"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: you need Full access to the project to add members", code: "NEEDS_FULL_ACCESS" }, { status: 403 })

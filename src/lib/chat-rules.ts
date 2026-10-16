@@ -375,9 +375,9 @@ const GROUP_MEMBER_MANAGER_ROLES: ReadonlySet<string> = new Set(["MANAGER", "BOD
  *   - GROUP only. A PROJECT room follows the project's members and a DM is two people: neither has
  *     member management of its own, so both answer false.
  *   - Leaving is not removing. Taking yourself out of a group (targetIsSelf) is always allowed.
- *   - Otherwise MANAGER, BOD or ONE_ABOVE_ALL in the ROOM's workspace, or a system ADMIN. A role in
- *     some other workspace does not count: anyone who signs up is One Above All of a workspace of
- *     their own. A room without a workspace gives nobody a workspace role (null), so only an admin.
+ *   - Otherwise MANAGER, BOD or ONE_ABOVE_ALL in the ROOM's workspace. A role in some other workspace
+ *     does not count: anyone who signs up is One Above All of a workspace of their own. A room without
+ *     a workspace gives nobody a workspace role (null), so nobody manages its members.
  *
  * Creating a group with its first members is not covered: that stays open to everyone.
  */
@@ -385,14 +385,11 @@ export function canManageGroupMembers(input: {
   kind: ConversationKind | string | null | undefined
   /** The caller's role in the room's workspace (Conversation.workspaceId); null when none. */
   callerWorkspaceRole: string | null | undefined
-  /** User.role: "ADMIN" | "MEMBER". */
-  callerSystemRole: string | null | undefined
   /** The person being removed is the caller (leaving the group). */
   targetIsSelf?: boolean
 }): boolean {
   if (input.kind !== "GROUP") return false
   if (input.targetIsSelf) return true
-  if (input.callerSystemRole === "ADMIN") return true
   return GROUP_MEMBER_MANAGER_ROLES.has(input.callerWorkspaceRole ?? "")
 }
 
@@ -420,7 +417,7 @@ export const DELETE_GROUP_MANAGER_MESSAGE = "Hanya manager ke atas yang bisa men
  *
  *   - GROUP only. A DM belongs to its two people and a project room to its project.
  *   - Whoever may add and remove people in it (canManageGroupMembers: Manager, BoD or One Above All of
- *     the room's workspace, or a system admin), or
+ *     the room's workspace), or
  *   - its only remaining member — the one person a group can no longer be left by (LAST_MEMBER).
  *
  * `isMember`: the caller holds a member row. The routes reach this only through conversationAccess,
@@ -635,8 +632,7 @@ export function parseDescription(raw: unknown):
 }
 
 /** Workspace roles shown as "Admin" in a room: the people who may add or remove members. */
-export function isRoomAdmin(input: { workspaceRole: string | null | undefined; systemRole: string | null | undefined }): boolean {
-  if (input.systemRole === "ADMIN") return true
+export function isRoomAdmin(input: { workspaceRole: string | null | undefined }): boolean {
   return GROUP_MEMBER_MANAGER_ROLES.has(input.workspaceRole ?? "")
 }
 

@@ -8,7 +8,7 @@ import { putSocialDayTargets, socialGate } from "@/lib/social-media-server"
  * A date's own targets per platform (owner, 14 Oct 2026). PUT { date, platforms: { [platformId]: {
  * engagementTarget?, postsTarget? } } }: null clears a part, which then falls back to the month's target split
  * over its days. Full access (the Project
- * Owner, BoD / One Above All, a system admin); anyone else 403 SETTINGS_FORBIDDEN.
+ * Owner, BoD / One Above All); anyone else 403 SETTINGS_FORBIDDEN.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {

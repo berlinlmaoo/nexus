@@ -4,14 +4,14 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { getAppSetting, setAppSetting } from "@/lib/app-setting"
-import { isAdminOrOrgBodPlus, ORG_WORKSPACE_ID } from "@/lib/org"
+import { isOrgBodPlus, ORG_WORKSPACE_ID } from "@/lib/org"
 import { normalizeCalendarSettings, privacyOf, type CalendarSettings } from "@/lib/calendar/core"
 import { CALENDAR_SETTING_KEY, getCalendarSettings } from "@/lib/calendar/server"
 
 /**
  * GET/PATCH /api/admin/calendar-settings — the Calendar's AppSetting "calendar": which projects are
  * private (staff outside them see "Tugas internal", decision 1), the rollout audience and the overdue
- * window. BoD / One Above All / system admin only. Takes effect on the next request, no deploy.
+ * window. BoD / One Above All only. Takes effect on the next request, no deploy.
  *
  * The hand-set project/folder division (folderUnits / projectUnits, "Project divisions" in the Control
  * Room) was removed on 12 Oct 2026 together with the whole "project's division" fallback: a task without
@@ -26,7 +26,7 @@ async function guard(): Promise<NextResponse | null> {
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await isAdminOrOrgBodPlus(userId))) return NextResponse.json({ error: "Hanya BoD / One Above All yang bisa mengatur kalender." }, { status: 403 })
+  if (!(await isOrgBodPlus(userId))) return NextResponse.json({ error: "Hanya BoD / One Above All yang bisa mengatur kalender." }, { status: 403 })
   return null
 }
 

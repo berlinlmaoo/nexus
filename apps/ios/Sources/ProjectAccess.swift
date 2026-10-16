@@ -9,8 +9,8 @@ import SwiftUI
 //   COMMENT = Can comment  — read + comment (task comments, posting in the project chat).
 //   VIEW    = Can view     — read only.
 //
-// BoD / One Above All (and a system admin) have Full access to every project except a Pipeline they are
-// not in; Managers and Staff only see projects they are members of, at their level. The server answers
+// BoD / One Above All have Full access to every project of their workspace, Pipelines included (owner,
+// 16 Oct 2026); Managers and Staff only see projects they are members of, at their level. The server answers
 // GET /api/projects/:id with `viewerAccessLevel` and `viewerCanManage`, and ProjectMember rows with
 // `accessLevel` next to the old `role` (kept in step for released apps).
 //

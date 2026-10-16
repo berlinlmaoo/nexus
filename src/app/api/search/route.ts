@@ -21,10 +21,7 @@ export async function GET(request: NextRequest) {
     // query below was global — leaking tasks/docs/comments across tenants and (via the user query)
     // enabling full email enumeration of the whole instance.
     const me = session.user.id
-    const [memberships, user] = await Promise.all([
-      prisma.workspaceMember.findMany({ where: { userId: me }, select: { workspaceId: true, role: true } }),
-      prisma.user.findUnique({ where: { id: me }, select: { role: true } }),
-    ])
+    const memberships = await prisma.workspaceMember.findMany({ where: { userId: me }, select: { workspaceId: true, role: true } })
     const wsIds = memberships.map((m) => m.workspaceId)
     if (wsIds.length === 0) {
       return NextResponse.json({ tasks: [], projects: [], comments: [], docs: [], members: [], goals: [], forms: [], sprints: [] })
@@ -33,9 +30,9 @@ export async function GET(request: NextRequest) {
 
     // Projects the searcher may find things in (owner, 5 Oct 2026: "a task that shows up is only one
     // inside a project they are in"): every project of a workspace where they are BoD / One Above All
-    // (Full access to every project, owner 13 Oct 2026 — Managers see only their own projects) or system admin; otherwise only projects they are a
+    // (Full access to every project, owner 13 Oct 2026 — Managers see only their own projects); otherwise only projects they are a
     // member of. Their own tasks (assignee or creator) are found wherever they are.
-    const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
+    const fullWs = memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
     const visibleProject = {
       workspaceId: inWorkspace,
       OR: [{ workspaceId: { in: fullWs.length ? fullWs : ["__none__"] } }, { members: { some: { userId: me } } }],

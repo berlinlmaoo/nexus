@@ -6,8 +6,8 @@ import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 /**
  * Bagan IP & Divisi — shared guard. Reading: anyone who may open Control Room's user management
- * (BoD / Manager / One Above All of the company workspace, or system admin), like Bagan Approval.
- * Changing: BoD / One Above All / system admin only. Always the COMPANY workspace.
+ * (BoD / Manager / One Above All of the company workspace), like Bagan Approval.
+ * Changing: BoD / One Above All only. Always the COMPANY workspace.
  *
  * The chart grants nothing (owner, 30 Sep 2026): no project access, no attendance rule. Nothing
  * here may touch ProjectMember or approverId.
@@ -18,7 +18,7 @@ export async function orgChartGuard(mode: "read" | "write"): Promise<{ userId: s
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const ctx = await getAdminAccessContext(userId)
   if (!ctx.canAccessUserManagement) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  if (mode === "write" && !(ctx.isSystemAdmin || ctx.orgRole === "BOD" || ctx.orgRole === "ONE_ABOVE_ALL")) {
+  if (mode === "write" && !(ctx.orgRole === "BOD" || ctx.orgRole === "ONE_ABOVE_ALL")) {
     return NextResponse.json({ error: "Hanya BoD / One Above All yang bisa mengubah bagan." }, { status: 403 })
   }
   return { userId }

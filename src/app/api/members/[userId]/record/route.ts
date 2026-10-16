@@ -13,7 +13,7 @@ import { memberRecordQuerySchema } from "@/lib/validations"
  * period (28th → 27th; default the current one). `:userId` may be "me".
  *
  * Who may look (lib/attendance-approvers reportableUserIds, the rule Reports per crew uses):
- *   BoD / One Above All / system admin → anyone in the workspace
+ *   BoD / One Above All → anyone in the workspace
  *   a manager in the Bagan Approval    → their direct reports (one level) and themselves
  *   everyone else                      → themselves
  *   otherwise 403 FORBIDDEN.

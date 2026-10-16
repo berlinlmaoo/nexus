@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { orgRoleOf } from "@/lib/org"
 
 export async function GET() {
   try {
@@ -38,10 +39,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // System admin only. No client creates workspaces here (registration makes the personal workspace
-    // through its own code), and whoever creates a workspace becomes its One Above All.
-    const caller = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
-    if (caller?.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // The company's One Above All only. No client creates workspaces here (registration makes the personal
+    // workspace through its own code), and whoever creates a workspace becomes its One Above All.
+    if ((await orgRoleOf(session.user.id)) !== "ONE_ABOVE_ALL") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const body = await request.json()
     const { name, slug, description } = body

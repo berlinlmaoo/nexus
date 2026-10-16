@@ -6,8 +6,8 @@ import { visibleConversationIdsOf } from "@/lib/chat-access"
  * Workspace Q&A search (owner, 12 Oct 2026 — GIDEON like Notion AI: "ask anything across everything you can
  * access, with cited sources"). One query over projects, tasks, docs, task comments, forms and chat messages,
  * with exactly the visibility of the person asking — the same rules as the ⌘K search (/api/search):
- *   - projects: every project of a workspace where they are Manager / BoD / One Above All (system admin: all
- *     their workspaces), otherwise projects they are a member of;
+ *   - projects: every project of a workspace where they are BoD / One Above All, otherwise projects they
+ *     are a member of;
  *   - tasks: in those projects, plus tasks assigned to or created by them;
  *   - docs, forms, comments: through the project / task they belong to;
  *   - chat: only rooms they can open (chat-access visibleConversationIdsOf).
@@ -89,12 +89,9 @@ function excerptOf(text: string, terms: string[], max = 220): string {
 
 /** The person's visibility, built once per search. */
 export async function visibilityOf(userId: string) {
-  const [memberships, user] = await Promise.all([
-    prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true, role: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-  ])
+  const memberships = await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true, role: true } })
   const wsIds = memberships.map((m) => m.workspaceId)
-  const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
+  const fullWs = memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
   const visibleProject = {
     workspaceId: { in: wsIds.length ? wsIds : ["__none__"] },
     OR: [{ workspaceId: { in: fullWs.length ? fullWs : ["__none__"] } }, { members: { some: { userId } } }],

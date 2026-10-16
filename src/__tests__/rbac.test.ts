@@ -59,18 +59,26 @@ describe('project access levels', () => {
     }
   })
 
-  it('a PIPELINE project: only its members, even for the BoD', async () => {
-    setup({ ws: 'BOD', type: 'PIPELINE' })
-    expect(await projectAccessLevel('u', 'p')).toBeNull()
-    setup({ ws: 'BOD', type: 'PIPELINE', m: { role: 'MEMBER' } })
-    expect(await projectAccessLevel('u', 'p')).toBe('EDIT')
+  it('a PIPELINE project follows the same rules (owner, 16 Oct 2026)', async () => {
+    for (const ws of ['BOD', 'ONE_ABOVE_ALL']) {
+      setup({ ws, type: 'PIPELINE' })
+      expect(await projectAccessLevel('u', 'p')).toBe('FULL')
+    }
+    for (const ws of ['MANAGER', 'STAFF']) {
+      setup({ ws, type: 'PIPELINE' })
+      expect(await projectAccessLevel('u', 'p')).toBeNull()
+      setup({ ws, type: 'PIPELINE', m: { role: 'MEMBER', accessLevel: 'VIEW' } })
+      expect(await projectAccessLevel('u', 'p')).toBe('VIEW')
+    }
   })
 
-  it('not in the workspace: nothing; system admin: Full', async () => {
+  it('not in the workspace: nothing; the retired ADMIN flag grants nothing', async () => {
     setup({ ws: null, m: { role: 'LEAD' } })
     expect(await projectAccessLevel('u', 'p')).toBeNull()
     setup({ sys: 'ADMIN', ws: null })
-    expect(await projectAccessLevel('u', 'p')).toBe('FULL')
+    expect(await projectAccessLevel('u', 'p')).toBeNull()
+    setup({ sys: 'ADMIN', ws: 'STAFF' })
+    expect(await projectAccessLevel('u', 'p')).toBeNull()
   })
 
   it('checkProjectAccess: LEAD needs Full, MEMBER needs Edit, VIEWER needs View', async () => {

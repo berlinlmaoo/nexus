@@ -205,7 +205,7 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
                     </div>
                   )}
                   <WorkspaceMembersSection 
-                    canManage={isAdmin || user?.role === "ADMIN"} 
+                    canManage={!!isAdmin} 
                     currentUserId={user?.id || ""} 
                   />
                 </div>

@@ -120,7 +120,6 @@ vi.mock("@/lib/prisma", () => {
 
 vi.mock("@/lib/rbac", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rbac")>()),
-  isSystemAdminUser: async (id: string) => m.users.get(id)?.role === "ADMIN",
   checkProjectAccess: async () => ({ allowed: true, role: "LEAD" }),
   checkWorkspaceAccess: async () => ({ allowed: true }),
 }))
@@ -145,8 +144,8 @@ import { PATCH as patchVaultItem } from "@/app/api/vault/items/[itemId]/route"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { POST as restoreEntry } from "@/app/api/audit/[id]/restore/route"
 
-// W1: Alice (BoD → may read the audit), Bob (staff → may not). W2: Carol (staff). Erin is a system admin
-// in no workspace at all. Dave was offboarded.
+// W1: Alice (BoD → may read the audit), Bob (staff → may not). W2: Carol (staff). Erin still carries the
+// retired system ADMIN flag (it grants nothing since 16 Oct 2026) and is One Above All of the company only. Dave was offboarded.
 function seed() {
   m.users.clear()
   m.users.set("u-alice", { name: "Alice", email: "alice@x.test", role: "USER", deactivatedAt: null })
@@ -168,6 +167,7 @@ function seed() {
   m.memberships.push(
     { userId: "u-alice", workspaceId: ORG_WORKSPACE_ID, role: "BOD" },
     { userId: "u-bob", workspaceId: ORG_WORKSPACE_ID, role: "STAFF" },
+    { userId: "u-erin", workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL" },
   )
   // LOGO holds INTOO (the owner's own case, 9 Oct 2026).
   const folder = (id: string, name: string, parentId: string | null): FakeVaultItem => ({
@@ -245,7 +245,7 @@ describe("workspace rooms (server-assigned from WorkspaceMember)", () => {
     await settle()
     expect(seen.get("u-alice")!.workspace).toEqual([{ kind: "folders", folderId: "f-1", actorId: "u-alice" }])
     expect(seen.get("u-bob")!.workspace).toHaveLength(1)
-    expect(seen.get("u-erin")!.workspace).toHaveLength(1) // system admin: sees every workspace's projects
+    expect(seen.get("u-erin")!.workspace).toHaveLength(0) // the ADMIN flag no longer reaches every workspace
     expect(seen.get("u-carol")!.workspace).toHaveLength(0) // W2 only
 
     clearSeen()
@@ -293,7 +293,7 @@ describe("audit room (resolveAuditAccess)", () => {
     await logAudit({ action: "update", entityType: "project", entityId: "p-alpha", userId: "u-bob" })
     await settle()
     expect(seen.get("u-alice")!.audit).toEqual([{ kind: "audit" }])
-    expect(seen.get("u-erin")!.audit).toEqual([{ kind: "audit" }])
+    expect(seen.get("u-erin")!.audit).toEqual([{ kind: "audit" }]) // the company's One Above All
     expect(seen.get("u-bob")!.audit).toHaveLength(0) // staff: no audit access
     expect(seen.get("u-carol")!.audit).toHaveLength(0)
   })

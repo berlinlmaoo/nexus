@@ -6,10 +6,8 @@ import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 import { notifyAnnouncement } from "@/lib/notification-service"
 
-// BoD and above (+ system admin) can post/manage announcements.
+// BoD and above can post/manage announcements.
 async function isBoD(userId: string): Promise<boolean> {
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (me?.role === "ADMIN") return true
   // Company workspace only: every sign-up is One Above All of their own personal workspace.
   const role = await orgRoleOf(userId)
   return role === "BOD" || role === "ONE_ABOVE_ALL"

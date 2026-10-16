@@ -9,7 +9,7 @@ import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
 import { canWriteGlobalAccount } from '@/lib/org'
 import { auditDiff } from '@/lib/audit-describe'
-import { isSystemAdminUser, WORKSPACE_HIERARCHY } from '@/lib/rbac'
+import { WORKSPACE_HIERARCHY } from '@/lib/rbac'
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from '@/lib/phone-number'
 import { Prisma } from '@/generated/prisma/client'
 import { canonicalEmail } from '@/lib/email-auth'
@@ -20,9 +20,9 @@ import { pipelineFlags } from '@/lib/pipeline-access'
 import { hasLegalAccess } from '@/lib/legal/access'
 import { personalScope } from '@/lib/personal-visibility'
 
-// Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
-function callerTier(role: string | null | undefined, isSystemAdmin: boolean) {
-  return isSystemAdmin ? 4 : (WORKSPACE_HIERARCHY[role as WorkspaceRole] ?? 0)
+// Caller's tier in the workspace. Used to gate who can assign which role.
+function callerTier(role: string | null | undefined) {
+  return WORKSPACE_HIERARCHY[role as WorkspaceRole] ?? 0
 }
 // You can assign a role strictly below your tier; One Above All (4) can assign any (incl One Above All/BoD).
 function canAssign(tier: number, targetRole: string) {
@@ -70,16 +70,15 @@ export async function GET(req: NextRequest) {
 
     const member = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
     // Reading a colleague's personal phone number is gated at the same tier that is allowed to WRITE
-    // it (see PATCH: tier >= 3 = BoD / One Above All / system admin). It is a personal mobile, not a
+    // it (see PATCH: tier >= 3 = BoD / One Above All). It is a personal mobile, not a
     // work contact detail, and no screen below that tier displays it.
-    const canSeePhoneNumbers = callerTier(member.role, isSystemAdmin) >= 3
+    const canSeePhoneNumbers = callerTier(member.role) >= 3
 
     const pipeline = await pipelineFlags(session.user.id)
     const canAccessLegal = await hasLegalAccess(session.user.id)
     // Personal attendance data (shift, per-day shift, rest days, Flexi / no-geofence, approver) only for
-    // yourself and the people below you in the approval chain; BoD / One Above All / system admin see all
+    // yourself and the people below you in the approval chain; BoD / One Above All see all
     // (owner decision 13 Oct 2026, lib/personal-visibility.ts). Hidden rows keep every key with a neutral
     // value plus `personalHidden: true`, so the released apps decode them as before.
     const personal = await personalScope(session.user.id, member.workspaceId)
@@ -188,7 +187,6 @@ export async function GET(req: NextRequest) {
     }
 
     const canSeeRegistered =
-      isSystemAdmin ||
       member.role === 'BOD' ||
       member.role === 'MANAGER' || member.role === 'ONE_ABOVE_ALL' ||
       await canManageTeamInWorkspace(session.user.id, member.workspaceId, teamId)
@@ -234,8 +232,7 @@ export async function POST(req: NextRequest) {
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
-    const tier = callerTier(currentMember.role, isSystemAdmin)
+    const tier = callerTier(currentMember.role)
     if (tier < 3) {
       return NextResponse.json({ error: 'Only One Above All / BoD can invite members' }, { status: 403 })
     }
@@ -447,8 +444,7 @@ export async function PATCH(req: NextRequest) {
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
-    const tier = callerTier(currentMember.role, isSystemAdmin)
+    const tier = callerTier(currentMember.role)
     // Managing members requires BoD+ (tier ≥ 3); Manager/Staff cannot.
     if (tier < 3) {
       return NextResponse.json({ error: 'Only One Above All / BoD can manage members' }, { status: 403 })
@@ -493,7 +489,7 @@ export async function PATCH(req: NextRequest) {
       if (!canAssign(tier, role)) {
         return NextResponse.json({ error: 'Kamu tidak bisa memberikan role itu (di atas level kamu).' }, { status: 403 })
       }
-      const targetTier = callerTier(targetMember.role, false)
+      const targetTier = callerTier(targetMember.role)
       if (tier !== 4 && targetTier >= tier) {
         return NextResponse.json({ error: 'Kamu tidak bisa mengubah role member yang setara/di atas kamu.' }, { status: 403 })
       }
@@ -645,10 +641,9 @@ export async function DELETE(req: NextRequest) {
     const requestedWorkspaceId = req.nextUrl.searchParams.get('workspaceId') || undefined
     const currentMember = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
     // BoD and above only, as every other member change (audit 28 Sep 2026: Managers could remove
     // anyone, One Above All included).
-    const tier = callerTier(currentMember.role, isSystemAdmin)
+    const tier = callerTier(currentMember.role)
     if (tier < WORKSPACE_HIERARCHY.BOD) {
       return NextResponse.json({ error: 'Hanya BoD ke atas yang bisa mengeluarkan anggota.' }, { status: 403 })
     }
@@ -665,8 +660,8 @@ export async function DELETE(req: NextRequest) {
     if (targetMember.userId === session.user.id) {
       return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 })
     }
-    // Only someone who outranks them (One Above All / system admin excepted).
-    if (tier !== 4 && callerTier(targetMember.role, false) >= tier) {
+    // Only someone who outranks them (One Above All excepted).
+    if (tier !== 4 && callerTier(targetMember.role) >= tier) {
       return NextResponse.json({ error: 'Kamu tidak bisa mengeluarkan anggota yang setara atau di atas level kamu.' }, { status: 403 })
     }
 

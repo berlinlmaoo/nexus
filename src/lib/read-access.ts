@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { hasProjectLevel, isSystemAdminUser } from "@/lib/rbac"
+import { hasProjectLevel } from "@/lib/rbac"
 
 /**
  * Read access for single items that used to check only "is someone signed in" (API.md §4 E5).
@@ -14,8 +14,8 @@ import { hasProjectLevel, isSystemAdminUser } from "@/lib/rbac"
  *  - the dashboard lists tasks assigned to the user whatever the project;
  *  - the project board shows tasks linked in from other projects (TaskProject);
  *  - the docs list shows docs of projects the user is a ProjectMember of;
- *  - checkProjectAccess (board, comments, attachments) lets system admins, BoD / One Above All /
- *    Manager of the workspace, and project members through.
+ *  - checkProjectAccess (board, comments, attachments) lets BoD / One Above All of the workspace and
+ *    project members through.
  * What it closes is reading across workspaces — anyone with an account (a self-signup gets a
  * personal workspace) could read any task, doc, sprint or dependency by id.
  */
@@ -59,7 +59,7 @@ export async function canReadTask(userId: string, taskId: string): Promise<ReadV
 
   const projectIds = unique([task.taskList.projectId, ...task.taskProjects.map((link) => link.projectId)])
   // Project access by membership (owner 13 Oct 2026): any access level in the task's project or a project it
-  // is linked into (BoD / One Above All / system admin have every project). Being in the same WORKSPACE no
+  // is linked into (BoD / One Above All have every project). Being in the same WORKSPACE no
   // longer opens a task (QA R2 Manager N1). The calendar's own previews (/api/calendar/*) are a separate,
   // pending owner decision and don't go through here.
   for (const id of projectIds) if (await hasProjectLevel(userId, id, "VIEW")) return "ok"
@@ -82,10 +82,9 @@ export async function canReadProjectContent(userId: string, projectId: string): 
   return hasProjectLevel(userId, projectId, "VIEW")
 }
 
-/** Workspace-owned items (a goal, a portfolio): the lists show them to members of the workspace; admins too. */
-export async function isWorkspaceMemberOrAdmin(userId: string, workspaceId: string): Promise<boolean> {
-  if (await isMemberOfAnyWorkspace(userId, [workspaceId])) return true
-  return isSystemAdminUser(userId)
+/** Workspace-owned items (a goal, a portfolio): the lists show them to members of the workspace. */
+export async function isWorkspaceMemberOf(userId: string, workspaceId: string): Promise<boolean> {
+  return isMemberOfAnyWorkspace(userId, [workspaceId])
 }
 
 /** The ids of the workspaces a user belongs to (the activity feed without a project/task filter). */

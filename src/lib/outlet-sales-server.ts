@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { checkProjectAccess, isSystemAdminUser, hasProjectLevel } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitOutletSalesChanged } from "@/lib/socket-emitter"
@@ -45,8 +45,8 @@ export type OutletGate = { ok: true; project: GateProject } | { ok: false; respo
 
 /**
  * An ordinary project for access (owner: "akses = anggota project seperti project biasa"):
- * checkProjectAccess with read = VIEWER, write = MEMBER — the project's members, plus Manager / BoD /
- * One Above All of the workspace and system admins, exactly as for a task project. Any member may add
+ * checkProjectAccess with read = VIEWER, write = MEMBER — the project's members, plus BoD / One Above
+ * All of the workspace, exactly as for a task project. Any member may add
  * an event and fill or change a report. Anything that is not an OUTLET_SALES project answers 400
  * NOT_OUTLET_SALES.
  */
@@ -69,11 +69,10 @@ export async function outletGate(userId: string, projectId: string, need: "read"
 
 /**
  * Who sets the monthly targets: the same people who manage the project's settings (canManageProject in
- * api/projects/[projectId]/route.ts) — system admin, the project's LEAD, and Manager / BoD / One Above
- * All of its workspace.
+ * api/projects/[projectId]/route.ts) — the project's LEAD, and BoD / One Above All of its workspace.
  */
 export async function canManageOutletTargets(userId: string, projectId: string): Promise<boolean> {
-  // Full access (lib/rbac.ts): the Project Owner, BoD / One Above All, a system admin (owner 13 Oct 2026).
+  // Full access (lib/rbac.ts): the Project Owner, BoD / One Above All (owner 13 Oct 2026).
   return hasProjectLevel(userId, projectId, "FULL")
 }
 

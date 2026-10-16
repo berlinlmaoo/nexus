@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { checkProjectAccess, isSystemAdminUser, hasProjectWideAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectWideAccess } from "@/lib/rbac"
 import { canReadTask, taskReadRefusal, workspaceIdsOf } from "@/lib/read-access"
 
 export async function GET(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     const onlyWorkspaceIds =
-      !scopeTaskId && !scopeProjectId && !(await isSystemAdminUser(session.user.id!))
+      !scopeTaskId && !scopeProjectId
         ? await workspaceIdsOf(session.user.id!)
         : null
 

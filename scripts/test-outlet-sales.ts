@@ -65,14 +65,14 @@ async function main() {
   ck("blank name on patch refused", parseEventFields({ name: "  " }, "patch").ok, false)
 
   // ── Database ──
-  const groups = await prisma.workspaceMember.groupBy({ by: ["workspaceId"], where: { role: "STAFF", user: { role: { not: "ADMIN" } } }, _count: { _all: true } })
+  const groups = await prisma.workspaceMember.groupBy({ by: ["workspaceId"], where: { role: "STAFF" }, _count: { _all: true } })
   const best = groups.sort((a, b) => b._count._all - a._count._all)[0]
   if (!best || best._count._all < 3) throw new Error("need a workspace with 3 staff in the test DB")
   const ws = { id: best.workspaceId }
   const [lead, staff, outsider] = await prisma.workspaceMember.findMany({
-    where: { workspaceId: ws.id, role: "STAFF", user: { role: { not: "ADMIN" } } }, take: 3, select: { userId: true },
+    where: { workspaceId: ws.id, role: "STAFF" }, take: 3, select: { userId: true },
   })
-  const manager = await prisma.workspaceMember.findFirst({ where: { workspaceId: ws.id, role: "MANAGER", user: { role: { not: "ADMIN" } } }, select: { userId: true } })
+  const manager = await prisma.workspaceMember.findFirst({ where: { workspaceId: ws.id, role: "MANAGER" }, select: { userId: true } })
   const project = await prisma.project.create({
     data: {
       name: "TEST outlet (test-outlet-sales.ts)", type: "OUTLET_SALES", workspaceId: ws.id,

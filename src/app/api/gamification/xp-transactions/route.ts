@@ -14,20 +14,17 @@ import {
 const LATE_PREFIX = "attendance:late:"
 
 // Admin-only XP audit log: every XP change (+/-) across all crew the caller shares
-// a workspace with. Visible to BoD and above (+ system admin) only — it exposes
+// a workspace with. Visible to BoD and above only — it exposes
 // per-person penalty data (alpha, late, no-checkout) which is HR-sensitive.
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
-    const isSysAdmin = me?.role === "ADMIN"
-
     // BoD+ of the COMPANY workspace only (every sign-up is One Above All of a personal workspace).
     const orgRole = await orgRoleOf(session.user.id)
     const isBoD = orgRole === "BOD" || orgRole === "ONE_ABOVE_ALL"
-    if (!isSysAdmin && !isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // Peers = everyone in the company workspace.
     const workspaceIds = [ORG_WORKSPACE_ID]

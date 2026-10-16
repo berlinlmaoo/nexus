@@ -6,6 +6,7 @@ import path from "path"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { syncUserRoomsSafe } from "@/lib/chat-membership"
 import { deleteGideonAttachmentFiles } from "@/lib/gideon-attachments"
 import {
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true },
     })
     if (!user) {
       return NextResponse.json({ error: "We couldn't find your account." }, { status: 404 })
@@ -109,12 +110,17 @@ export async function POST(request: NextRequest) {
         const blocked = await workspacesLeftOwnerless(tx, userId)
         if (blocked.length > 0) throw new DeletionRefused(409, ownerlessMessage(blocked))
 
-        if (user.role === "ADMIN") {
-          const otherAdmins = await tx.user.count({ where: { role: "ADMIN", id: { not: userId } } })
-          if (otherAdmins === 0) {
+        // The last One Above All of the company workspace never goes (it replaced the "last system admin"
+        // guard when the system ADMIN flag was retired, 16 Oct 2026), even with nobody else left in it.
+        const companyOaa = await tx.workspaceMember.count({ where: { userId, workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL" } })
+        if (companyOaa > 0) {
+          const otherOaas = await tx.workspaceMember.count({
+            where: { workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL", userId: { not: userId } },
+          })
+          if (otherOaas === 0) {
             throw new DeletionRefused(
               409,
-              "You're the last system admin of NEXUS. Make someone else a system admin first, then delete your account.",
+              "You're the last One Above All of the company. Make someone else One Above All first, then delete your account.",
             )
           }
         }
@@ -232,7 +238,7 @@ export async function POST(request: NextRequest) {
       entityName: `${user.name} (${DELETED_ACCOUNT_NAME})`,
       userId,
       request,
-      metadata: { selfService: true, previousRole: user.role, ...summary.counts },
+      metadata: { selfService: true, ...summary.counts },
     })
 
     return NextResponse.json({ ok: true })

@@ -1,5 +1,4 @@
 import prisma from "@/lib/prisma"
-import { isSystemAdminUser } from "@/lib/rbac"
 import type { Prisma, TeamCalendarEventStatus, WorkspaceRole } from "@/generated/prisma"
 import { hasProjectWideAccess } from "@/lib/rbac"
 
@@ -14,30 +13,6 @@ export type TeamCalendarTeamOption = {
 }
 
 export async function getMasterCalendarTeamsForUser(userId: string): Promise<TeamCalendarTeamOption[]> {
-  const isSystemAdmin = await isSystemAdminUser(userId)
-
-  if (isSystemAdmin) {
-    const teams = await prisma.team.findMany({
-      include: {
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: [{ workspace: { name: "asc" } }, { name: "asc" }],
-    })
-
-    return teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      color: team.color,
-      workspaceId: team.workspaceId,
-      workspaceName: team.workspace.name,
-    }))
-  }
-
   const workspaceMemberships = await prisma.workspaceMember.findMany({
     where: { userId },
     select: {
@@ -96,29 +71,26 @@ export async function getMasterCalendarTeamsForUser(userId: string): Promise<Tea
 }
 
 export async function getMasterCalendarTeamAccess(userId: string, teamId: string) {
-  const [isSystemAdmin, team] = await Promise.all([
-    isSystemAdminUser(userId),
-    prisma.team.findUnique({
-      where: { id: teamId },
-      select: {
-        id: true,
-        name: true,
-        color: true,
-        workspaceId: true,
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        members: {
-          where: { userId },
-          select: { role: true },
-          take: 1,
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      workspaceId: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
         },
       },
-    }),
-  ])
+      members: {
+        where: { userId },
+        select: { role: true },
+        take: 1,
+      },
+    },
+  })
 
   if (!team) {
     return {
@@ -126,7 +98,6 @@ export async function getMasterCalendarTeamAccess(userId: string, teamId: string
       visible: false,
       canManage: false,
       workspaceRole: null as WorkspaceRole | null,
-      isSystemAdmin,
     }
   }
 
@@ -143,14 +114,13 @@ export async function getMasterCalendarTeamAccess(userId: string, teamId: string
   const workspaceRole = workspaceMembership?.role ?? null
   const isWorkspaceAdmin = workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
   const isTeamMember = team.members.length > 0
-  const visible = Boolean(isSystemAdmin || isWorkspaceAdmin || isTeamMember)
+  const visible = Boolean(isWorkspaceAdmin || isTeamMember)
 
   return {
     team,
     visible,
     canManage: visible,
     workspaceRole,
-    isSystemAdmin,
   }
 }
 

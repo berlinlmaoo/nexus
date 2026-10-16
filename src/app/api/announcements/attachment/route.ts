@@ -5,22 +5,19 @@ import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { randomBytes } from "crypto"
 import { auth } from "@/lib/auth"
-import prisma from "@/lib/prisma"
 import { orgRoleOf } from "@/lib/org"
 
 // An SP (surat peringatan) is a letter, a few pages at most.
 const MAX_SIZE = 10 * 1024 * 1024
 
 async function isBoD(userId: string): Promise<boolean> {
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (me?.role === "ADMIN") return true
   // Company workspace only: every sign-up is One Above All of their own personal workspace.
   const role = await orgRoleOf(userId)
   return role === "BOD" || role === "ONE_ABOVE_ALL"
 }
 
 /**
- * POST /api/announcements/attachment   multipart, field `file`   BoD / One Above All (+ system admin).
+ * POST /api/announcements/attachment   multipart, field `file`   BoD / One Above All.
  *
  * A PDF for an announcement (kind "sp"). Stored under uploads/attachments/announcements/ with a
  * random name and served by /api/files (session required). The URL returned is the only kind

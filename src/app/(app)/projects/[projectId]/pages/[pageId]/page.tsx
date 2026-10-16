@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { PageViewClient } from "@/components/projects/page-view-client"
 import type { TaskCardData } from "@/components/tasks/task-card"
-import { isSystemAdminUser } from "@/lib/rbac"
 
 interface PageViewProps {
   params: Promise<{ projectId: string; pageId: string }>
@@ -15,7 +14,6 @@ export default async function ProjectPageView({ params }: PageViewProps) {
   const { projectId, pageId } = await params
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
-  const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
   const page = await prisma.projectPage.findUnique({
     where: { id: pageId },
@@ -73,7 +71,7 @@ export default async function ProjectPageView({ params }: PageViewProps) {
 
   const workspaceRole = page.project.workspace.members[0]?.role
   const hasWorkspaceAccess =
-    isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
+    workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
   const isDirectProjectMember = page.project.members.some(
     (m) => m.user.id === session.user!.id
   )

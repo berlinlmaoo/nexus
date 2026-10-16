@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { rememberUiLanguage, setUiLanguage } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
+import { orgRoleOf } from "@/lib/org"
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
 export async function GET(req: Request) {
@@ -18,14 +19,17 @@ export async function GET(req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true, uiLanguage: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, uiLanguage: true },
     })
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ user })
+    // `role` is the retired system flag (16 Oct 2026). Kept for clients that still read it, derived from
+    // the company role: "ADMIN" for the company's One Above All, "MEMBER" for everyone else.
+    const orgRole = await orgRoleOf(user.id)
+    return NextResponse.json({ user: { ...user, role: orgRole === "ONE_ABOVE_ALL" ? "ADMIN" : "MEMBER" } })
   } catch (error) {
     console.error("Error fetching profile:", error)
     return NextResponse.json(
@@ -96,7 +100,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true, uiLanguage: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, uiLanguage: true },
     })
 
     logAudit({
@@ -114,7 +118,8 @@ export async function PATCH(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ user })
+    const orgRole = await orgRoleOf(user.id)
+    return NextResponse.json({ user: { ...user, role: orgRole === "ONE_ABOVE_ALL" ? "ADMIN" : "MEMBER" } })
   } catch (error) {
     console.error("Error updating profile:", error)
     return NextResponse.json(

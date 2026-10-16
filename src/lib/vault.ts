@@ -160,17 +160,13 @@ export interface VaultActor {
 
 /**
  * Z Vault is the COMPANY drive: the actor's vault is the company workspace's, and only its members
- * (or a system admin) get one. Anyone else — e.g. the One Above All of a personal workspace made at
+ * get one. Anyone else — e.g. the One Above All of a personal workspace made at
  * sign-up — gets workspaceId null, which every vault route answers with 403. Public share links
  * (/api/vault/public/**) do not go through here and keep working for outsiders.
  */
 export async function getVaultActor(userId: string): Promise<VaultActor> {
-  const [user, orgRole] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    orgRoleOf(userId),
-  ])
-  const allowed = orgRole !== null || user?.role === "ADMIN"
-  return { userId, orgRole, workspaceId: allowed ? ORG_WORKSPACE_ID : null }
+  const orgRole = await orgRoleOf(userId)
+  return { userId, orgRole, workspaceId: orgRole !== null ? ORG_WORKSPACE_ID : null }
 }
 
 export { getUserOrgRole, isManagerRole, isBodPlus }

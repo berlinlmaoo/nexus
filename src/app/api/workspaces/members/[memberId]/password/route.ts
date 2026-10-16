@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { canWriteGlobalAccount } from "@/lib/org"
 import { markSessionsEnded } from "@/lib/user-sessions"
-import { WORKSPACE_HIERARCHY, isSystemAdminUser } from "@/lib/rbac"
+import { WORKSPACE_HIERARCHY } from "@/lib/rbac"
 import type { WorkspaceRole } from "@/generated/prisma/client"
 
 // POST { password } → a BoD-or-above resets another member's login password.
@@ -30,13 +30,12 @@ export async function POST(
     })
     if (!targetMember) return NextResponse.json({ error: "Member not found" }, { status: 404 })
 
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
     const caller = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: session.user.id, workspaceId: targetMember.workspaceId } },
       select: { role: true },
     })
 
-    const callerTier = isSystemAdmin ? 4 : (caller ? WORKSPACE_HIERARCHY[caller.role] : 0)
+    const callerTier = caller ? WORKSPACE_HIERARCHY[caller.role] : 0
     // BoD ke atas only.
     if (callerTier < WORKSPACE_HIERARCHY.BOD) {
       return NextResponse.json({ error: "Cuma BoD ke atas yang bisa reset password" }, { status: 403 })

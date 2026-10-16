@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ProjectDetailClient } from "@/components/projects/project-detail-client"
 import type { TaskCardData } from "@/components/tasks/task-card"
-import { isSystemAdminUser } from "@/lib/rbac"
 import { buildTaskCardCustomFieldChips } from "@/lib/task-card-custom-fields"
 
 interface ProjectDetailPageProps {
@@ -146,7 +145,6 @@ export default async function ProjectDetailPage({
 
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
-  const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -293,7 +291,7 @@ export default async function ProjectDetailPage({
 
   const workspaceRole = project.workspace.members[0]?.role
   const hasWorkspaceAccess =
-    isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
+    workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
   const isDirectProjectMember = project.members.some(
     (m) => m.user.id === session.user!.id
   )

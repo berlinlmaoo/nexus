@@ -347,10 +347,9 @@ export async function reinstateUser(input: ReinstateInput, tx: Prisma.Transactio
 }
 
 /**
- * Who may offboard or reinstate whom (both routes). A system ADMIN may; otherwise BoD or One Above All
- * of the COMPANY workspace (the same people who may delete an account). Never yourself. Never someone
- * of equal or higher company role unless you are a system ADMIN or One Above All. A system admin
- * account is only touched by another system admin.
+ * Who may offboard or reinstate whom (both routes). BoD or One Above All of the COMPANY workspace (the
+ * same people who may delete an account). Never yourself. Never someone of equal or higher company role
+ * unless you are One Above All.
  *
  * `targetCompanyRole`: their role in the company workspace (for a reinstatement, the role they had).
  * Returns null when allowed.
@@ -358,24 +357,17 @@ export async function reinstateUser(input: ReinstateInput, tx: Prisma.Transactio
 export function offboardAuthorityError(args: {
   action: "offboard" | "reinstate"
   actorId: string
-  actorIsSystemAdmin: boolean
   actorCompanyRole: string | null
   targetId: string
-  targetSystemRole: string
   targetCompanyRole: string | null
 }): { status: number; code: "FORBIDDEN" | "SELF" | "RANK"; error: string } | null {
-  const actorTier = args.actorIsSystemAdmin
-    ? WORKSPACE_HIERARCHY.ONE_ABOVE_ALL
-    : (WORKSPACE_HIERARCHY[args.actorCompanyRole as WorkspaceRole] ?? 0)
+  const actorTier = WORKSPACE_HIERARCHY[args.actorCompanyRole as WorkspaceRole] ?? 0
   const verb = args.action === "offboard" ? "offboard" : "mengaktifkan ulang"
   if (actorTier < WORKSPACE_HIERARCHY.BOD) {
-    return { status: 403, code: "FORBIDDEN", error: `Hanya system admin / BoD yang bisa ${verb} akun.` }
+    return { status: 403, code: "FORBIDDEN", error: `Hanya BoD ke atas yang bisa ${verb} akun.` }
   }
   if (args.actorId === args.targetId) {
     return { status: 400, code: "SELF", error: `Gak bisa ${verb} akun kamu sendiri.` }
-  }
-  if (args.targetSystemRole === "ADMIN" && !args.actorIsSystemAdmin) {
-    return { status: 403, code: "RANK", error: `Akun ini system admin — cuma sesama system admin yang bisa ${verb}.` }
   }
   const targetTier = WORKSPACE_HIERARCHY[args.targetCompanyRole as WorkspaceRole] ?? 0
   if (actorTier !== WORKSPACE_HIERARCHY.ONE_ABOVE_ALL && targetTier >= actorTier) {

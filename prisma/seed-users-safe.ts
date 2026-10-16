@@ -18,7 +18,7 @@ const demoUsers = [
     name: 'Berlin Taufik',
     email: 'berlin@patsgroup.id',
     password: 'password123',
-    systemRole: 'ADMIN' as const,
+    systemRole: 'MEMBER' as const,
     workspaceRole: 'OWNER' as const,
   },
   {

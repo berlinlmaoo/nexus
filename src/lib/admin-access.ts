@@ -12,7 +12,6 @@ export async function getAdminAccessContext(userId: string) {
         name: true,
         email: true,
         avatar: true,
-        role: true,
       },
     }),
     prisma.workspaceMember.findMany({
@@ -26,7 +25,6 @@ export async function getAdminAccessContext(userId: string) {
     }),
   ])
 
-  const isSystemAdmin = user?.role === "ADMIN"
   // Company-level admin rights come from the role in the COMPANY workspace only. A role in any
   // other workspace (e.g. the personal workspace every sign-up owns as ONE_ABOVE_ALL) grants none.
   const orgRole = workspaceMemberships.find((membership) => membership.workspaceId === ORG_WORKSPACE_ID)?.role ?? null
@@ -36,10 +34,9 @@ export async function getAdminAccessContext(userId: string) {
     user,
     workspaceMemberships,
     primaryWorkspaceMembership: workspaceMemberships[0] ?? null,
-    isSystemAdmin,
     isWorkspaceAdmin,
     orgRole,
-    canAccessUserManagement: Boolean(user && (isSystemAdmin || isWorkspaceAdmin)),
+    canAccessUserManagement: Boolean(user && isWorkspaceAdmin),
   }
 }
 

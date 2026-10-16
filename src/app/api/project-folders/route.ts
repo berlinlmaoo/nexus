@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
@@ -13,7 +12,6 @@ function isMissingSchemaError(error: unknown) {
 }
 
 async function canManageWorkspace(userId: string, workspaceId: string) {
-  if (await isSystemAdminUser(userId)) return true
 
   const membership = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
@@ -29,16 +27,13 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const workspaceId = request.nextUrl.searchParams.get("workspaceId")
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
     if (workspaceId) {
-      if (!isSystemAdmin) {
-        const membership = await prisma.workspaceMember.findUnique({
-          where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
-          select: { id: true },
-        })
-        if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
+      const membership = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
+        select: { id: true },
+      })
+      if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
       const folders = await prisma.projectFolder.findMany({
         where: { workspaceId },
@@ -49,18 +44,16 @@ export async function GET(request: NextRequest) {
     }
 
     const workspaceMemberships = await prisma.workspaceMember.findMany({
-      where: isSystemAdmin ? undefined : { userId: session.user.id },
+      where: { userId: session.user.id },
       select: { workspaceId: true },
     })
 
-    if (!isSystemAdmin && workspaceMemberships.length === 0) {
+    if (workspaceMemberships.length === 0) {
       return NextResponse.json([])
     }
 
     const folders = await prisma.projectFolder.findMany({
-      where: isSystemAdmin
-        ? undefined
-        : { workspaceId: { in: workspaceMemberships.map((membership) => membership.workspaceId) } },
+      where: { workspaceId: { in: workspaceMemberships.map((membership) => membership.workspaceId) } },
       orderBy: [{ workspaceId: "asc" }, { position: "asc" }, { name: "asc" }],
     })
 

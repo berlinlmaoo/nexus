@@ -73,7 +73,7 @@ export async function POST(
 
     // Company-wide user management does not reach other workspaces: the caller must be BoD+ in the
     // workspace being joined, and may only grant a role below their own there.
-    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, workspaceId, {
+    const denied = await membershipChangeError(session.user.id, workspaceId, {
       targetUserId: user.id,
       newRole: role,
     })

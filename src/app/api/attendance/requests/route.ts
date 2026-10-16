@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
     // Permission model: Staff may self-submit DAY_OFF / SICK / PERMIT / RED_DATE (all go in as
     // PENDING for review). LEAVE is granted by BoD (canManageAttendance) — optionally on behalf
     // of a specific user.
-    const canGrant = context.canManageAttendance // BoD / One Above All / system admin
+    const canGrant = context.canManageAttendance // BoD / One Above All
     const reqType = validation.data.type
     // Izin is for work done away from the desk — shooting, events, rehearsals, venue surveys, client
     // visits, "masuk siang karena …". It is not a day off and it does not cover a forgotten check-in

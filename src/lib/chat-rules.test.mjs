@@ -246,33 +246,32 @@ test("new room's workspace: one everybody is in, the creator's oldest first; non
 })
 
 // ── who may add or remove people in a group (owner, 8 Oct 2026) ──
-const manage = (kind, callerWorkspaceRole, callerSystemRole = "MEMBER", targetIsSelf = false) =>
-  R.canManageGroupMembers({ kind, callerWorkspaceRole, callerSystemRole, targetIsSelf })
+const manage = (kind, callerWorkspaceRole, targetIsSelf = false) =>
+  R.canManageGroupMembers({ kind, callerWorkspaceRole, targetIsSelf })
 test("group: Manager, BoD and One Above All of the room's workspace may add or remove; staff may not", () => {
   assert.equal(manage("GROUP", "MANAGER"), true)
   assert.equal(manage("GROUP", "BOD"), true)
   assert.equal(manage("GROUP", "ONE_ABOVE_ALL"), true)
   assert.equal(manage("GROUP", "STAFF"), false)
 })
-test("group: no role in the room's workspace (or a room without one) is no say — unless system admin", () => {
+test("group: no role in the room's workspace (or a room without one) is no say", () => {
   assert.equal(manage("GROUP", null), false)
   assert.equal(manage("GROUP", undefined), false)
   assert.equal(manage("GROUP", ""), false)
   assert.equal(manage("GROUP", "staff"), false, "roles are exact enum values")
-  assert.equal(manage("GROUP", null, "ADMIN"), true)
-  assert.equal(manage("GROUP", "STAFF", "ADMIN"), true)
-  assert.equal(R.canManageGroupMembers({ kind: "GROUP", callerWorkspaceRole: "STAFF", callerSystemRole: null }), false)
+  assert.equal(R.canManageGroupMembers({ kind: "GROUP", callerWorkspaceRole: "STAFF" }), false)
+  // The retired system flag (User.role ADMIN, 16 Oct 2026) is not an input any more and grants nothing.
+  assert.equal(R.canManageGroupMembers({ kind: "GROUP", callerWorkspaceRole: null, callerSystemRole: "ADMIN" }), false)
 })
 test("group: leaving is not removing — anyone may take themselves out", () => {
-  assert.equal(manage("GROUP", "STAFF", "MEMBER", true), true)
-  assert.equal(manage("GROUP", null, null, true), true)
-  assert.equal(manage("GROUP", "STAFF", "MEMBER", false), false)
+  assert.equal(manage("GROUP", "STAFF", true), true)
+  assert.equal(manage("GROUP", null, true), true)
+  assert.equal(manage("GROUP", "STAFF", false), false)
 })
 test("DM and project rooms have no member management here, whatever the role", () => {
   for (const kind of ["DM", "PROJECT", null, undefined, "group"]) {
     assert.equal(manage(kind, "ONE_ABOVE_ALL"), false, String(kind))
-    assert.equal(manage(kind, null, "ADMIN"), false, String(kind))
-    assert.equal(manage(kind, "STAFF", "MEMBER", true), false, String(kind))
+    assert.equal(manage(kind, "STAFF", true), false, String(kind))
   }
 })
 test("MANAGER_REQUIRED code and sentence", () => {
@@ -396,13 +395,13 @@ test("description: absent / null / blank / text / too long / junk", () => {
   assert.equal(R.parseDescription(42).ok, false)
   assert.equal(R.DESCRIPTION_MAX, 500)
 })
-test("Admin = Manager, BoD, One Above All in the room's workspace, or a system admin", () => {
-  assert.equal(R.isRoomAdmin({ workspaceRole: "MANAGER", systemRole: "MEMBER" }), true)
-  assert.equal(R.isRoomAdmin({ workspaceRole: "BOD", systemRole: null }), true)
-  assert.equal(R.isRoomAdmin({ workspaceRole: "ONE_ABOVE_ALL", systemRole: null }), true)
-  assert.equal(R.isRoomAdmin({ workspaceRole: "STAFF", systemRole: "MEMBER" }), false)
-  assert.equal(R.isRoomAdmin({ workspaceRole: null, systemRole: "ADMIN" }), true)
-  assert.equal(R.isRoomAdmin({ workspaceRole: null, systemRole: null }), false)
+test("Admin = Manager, BoD, One Above All in the room's workspace", () => {
+  assert.equal(R.isRoomAdmin({ workspaceRole: "MANAGER" }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "BOD" }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "ONE_ABOVE_ALL" }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "STAFF" }), false)
+  assert.equal(R.isRoomAdmin({ workspaceRole: null, systemRole: "ADMIN" }), false)
+  assert.equal(R.isRoomAdmin({ workspaceRole: null }), false)
 })
 test("members: admins first, then A–Z, case-blind", () => {
   const rows = [

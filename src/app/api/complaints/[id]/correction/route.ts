@@ -72,7 +72,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 // POST /api/complaints/[id]/correction — two shapes on one route:
 //   { decision: "PROPOSE", date, checkInAt?, checkOutAt?, reason }  — the reporter (or a BoD) files a
 //     proposal in their own name. Writes nothing but the proposal row and a thread message.
-//   { decision: "APPROVE" | "REJECT", correctionId?, note? }  — BoD / One-Above-All / system admin only. APPROVE writes the AttendanceRecord; REJECT touches nothing
+//   { decision: "APPROVE" | "REJECT", correctionId?, note? }  — BoD / One-Above-All only. APPROVE writes the AttendanceRecord; REJECT touches nothing
 // but the proposal row.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

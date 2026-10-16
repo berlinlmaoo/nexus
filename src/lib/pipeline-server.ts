@@ -90,10 +90,10 @@ export type PipelineGate =
   | { ok: false; response: NextResponse }
 
 /**
- * The project's access rule (checkProjectAccess), as for any project: read = VIEWER, write = MEMBER —
- * system admin, One Above All / BoD / Manager of the workspace, and staff who are members of the project
- * (owner, 9 Oct 2026, evening: the board's people are added as project members by its lead, like a task
- * project). The GM's board stays "editable antar divisi": no field is held back — the real cost lines and
+ * The project's access rule (checkProjectAccess), exactly as for any project: read = VIEWER, write = MEMBER.
+ * One Above All / BoD of the workspace have Full without being invited; Managers and Staff only once added
+ * as project members, at their per-project level (owner, 16 Oct 2026: a Pipeline follows the same rules as
+ * every other project). The GM's board stays "editable antar divisi": no field is held back — the real cost lines and
  * margin included (owner, 14 Oct 2026: everyone invited to the board sees them; Full / Can edit may change
  * them, Can comment / Can view only read, anyone else gets nothing, live pings carry no data). Only a
  * PIPELINE project has deals: anything else answers 400 NOT_PIPELINE.

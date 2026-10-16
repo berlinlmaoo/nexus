@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { resolveUploadedImageType } from "@/lib/image-sniff"
 import { logAudit } from "@/lib/audit"
-import { isSystemAdminUser } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { mkdir, writeFile } from "fs/promises"
@@ -35,7 +34,6 @@ async function canManageFolder(userId: string, folderId: string) {
   })
 
   if (!folder) return { allowed: false, reason: "Folder not found" as const }
-  if (await isSystemAdminUser(userId)) return { allowed: true, reason: "system-admin" as const }
 
   const membership = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId: folder.workspaceId } },

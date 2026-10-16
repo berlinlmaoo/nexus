@@ -95,12 +95,11 @@ function Admin() {
   const canManageTeamsOrg = canManageShift || viewerRole === "MANAGER";
   // Permanent account deletion = BoD / One Above All only (backend also enforces). Plain Managers can't.
   const canDeleteUsers = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
-  // Offboard / reinstate: the same people as delete, plus a system admin (POST …/offboard checks
-  // again, including the rank rule). Never on your own row.
+  // Offboard / reinstate: the same people as delete (POST …/offboard checks again, including the rank
+  // rule). Never on your own row.
   const meQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const me = meQ.data?.user;
-  const isSystemAdmin = me?.role === "ADMIN";
-  const canOffboard = canDeleteUsers || isSystemAdmin;
+  const canOffboard = canDeleteUsers;
   // The same rule the server enforces in isBoD(). A MANAGER shown the compose form only ever gets a
   // 403 back, which reads as a broken page rather than a permission they do not have.
   const canAnnounce = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -227,14 +226,14 @@ function Admin() {
   });
   const toggleRole = (r: "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF") => setRoleFilter((cur) => (cur === r ? "ALL" : r));
 
-  // Who may be here at all: Manager and above in the company workspace, or a system admin — the rule the
-  // server applies to every Control Room API (lib/admin-access.ts). Staff reached this page by URL or the
+  // Who may be here at all: Manager and above in the company workspace — the rule the server applies to
+  // every Control Room API (lib/admin-access.ts). Staff reached this page by URL or the
   // search's People result and got the shell, a wrong "system admin role" message and the quest admin form
   // (QA 13 Oct 2026). Decided only once the role is KNOWN: a failed members request is a load error, never
   // "no access".
   const meLoaded = meQ.isFetched;
   const isOrgAdmin = viewerRole === "BOD" || viewerRole === "MANAGER" || viewerRole === "ONE_ABOVE_ALL";
-  const notAllowed = wsm.isSuccess && meLoaded && !isOrgAdmin && !isSystemAdmin;
+  const notAllowed = wsm.isSuccess && meLoaded && !isOrgAdmin;
   if (notAllowed || (wsm.isError && !isForbidden(wsm.error))) {
     return (
       <div>
@@ -341,7 +340,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || t("Unnamed"), email: u.email ?? "", deactivated: !!u.deactivatedAt })} canOffboard={canOffboard && !!info && u.id !== me?.id && (isSystemAdmin || canEditTier(viewerRole, info.role))} onOffboard={() => setOffboardTarget(u)} canReinstate={canOffboard && u.id !== me?.id} onReinstate={() => setReinstateTarget(u)} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || t("Unnamed"), email: u.email ?? "", deactivated: !!u.deactivatedAt })} canOffboard={canOffboard && !!info && u.id !== me?.id && canEditTier(viewerRole, info.role)} onOffboard={() => setOffboardTarget(u)} canReinstate={canOffboard && u.id !== me?.id} onReinstate={() => setReinstateTarget(u)} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
                   })}
                 </tbody>
               </table>
@@ -1025,7 +1024,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
               </div>
             </Card>
 
-            {/* Offboard: rare and heavy, so last, and only for those who may (BoD+, system admin, rank). */}
+            {/* Offboard: rare and heavy, so last, and only for those who may (BoD+, rank). */}
             {props.canOffboard && (
               <section className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 md:col-span-2 dark:border-rose-900/50 dark:bg-rose-950/20">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
