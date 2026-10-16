@@ -42,6 +42,14 @@ export async function calendarCaller(): Promise<CalendarCaller | NextResponse> {
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  return calendarCallerFor(userId)
+}
+
+/**
+ * The same caller for a known user, without a session: GIDEON's get_calendar acts as the person who asked
+ * and must see exactly what their Master Calendar shows them, no more.
+ */
+export async function calendarCallerFor(userId: string): Promise<CalendarCaller> {
   const [member, settings] = await Promise.all([
     prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } }, select: { role: true } }),
     getCalendarSettings(),

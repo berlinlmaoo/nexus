@@ -78,6 +78,9 @@ class GideonRedesignTest {
         assertEquals(GideonSteps.Kind.READ_PROJECT, t("read_context").kind)
         assertEquals(GideonSteps.Kind.READ_NAMED, t("read_context", "Atlas").kind)
         assertEquals(GideonSteps.Kind.LOOK_IMAGE, t("vision").kind)
+        assertEquals(GideonSteps.Text(GideonSteps.Kind.READ_CALENDAR, "2026-10-19"), t("get_calendar", "2026-10-19"))
+        assertEquals(GideonSteps.Kind.ROOM_BOOKINGS, t("list_room_bookings").kind)
+        assertEquals(GideonSteps.Text(GideonSteps.Kind.BOOK_ROOM, "Studio"), t("book_room", "Studio"))
         // Unknown tools: a worded label is shown, a tool-like one never.
         assertEquals(GideonSteps.Text(GideonSteps.Kind.LABEL, "Checking the calendar"), t("calendar_peek", label = "Checking the calendar"))
         assertEquals(GideonSteps.Kind.WORKING, t("calendar_peek", label = "calendar_peek").kind)

@@ -7,13 +7,14 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
+  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
   FolderKanban, History, ImagePlus, ListChecks, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2, MoreHorizontal, PanelRight,
   Paperclip, Pencil, Plus, Search, ShieldCheck, SquarePen, Trash2, UserRound, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
+import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
@@ -79,6 +80,9 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "update_task": return a ? t("Updating task {name}", { name: a }) : t("Updating a task");
     case "add_task_comment": return a ? t("Commenting on {name}", { name: a }) : t("Commenting on a task");
     case "create_document": return a ? t("Writing doc {name}", { name: a }) : t("Writing a doc");
+    case "get_calendar": return a ? t("Reading the calendar, {range}", { range: a }) : t("Reading the calendar");
+    case "list_room_bookings": return a ? t("Checking room bookings, {range}", { range: a }) : t("Checking room bookings");
+    case "book_room": return a ? t("Booking {room}", { room: a }) : t("Booking a room");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return s.label || s.tool;
   }
@@ -438,7 +442,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       t("What's overdue in {name}, and who owns it?", { name: c.projectName }),
       t("Turn the next steps of {name} into tasks", { name: c.projectName }),
     ];
-    return [t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
+    return [t("What's on my calendar this week?"), t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
   }, [pageContext, t]);
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
@@ -1188,7 +1192,7 @@ function useGo() {
 
 function SourceChip({ source, n }: { source: GideonRef; n?: number }) {
   const go = useGo();
-  const Icon = source.kind === "project" ? FolderKanban : source.kind === "doc" ? FileText : source.kind === "comment" ? MessageSquare : source.kind === "message" ? MessageCircle : source.kind === "form" ? ClipboardList : ListChecks;
+  const Icon = source.kind === "project" ? FolderKanban : source.kind === "booking" ? CalendarClock : source.kind === "doc" ? FileText : source.kind === "comment" ? MessageSquare : source.kind === "message" ? MessageCircle : source.kind === "form" ? ClipboardList : ListChecks;
   return (
     <a
       href={source.url}
@@ -1232,8 +1236,27 @@ const FIELD_WORD: Record<string, string> = {
   Description: "Description", Comment: "Comment", Body: "Body", "Custom fields": "Custom fields",
 };
 
+/**
+ * A Due row's day in the reader's language ("Fri 23 Oct" / "Jum 23 Okt"), keeping the WIB time the server put
+ * after it; the server's English label when there is no day.
+ */
+function diffDayText(label: string | null | undefined, day: string | null | undefined, locale: string): string | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return label ?? null;
+  const d = new Date(`${day}T12:00:00Z`);
+  const sameYear = day.slice(0, 4) === String(new Date().getFullYear());
+  const text = d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" }).replace(/,/g, "");
+  const time = label?.match(/\b\d{2}:\d{2}$/)?.[0];
+  return time ? `${text} ${time}` : text;
+}
+
 function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t } = useLang();
+  // A room booking has its own card: the room picker (GideonBookRoomCard).
+  if (proposal.action === "book_room" && proposal.booking) return <GideonBookRoomCard proposal={proposal} onDecided={onDecided} />;
+  return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
+}
+
+function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
+  const { t, locale } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const decide = async (d: "apply" | "discard") => {
@@ -1247,7 +1270,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
       setPending(null);
     }
   };
-  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action;
+  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action === "book_room" ? t("Book a room") : proposal.action;
   const open = proposal.status === "PENDING";
   const statusLine =
     proposal.status === "APPLIED" ? t("Applied") :
@@ -1269,8 +1292,8 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
             <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2">
               <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
               <dd className="min-w-0 break-words">
-                {row.from != null && row.from !== "" && <><span className="text-muted-foreground line-through decoration-muted-foreground/60">{row.from}</span> <span aria-hidden>→</span> </>}
-                <span className="font-medium">{row.field === "Status" && row.to ? t(row.to) : row.to ?? "—"}</span>
+                {row.from != null && row.from !== "" && <><span className="text-muted-foreground line-through decoration-muted-foreground/60">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden>→</span> </>}
+                <span className="font-medium">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
               </dd>
             </div>
           ))}

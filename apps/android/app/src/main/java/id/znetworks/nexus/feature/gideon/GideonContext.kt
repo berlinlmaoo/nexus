@@ -97,8 +97,11 @@ enum class GideonApprovalMode(val key: String) {
 
 /** Review before writing: deciding a proposal and keeping the transcript in step with the answer. */
 object GideonReview {
-    /** POST /api/gideon/proposals/:id body. */
-    fun body(apply: Boolean): JsonObject = buildJsonObject { put("decision", if (apply) "apply" else "discard") }
+    /** POST /api/gideon/proposals/:id body; `booking` = the room and slot picked on a book_room card. */
+    fun body(apply: Boolean, booking: GBookingChoice? = null): JsonObject = buildJsonObject {
+        put("decision", if (apply) "apply" else "discard")
+        if (booking != null) put("booking", buildJsonObject { put("room", booking.room); put("startsAt", booking.startsAt); put("endsAt", booking.endsAt) })
+    }
 
     /**
      * A refusal that still carries the proposal is an answer, not a failure: 409 already decided (a double tap),

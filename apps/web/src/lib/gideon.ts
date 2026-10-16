@@ -46,7 +46,7 @@ export type GideonAttachment = {
 };
 
 // ── What a run shows beside the text (mirrors src/lib/gideon-runs.ts on the server) ─────────────────
-export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null };
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message" | "booking"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null };
 export type GideonCard = {
   kind: "task" | "doc" | "comment";
   action: "created" | "updated" | "commented";
@@ -59,7 +59,7 @@ export type GideonCard = {
   dueDate?: string | null;
   assignees?: string[];
 };
-export type GideonDiffRow = { field: string; from?: string | null; to?: string | null };
+export type GideonDiffRow = { field: string; from?: string | null; to?: string | null; fromDay?: string | null; toDay?: string | null };
 export type GideonProposal = {
   id: string;
   action: "create_task" | "update_task" | "add_task_comment" | "create_document" | string;
@@ -71,6 +71,27 @@ export type GideonProposal = {
   createdAt: string;
   card?: GideonCard | null;
   error?: string | null;
+  /** book_room only (16 Oct 2026): what the booking card draws; the rooms' availability is read live. */
+  booking?: GideonBookingView | null;
+};
+/** Server gideon-book-room-plan.ts GideonBookingView. Times are ISO instants; day is the WIB day. */
+export type GideonBookingView = {
+  title: string;
+  day: string;
+  dayLabel: string;
+  start: string;
+  end: string;
+  startsAt: string;
+  endsAt: string;
+  room: string | null;
+  requestedRoom: string | null;
+  candidates: string[];
+  bookingId?: string | null;
+};
+/** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
+export type RoomAvailability = {
+  rooms: { room: string; capacity: number | null; free: boolean; busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null }[];
+  freeSlots: { startsAt: string; endsAt: string; rooms: string[] }[];
 };
 export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };
 export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[] };
@@ -300,12 +321,18 @@ async function gjson<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+export const roomAvailability = (startsAt: string, endsAt: string) =>
+  gjson<RoomAvailability>(`/api/room-bookings/availability?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}`);
+
 export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] }>("/api/gideon/proposals");
 
-/** Apply or discard. A 409/410/422 still carries the proposal's new state, which is returned. */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard"): Promise<GideonProposal> {
+/**
+ * Apply or discard. A 409/410/422 still carries the proposal's new state, which is returned. `booking`: the room
+ * and slot picked on a book_room card (required to apply one).
+ */
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { room: string; startsAt: string; endsAt: string }): Promise<GideonProposal> {
   try {
-    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision }) });
+    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}) }) });
     return r.proposal;
   } catch (e) {
     const p = (e as { body?: { proposal?: GideonProposal } }).body?.proposal;

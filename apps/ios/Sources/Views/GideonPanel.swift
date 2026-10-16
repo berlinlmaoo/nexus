@@ -222,10 +222,10 @@ struct GideonPanel: View {
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
                     Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
-                        Task { await chat.decide(d.proposal, apply: d.apply) }
+                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
-                } message: { d in Text(d.proposal.summary ?? "") }
+                } message: { d in Text(d.message) }
                 .background { Color.clear.alert(T("Delete this chat?"), isPresented: $confirmDeleteChat) {
                     Button(T("Delete"), role: .destructive) { Task { await chat.deleteCurrent() } }
                     Button(T("Cancel"), role: .cancel) {}
@@ -747,7 +747,18 @@ struct GideonPanel: View {
         }
     }
 
-    private func proposalCard(_ p: GideonProposal) -> some View {
+    /// A room booking has its own card with the room picker (GideonBookRoomCard); every other change is a diff.
+    @ViewBuilder private func proposalCard(_ p: GideonProposal) -> some View {
+        if p.action == "book_room", let b = p.booking {
+            GideonBookRoomCard(proposal: p, booking: b,
+                               onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
+                               onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else {
+            changeProposalCard(p)
+        }
+    }
+
+    private func changeProposalCard(_ p: GideonProposal) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12)).foregroundStyle(NX.warning)
@@ -1314,8 +1325,15 @@ extension GideonPanel {
 struct GideonDecision: Identifiable {
     let proposal: GideonProposal
     let apply: Bool
+    /// book_room: the room and slot picked on the card.
+    var booking: GideonBookingChoice? = nil
     var id: String { proposal.id + (apply ? "-apply" : "-discard") }
     var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
+    /// The picked room for a booking (the server's summary was written before the room was chosen).
+    var message: String {
+        if let booking { return [RoomBooking.label(booking.room), proposal.booking?.title].compactMap { $0 }.joined(separator: " · ") }
+        return proposal.summary ?? ""
+    }
 }
 
 /// The person's GIDEON conversations, searchable; open one or delete it (asks first).

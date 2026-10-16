@@ -91,4 +91,22 @@
     <string name="gx_card_created">Dibuat</string>
     <string name="gx_card_updated">Diperbarui</string>
     <string name="gx_card_commented">Dikomentari</string>
+
+    <!-- GIDEON membaca Kalender dan Room Booking, dan membooking ruangan (16 Okt 2026) -->
+    <string name="gx_chip_calendar">Ada apa di kalenderku minggu ini?</string>
+    <string name="gx_step_calendar">Membaca kalender</string>
+    <string name="gx_step_calendar_n">Membaca kalender, %1$s</string>
+    <string name="gx_step_rooms">Mengecek booking ruangan</string>
+    <string name="gx_step_rooms_n">Mengecek booking ruangan, %1$s</string>
+    <string name="gx_step_book_room">Membooking ruangan</string>
+    <string name="gx_step_book_room_n">Membooking %1$s</string>
+    <string name="gx_book_room">Booking ruangan</string>
+    <string name="gx_rooms_checking">Mengecek ruangan…</string>
+    <string name="gx_rooms_failed">Gagal mengecek ruangan.</string>
+    <string name="gx_room_named_busy">%1$s sudah dibooking di jam itu. Pilih ruangan yang kosong di bawah.</string>
+    <string name="gx_room_seats">%1$d kursi</string>
+    <string name="gx_room_booked_by">Dibooking %1$s sampai %2$s</string>
+    <string name="gx_someone">seseorang</string>
+    <string name="gx_room_none_free">Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:</string>
+    <string name="gx_room_booked">Ruangan dibooking</string>
 </resources>

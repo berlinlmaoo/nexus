@@ -6,6 +6,7 @@ import Foundation
 enum GideonChatTitle {
     /// English chip text and its Indonesian, as the web's i18n has them.
     private static let chips: [(en: String, id: String)] = [
+        ("What's on my calendar this week?", "Ada apa di kalenderku minggu ini?"),
         ("What's overdue for me?", "Apa saja task-ku yang terlambat?"),
         ("Summarize my week across projects", "Ringkas mingguku di semua project"),
         ("What did my team decide recently? Cite the sources.", "Apa yang baru diputuskan timku? Sebutkan sumbernya."),

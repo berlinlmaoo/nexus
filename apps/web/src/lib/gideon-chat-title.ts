@@ -7,6 +7,7 @@ import { t } from "@/lib/lang";
  * language, whichever language they were saved in; anything a person typed stays as typed.
  */
 const CHIP_KEYS = [
+  "What's on my calendar this week?",
   "What's overdue for me?",
   "Summarize my week across projects",
   "What did my team decide recently? Cite the sources.",

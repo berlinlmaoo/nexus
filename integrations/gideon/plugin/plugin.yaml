@@ -23,6 +23,11 @@ provides_tools:
   - nexus_get_task
   - nexus_search_docs
   - nexus_get_doc
+  # Read, added 16 Oct 2026: the Master Calendar and Room Booking, as the asking user sees them
+  - nexus_get_calendar
+  - nexus_list_room_bookings
+  # Write, added 16 Oct 2026: book a room as the asking user (approval modes like create_task)
+  - nexus_book_room
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

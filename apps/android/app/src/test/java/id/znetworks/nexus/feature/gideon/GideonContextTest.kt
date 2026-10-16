@@ -85,6 +85,9 @@ class GideonContextTest {
         assertEquals(listOf("always_ask", "review", "dont_ask"), GideonApprovalMode.entries.map { it.key })
         assertEquals("""{"decision":"apply"}""", GideonReview.body(true).toString())
         assertEquals("""{"decision":"discard"}""", GideonReview.body(false).toString())
+        // A book_room Apply carries the room and slot picked on the card (16 Oct 2026).
+        assertEquals("""{"decision":"apply","booking":{"room":"Studio","startsAt":"2026-10-19T07:00:00.000Z","endsAt":"2026-10-19T08:00:00.000Z"}}""",
+            GideonReview.body(true, GBookingChoice("Studio", "2026-10-19T07:00:00.000Z", "2026-10-19T08:00:00.000Z")).toString())
         assertTrue(GideonReview.carriesProposal(200)); assertTrue(GideonReview.carriesProposal(409))
         assertTrue(GideonReview.carriesProposal(410)); assertTrue(GideonReview.carriesProposal(422))
         assertFalse(GideonReview.carriesProposal(404)); assertFalse(GideonReview.carriesProposal(500))

@@ -1,0 +1,32 @@
+export const dynamic = "force-dynamic"
+
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { getUserWorkspaceIds } from "@/lib/workspace-scope"
+import { roomAvailability } from "@/lib/room-booking"
+
+const MAX_SLOT_MS = 24 * 60 * 60 * 1000
+
+/**
+ * GET /api/room-bookings/availability?startsAt=ISO&endsAt=ISO — every room for one slot (free, or booked by
+ * whom until when, and its capacity when known), plus the nearest free slots (same day, ±2 h) when no room
+ * is free. The room picker on GIDEON's book_room card reads it, again whenever a slot chip is picked; the
+ * slot is re-checked on Apply anyway.
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const start = new Date(req.nextUrl.searchParams.get("startsAt") ?? "")
+    const end = new Date(req.nextUrl.searchParams.get("endsAt") ?? "")
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start || end.getTime() - start.getTime() > MAX_SLOT_MS) {
+      return NextResponse.json({ error: "Invalid time range" }, { status: 400 })
+    }
+    const workspaceIds = await getUserWorkspaceIds(session.user.id)
+    if (workspaceIds.length === 0) return NextResponse.json({ rooms: [], freeSlots: [] })
+    return NextResponse.json(await roomAvailability(workspaceIds, start, end))
+  } catch (error) {
+    console.error("Room availability GET error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

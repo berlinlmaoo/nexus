@@ -1,6 +1,8 @@
 import { EventEmitter } from "events"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
+import { bookingView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
+import { resolveRoomName } from "@/lib/room-booking-rooms"
 
 /**
  * GIDEON runs (owner, 12 Oct 2026 — "GIDEON replies like Notion's agent").
@@ -32,32 +34,41 @@ export function parseApprovalMode(value: unknown): ApprovalMode | null {
 }
 
 /** Tools that change something. Everything else is a read. */
-export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document"])
+export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room"])
 
 /**
  * Which writes wait for the person (Notion's "Always ask / Review for me / Skip approvals").
  *  - always_ask: every write.
  *  - review ("Review before writing", the web default): anything that touches other people's work or
  *    attention — editing an existing task, a comment others will read, a task assigned to someone else.
- *    A new task for nobody / only the asker, and a new doc, are made directly and shown as a card.
+ *    A new task for only the asker, and a new doc, are made directly and shown as a card.
+ *    A new task for NOBODY is held too (16 Oct 2026): "turn this doc into tasks for the people named" was
+ *    made as tasks for nobody, then assigned by separate update cards. Held, the assignees that follow are
+ *    merged into the one create card (tools route, mergeIntoCreateProposal) and Discard leaves nothing.
  *  - dont_ask: nothing waits (what GIDEON did before 12 Oct 2026, and what released apps still get).
+ * book_room (16 Oct 2026) waits in always_ask and review; in dont_ask it books directly — unless no single room
+ * was named, because GIDEON never guesses a room: the person picks it on the card.
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
   if (!WRITE_ACTIONS.has(action)) return false
+  if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
   if (mode === "dont_ask") return false
   if (mode === "always_ask") return true
   if (action === "update_task" || action === "add_task_comment") return true
   if (action === "create_task") {
     const ids = Array.isArray(input.assigneeIds) ? input.assigneeIds.filter((x): x is string => typeof x === "string") : []
-    return ids.some((id) => id !== actorId)
+    return ids.length === 0 || ids.some((id) => id !== actorId)
   }
   return false
 }
 
 // ── Shapes sent to the web (and stored in GideonMessage.meta) ─────────────────────────────────────────
 
-/** A source a run read. comment / form / message + excerpt: 12 Oct 2026 (workspace Q&A); older clients draw them as links. */
-export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null }
+/**
+ * A source a run read. comment / form / message + excerpt: 12 Oct 2026 (workspace Q&A); older clients draw them
+ * as links. booking (a room booking, 16 Oct 2026): the released apps show it as a plain, untappable chip.
+ */
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message" | "booking"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null }
 export type GideonCard = {
   kind: "task" | "doc" | "comment"
   action: "created" | "updated" | "commented"
@@ -70,7 +81,8 @@ export type GideonCard = {
   dueDate?: string | null
   assignees?: string[]
 }
-export type GideonDiffRow = { field: string; from?: string | null; to?: string | null }
+/** `toDay` / `fromDay`: the "YYYY-MM-DD" behind a Due row's label, for clients that show it in their own language. */
+export type GideonDiffRow = { field: string; from?: string | null; to?: string | null; fromDay?: string | null; toDay?: string | null }
 export type GideonProposalView = {
   id: string
   action: string
@@ -82,6 +94,11 @@ export type GideonProposalView = {
   createdAt: string
   card?: GideonCard | null
   error?: string | null
+  /**
+   * book_room only: what the booking card draws (room picker, slot, title). A client without the picker never
+   * sees this field and cannot apply the proposal (POST /api/gideon/proposals/:id wants the chosen room).
+   */
+  booking?: GideonBookingView | null
 }
 export type GideonStepView = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null }
 export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[] }
@@ -207,6 +224,9 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "update_task": return a ? `Updating task ${a}` : "Updating a task"
     case "add_task_comment": return a ? `Commenting on ${a}` : "Commenting on a task"
     case "create_document": return a ? `Writing doc ${a}` : "Writing a doc"
+    case "get_calendar": return a ? `Reading the calendar, ${a}` : "Reading the calendar"
+    case "list_room_bookings": return a ? `Checking room bookings, ${a}` : "Checking room bookings"
+    case "book_room": return a ? `Booking ${a}` : "Booking a room"
     default: return tool.replace(/_/g, " ")
   }
 }
@@ -245,6 +265,19 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
         const id = str(input.projectId)
         if (!id) return null
         return (await prisma.project.findUnique({ where: { id }, select: { name: true } }))?.name ?? null
+      }
+      case "book_room": {
+        const room = resolveRoomName(input.room).room ?? str(input.room)
+        return [room ?? "a room", str(input.date) ?? str(input.startsAt)?.slice(0, 10)].filter(Boolean).join(", ")
+      }
+      // The days asked about, as typed ("2026-10-19 – 2026-10-25", "Friday"); no lookup.
+      case "get_calendar":
+      case "list_room_bookings": {
+        const from = str(input.from) ?? str(input.date)
+        const to = str(input.to)
+        const room = tool === "list_room_bookings" ? str(input.room) : null
+        const days = from && to && to !== from ? `${from} – ${to}` : from ?? to
+        return [room, days].filter(Boolean).join(", ") || null
       }
       default:
         return null
@@ -295,6 +328,17 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
       break
     case "search_workspace":
       if (Array.isArray(d.hits)) for (const h of d.hits.slice(0, 12)) if (h?.id && h?.kind) push({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt ?? null })
+      break
+    case "list_room_bookings":
+      if (Array.isArray(d.bookings)) for (const b of d.bookings.slice(0, 12)) if (b?.id && b?.title) push({ kind: "booking", id: b.id, title: b.title, url: `/room-booking?booking=${b.id}`, excerpt: `${b.room} · ${b.dayLabel ?? b.day} ${b.start}–${b.end}${b.bookedBy ? ` · ${b.bookedBy}` : ""}` })
+      break
+    // The booking just made: a "booking" source (no card: released apps would open a card's id as a task).
+    case "book_room":
+      if (d.booking?.id) push({ kind: "booking", id: d.booking.id, title: d.booking.title, url: `/room-booking?booking=${d.booking.id}`, excerpt: `${d.booking.room} · ${d.booking.dayLabel ?? d.booking.day} ${d.booking.start}–${d.booking.end}` })
+      break
+    // Calendar rows are tasks; a masked row (private project) has no id and never becomes a source.
+    case "get_calendar":
+      if (Array.isArray(d.items)) for (const t of d.items.filter((x: AnyObj) => x && !x.masked && x.id).slice(0, 12)) push({ kind: "task", id: t.id, title: t.title, projectId: t.projectId ?? null, url: taskUrl(t.id) })
       break
   }
   return out
@@ -359,7 +403,7 @@ export async function recordStep(runId: string, step: { tool: string; arg?: stri
   }
 }
 
-export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null }): GideonProposalView {
+export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null; input?: unknown }): GideonProposalView {
   const result = p.result as AnyObj | null | undefined
   return {
     id: p.id,
@@ -372,6 +416,7 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     createdAt: p.createdAt.toISOString(),
     card: result && typeof result === "object" && "card" in result ? (result.card as GideonCard) : null,
     error: p.error ?? null,
+    ...(p.action === "book_room" ? { booking: bookingView(p.input, (result?.booking as AnyObj | undefined)?.id ?? null) } : {}),
   }
 }
 
@@ -419,10 +464,15 @@ export async function runMeta(runId: string, opts: { citedBy?: string } = {}): P
   }
 }
 
-/** Short text for prompts: tell the model what its approval mode means, so it reports honestly. */
+/**
+ * Short text for prompts: tell the model what its approval mode means, so it reports honestly, and how to
+ * make a task in ONE call (the server holds and merges anyway, see needsApproval).
+ */
 export function approvalPromptLine(mode: ApprovalMode, lang: "id" | "en" = "id"): string {
   if (mode === "dont_ask") return ""
   return lang === "en"
-    ? "[APPROVAL] Some writes are held for the person's approval. When a NEXUS tool answers with proposed:true, the change has NOT happened yet: say it is waiting for their approval in the card below, never that it is done."
-    : "[PERSETUJUAN] Sebagian perubahan ditahan sampai orangnya menyetujui. Kalau tool NEXUS menjawab proposed:true, perubahannya BELUM terjadi: bilang perubahan itu menunggu persetujuannya di kartu di bawah, jangan bilang sudah selesai."
+    ? "[APPROVAL] Some writes are held for the person's approval. When a NEXUS tool answers with proposed:true, the change has NOT happened yet: say it is waiting for their approval in the card below, never that it is done. " +
+      "A new task is ONE nexus_create_task call with everything in it — title, section/status, dueDate and assigneeIds of the people named — never a create followed by an update to assign it or date it."
+    : "[PERSETUJUAN] Sebagian perubahan ditahan sampai orangnya menyetujui. Kalau tool NEXUS menjawab proposed:true, perubahannya BELUM terjadi: bilang perubahan itu menunggu persetujuannya di kartu di bawah, jangan bilang sudah selesai. " +
+      "Task baru = SATU panggilan nexus_create_task yang sudah lengkap — judul, section/status, dueDate, dan assigneeIds orang yang disebut — jangan bikin dulu lalu update untuk meng-assign atau memberi tenggat."
 }

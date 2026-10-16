@@ -5,6 +5,7 @@ import { askGideon } from "@/lib/gideon-chat"
 import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
 import { checkProjectAccess } from "@/lib/rbac"
 import { approvalPromptLine } from "@/lib/gideon-runs"
+import { datePromptLine } from "@/lib/gideon-dates"
 import { emitCommentAdded } from "@/lib/socket-emitter"
 import { createInAppNotification, notifyCommentAdded, notifyStatusUpdate } from "@/lib/notification-service"
 import type { ProjectHealth } from "@/generated/prisma/client"
@@ -301,6 +302,7 @@ export async function answerGideonMention(commentId: string): Promise<void> {
       task.description ? `[DESKRIPSI] ${task.description.slice(0, 1500)}` : "",
       `[THREAD]\n${thread.map((c) => `${c.user?.name ?? "?"}: ${c.content.slice(0, 500)}`).join("\n")}`,
       approvalPromptLine("always_ask"),
+      datePromptLine(),
       `[FORMAT] Maksimal 8 baris, langsung ke inti, Markdown ringan. Bahasa mengikuti bahasa pertanyaannya.`,
       `Pertanyaan dari ${name}: ${question.slice(0, 2000)}`,
     ].filter(Boolean).join("\n\n")

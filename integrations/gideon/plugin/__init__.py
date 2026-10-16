@@ -19,6 +19,12 @@ _ACTION_BY_TOOL = {
     # Workspace Q&A (12 Oct 2026): one search over projects, tasks, docs, comments, forms and chat,
     # with the asker's visibility only.
     "nexus_search_workspace": "search_workspace",
+    # The Master Calendar and Room Booking, read as the asking user sees them (16 Oct 2026).
+    "nexus_get_calendar": "get_calendar",
+    "nexus_list_room_bookings": "list_room_bookings",
+    # A write, as the asking user, through the Room Booking page's own rules; held for approval like
+    # create_task (and always when no single room was named: the person picks it on the card).
+    "nexus_book_room": "book_room",
     "nexus_create_document": "create_document",
     "nexus_get_attendance_day": "get_attendance_day",
     # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both

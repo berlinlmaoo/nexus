@@ -45,11 +45,31 @@ import java.time.ZoneId
     val toText: String? get() = GideonReview.loose(to)
 }
 
-/** A write GIDEON holds for the person's Apply / Discard (server proposalView; iOS GideonProposal). */
+/**
+ * A write GIDEON holds for the person's Apply / Discard (server proposalView; iOS GideonProposal). `booking`: a
+ * book_room proposal's card (16 Oct 2026); a build without it cannot apply one (the server asks for the room).
+ */
 @Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
-                                   val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null) {
+                                   val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null,
+                                   val booking: GBooking? = null) {
     val isPending: Boolean get() = status == "PENDING"
 }
+
+/** A room GIDEON wants to book (server GideonBookingView): the slot as ISO instants, the room named or null. */
+@Serializable data class GBooking(val title: String? = null, val startsAt: String? = null, val endsAt: String? = null,
+                                  val room: String? = null, val bookingId: String? = null)
+
+/** The room and slot picked on the card, sent with Apply; the server checks both again. */
+data class GBookingChoice(val room: String, val startsAt: String, val endsAt: String)
+
+/** Apply / Discard of one proposal, as asked in the centred dialog. */
+data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null)
+
+/** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
+@Serializable data class GRoomAvailability(val rooms: List<GRoomSlot> = emptyList(), val freeSlots: List<GFreeSlot> = emptyList())
+@Serializable data class GRoomSlot(val room: String, val capacity: Int? = null, val free: Boolean = false, val busy: GRoomBusy? = null)
+@Serializable data class GRoomBusy(val title: String? = null, val by: String? = null, val endsAt: String? = null)
+@Serializable data class GFreeSlot(val startsAt: String, val endsAt: String)
 
 @Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList())
 
@@ -208,6 +228,7 @@ object GideonSteps {
     enum class Kind {
         LIST_PROJECTS, LOOKUP_PEOPLE, LIST_TASKS, SEARCH_TASKS, SEARCH_WORKSPACE, READ_PROJECT, READ_NAMED, READ_FIELDS, READ_TASK,
         SEARCH_DOCS, READ_DOC, CREATE_TASK, UPDATE_TASK, COMMENT, WRITE_DOC, LOOK_IMAGE, LABEL, WORKING,
+        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM,
     }
 
     /** [arg] is the step's own handle (≤ 60 chars) or null when the sentence has none. */
@@ -232,6 +253,9 @@ object GideonSteps {
             "update_task" -> t(Kind.UPDATE_TASK)
             "add_task_comment" -> t(Kind.COMMENT)
             "create_document" -> t(Kind.WRITE_DOC)
+            "get_calendar" -> t(Kind.READ_CALENDAR)
+            "list_room_bookings" -> t(Kind.ROOM_BOOKINGS)
+            "book_room" -> t(Kind.BOOK_ROOM)
             "vision_analyze", "vision" -> t(Kind.LOOK_IMAGE, false)
             // An unknown tool: the server's own label when it reads as words, never a raw tool name.
             else -> s.label?.trim()?.takeIf { it.isNotEmpty() && !looksLikeToolName(it) && it != s.tool }?.let { Text(Kind.LABEL, it) } ?: Text(Kind.WORKING, null)
@@ -245,6 +269,7 @@ object GideonSteps {
 /** Saved titles that were a suggestion chip show in the app's language (web gideon-chat-title.ts, iOS GideonChatTitle). */
 object GideonChatTitle {
     val CHIPS = listOf(
+        "What's on my calendar this week?" to "Ada apa di kalenderku minggu ini?",
         "What's overdue for me?" to "Apa saja task-ku yang terlambat?",
         "Summarize my week across projects" to "Ringkas mingguku di semua project",
         "What did my team decide recently? Cite the sources." to "Apa yang baru diputuskan timku? Sebutkan sumbernya.",
@@ -339,14 +364,14 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
      * Apply or Discard a proposal (POST /api/gideon/proposals/:id {decision}); the card shows what came back. The
      * server re-checks access when applying, and a double tap applies once (409 still carries the proposal).
      */
-    fun decide(p: GProposal, apply: Boolean) {
+    fun decide(p: GProposal, apply: Boolean, booking: GBookingChoice? = null) {
         if (p.id in _state.value.deciding) return
         _state.update { it.copy(deciding = it.deciding + p.id, error = null) }
         scope.launch {
             try {
                 val updated = try {
                     api.send(Request.Builder().url(api.url("/api/gideon/proposals/" + URLEncoder.encode(p.id, "UTF-8")))
-                        .post(GideonReview.body(apply).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
+                        .post(GideonReview.body(apply, booking).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
                 } catch (e: ApiError.Http) {
                     val carried = if (GideonReview.carriesProposal(e.status)) (e.body?.get("proposal") as? JsonObject)
                         ?.let { j -> runCatching { api.json.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() } else null
@@ -363,6 +388,14 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                 _state.update { it.copy(deciding = it.deciding - p.id) }
             }
         }
+    }
+
+    /** Every room for one slot, for the book_room card's picker (read live); null when it could not be read. */
+    suspend fun roomAvailability(startsAt: String, endsAt: String): GRoomAvailability? = try {
+        api.get("/api/room-bookings/availability?startsAt=" + URLEncoder.encode(startsAt, "UTF-8") + "&endsAt=" + URLEncoder.encode(endsAt, "UTF-8"),
+            GRoomAvailability.serializer())
+    } catch (e: ApiError) {
+        null
     }
 
     /** The context chip's ×: ask without the project. */

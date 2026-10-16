@@ -163,6 +163,56 @@ SCHEMAS = {
         },
         required=["query"],
     ),
+    "nexus_get_calendar": object_schema(
+        "Read the person's Master Calendar for a range of days: every task due on those days that someone is doing, "
+        "exactly as their Calendar shows it — day, time, title, status, project and who is doing it. Use it for "
+        "'what's on my calendar this week', 'what is due Friday', 'what does the design team have next week'. "
+        "A row with masked:true is a task of a private project the person is not in: call it 'Internal task' and never "
+        "guess or invent its title, project or details. Tasks with nobody assigned are not on the calendar. "
+        "Default range: this week (Monday to Sunday, WIB). At most 62 days per call. Read only.",
+        {
+            "from": {"type": "string", "description": "First day, YYYY-MM-DD (WIB). A relative day such as 'friday' or 'besok' is also understood."},
+            "to": {"type": "string", "description": "Last day, YYYY-MM-DD, inclusive."},
+            "date": {"type": "string", "description": "One day only, YYYY-MM-DD (instead of from/to)."},
+            "mine": {"type": "boolean", "description": "Only tasks the person is doing."},
+            "projectId": {"type": "string"},
+            "projectName": {"type": "string"},
+            "division": {"type": "string", "description": "A division or unit of the org chart, by name or id: its tasks and those of the units under it."},
+        },
+    ),
+    "nexus_list_room_bookings": object_schema(
+        "Read Room Booking: the bookings of the company's meeting rooms for a range of days (room, time in WIB, title, "
+        "who booked), the free time of each room per day, and — with `time` — which rooms are free for that exact slot "
+        "and the nearest free slots. Use it for 'is the meeting room free tomorrow at 2?' or 'what's booked in the "
+        "Studio this week'. Default: today and the next 6 days. At most 62 days per call. Read only.",
+        {
+            "from": {"type": "string", "description": "First day, YYYY-MM-DD (WIB)."},
+            "to": {"type": "string", "description": "Last day, YYYY-MM-DD, inclusive."},
+            "date": {"type": "string", "description": "One day only, YYYY-MM-DD; needed with `time`."},
+            "room": {"type": "string", "description": "A room name as said (e.g. 'Studio', 'VIP'). Omit for every room."},
+            "time": {"type": "string", "description": "A start time to check, HH:mm WIB, on `date`."},
+            "endTime": {"type": "string", "description": "End of the slot to check, HH:mm WIB. Default: one hour after `time`."},
+            "durationMinutes": {"type": "integer", "minimum": 15, "maximum": 720},
+        },
+    ),
+    "nexus_book_room": object_schema(
+        "Book one of the company's rooms for the person, as them (they own the booking and get the usual confirmation). "
+        "The server applies the Room Booking page's rules and never double-books. Depending on the person's approval mode "
+        "it is booked directly or shown as a card they approve. If the person did not name a room, or the name could be "
+        "more than one room, leave `room` out (or pass what they said): do NOT guess and do NOT ask in the chat — the card "
+        "shows every room with whether it is free then and they pick there. If the slot is taken you get the holder and the "
+        "nearest free slots; tell the person, do not retry another room on your own. Cancelling or moving a booking is not "
+        "possible yet. Check first with nexus_list_room_bookings when the person asks whether something is free.",
+        {
+            "room": {"type": "string", "description": "The room as the person named it (e.g. 'Studio', 'VIP'). Omit when not named."},
+            "date": {"type": "string", "description": "YYYY-MM-DD (WIB). A weekday name means the NEXT one, never today."},
+            "start": {"type": "string", "description": "Start time, HH:mm WIB."},
+            "end": {"type": "string", "description": "End time, HH:mm WIB. Or give durationMinutes; default one hour."},
+            "durationMinutes": {"type": "integer", "minimum": 15, "maximum": 720},
+            "title": {"type": "string", "description": "What the room is for, as it will show on the Room Booking page."},
+        },
+        ["date", "start", "title"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},
@@ -215,7 +265,10 @@ SCHEMAS = {
         required=["projectId"],
     ),
     "nexus_create_task": object_schema(
-        "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification.",
+        "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification. "
+        "ONE call per task, complete: put the people it is for in assigneeIds and the deadline in dueDate here — never create "
+        "first and assign or date it with nexus_update_task afterwards. When the answer is proposed:true, the returned "
+        "proposalId is the task's only id until it is approved; nexus_update_task with taskId = that proposalId joins the same card.",
         {
             "projectId": {"type": "string"},
             "taskListId": {"type": "string"},
@@ -223,8 +276,8 @@ SCHEMAS = {
             "description": {"type": "string"},
             "status": TASK_STATUS,
             "priority": TASK_PRIORITY,
-            "dueDate": {"type": "string", "description": "ISO date/datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00"},
-            "assigneeIds": {"type": "array", "items": {"type": "string"}},
+            "dueDate": {"type": "string", "description": "YYYY-MM-DD or ISO datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00. A weekday name means the NEXT one, never today (said on a Friday, 'Friday' = next week's Friday); only 'today' is today. Say the resolved date in your reply."},
+            "assigneeIds": {"type": "array", "items": {"type": "string"}, "description": "The people the task is for (user ids from nexus_list_members). Include them here, in this call."},
             "customFields": CUSTOM_FIELD_UPDATES,
         },
         required=["title"],

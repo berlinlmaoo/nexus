@@ -10,6 +10,7 @@ import { checkProjectAccess } from '@/lib/rbac'
 import {
   approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
+import { datePromptLine } from '@/lib/gideon-dates'
 import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
 
@@ -350,6 +351,8 @@ export async function POST(req: NextRequest) {
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
         approvalPromptLine(approvalMode),
+        // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
+        datePromptLine(new Date(), rawUiLang === 'en' ? 'en' : 'id'),
         rawUiLang === 'en'
           ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
           : rawUiLang === 'id'
