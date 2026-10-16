@@ -4,6 +4,8 @@
  * Keys must be unique across all id-*.ts files (i18n.test.mjs).
  */
 export const ID_GIDEON_AI: Record<string, string> = {
+  "Hide chat list": "Sembunyikan daftar chat",
+  "Show chat list": "Tampilkan daftar chat",
   // Chat panel
   "Searching your workspace for “{q}”": "Mencari di workspace-mu: “{q}”",
   "Searching your workspace": "Mencari di workspace-mu",

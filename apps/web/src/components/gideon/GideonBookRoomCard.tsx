@@ -77,7 +77,7 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
     proposal.status === "APPLYING" ? t("Applying…") : null;
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-background", open ? "shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)]" : "opacity-90")}>
+    <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
       <ProposalHead open={open} title={open ? b.title : t("Book a room")} summary={b.title} />
       <div className="space-y-2 px-3 pb-2.5 text-xs">
         <div className="flex items-center gap-1.5 font-medium"><CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />{when}</div>
@@ -143,12 +143,12 @@ export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvail
           onClick={() => onPick(r.room)}
           className={cn(
             "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-            room === r.room && r.free ? "border-primary bg-primary/5" : "border-border",
+            room === r.room && r.free ? "border-ring bg-accent/60" : "border-border",
             r.free ? "hover:border-primary/40" : "cursor-not-allowed opacity-60",
           )}
         >
-          <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-primary" : "border-muted-foreground/50")}>
-            {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+          <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-ring" : "border-muted-foreground/50")}>
+            {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-sidebar-primary" />}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">{t(roomLabel(r.room))}{r.capacity ? <span className="font-normal text-muted-foreground"> · {t("{n} seats", { n: r.capacity })}</span> : null}</span>
