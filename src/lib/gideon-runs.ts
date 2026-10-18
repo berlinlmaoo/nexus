@@ -318,7 +318,8 @@ const docUrl = (id: string) => `/docs/${id}`
 
 function taskRef(t: AnyObj): GideonRef | null {
   if (!t || typeof t.id !== "string" || typeof t.title !== "string") return null
-  const projectId = t.taskList?.projectId ?? t.project?.id ?? null
+  // Full rows carry taskList / project objects; the compact list rows (gideon-compact.ts) carry projectId.
+  const projectId = t.taskList?.projectId ?? t.project?.id ?? (typeof t.projectId === "string" ? t.projectId : null)
   return { kind: "task", id: t.id, title: t.title, projectId, url: taskUrl(t.id) }
 }
 
@@ -330,15 +331,19 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
   if (!d) return out
   switch (tool) {
     case "list_projects":
-      if (Array.isArray(d)) for (const p of d.slice(0, 8)) if (p?.id && p?.name) push({ kind: "project", id: p.id, title: p.name, url: projectUrl(p.id) })
+      for (const p of (Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []).slice(0, 8)) if (p?.id && p?.name) push({ kind: "project", id: p.id, title: p.name, url: projectUrl(p.id) })
       break
     case "get_project_summary":
       if (d.project?.id) push({ kind: "project", id: d.project.id, title: d.project.name, url: projectUrl(d.project.id) })
+      if (d.project?.id && Array.isArray(d.topOpenTasks)) for (const t of d.topOpenTasks.slice(0, 8)) push(taskRef({ ...t, projectId: d.project.id }))
       break
     case "list_tasks":
-    case "search_tasks":
-      if (Array.isArray(d)) for (const t of d.slice(0, 10)) push(taskRef(t))
+    case "search_tasks": {
+      // Paged compact rows since 18 Oct 2026 ({ items }); a list in one project names it once at the top.
+      const rows = Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []
+      for (const t of rows.slice(0, 10)) push(taskRef(typeof d.projectId === "string" && !t.projectId ? { ...t, projectId: d.projectId } : t))
       break
+    }
     case "get_task":
       push(taskRef(d))
       break

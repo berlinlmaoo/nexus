@@ -34,10 +34,12 @@ const HERMES = process.env.HERMES_BIN || "hermes"
 // Each tier names its own provider now, because one of them does not live at OpenAI. Keeping the
 // provider beside the model means adding a fourth engine is a line in this table rather than a
 // branch further down.
+// What users see (owner, 18 Oct 2026): GIDEON's own tier names, never the vendor's model names.
+const TIER_NAMES = { astra: "GIDEON Artemis", luna: "GIDEON Phaëthon", terra: "GIDEON Aphrodite", experimental: "GIDEON Model 0" }
 const TIERS = {
   astra: { model: "gpt-6-astra", provider: "openai-codex", timeoutMs: 140000 },
-  luna: { model: "gpt-5.6-luna", provider: "openai-codex", timeoutMs: 140000 },
-  terra: { model: "gpt-5.6-terra", provider: "openai-codex", timeoutMs: 140000 },
+  luna: { model: "gpt-6.1-sol", provider: "openai-codex", timeoutMs: 140000 },
+  terra: { model: "gpt-6-luna", provider: "openai-codex", timeoutMs: 140000 },
   // Local: Qwen3.5-27B IQ2_M on the RTX 5070 in this building. Measured at 142s for a question the
   // hosted tiers answer in 42, so it gets its own ceiling — 140s would have timed it out at the
   // exact moment it was about to succeed.
@@ -76,6 +78,91 @@ function childEnv(actorEmail, runId) {
   delete env.ORACLE_LLM_SECRET
   return env
 }
+// ── Usage of the run just done (GIDEON credits, 18 Oct 2026) ──────────────────────────────────────────
+// Hermes writes every session's token buckets to <HERMES_HOME>/state.db (session_model_usage: one row per
+// model and per task — the answer itself, title_generation, ...). The runner / `hermes -z --usage-file`
+// name the session id; this reads that session (and any child session it spawned) back so NEXUS can bill
+// what the model was actually paid for. Additive in the response: an older NEXUS ignores it.
+// node:sqlite is built into Node 22 (experimental: one warning line on stderr, no flag needed).
+const STATE_DB = path.join(PROFILE_HOME || path.join(os.homedir(), ".hermes"), "state.db")
+function cleanSessionId(v) {
+  const s = String(v || "")
+  return /^[A-Za-z0-9_.:-]{6,80}$/.test(s) ? s : ""
+}
+function readSessionUsage(sessionId) {
+  const sid = cleanSessionId(sessionId)
+  if (!sid) return null
+  let db = null
+  try {
+    const { DatabaseSync } = require("node:sqlite")
+    db = new DatabaseSync(STATE_DB, { readOnly: true })
+    try { db.exec("PRAGMA busy_timeout = 3000") } catch {}
+    const rows = db.prepare(`
+      WITH RECURSIVE tree(id) AS (
+        SELECT id FROM sessions WHERE id = ?
+        UNION SELECT s.id FROM sessions s JOIN tree t ON s.parent_session_id = t.id
+      )
+      SELECT u.model AS model, u.task AS task, u.billing_provider AS provider,
+             SUM(u.api_call_count) AS apiCalls, SUM(u.input_tokens) AS inputTokens, SUM(u.output_tokens) AS outputTokens,
+             SUM(u.cache_read_tokens) AS cacheReadTokens, SUM(u.cache_write_tokens) AS cacheWriteTokens,
+             SUM(u.reasoning_tokens) AS reasoningTokens
+      FROM session_model_usage u JOIN tree t ON u.session_id = t.id
+      GROUP BY u.model, u.task, u.billing_provider`).all(sid)
+    if (!rows.length) return null
+    const byModel = rows.map((r) => ({
+      model: String(r.model || ""), task: String(r.task || ""), provider: String(r.provider || ""),
+      apiCalls: Number(r.apiCalls) || 0, inputTokens: Number(r.inputTokens) || 0, outputTokens: Number(r.outputTokens) || 0,
+      cacheReadTokens: Number(r.cacheReadTokens) || 0, cacheWriteTokens: Number(r.cacheWriteTokens) || 0, reasoningTokens: Number(r.reasoningTokens) || 0,
+    }))
+    return { source: "state.db", sessionId: sid, byModel }
+  } catch (e) {
+    console.error(`[${SHIM_NAME}] usage read failed for ${sid}:`, e.message)
+    return null
+  } finally {
+    try { db && db.close() } catch {}
+  }
+}
+// The runner's / usage file's own numbers, for when state.db has no row (never written, or unreadable).
+function usageFromResult(u, fallbackModel) {
+  if (!u || typeof u !== "object") return null
+  const n = (k) => Number(u[k]) || 0
+  if (!n("input_tokens") && !n("output_tokens") && !n("cache_read_tokens")) return null
+  return {
+    source: "runner", sessionId: cleanSessionId(u.session_id) || null,
+    byModel: [{ model: String(u.model || fallbackModel || ""), task: "", provider: String(u.provider || ""), apiCalls: n("api_calls"),
+      inputTokens: n("input_tokens"), outputTokens: n("output_tokens"), cacheReadTokens: n("cache_read_tokens"),
+      cacheWriteTokens: n("cache_write_tokens"), reasoningTokens: n("reasoning_tokens") }],
+  }
+}
+// Several sessions (the router-miss retry runs the question twice, 18 Oct 2026): their rows summed per model/task.
+function readSessionsUsage(ids) {
+  const parts = ids.map(readSessionUsage).filter(Boolean)
+  if (!parts.length) return null
+  if (parts.length === 1) return parts[0]
+  const merged = new Map()
+  for (const p of parts) for (const r of p.byModel) {
+    const key = `${r.model}|${r.task}|${r.provider}`
+    const m = merged.get(key)
+    if (!m) { merged.set(key, { ...r }); continue }
+    for (const k of ["apiCalls", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens"]) m[k] += r[k]
+  }
+  return { source: "state.db", sessionId: parts[0].sessionId, sessionIds: parts.map((p) => p.sessionId), byModel: [...merged.values()] }
+}
+function runUsage(resultUsage, tier, model) {
+  const ids = resultUsage && Array.isArray(resultUsage.session_ids) && resultUsage.session_ids.length ? resultUsage.session_ids : resultUsage && resultUsage.session_id ? [resultUsage.session_id] : []
+  const fromDb = ids.length ? readSessionsUsage(ids.slice(0, 4)) : null
+  const u = fromDb || usageFromResult(resultUsage, model)
+  return u ? { ...u, tier, model } : null
+}
+
+// Router misses (18 Oct 2026): an answer that said "can't / no tool" from a run that had deferred tools and never
+// loaded one; the runner retried it with every tool. One JSON line each, for tuning GIDEON_EAGER_TOOLS.
+const ROUTER_MISS_LOG = process.env.GIDEON_ROUTER_MISS_LOG || path.join(__dirname, "router-misses.jsonl")
+function logRouterMiss(entry) {
+  try { fs.appendFileSync(ROUTER_MISS_LOG, JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n") } catch (e) { console.error(`[${SHIM_NAME}] router-miss log failed:`, e.message) }
+  console.log(`[${SHIM_NAME}] router miss ${entry.tier} run=${entry.runId || "-"}`)
+}
+
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
 const WORKDIR = path.join(os.homedir(), ".hermes", "oracle-workdir")
 try { fs.mkdirSync(WORKDIR, { recursive: true }) } catch {}
@@ -209,8 +296,12 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
     // Telling it to LOOK at a PDF sends it to vision, which cannot open one; telling it to READ
     // the file gets the anydoc text extraction. So the two attachments get different wording, and
     // the image-only sentence is left exactly as it was.
-    const full = buildAttachedPrompt(prompt, imagePath, doc)
-    const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", provider], { cwd: WORKDIR, env })
+    // The tier's GIDEON name rides along, so "which GIDEON am I talking to?" has an answer (owner, 18 Oct 2026).
+    const tierName = TIER_NAMES[TIERS[tier] ? tier : DEFAULT_TIER] || "GIDEON"
+    const full = "[You are answering as " + tierName + ".]\n" + buildAttachedPrompt(prompt, imagePath, doc)
+    // The usage report names the session (GIDEON credits); written even when the run fails.
+    const usageFile = path.join(WORKDIR, `gideon-usage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`)
+    const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", provider, "--usage-file", usageFile], { cwd: WORKDIR, env })
     let out = "", err = ""
     try { child.stdin.end() } catch {}
     child.stdout.on("data", (d) => { out += d.toString() })
@@ -220,9 +311,12 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
       clearTimeout(timer)
       const reply = out.trim()
       if (!reply) console.error(`[${SHIM_NAME}] empty reply; err:`, err.slice(-200).replace(/\n/g, " "))
-      resolve(reply)
+      let report = null
+      try { report = JSON.parse(fs.readFileSync(usageFile, "utf8")) } catch {}
+      try { fs.unlinkSync(usageFile) } catch {}
+      resolve({ reply, usage: runUsage(report, tier, model) })
     })
-    child.on("error", (e) => { clearTimeout(timer); console.error("[hermes-chat] spawn error", e.message); resolve("") })
+    child.on("error", (e) => { clearTimeout(timer); console.error("[hermes-chat] spawn error", e.message); try { fs.unlinkSync(usageFile) } catch {}; resolve({ reply: "", usage: null }) })
   })
 }
 
@@ -235,9 +329,11 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
     const env = childEnv(actorEmail, runId)
     const chosen = TIERS[tier] || TIERS[DEFAULT_TIER]
     const { model, provider, timeoutMs } = chosen
-    const full = buildAttachedPrompt(prompt, imagePath, null)
+    // The tier line the one-shot path always had (SOUL: "the first line of each request says which one is answering").
+    const tierName = TIER_NAMES[TIERS[tier] ? tier : DEFAULT_TIER] || "GIDEON"
+    const full = "[You are answering as " + tierName + ".]\n" + buildAttachedPrompt(prompt, imagePath, null)
     const child = spawn(PYTHON, [RUNNER, "--model", model, "--provider", provider, "--toolsets", STREAM_TOOLSETS], { cwd: WORKDIR, env })
-    let err = "", sawFinal = false, outChars = 0, pending = ""
+    let err = "", sawFinal = false, outChars = 0, pending = "", finalUsage = null
     child.stdout.on("data", (d) => {
       pending += d.toString()
       let nl
@@ -247,7 +343,8 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
         if (!line) continue
         try {
           const ev = JSON.parse(line)
-          if (ev.t === "final") { sawFinal = true; outChars = String(ev.c || "").length }
+          if (ev.t === "final") { sawFinal = true; outChars = String(ev.c || "").length; finalUsage = ev.usage || null }
+          if (ev.t === "router_miss") logRouterMiss({ tier, runId, first: String(ev.c || ev.first || "").slice(0, 300), tools: Array.isArray(ev.tools) ? ev.tools.slice(0, 20) : [] })
         } catch { continue }
         try { res.write(line + "\n") } catch {}
       }
@@ -263,7 +360,10 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
     child.on("close", (code) => {
       clearTimeout(timer)
       if (!sawFinal) console.error(`[${SHIM_NAME}] stream ended without final (code ${code}); err:`, err.slice(-200).replace(/\n/g, " "))
-      resolve({ ok: sawFinal, outChars })
+      // One last line with what the run cost (GIDEON credits, 18 Oct 2026). Older NEXUS servers skip unknown `t`.
+      const usage = runUsage(finalUsage, tier, model)
+      if (usage) { try { res.write(JSON.stringify({ t: "usage", usage }) + "\n") } catch {} }
+      resolve({ ok: sawFinal, outChars, usage })
     })
     child.on("error", (e) => {
       clearTimeout(timer)
@@ -303,7 +403,9 @@ const server = http.createServer((req, res) => {
       return res.end(JSON.stringify(intent))
     }
     // /chat → Hermes agent
-    const prompt = (payload.prompt || "").toString().slice(0, 6000)
+    // 16000 (was 6000, 18 Oct 2026): the cut kept the START, so a long context lost the actual question at the end.
+    // NEXUS now budgets its prompt itself and always ends it with the question; this is only a safety ceiling.
+    const prompt = (payload.prompt || "").toString().slice(0, 16000)
     if (!prompt.trim()) { res.writeHead(400); return res.end(JSON.stringify({ error: "empty" })) }
     const actorEmail = (payload.actorEmail || "").toString().slice(0, 200)
     const tier = (payload.model || "").toString().toLowerCase().slice(0, 20)
@@ -373,19 +475,21 @@ const server = http.createServer((req, res) => {
       } finally {
         if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
       }
-      console.log(`[${SHIM_NAME}] stream ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> ${r.ok ? `out=${r.outChars}c` : "FAILED"} (${Date.now() - started}ms)`)
+      const tok = r.usage ? r.usage.byModel.reduce((a, m) => a + m.inputTokens + m.cacheReadTokens + m.outputTokens, 0) : 0
+      console.log(`[${SHIM_NAME}] stream ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> ${r.ok ? `out=${r.outChars}c` : "FAILED"} tok=${tok} sess=${r.usage ? r.usage.sessionId : "-"} (${Date.now() - started}ms)`)
       return res.end()
     }
-    let reply
+    let reply, usage = null
     try {
-      reply = await runHermes(prompt, actorEmail, chosen, imagePath, doc, runId)
+      ;({ reply, usage } = await runHermes(prompt, actorEmail, chosen, imagePath, doc, runId))
     } finally {
       if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
       if (doc) { try { fs.unlinkSync(doc.path) } catch {} }
     }
     console.log(`[${SHIM_NAME}] ${chosen}${imagePath ? " +gambar" : ""}${doc ? " +dokumen" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
     res.writeHead(200, { "Content-Type": "application/json" })
-    return res.end(JSON.stringify({ reply }))
+    // `usage` is additive (18 Oct 2026): older NEXUS servers read only `reply`.
+    return res.end(JSON.stringify(usage ? { reply, usage } : { reply }))
   })
 })
 

@@ -55,8 +55,8 @@ export const DEFAULT_POLICY: CreditPolicy = {
   roles: {
     ONE_ABOVE_ALL: { unlimited: true, daily: 0, monthly: 0 },
     BOD: { unlimited: true, daily: 0, monthly: 0 },
-    MANAGER: { unlimited: false, daily: 300, monthly: 3000 },
-    STAFF: { unlimited: false, daily: 100, monthly: 1000 },
+    MANAGER: { unlimited: false, daily: 750, monthly: 7500 },
+    STAFF: { unlimited: false, daily: 250, monthly: 2500 },
   },
   fallbackPerDay: FALLBACK_PER_DAY,
 }

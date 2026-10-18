@@ -31,6 +31,10 @@ provides_tools:
   # Write, added 16 Oct 2026: move / cancel an existing booking as the asking user (same approval modes)
   - nexus_move_room_booking
   - nexus_cancel_room_booking
+  - nexus_search_workspace
+  # Read, added 18 Oct 2026: Pipeline deals and Legal documents (loaded on demand)
+  - nexus_search_deals
+  - nexus_search_legal_documents
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

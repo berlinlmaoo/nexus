@@ -18,6 +18,17 @@ Usage (prompt on stdin, so it never shows up in `ps`):
 
 Runs with the Hermes venv's python (it imports Hermes). The toolsets are EXPLICIT: the caller decides
 what this agent may touch, not the profile's interactive defaults.
+
+Cost (owner, 18 Oct 2026 — "cheaper per answer, not dumber"):
+  - GIDEON_EAGER_TOOLS (comma list): plugin tools the model always sees with their full schema. Every other
+    plugin tool stays deferred behind Hermes' tool_search / tool_describe / tool_call bridge, whose
+    description lists each one by name, so the model can still load any of them mid-answer.
+  - GIDEON_CACHE_SCOPE: one prompt-cache scope for every run of this instance. Hermes derives the cache key
+    from the session id, and a one-shot run is a new session every time, so the identical system prompt +
+    tool schemas never hit the provider cache across questions. Same scope = same key = cached prefix (10%).
+  - Router-miss safety net: an answer that says it cannot / has no tool, from a run that never loaded a
+    deferred tool, is retried ONCE with every tool loaded. The first attempt's text is withdrawn with a
+    `reset` line; a {"t":"router_miss"} line tells the shim to log it.
 """
 from __future__ import annotations
 
@@ -25,6 +36,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import threading
 from contextlib import redirect_stderr, redirect_stdout
@@ -43,7 +55,47 @@ def emit(obj: dict) -> None:
             pass
 
 
-def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[str, dict]:
+# "I can't / there is no tool / no access" — the words of an answer given without the tool it needed.
+# Not "not found": an empty search is a real answer.
+_MISS = re.compile(
+    r"(tidak|nggak|gak|ga|belum) (bisa|dapat) (aku |gw |saya )?(proses|akses|mengakses|membaca|melihat|memesan|booking|membooking)"
+    r"|(tidak|nggak|gak|belum) (punya|ada) (akses|tool|alat|fitur)"
+    r"|(tool|alat|fitur)[^.\n]{0,60}(tidak|belum|nggak) (tersedia|menyediakan|ada|bisa)"
+    r"|tidak menyediakan"
+    r"|di luar kemampuan"
+    r"|(can't|cannot|can not|unable to) (access|book|read|see|check|process)"
+    r"|(don't|do not) have (access|a tool|the tool|tools)"
+    r"|(no|not an?) (tool|access) (for|to)"
+    r"|not available (in|to) (this|me)",
+    re.I,
+)
+_BRIDGE = {"tool_search", "tool_describe", "tool_call"}
+
+
+def _patch_hermes(eager: set, cache_scope: str) -> None:
+    """Tool deferral and the prompt-cache scope, for this process only (Hermes itself is untouched)."""
+    import tools.tool_search as ts
+
+    original_core = ts._core_tool_names
+
+    def core_names():
+        names = original_core()
+        if _STATE.get("eager_all"):
+            # The retry: every plugin tool of this session counts as core, so nothing defers.
+            from tools.registry import registry
+            return names | frozenset(e.name for e in registry._snapshot_entries())
+        return names | frozenset(eager)
+
+    ts._core_tool_names = core_names
+    if cache_scope:
+        import agent.chat_completion_helpers as cch
+        cch._prompt_cache_scope_for_agent = lambda _agent: cache_scope
+
+
+_STATE: dict = {}
+
+
+def _run(prompt: str, model: str, provider: str, toolsets: list[str], tools_seen: list) -> tuple[str, dict]:
     # Imported here so HERMES_HOME (set by the caller) is in place before Hermes reads anything.
     from gateway.session_context import declare_stateless_channel
     from hermes_cli.config import load_config
@@ -78,6 +130,7 @@ def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[s
             emit({"t": "delta", "c": text})
 
     def on_tool_start(call_id=None, name=None, *_args, **_kw):
+        tools_seen.append(str(name or ""))
         emit({"t": "tool", "phase": "start", "id": str(call_id or ""), "name": str(name or "")})
 
     def on_tool_done(call_id=None, name=None, *_args, **_kw):
@@ -110,6 +163,9 @@ def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[s
         agent.tool_start_callback = on_tool_start
         agent.tool_complete_callback = on_tool_done
         result = agent.run_conversation(prompt)
+        # The session row this run wrote in state.db (credits, 18 Oct 2026): the shim reads its usage there.
+        if isinstance(result, dict) and not result.get("session_id"):
+            result["session_id"] = getattr(agent, "session_id", None)
         return (result.get("final_response") or "", result)
     finally:
         _close_agent(agent, session_db)
@@ -130,13 +186,34 @@ def main() -> int:
         emit({"t": "error", "c": "empty prompt"})
         return 2
     toolsets = [t.strip() for t in args.toolsets.split(",") if t.strip()]
+    eager = {t.strip() for t in os.getenv("GIDEON_EAGER_TOOLS", "").split(",") if t.strip()}
+    cache_scope = os.getenv("GIDEON_CACHE_SCOPE", "").strip()
+    retry_on_miss = os.getenv("GIDEON_ROUTER_RETRY", "1") != "0"
 
     logging.disable(logging.CRITICAL)
     failure = None
     response, result = "", {}
+    tools_seen: list = []
+    sessions: list = []
     with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull), redirect_stderr(devnull):
         try:
-            response, result = _run(prompt, args.model, args.provider, toolsets)
+            if eager or cache_scope:
+                _patch_hermes(eager, cache_scope)
+            response, result = _run(prompt, args.model, args.provider, toolsets, tools_seen)
+            sessions.append(result.get("session_id"))
+            # Only when tools were deferred at all, the run never touched the bridge, and the answer reads as "can't".
+            if (retry_on_miss and eager and (response or "").strip() and _MISS.search(response)
+                    and not (_BRIDGE & set(tools_seen))):
+                emit({"t": "router_miss", "first": response.strip()[:300], "tools": [t for t in tools_seen if t][:20]})
+                emit({"t": "reset"})
+                _STATE["eager_all"] = True
+                import model_tools
+                model_tools._clear_tool_defs_cache()
+                first_result = result
+                response, result = _run(prompt, args.model, args.provider, toolsets, tools_seen)
+                sessions.append(result.get("session_id"))
+                for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
+                    result[k] = (result.get(k) or 0) + (first_result.get(k) or 0)
         except BaseException as exc:  # noqa: BLE001 - must reach the caller, never die silently
             failure = exc
     if failure is not None:
@@ -146,7 +223,11 @@ def main() -> int:
     if not response:
         emit({"t": "error", "c": "no final response was produced"})
         return 1
-    usage = {k: result.get(k) for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "model", "provider")}
+    # Additive (18 Oct 2026, GIDEON credits): the cache / reasoning buckets and the Hermes session id(s) — two when
+    # the router-miss retry ran; the shim bills both. Older NEXUS servers read only total_tokens from here.
+    usage = {k: result.get(k) for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "model", "provider",
+                                        "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "session_id")}
+    usage["session_ids"] = [s for s in sessions if s]
     emit({"t": "final", "c": response, "usage": usage})
     return 0
 
