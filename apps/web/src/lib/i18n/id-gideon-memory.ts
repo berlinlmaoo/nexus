@@ -9,7 +9,7 @@ export const ID_GIDEON_MEMORY: Record<string, string> = {
   "What GIDEON remembers about you, so its answers fit you. Only you can see this.": "Hal yang GIDEON ingat tentang kamu, supaya jawabannya pas buat kamu. Hanya kamu yang bisa melihatnya.",
   "Use GIDEON Memory": "Pakai Memori GIDEON",
   "Off: GIDEON doesn't remember anything new and doesn't use what's here.": "Mati: GIDEON tidak mengingat hal baru dan tidak memakai yang ada di sini.",
-  "e.g. Call me by my first name. Keep answers short.": "mis. Panggil aku pakai nama depan. Jawab singkat saja.",
+  "e.g. Keep answers short.": "mis. Jawab singkat saja.",
   "Something for GIDEON to remember": "Hal yang perlu GIDEON ingat",
   "GIDEON Memory is off. Turn it on to add or use memories.": "Memori GIDEON sedang mati. Nyalakan untuk menambah atau memakai memori.",
   "GIDEON Memory is full ({n}). Delete something to add more.": "Memori GIDEON penuh ({n}). Hapus sesuatu untuk menambah.",

@@ -86,7 +86,7 @@ export function GideonMemorySection() {
 
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(); }}>
           <input value={text} onChange={(e) => setText(e.target.value)} maxLength={data?.textMax ?? 200} disabled={paused || atMax}
-            placeholder={t("e.g. Call me by my first name. Keep answers short.")}
+            placeholder={t("e.g. Keep answers short.")}
             aria-label={t("Something for GIDEON to remember")}
             className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60" />
           <div className="flex gap-2">
@@ -192,18 +192,19 @@ function MemoryRow({ memory, locale, paused, onDone }: { memory: GideonMemory; l
       <div className="min-w-0 flex-1 py-1">
         <p className="break-words text-sm">{memory.text}</p>
         {(pending || day) && (
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
             {day && <span>{day}</span>}
-            {pending && <span className="rounded bg-accent px-1.5 py-px font-medium text-accent-foreground">{t("Suggested, not saved yet")}</span>}
-          </p>
+            {pending && <span className="whitespace-nowrap rounded bg-accent px-1.5 py-px font-medium text-accent-foreground">{t("Suggested, not saved yet")}</span>}
+            {/* Under the text, not beside it: on a phone a button beside squeezed the text into a narrow column. */}
+            {pending && (
+              <button type="button" onClick={() => save.mutate({ status: "ACTIVE" })} disabled={save.isPending || paused}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                {save.isPending && <Loader2 className="h-3 w-3 animate-spin" />}{t("Save")}
+              </button>
+            )}
+          </div>
         )}
       </div>
-      {pending && (
-        <button type="button" onClick={() => save.mutate({ status: "ACTIVE" })} disabled={save.isPending || paused}
-          className="mt-0.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
-          {save.isPending && <Loader2 className="h-3 w-3 animate-spin" />}{t("Save")}
-        </button>
-      )}
       <button type="button" onClick={() => setEditing(true)} className={iconBtn} aria-label={t("Edit")} title={t("Edit")}><Pencil className="h-4 w-4" /></button>
       <button type="button" onClick={() => del.mutate()} disabled={del.isPending} className={`${iconBtn} hover:text-destructive`} aria-label={t("Delete")} title={t("Delete")}>
         {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
