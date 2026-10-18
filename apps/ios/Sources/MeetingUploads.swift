@@ -72,6 +72,11 @@ final class MeetingUploads {
         }
         for job in jobs.values where isCurrent(job) && !running.contains(job.id) && !active.contains(job.id) { await schedule(job.id, reconcile: true) }
     }
+    func cancelAndRemove(_ id: String) {
+        guard let job = jobs[id], isCurrent(job) else { return }
+        session.getAllTasks { tasks in for task in tasks where task.taskDescription?.hasPrefix(id + ":") == true { task.cancel() } }
+        finish(id); completed[id] = nil; fractions[id] = nil
+    }
     func retry(_ id: String) async { failures[id] = nil; await schedule(id, reconcile: true) }
     func isCurrent(_ job: Job) -> Bool { job.ownerId == Keychain.load()?.userId && job.server == ServerEnvironment.current.rawValue }
     func rebindIdentity(from old: String, to new: String) {

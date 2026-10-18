@@ -76,7 +76,7 @@ struct GideonCreateTaskCard: View {
     @State private var failure: String?
     @State private var chooseProject = false
     @State private var search = ""
-    @State private var due = Date()
+    @State private var due = CalDays.date(CalDays.wibToday())
     @State private var hasDue = false
     @State private var hydrated = false
     var body: some View {
@@ -153,7 +153,7 @@ struct GideonCreateTaskCard: View {
         .task {
             guard !hydrated else { return }; hydrated = true
             choice = GideonTaskChoice(projectId: target.chosenProjectId ?? target.projectId ?? "", taskListId: target.taskListId, assigneeIds: target.assigneeIds ?? [], dueDate: target.dueDay)
-            if let date = TaskDates.parse(target.dueDay) { due = date; hasDue = true }
+            if let day = target.dueDay { due = CalDays.date(day); hasDue = true }
         }
         .task(id: choice.projectId) { await loadOptions() }
         .onChange(of: due) { _, _ in syncDate() }

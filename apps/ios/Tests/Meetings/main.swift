@@ -44,6 +44,7 @@ func payload(_ title: String, _ version: Int) -> Data { Data(base.replacingOccur
     expect(!store.deleted, "Other meetings' events are ignored")
     await store.event(#"{"meetingId":"meeting","deleted":true}"#)
     expect(store.deleted, "Deleted event closes this meeting")
+    expect(MeetingUploads.shared.removed == ["meeting"], "Deletion cancels and removes only this meeting's pending audio")
 }
 try await run()
 print("\(checks) meeting wire and concurrent autosave checks passed")

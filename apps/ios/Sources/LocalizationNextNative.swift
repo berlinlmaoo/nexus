@@ -205,5 +205,6 @@ extension AppLanguage {
         "Short description": "Deskripsi singkat",
         "New field": "Field baru",
         "Project duplicated": "Project diduplikat",
+        "Experimental": "Eksperimental",
     ]
 }

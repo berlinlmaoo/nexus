@@ -78,7 +78,7 @@ final class MeetingStore {
     func event(_ json: String) async {
         struct Event: Decodable { let meetingId: String; let status: String?; let progress: Double?; let version: Int?; let deleted: Bool? }
         guard let event = try? JSONDecoder().decode(Event.self, from: Data(json.utf8)), event.meetingId == id else { return }
-        if event.deleted == true { deleted = true; return }
+        if event.deleted == true { MeetingUploads.shared.cancelAndRemove(id); deleted = true; return }
         if let version = event.version, let current = meeting, version <= current.version { return }
         if hasUnsaved { latestEventVersion = max(latestEventVersion, event.version ?? 0); return }
         if let status = event.status, let current = meeting, status == current.status,
@@ -108,7 +108,7 @@ final class MeetingStore {
         guard !busy else { return }; busy = true; defer { busy = false }
         do {
             let _: NativeAPI.Empty = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id), method: "DELETE")
-            debounce?.cancel(); pending = [:]; deleted = true
+            debounce?.cancel(); pending = [:]; MeetingUploads.shared.cancelAndRemove(id); deleted = true
         } catch { failure = error.localizedDescription }
     }
     func changeProject(_ projectId: String?) async {

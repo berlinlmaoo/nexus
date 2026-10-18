@@ -465,20 +465,14 @@ struct GideonPanel: View {
         .background(NX.card)
     }
 
-    /// "Luna ▾" (web SelectPicker): the tier, with each one's blurb in the menu.
+    /// Tier names with their Default / Experimental badges; live availability is owned by the server.
+    @State private var showTierPicker = false
     private var tierChip: some View {
-        Menu {
-            ForEach(GideonTier.allCases) { option in
-                let status = tierStatus.state(option)
-                Button { tierRaw = option.rawValue } label: {
-                    Text(option.label)
-                    if !status.available { Text(T("Unavailable right now") + " · " + status.reasonText) }
-                }.disabled(!status.available)
-            }
-            Text(tier.blurb)
-        } label: {
+        Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
                 Text(tier.label).font(NXFont.text(13, .semibold))
+                if tier == .luna { tierBadge("Default", experimental: false) }
+                if tier == .experimental { tierBadge("Experimental", experimental: true) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
             .foregroundStyle(NX.mutedFg)
@@ -487,14 +481,44 @@ struct GideonPanel: View {
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
             .contentShape(Rectangle())
         }
-        .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .disabled(chat.sending)
         .accessibilityLabel(T("GIDEON tier"))
         .accessibilityIdentifier("gideon.tier")
+        .popover(isPresented: $showTierPicker, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(GideonTier.allCases) { option in
+                    let status = tierStatus.state(option)
+                    Button { tierRaw = option.rawValue; showTierPicker = false } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 8) {
+                                Text(option.label).font(NXFont.text(14, .semibold)).foregroundStyle(status.available ? NX.foreground : NX.mutedFg)
+                                if option == .luna { tierBadge("Default", experimental: false) }
+                                if option == .experimental { tierBadge("Experimental", experimental: true) }
+                                Spacer(minLength: 8)
+                                if option == tier { Image(systemName: "checkmark").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText) }
+                            }
+                            if !status.available {
+                                Text(T("Unavailable right now")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                                Text(status.reasonText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(option == tier ? NX.accentBg : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                            .contentShape(Rectangle())
+                    }.buttonStyle(.plain).disabled(!status.available).accessibilityIdentifier("gideon.tier." + option.rawValue)
+                }
+                Divider().padding(.vertical, 4)
+                Text(tier.blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 12).padding(.bottom, 8)
+            }.padding(8).frame(width: 320).background(NX.card)
+                .presentationCompactAdaptation(.popover)
+        }
     }
-
-    // MARK: - title (compact)
+    private func tierBadge(_ title: String, experimental: Bool) -> some View {
+        Text(T(title)).font(NXFont.text(10, .semibold))
+            .foregroundStyle(experimental ? ChipTone.warning.fg : NX.violetText)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(experimental ? ChipTone.warning.bg : NX.accentBg, in: Capsule())
+    }
 
     /// "GIDEON" over "Acts in NEXUS as you" (or the chat's title), as web's header (UI tour run 9, I9). The
     /// tier is its own "Luna ▾" chip beside it, so the title's width no longer changes with the tier (the

@@ -615,7 +615,10 @@ final class NEXUSUITour: XCTestCase {
                 let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : other
                 #endif
                 let exists = target.waitForExistence(timeout: 15)
-                var usable = exists && target.isHittable
+                if exists && target.elementType == .button { revealNativeTab(target) }
+                let targetFrame = exists ? target.frame : .zero
+                var usable = exists && !targetFrame.isEmpty && !targetFrame.isInfinite
+                    && app.windows.firstMatch.frame.intersects(targetFrame) && target.isHittable
                 #if targetEnvironment(macCatalyst)
                 // Catalyst can report a visible native menu as non-hittable, or return an
                 // infinite activation point. Its on-screen frame still gives a real mouse point.

@@ -19,3 +19,5 @@ struct NativeAPIError: Error { let code: String; let data: Data }
     static func object<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) }
     static func escape(_ value: String) -> String { value }
 }
+
+@MainActor final class MeetingUploads { static let shared = MeetingUploads(); var removed: [String] = []; func cancelAndRemove(_ id: String) { removed.append(id) } }

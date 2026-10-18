@@ -85,7 +85,7 @@ private struct GideonPersonChats: View {
     @State private var loading = false; @State private var loaded = false
     @State private var failure: Error?
     @State private var selected: GideonReviewedChats.Chat?
-    private var filterKey: String { query + deleted + (from?.description ?? "") + (to?.description ?? "") }
+    private var filterKey: String { [query, deleted, from.map(CalDays.key) ?? "", to.map(CalDays.key) ?? ""].joined(separator: "|") }
     private var filtering: Bool { !query.isEmpty || deleted != "all" || from != nil || to != nil }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -156,8 +156,8 @@ struct NativeOptionalDay: View {
     @Binding var value: Date?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle(T(label), isOn: Binding(get: { value != nil }, set: { value = $0 ? Date() : nil })).font(NXFont.text(12))
-            if value != nil { DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date).labelsHidden() }
+            Toggle(T(label), isOn: Binding(get: { value != nil }, set: { value = $0 ? CalDays.date(CalDays.wibToday()) : nil })).font(NXFont.text(12))
+            if value != nil { DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date).labelsHidden().environment(\.timeZone, TimeZone(secondsFromGMT: 0)!) }
         }.padding(8).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(NX.border))
     }
 }

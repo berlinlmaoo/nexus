@@ -32,6 +32,8 @@ struct MeetingQueueBlock: View {
 }
 
 struct MeetingListView: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     var projectId: String? = nil
     @State private var meetings: [MeetingNote] = []
     @State private var loading = true
@@ -43,7 +45,10 @@ struct MeetingListView: View {
             else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        HStack { Text(T("Meeting notes")).font(NXFont.display(28, .bold)); MeetingBetaBadge(); Spacer(); Button { showNew = true } label: { Label(T("New meeting notes"), systemImage: "plus") }.buttonStyle(.nxPrimary) }
+                        ViewThatFits(in: .horizontal) {
+                            HStack { heading.fixedSize(); Spacer(); newButton.fixedSize() }
+                            VStack(alignment: .leading, spacing: 12) { heading; newButton }
+                        }
                         if loading && meetings.isEmpty { ProgressView().frame(maxWidth: .infinity) }
                         if let failure { LoadErrorView(error: failure, what: T("Meeting notes"), retry: { Task { await load() } }, compact: true) }
                         if !loading && meetings.isEmpty && failure == nil {
@@ -64,12 +69,14 @@ struct MeetingListView: View {
             }
         }
         .background(NX.background).navigationTitle(T("Meeting notes")).navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showNew) { NewMeetingSheet(projectId: projectId) }
+        .sheet(isPresented: $showNew) { NewMeetingSheet(projectId: projectId).environment(auth).environment(router) }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .nexusMeetingChanged)) { _ in Task { await load() } }
         .refreshable { await load() }
         .accessibilityIdentifier("meetings.list")
     }
+    private var heading: some View { HStack { Text(T("Meeting notes")).font(NXFont.display(28, .bold)); MeetingBetaBadge() } }
+    private var newButton: some View { Button { showNew = true } label: { Label(T("New meeting notes"), systemImage: "plus") }.buttonStyle(.nxPrimary) }
     private var disabled: some View { EmptyState(icon: "mic.slash", title: T("Meeting notes is unavailable right now."), subtitle: T("Try again later.")) }
     private func load() async {
         guard RemoteConfig.shared.meetingNotesEnabled else { loading = false; return }
@@ -169,7 +176,7 @@ struct MeetingDetailView: View {
     private func properties(_ meeting: MeetingNote) -> some View {
         VStack(spacing: 12) {
             property("Status") { Text(MeetingLabels.status(meeting.status)).foregroundStyle(meeting.status == "FAILED" ? NX.danger : NX.violetText) }
-            property("Project") { Button(meeting.project?.name ?? T("Choose a project")) { projectPicker = true }.buttonStyle(.plain).disabled(!meeting.can.edit || meeting.createdBy.id != Keychain.load()?.userId).accessibilityIdentifier("meetings.project") }
+            property("Project") { Button(meeting.project?.name ?? T("Choose a project")) { projectPicker = true }.buttonStyle(.plain).disabled(!meeting.can.edit || meeting.status == "APPLIED" || meeting.createdBy.id != Keychain.load()?.userId).accessibilityIdentifier("meetings.project") }
             property("Date") { Text(LegalLabels.date(meeting.recordedAt ?? meeting.createdAt)) }
             property("Duration") { Text(meeting.durationSec.map(MeetingLabels.clock) ?? "—") }
             property("Language") {
@@ -219,7 +226,7 @@ struct MeetingDetailView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         textEditor(mom.topics[index].title, editable: editable(meeting), id: "topic-\(index)") { value in store.updateMinutes { guard $0.topics.indices.contains(index) else { return }; $0.topics[index].title = value } }
                         stringList(mom.topics[index].points, editable: editable(meeting), label: "Points") { values in store.updateMinutes { guard $0.topics.indices.contains(index) else { return }; $0.topics[index].points = values } }
-                        if editable(meeting) { Button(T("Remove topic"), role: .destructive) { store.updateMinutes { if $0.topics.indices.contains(index) { $0.topics.remove(at: index) } } }.font(NXFont.text(11)) }
+                        if editable(meeting) { Button(T("Remove topic"), role: .destructive) { store.updateMinutes { if $0.topics.indices.contains(index) { $0.topics.remove(at: index) } } }.font(NXFont.text(11)).frame(minHeight: 44) }
                     }.nexusCard()
                 }
                 if editable(meeting) { Button(T("Add topic")) { store.updateMinutes { $0.topics.append(.init(title: "", points: [])) } }.buttonStyle(.nxBordered) }
@@ -231,7 +238,7 @@ struct MeetingDetailView: View {
                         textEditor(mom.actionItems[index].text, editable: editable(meeting), id: "action-\(index)") { value in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].text = value } }
                         if editable(meeting) {
                             TextField(T("Owner"), text: Binding(get: { store.meeting?.mom?.actionItems.meetingElement(index)?.owner ?? "" }, set: { value in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].owner = value.isEmpty ? nil : value } })).textFieldStyle(.roundedBorder)
-                            NativeOptionalDay(label: "Due", value: Binding(get: { TaskDates.parse(store.meeting?.mom?.actionItems.meetingElement(index)?.due) }, set: { date in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].due = date.map(CalDays.key) } }))
+                            NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.mom?.actionItems.meetingElement(index)?.due.map(CalDays.date) }, set: { date in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].due = date.map(CalDays.key) } }))
                             Button(T("Remove"), role: .destructive) { store.updateMinutes { if $0.actionItems.indices.contains(index) { $0.actionItems.remove(at: index) } } }
                         } else { Text([mom.actionItems[index].owner,mom.actionItems[index].due].compactMap { $0 }.joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                     }.nexusCard()
@@ -246,13 +253,13 @@ struct MeetingDetailView: View {
             Text(T("Attendees")).font(NXFont.text(13, .semibold))
             FlowLayout(spacing: 6) {
                 ForEach(Array((meeting.mom?.attendees ?? []).enumerated()), id: \.offset) { index, name in
-                    HStack { Text(name); if editable(meeting) { Button { store.updateMinutes { if $0.attendees.indices.contains(index) { $0.attendees.remove(at: index) } } } label: { Image(systemName: "xmark") }.accessibilityLabel(String(format: T("Remove %@"), name)) } }.font(NXFont.text(12)).padding(7).background(NX.muted, in: Capsule())
+                    HStack { Text(name); if editable(meeting) { Button { store.updateMinutes { if $0.attendees.indices.contains(index) { $0.attendees.remove(at: index) } } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel(String(format: T("Remove %@"), name)) } }.font(NXFont.text(12)).padding(7).background(NX.muted, in: Capsule())
                 }
             }
             if editable(meeting) {
                 HStack {
                     TextField(T("Add attendee"), text: $attendee).textFieldStyle(.roundedBorder)
-                    Button(T("Add")) { let name = attendee.trimmingCharacters(in: .whitespacesAndNewlines); if !name.isEmpty { store.updateMinutes { if !$0.attendees.contains(name) { $0.attendees.append(name) } }; attendee = "" } }.disabled(attendee.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button(T("Add")) { let name = attendee.trimmingCharacters(in: .whitespacesAndNewlines); if !name.isEmpty { store.updateMinutes { if !$0.attendees.contains(name) { $0.attendees.append(name) } }; attendee = "" } }.buttonStyle(.nxBordered).disabled(attendee.trimmingCharacters(in: .whitespaces).isEmpty)
                     Menu(T("Project members")) {
                         ForEach(meeting.members ?? []) { member in
                             Button(member.name ?? "—") {
@@ -262,7 +269,7 @@ struct MeetingDetailView: View {
                                 }
                             }
                         }
-                    }
+                    }.buttonStyle(.nxBordered)
                 }
             }
             if let speakers = meeting.speakers, !speakers.isEmpty, editable(meeting) {
@@ -292,7 +299,7 @@ struct MeetingDetailView: View {
                             }
                         }
                     } label: { Label(proposal.assigneeIds.isEmpty ? T("Unassigned") : (meeting.members ?? []).filter { proposal.assigneeIds.contains($0.id) }.compactMap(\.name).joined(separator: ", "), systemImage: "person") }
-                    NativeOptionalDay(label: "Due", value: Binding(get: { TaskDates.parse(store.meeting?.proposals?.meetingElement(index)?.dueDate) }, set: { date in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].dueDate = date.map(CalDays.key) } }))
+                    NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.dueDate.map(CalDays.date) }, set: { date in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].dueDate = date.map(CalDays.key) } }))
                 }.disabled(!meeting.can.edit).nexusCard()
             }
         }
@@ -332,10 +339,10 @@ struct MeetingDetailView: View {
                 HStack(alignment: .top) {
                     Text("•").foregroundStyle(NX.mutedFg)
                     textEditor(values[index], editable: editable, id: label + "-\(index)") { text in var next = values; next[index] = text; change(next) }
-                    if editable { Button { var next = values; next.remove(at: index); change(next) } label: { Image(systemName: "xmark") }.accessibilityLabel(T("Remove")) }
+                    if editable { Button { var next = values; next.remove(at: index); change(next) } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel(T("Remove")) }
                 }
             }
-            if editable { Button(T("Add")) { var next = values; next.append(""); change(next) }.font(NXFont.text(12)) }
+            if editable { Button(T("Add")) { var next = values; next.append(""); change(next) }.font(NXFont.text(12)).frame(minHeight: 44) }
         }
     }
 }
