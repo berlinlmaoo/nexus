@@ -824,7 +824,7 @@ struct APIClient {
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"projectId\"\r\n\r\n\(projectId)\r\n")
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -842,7 +842,7 @@ struct APIClient {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -857,7 +857,7 @@ struct APIClient {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -2125,13 +2125,14 @@ struct APIClient {
     /// message was still delivered.
     @discardableResult
     func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = [],
-                     attachmentUrl: String? = nil, attachmentType: String? = nil,
+                     attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil,
                      replyToId: String? = nil) async throws -> ChatMessage? {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload: [String: Any] = ["content": content, "mentionedUserIds": mentionedUserIds]
         if let attachmentUrl { payload["attachmentUrl"] = attachmentUrl }
         if let attachmentType { payload["attachmentType"] = attachmentType }
+        if let attachmentName { payload["attachmentName"] = attachmentName }
         if let replyToId { payload["replyToId"] = replyToId }
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         return try await run(req, decode: SentMessageResponse.self).message
@@ -2147,7 +2148,7 @@ struct APIClient {
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"conversationId\"\r\n\r\n\(conversationId)\r\n")
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body

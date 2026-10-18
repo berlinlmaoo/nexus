@@ -81,6 +81,8 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     /// Set when the message carries a picture. Server-relative, e.g. "/api/files/chat/<uuid>.jpg".
     let attachmentUrl: String?
     let attachmentType: String?
+    let attachmentName: String?
+    let attachmentSize: Int?
     /// The message this one answers. Optional because every message sent before replies existed
     /// has none, and the server sends null rather than omitting the key.
     let replyTo: Quoted?
@@ -124,7 +126,7 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     var isSystem: Bool { kind == "SYSTEM" }
 
     private enum CodingKeys: String, CodingKey {
-        case id, userId, content, createdAt, user, attachmentUrl, attachmentType, replyTo, kind, event
+        case id, userId, content, createdAt, user, attachmentUrl, attachmentType, attachmentName, attachmentSize, replyTo, kind, event
     }
 
     /// Lenient past `id`: one row this build cannot fully read must not empty the whole page, and the
@@ -138,13 +140,15 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
         user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
         attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
         attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
+        attachmentName = try? c.decodeIfPresent(String.self, forKey: .attachmentName)
+        attachmentSize = try? c.decodeIfPresent(Int.self, forKey: .attachmentSize)
         replyTo = try? c.decodeIfPresent(Quoted.self, forKey: .replyTo)
         kind = try? c.decodeIfPresent(String.self, forKey: .kind)
         event = try? c.decodeIfPresent(ChatSystemEvent.self, forKey: .event)
     }
 }
 
-struct ChatUpload: Decodable, Sendable { let url: String; let type: String? }
+struct ChatUpload: Decodable, Sendable { let url: String; let type: String?; let kind: String?; let name: String?; let size: Int? }
 
 struct ConversationsResponse: Decodable, Sendable {
     let conversations: [Conversation]?

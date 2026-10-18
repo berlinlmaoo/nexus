@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 import CoreLocation   // "kirim lokasi" reads CLLocationCoordinate2D members off LocationManager
 
 /// Port of messages.tsx: conversation list grouped Direct/Groups/Projects → tap → chat thread.
@@ -397,7 +398,9 @@ struct ConvoRow: View {
     private var preview: String {
         guard let last = convo.lastMessage else { return T("No messages yet") }
         if last.isSystem { return last.systemSentence(meId: meId) }
-        if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("Photo") }
+        if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty {
+            return ChatAttachment.isDocument(last.attachmentType, path: path) ? (last.attachmentName ?? T("Document")) : T("Photo")
+        }
         return last.content
     }
 
@@ -563,6 +566,7 @@ struct ChatThreadView: View {
     @State private var showRename = false
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var showPhotoPicker = false
+    @State private var showDocumentPicker = false
     @State private var showCamera = false
     @State private var pendingAttachment: ChatUpload?
     @State private var replyingTo: ChatMessage?
@@ -989,6 +993,14 @@ struct ChatThreadView: View {
             guard let item else { return }
             Task { await uploadPhoto(item) }
         }
+        .sheet(isPresented: $showDocumentPicker) {
+            DocumentPicker(types: [.pdf, .plainText, .commaSeparatedText, .zip,
+                UTType(filenameExtension: "doc")!, UTType(filenameExtension: "docx")!,
+                UTType(filenameExtension: "xls")!, UTType(filenameExtension: "xlsx")!,
+                UTType(filenameExtension: "ppt")!, UTType(filenameExtension: "pptx")!], multiple: false) { files in
+                if let file = files.first { Task { await uploadDocument(file) } }
+            }
+        }
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
                       matching: .images, photoLibrary: .shared())
         .fullScreenCover(isPresented: $showCamera) {
@@ -1246,7 +1258,9 @@ struct ChatThreadView: View {
             }
             if let pending = pendingAttachment {
                 HStack(spacing: 8) {
-                    if let url = ChatMessage.fileURL(pending.url) {
+                    if ChatAttachment.isDocument(pending.type, path: pending.url) {
+                        ChatDocumentCard(path: pending.url, name: pending.name, size: pending.size)
+                    } else if let url = ChatMessage.fileURL(pending.url) {
                         ChatPhoto(url: url, style: .thumb)
                             .frame(width: 54, height: 54)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1271,12 +1285,13 @@ struct ChatThreadView: View {
                     // Flip a flag here and present from the composer, which outlives the menu.
                     Button { showPhotoPicker = true } label: { Label(T("Send a photo"), systemImage: "photo") }
                     Button { showCamera = true } label: { Label(T("Take a photo"), systemImage: "camera") }
+                    Button { showDocumentPicker = true } label: { Label(T("Send a document"), systemImage: "doc") }
                 } label: {
                     // The web's image glyph for attaching (UI tour run 15, Q-IA11).
                     Image(systemName: "photo").font(.system(size: 16, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
                 }
-                .disabled(sending)
+                .disabled(sending || uploadingPhoto)
 
                 if !mentionable.isEmpty {
                     // Kept for discoverability only: it types the "@" for you, then the inline
@@ -1390,7 +1405,9 @@ struct ChatThreadView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
                     if let quoted = m.replyTo { quoteBlock(quoted, mine: mine) }
-                    if let url = ChatMessage.fileURL(m.attachmentUrl) {
+                    if let path = m.attachmentUrl, ChatAttachment.isDocument(m.attachmentType, path: path) {
+                        ChatDocumentCard(path: path, name: m.attachmentName, size: m.attachmentSize, ink: ink)
+                    } else if let url = ChatMessage.fileURL(m.attachmentUrl) {
                         // ChatPhoto, not CachedImage: a picture that failed to load used to leave
                         // CachedImage's placeholder up for good — a 140 pt NX.muted rectangle, a
                         // blank white slab on the sender's own dark bubble. ChatPhoto retries once,
@@ -1446,7 +1463,7 @@ struct ChatThreadView: View {
     /// does not carry the picture's path today, so it is taken from the quoted message when that one
     /// is loaded, and the quote says "📷 Photo" when it is not. Tapping the quote jumps to it.
     @ViewBuilder private func quoteBlock(_ q: ChatMessage.Quoted, mine: Bool) -> some View {
-        let picture = ChatMessage.fileURL(q.attachmentUrl ?? messages.first(where: { $0.id == q.id })?.attachmentUrl)
+        let picture = ChatAttachment.isDocument(q.attachmentType, path: q.attachmentUrl) ? nil : ChatMessage.fileURL(q.attachmentUrl ?? messages.first(where: { $0.id == q.id })?.attachmentUrl)
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(mine ? ChatInk.onMine.opacity(0.55) : NX.violet)
@@ -1994,7 +2011,7 @@ struct ChatThreadView: View {
         // on screen, and the person walked away believing it was delivered.
         do {
             let sent = try await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
-                                                              attachmentUrl: attachment?.url, attachmentType: attachment?.type,
+                                                              attachmentUrl: attachment?.url, attachmentType: attachment?.type, attachmentName: attachment?.name,
                                                               replyToId: replyId)
             input = ""; pendingMentions = [:]; pendingAttachment = nil; replyingTo = nil
             await showSent(sent)
@@ -2014,6 +2031,23 @@ struct ChatThreadView: View {
     /// The library hands back whatever the camera produced - often HEIC, which the server rejects.
     /// Re-encode to JPEG and cap the long edge so a photo straight off the camera doesn't blow the
     /// 8 MB limit.
+    private func uploadDocument(_ file: URL) async {
+        guard !uploadingPhoto else { return }
+        uploadingPhoto = true
+        notice = nil
+        defer { uploadingPhoto = false }
+        do {
+            let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size > 0, size <= 25 * 1024 * 1024 else {
+                notice = T("Choose a document up to 25 MB."); return
+            }
+            let data = try Data(contentsOf: file, options: .mappedIfSafe)
+            pendingAttachment = try await APIClient.shared.uploadChatImage(conversationId: conversationId,
+                fileName: file.lastPathComponent, mime: UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream",
+                data: data, progress: uploadProgress)
+        } catch { notice = error.localizedDescription }
+    }
+
     private func uploadPhoto(_ item: PhotosPickerItem) async {
         notice = nil
         defer { pickedPhoto = nil }

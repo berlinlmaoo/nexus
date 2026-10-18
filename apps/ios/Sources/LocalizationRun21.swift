@@ -40,5 +40,10 @@ extension AppLanguage {
         "A typical question: Phaëthon ≈ 10 credits, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 free.": "Pertanyaan biasa: Phaëthon ≈ 10 kredit, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 gratis.",
         "Waiting for your approval": "Menunggu persetujuanmu",
         "Thinking…": "Sedang berpikir…",
+        "Send a document": "Kirim dokumen",
+        "Choose a document up to 25 MB.": "Pilih dokumen hingga 25 MB.",
+        "Couldn't open this file": "File ini tidak bisa dibuka",
+        "No paragraphs to edit": "Tidak ada paragraf untuk diedit",
+        "Upload a Word version to review its paragraphs here.": "Unggah versi Word untuk meninjau paragrafnya di sini.",
     ]
 }
