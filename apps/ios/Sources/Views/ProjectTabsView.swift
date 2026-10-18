@@ -234,23 +234,28 @@ struct ListTab: View {
     var body: some View {
         // Computed once per render: every row of the List draws the same columns.
         let columns = hSize == .regular ? columnLayout : ListColumns.Layout()
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                ForEach(lanes) { lane in
-                    group(lane, columns: columns)
+        return ScrollViewReader { scroll in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(lanes) { lane in
+                        group(lane, columns: columns).id(lane.id)
+                    }
+                }
+                .padding(.horizontal, hSize == .regular ? 32 : 14)
+                .padding(.vertical, 12)
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+            .onChange(of: composeRequest) { _, request in
+                if request != nil, let id = composeLaneId {
+                    collapsed.remove(id)
+                    withAnimation(.snappy) { scroll.scrollTo(id, anchor: .top) }
                 }
             }
-            .padding(.horizontal, hSize == .regular ? 32 : 14)
-            .padding(.vertical, 12)
+            // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
+            // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
+            // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
+            .environment(slotWidths)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
-        .onChange(of: composeRequest) { _, request in
-            if request != nil, let id = composeLaneId { collapsed.remove(id) }
-        }
-        // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
-        // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
-        // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
-        .environment(slotWidths)
     }
 
     /// Grouped by status (or priority), the group header already says it: the row leaves that chip out
