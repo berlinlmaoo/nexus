@@ -292,7 +292,7 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
         .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
         val actor = item.actor
         if (actor?.id != null) Box {
-            id.znetworks.nexus.ui.components.Avatar(actor.name, actor.avatar, size = 36.dp)
+            id.znetworks.nexus.ui.components.Avatar(actor.name, actor.avatar, size = 36.dp, userId = actor.id)
             Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(c.card, CircleShape).padding(2.dp)) {
                 Box(Modifier.fillMaxSize().background(fill, CircleShape), contentAlignment = Alignment.Center) { Icon(inboxIcon(item.type), null, tint = ink, modifier = Modifier.size(10.dp)) }
             }

@@ -57,15 +57,15 @@ import id.znetworks.nexus.R
  * ZoomableAvatar): initials, or a photo that failed, open nothing and aren't clickable.
  */
 @Composable
-fun ZoomableAvatar(url: String?, name: String?, size: Dp) {
+fun ZoomableAvatar(url: String?, name: String?, size: Dp, userId: String? = null) {
     val context = LocalContext.current
     var img by remember(url) { mutableStateOf(url?.let(ImageMemory::get)) }
     LaunchedEffect(url) { if (url != null && img == null) img = RemoteImages.load(context, url, 300) }
     var open by remember { mutableStateOf(false) }
     val i = img
-    if (i == null) { Avatar(name, url, size); return }
+    if (i == null) { Avatar(name, url, size, userId = userId); return }
     val desc = stringResource(R.string.pp_view_photo)
-    Image(i, null, Modifier.size(size).clip(CircleShape).clickable { open = true }.semantics { contentDescription = desc }, contentScale = ContentScale.Crop)
+    id.znetworks.nexus.feature.presence.PresenceAvatar(userId, name, size) { Image(i, null, Modifier.size(size).clip(CircleShape).clickable { open = true }.semantics { contentDescription = desc }, contentScale = ContentScale.Crop) }
     if (open) PhotoViewer(url!!, name) { open = false }
 }
 

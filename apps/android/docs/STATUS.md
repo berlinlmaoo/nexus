@@ -1,5 +1,10 @@
 # NEXUS Android: status
 
+## Presence and GIDEON Memory — items 16/17 (in progress)
+
+Presence implemented: server labels/tones, ID-based avatar dots and tooltips, profile/DM/Control Room lines, own status dialog with WIB scheduling and guarded clear, realtime/reconnect, remote flag, and set_my_status approval card. 810 unit tests + assembleDebug green; DEV Pixel_7 verification is in progress. GIDEON Memory implementation follows this green step.
+
+
 ## Android parity round — 19 Oct 2026
 
 All six items in round-android-19oct.md and additions 13/14 are implemented on feat/android-r21. Review fixes through 63f7486a are ancestors of this work. Compared against the deployed DEV web and the supplied native contracts; no release, version change or push. Implementation steps are small green commits authored as Berlin <bagasputro.bp@gmail.com>, without attribution trailers.

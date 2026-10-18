@@ -178,7 +178,7 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, onItem: (ShellNa
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val name = session.userName.ifBlank { session.userEmail }
                 FooterCard(onClick = { onItem(ShellNav.Item.SETTINGS) }) {
-                    Avatar(name, avatar, size = 36.dp)
+                    Avatar(name, avatar, size = 36.dp, userId = session.userId)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -245,7 +245,7 @@ internal fun ShellSidebar(session: Session, current: ShellNav.Item?, onItem: (Sh
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val name = session.userName.ifBlank { session.userEmail }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { onItem(ShellNav.Item.SETTINGS) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(name, avatar, size = 28.dp)
+                    Avatar(name, avatar, size = 28.dp, userId = session.userId)
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)

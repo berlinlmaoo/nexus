@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -164,12 +166,13 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
                 val cv = x.conversation
                 // Header: the picture (DM: the person), name, kind and member count, description.
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (isDm) Avatar(other?.name, other?.avatar, 88.dp)
+                    if (isDm) Avatar(other?.name, other?.avatar, 88.dp, userId = other?.userId)
                     else Box(Modifier.size(88.dp).background(c.violet.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
                         Icon(if (cv.type == "PROJECT") Icons.Filled.ViewKanban else Icons.Filled.Groups, null, tint = c.violetText, modifier = Modifier.size(40.dp))
                     }
                     Spacer(Modifier.size(4.dp))
                     Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground, textAlign = TextAlign.Center)
+                    if (isDm) { Text(stringResource(R.string.chat_direct_message), color = c.mutedFg, fontSize = 13.sp); PresenceLine(other?.userId, chip = true) }
                     if (!isDm) Text(pluralStringResource(if (cv.type == "PROJECT") R.plurals.ci_project_members else R.plurals.ci_group_members, cv.memberCount, cv.memberCount),
                         fontSize = 13.sp, color = c.mutedFg)
                     if (!cv.description.isNullOrBlank()) Text(cv.description, fontSize = 14.sp, color = c.foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
@@ -218,7 +221,7 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
                             if (i > 0) HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 60.dp))
                             Row(Modifier.fillMaxWidth().clickable(enabled = !m.isMe) { picked = m }.heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(m.name, m.avatar, 36.dp); Spacer(Modifier.width(12.dp))
+                                Avatar(m.name, m.avatar, 36.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
                                 Text(if (m.isMe) stringResource(R.string.chat_you) else m.name ?: "—", fontSize = 14.sp, color = c.foreground,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 if (m.deactivatedAt != null) LeftPill(Modifier.padding(start = 6.dp))

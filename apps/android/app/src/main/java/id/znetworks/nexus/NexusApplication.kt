@@ -39,6 +39,7 @@ class NexusApplication : Application() {
                 // Back in the foreground: are we in the office? (API.md §1.2)
                 container.lanRoute.reprobe(force = true)
                 container.appScope.launch { container.remoteConfig.refresh() }
+                container.appScope.launch { container.presenceStatuses.refresh() }
                 // Pinned projects follow the web and the other devices (iOS 286cada); launch counts as a return too.
                 if (container.sessionStore.current != null) container.appScope.launch { container.shortcuts.syncPins() }
                 // Calendar widgets catch up with whatever changed while the app was away (throttled to 5 min).

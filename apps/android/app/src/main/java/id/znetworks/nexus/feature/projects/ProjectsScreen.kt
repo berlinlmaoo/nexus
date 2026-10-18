@@ -530,7 +530,7 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
                 modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape))
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (p.memberCount > 0) AvatarStack(p.members.map { it.user?.name to it.user?.avatar }, size = 24.dp, max = 4)
+                if (p.memberCount > 0) AvatarStack(p.members.map { it.user?.name to it.user?.avatar }, size = 24.dp, max = 4, userIds = p.members.map { it.uid })
                 else Text(stringResource(R.string.project_solo), fontSize = 11.sp, color = c.mutedFg)
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Schedule, null, tint = c.mutedFg, modifier = Modifier.size(12.dp))

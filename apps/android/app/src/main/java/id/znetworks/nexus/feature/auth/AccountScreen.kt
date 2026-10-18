@@ -222,6 +222,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
             UpdateRow()
             when (tab) {
                 SettingsTab.PROFILE -> {
+                    id.znetworks.nexus.feature.presence.SetStatusEntry()
                     ProfileCard { EmailBlock(s, vm, inline = true) }
                     // The web and iOS show the Password card under Profile too (Security keeps it, with passkeys and sessions).
                     PasswordBlock(s, vm)

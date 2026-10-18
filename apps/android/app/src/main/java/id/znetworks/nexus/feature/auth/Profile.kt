@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import id.znetworks.nexus.ui.theme.TextFont
@@ -133,7 +135,7 @@ fun ProfileCard(emailContent: @Composable () -> Unit = {}) {
     }
     SettingsBlock(stringResource(R.string.st_tab_profile), stringResource(R.string.st_profile_sub)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, user?.avatar, 72.dp); Spacer(Modifier.width(14.dp))
+            Avatar(name, user?.avatar, 72.dp, userId = user?.id); Spacer(Modifier.width(14.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     NxButton(stringResource(R.string.pf_change_photo), pick, compact = true, enabled = !photoBusy)
@@ -149,6 +151,7 @@ fun ProfileCard(emailContent: @Composable () -> Unit = {}) {
                 Text(stringResource(R.string.st_photo_hint), fontSize = 12.sp, color = c.mutedFg)
             }
         }
+        PresenceLine(user?.id, chip = true)
         ProfileEntry(stringResource(R.string.st_full_name), name, { name = it; saved = false })
         emailContent()
         // Read-only: a BoD links it from Control Room; the person only needs to know which address it is.

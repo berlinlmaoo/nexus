@@ -484,7 +484,7 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                     val u = assignee.user
                     val uid = u?.id ?: assignee.userId
                     Row(Modifier.clip(CircleShape).background(c.muted).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u?.name, u?.avatar, 22.dp)
+                        Avatar(u?.name, u?.avatar, 22.dp, userId = u?.id)
                         Text(u?.name.orEmpty(), fontSize = 13.sp, color = c.foreground, modifier = Modifier.widthIn(max = 100.dp).padding(start = 4.dp), maxLines = 2)
                         // Someone who left keeps their tasks (owner, 8 Oct; web PersonLeftTag).
                         if (u?.deactivatedAt != null) Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
@@ -514,7 +514,7 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                         val id = m.userId ?: m.user?.id ?: return@items
                         Row(Modifier.fillMaxWidth().clickable { chosen = if (id in chosen) chosen - id else chosen + id }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(m.user?.name, m.user?.avatar, 28.dp)
+                            Avatar(m.user?.name, m.user?.avatar, 28.dp, userId = m.uid)
                             Spacer(Modifier.width(10.dp))
                             Text(m.user?.name ?: "—", Modifier.weight(1f), fontSize = 14.sp, color = c.foreground)
                             Checkbox(id in chosen, { chosen = if (id in chosen) chosen - id else chosen + id })
@@ -591,7 +591,7 @@ private fun SubtasksCard(t: TaskDetail, vm: TaskDetailViewModel, onOpenTask: (St
                 Text(sub.title, fontSize = 14.sp, color = if (sub.isDone) c.mutedFg else c.foreground, modifier = Modifier.weight(1f),
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = if (sub.isDone) TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else TextStyle.Default)
-                sub.assignees.firstOrNull()?.user?.let { Avatar(it.name, it.avatar, 20.dp) }
+                sub.assignees.firstOrNull()?.user?.let { Avatar(it.name, it.avatar, 20.dp, userId = it.id) }
             }
         }
         if (t.projectId != null) TextField(
@@ -781,7 +781,7 @@ private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel) {
 
         t.comments.sortedWith(compareBy<Comment> { it.createdAt.orEmpty() }.thenBy { it.id }).forEach { cm ->
             Row(verticalAlignment = Alignment.Top) {
-                Avatar(id.znetworks.nexus.feature.projects.authorName(cm.user), cm.user?.avatar, 28.dp)
+                Avatar(id.znetworks.nexus.feature.projects.authorName(cm.user), cm.user?.avatar, 28.dp, userId = cm.user?.id)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -840,7 +840,7 @@ private fun CreatedBy(u: id.znetworks.nexus.feature.projects.UserRef) {
     val c = Nx.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
         val name = id.znetworks.nexus.feature.projects.authorName(u)
-        Avatar(name, u.avatar, 20.dp); Spacer(Modifier.width(6.dp))
+        Avatar(name, u.avatar, 20.dp, userId = u.id); Spacer(Modifier.width(6.dp))
         Text(stringResource(R.string.td_created_by, name), fontSize = 12.sp, color = c.mutedFg,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (u.deactivatedAt != null) id.znetworks.nexus.ui.components.LeftPill(Modifier.padding(start = 6.dp))

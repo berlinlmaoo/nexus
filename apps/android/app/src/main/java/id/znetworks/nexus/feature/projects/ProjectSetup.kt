@@ -118,16 +118,16 @@ fun StartingMembers(picked: Set<String>, roster: List<RosterMember>, enabled: Bo
         else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             picked.sortedBy { (byId[it]?.name ?: byId[it]?.email).orEmpty().lowercase() }.forEach { uid ->
                 val m = byId[uid]
-                PersonChip(m?.name ?: m?.email ?: "—", m?.avatar, enabled) { onRemove(uid) }
+                PersonChip(m?.name ?: m?.email ?: "—", m?.avatar, enabled, uid) { onRemove(uid) }
             }
         }
     }
 }
 
 @Composable
-private fun PersonChip(name: String, avatar: String?, enabled: Boolean, onRemove: () -> Unit) {
+private fun PersonChip(name: String, avatar: String?, enabled: Boolean, userId: String, onRemove: () -> Unit) {
     InputChip(selected = false, onClick = onRemove, enabled = enabled, label = { Text(name, fontSize = 12.sp, maxLines = 1) },
-        avatar = { Avatar(name, avatar, 20.dp) },
+        avatar = { Avatar(name, avatar, 20.dp, userId = userId) },
         trailingIcon = { Icon(Icons.Filled.Close, stringResource(R.string.setup_remove_person, name), Modifier.size(14.dp)) })
 }
 
@@ -168,7 +168,7 @@ fun PeoplePickerDialog(
             }
             if (picked.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                picked.forEach { uid -> val m = byId[uid]; PersonChip(m?.name ?: m?.email ?: "—", m?.avatar, !busy) { picked = picked - uid } }
+                picked.forEach { uid -> val m = byId[uid]; PersonChip(m?.name ?: m?.email ?: "—", m?.avatar, !busy, uid) { picked = picked - uid } }
             }
             error?.let { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
             when {
@@ -180,7 +180,7 @@ fun PeoplePickerDialog(
                         val on = uid in picked
                         Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(m.name ?: m.email, m.avatar, 32.dp); Spacer(Modifier.width(10.dp))
+                            Avatar(m.name ?: m.email, m.avatar, 32.dp, userId = m.userId ?: m.id); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(m.name ?: m.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
                                 m.email?.takeIf { it != m.name }?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }

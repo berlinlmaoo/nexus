@@ -286,7 +286,7 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(x.title ?: listOfNotNull(x.entry.action, x.entry.entityName).joinToString(" · "), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(x.entry.user?.name, x.entry.user?.avatar, 26.dp); Spacer(Modifier.width(8.dp))
+                    Avatar(x.entry.user?.name, x.entry.user?.avatar, 26.dp, userId = x.entry.user?.id); Spacer(Modifier.width(8.dp))
                     Text((x.entry.user?.name ?: stringResource(R.string.au_system)) + " · " + (x.entry.createdAt?.let { runCatching {
                         AppDateFormats.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: ""), fontSize = 12.sp, color = c.mutedFg)
                 }

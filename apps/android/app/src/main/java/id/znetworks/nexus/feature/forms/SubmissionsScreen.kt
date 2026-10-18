@@ -310,7 +310,7 @@ private fun BoardCard(s: Submission, onClick: () -> Unit) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s.projectName.orEmpty(), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (s.handlers.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(s.handlers.map { it.name to it.avatar }, size = 20.dp)
+            if (s.handlers.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(s.handlers.map { it.name to it.avatar }, size = 20.dp, userIds = s.handlers.map { it.id })
         }
         if (s.needsAction) Text("⚠ " + stringResource(R.string.sub_needs_reply), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF92400E),
             modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFFEF3C7)).padding(horizontal = 6.dp, vertical = 2.dp))

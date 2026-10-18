@@ -246,7 +246,7 @@ private fun TaskRow(t: BoardTask, section: String?, late: Boolean, onOpen: () ->
         }
         if (pr == "URGENT" || pr == "HIGH") { PriorityChip(pr, Modifier.padding(start = 6.dp)) }
         val people = t.assignees.map { (it.user?.name ?: it.user?.email) to it.user?.avatar }
-        if (people.isNotEmpty()) { Spacer(Modifier.width(6.dp)); AvatarStack(people, 22.dp, max = 2) }
+        if (people.isNotEmpty()) { Spacer(Modifier.width(6.dp)); AvatarStack(people, 22.dp, max = 2, userIds = t.assignees.map { it.userId ?: it.user?.id }) }
         Text(dueLabel(t), fontSize = 12.sp, fontWeight = if (late) FontWeight.SemiBold else FontWeight.Normal, color = if (late) c.danger else c.mutedFg,
             textAlign = TextAlign.End, maxLines = 1, modifier = Modifier.widthIn(min = 64.dp).padding(start = 8.dp))
     }
@@ -314,7 +314,7 @@ private fun TeamCard(m: OverviewMetrics, onDrill: (OverviewDrill) -> Unit) {
         (if (all) m.people else m.people.take(8)).forEach { p ->
             Row(Modifier.fillMaxWidth().clickable(enabled = p.open > 0) { onDrill(OverviewDrill(assigneeId = p.id)) }.padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Avatar(p.name, p.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                Avatar(p.name, p.avatar, 28.dp, userId = p.id); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(p.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -366,7 +366,7 @@ private fun BriefCard(d: ProjectDetail, onEdit: () -> Unit) {
             }
             HorizontalDivider(color = c.border, modifier = Modifier.padding(vertical = 12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (d.members.isNotEmpty()) AvatarStack(d.members.map { (it.user?.name ?: it.user?.email) to it.user?.avatar }, 26.dp, max = 6)
+                if (d.members.isNotEmpty()) AvatarStack(d.members.map { (it.user?.name ?: it.user?.email) to it.user?.avatar }, 26.dp, max = 6, userIds = d.members.map { it.uid })
                 else Icon(Icons.Filled.Groups, null, Modifier.size(16.dp), tint = c.mutedFg)
                 Spacer(Modifier.width(10.dp))
                 Column {
@@ -443,7 +443,7 @@ private fun RecentlyDoneCard(m: OverviewMetrics, onOpenTask: (String) -> Unit) {
                         val line = listOfNotNull(by?.name?.let { stringResource(R.string.ov_by, it) }, ago).joinToString(" · ")
                         if (line.isNotEmpty()) Text(line, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    by?.let { Avatar(it.name, it.avatar, 22.dp) }
+                    by?.let { Avatar(it.name, it.avatar, 22.dp, userId = it.id) }
                 }
             }
         }
@@ -498,7 +498,7 @@ private fun StatusUpdatesCard(projectId: String) {
                         HorizontalDivider(color = c.border)
                         Column(Modifier.padding(vertical = 6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(u.author?.name, u.author?.avatar, 22.dp); Spacer(Modifier.width(8.dp))
+                                Avatar(u.author?.name, u.author?.avatar, 22.dp, userId = u.author?.id); Spacer(Modifier.width(8.dp))
                                 Text(u.author?.name ?: stringResource(R.string.ov_someone), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 updateStatus(u.status)?.let { Text(stringResource(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,

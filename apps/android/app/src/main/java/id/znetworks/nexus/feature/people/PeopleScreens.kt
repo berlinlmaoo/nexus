@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -150,7 +152,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                                 Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
                                     if (rank == 1) Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
                                 }
-                                Avatar(r.name, r.avatar, 40.dp); Spacer(Modifier.width(12.dp))
+                                Avatar(r.name, r.avatar, 40.dp, userId = r.userId); Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(stringResource(R.string.home_level_n, r.level) + (r.levelName?.let { " – $it" } ?: ""), fontSize = 13.sp, color = c.mutedFg, maxLines = 1)
@@ -187,10 +189,10 @@ private fun Podium(top: List<List<BoardRow>>) {
                 val st = style(rank)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) {
-                        if (entry.size == 1) Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r?.name, r?.avatar, st.avatar) }
+                        if (entry.size == 1) Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r?.name, r?.avatar, st.avatar, userId = r?.userId) }
                         else Box(Modifier.width((32 + (entry.take(3).size - 1).coerceAtLeast(0) * 18 + if (entry.size > 3) 18 else 0).dp).height(36.dp)) {
                             entry.take(3).forEachIndexed { i, person ->
-                                Box(Modifier.offset(x = (18 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, 28.dp) }
+                                Box(Modifier.offset(x = (18 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, 28.dp, userId = person.userId) }
                             }
                             if (entry.size > 3) Box(Modifier.offset(x = 54.dp).size(32.dp).background(c.card, CircleShape).border(2.dp, st.ring, CircleShape), contentAlignment = Alignment.Center) {
                                 Text("+${entry.size - 3}", fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
@@ -280,9 +282,11 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
             // and a compact tonal Message that hugs its label.
             Card {
                 Row(verticalAlignment = Alignment.Top) {
-                    id.znetworks.nexus.ui.components.ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp); Spacer(Modifier.width(14.dp))
+                    id.znetworks.nexus.ui.components.ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp, userId = userId); Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        PresenceLine(userId, chip = true)
+                        if (isMe) id.znetworks.nexus.feature.presence.SetStatusEntry()
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             r?.person?.role?.let { role -> Pill(roleLabel(role), when (role) { "ONE_ABOVE_ALL", "BOD" -> c.violetText; "MANAGER" -> c.blue; else -> c.mutedFg }) }
                             if (isMe) Pill(stringResource(R.string.pf_you), c.violetText)

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import id.znetworks.nexus.ui.components.LeftTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -191,10 +193,11 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             if (shown.isEmpty()) item { Text(stringResource(R.string.ad_no_match), fontSize = 12.sp, color = c.mutedFg) }
             items(shown, key = { it.id }) { m ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).clickable { onOpenUser(m.userId) }.padding(10.dp), verticalAlignment = Alignment.Top) {
-                    Avatar(m.name, m.avatar, 34.dp); Spacer(Modifier.width(10.dp))
+                    Avatar(m.name, m.avatar, 34.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         m.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        PresenceLine(m.userId)
                         // Only what is ON: most people use none, and "off" badges on every row hide the few.
                         if (m.flexiTimeEnabled || m.noGeofenceMode || !m.googleWorkspaceEmail.isNullOrEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (m.flexiTimeEnabled) Text("⚡ Flexi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
@@ -220,7 +223,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 item { Text(stringResource(R.string.ad_not_in_ws, reg.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
                 items(reg, key = { "reg-" + it.id }) { u ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u.name, u.avatar, 30.dp); Spacer(Modifier.width(10.dp))
+                        Avatar(u.name, u.avatar, 30.dp, userId = u.id); Spacer(Modifier.width(10.dp))
                         Text(u.name ?: u.email ?: "—", fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
                         TextButton(onClick = {
                             val ws = r.workspaceId ?: return@TextButton
@@ -239,7 +242,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 item { Text(stringResource(R.string.off_left_section, gone.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
                 items(gone, key = { "left-" + it.id }) { u ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u.name, u.avatar, 30.dp); Spacer(Modifier.width(10.dp))
+                        Avatar(u.name, u.avatar, 30.dp, userId = u.id); Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(u.displayName, fontSize = 13.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (u.leftAt != null) LeftTag(u.leftAt) else Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
@@ -315,7 +318,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
         val canEdit = Roles.canEdit(r.role, m.role)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onOpenProfile(m.userId) }) {
-                Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
+                Avatar(m.name, m.avatar, 56.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
                 Column {
                     Text(m.displayName, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
                     Text(listOfNotNull(m.email, m.phoneNumber).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
@@ -414,7 +417,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                         items(candidates, key = { it.id }) { a ->
                             val loop = Roles.makesCycle(r.members, m.userId, a.userId)
                             Row(Modifier.fillMaxWidth().clickable(enabled = !loop) { picking = null; run { api.setApprover(m, ws, a.userId) } }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(a.name, a.avatar, 26.dp); Spacer(Modifier.width(8.dp))
+                                Avatar(a.name, a.avatar, 26.dp, userId = a.userId); Spacer(Modifier.width(8.dp))
                                 Text(a.displayName + " · " + Roles.label(a.role), fontSize = 13.sp, color = if (loop) c.mutedFg else c.foreground, modifier = Modifier.weight(1f))
                                 if (loop) Text(stringResource(R.string.ad_loop), fontSize = 10.sp, color = c.mutedFg)
                             }
@@ -452,7 +455,7 @@ private fun AccountCard(m: WsMember, onPhoto: (ByteArray?) -> Unit, onSave: (Map
     val pick = rememberAvatarPicker(onPhoto)
     AdminCard(stringResource(R.string.ad_account)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
+            Avatar(m.name, m.avatar, 56.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
             TextButton(onClick = pick) { Text(stringResource(R.string.pf_change_photo)) }
         }
         OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)

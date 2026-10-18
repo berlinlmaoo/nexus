@@ -179,7 +179,7 @@ private fun MemberFaces(members: List<ProjectMemberRef>, onClick: () -> Unit) {
     val label = stringResource(R.string.pp_members_title, members.size)
     Row(Modifier.clip(CircleShape).clickable(role = Role.Button, onClickLabel = label, onClick = onClick).padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
         members.take(2).forEachIndexed { i, m ->
-            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(m.user?.name, m.user?.avatar, size = 24.dp, ring = true) }
+            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(m.user?.name, m.user?.avatar, size = 24.dp, ring = true, userId = m.uid) }
         }
         if (members.size > 2) {
             Box(Modifier.offset(x = (-12).dp).size(24.dp).background(c.muted, CircleShape).border(1.dp, c.background, CircleShape), contentAlignment = Alignment.Center) {
@@ -198,7 +198,7 @@ fun MembersDialog(members: List<ProjectMemberRef>, canAdd: Boolean, onAdd: () ->
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 members.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.user?.name, m.user?.avatar, size = 28.dp)
+                        Avatar(m.user?.name, m.user?.avatar, size = 28.dp, userId = m.uid)
                         Spacer(Modifier.width(10.dp))
                         Text(m.user?.name ?: m.user?.email ?: "—", fontSize = 15.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val lvl = AccessLevel.ofMember(m.role, m.accessLevel)
@@ -862,7 +862,7 @@ private fun TableRow(t: BoardTask, lanes: List<Lane>, cols: List<String>, props:
                     value == null -> Text("—", fontSize = 13.sp, color = c.mutedFg)
                     // Assignee: the faces and first names (one line).
                     value is CardProps.Item.People -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        id.znetworks.nexus.ui.components.AvatarStack(value.people, size = 20.dp)
+                        id.znetworks.nexus.ui.components.AvatarStack(value.people, size = 20.dp, userIds = value.userIds)
                         Spacer(Modifier.width(4.dp))
                         Text(value.people.mapNotNull { it.first?.substringBefore(' ') }.joinToString(", "), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
                     }
@@ -926,7 +926,7 @@ fun ProjectSelectionBar(count: Int, busy: Boolean, lanes: List<Lane>, members: L
                     }
                     "status" -> StatusOptions.ordered(lanes).forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { menu = null; onMove(l.id) }) }
                     "priority" -> TaskEnums.PRIORITIES.forEach { p -> DropdownMenuItem(text = { Text(priorityLabel(p)) }, onClick = { menu = null; onPriority(p) }) }
-                    "assign" -> members.forEach { m -> DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { Avatar(m.user?.name, m.user?.avatar, size = 22.dp) },
+                    "assign" -> members.forEach { m -> DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { Avatar(m.user?.name, m.user?.avatar, size = 22.dp, userId = m.uid) },
                         onClick = { menu = null; onAssign(m.uid) }) }
                 }
             }

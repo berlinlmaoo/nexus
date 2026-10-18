@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.graphicsLayer
@@ -503,6 +505,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
                 // "typing…" in place of the member count while anyone types here (TYPING.md).
                 if (typers.isNotEmpty()) Text(stringResource(R.string.ty_typing), fontSize = 11.sp, color = c.violetText)
+                else if (conv?.type == "DM") PresenceLine(conv.other(vm.meId)?.id, showUntil = false)
                 else if (conv != null && conv.type != "DM") Text(context.resources.getQuantityString(R.plurals.ci_members, conv.members.size, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
             }
             // Add people: project rooms through the project, a GROUP for Manager and above (ChatRules).
@@ -551,7 +554,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 val mine = m.userId == vm.meId || m.user?.id == vm.meId
                 var msgMenu by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
-                    if (!mine && conv?.type != "DM") { Avatar(m.user?.name, m.user?.avatar, 26.dp); Spacer(Modifier.width(6.dp)) }
+                    if (!mine && conv?.type != "DM") { Avatar(m.user?.name, m.user?.avatar, 26.dp, userId = m.user?.id); Spacer(Modifier.width(6.dp)) }
                     Box {
                         Column(
                             Modifier.widthIn(max = 290.dp).clip18().background(if (mine) c.onyx else c.card)
@@ -637,7 +640,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     Row(Modifier.clip18().background(c.muted).clickable {
                         input = Mentions.insert(input, m.displayName); vm.picked[m.uid] = Mentions.tag(m.displayName)
                     }.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.displayName, m.user?.avatar, 20.dp); Spacer(Modifier.width(6.dp)); Text(m.displayName, fontSize = 12.sp, color = c.foreground)
+                        Avatar(m.displayName, m.user?.avatar, 20.dp, userId = m.uid); Spacer(Modifier.width(6.dp)); Text(m.displayName, fontSize = 12.sp, color = c.foreground)
                     }
                 }
             }
@@ -758,7 +761,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
                                 val uid = m.userId ?: m.id ?: ""
                                 val on = uid in picked
                                 Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                                    Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                                     Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
                                     androidx.compose.material3.Checkbox(on, { picked = if (on) picked - uid else picked + uid })
                                 }
@@ -821,7 +824,7 @@ private fun TypingIndicator(typers: List<Typer>, isDm: Boolean) {
         Row(verticalAlignment = Alignment.Bottom) {
             Box {
                 typers.take(3).forEachIndexed { i, t ->
-                    Box(Modifier.padding(start = (i * 16).dp).border(1.5.dp, c.background, CircleShape)) { Avatar(t.name, t.avatar, 26.dp) }
+                    Box(Modifier.padding(start = (i * 16).dp).border(1.5.dp, c.background, CircleShape)) { Avatar(t.name, t.avatar, 26.dp, userId = t.userId) }
                 }
                 if (typers.size > 3) Box(Modifier.padding(start = (3 * 16).dp).size(26.dp).background(c.muted, CircleShape).border(1.5.dp, c.background, CircleShape),
                     contentAlignment = Alignment.Center) { Text("+${typers.size - 3}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg) }

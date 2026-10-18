@@ -315,7 +315,7 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
                         ConfirmDialog(ask) { ask = null }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.weight(1f).clickable(enabled = m.uid != null) { m.uid?.let(onOpenProfile) }, verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(m.displayName, m.user?.avatar, 34.dp); Spacer(Modifier.width(12.dp))
+                                Avatar(m.displayName, m.user?.avatar, 34.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(m.displayName, fontSize = 14.sp, color = c.foreground, maxLines = 1)
                                     m.user?.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }

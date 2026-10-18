@@ -340,7 +340,7 @@ private fun MentionRow(text: String, roster: List<RosterMember>, picked: Mutable
             Row(Modifier.clip(RoundedCornerShape(16.dp)).background(c.muted).clickable {
                 onText(Mentions.insert(text, m.name!!)); (m.userId ?: m.id)?.let { picked[it] = Mentions.tag(m.name) }
             }.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(m.name, m.avatar, 20.dp); Spacer(Modifier.width(6.dp)); Text(m.name!!, fontSize = 12.sp, color = c.foreground)
+                Avatar(m.name, m.avatar, 20.dp, userId = m.userId); Spacer(Modifier.width(6.dp)); Text(m.name!!, fontSize = 12.sp, color = c.foreground)
             }
         }
     }
@@ -364,7 +364,7 @@ private fun PostCard(p: Post, vm: ThreadsViewModel) {
     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(p.author?.name, p.author?.avatar, 36.dp); Spacer(Modifier.width(10.dp))
+            Avatar(p.author?.name, p.author?.avatar, 36.dp, userId = p.author?.id); Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(p.author?.name ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                 Text(chatTime(p.createdAt) + if (p.editedAt != null) " · " + stringResource(R.string.th_edited) else "", fontSize = 11.sp, color = c.mutedFg)
@@ -430,7 +430,7 @@ private fun CommentsSheet(s: ThreadsState, vm: ThreadsViewModel) {
                 else if (list.isEmpty()) Text(stringResource(R.string.td_no_comments), fontSize = 13.sp, color = c.mutedFg)
                 list?.forEach { cm ->
                     Row(verticalAlignment = Alignment.Top) {
-                        Avatar(cm.author?.name, cm.author?.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                        Avatar(cm.author?.name, cm.author?.avatar, 28.dp, userId = cm.author?.id); Spacer(Modifier.width(10.dp))
                         Column {
                             Row { Text(cm.author?.name ?: "—", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground); Spacer(Modifier.width(6.dp)); Text(chatTime(cm.createdAt), fontSize = 11.sp, color = c.mutedFg) }
                             Text(highlight(cm.text, c.violetText), fontSize = 14.sp, color = c.foreground)

@@ -183,7 +183,7 @@ fun SheetTab(projectId: String, lanes: List<Lane>, onOpen: (String) -> Unit) {
                     // Faces, then the names (AVATARS-PRIORITY).
                     cell(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), 140.dp, content = if (t.assignees.isEmpty()) null else ({
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp)
+                            id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp, userIds = t.assignees.map { it.userId ?: it.user?.id })
                             Spacer(Modifier.width(4.dp))
                             Text(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 fontSize = 12.sp, color = c.foreground.copy(alpha = 0.9f))

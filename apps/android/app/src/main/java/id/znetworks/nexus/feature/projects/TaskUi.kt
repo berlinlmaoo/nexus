@@ -175,7 +175,7 @@ fun TaskCard(
             if (comments > 0) Text("💬 $comments", fontSize = 11.sp, color = c.mutedFg)
             if (t.questXp > 0) Pill("+${t.questXp} XP", c.violetText)
             Spacer(Modifier.weight(1f))
-            if (t.assignees.isNotEmpty()) AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 22.dp)
+            if (t.assignees.isNotEmpty()) AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 22.dp, userIds = t.assignees.map { it.userId ?: it.user?.id })
         }
     }
 }

@@ -169,7 +169,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
             if (roster == null) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             members.forEach { m ->
                 Row(Modifier.fillMaxWidth().clickable { onOpenMember(m.userId) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(8.dp))
+                    Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(listOfNotNull(m.attendanceShiftStartTime?.let { "$it–${m.attendanceShiftEndTime}" },

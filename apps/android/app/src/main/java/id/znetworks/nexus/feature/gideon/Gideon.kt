@@ -271,7 +271,7 @@ object GideonSteps {
     enum class Kind {
         LIST_PROJECTS, LOOKUP_PEOPLE, LIST_TASKS, SEARCH_TASKS, SEARCH_WORKSPACE, READ_PROJECT, READ_NAMED, READ_FIELDS, READ_TASK,
         SEARCH_DOCS, READ_DOC, CREATE_TASK, UPDATE_TASK, COMMENT, WRITE_DOC, LOOK_IMAGE, LABEL, WORKING,
-        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM, MOVE_BOOKING, CANCEL_BOOKING,
+        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM, MOVE_BOOKING, CANCEL_BOOKING, PERSON_STATUS, MY_STATUS,
     }
 
     /** [arg] is the step's own handle (≤ 60 chars) or null when the sentence has none. */
@@ -281,6 +281,8 @@ object GideonSteps {
         val a = s.arg?.trim()?.take(60)?.takeIf { it.isNotEmpty() }
         fun t(k: Kind, withArg: Boolean = true) = Text(k, if (withArg) a else null)
         return when (s.tool) {
+            "get_person_status", "nexus_get_person_status" -> t(Kind.PERSON_STATUS)
+            "set_my_status", "nexus_set_my_status" -> t(Kind.MY_STATUS)
             "list_projects" -> t(Kind.LIST_PROJECTS, false)
             "list_members" -> t(Kind.LOOKUP_PEOPLE, false)
             "list_tasks" -> t(Kind.LIST_TASKS)

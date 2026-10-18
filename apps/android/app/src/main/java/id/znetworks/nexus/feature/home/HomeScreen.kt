@@ -792,7 +792,7 @@ private fun ProfileCard(name: String?, avatar: String?, g: Gamification?, onOpen
     val c = Nx.colors
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, avatar, 52.dp)
+            Avatar(name, avatar, 52.dp, userId = (LocalContext.current.applicationContext as NexusApplication).container.sessionStore.current?.userId)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileRow(stringResource(R.string.home_level), "${g?.xp?.level ?: 0} · ${g?.xp?.levelName ?: "—"}")

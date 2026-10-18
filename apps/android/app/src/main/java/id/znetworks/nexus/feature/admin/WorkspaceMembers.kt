@@ -117,7 +117,7 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
             if (i > 0) HorizontalDivider(color = c.border)
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).clickable { onOpenProfile(m.userId) }, verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(m.name, m.avatar, 36.dp); Spacer(Modifier.width(10.dp))
+                    Avatar(m.name, m.avatar, 36.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
                         m.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }

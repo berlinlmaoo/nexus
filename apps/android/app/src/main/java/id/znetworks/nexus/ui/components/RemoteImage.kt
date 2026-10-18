@@ -81,25 +81,25 @@ fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = C
 
 /** A person: their photo, or their initial on a colour derived from the name (stable across launches). */
 @Composable
-fun Avatar(name: String?, url: String?, size: Dp = 28.dp, ring: Boolean = false, initials: String? = null) {
+fun Avatar(name: String?, url: String?, size: Dp = 28.dp, ring: Boolean = false, initials: String? = null, userId: String? = null) {
     val c = Nx.colors
     val initial = initials ?: name?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     val palette = listOf(Color(0xFF7B68EE), Color(0xFF0091FF), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFFEC4899))
     val tint = palette[((name ?: "").fold(0) { a, ch -> (a * 31 + ch.code) and 0xFFFF }) % palette.size]
     val mod = Modifier.size(size).clip(CircleShape).then(if (ring) Modifier.border(1.5.dp, c.card, CircleShape) else Modifier)
-    RemoteImage(url, mod, maxPx = 160) {
+    id.znetworks.nexus.feature.presence.PresenceAvatar(userId, name, size) { RemoteImage(url, mod, maxPx = 160) {
         Box(Modifier.size(size).background(tint, CircleShape), contentAlignment = Alignment.Center) {
             Text(initial, color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp)
         }
-    }
+    } }
 }
 
 /** Up to [max] photos overlapping by 6dp with a card-coloured ring (AVATARS-PRIORITY), "+N" for the rest. */
 @Composable
-fun AvatarStack(people: List<Pair<String?, String?>>, size: Dp = 24.dp, max: Int = 3) {
+fun AvatarStack(people: List<Pair<String?, String?>>, size: Dp = 24.dp, max: Int = 3, userIds: List<String?> = emptyList()) {
     Row {
         people.take(max).forEachIndexed { i, (name, url) ->
-            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(name, url, size, ring = true) }
+            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(name, url, size, ring = true, userId = userIds.getOrNull(i)) }
         }
         if (people.size > max) {
             Box(Modifier.offset(x = (-6 * max).dp).size(size).background(Nx.colors.muted, CircleShape), contentAlignment = Alignment.Center) {

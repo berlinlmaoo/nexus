@@ -130,7 +130,7 @@ private fun MemberRow(m: LgMember, onRevoke: (() -> Unit)?) {
         else -> stringResource(R.string.lg_left_company)
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(m.shownName, m.avatar, size = 34.dp)
+        Avatar(m.shownName, m.avatar, size = 34.dp, userId = m.userId)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp), itemVerticalAlignment = Alignment.CenterVertically) {
@@ -186,7 +186,7 @@ fun LegalInviteScreen(onBack: () -> Unit) {
                     items(l, key = { it.userId }) { cand ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             val name = cand.name.ifBlank { cand.email }
-                            Avatar(name, cand.avatar, size = 30.dp)
+                            Avatar(name, cand.avatar, size = 30.dp, userId = cand.userId)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)

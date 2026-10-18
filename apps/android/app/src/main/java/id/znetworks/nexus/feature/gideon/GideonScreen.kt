@@ -369,6 +369,8 @@ fun stepText(st: GStep): String {
     return when (t.kind) {
         GideonSteps.Kind.LIST_PROJECTS -> stringResource(R.string.gx_step_list_projects)
         GideonSteps.Kind.LOOKUP_PEOPLE -> stringResource(R.string.gx_step_people)
+        GideonSteps.Kind.PERSON_STATUS -> if (a != null) stringResource(R.string.prs_step_get, a) else st.label.orEmpty()
+        GideonSteps.Kind.MY_STATUS -> if (a != null) stringResource(R.string.prs_step_set, a) else st.label.orEmpty()
         GideonSteps.Kind.LIST_TASKS -> pick(R.string.gx_step_list_tasks, R.string.gx_step_list_tasks_in)
         GideonSteps.Kind.SEARCH_TASKS -> pick(R.string.gx_step_search_tasks, R.string.gx_step_search_tasks_q)
         GideonSteps.Kind.SEARCH_WORKSPACE -> pick(R.string.gx_step_search_ws, R.string.gx_step_search_ws_q)

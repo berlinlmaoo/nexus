@@ -286,7 +286,7 @@ private fun NotifyCard(ids: List<String>, members: List<StudioMember>, onChange:
                 val name = m?.name ?: stringResource(R.string.fs_former_member)
                 Row(Modifier.clip(CircleShape).background(c.muted.copy(alpha = 0.6f)).border(1.dp, c.border, CircleShape).padding(start = 3.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Avatar(name, m?.avatar, size = 20.dp)
+                    Avatar(name, m?.avatar, size = 20.dp, userId = id)
                     Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
                     val label = stringResource(R.string.fs_remove_person, name)
                     Box(Modifier.size(28.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = label) { onChange(ids - id) }
@@ -307,7 +307,7 @@ private fun NotifyCard(ids: List<String>, members: List<StudioMember>, onChange:
                 Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(6.dp))
                     .clickable(role = Role.Checkbox) { onChange(if (on) ids - m.id else ids + m.id) }.semantics { selected = on }.padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Avatar(m.name, m.avatar, size = 24.dp)
+                    Avatar(m.name, m.avatar, size = 24.dp, userId = m.id)
                     Text(m.name, fontSize = 15.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Icon(if (on) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, null, tint = if (on) c.onyx else c.mutedFg, modifier = Modifier.size(20.dp))
                 }

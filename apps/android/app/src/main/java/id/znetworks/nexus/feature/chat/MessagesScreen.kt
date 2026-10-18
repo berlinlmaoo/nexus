@@ -209,7 +209,7 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         when (conv.type) {
             // The other person's photo, else the web's two-letter initials of the title ("BZ", "DM"), never "?".
-            "DM" -> Avatar(conv.title(meId, dmFallback), conv.other(meId)?.avatar, 44.dp, initials = conv.initials(meId, dmFallback))
+            "DM" -> Avatar(conv.title(meId, dmFallback), conv.other(meId)?.avatar, 44.dp, initials = conv.initials(meId, dmFallback), userId = conv.other(meId)?.id)
             // A project room shows its project's mark (photo or the page icon), like iOS; a group keeps the group icon.
             "PROJECT" -> {
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
@@ -295,7 +295,7 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
                     items(people, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
                         val on = m in picked
                         Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - m else picked + m }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                            Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                             Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
                             Checkbox(on, { picked = if (on) picked - m else picked + m })
                         }

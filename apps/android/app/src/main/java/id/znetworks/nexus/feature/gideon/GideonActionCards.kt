@@ -91,6 +91,7 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
         "edit_sheet_cells", "create_sheet" -> Icons.Outlined.TableChart
         "save_file_to_vault" -> Icons.Outlined.DriveFileMove
         "delete_task" -> Icons.Outlined.Delete
+        "set_my_status" -> Icons.Outlined.RadioButtonChecked
         else -> Icons.Outlined.VerifiedUser
     }
     Column(Modifier.fillMaxWidth().border(1.dp, if (p.isPending && danger) c.dangerText.copy(alpha = .4f) else c.border, RoundedCornerShape(16.dp)).background(c.card, RoundedCornerShape(16.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -197,6 +198,7 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
 }
 
 private fun actionResources(action: String?, apply: Boolean, done: Boolean): Pair<Int, Int> = when (action) {
+    "set_my_status" -> R.string.prs_card_title to (if (apply) R.string.prs_card_apply else if (done) R.string.prs_card_done else R.string.prs_card_title)
     "send_message" -> R.string.gt_send_message_title to (if (apply) R.string.gt_send_message_apply else if (done) R.string.gt_send_message_done else R.string.gt_send_message_title)
     "create_reminder" -> R.string.gt_create_reminder_title to (if (apply) R.string.gt_create_reminder_apply else if (done) R.string.gt_create_reminder_done else R.string.gt_create_reminder_title)
     "cancel_reminder" -> R.string.gt_cancel_reminder_title to (if (apply) R.string.gt_cancel_reminder_apply else if (done) R.string.gt_cancel_reminder_done else R.string.gt_cancel_reminder_title)
@@ -219,6 +221,7 @@ private fun actionResources(action: String?, apply: Boolean, done: Boolean): Pai
     else -> R.string.gx_change_default to R.string.gx_apply
 }
 private fun fieldResource(field: String): Int? = when (field) {
+    "From" -> R.string.prs_from
     "To" -> R.string.gt_wire_0
     "Recipient" -> R.string.gt_wire_1
     "Approver" -> R.string.gt_wire_2

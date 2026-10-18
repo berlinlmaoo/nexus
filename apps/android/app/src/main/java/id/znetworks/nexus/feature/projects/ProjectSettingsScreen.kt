@@ -312,7 +312,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                     var levelMenu by remember { mutableStateOf(false) }
                     var confirmRemove by remember { mutableStateOf(false) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.user?.name, m.user?.avatar, 30.dp)
+                        Avatar(m.user?.name, m.user?.avatar, 30.dp, userId = m.uid)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(m.user?.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
@@ -382,7 +382,7 @@ private fun AutoAssignMembers(projectId: String, members: List<ProjectMemberRef>
         .padding(horizontal = 8.dp, vertical = if (expanded) 8.dp else 0.dp)) {
         if (!expanded) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                id.znetworks.nexus.ui.components.AvatarStack(selected.map { it.user?.name to it.user?.avatar }, size = 22.dp)
+                id.znetworks.nexus.ui.components.AvatarStack(selected.map { it.user?.name to it.user?.avatar }, size = 22.dp, userIds = selected.map { it.uid })
                 Text(selected.joinToString(", ") { it.user?.name ?: it.user?.email ?: it.uid }, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                     color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 TextButton(onClick = { open = true }, enabled = enabled) { Text(stringResource(R.string.change), fontSize = 12.sp, color = c.foreground) }
@@ -400,7 +400,7 @@ private fun AutoAssignMembers(projectId: String, members: List<ProjectMemberRef>
                         onSelect(next)
                     }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(16.dp), tint = if (checked) c.foreground else c.mutedFg)
-                    Avatar(member.user?.name, member.user?.avatar, 22.dp)
+                    Avatar(member.user?.name, member.user?.avatar, 22.dp, userId = member.uid)
                     Text(member.user?.name ?: member.user?.email ?: member.uid, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

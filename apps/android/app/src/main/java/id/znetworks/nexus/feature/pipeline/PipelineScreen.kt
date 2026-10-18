@@ -568,14 +568,14 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
                 Text(reasonText(r) + if (more > 0) " " + stringResource(R.string.pl_more_reasons, more) else "", fontSize = 11.sp, color = healthColor(d.healthKey),
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            val people = listOfNotNull(d.pmShown?.let { it to d.pm?.avatar }, d.bdShown?.let { it to d.bd?.avatar }).distinctBy { it.first }
+            val people = listOfNotNull(d.pmShown?.let { Triple(it, d.pm?.avatar, d.pm?.id) }, d.bdShown?.let { Triple(it, d.bd?.avatar, d.bd?.id) }).distinctBy { it.third ?: it.first }
             val due = PipelineCard.nextDate(d)
             val noPm = d.pmShown == null && PipelineCard.needsPm(d)
             val services = d.services.joinToString(", ")
             if (people.isNotEmpty() || due != null || noPm || services.isNotEmpty()) {
                 androidx.compose.material3.HorizontalDivider(color = c.border)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    people.forEach { (n, a) -> Avatar(n, a, 18.dp); Spacer(Modifier.width(2.dp)) }
+                    people.forEach { (n, a, uid) -> Avatar(n, a, 18.dp, userId = uid); Spacer(Modifier.width(2.dp)) }
                     if (people.isNotEmpty()) Spacer(Modifier.width(2.dp))
                     when {
                         noPm -> Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger, maxLines = 1)
