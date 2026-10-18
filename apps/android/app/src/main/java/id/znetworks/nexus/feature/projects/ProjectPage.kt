@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -246,7 +248,7 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
  */
 @Composable
 fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
-                  onAdd: (() -> Unit)? = null) {
+                  onAdd: (() -> Unit)? = null, onDetails: (() -> Unit)? = null) {
     val c = Nx.colors
     // The open tab is scrolled into view (it sat clipped under "Add task" on List / Table / Calendar / Timeline).
     val scroll = rememberScrollState()
@@ -278,7 +280,23 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
         if (!dividerDrawn && canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))
     }
     // "Add task" at the end of the tabs, always in reach (web phone).
-    if (onAdd != null) { Spacer(Modifier.width(6.dp)); HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true, size = 36.dp) }
+    if (onAdd != null) {
+        Spacer(Modifier.width(6.dp))
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(c.onyx), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.r21_new), color = c.background, fontSize = 13.sp,
+                    modifier = Modifier.clickable(onClick = onAdd).padding(horizontal = 10.dp, vertical = 10.dp))
+                androidx.compose.material3.IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.more), tint = c.background, modifier = Modifier.size(16.dp))
+                }
+            }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.pp_new_task)) }, onClick = { menu = false; onAdd() })
+                if (onDetails != null) DropdownMenuItem(text = { Text(stringResource(R.string.r21_new_details)) }, onClick = { menu = false; onDetails() })
+            }
+        }
+    }
     }
 }
 
@@ -359,7 +377,10 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
               props: PropCtx, linked: List<BoardLogic.LinkedLane>, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val dark = c.background.luminance() < 0.3f
-    LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+    val state = rememberLazyListState()
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
+    LaunchedEffect(inline) { if (inline != null) groups.indexOfFirst { it.key == inline }.takeIf { it >= 0 }?.let { state.scrollToItem(it + linked.size) } }
+    LazyRow(state = state, contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         items(linked.size, key = { "linked-" + linked[it].sourceId }) { i -> LinkedColumn(linked[i], props, access, vm, onOpenTask) }
         items(groups.size, key = { groups[it].key }) { i ->
             val g = groups[i]
@@ -403,6 +424,7 @@ private fun LinkedColumn(l: BoardLogic.LinkedLane, props: PropCtx, access: Proje
 private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>, props: PropCtx,
                         onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit, dark: Boolean, firstOfGroup: Boolean) {
     val c = Nx.colors
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
     run {
             val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
             Column(Modifier.width(284.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(tone?.lane ?: c.muted.copy(alpha = 0.5f)).padding(8.dp)) {
@@ -414,7 +436,7 @@ private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access
                 }
                 Spacer(Modifier.height(6.dp))
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
-                if (create != null) { InlineNewTask(create); Spacer(Modifier.height(6.dp)) }
+                if (create != null) { InlineNewTask(create, request = inline == g.key, consumed = vm::inlineConsumed); Spacer(Modifier.height(6.dp)) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
                     items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate, props) }
                 }
@@ -517,8 +539,11 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("view_collapsed", android.content.Context.MODE_PRIVATE) }
     var collapsed by remember(viewId) { mutableStateOf(prefs.getStringSet(viewId, emptySet()).orEmpty().toSet()) }
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
+    val state = rememberLazyListState()
+    LaunchedEffect(inline) { if (inline != null) { collapsed = collapsed - inline; state.scrollToItem(0) } }
     fun toggle(k: String) { collapsed = if (k in collapsed) collapsed - k else collapsed + k; prefs.edit().putStringSet(viewId, collapsed).apply() }
-    LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = state, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         groups.forEach { g ->
             val open = g.key !in collapsed
             item(key = "h-" + g.key) {
@@ -531,7 +556,7 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
             }
             if (open) {
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
-                if (create != null) item(key = "n-" + g.key) { Box(Modifier.padding(start = 26.dp, bottom = 4.dp)) { InlineNewTask(create, flat = true) } }
+                if (create != null) item(key = "n-" + g.key) { Box(Modifier.padding(start = 26.dp, bottom = 4.dp)) { InlineNewTask(create, flat = true, request = inline == g.key, consumed = vm::inlineConsumed) } }
                 items(g.tasks, key = { g.key + "/" + it.id }) { t -> ListRow(t, lanes, vm, selected, access, props, onOpenTask, onDuplicateDate) }
             }
         }
@@ -647,10 +672,11 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
  * waits (each title is sent on its own); a tap on ✕ closes it.
  */
 @Composable
-fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false) {
+fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false, request: Boolean = false, consumed: () -> Unit = {}) {
     val c = Nx.colors
     var composing by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
+    LaunchedEffect(request) { if (request) { composing = true; consumed() } }
     if (!composing) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { composing = true }.defaultMinSize(minHeight = 40.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {

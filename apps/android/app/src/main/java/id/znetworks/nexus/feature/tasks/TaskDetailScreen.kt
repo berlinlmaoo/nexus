@@ -51,6 +51,9 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Label
+import id.znetworks.nexus.ui.components.describe
+import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -125,9 +128,11 @@ import java.util.Locale
 fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenProject: (String) -> Unit, vm: TaskDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
+    val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var requestQuest by remember { mutableStateOf(false) }
+    var copying by remember { mutableStateOf(false) }
     LaunchedEffect(s.deleted) { if (s.deleted) onBack() }
     // The task's project room while it is open: an edit or a comment elsewhere shows up here (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom(s.task?.projectId?.let { "project:$it" })
@@ -148,11 +153,17 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                 IconButton(onClick = vm::toggleLike, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.ThumbUp, stringResource(R.string.r21_like), tint = if (s.task?.liked == true) c.violetText else c.mutedFg) }
                 if (s.isBoD && s.access.canEdit) IconButton(onClick = { requestQuest = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.EmojiEvents, stringResource(R.string.td_make_quest), tint = c.mutedFg) }
             }
-            if (s.task != null && s.access.canEdit) Box {
+            if (s.task != null) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.fs_open_page)) }, onClick = {
+                        menu = false; id.znetworks.nexus.ui.shell.openWeb(context, "/tasks/${vm.taskId}")
+                    })
+                    if (s.access.canEdit) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.r21_copy_project)) }, onClick = { menu = false; copying = true })
                     DropdownMenuItem(text = { Text(stringResource(R.string.td_delete), color = c.danger) },
                         leadingIcon = { Icon(Icons.Filled.Delete, null, tint = c.danger) }, onClick = { menu = false; confirmDelete = true })
+                    }
                 }
             }
         }
@@ -195,6 +206,9 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
         confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete() }) { Text(stringResource(R.string.delete), color = c.danger) } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
     )
+    if (copying && s.access.canEdit) CopyTaskDialog(s.task?.projectId, s.busy, { copying = false }) { lane ->
+        vm.copyTo(lane) { id -> copying = false; onOpenTask(id) }
+    }
     s.actionError?.let {
         AlertDialog(onDismissRequest = vm::dismissError, title = { Text(stringResource(R.string.td_couldnt)) }, text = { Text(it) },
             confirmButton = { TextButton(onClick = vm::dismissError) { Text("OK") } })
@@ -211,6 +225,43 @@ private fun PropertyRow(label: String, icon: ImageVector, value: @Composable and
         Text(label, color = c.mutedFg, fontSize = 13.sp, modifier = Modifier.width(108.dp).padding(start = 8.dp))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = value)
     }
+}
+
+@Composable
+private fun CopyTaskDialog(sourceProject: String?, busy: Boolean, onDismiss: () -> Unit, onCopy: (String) -> Unit) {
+    val context = LocalContext.current
+    val api = remember { id.znetworks.nexus.feature.projects.ProjectsApi((context.applicationContext as id.znetworks.nexus.NexusApplication).container.api) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var projects by remember { mutableStateOf<List<id.znetworks.nexus.feature.projects.Project>?>(null) }
+    var target by remember { mutableStateOf<id.znetworks.nexus.feature.projects.ProjectDetail?>(null) }
+    var lane by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { try { projects = api.projects().value.filter { it.id != sourceProject && (it.type == null || it.type == "TASK") } } catch (e: id.znetworks.nexus.core.net.ApiError) { error = e.describe(context.resources) } }
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(stringResource(R.string.r21_copy_project)) }, text = {
+        Column {
+            error?.let { Text(it, color = Nx.colors.dangerText) }
+            if (projects == null && error == null || loading) CircularProgressIndicator(Modifier.size(24.dp))
+            if (target == null) LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                items(projects.orEmpty(), key = { it.id }) { project -> TextButton(enabled = !loading, onClick = { loading = true; scope.launch {
+                    try {
+                        val detail = api.project(project.id).value
+                        if (!id.znetworks.nexus.feature.projects.ProjectAccess.of(detail).canEdit) error = context.getString(R.string.acc_needs_edit)
+                        else { target = detail; lane = detail.taskLists.firstOrNull()?.id; error = null }
+                    } catch (e: id.znetworks.nexus.core.net.ApiError) { error = e.describe(context.resources) }; loading = false
+                } }) { Text(project.name) } }
+            } else {
+                Text(target!!.name, fontWeight = FontWeight.SemiBold)
+                LazyColumn(Modifier.heightIn(max = 300.dp)) { items(target!!.taskLists, key = { it.id }) { option ->
+                    Row(Modifier.fillMaxWidth().clickable { lane = option.id }, verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(lane == option.id, { lane = option.id }); Text(option.name)
+                    }
+                } }
+                TextButton(onClick = { target = null; lane = null }) { Text(stringResource(R.string.back)) }
+            }
+        }
+    }, confirmButton = { TextButton(enabled = lane != null && !busy && !loading, onClick = { lane?.let(onCopy) }) { Text(stringResource(R.string.r21_copy)) } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } })
 }
 
 @Composable
@@ -411,6 +462,7 @@ private fun QuestBanner(t: TaskDetail, isBoD: Boolean, vm: TaskDetailViewModel, 
 private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel, onOpenProject: (String) -> Unit) {
     val c = Nx.colors
     var picking by remember { mutableStateOf(false) }
+    var tagsOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PropertyRow(stringResource(R.string.td_assigned), Icons.Filled.Person) {
             Column(Modifier.weight(1f).clickable { picking = true }.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -439,6 +491,21 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                 }
                 }
             }
+            PropertyRow(stringResource(R.string.cp_tags), Icons.Filled.Label) {
+                Text(t.tags.joinToString(", ").ifEmpty { "—" }, color = c.foreground, fontSize = 13.sp,
+                    modifier = Modifier.clickable { tagsOpen = true }.padding(8.dp))
+            }
+    }
+    if (tagsOpen) {
+        val base = remember { t.tags.toSet() }
+        var draft by remember { mutableStateOf(t.tags.joinToString(", ")) }
+        val chosen = draft.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        AlertDialog(onDismissRequest = { tagsOpen = false }, title = { Text(stringResource(R.string.cp_tags)) },
+            text = { OutlinedTextField(draft, { draft = it }, supportingText = { Text(stringResource(R.string.r21_tags_help)) }) },
+            confirmButton = { TextButton(enabled = chosen.size <= 20 && chosen.all { it.length <= 50 }, onClick = {
+                vm.setTags(chosen, base); tagsOpen = false
+            }) { Text(stringResource(R.string.save)) } },
+            dismissButton = { TextButton(onClick = { tagsOpen = false }) { Text(stringResource(R.string.cancel)) } })
     }
     if (picking) {
         val base = remember { t.assignees.mapNotNull { it.user?.id ?: it.userId }.toSet() }

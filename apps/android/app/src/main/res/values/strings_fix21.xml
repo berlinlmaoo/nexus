@@ -1,4 +1,14 @@
 <resources>
+    <string name="r21_copy_project">Copy to another project</string>
+    <string name="r21_copy">Copy</string>
+    <string name="r21_tags_help">Separate tags with commas (up to 20).</string>
+    <string name="r21_text_type">Text</string>
+    <string name="r21_number_type">Number</string>
+    <string name="r21_date_type">Date</string>
+    <string name="gc_thinking">Thinking…</string>
+    <string name="gc_waiting_approval">Waiting for your approval</string>
+    <string name="r21_new">New</string>
+    <string name="r21_new_details">New task with details…</string>
     <string name="chat_file_rules">Choose a PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP file up to 25 MB.</string>
     <string name="chat_file_download">Download or share file</string>
     <string name="gc_title">GIDEON credits</string>

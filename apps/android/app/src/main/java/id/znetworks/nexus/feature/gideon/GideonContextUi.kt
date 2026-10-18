@@ -198,8 +198,9 @@ internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode)
 internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(12.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(c.warning.copy(alpha = 0.06f)).border(1.dp, c.warning.copy(alpha = 0.3f), shape).padding(12.dp),
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (p.isPending) Text(stringResource(R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.warningFg, modifier = Modifier.size(14.dp).padding(top = 2.dp))
             Spacer(Modifier.width(6.dp))
@@ -211,21 +212,21 @@ internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -
                 Text(row.field.orEmpty(), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
                 Spacer(Modifier.width(6.dp))
                 row.fromText?.takeIf { it.isNotEmpty() }?.let {
-                    Text(if (status) taskStatusLabel(it) else it, fontSize = 12.sp, color = c.mutedFg, textDecoration = TextDecoration.LineThrough,
+                    Text(if (status) taskStatusLabel(it) else it, fontSize = 12.sp, color = c.dangerText, textDecoration = TextDecoration.LineThrough,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = c.mutedFg, modifier = Modifier.size(10.dp))
                 Spacer(Modifier.width(4.dp))
                 val to = row.toText
-                Text(if (to == null) "—" else if (status) taskStatusLabel(to) else to, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                Text(if (to == null) "—" else if (status) taskStatusLabel(to) else to, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.success,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
         }
         if (p.isPending) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (deciding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                NxButton(stringResource(R.string.gx_discard), { onDecide(false) }, kind = NxButtonKind.BORDERED, enabled = !deciding, compact = true)
+                NxButton(stringResource(R.string.gx_discard), { onDecide(false) }, kind = NxButtonKind.GHOST, enabled = !deciding, compact = true)
                 NxButton(stringResource(R.string.gx_apply), { onDecide(true) }, kind = NxButtonKind.PRIMARY, icon = Icons.Filled.Check, enabled = !deciding, compact = true)
             }
         } else {
@@ -360,7 +361,7 @@ internal fun BookRoomCard(
 
 /**
  * Every room for one slot as rows (the book_room card and the move card): free ones selectable, busy ones disabled
- * with who holds them until when, the capacity when it is known.
+ * with who holds them until when.
  */
 @Composable
 internal fun RoomRows(rooms: List<GRoomSlot>, selected: String?, enabled: Boolean, onPick: (String) -> Unit) {

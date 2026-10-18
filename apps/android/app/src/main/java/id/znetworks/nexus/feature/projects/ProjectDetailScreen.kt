@@ -150,6 +150,7 @@ data class ProjectDetailState(
     val undo: UndoEntry? = null,
     /** 404: the project is gone or the link is wrong. */
     val notFound: Boolean = false,
+    val inlineGroup: String? = null,
 ) {
     val access: ProjectAccess get() = ProjectAccess.of(detail)
     /** A plain task project (not a Pipeline / Outlet board): the one with views. */
@@ -433,6 +434,8 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         load()
     }
     fun dismissError() = _state.update { it.copy(actionError = null) }
+    fun requestInline(group: String) = _state.update { it.copy(inlineGroup = group) }
+    fun inlineConsumed() = _state.update { it.copy(inlineGroup = null) }
 
     fun move(taskId: String, laneId: String) {
         _state.update { it.copy(lanes = BoardLogic.move(it.lanes, taskId, laneId)) }
@@ -482,7 +485,11 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     LaunchedEffect(Unit) { if (entered) vm.load() else entered = true }
     // Its tasks change on another device: the project room while this board is open (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
-    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { event ->
+        val held = s.lanes.asSequence().flatMap { it.tasks.asSequence() }.firstOrNull { it.id == event.taskId }
+        id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(event, vm.projectId) &&
+            !id.znetworks.nexus.core.net.ConcurrentEdits.older(event.updatedAt, held?.updatedAt)
+    }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     // The open view (a saved view's id); the tab follows its layout.
     var viewId by rememberSaveable { mutableStateOf(vm.savedViewId()) }
@@ -593,13 +600,17 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            val onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
+            val details = { createDue = null; creating = true }
+            val onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({
+                if (tab in setOf(ProjectTab.BOARD, ProjectTab.LIST) && groups.isNotEmpty()) vm.requestInline(groups.first().key)
+                else details()
+            }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
                 onAdd = onAdd, addInTabs = tabsShown)
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
-                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd)
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null)
             }
             androidx.compose.material3.HorizontalDivider(color = c.border)
             // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.
@@ -651,7 +662,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                 }, Modifier.fillMaxSize())
                             s.lanes.isEmpty() && tab.searches && tab != ProjectTab.CALENDAR -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.board_no_lanes),
                                 stringResource(R.string.board_no_lanes_sub), stringResource(R.string.open_on_web), web, Modifier.fillMaxSize())
-                            total == 0 && (tab == ProjectTab.LIST || tab == ProjectTab.TABLE) && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
+                            total == 0 && tab == ProjectTab.TABLE && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
                                 stringResource(R.string.pp_no_tasks_sub), stringResource(R.string.pp_add_task), { createDue = null; creating = true }, Modifier.fillMaxSize())
                             else -> when (tab) {
                                 ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,

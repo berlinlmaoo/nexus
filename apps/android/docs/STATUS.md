@@ -17,6 +17,7 @@ In progress. No APK publication, version change, push or production access.
 - Local tour companion `scripts/ui-tour-local.mjs` targets Pixel_7 explicitly, shares the API runner's one login through a consumed debug-private file, follows the iOS screen manifest, and records missing fixtures/native screens as skips. Generic debug routes cover Legal/detail screens. 750 JVM tests + debug build remain green.
 - Pixel_7's DNS cannot resolve the private hostname despite successful host access; explicit emulator DNS also failed. Added optional debug-only `nexusDevAddress` IP mapping for the exact dev host, retaining URL/TLS/SNI/certificate checks; empty committed default, release ignores it. 752 JVM tests and assembleDebug pass. Initial network-error screenshots are being replaced.
 - DEV API checks on a newly created QA task: title edits, additive/removal tags preserving a concurrent tag, assignee delta + stale-base 409, guarded description + stale 409, comment, new QA sheet + stale structure 409, Vault listing and Legal layout all passed. Fixtures will be removed after the UI flows.
+- Remaining approved parity completed: split onyx New / menu; Board/List New opens the first group's inline card and New task with details opens the full composer; editable tag deltas; task Copy to another project (gated below Can edit) and Open as page; clickable GIDEON history title, animated Thinking line and neutral approval cards with red/green diff. 752 JVM tests + debug build pass. UI checks/re-shoots continue.
 
 | QA area | Result |
 |---|---|

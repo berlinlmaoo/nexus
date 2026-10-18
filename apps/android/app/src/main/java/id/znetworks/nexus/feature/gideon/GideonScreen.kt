@@ -3,6 +3,8 @@ package id.znetworks.nexus.feature.gideon
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import android.net.Uri
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.alpha
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -129,7 +131,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         val title = if (showChats) stringResource(R.string.gx_chats)
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
-        PageHeader(title, onBack = back, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
+        PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
             if (!showChats) Box {
                 TextButton(onClick = { tierMenu = true }) { Text(s.tier.label, color = c.foreground) }
                 DropdownMenu(tierMenu, { tierMenu = false }) {
@@ -248,7 +250,7 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (m.steps.isNotEmpty()) {
                     var expanded by remember { mutableStateOf(false) }
-                    Text(stringResource(R.string.gc_steps, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
+                    Text(if (m.steps.any { it.status == "running" }) stringResource(R.string.gc_thinking) else stringResource(R.string.gc_steps, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
                     if (expanded) m.steps.forEach { st -> StepLine(st) }
                 }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
@@ -271,10 +273,17 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
         if (s.thinking) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.gx_working), fontSize = 13.sp, color = c.mutedFg)
+                ThinkingLine()
             }
         }
     }
+}
+
+@Composable
+private fun ThinkingLine() {
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val alpha by transition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "thinkingAlpha")
+    Text(stringResource(R.string.gc_thinking), fontSize = 13.sp, color = Nx.colors.mutedFg, modifier = Modifier.alpha(alpha))
 }
 
 @Composable

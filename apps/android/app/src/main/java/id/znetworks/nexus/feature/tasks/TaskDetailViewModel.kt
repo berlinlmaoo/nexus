@@ -115,6 +115,9 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun toggleFollow() = act(R.string.td_update_failed) { val o = api.follow(taskId); _state.update { it.copy(following = o["following"] == JsonPrimitive(true)) } }
     fun toggleFavorite() = act(R.string.td_update_failed) { val o = api.favorite(taskId); _state.update { it.copy(favorite = o["favorited"] == JsonPrimitive(true)) } }
     fun toggleLike() = act(R.string.td_update_failed) { api.like(taskId) }
+    fun copyTo(laneId: String, onDone: (String) -> Unit) = act(R.string.td_update_failed) {
+        projects.duplicateTaskId(taskId, JsonObject(mapOf("taskListId" to JsonPrimitive(laneId))))?.let(onDone)
+    }
     fun setDue(d: LocalDate?) = patch("dueDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setStart(d: LocalDate?) = patch("startDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setDescription(text: String, baseText: String, onDone: () -> Unit) = act(R.string.td_update_failed) {

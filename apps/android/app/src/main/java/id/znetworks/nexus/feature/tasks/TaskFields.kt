@@ -128,7 +128,9 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit,
         AlertDialog(onDismissRequest = { if (!saving) adding = false }, title = { Text(stringResource(R.string.r21_add_property)) },
             text = { Column {
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.r21_property_name)) })
-                Row { listOf("TEXT", "NUMBER", "DATE").forEach { type -> TextButton(onClick = { kind = type }) { Text(if (kind == type) "✓ $type" else type, fontSize = 11.sp) } } }
+                Row { listOf("TEXT" to R.string.r21_text_type, "NUMBER" to R.string.r21_number_type, "DATE" to R.string.r21_date_type).forEach { (type, label) ->
+                    TextButton(onClick = { kind = type }) { Text((if (kind == type) "✓ " else "") + stringResource(label), fontSize = 11.sp) }
+                } }
             } },
             confirmButton = { TextButton(enabled = !saving && name.isNotBlank(), onClick = { saving = true; scope.launch {
                 try { api.createField(projectId, name, kind, emptyList()); fields = api.taskFields(projectId, taskId); adding = false }

@@ -17,6 +17,9 @@ const pkg = 'id.znetworks.nexus';
 const adb = (...args) => execFileSync('adb', ['-s', serial, ...args], {maxBuffer:32*1024*1024, timeout:30000});
 if (!adb('emu','avd','name').toString().split(/\r?\n/).some(x=>x.trim()==='Pixel_7')) throw new Error('This tour is restricted to AVD Pixel_7.');
 fs.mkdirSync(out, {recursive:true});
+for (const permission of ['ACCESS_COARSE_LOCATION','ACCESS_FINE_LOCATION','POST_NOTIFICATIONS','CAMERA']) {
+  adb('shell','pm','grant',pkg,'android.permission.'+permission);
+}
 const pause = ms => new Promise(r=>setTimeout(r,ms));
 const save = id => { const file=path.join(out,id+'.png');fs.writeFileSync(file,adb('exec-out','screencap','-p'));return file; };
 async function get(route) {
@@ -29,7 +32,9 @@ async function launch(step, id, route) {
   const extras=['--es','nexusTour','1','--es','nexusServer','dev','--es','nexusTourStep',step];
   if(id) extras.push('--es','nexusTourScreen',id);
   if(route) extras.push('--es','nexusTourRoute',route);
-  adb('shell','am','start','-S','-n',pkg+'/.MainActivity',...extras);
+  adb('shell','am','force-stop',pkg);
+  await pause(200);
+  adb('shell','am','start','-n',pkg+'/.MainActivity',...extras);
   for(let n=0;n<70;n++) {
     await pause(500);
     const log=adb('logcat','-d','-s','NEXUS_TOUR:I').toString();
@@ -79,7 +84,9 @@ const routes={dashboard:'home','my-tasks':'tasks',calendar:'calendar',messages:'
 for(const view of ['overview','board','list','table','calendar','timeline']) routes['project-'+view]=project?'project/'+project+'?view='+view:null;
 for(const view of ['overview','calendar','day','settings']) routes['outlet-'+view]=outlet?'project/'+outlet+'?view='+(['overview','settings'].includes(view)?'overview':'calendar'):null;
 const only=arg('only')?.split(',');
-const report=[];
+const reportFile=path.join(out,'tour-report.json');
+const previous=only&&fs.existsSync(reportFile)?JSON.parse(fs.readFileSync(reportFile,'utf8')).filter(row=>!only.includes(row.id)):[];
+const report=[...previous];
 for(const screen of config.screens) {
   if(only&&!only.includes(screen.id)) continue;
   if(screen.id==='login') { report.push({id:screen.id,result:fs.existsSync(path.join(out,'login.png'))?'captured before session import':'skipped: capture before signing in'});continue; }
@@ -99,7 +106,10 @@ for(const screen of config.screens) {
     const file=save(screen.id);
     report.push({id:screen.id,result:actionResult===false?'blocked: requested action is absent on this native screen':'captured; visual review pending',file});
     console.log(screen.id+': '+report.at(-1).result);
-  } catch(error) {report.push({id:screen.id,result:'failed: '+error.message});console.log(screen.id+': failed');}
+  } catch(error) {
+    report.push({id:screen.id,result:'failed: '+error.message});console.log(screen.id+': failed');
+    try { save(screen.id+'-failed');fs.writeFileSync(path.join(out,screen.id+'-failed.log'),adb('logcat','-d')); } catch {}
+  }
   fs.writeFileSync(path.join(out,'tour-report.json'),JSON.stringify(report,null,2));
 }
 fs.writeFileSync(path.join(out,'tour-report.json'),JSON.stringify(report,null,2));
