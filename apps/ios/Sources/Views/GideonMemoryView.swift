@@ -51,7 +51,7 @@ struct GideonMemoryView: View {
                 if embedded { Text(T("GIDEON Memory")).font(NXFont.display(26, .bold)) }
                 Text(T("What GIDEON remembers about you, so its answers fit you. Only you can see this.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 Toggle(T("Use GIDEON Memory"), isOn: Binding(get: { !store.paused }, set: { on in Task { await store.setPaused(!on) } }))
-                    .disabled(store.busy || !store.loaded).accessibilityIdentifier("memory.enabled")
+                    .tint(NX.foreground).disabled(store.busy || !store.loaded).accessibilityIdentifier("memory.enabled")
                 Text(T("Off: GIDEON doesn't remember anything new and doesn't use what's here.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 if store.loading && !store.loaded { ProgressView().frame(maxWidth: .infinity) }
                 if let failure = store.failure {
@@ -72,7 +72,7 @@ struct GideonMemoryView: View {
                                 }
                             }
                         }
-                        Button(T("Forget everything"), role: .destructive) { confirmAll = true }.buttonStyle(.nxBordered).disabled(store.busy).accessibilityIdentifier("memory.forgetAll")
+                        Button(T("Forget everything"), role: .destructive) { confirmAll = true }.buttonStyle(.nxDestructive).disabled(store.busy).accessibilityIdentifier("memory.forgetAll")
                     }
                 }
             }.padding(embedded ? 0 : 20).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
