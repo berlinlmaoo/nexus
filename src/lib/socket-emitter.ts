@@ -249,6 +249,11 @@ export function emitGideonCredits(userId: string, summary: unknown) {
   publishSafely(BUS_EVENTS.GIDEON_CREDITS, { userId, summary })
 }
 
+/** `reminders-changed` { id } to `user:<id>` (personal reminders, 18 Oct 2026): the Reminders page refetches. */
+export function emitRemindersChanged(userId: string, id: string) {
+  publishSafely(BUS_EVENTS.REMINDERS_CHANGED, { userId, id })
+}
+
 function publishSafely(event: string, data: unknown) {
   try {
     eventBus.emit(event, data)

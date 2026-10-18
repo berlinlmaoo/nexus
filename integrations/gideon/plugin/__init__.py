@@ -3,6 +3,17 @@ import os
 from .humanize import humanize_json
 from .client import call_nexus, check_available
 from .schemas import SCHEMAS
+from .schemas_extra import EXTRA_SCHEMAS
+from .schemas_g67 import G67_SCHEMAS
+from .schemas_g8_10_14 import G8_10_14_SCHEMAS
+from .schemas_sheets import SHEET_SCHEMAS
+from .schemas_g11_13 import G11_13_SCHEMAS
+from .images import read_nexus_image_handler
+
+# The 18 Oct 2026 package (inbox, chat, reminders, …): schemas_extra.py.
+_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS, **G11_13_SCHEMAS}
+SCHEMAS = {**SCHEMAS, **_PACKAGE}
+EXTRA_ACTIONS = {name: name[len("nexus_"):] for name in _PACKAGE}
 
 _ACTION_BY_TOOL = {
     "nexus_list_projects": "list_projects",
@@ -45,6 +56,7 @@ _ACTION_BY_TOOL = {
     # Menutup tiket yang sudah tidak menyisakan apa pun. Server yang memverifikasi (ledger kosong,
     # jatah day-off utuh, tidak ada usulan menunggu) dan menolak kalau tidak; ini bukan hak model.
     "nexus_resolve_ticket": "resolve_ticket",
+    **EXTRA_ACTIONS,
 }
 
 
@@ -87,7 +99,8 @@ def register(ctx) -> None:
             name=tool_name,
             toolset="nexus",
             schema=_function_schema(tool_name, SCHEMAS[tool_name]),
-            handler=_make_handler(action),
+            # A NEXUS picture is written to the work dir and opened with vision_analyze (images.py), never as text.
+            handler=read_nexus_image_handler if tool_name == "nexus_read_nexus_image" else _make_handler(action),
             check_fn=check_available,
             requires_env=["NEXUS_BASE_URL", "NEXUS_SERVICE_TOKEN"],
             emoji="🧭",

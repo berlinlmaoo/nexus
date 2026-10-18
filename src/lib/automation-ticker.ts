@@ -2,9 +2,11 @@ import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { pruneAutomationRuns, runTimeBasedAutomations } from "@/lib/automation-engine"
 import { isSingletonLeader } from "@/lib/bluegreen"
+import { sendDueReminders } from "@/lib/personal-reminders"
 
 /**
- * The clock of project automations (12 Oct 2026): every minute, due-date and scheduled rules
+ * The clock of project automations (12 Oct 2026): every minute, due-date and scheduled rules — and, since 18 Oct
+ * 2026, due reminders (lib/personal-reminders.ts sendDueReminders)
  * (automation-engine.ts runTimeBasedAutomations); every hour, the 90-day run-log trim.
  *
  * Started once per server process from the root instrumentation.ts. Off with NEXUS_AUTOMATION_TICKER=0. It
@@ -33,6 +35,9 @@ export function startAutomationTicker() {
       if (rows[0]?.ro) return
       const res = await runTimeBasedAutomations()
       if (res.fired > 0) log.info("time-based automations fired", res)
+      // Personal reminders and the block editor's "Remind me" chips (18 Oct 2026): due ones, each claimed once.
+      const rem = await sendDueReminders().catch((err) => { log.error("reminders tick failed", { error: String(err) }); return null })
+      if (rem && rem.due > 0) log.info("reminders sent", rem)
       if (++ticks % PRUNE_EVERY === 0) {
         const n = await pruneAutomationRuns()
         if (n > 0) log.info("automation runs pruned", { n })

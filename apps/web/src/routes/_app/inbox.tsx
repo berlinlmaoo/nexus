@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -74,9 +74,14 @@ function InboxPage() {
   return (
     <div>
       <PageHeader title={t("Notifications")} subtitle={t("Mentions, assignments, approvals and replies that need you.")} actions={
+        <div className="flex items-center gap-2">
+        <Link to="/reminders" className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98]">
+          <AlarmClock className="h-3.5 w-3.5" /> {t("Reminders")}
+        </Link>
         <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-60">
           {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Mark all as read")}
         </button>
+        </div>
       } tabs={!inbox.isLoading && !inbox.isError && notifications.length > 0
         ? <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} />
         : undefined} />

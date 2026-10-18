@@ -28,6 +28,7 @@ import { Route as AppSubmissionsRouteImport } from './routes/_app/submissions'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomBookingRouteImport } from './routes/_app/room-booking'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppRemindersRouteImport } from './routes/_app/reminders'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
@@ -146,6 +147,11 @@ const AppRoomBookingRoute = AppRoomBookingRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRemindersRoute = AppRemindersRouteImport.update({
+  id: '/reminders',
+  path: '/reminders',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyTasksRoute = AppMyTasksRouteImport.update({
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
+  '/reminders': typeof AppRemindersRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
@@ -339,6 +346,7 @@ export interface FileRoutesByTo {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
+  '/reminders': typeof AppRemindersRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
@@ -386,6 +394,7 @@ export interface FileRoutesById {
   '/_app/master-calendar': typeof AppMasterCalendarRoute
   '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
+  '/_app/reminders': typeof AppRemindersRoute
   '/_app/reports': typeof AppReportsRouteWithChildren
   '/_app/room-booking': typeof AppRoomBookingRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -434,6 +443,7 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
+    | '/reminders'
     | '/reports'
     | '/room-booking'
     | '/settings'
@@ -478,6 +488,7 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
+    | '/reminders'
     | '/reports'
     | '/room-booking'
     | '/settings'
@@ -524,6 +535,7 @@ export interface FileRouteTypes {
     | '/_app/master-calendar'
     | '/_app/messages'
     | '/_app/my-tasks'
+    | '/_app/reminders'
     | '/_app/reports'
     | '/_app/room-booking'
     | '/_app/settings'
@@ -699,6 +711,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reminders': {
+      id: '/_app/reminders'
+      path: '/reminders'
+      fullPath: '/reminders'
+      preLoaderRoute: typeof AppRemindersRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-tasks': {
@@ -929,6 +948,7 @@ interface AppRouteChildren {
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
   AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
+  AppRemindersRoute: typeof AppRemindersRoute
   AppReportsRoute: typeof AppReportsRouteWithChildren
   AppRoomBookingRoute: typeof AppRoomBookingRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -961,6 +981,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMasterCalendarRoute: AppMasterCalendarRoute,
   AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,
+  AppRemindersRoute: AppRemindersRoute,
   AppReportsRoute: AppReportsRouteWithChildren,
   AppRoomBookingRoute: AppRoomBookingRoute,
   AppSettingsRoute: AppSettingsRoute,

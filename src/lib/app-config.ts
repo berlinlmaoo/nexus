@@ -39,6 +39,24 @@ export type AppConfig = {
     /** Meeting notes, Beta (owner, 18 Oct 2026): GIDEON turns a meeting recording into minutes and tasks. Off = the
      *  entry points are hidden and new uploads are refused; meetings already made stay readable. */
     meetingNotesEnabled: boolean
+    /** GIDEON tools package (owner, 18 Oct 2026), one flag per group (lib/gideon-tools/meta.ts EXTRA_TOOL_GROUP).
+     *  Off = those tools answer "not available yet" and their cards cannot be applied. */
+    gideonToolsInbox: boolean
+    gideonToolsChat: boolean
+    gideonToolsReminders: boolean
+    gideonToolsLeave: boolean
+    gideonToolsBulkTasks: boolean
+    gideonToolsPipeline: boolean
+    gideonToolsOutletSocial: boolean
+    gideonToolsLegal: boolean
+    gideonToolsVault: boolean
+    gideonToolsDocEdit: boolean
+    gideonToolsForms: boolean
+    gideonToolsPerformance: boolean
+    gideonToolsAnnouncement: boolean
+    gideonToolsSheets: boolean
+    gideonToolsImages: boolean
+    gideonToolsFiles: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -57,8 +75,16 @@ export type AppConfig = {
   banner: null | { id: string; tone: "info" | "warning" | "danger"; title: string; message: string; link?: string | null }
 }
 
+/** GIDEON tools groups (18 Oct 2026): on unless listed off here; prod opens the rest per runbook L.28. */
+const GIDEON_TOOL_FLAG_DEFAULTS = {
+  gideonToolsInbox: true, gideonToolsChat: true, gideonToolsReminders: true, gideonToolsLeave: true, gideonToolsBulkTasks: true,
+  gideonToolsPipeline: true, gideonToolsOutletSocial: true, gideonToolsLegal: true, gideonToolsVault: true, gideonToolsDocEdit: true,
+  gideonToolsForms: true, gideonToolsPerformance: true, gideonToolsAnnouncement: true, gideonToolsSheets: true, gideonToolsImages: true,
+  gideonToolsFiles: true,
+}
+
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {

@@ -11,9 +11,13 @@ import {
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import { taskTargetOptions } from "@/lib/gideon-task-target"
 import type { Prisma } from "@/generated/prisma"
+import { isExtraAction } from "@/lib/gideon-tools/meta"
+import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled } from "@/lib/gideon-tools"
+import type { WebCall, WebCaller, WebReply } from "@/lib/gideon-tools/types"
 
 const CREATE_TASK_LATEST_APP = "Open on the latest app or the web to choose the project for this task · Buka di app terbaru atau web untuk memilih project task ini"
 const NOT_EDITABLE = "You can't add tasks to that project (it needs Can edit, and an open task project). Pick another · Kamu tidak bisa menambah task di project itu (butuh akses Can edit di project task yang aktif). Pilih project lain"
+const EXTRA_LATEST_APP = "Open on the latest app or the web to do this · Buka di app terbaru atau web untuk melakukan ini"
 const DELETE_TASK_LATEST_APP = "Open on the latest app or the web to delete this task · Buka di app terbaru atau web untuk menghapus task ini"
 
 /** A proposal older than this is not applied: the task it describes has likely moved on. */
@@ -138,6 +142,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
   }
 
+  // The 18 Oct 2026 package (inbox/chat/reminders/leave/…, lib/gideon-tools/meta.ts): only its own card applies it,
+  // and that card sends the proposal id back (`confirm: { proposalId }`). A released app draws these as plain rows
+  // and sends no confirm: it is told to open the latest app or the web, and the proposal stays waiting.
+  if (isExtraAction(proposal.action)) {
+    const confirm = body.confirm && typeof body.confirm === "object" ? (body.confirm as Record<string, unknown>) : null
+    if (confirm?.proposalId !== id) {
+      const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_LATEST_APP }
+      return NextResponse.json({ error: EXTRA_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
+    }
+    if (!(await extraToolEnabled(proposal.action))) {
+      const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_DISABLED_TEXT }
+      return NextResponse.json({ error: EXTRA_DISABLED_TEXT, code: "TOOL_DISABLED", proposal: view }, { status: 409 })
+    }
+  }
+
   if (proposal.action === "book_room") {
     const choice = parseBookRoomChoice(body.booking)
     if (!choice) {
@@ -157,6 +176,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const claimed = await prisma.gideonProposal.updateMany({ where: { id, status: "PENDING" }, data: { status: "APPLYING" } })
   if (claimed.count === 0) return NextResponse.json({ error: "Already decided" }, { status: 409 })
+
+  // A write of the package that runs through the person's OWN session: the endpoint the app itself calls, with the
+  // cookie (or bearer) of this request — every rule, permission, lock, realtime event and notification of that
+  // endpoint applies, and nothing is reimplemented. The calls are built from the stored proposal only.
+  const extraWeb = extraTool(proposal.action)?.web
+  if (extraWeb) {
+    const call: WebCaller = (c) => callAsPerson(req, c)
+    let outcome: { ok: boolean; message?: string | null; link?: string | null; result?: Record<string, unknown> }
+    try {
+      outcome = await extraWeb((proposal.input as Record<string, unknown>) ?? {}, call)
+    } catch (error) {
+      outcome = { ok: false, message: error instanceof Error ? error.message : "Failed" }
+    }
+    const updated = await prisma.gideonProposal.update({
+      where: { id },
+      data: outcome.ok
+        ? { status: "APPLIED", decidedAt: new Date(), result: { card: null, link: outcome.link ?? null, note: outcome.message ?? null, ...(outcome.result ?? {}) } as object, error: null }
+        : { status: "FAILED", decidedAt: new Date(), error: (outcome.message || "Failed").slice(0, 500) },
+    })
+    return NextResponse.json({ proposal: proposalView(updated) }, { status: outcome.ok ? 200 : 422 })
+  }
 
   const token = process.env.NEXUS_GIDEON_SERVICE_TOKEN
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } })
@@ -196,10 +236,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const card = ok ? cardFromResult(proposal.action, data) : null
+  const extraLink = ok && isExtraAction(proposal.action) && typeof (data as { link?: unknown } | null)?.link === "string" ? (data as { link: string }).link : null
   const updated = await prisma.gideonProposal.update({
     where: { id },
     data: ok
-      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(["book_room", "move_room_booking", "cancel_room_booking"].includes(proposal.action) ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}), ...(proposal.action === "delete_task" ? { auditLogId: (data as { auditLogId?: unknown } | null)?.auditLogId ?? null } : {}) } as object, error: null }
+      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(extraLink ? { link: extraLink } : {}), ...(["book_room", "move_room_booking", "cancel_room_booking"].includes(proposal.action) ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}), ...(proposal.action === "delete_task" ? { auditLogId: (data as { auditLogId?: unknown } | null)?.auditLogId ?? null } : {}) } as object, error: null }
       : { status: "FAILED", decidedAt: new Date(), error: (message || "Failed").slice(0, 500) },
   })
   // An approved AI Autofill value keeps its ✨ marker (CustomFieldAiFill) like one written directly.
@@ -210,4 +251,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // No separate audit row: the action itself writes its ActivityLog (GIDEON_TASK_CREATED / _UPDATED /
   // GIDEON_COMMENT_ADDED) exactly as when GIDEON writes without asking.
   return NextResponse.json({ proposal: proposalView(updated) }, { status: ok ? 200 : 422 })
+}
+
+/**
+ * One request to a NEXUS endpoint AS the person deciding this card: their own cookie / bearer, so the endpoint sees
+ * exactly the request the app would send. Local only (127.0.0.1), /api/ paths only, never a path from the body.
+ * `X-Nexus-Client: web/1`: the card is a current client, so the endpoint holds it to the current rules (the strict
+ * side of every client-version gate, e.g. one date per attendance request).
+ */
+async function callAsPerson(req: NextRequest, c: WebCall): Promise<WebReply> {
+  if (!/^\/api\/[A-Za-z0-9/_\-?=&.%:]+$/.test(c.path) || c.path.includes("..")) throw new Error("Bad internal path")
+  const headers: Record<string, string> = { "x-nexus-client": "web/1", "x-forwarded-proto": "https", accept: "application/json" }
+  const cookie = req.headers.get("cookie")
+  if (cookie) headers.cookie = cookie
+  const authorization = req.headers.get("authorization")
+  if (authorization) headers.authorization = authorization
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host")
+  if (host) headers["x-forwarded-host"] = host
+  let body: BodyInit | undefined
+  if (c.form || c.files) {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(c.form ?? {})) fd.set(k, v)
+    for (const [k, f] of Object.entries(c.files ?? {})) fd.set(k, new Blob([new Uint8Array(Buffer.from(f.base64, "base64"))], { type: f.type }), f.name)
+    body = fd
+  } else if (c.json !== undefined) {
+    headers["content-type"] = "application/json"
+    body = JSON.stringify(c.json)
+  }
+  const res = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}${c.path}`, { method: c.method, headers, body, signal: AbortSignal.timeout(30_000) })
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  return { status: res.status, ok: res.ok, body: json }
 }

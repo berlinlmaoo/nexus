@@ -1,3 +1,4 @@
+import { EXTRA_WRITE_ACTIONS, extraNeedsApproval, extraStepLabel, isExtraAction } from "@/lib/gideon-tools/meta"
 import { EventEmitter } from "events"
 import { parseShimUsage, recordRunUsage } from "@/lib/gideon-credits"
 import prisma from "@/lib/prisma"
@@ -37,7 +38,7 @@ export function parseApprovalMode(value: unknown): ApprovalMode | null {
 }
 
 /** Tools that change something. Everything else is a read. */
-export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking", "delete_task"])
+export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking", "delete_task", ...EXTRA_WRITE_ACTIONS])
 
 /**
  * Which writes wait for the person (Notion's "Always ask / Review for me / Skip approvals").
@@ -63,6 +64,8 @@ export function needsApproval(mode: ApprovalMode, action: string, input: Record<
   // A new task with no project named (18 Oct 2026): a card with the project picker in every mode — GIDEON never
   // guesses a project, the person picks it (preselected when the context makes it obvious).
   if (action === "create_task" && createTaskNeedsProject(input)) return true
+  // The 18 Oct 2026 package (lib/gideon-tools/meta.ts): "always" = a card in every mode, "modes" = like create_task.
+  if (isExtraAction(action)) return extraNeedsApproval(action, mode)
   if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
   if (action === "move_room_booking") return mode !== "dont_ask" || moveNeedsPick(input)
   if (action === "cancel_room_booking") return mode !== "dont_ask"
@@ -129,6 +132,13 @@ export type GideonProposalView = {
    * picker never sees this field and cannot apply the proposal (the apply route wants `task: { projectId, … }`).
    */
   taskTarget?: GideonTaskTargetView | null
+  /**
+   * The 18 Oct 2026 package only (inbox/chat/reminders/leave/…, lib/gideon-tools/meta.ts): what its card draws beyond
+   * the rows — the long text in full (`preview`: a message, a doc section, an announcement) and, once applied, where
+   * the result is (`link`). A client without the card draws the diff rows; the apply route refuses its Apply
+   * without `confirm: { proposalId }` (released apps), so nothing outward-facing is ever applied from plain rows.
+   */
+  extra?: GideonExtraView | null
 }
 export type GideonTaskTargetView = {
   title: string
@@ -141,6 +151,12 @@ export type GideonTaskTargetView = {
   dueDay: string | null
   /** Once applied: where it went. */
   chosenProjectId: string | null
+}
+/** `note`: what an applied card adds (e.g. "Skipped: 2 tasks changed by someone meanwhile"). */
+export type GideonExtraView = {
+  preview: string | null; link: string | null; note: string | null
+  /** edit_sheet_cells only: the cells before → after and the rows added, as the card shows them. */
+  sheetEdit?: { sheet?: string; project?: string; cells?: { ref: string; from: string | null; to: string | null }[]; newRows?: unknown[] } | null
 }
 /** What a delete card shows. `deleted`: applied; it can be restored from Control Room → Audit (`auditLogId`). */
 export type GideonTaskDeleteView = {
@@ -304,7 +320,7 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "move_room_booking": return a ? `Moving booking ${a}` : "Moving a booking"
     case "cancel_room_booking": return a ? `Cancelling booking ${a}` : "Cancelling a booking"
     case "delete_task": return a ? `Deleting task ${a}` : "Deleting a task"
-    default: return tool.replace(/_/g, " ")
+    default: return extraStepLabel(tool, a) ?? tool.replace(/_/g, " ")
   }
 }
 
@@ -510,6 +526,17 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     ...(p.action === "move_room_booking" || p.action === "cancel_room_booking" ? { bookingChange: bookingChangeView(p.action, p.input, result) } : {}),
     ...(p.action === "delete_task" ? { taskDelete: taskDeleteView(p.input, result, p.status) } : {}),
     ...(p.action === "create_task" && (p.input as AnyObj | null)?.pickProject === true ? { taskTarget: taskTargetView(p.input) } : {}),
+    ...(isExtraAction(p.action) ? { extra: extraView(p.input, result) } : {}),
+  }
+}
+
+function extraView(input: unknown, result: AnyObj | null | undefined): GideonExtraView {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  return {
+    preview: typeof i.preview === "string" && i.preview ? i.preview : null,
+    link: typeof result?.link === "string" && result.link ? result.link : null,
+    note: typeof result?.note === "string" && result.note ? result.note : null,
+    ...(i.sheetEdit && typeof i.sheetEdit === "object" ? { sheetEdit: i.sheetEdit as GideonExtraView["sheetEdit"] } : {}),
   }
 }
 
