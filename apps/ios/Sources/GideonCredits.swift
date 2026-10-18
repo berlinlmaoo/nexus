@@ -7,7 +7,7 @@ extension GideonClient {
         var path = "/api/gideon/credits"
         if history {
             path += "?history=1&limit=50"
-            if let before { path += "&before=" + (before.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? before) }
+            if let before { path += "&before=" + (before.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? before) }
         }
         let (data, response) = try await APIClient.shared.perform(APIClient.shared.makeRequest(path))
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }

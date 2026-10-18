@@ -54,7 +54,7 @@ struct RemindersView: View {
                 if let at = TaskDates.parse(item.remindAt) { Text(AppDateLocale.formatter("EEE d MMM HH:mm", timeZone: wib).string(from: at) + " WIB").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             }
             Spacer()
-            if cancellable { Button { cancel = item } label: { Image(systemName: "xmark").frame(width: 36, height: 36) }.accessibilityLabel(T("Cancel reminder")) }
+            if cancellable { Button { cancel = item } label: { Image(systemName: "xmark").frame(width: 36, height: 36) }.accessibilityLabel(T("Cancel reminder")).accessibilityIdentifier("reminders.cancel." + item.id) }
         }.padding(14).background(NX.card, in: RoundedRectangle(cornerRadius: 10))
     }
     private func load(quiet: Bool = false) async {

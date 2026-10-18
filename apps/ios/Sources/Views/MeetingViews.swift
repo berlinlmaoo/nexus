@@ -141,7 +141,6 @@ struct MeetingDetailView: View {
         .onDisappear { player?.pause(); Task { _ = await store.flush() } }
         .onChange(of: phase) { _, phase in if phase == .background { Task { _ = await store.flush() } } }
         .keyboardDoneBar()
-        .accessibilityIdentifier("meetings.detail")
     }
     private func content(_ meeting: MeetingNote) -> some View {
         ScrollView {
@@ -162,6 +161,8 @@ struct MeetingDetailView: View {
                 if let segments = meeting.transcript, !segments.isEmpty { transcript(segments) }
             }.frame(maxWidth: 960).frame(maxWidth: .infinity).padding(20)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("meetings.detail")
         .safeAreaInset(edge: .bottom) {
             if meeting.status == "READY" {
                 HStack(spacing: 12) {
@@ -289,8 +290,8 @@ struct MeetingDetailView: View {
             ForEach(Array((meeting.proposals ?? []).enumerated()), id: \.element.key) { index, proposal in
                 VStack(alignment: .leading, spacing: 9) {
                     Toggle(isOn: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.include ?? false }, set: { value in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].include = value } })) {
-                        TextField(T("Title"), text: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.title ?? "" }, set: { value in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].title = value } }), axis: .vertical)
-                    }
+                        TextField(T("Title"), text: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.title ?? "" }, set: { value in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].title = value } }), axis: .vertical).accessibilityIdentifier("meetings.proposal.title." + proposal.key)
+                    }.accessibilityIdentifier("meetings.proposal.include." + proposal.key)
                     TextField(T("Description"), text: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.description ?? "" }, set: { value in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].description = value } }), axis: .vertical).font(NXFont.text(13))
                     Menu {
                         ForEach(meeting.members ?? []) { member in
@@ -298,8 +299,8 @@ struct MeetingDetailView: View {
                                 Label(member.name ?? "—", systemImage: proposal.assigneeIds.contains(member.id) ? "checkmark" : "person")
                             }
                         }
-                    } label: { Label(proposal.assigneeIds.isEmpty ? T("Unassigned") : (meeting.members ?? []).filter { proposal.assigneeIds.contains($0.id) }.compactMap(\.name).joined(separator: ", "), systemImage: "person") }
-                    NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.dueDate.map(CalDays.date) }, set: { date in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].dueDate = date.map(CalDays.key) } }))
+                    } label: { Label(proposal.assigneeIds.isEmpty ? T("Unassigned") : (meeting.members ?? []).filter { proposal.assigneeIds.contains($0.id) }.compactMap(\.name).joined(separator: ", "), systemImage: "person") }.accessibilityIdentifier("meetings.proposal.pic." + proposal.key)
+                    NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.dueDate.map(CalDays.date) }, set: { date in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].dueDate = date.map(CalDays.key) } })).accessibilityIdentifier("meetings.proposal.due." + proposal.key)
                 }.disabled(!meeting.can.edit).nexusCard()
             }
         }

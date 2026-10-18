@@ -634,15 +634,33 @@ final class NEXUSUITour: XCTestCase {
                 }
                 press(target)
                 pause(1)
-            case "type":
+            case "type", "replace":
                 let field = app.textFields.matching(textMatch).firstMatch
                 let search = app.searchFields.matching(textMatch).firstMatch
                 let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
                 press(target)
                 dismissKeyboardIntroduction()
+                if action.kind == "replace" { app.typeKey("a", modifierFlags: .command) }
                 target.typeText(action.text ?? "")
                 pause(0.5)
+            case "reveal":
+                for _ in 0..<10 {
+                    let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                    if target.exists && target.isHittable && app.windows.firstMatch.frame.intersects(target.frame) { break }
+                    let window = app.windows.firstMatch
+                    let upward = target.exists && !target.frame.isEmpty && target.frame.maxY < 140
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: upward ? 0.35 : 0.75))
+                    #if targetEnvironment(macCatalyst)
+                    start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * window.frame.height * 0.4)
+                    #else
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: upward ? 0.75 : 0.35))
+                    start.press(forDuration: 0.05, thenDragTo: end)
+                    #endif
+                    pause(0.5)
+                }
+                let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                guard target.exists && target.isHittable else { return "wrong-screen: couldn't reveal \(action.label)" }
             case "scroll":
                 let window = app.windows.firstMatch
                 let amount = min(0.55, max(0.1, Double(action.text ?? "0.33") ?? 0.33))

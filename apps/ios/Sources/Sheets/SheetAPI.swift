@@ -43,7 +43,7 @@ extension APIClient {
     static let sheetTabId: String = "ios-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
 
     private static func sheetEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     private func sheetRequest(_ path: String, method: String = "GET", body: Any? = nil) throws -> URLRequest {

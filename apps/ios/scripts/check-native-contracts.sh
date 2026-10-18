@@ -49,6 +49,13 @@ start = client.index('        let url: URL', client.index('func makeRequest('))
 end = client.index('        var req = URLRequest(url: url)', start)
 stub = Path('Tests/NativeRequests/Stub.swift').read_text().replace('        // BUILD_REQUEST_URL', client[start:end])
 Path(sys.argv[1], 'request-stub.swift').write_text(stub)
+gideon = Path('Sources/Gideon.swift').read_text()
+a = gideon.index('        var url = Config.baseURL', gideon.index('private static func authed('))
+b = gideon.index('        var request = URLRequest(url: url)', a)
+enc = gideon[gideon.index('    private static func enc(_ s: String)'):].splitlines()[0].replace('private static', 'static')
+probe = 'struct Config { static let baseURL = URL(string: "https://native.invalid")! }\nstruct GideonRequestProbe {\n    static func url(_ path: String, query: String? = nil) -> URL {\n' + gideon[a:b] + '        return url\n    }\n' + enc + '\n}\n'
+with Path(sys.argv[1], 'request-stub.swift').open('a') as f: f.write(probe)
+
 PY
 swiftc Sources/NativeAPI.swift "$NATIVE_CHECK_TMP/request-stub.swift" Tests/NativeRequests/main.swift -o "$NATIVE_CHECK_TMP/requests"
 "$NATIVE_CHECK_TMP/requests"

@@ -45,7 +45,7 @@ struct GideonActionCard: View {
                     .font(NXFont.text(12, .medium)).foregroundStyle(proposal.status == "FAILED" ? NX.danger : NX.mutedFg)
                 if proposal.status == "APPLIED" {
                     if let link = proposal.extra?.link {
-                        Button(T("Open")) { if let url = URL(string: link), url.host != nil { router.open(url) } else if let target = NotificationTarget(path: link) { router.open(target) } }
+                        Button(T("Open")) { if let url = URL(string: link, relativeTo: Config.baseURL)?.absoluteURL { router.open(url) } }
                     }
                     if let note = proposal.extra?.note { Text(note).font(NXFont.text(12)).textSelection(.enabled) }
                 }

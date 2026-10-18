@@ -734,7 +734,7 @@ enum GideonClient {
         return request
     }
 
-    private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+    private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s }
 
     private static func check(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }

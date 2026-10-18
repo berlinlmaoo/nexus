@@ -331,3 +331,27 @@ The WebSocket server runs at `pages/api/socket.ts` (Next.js Pages API).
 | `comment-added` | Comment object | `project:{projectId}` |
 | `sprint-updated` | Sprint object | `project:{projectId}` |
 | `new-notification` | Notification object | `user:{userId}` |
+
+## Native client additions (19 October 2026)
+
+Native clients refresh `GET /user/profile` before restoring a saved session's shell; IDs are opaque, including UUIDv7. Credentials survive an ID migration. Document-capable chat clients send `X-Nexus-Caps: chat-files` and decode attachment name/size on messages, replies and Docs entries.
+
+| Method | Endpoint | Native use |
+|--------|----------|------------|
+| GET | `/calendar/structure` | Includes optional `folders`; old responses remain compatible. |
+| GET | `/calendar/items`, `/calendar/overdue` | Optional comma-separated `folder` filter, combined with other filters. Folder entries open the main Calendar. |
+| GET, PUT | `/gideon/prefs` | `reviewNotice`; dismiss with only `{reviewNoticeSeen:true}`. |
+| GET | `/gideon/people/:userId` | BoD/OAA person overview and credit period. |
+| GET | `/gideon/people/:userId/chats`, `/gideon/people/:userId/chats/:chatId` | OAA-only, paged read-only chat review; BoD gets 403. |
+| GET | `/gideon/perf`, `/gideon/tiers` | Performance telemetry and live tier availability. |
+| GET | `/gideon/task-targets?projectId=:id` | Editable project sections/members for a pending create-task card. |
+| POST | `/gideon/proposals/:id` | Apply/discard. Delete-task Apply echoes `confirm.taskId`; new tool writes echo `confirm.proposalId`; create-task picker sends `task` with project/section/PIC/date. |
+| GET | `/gideon/files/:id` | Owner-only PDF/DOCX/XLSX download (30 days); native cookie download preserves the server filename. |
+| GET, POST | `/reminders` | Upcoming/done lists (`done=1`), create text ≤280 and future `remindAt`; local picker uses WIB. |
+| DELETE | `/reminders/:id` | Cancel an own reminder. |
+| GET, POST | `/meetings` | Meeting notes (Beta); gated by `meetingNotesEnabled`, `meetingMaxMinutes` and `meetingMaxMB`. |
+| GET, PATCH, DELETE | `/meetings/:id` | Detail, versioned dirty-field autosave (`VERSION_CONFLICT` returns current meeting), delete audio immediately/retain restorable notes 90 days. |
+| PUT, POST | `/meetings/:id/audio?offset=:bytes`, `/meetings/:id/audio/complete` | Resumable background upload; server `audio.received` is authoritative on relaunch. |
+| POST | `/meetings/:id/apply`, `/meetings/:id/retry` | Flush draft before Apply; saved page/tasks are retained independently of meeting deletion. |
+
+Realtime: `meeting-changed`, `reminders-changed`, `gideon-tiers`, and `gideon-perf` (join `gideon:perf` only while foreground/visible). Notifications route meeting IDs to `/meetings/:id`, reminders to `/reminders`, and GIDEON alerts to `/admin?tab=gideon&gideon=performance`.

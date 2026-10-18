@@ -16,7 +16,7 @@ extension APIClient {
     }
 
     private static func socialEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     /// One month: platforms, every day with its targets in force, the targets, and the Overview to date.

@@ -1213,7 +1213,7 @@ struct SheetProtectPrompt: Identifiable {
 extension APIClient {
     /// POST rows with explicit cells / styles / positions (undo of a row delete).
     func patchSheetRowsInsert(_ sheetId: String, body: SheetJSON) async throws -> SheetJSON {
-        var req = makeRequest("/api/sheets/\(sheetId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? sheetId)/rows", method: "POST")
+        var req = makeRequest("/api/sheets/\(sheetId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? sheetId)/rows", method: "POST")
         req.setValue(Self.sheetTabId, forHTTPHeaderField: "X-Nexus-Tab")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)

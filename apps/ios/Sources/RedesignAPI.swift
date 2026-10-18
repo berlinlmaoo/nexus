@@ -25,7 +25,7 @@ struct BatchMoveResult: Decodable, Sendable {
 extension APIClient {
 
     private static func redesignEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     private func redesignRun<Payload: Decodable>(_ req: URLRequest, as type: Payload.Type) async throws -> Payload {
@@ -189,7 +189,7 @@ extension APIClient {
     /// The project's status options (sections), light: no tasks. MEMBER and up; a viewer gets 403 and the
     /// caller falls back to the project payload.
     func statusOptions(projectId: String) async throws -> [SectionInfo] {
-        let path = "/api/projects/\(projectId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? projectId)/sections"
+        let path = "/api/projects/\(projectId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? projectId)/sections"
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await perform(makeRequest(path)) } catch { throw APIError.nothingAnswered(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }

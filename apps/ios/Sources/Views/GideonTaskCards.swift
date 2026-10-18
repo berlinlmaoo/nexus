@@ -159,6 +159,7 @@ struct GideonCreateTaskCard: View {
         }
         .task(id: choice.projectId) { await loadOptions() }
         .onChange(of: due) { _, _ in syncDate() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("gideon.createTask." + proposal.id)
     }
     private func property<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {

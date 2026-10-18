@@ -183,7 +183,7 @@ struct ProjectViewsFullResponse: Decodable, Sendable {
 private struct ViewEnvelope: Decodable { let view: ProjectViewFull }
 
 extension APIClient {
-    private static func viewEnc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+    private static func viewEnc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s }
 
     private func viewCall(_ req: URLRequest) async throws -> Data {
         let (data, response): (Data, URLResponse)

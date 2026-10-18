@@ -319,7 +319,7 @@ extension APIClient {
     ]
 
     private func vaultEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     /// A quote or a newline in a filename would end the multipart header early. Everything else is

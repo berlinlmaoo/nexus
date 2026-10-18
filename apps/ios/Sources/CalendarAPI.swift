@@ -28,14 +28,14 @@ extension APIClient {
 
     /// How a task that is not in what is loaded may be opened (masked / editable / read-only).
     func calendarTask(id: String) async throws -> CalTaskAccess {
-        let safe = id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id
+        let safe = id.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? id
         return try await calRun("/api/calendar/task?id=\(safe)", as: CalTaskAccess.self, cache: nil)
     }
 
     /// The task itself, read-only, for a calendar viewer outside its project (`&detail=1`, web 80a286c,
     /// 13 Oct 2026). The task routes stay members-only; this answers no file URL. Not cached.
     func calendarTaskDetail(id: String) async throws -> CalTaskDetailResponse {
-        let safe = id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id
+        let safe = id.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? id
         return try await calRun("/api/calendar/task?id=\(safe)&detail=1", as: CalTaskDetailResponse.self, cache: nil)
     }
 
@@ -48,7 +48,7 @@ extension APIClient {
     static func calStructureKey(_ userId: String) -> String { "cal-structure-\(userId)" }
     private static func calFolderQuery(_ folder: String?, first: Bool) -> String {
         guard let folder, !folder.isEmpty else { return "" }
-        return (first ? "?folder=" : "&folder=") + (folder.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
+        return (first ? "?folder=" : "&folder=") + (folder.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? "")
     }
     static func calOverdueKey(_ userId: String, folder: String? = nil) -> String { "cal-overdue-\(userId)" + calFolderQuery(folder, first: true) }
     static func calItemsKey(_ userId: String, from: String, to: String, folder: String? = nil) -> String { "cal-items-\(userId)-\(from)-\(to)" + calFolderQuery(folder, first: true) }

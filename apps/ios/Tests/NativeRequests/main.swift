@@ -10,4 +10,11 @@ for id in [uuid,"legacycuid000000000000001","future id_~"] {
 }
 let _: NativeAPI.Empty = try await NativeAPI.request("/api/gideon/task-targets?projectId=" + NativeAPI.escape(uuid))
 precondition(URLComponents(url: APIClient.last!.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == uuid)
-print("10 native request path/query contract checks passed")
+for id in [uuid, "legacycuid000000000000001"] {
+    for prefix in ["/api/gideon/proposals/", "/api/gideon/chats/"] {
+        precondition(GideonRequestProbe.url(prefix + GideonRequestProbe.enc(id)).lastPathComponent == id, "GIDEON decisions and rename/delete must preserve UUIDs")
+    }
+    let request = APIClient.shared.makeRequest("/api/projects/" + GideonRequestProbe.enc(id) + "/social-media")
+    precondition(request.url!.path == "/api/projects/" + id + "/social-media", "Shared legacy component encoding must preserve UUID paths")
+}
+print("16 native and GIDEON request path/query contract checks passed")

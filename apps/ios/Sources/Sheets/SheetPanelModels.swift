@@ -146,7 +146,7 @@ final class SheetCommentsModel {
 // MARK: - server calls
 
 enum SheetPanelAPI {
-    static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+    static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s }
 
     /// A settings list, or NSNull (removes the key) when it is empty — the web's `next.length ? next : null`.
     static func orNull(_ list: [SheetJSON]) -> Any { list.isEmpty ? NSNull() : list }

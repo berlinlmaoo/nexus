@@ -34,7 +34,7 @@ struct FormResponseRow: Decodable, Identifiable {
 
 extension APIClient {
     func formResponses(_ formId: String) async throws -> FormResponsesPayload {
-        let enc = formId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? formId
+        let enc = formId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? formId
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await perform(makeRequest("/api/forms/\(enc)/responses")) } catch { throw APIError.nothingAnswered(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
