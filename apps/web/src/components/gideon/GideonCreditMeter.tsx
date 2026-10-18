@@ -146,13 +146,27 @@ function CreditDetails({ s, L, onHistory, poolOut }: { s: CreditSummary; L: Lang
         </>
       )}
       <div className="border-t border-border pt-2 text-[11px] leading-relaxed text-muted-foreground">
-        {t("A typical question: Phaëthon ≈ 10 credits, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 free.")}
+        {t("A short question costs about: Phaëthon 15, Artemis 70, Aphrodite 1, Model 0 free. Questions that search your work cost several times more.")}
       </div>
       <button type="button" onClick={onHistory} className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <History className="h-4 w-4" />{t("Usage history")}
       </button>
     </div>
   );
+}
+
+function periodDays(s: CreditSummary | undefined, rows: { dayKey: string; credits: number; answers: number }[]) {
+  if (!s) return rows;
+  const by = new Map(rows.map((r) => [r.dayKey, r]));
+  const out: { dayKey: string; credits: number; answers: number }[] = [];
+  const d = new Date(`${s.period.startKey}T00:00:00Z`);
+  for (let i = 0; i < 40; i++) {
+    const key = d.toISOString().slice(0, 10);
+    if (key > s.dayKey || key > s.period.endKey) break;
+    out.push(by.get(key) ?? { dayKey: key, credits: 0, answers: 0 });
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
 }
 
 const TRIGGER_LABEL: Record<string, string> = { CHAT: "Chat", WRITE: "Ask AI", MENTION: "@mention", SCHEDULE: "Schedule", AUTOFILL: "Autofill", TICKET: "Support ticket", REFLECTION: "Reflection" };
@@ -169,9 +183,10 @@ export function CreditHistoryDialog({ open, onOpenChange }: { open: boolean; onO
   });
   const first = q.data?.pages[0];
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const days = first?.days ?? [];
-  const maxDay = Math.max(1, ...days.map((d) => d.credits));
   const s = first?.summary;
+  // Every day of the period up to today, zeros included, so one busy day is one thin bar rather than the whole width.
+  const days = periodDays(s, first?.days ?? []);
+  const maxDay = Math.max(1, ...days.map((d) => d.credits));
   const time = (iso: string) => new Date(iso).toLocaleString(L.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
   return (
@@ -195,11 +210,16 @@ export function CreditHistoryDialog({ open, onOpenChange }: { open: boolean; onO
                   <div className="mb-2 text-xs font-medium text-muted-foreground">{t("Credits per day")}</div>
                   <div className="flex h-16 items-end gap-[3px]" role="img" aria-label={t("Credits per day")}>
                     {days.map((d) => (
-                      <div key={d.dayKey} title={`${fmtDay(d.dayKey, L)} · ${formatCount(d.credits)} ${t("credits")} · ${formatCount(d.answers)} ${t("answers")}`} className="flex min-w-0 flex-1 flex-col justify-end">
-                        <div className={cn("rounded-t-sm", d.dayKey === s?.dayKey ? "bg-sidebar-primary" : "bg-sidebar-primary/35")} style={{ height: `${Math.max(4, Math.round((d.credits / maxDay) * 64))}px` }} />
+                      <div key={d.dayKey} title={`${fmtDay(d.dayKey, L)} · ${formatCount(d.credits)} ${t("credits")} · ${formatCount(d.answers)} ${t("answers")}`} className="flex h-full min-w-0 max-w-4 flex-1 flex-col justify-end">
+                        <div className={cn("rounded-t-sm", d.credits === 0 ? "bg-muted" : d.dayKey === s?.dayKey ? "bg-sidebar-primary" : "bg-sidebar-primary/40")} style={{ height: `${d.credits === 0 ? 2 : Math.max(4, Math.round((d.credits / maxDay) * 64))}px` }} />
                       </div>
                     ))}
                   </div>
+                  {days.length > 1 && (
+                    <div className="mt-1 flex justify-between text-[11px] text-muted-foreground tabular-nums">
+                      <span>{fmtDay(days[0].dayKey, L)}</span><span>{fmtDay(days[days.length - 1].dayKey, L)}</span>
+                    </div>
+                  )}
                 </div>
               )}
               {items.length === 0 ? (
