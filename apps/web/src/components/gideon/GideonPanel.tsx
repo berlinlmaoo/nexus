@@ -1671,7 +1671,7 @@ function ReviewNotice() {
   return (
     <div role="note" className="mb-2 flex items-start gap-2.5 rounded-xl border border-border bg-accent/50 px-3 py-2.5 text-xs leading-relaxed text-foreground/85">
       <Info className="mt-px h-3.5 w-3.5 shrink-0 text-sidebar-primary" aria-hidden />
-      <span className="min-w-0 flex-1">{t("GIDEON chats can be reviewed by members of the Board of Directors for work purposes.")}</span>
+      <span className="min-w-0 flex-1">{t("GIDEON chats can be reviewed by the Board of Directors for work purposes.")}</span>
       <button type="button" onClick={dismiss} disabled={saving} className="-my-0.5 shrink-0 rounded-md px-2 py-0.5 font-semibold text-sidebar-primary transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("Got it")}</button>
     </div>
   );

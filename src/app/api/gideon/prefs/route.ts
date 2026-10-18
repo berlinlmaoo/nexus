@@ -11,7 +11,7 @@ import { ASSISTANT_NAME_MAX, INSTRUCTIONS_MAX, getGideonPreference } from "@/lib
  *   GET → { assistantName, instructions, updatedAt, reviewNotice }     PUT { assistantName?, instructions?, reviewNoticeSeen? } → same
  *
  * reviewNotice (18 Oct 2026, UU PDP transparency): true while the person has not yet dismissed the one-time
- * notice "GIDEON chats can be reviewed by members of the Board of Directors for work purposes." PUT
+ * notice "GIDEON chats can be reviewed by the Board of Directors for work purposes." PUT
  * { reviewNoticeSeen: true } dismisses it for good, on every device (remembered server-side).
  */
 async function withNotice(userId: string) {

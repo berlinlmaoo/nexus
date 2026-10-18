@@ -5,7 +5,7 @@
  */
 export const ID_GIDEON_REVIEW: Record<string, string> = {
   // GIDEON panel
-  "GIDEON chats can be reviewed by members of the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh anggota BoD untuk keperluan kerja.",
+  "GIDEON chats can be reviewed by the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh BoD untuk keperluan kerja.",
   "GIDEON is AI and can make mistakes.": "GIDEON adalah AI dan bisa keliru.",
   "Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
   "Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
