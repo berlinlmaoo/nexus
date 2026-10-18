@@ -841,7 +841,7 @@ struct GideonPanel: View {
             }
             ForEach(Array((p.diff ?? []).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.field ?? "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    Text(T(row.field ?? "")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.danger) }
                     Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(NX.mutedFg)
                     Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
