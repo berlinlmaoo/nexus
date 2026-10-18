@@ -40,7 +40,8 @@ struct ZoomableAvatar: View {
                     AvatarView(url: url, initial: initial, size: size, userId: userId, name: name)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(T("View profile photo"))
+                .accessibilityLabel(PresenceStore.shared.status(userId).map { (name ?? initial) + " · " + $0.localizedLabel(AppLanguage.shared.lang.rawValue) } ?? T("View profile photo"))
+                .accessibilityHint(T("View profile photo"))
             } else {
                 AvatarView(url: url, initial: initial, size: size, userId: userId, name: name)
             }

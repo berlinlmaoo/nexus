@@ -626,9 +626,10 @@ struct AvatarView: View {
             }
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(presenceLabel)
+        .accessibilityIdentifier(userId.map { "presence.avatar." + $0 } ?? "avatar")
         .help(presenceLabel)
         .simultaneousGesture(LongPressGesture().onEnded { _ in if presence != nil { showPresence = true } })
-        .popover(isPresented: $showPresence) { Text(presenceLabel).font(NXFont.text(13)).padding(14).presentationCompactAdaptation(.popover) }
+        .popover(isPresented: $showPresence) { Text(presenceLabel).font(NXFont.text(13)).padding(14).accessibilityIdentifier("presence.tooltip").presentationCompactAdaptation(.popover) }
     }
     private var initialText: some View {
         Text(initial).font(NXFont.text(size * 0.36, .bold)).foregroundStyle(NX.violetText)

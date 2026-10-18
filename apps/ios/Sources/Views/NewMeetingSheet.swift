@@ -115,7 +115,7 @@ struct NewMeetingSheet: View {
                 .task { if let projectId, chosenProject == nil, let project = try? await APIClient.shared.project(projectId) { chosenProject = ProjectRef(id: project.id, name: project.name, icon: project.icon) } }
                 .onDisappear { recorder.cancelPreparation() }
                 .onChange(of: recorder.recording) { _, recording in if !recording && !recorder.paused && source == "record" { file = recorder.file } }
-        }.keyboardDoneBar().accessibilityIdentifier("meetings.new")
+        }.accessibilityIdentifier("meetings.new").keyboardDoneBar()
     }
     private var speakerOptions: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -123,7 +123,7 @@ struct NewMeetingSheet: View {
             if speakerLabels {
                 Text(T("Start with a quick round of introductions so GIDEON can tell voices apart.") + " “" + T("Hi, I'm Berlin…") + "”").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 Text(T("Voices are only used to label this recording.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                if !recorder.recording && !recorder.paused { Text(T("Start with a round of introductions.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                if !recorder.recording && !recorder.paused && file == nil { Text(T("Start with a round of introductions.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 if source == "record", file == recorder.file, let end = recorder.introEndSec {
                     Text("· " + String(format: T("introductions until %@"), MeetingLabels.clock(end))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }

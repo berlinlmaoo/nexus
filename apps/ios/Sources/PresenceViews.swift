@@ -128,6 +128,7 @@ struct SetPresenceSheet: View {
             }.background(NX.background).navigationTitle(T("Set a status")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.disabled(busy) } }
                 .environment(\.timeZone, PresenceTime.zone)
+                .environment(\.locale, AppDateLocale.current)
                 .onChange(of: text) { _, value in if value.count > 80 { text = String(value.prefix(80)) } }
                 .task {
                     await PresenceStore.shared.refresh()
@@ -136,7 +137,7 @@ struct SetPresenceSheet: View {
                     if let date = PresenceTime.instant(manual.startsAt), date > Date() { later = true; start = date }
                     if let date = PresenceTime.instant(manual.endsAt) { clearAfter = "pick"; end = date }
                 }
-        }.keyboardDoneBar().presentationDetents([.large]).interactiveDismissDisabled(busy).accessibilityIdentifier("presence.sheet")
+        }.accessibilityIdentifier("presence.sheet").keyboardDoneBar().presentationDetents([.large]).interactiveDismissDisabled(busy)
     }
     private func mutate(_ operation: @escaping @MainActor () async throws -> Void) {
         busy = true; failure = nil

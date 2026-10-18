@@ -167,7 +167,7 @@ struct MeetingDetailView: View {
         .safeAreaInset(edge: .bottom) {
             if meeting.status == "READY" {
                 HStack(spacing: 12) {
-                    Text(String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
+                    Text(meeting.selectedTasks.count == 1 ? T("Save the minutes and create 1 task") : String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
                     Spacer()
                     Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxPrimary).disabled(!meeting.canApplyDraft || store.busy)
                         .accessibilityIdentifier("meetings.apply")
@@ -214,7 +214,7 @@ struct MeetingDetailView: View {
         VStack(alignment: .leading, spacing: 18) {
             if meeting.status == "APPLIED" {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(String(format: T("Minutes saved and %@ tasks created"), AppNumber.int(meeting.taskCount)), systemImage: "checkmark.circle.fill").foregroundStyle(NX.success)
+                    Label(meeting.taskCount == 1 ? T("Minutes saved and 1 task created") : String(format: T("Minutes saved and %@ tasks created"), AppNumber.int(meeting.taskCount)), systemImage: "checkmark.circle.fill").foregroundStyle(NX.success)
                     if let document = meeting.doc { Button(T("Open minutes")) { doc = document.id }.buttonStyle(.nxBordered) }
                     ForEach(meeting.tasks ?? []) { value in Button(value.title) { task = value.id }.buttonStyle(.plain).font(NXFont.text(13)) }
                 }.nexusCard()

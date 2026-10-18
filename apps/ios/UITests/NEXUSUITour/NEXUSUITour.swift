@@ -647,6 +647,11 @@ final class NEXUSUITour: XCTestCase {
             case "dismissKeyboard":
                 let done = app.buttons["keyboard.dismiss"]
                 if done.exists && done.isHittable { press(done); pause(1) }
+                else if app.keyboards.firstMatch.exists {
+                    // A screen-level identifier on older forms can override the inset's id.
+                    let buttons = app.buttons.matching(NSPredicate(format: "label == 'Done' OR label == 'Selesai'")).allElementsBoundByIndex
+                    if let legacy = buttons.first(where: { $0.isHittable && $0.frame.midY > app.windows.firstMatch.frame.midY }) { press(legacy); pause(1) }
+                }
             case "reveal":
                 for _ in 0..<10 {
                     let target = app.descendants(matching: .any).matching(textMatch).firstMatch
@@ -683,6 +688,11 @@ final class NEXUSUITour: XCTestCase {
                 let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.78 - amount))
                 start.press(forDuration: 0.05, thenDragTo: end)
                 #endif
+                pause(1)
+            case "longPress":
+                let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing long-press target \(action.label)" }
+                target.press(forDuration: 1)
                 pause(1)
             case "hover":
                 let target = app.buttons.matching(match).firstMatch

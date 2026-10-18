@@ -24,7 +24,7 @@ struct MeetingSpeakersSection: View {
     var body: some View {
         if !keys.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Text(T("Speakers")).font(NXFont.text(18, .semibold)); Spacer(); Text(String(format: T("%@ voices"), AppNumber.int(keys.count))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                HStack { Text(T("Speakers")).font(NXFont.text(18, .semibold)); Spacer(); Text(keys.count == 1 ? T("1 voice") : String(format: T("%@ voices"), AppNumber.int(keys.count))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 Text(T("GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 ForEach(keys, id: \.self) { key in voice(key) }
             }.accessibilityElement(children: .contain).accessibilityIdentifier("meetings.speakers")
@@ -54,7 +54,7 @@ struct MeetingSpeakersSection: View {
             HStack {
                 Text(String(format: T("%@ lines · %@"), AppNumber.int(lines.count), MeetingLabels.clock(duration))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 Spacer()
-                if let first, meeting.audio.available { Button(String(format: T("Listen %@"), MeetingLabels.clock(first.start))) { listen(first.start) }.font(NXFont.text(12, .medium)).buttonStyle(.plain).accessibilityIdentifier("meetings.speaker.listen." + key) }
+                if let first, meeting.audio.available { Button(String(format: T("Listen %@"), MeetingLabels.clock(first.start))) { listen(first.start) }.font(NXFont.text(12, .medium)).buttonStyle(.plain).foregroundStyle(NX.violetText).accessibilityIdentifier("meetings.speaker.listen." + key) }
             }
             if let first { Text(first.text).italic().font(NXFont.text(13)).foregroundStyle(NX.mutedFg).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
         }.nexusCard()

@@ -331,6 +331,9 @@ extension AppLanguage {
         "Starts at": "Mulai pada",
         "Meeting": "Meeting",
         "Include task": "Sertakan task",
+        "1 voice": "1 suara",
+        "Save the minutes and create 1 task": "Simpan notulen dan buat 1 task",
+        "Minutes saved and 1 task created": "Notulen tersimpan dan 1 task dibuat",
     ]
 }
 
