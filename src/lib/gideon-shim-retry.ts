@@ -96,6 +96,34 @@ export async function shimRestartedSince(url: string, sinceMs: number, opts: { t
   return false
 }
 
+/** Poll the shim's /health until a process started after `sinceMs` answers ready (or `maxMs` passes). */
+export async function waitForFreshShim(url: string, sinceMs: number, maxMs: number, fetchImpl?: typeof fetch, gapMs = 1000): Promise<boolean> {
+  const f = fetchImpl ?? fetch
+  let health: string
+  try {
+    health = new URL("/health", url).toString()
+  } catch {
+    return false
+  }
+  const until = Date.now() + maxMs
+  while (Date.now() < until) {
+    try {
+      const r = await f(health, { signal: AbortSignal.timeout(2000) })
+      const state = (r.headers.get("x-gideon-shim") || "").toLowerCase()
+      const started = Date.parse(r.headers.get("x-gideon-shim-started") || "")
+      await r.body?.cancel().catch(() => {})
+      if (r.ok && state === "ready" && Number.isFinite(started) && started >= sinceMs - 120_000) {
+        // "ready" from the process that drained is impossible (it says draining); a fresh one is what we want.
+        return true
+      }
+    } catch {
+      /* between the old process exiting and the new one listening */
+    }
+    await sleep(gapMs)
+  }
+  return false
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class ShimRestartError extends Error {
@@ -118,7 +146,7 @@ export type ShimFetchResult = {
  * `stream`: the endpoint answers headers before the model starts (/chat-stream), so a broken connection before the
  * response means nothing ran and may be retried; for /chat it may have been mid-answer, so only "refused" retries.
  */
-export async function fetchShim(url: string, init: RequestInit, opts: { stream: boolean; fetchImpl?: typeof fetch; sleepImpl?: (ms: number) => Promise<void>; healthTries?: number } = { stream: false }): Promise<ShimFetchResult> {
+export async function fetchShim(url: string, init: RequestInit, opts: { stream: boolean; fetchImpl?: typeof fetch; sleepImpl?: (ms: number) => Promise<void>; healthTries?: number; maxWaitMs?: number } = { stream: false }): Promise<ShimFetchResult> {
   const f = opts.fetchImpl ?? fetch
   const wait = opts.sleepImpl ?? sleep
   const t0 = Date.now()
@@ -139,7 +167,10 @@ export async function fetchShim(url: string, init: RequestInit, opts: { stream: 
     const gateway = isGatewayDown(res.status, res.headers) && opts.stream
     if (attempt === 0 && (restarting || gateway)) {
       await res.body?.cancel().catch(() => {})
-      await wait(retryDelayMs(res.headers.get("retry-after")))
+      // A drain lasts as long as the longest answer in flight (dev, 18 Oct: 28 s), so a fixed short wait mostly hit
+      // the same draining shim again: wait for the NEW shim to answer /health (at most maxWaitMs), then retry.
+      if (restarting && !opts.sleepImpl) await waitForFreshShim(url, t0, Math.min(opts.maxWaitMs ?? 45_000, Math.max(2000, (Number(res.headers.get("retry-after")) || 0) * 1000 + 3000)), f)
+      else await wait(retryDelayMs(res.headers.get("retry-after")))
       continue
     }
     return { res, restarting: restarting || isShimStoppedResponse(res.status, res.headers) || (isGatewayDown(res.status, res.headers) && (await shimRestartedSince(url, t0, { fetchImpl: f, tries: opts.healthTries }))), retried: attempt > 0 }
