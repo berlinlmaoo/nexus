@@ -477,6 +477,7 @@ struct SidebarRoot: View {
                 }
             }
 
+            if columns != .detailOnly {
             // The web's Projects tree, after the nav groups: "Projects" with its + and the
             // Pinned shortcuts (SidebarProjectTree.tsx).
             Section {
@@ -522,6 +523,7 @@ struct SidebarRoot: View {
                         .accessibilityLabel(T("New project"))
                     }
                 }
+            }
             }
         }
         .listStyle(.sidebar)

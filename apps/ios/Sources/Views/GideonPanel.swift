@@ -124,6 +124,7 @@ struct GideonPanel: View {
     @FocusState private var composerFocused: Bool
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
+    @AppStorage("gideon.reviewNoticeAcknowledgedFor") private var reviewNoticeAcknowledgedFor = ""
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
     /// "Review before writing ▾" in the composer (web gideon-approval), remembered on the device.
     @AppStorage("gideon.approval") private var approvalRaw = GideonApprovalMode.fallback.rawValue
@@ -979,6 +980,22 @@ struct GideonPanel: View {
             contextChips
             composer
             GideonCreditMeter()
+            Text(T("GIDEON is AI and can make mistakes. Check important information."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+            if !reviewNoticeAcknowledgedFor.split(separator: ",").contains(Substring(Keychain.load()?.userId ?? "")) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(T("GIDEON chats can be reviewed by members of the Board of Directors for work purposes."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        if let id = Keychain.load()?.userId { reviewNoticeAcknowledgedFor += "," + id }
+                    } label: {
+                        Image(systemName: "xmark").font(.system(size: 11))
+                            .frame(width: 32, height: 32).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel(T("Dismiss"))
+                }
+            }
         }
     }
 

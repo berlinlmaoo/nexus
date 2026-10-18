@@ -4,6 +4,8 @@ import Foundation
 /// (scripts/check-localization.sh). Wording as on the web.
 extension AppLanguage {
     static let indonesianRun21: [String: String] = [
+        "GIDEON is AI and can make mistakes. Check important information.": "GIDEON adalah AI dan bisa keliru. Periksa lagi informasi penting.",
+        "GIDEON chats can be reviewed by members of the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh anggota BoD untuk keperluan kerja.",
         // Mac Home Attendance card: no check-in on the Mac (M-07)
         "Use the NEXUS app on your phone to check in": "Pakai app NEXUS di HP-mu untuk check-in",
         // Leaderboard podium, a step several people share (web "{n} tied")
