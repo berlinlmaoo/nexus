@@ -710,7 +710,8 @@ async function restoreColumn(db: Db, col: NonNullable<SnapshotData["column"]>): 
   }
   const next = [...list]
   next.splice(Math.max(0, Math.min(col.index, next.length)), 0, col.def)
-  await db.query(`update "ProjectSheet" set columns = $1::jsonb, "updatedAt" = now() where id = $2`, [JSON.stringify(next), col.sheetId])
+  // structureVersion: a client holding the list without this column must not write over it (race audit H6).
+  await db.query(`update "ProjectSheet" set columns = $1::jsonb, "structureVersion" = "structureVersion" + 1, "updatedAt" = now() where id = $2`, [JSON.stringify(next), col.sheetId])
   const key = String(col.def.id)
   let cells = 0
   for (const part of chunks(Object.entries(col.cells).map(([id, v]) => ({ id, v })))) {

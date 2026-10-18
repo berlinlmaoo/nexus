@@ -51,11 +51,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     try {
       if (body.config !== undefined) data.config = sanitizeViewConfig(body.config)
-      else if (body.patch !== undefined) {
-        const current = view.config && typeof view.config === "object" && !Array.isArray(view.config) ? (view.config as Record<string, unknown>) : {}
-        const patch = body.patch && typeof body.patch === "object" && !Array.isArray(body.patch) ? (body.patch as Record<string, unknown>) : {}
-        data.config = sanitizeViewConfig({ ...current, ...patch })
-      }
+      // `patch` is merged below, into the config as stored at the moment of the write.
+      else if (body.patch !== undefined) sanitizeViewConfig(body.patch && typeof body.patch === "object" && !Array.isArray(body.patch) ? body.patch : {})
     } catch (e) {
       if (e instanceof ViewConfigError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 })
       throw e
@@ -68,7 +65,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (isBuiltinTab(view.builtin)) return NextResponse.json({ error: "Built-in views are always shared.", code: "BUILTIN_VIEW" }, { status: 400 })
       data.ownerId = body.shared ? null : userId
     }
-    const updated = Object.keys(data).length ? await prisma.projectView.update({ where: { id: viewId }, data }) : view
+    // Race audit 16 Oct 2026 (M13): `patch` was merged into the config read at the top of the request, so 8
+    // settings changed at once kept 6 (each write put back the others' stale copy). The merge now happens in
+    // one transaction with the view row locked (SELECT … FOR UPDATE) on the config as stored then.
+    const patch = body.config === undefined && body.patch && typeof body.patch === "object" && !Array.isArray(body.patch) ? (body.patch as Record<string, unknown>) : null
+    const updated = Object.keys(data).length || patch
+      ? await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "ProjectView" WHERE id = ${viewId} FOR UPDATE`
+          if (patch) {
+            const fresh = await tx.projectView.findUnique({ where: { id: viewId }, select: { config: true } })
+            const current = fresh?.config && typeof fresh.config === "object" && !Array.isArray(fresh.config) ? (fresh.config as Record<string, unknown>) : {}
+            data.config = sanitizeViewConfig({ ...current, ...patch })
+          }
+          return tx.projectView.update({ where: { id: viewId }, data })
+        })
+      : view
     const isShared = updated.ownerId === null
     notifyViewsChanged(projectId, userId, isShared || wasShared)
     return NextResponse.json({ view: serializeView(updated) })

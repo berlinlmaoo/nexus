@@ -625,7 +625,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
   requestCloseRef.current = requestClose;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={requestClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={requestClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="automation-builder-title" className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         {confirmDiscard && (
           <div className="absolute inset-0 z-20 grid place-items-center bg-card/80 p-6 backdrop-blur-[2px]">

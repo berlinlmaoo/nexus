@@ -1,4 +1,5 @@
 import { EventEmitter } from "events"
+import { parseShimUsage, recordRunUsage } from "@/lib/gideon-credits"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
@@ -172,8 +173,12 @@ export async function startRun(input: {
   }
 }
 
-export async function finishRun(runId: string | null | undefined, outcome: { ok: boolean; error?: string | null; replyChars?: number | null; tokens?: number | null }) {
+export async function finishRun(runId: string | null | undefined, outcome: { ok: boolean; error?: string | null; replyChars?: number | null; tokens?: number | null; usage?: unknown }) {
   if (!runId) return
+  // GIDEON credits (18 Oct 2026): the shim's `usage` for this run, billed to the run's person. Idempotent on
+  // runId, so a caller that already billed (the chat route, to stream the new balance) costs nothing here.
+  const usage = parseShimUsage(outcome.usage)
+  if (usage) await recordRunUsage(runId, usage).catch(() => null)
   try {
     const run = await prisma.gideonRun.findUnique({ where: { id: runId }, select: { startedAt: true } })
     const now = new Date()

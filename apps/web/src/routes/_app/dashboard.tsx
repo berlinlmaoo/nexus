@@ -116,7 +116,7 @@ function Dashboard() {
               the whole rail, and a double gap where the hidden copy was). Two columns from xl. */}
           {/* Phone: the Calendar and Your schedule cards are snap points of their own, not one block (UI tour run 19,
               R19-WB-1 wm dashboard-2: the page rested on the Calendar's last week row). */}
-          <div data-dashboard-main-cal="" data-snap-rows={phone ? "" : undefined} className="grid gap-6 xl:grid-cols-2">
+          <div data-dashboard-main-cal="" data-snap-rows={phone ? "" : undefined} className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <Reveal delay={0.15}><CalendarCard /></Reveal>
             <Reveal delay={0.2} className="xl:h-full"><ScheduleCard /></Reveal>
           </div>
@@ -257,7 +257,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center p-4">
           <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "notif-bell"}
@@ -512,7 +512,7 @@ function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: 
   return createPortal(
     <AnimatePresence>
       {active != null && card && (
-        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center p-4">
           <motion.div
             className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm"
             initial={{ opacity: 0 }}
@@ -744,7 +744,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center p-4">
           <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "level-chip"}
@@ -888,7 +888,7 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center p-4">
           <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "messages-card"}

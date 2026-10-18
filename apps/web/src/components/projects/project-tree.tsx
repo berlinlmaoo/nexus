@@ -423,7 +423,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
   const photoPreview = pickedPreview ?? uploadedUrl;
   const title = form.mode === "create" ? (form.parentName ? t("New subfolder") : t("New folder")) : t("Edit folder");
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+    <div className="fixed inset-0 z-[60] grid grid-cols-1 place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="w-full max-w-sm rounded-[28px] border border-border bg-card p-5 shadow-pop">
         <h2 className="text-lg font-black tracking-tight">{title}</h2>
         <p className="mt-1 text-xs text-muted-foreground">

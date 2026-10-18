@@ -1,7 +1,6 @@
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
-import { BOOKING_ROOMS, ROOM_CAPACITY_SETTING_KEY, normalizeRoomCapacity } from "@/lib/room-booking-rooms"
-import { getAppSetting } from "@/lib/app-setting"
+import { BOOKING_ROOMS } from "@/lib/room-booking-rooms"
 import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
@@ -135,18 +134,10 @@ export async function nearestFreeSlots(workspaceIds: string[], room: string, sta
   return freeSlotsAround(bookings, [room], start, end)
 }
 
-/**
- * Seats per room, from the AppSetting row "room-capacity" (filled without a deploy; see room-booking-rooms.ts).
- * A room without a number, or a row that cannot be read, has none: the capacity is then hidden, never guessed.
- */
-export async function roomCapacities(): Promise<Record<string, number>> {
-  const stored = await getAppSetting<unknown>(ROOM_CAPACITY_SETTING_KEY).catch(() => null)
-  return normalizeRoomCapacity(stored)
-}
-
+// Room capacity was dropped (owner, 16 Oct 2026): no seat numbers anywhere. The field is simply absent;
+// the released apps decode it as optional (iOS `Int?`, Android `Int? = null`) and show nothing.
 export type RoomAvailability = {
   room: string
-  capacity: number | null
   free: boolean
   /** The booking that holds the slot: who booked it and until when, as the Room Booking page shows it. */
   busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null
@@ -158,12 +149,11 @@ export type RoomAvailability = {
  */
 export async function roomAvailability(workspaceIds: string[], start: Date, end: Date, excludeId?: string): Promise<{ rooms: RoomAvailability[]; freeSlots: FreeSlot[] }> {
   // excludeId: the booking being moved (GIDEON's move card) does not hold its own new slot.
-  const [bookings, capacity] = await Promise.all([bookingsOfDay(workspaceIds, BOOKING_ROOMS, start, excludeId), roomCapacities()])
+  const bookings = await bookingsOfDay(workspaceIds, BOOKING_ROOMS, start, excludeId)
   const rooms = BOOKING_ROOMS.map((room): RoomAvailability => {
     const hit = bookings.find((b) => b.room === room && overlaps({ start, end }, b))
     return {
       room,
-      capacity: capacity[room] ?? null,
       free: !hit,
       busy: hit ? { id: hit.id, title: hit.title, by: hit.createdBy?.name ?? null, startsAt: hit.startsAt.toISOString(), endsAt: hit.endsAt.toISOString() } : null,
     }

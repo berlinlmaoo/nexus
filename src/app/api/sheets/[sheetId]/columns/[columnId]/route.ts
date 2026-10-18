@@ -4,10 +4,13 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { MAX_COLUMNS, resolveSheetAccess } from "@/lib/project-sheets"
+import { MAX_COLUMNS, lockSheetStructure, resolveSheetAccess } from "@/lib/project-sheets"
 import { deleteColumnKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { shrinkRangesAfterDeletion } from "@/lib/sheet-structure"
+
+class ColumnGone extends Error {}
+class LastColumn extends Error {}
 
 // DELETE /api/sheets/[sheetId]/columns/[columnId]
 //
@@ -54,9 +57,15 @@ export async function DELETE(
       sheetId, columnId, maxColumns: MAX_COLUMNS,
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: async (tx) => {
+        // The columns as they are NOW, under the sheet's row lock (deleteColumnKeepingSnapshot took it): the
+        // copy read at the start of the request may lack a column someone added since, and writing it back
+        // would drop that one (race audit 16 Oct 2026, H6).
+        const fresh = await lockSheetStructure(tx, sheetId)
+        if (!fresh || !fresh.columns.some((c) => c.id === columnId)) throw new ColumnGone()
+        if (fresh.columns.length <= 1) throw new LastColumn()
         await tx.projectSheet.update({
           where: { id: sheetId },
-          data: { columns: access.sheet.columns.filter((c) => c.id !== columnId) as unknown as object },
+          data: { columns: fresh.columns.filter((c) => c.id !== columnId) as unknown as object, structureVersion: { increment: 1 } },
         })
         // Drop the key from every row in one statement — otherwise the values linger as orphans that
         // would silently reappear if a future column ever reused the id.
@@ -69,6 +78,11 @@ export async function DELETE(
     emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true })
   } catch (error) {
+    // Two deletes of one column at once: the second finds it gone under the lock.
+    if (error instanceof ColumnGone || (error instanceof Error && error.message === "column not found")) {
+      return NextResponse.json({ error: "Kolomnya nggak ketemu.", errorEn: "This column was already deleted.", code: "COLUMN_GONE" }, { status: 404 })
+    }
+    if (error instanceof LastColumn) return NextResponse.json({ error: "Sheet harus punya minimal satu kolom." }, { status: 422 })
     console.error("Error deleting sheet column:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

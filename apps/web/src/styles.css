@@ -596,6 +596,14 @@
 /* Small icon buttons get a finger-sized hit area on touch screens without changing the layout
    (QA 13 Oct 2026, S-12 / B41: 12–20 px targets on board cards, tables, notifications, attendance).
    The ::after box extends the button's own click area by 12 px on every side. */
+/* The project page's side gutters, Notion's database page (16 Oct 2026): 16px on a phone, 32px on a tablet, 96px
+   once the content column is wide. Header, tabs and every view share it, so they line up. */
+@utility nx-gx {
+  padding-inline: 1rem;
+  @media (width >= 48rem) { padding-inline: 2rem; }
+  @media (width >= 80rem) { padding-inline: 6rem; }
+}
+
 @utility tap-area {
   @media (pointer: coarse) {
     &:not(.absolute, .fixed, .sticky) {
@@ -662,4 +670,22 @@ html:has([data-page-canvas="card"]) :is([data-snap-tail="document"], [data-tabba
 [data-snap-box] {
   scroll-snap-type: y proximity;
   scroll-padding-top: var(--snap-box-head, 0px);
+}
+
+/* GIDEON's "Thinking…" line: NEXUS's violet-to-blue band sweeping across muted text (the one place the
+   brand gradient shows in GIDEON). */
+.gideon-shimmer {
+  background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--muted-foreground) 35%, var(--sidebar-primary) 45%, var(--info) 55%, var(--muted-foreground) 65%, var(--muted-foreground) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gideon-shimmer 1.8s linear infinite;
+}
+@keyframes gideon-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gideon-shimmer { animation: none; color: var(--muted-foreground); background: none; }
 }

@@ -78,6 +78,7 @@ export type FanOutInput = {
     content: string
     attachmentUrl: string | null
     attachmentType: string | null
+    attachmentName?: string | null
     user?: { name?: string | null } | null
   }
   senderId: string
@@ -154,7 +155,7 @@ export async function fanOutChatMessage(input: FanOutInput): Promise<void> {
     if (decision.inbox) {
       const content = buildChatPush({
         conversationId, messageId: input.message.id, kind: convo.type, conversationName: roomName, senderName,
-        content: input.message.content, attachmentUrl: input.message.attachmentUrl, attachmentType: input.message.attachmentType,
+        content: input.message.content, attachmentUrl: input.message.attachmentUrl, attachmentType: input.message.attachmentType, attachmentName: input.message.attachmentName,
         isMention: true,
       })
       const row = await createInAppNotification({
@@ -188,7 +189,7 @@ export async function fanOutChatMessage(input: FanOutInput): Promise<void> {
   const items = toPush.map((p) => {
     const content = buildChatPush({
       conversationId, messageId: input.message.id, kind: convo.type, conversationName: roomName, senderName,
-      content: input.message.content, attachmentUrl: input.message.attachmentUrl, attachmentType: input.message.attachmentType,
+      content: input.message.content, attachmentUrl: input.message.attachmentUrl, attachmentType: input.message.attachmentType, attachmentName: input.message.attachmentName,
       isMention: p.isMention,
     })
     const payload: PushPayload = {

@@ -229,7 +229,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   return createPortal(
     <AnimatePresence onExitComplete={onClose}>
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center p-0 sm:p-4">
           <motion.div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} />
           <motion.aside
             role="dialog"

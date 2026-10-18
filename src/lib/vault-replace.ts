@@ -12,6 +12,9 @@ import {
   bytesNumber,
   VAULT_QUOTA_BYTES,
   VAULT_ITEM_INCLUDE,
+  lockVaultQuota,
+  vaultQuotaProblemTx,
+  VaultWriteRefused,
   type VaultActor,
 } from "@/lib/vault"
 
@@ -137,6 +140,17 @@ export async function applyReplace(input: {
       ...(input.chunked ? { chunked: true } : {}),
     },
     meta: { open: { type: "vault", id: item.id } },
+    // Race audit 16 Oct 2026 (H10 / LOW "stale replace snapshot"): the row is locked before the copy of what
+    // it pointed at is read, so two replaces at once each keep the bytes they really replaced; and the quota
+    // is re-summed under its lock with the size the row has NOW.
+    prepare: async (tx) => {
+      await lockVaultQuota(tx, workspaceId)
+      const rows = await tx.$queryRaw<{ size: bigint | null; deletedAt: Date | null }[]>`
+        SELECT "size", "deletedAt" FROM "VaultItem" WHERE "id" = ${item.id} FOR UPDATE`
+      if (!rows[0] || rows[0].deletedAt) throw new VaultWriteRefused(409, { error: "Berkas ini ada di sampah. Pulihkan dulu.", code: "TRASHED" })
+      const full = await vaultQuotaProblemTx(tx, workspaceId, input.size, { freeingBytes: bytesNumber(rows[0].size) ?? 0 })
+      if (full) throw new VaultWriteRefused(507, { error: full, code: "QUOTA" })
+    },
     apply: (tx) =>
       tx.vaultItem.update({
         where: { id: item.id },

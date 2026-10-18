@@ -522,32 +522,49 @@ export function requestAttachment(r: { attachments: unknown }, attachmentId: str
 // ── Create document from a request ──────────────────────────────────────────────────────────────────
 
 /** Before generating from a request: it exists, isn't declined, has no live document yet, and an addendum
- *  request names its signed parent. */
-export async function requestGenerateProblem(requestId: string, parentDocumentId: string | null): Promise<{ status: number; error: string } | null> {
-  const r = await prisma.legalRequest.findUnique({ where: { id: requestId }, include: { document: { select: { status: true, deletedAt: true } } } })
-  if (!r) return { status: 404, error: "Request not found" }
-  if (r.rejectedAt) return { status: 409, error: "This request was declined. Move it back to To Do or In Progress to work on it." }
-  if (r.document && !r.document.deletedAt && r.document.status !== "VOID") return { status: 409, error: "This request already has a document" }
-  if (r.isAddendum && !parentDocumentId) return { status: 400, error: "Pick the signed document this addendum amends first" }
+ *  request names its signed parent. Asked twice: up front (no dry run, no number for a request that can't
+ *  be served), and again INSIDE the generate transaction under lockLegalRequest (race audit 16 Oct 2026,
+ *  H5) — that second answer is the one that counts. */
+export async function requestGenerateProblem(
+  requestId: string,
+  parentDocumentId: string | null,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<{ status: number; error: string; code: string } | null> {
+  const r = await client.legalRequest.findUnique({ where: { id: requestId }, include: { document: { select: { status: true, deletedAt: true } } } })
+  if (!r) return { status: 404, error: "Request not found", code: "LEGAL_REQUEST_NOT_FOUND" }
+  if (r.rejectedAt) return { status: 409, error: "This request was declined. Move it back to To Do or In Progress to work on it.", code: "LEGAL_REQUEST_DECLINED" }
+  if (r.document && !r.document.deletedAt && r.document.status !== "VOID") {
+    return { status: 409, error: "This request already has a document", code: "LEGAL_REQUEST_HAS_DOCUMENT" }
+  }
+  if (r.isAddendum && !parentDocumentId) return { status: 400, error: "Pick the signed document this addendum amends first", code: "LEGAL_ADDENDUM_PARENT_REQUIRED" }
   return null
 }
 
-/** The document made from a request: link it (and an addendum's parent), and move the card on. */
-export async function linkRequestToDocument(requestId: string, documentId: string, parentDocumentId: string | null, actorId: string) {
-  try {
-    await prisma.legalRequest.update({
-      where: { id: requestId },
-      data: { documentId, ...(parentDocumentId ? { parentDocumentId } : {}), ...(await picIfNone(requestId, actorId)) },
-    })
-  } catch (error) {
-    console.error("Linking a Legal request to its document failed:", error)
-    return
-  }
-  await syncRequestForDocument(documentId, actorId)
+/**
+ * One "Create document" per request at a time (race audit 16 Oct 2026, H5). Two Legal members pressing it
+ * together (or one double tap) both passed the up-front check, both took a number and both wrote a
+ * document; the second link then overwrote the first, leaving an orphan document on a burned number. The
+ * generate transaction takes this lock BEFORE the number's own lock, re-checks requestGenerateProblem
+ * through `tx` and links the request in the same transaction: the second one waits, then sees the first
+ * document and rolls back before it takes a number.
+ */
+export async function lockLegalRequest(tx: Prisma.TransactionClient, requestId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`legalreq|${requestId}`})::int8)`
 }
 
-/** Whoever makes the document becomes the PIC when nobody was assigned. */
-async function picIfNone(requestId: string, actorId: string) {
-  const r = await prisma.legalRequest.findUnique({ where: { id: requestId }, select: { picId: true } })
-  return r && !r.picId ? { picId: actorId } : {}
+/** Inside the generate transaction (under lockLegalRequest): the request points at its new document, an
+ *  addendum's parent is recorded, and whoever made it becomes the PIC when nobody was assigned. The card
+ *  moves on afterwards (syncRequestForDocument, after the commit). */
+export async function linkRequestToDocumentTx(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+  documentId: string,
+  parentDocumentId: string | null,
+  actorId: string,
+): Promise<void> {
+  const r = await tx.legalRequest.findUnique({ where: { id: requestId }, select: { picId: true } })
+  await tx.legalRequest.update({
+    where: { id: requestId },
+    data: { documentId, ...(parentDocumentId ? { parentDocumentId } : {}), ...(r && !r.picId ? { picId: actorId } : {}) },
+  })
 }

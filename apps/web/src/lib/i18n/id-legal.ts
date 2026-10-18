@@ -238,4 +238,5 @@ export const ID_LEGAL: Record<string, string> = {
   "Addendum to {number}. Pick the addendum template.": "Addendum atas {number}. Pilih template addendum.",
   "No addendum template yet. Upload one with the type Addendum in the Templates tab first.": "Belum ada template addendum. Unggah dulu template berjenis Addendum di tab Template.",
   "Addendum {n} to {number}. The number is taken only when you generate.": "Addendum ke-{n} atas {number}. Nomornya baru diambil saat kamu generate.",
+  "This request already has a document — someone made it a moment ago. Open it from the request.": "Permintaan ini sudah punya dokumen — baru saja dibuat orang lain. Buka dari permintaannya.",
 };

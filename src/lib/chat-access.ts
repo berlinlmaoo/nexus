@@ -37,6 +37,9 @@ export const CHAT_MESSAGE_INCLUDE = {
       content: true,
       attachmentUrl: true,
       attachmentType: true,
+      // A quoted document reads as its name (18 Oct 2026).
+      attachmentName: true,
+      attachmentSize: true,
       user: { select: { id: true, name: true } },
     },
   },

@@ -16,7 +16,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
     const result = await createOutletEvent(session.user.id, projectId, body, request)
     if (!result.ok) return NextResponse.json(result.body, { status: result.status })
-    return NextResponse.json(result.value, { status: 201 })
+    // A repeat of the same press (race audit M9): the night already stored, 200 instead of 201.
+    return NextResponse.json(result.value, { status: result.duplicate ? 200 : 201 })
   } catch (error) {
     console.error("Error creating outlet event:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

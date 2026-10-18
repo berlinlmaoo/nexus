@@ -115,7 +115,7 @@ data class GMessage(
                                   val messages: Int = 0, val match: String? = null)
 @Serializable data class GChats(val chats: List<GChatRow> = emptyList())
 
-enum class GideonTier(val key: String, val label: String) { ASTRA("astra", "Astra"), LUNA("luna", "Luna"), TERRA("terra", "Terra"), EXPERIMENTAL("experimental", "Experimental") }
+enum class GideonTier(val key: String, val label: String) { ASTRA("astra", "Artemis"), LUNA("luna", "Phaëthon"), TERRA("terra", "Aphrodite"), EXPERIMENTAL("experimental", "Model 0") }
 
 /** What goes with a question: an image (base64 JPEG) or a document (≤ 10 MB, known extensions). */
 sealed interface GUpload {

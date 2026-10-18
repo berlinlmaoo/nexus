@@ -32,6 +32,10 @@ export type AppConfig = {
     /** Check-in/out refused from an Android phone's BROWSER (owner, 16 Oct 2026). Off until the big-release
      *  Android APK ships; desktop and iPhone/iPad browsers are always refused. The apps may ignore it. */
     blockAndroidBrowserAttendance: boolean
+    /** GIDEON credits phase 2 (owner, 18 Oct 2026). Off = every answer is recorded and shown, nothing is
+     *  refused. On = a person out of credits is answered by GIDEON Aphrodite (max 30 a day), then refused;
+     *  GIDEON Model 0 stays free. BoD / One Above All are unlimited by default. */
+    gideonCreditsEnforced: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -45,7 +49,7 @@ export type AppConfig = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
   texts: {
     en: {

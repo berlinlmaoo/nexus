@@ -154,7 +154,7 @@ export const outletApi = {
   month: (projectId: string, month: string) => apiFetch<OutletMonthResponse>(`${base(projectId)}?month=${encodeURIComponent(month)}`),
   event: (projectId: string, eventId: string) =>
     apiFetch<{ event: OutletEvent; form: OutletForm }>(`${base(projectId)}/events/${encodeURIComponent(eventId)}`),
-  create: (projectId: string, payload: OutletEventWrite) =>
+  create: (projectId: string, payload: OutletEventWrite & { clientRequestId?: string }) =>
     apiFetch<OutletEvent>(`${base(projectId)}/events`, { method: "POST", body: JSON.stringify(payload) }),
   update: (projectId: string, eventId: string, payload: OutletEventWrite) =>
     apiFetch<OutletEvent>(`${base(projectId)}/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(payload) }),

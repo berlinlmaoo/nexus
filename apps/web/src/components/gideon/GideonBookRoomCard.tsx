@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { CalendarClock, Check, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Loader2 } from "lucide-react";
 import { decideGideonProposal, roomAvailability, type GideonProposal, type RoomAvailability } from "@/lib/gideon";
 import { roomLabel } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 
 /**
  * GIDEON's book_room card (owner, 16 Oct 2026). GIDEON never guesses a room: the card lists every room with its
@@ -76,15 +77,9 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
     proposal.status === "APPLYING" ? t("Applying…") : null;
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border bg-background", open ? "border-amber-500/40" : "border-border opacity-90")}>
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-        <ShieldCheck className={cn("h-4 w-4 shrink-0", open ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-semibold text-muted-foreground">{open ? t("Waiting for your approval") : t("Book a room")}</span>
-          <span className="block truncate text-sm font-semibold" title={b.title}>{b.title}</span>
-        </span>
-      </div>
-      <div className="space-y-2 px-3 py-2 text-xs">
+    <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
+      <ProposalHead open={open} title={open ? b.title : t("Book a room")} summary={b.title} />
+      <div className="space-y-2 px-3 pb-2.5 text-xs">
         <div className="flex items-center gap-1.5 font-medium"><CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />{when}</div>
         {open && (
           <>
@@ -114,11 +109,11 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
       )}
       {error && <div className="px-3 pb-2 text-xs font-medium text-destructive">{error}</div>}
       {open && (
-        <div className="flex justify-end gap-2 border-t border-border/60 px-3 py-2">
-          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent disabled:opacity-50">
+        <div className="flex justify-end gap-1.5 border-t border-border/60 px-2.5 py-2">
+          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className={PROPOSAL_DISCARD}>
             {pending === "discard" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Discard")}
           </button>
-          <button type="button" onClick={() => void decide("apply")} disabled={!!pending || !chosen} title={!chosen ? t("Choose a room") : undefined} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+          <button type="button" onClick={() => void decide("apply")} disabled={!!pending || !chosen} title={!chosen ? t("Choose a room") : undefined} className={PROPOSAL_APPLY}>
             {pending === "apply" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Apply")}
           </button>
         </div>
@@ -130,8 +125,7 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
 const wibTime = (iso: string, locale: string) => new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
 
 /**
- * Every room for one slot: free ones selectable, busy ones disabled with who holds them until when, the capacity
- * when it is known. Shared by the book_room card and the move card (GideonBookingChangeCard).
+ * Every room for one slot: free ones selectable, busy ones disabled with who holds them until when. Shared by the book_room card and the move card (GideonBookingChangeCard).
  */
 export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvailability["rooms"]; room: string | null; disabled?: boolean; onPick: (room: string) => void }) {
   const { t, locale } = useLang();
@@ -148,15 +142,15 @@ export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvail
           onClick={() => onPick(r.room)}
           className={cn(
             "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-            room === r.room && r.free ? "border-primary bg-primary/5" : "border-border",
+            room === r.room && r.free ? "border-ring bg-accent/60" : "border-border",
             r.free ? "hover:border-primary/40" : "cursor-not-allowed opacity-60",
           )}
         >
-          <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-primary" : "border-muted-foreground/50")}>
-            {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+          <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-ring" : "border-muted-foreground/50")}>
+            {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-sidebar-primary" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{t(roomLabel(r.room))}{r.capacity ? <span className="font-normal text-muted-foreground"> · {t("{n} seats", { n: r.capacity })}</span> : null}</span>
+            <span className="block font-semibold">{t(roomLabel(r.room))}</span>
             {r.busy && <span className="block truncate text-muted-foreground">{t("Booked by {name} until {time}", { name: r.busy.by ?? t("someone"), time: wibTime(r.busy.endsAt, locale) })}</span>}
           </span>
         </button>

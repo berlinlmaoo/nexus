@@ -5,7 +5,10 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { normalizeColumns, protectionChangeBlock, readCells, readSheetSettings, readStyles, resolveSheetAccess } from "@/lib/project-sheets"
+import {
+  SHEET_STRUCTURE_CHANGED, lockSheetStructure, normalizeColumns, protectionChangeBlock, readCells, readSheetSettings, readStyles,
+  resolveSheetAccess, type LockedSheet,
+} from "@/lib/project-sheets"
 import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { computeSheet } from "@/lib/sheet-formula"
 
@@ -49,6 +52,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
       projectId: sheet.projectId,
       name: sheet.name,
       columns: sheet.columns,
+      // What a structure PATCH sends back as `structureVersion` (race audit 16 Oct 2026, H6).
+      structureVersion: sheet.structureVersion,
       // Freeze, hidden rows/columns, merges, tab colour — the same for everyone looking at the sheet.
       settings: sheet.settings,
       rows: outRows,
@@ -62,55 +67,105 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
   }
 }
 
-// PATCH — STRUCTURE only ({ name?, columns? }). Cell values go through /cells.
+// PATCH — STRUCTURE only ({ name?, columns?, settings?, structureVersion? }). Cell values go through /cells.
+//
+// Concurrency (race audit 16 Oct 2026, H6): the sheet row is locked (SELECT … FOR UPDATE) and re-read, and
+// everything below is computed from THAT copy, so two writes in the same moment both land:
+//   - settings merge per key onto what is stored now ({ frozenRows: 2 } and { hiddenRows: […] } at once keep both);
+//   - `columns` is the whole list. With `structureVersion` (the version the client last saw: GET and every PATCH
+//     answer it) a list based on an older version is refused with 409 SHEET_STRUCTURE_CHANGED + the current
+//     structure, instead of silently dropping a column someone else just added. Without it (apps from before
+//     16 Oct 2026) the list is accepted, columns it did not know about are put back at their place, and a
+//     column someone deleted meanwhile is not brought back.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sheetId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userId = session.user.id
     const { sheetId } = await params
 
-    const access = await resolveSheetAccess(session.user.id, sheetId, ["MEMBER"])
+    const access = await resolveSheetAccess(userId, sheetId, ["MEMBER"])
     if (!access.allowed) return NextResponse.json({ error: access.error }, { status: access.status })
 
-    const body = (await req.json().catch(() => ({}))) as { name?: unknown; columns?: unknown; settings?: unknown }
-    const data: { name?: string; columns?: object; settings?: object } = {}
+    const body = (await req.json().catch(() => ({}))) as { name?: unknown; columns?: unknown; settings?: unknown; structureVersion?: unknown }
+    const base = typeof body.structureVersion === "number" && Number.isInteger(body.structureVersion) ? body.structureVersion : null
 
+    let name: string | undefined
     if (typeof body.name === "string") {
-      const name = body.name.trim().slice(0, 80)
+      name = body.name.trim().slice(0, 80)
       if (!name) return NextResponse.json({ error: "Nama sheet nggak boleh kosong." }, { status: 422 })
-      data.name = name
     }
-    if (body.columns !== undefined) {
-      const result = normalizeColumns(body.columns, access.sheet.columns)
-      if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 })
-      data.columns = result.columns as unknown as object
+    const settingsPatch = body.settings && typeof body.settings === "object" && !Array.isArray(body.settings)
+      ? (body.settings as Record<string, unknown>) : null
+    if (name === undefined && body.columns === undefined && !settingsPatch) {
+      return NextResponse.json({ error: "Nggak ada yang diubah." }, { status: 400 })
     }
-    // Settings merge per key: { frozenRows: 2 } leaves the merges alone; a key set to null clears it.
-    if (body.settings && typeof body.settings === "object" && !Array.isArray(body.settings)) {
-      const merged: Record<string, unknown> = { ...access.sheet.settings }
-      for (const [k, v] of Object.entries(body.settings as Record<string, unknown>)) {
-        if (v === null) delete merged[k]
-        else merged[k] = v
-      }
-      const next = readSheetSettings(merged)
-      // New protections are stamped with their creator; nobody can forge `by` for someone else.
-      for (const p of next.protections ?? []) {
-        const old = (access.sheet.settings.protections ?? []).find((x) => x.id === p.id)
-        p.by = old?.by ?? session.user.id
-      }
-      const blocked = await protectionChangeBlock(session.user.id, access.sheet, next)
-      if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
-      data.settings = next as object
-    }
-    if (!Object.keys(data).length) return NextResponse.json({ error: "Nggak ada yang diubah." }, { status: 400 })
 
-    const updated = await prisma.projectSheet.update({
-      where: { id: sheetId },
-      data,
-      select: { id: true, name: true, columns: true, settings: true },
+    type Out =
+      | { kind: "ok"; row: { id: string; name: string; columns: unknown; settings: unknown; structureVersion: number } }
+      | { kind: "error"; status: number; body: Record<string, unknown> }
+    const out: Out = await prisma.$transaction(async (tx): Promise<Out> => {
+      const fresh: LockedSheet | null = await lockSheetStructure(tx, sheetId)
+      if (!fresh) return { kind: "error", status: 404, body: { error: "Sheet-nya nggak ketemu." } }
+      const data: { name?: string; columns?: object; settings?: object; structureVersion?: { increment: number } } = {}
+      if (name !== undefined) data.name = name
+      if (body.columns !== undefined) {
+        if (base !== null && base !== fresh.structureVersion) {
+          return {
+            kind: "error", status: 409,
+            body: { ...SHEET_STRUCTURE_CHANGED, current: { columns: fresh.columns, settings: fresh.settings, structureVersion: fresh.structureVersion, name: fresh.name } },
+          }
+        }
+        // Without a version: ids in the body the sheet no longer has that were DELETED (a restorable column
+        // delete) are a stale copy, not new columns — they must not come back. Read under the lock, so a delete
+        // that committed while this request waited for it is seen.
+        let dropIds: Set<string> | undefined
+        if (base === null && Array.isArray(body.columns)) {
+          const unknownIds = (body.columns as { id?: unknown }[])
+            .map((c) => (c && typeof c.id === "string" ? c.id : null))
+            .filter((id): id is string => !!id && !fresh.columns.some((c) => c.id === id))
+          if (unknownIds.length) {
+            const gone = await tx.deletionSnapshot.findMany({
+              where: { entityType: "project_sheet_column", entityId: { in: unknownIds.map((id) => `${sheetId}:${id}`) }, restoredAt: null },
+              select: { entityId: true },
+            })
+            dropIds = new Set(gone.map((g) => g.entityId.slice(sheetId.length + 1)))
+          }
+        }
+        const result = normalizeColumns(body.columns, fresh.columns, base === null ? { keepMissing: true, dropIds } : {})
+        if ("error" in result) return { kind: "error", status: 422, body: { error: result.error } }
+        if (JSON.stringify(result.columns) !== JSON.stringify(fresh.columns)) {
+          data.columns = result.columns as unknown as object
+          data.structureVersion = { increment: 1 }
+        }
+      }
+      // Settings merge per key: { frozenRows: 2 } leaves the merges alone; a key set to null clears it.
+      if (settingsPatch) {
+        const merged: Record<string, unknown> = { ...fresh.settings }
+        for (const [k, v] of Object.entries(settingsPatch)) {
+          if (v === null) delete merged[k]
+          else merged[k] = v
+        }
+        const next = readSheetSettings(merged)
+        // New protections are stamped with their creator; nobody can forge `by` for someone else.
+        for (const p of next.protections ?? []) {
+          const old = (fresh.settings.protections ?? []).find((x) => x.id === p.id)
+          p.by = old?.by ?? userId
+        }
+        const blocked = await protectionChangeBlock(userId, { ...access.sheet, settings: fresh.settings }, next)
+        if (blocked) return { kind: "error", status: 403, body: { error: blocked } }
+        data.settings = next as object
+      }
+      const row = await tx.projectSheet.update({
+        where: { id: sheetId },
+        data,
+        select: { id: true, name: true, columns: true, settings: true, structureVersion: true },
+      })
+      return { kind: "ok", row }
     })
-    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
-    return NextResponse.json({ ...updated, settings: readSheetSettings(updated.settings) })
+    if (out.kind === "error") return NextResponse.json(out.body, { status: out.status })
+    emitSheetStructure(sheetId, userId, originTabOf(req))
+    return NextResponse.json({ ...out.row, settings: readSheetSettings(out.row.settings) })
   } catch (error) {
     console.error("Error updating sheet:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

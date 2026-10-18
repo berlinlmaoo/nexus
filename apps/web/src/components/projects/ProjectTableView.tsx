@@ -115,7 +115,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     onColumnsChange(next);
   };
 
-  const [addOpen, setAddOpen] = useState(false);
+  // Which header's "+" menu is open: with groups every group repeats the column names (Notion), each with its own "+".
+  const [addOpen, setAddOpenKey] = useState<string | null>(null);
   const [addingField, setAddingField] = useState(false);
   const createField = useMutation({
     mutationFn: (p: { name: string; type: string; options: NexusCustomFieldOptions | null }) => nexusApi.createCustomField(projectId, p),
@@ -142,8 +143,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
-  const setCf = async (fieldId: string, taskId: string, value: unknown) => {
-    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
+  const setCf = async (fieldId: string, taskId: string, value: unknown, prev?: unknown) => {
+    try { await nexusApi.saveCustomFieldValue(fieldId, taskId, value, prev); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
   };
   // ✨ on AI Autofill columns and on the values GIDEON wrote (a person's edit makes a value theirs again).
   const ai = useAutofillMarks(projectId);
@@ -212,32 +213,19 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
-    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
+    // w-fit: a heading as wide as the whole table could not stay pinned, so it scrolled away sideways and left a
+    // blank band between the groups (QA 16 Oct 2026, phone and any table wider than the screen).
+    <div className={cn("sticky left-0 flex w-fit snap-start items-center bg-card px-0.5 pb-1.5 pt-4", depth > 0 && "pl-6 pt-2")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
     </div>
   );
 
-  return (
-    <div data-touch-drag-root="" className="px-4 py-3 md:px-8">
-      {/* Phone: the table is its own vertical scroller, as tall as the screen between the pinned project header
-          and the tab bar. A sticky header row only sticks inside the box that scrolls, and this box already
-          scrolls sideways, so with the page doing the vertical scrolling the column names left with the first
-          rows (UI tour run 12, WM3). */}
-      {/* Desktop too (UI tour run 13, W-D1): the table scrolls inside a box as tall as the screen under the
-          project header, so the column names stay pinned past the first screen. The edge that has more columns
-          fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
-      {/* Rows snap whole under the pinned column names (UI tour run 15, R15-WB-1 / R15-WM-3); the header row
-          has a set height so the snap offset is exact. */}
-      <div className="relative">
-      {/* The header's right end says when more columns lie that way (UI tour run 20, R20-WM-6: a glyph sliver of
-          the third column's name sat at the edge); the rows keep their fade. */}
-      <EdgeArrows target={scrollRef} sides="right" className="right-px top-px h-[35px] rounded-tr-lg" />
-      <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
-        {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
-            row that loaded wider content widened every column and the header jumped. */}
-        <div className="w-full" style={{ minWidth: nameW + columns.reduce((n, k) => n + colMin(k), 0) + 40 }}>
-          {/* Header row */}
-          <div className="sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+  // The column names. Ungrouped: once, pinned at the top. Grouped: under each group's heading, as Notion repeats
+  // them, pinned while that group scrolls by (a sticky row only sticks inside its own group).
+  // Notion's column names: 14px in the page's grey, a type glyph before each, on the open canvas (no boxed card
+  // around the table, 16 Oct 2026 pass).
+  const headerRow = (hk: string) => (
+          <div key={`head-${hk}`} className={cn("sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-sm text-muted-foreground", hk !== "all" && "border-t")} style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);
@@ -259,7 +247,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               );
             })}
             <div className="border-l border-border">
-              <Popover open={addOpen} onOpenChange={setAddOpen}>
+              <Popover open={addOpen === hk} onOpenChange={(o) => setAddOpenKey(o ? hk : null)}>
                 <PopoverTrigger asChild>
                   <button type="button" title={t("Add column")} aria-label={t("Add column")} disabled={!canEditColumns} className="grid h-full w-full place-items-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"><Plus className="h-3.5 w-3.5" /></button>
                 </PopoverTrigger>
@@ -267,16 +255,37 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
                   <div className="max-h-64 overflow-y-auto">
                     {available.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("Every property is already a column.")}</p>}
                     {available.map((a) => (
-                      <button key={a.key} type="button" onClick={() => { setColumns([...columns, a.key]); setAddOpen(false); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+                      <button key={a.key} type="button" onClick={() => { setColumns([...columns, a.key]); setAddOpenKey(null); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
                         <PropIcon def={a} /> {propLabel(a)}
                       </button>
                     ))}
                   </div>
-                  <button type="button" onClick={() => { setAddOpen(false); setAddingField(true); }} className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border px-2 py-2 text-left text-sm font-medium text-[color:var(--accent-foreground)] hover:bg-muted"><Plus className="h-3.5 w-3.5" /> {t("New custom field")}</button>
+                  <button type="button" onClick={() => { setAddOpenKey(null); setAddingField(true); }} className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border px-2 py-2 text-left text-sm font-medium text-[color:var(--accent-foreground)] hover:bg-muted"><Plus className="h-3.5 w-3.5" /> {t("New custom field")}</button>
                 </PopoverContent>
               </Popover>
             </div>
           </div>
+  );
+  return (
+    <div data-touch-drag-root="" className="nx-gx py-3">
+      {/* Phone: the table is its own vertical scroller, as tall as the screen between the pinned project header
+          and the tab bar. A sticky header row only sticks inside the box that scrolls, and this box already
+          scrolls sideways, so with the page doing the vertical scrolling the column names left with the first
+          rows (UI tour run 12, WM3). */}
+      {/* Desktop too (UI tour run 13, W-D1): the table scrolls inside a box as tall as the screen under the
+          project header, so the column names stay pinned past the first screen. The edge that has more columns
+          fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
+      {/* Rows snap whole under the pinned column names (UI tour run 15, R15-WB-1 / R15-WM-3); the header row
+          has a set height so the snap offset is exact. */}
+      <div className="relative">
+      {/* The header's right end says when more columns lie that way (UI tour run 20, R20-WM-6: a glyph sliver of
+          the third column's name sat at the edge); the rows keep their fade. */}
+      <EdgeArrows target={scrollRef} sides="right" className="right-0 top-px h-[35px]" />
+      <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain", !groupBy && "border-t border-border", "max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
+        {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
+            row that loaded wider content widened every column and the header jumped. */}
+        <div className="w-full" style={{ minWidth: nameW + columns.reduce((n, k) => n + colMin(k), 0) + 40 }}>
+          {!groupBy && headerRow("all")}
 
           {groups.map((g) => {
             if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={(task) => row(task)} />{newRow("all", null, null)}</div>;
@@ -289,9 +298,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
                   ? subs.map((s) => {
                     const k = `${g.key}/${s.key}`;
                     const subZone = mover.dropZone(g.key, s.key);
-                    return <div key={k} {...subZone.props} className={cn(subZone.isOver && dropRing)}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <><Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, s.key)} />{newRow(k, g.key, s.key)}</>}</div>;
+                    return <div key={k} {...subZone.props} className={cn(subZone.isOver && dropRing)}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <>{headerRow(k)}<Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, s.key)} />{newRow(k, g.key, s.key)}</>}</div>;
                   })
-                  : <>{g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, null)} /> : null}{newRow(g.key, g.key, null)}</>)}
+                  : <>{headerRow(g.key)}{g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, null)} /> : null}{newRow(g.key, g.key, null)}</>)}
               </div>
             );
           })}
@@ -315,7 +324,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       </div>
 
       {addingField && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
+        <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
       <EscClose onClose={() => setAddingField(false)} />
           <div role="dialog" aria-modal="true" aria-label={t("New field")} className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <FieldEditor saving={createField.isPending} onSave={(p) => createField.mutate(p)} onCancel={() => setAddingField(false)} />
@@ -359,7 +368,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>
@@ -411,7 +420,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   projectId: string;
   patchTask: (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => void;
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
-  setCf: (fieldId: string, taskId: string, value: unknown) => void;
+  setCf: (fieldId: string, taskId: string, value: unknown, prev?: unknown) => void;
 }) {
   const { t, locale } = useLang();
   // Cells read as text until hovered (Notion): no select chevrons, no "mm/dd/yyyy" in empty dates.
@@ -425,7 +434,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
     // MULTI_SELECT (e.g. TALENT) can hold many options — rendered inline it stretches the whole table
     // to the right. In the Table view collapse it to a compact summary + dropdown instead.
     if ((def.type ?? "").toUpperCase() === "MULTI_SELECT") {
-      return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v)} />;
+      return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v, value)} />;
     }
     if ((def.type ?? "").toUpperCase() === "CREATED") return <CreatedCell raw={raw} task={task} members={members} />;
     // key by the persisted raw value so the editor re-seeds its internal state after a save+refetch

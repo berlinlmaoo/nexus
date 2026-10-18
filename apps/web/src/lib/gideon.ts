@@ -7,15 +7,16 @@ import { useSyncExternalStore } from "react";
 import { getLang } from "@/lib/lang";
 import { ApiError } from "@/lib/nexus-api";
 
-/** The three GIDEON tiers. Which model each one runs is decided on the server side. */
+/** GIDEON tiers. Display names are GIDEON's own (owner, 18 Oct 2026: not GPT's); the ids stay for older apps. Which
+ *  model each one runs is decided in the shim (astra = Artemis, luna = Phaëthon, the default, terra = Aphrodite). */
 export const GIDEON_TIERS = [
-  { id: "astra", name: "Astra", blurb: "Paling dalam. Untuk analisis dan keputusan." },
-  { id: "luna", name: "Luna", blurb: "Sehari-hari." },
-  { id: "terra", name: "Terra", blurb: "Ringan. Pertanyaan pendek." },
+  { id: "astra", name: "Artemis", blurb: "Deepest. For analysis and decisions." },
+  { id: "luna", name: "Phaëthon", blurb: "Everyday work." },
+  { id: "terra", name: "Aphrodite", blurb: "Light. Short questions." },
   // Runs on the RTX 5070 in the office, not on anybody's API. Measurably weaker than the hosted
   // tiers — it got a task count wrong that Luna got right — so the label says experimental and
   // means it.
-  { id: "experimental", name: "Experimental", blurb: "Model lokal di kantor. Lambat dan bisa keliru." },
+  { id: "experimental", name: "Model 0", blurb: "Local model in the office. Slow and can be wrong." },
 ] as const;
 
 export type GideonTier = (typeof GIDEON_TIERS)[number]["id"];
@@ -103,7 +104,7 @@ export type GideonBookingView = {
 };
 /** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
 export type RoomAvailability = {
-  rooms: { room: string; capacity: number | null; free: boolean; busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null }[];
+  rooms: { room: string; free: boolean; busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null }[];
   freeSlots: { startsAt: string; endsAt: string; rooms: string[] }[];
 };
 export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };
@@ -127,7 +128,9 @@ export type GideonEvent =
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposal }
   | { type: "done" }
-  | { type: "error"; content?: string };
+  /** GIDEON credits (18 Oct 2026): the person's balance after this answer; `notice` when phase 2 changed the tier or refused. */
+  | { type: "credits"; summary?: import("@/lib/gideon-credits").CreditSummary | null; credits?: number; notice?: import("@/lib/gideon-credits").CreditNotice }
+  | { type: "error"; content?: string; code?: string };
 
 /** Which writes wait for the person. Same names as the server (gideon-runs.ts needsApproval). */
 export const GIDEON_APPROVAL_MODES = [

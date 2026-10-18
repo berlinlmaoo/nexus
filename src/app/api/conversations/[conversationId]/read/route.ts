@@ -3,7 +3,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { CHAT_NOTIFICATION_TYPES } from "@/lib/chat-unread"
-import { chatLink, nextLastReadAt } from "@/lib/chat-rules"
+import { chatLink } from "@/lib/chat-rules"
+import { advanceLastReadAt } from "@/lib/chat-order"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 
 /**
@@ -57,11 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       if (!newest || newest.id !== upTo.id) inboxCutoff = new Date(upTo.createdAt.getTime() + 5_000)
     }
 
-    const lastReadAt = nextLastReadAt(access.member.lastReadAt, target)
-    await prisma.conversationMember.update({
-      where: { id: access.member.id },
-      data: { lastReadAt },
-    })
+    // Decided in the UPDATE itself (GREATEST), against the row as it is now: a late report from another
+    // device that read the old value before a newer mark landed can no longer move it back (race audit M18).
+    const lastReadAt = await advanceLastReadAt(prisma, access.member.id, target)
     await prisma.notification.updateMany({
       where: {
         userId,

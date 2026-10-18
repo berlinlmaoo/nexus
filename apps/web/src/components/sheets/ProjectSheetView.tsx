@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, Sheet as SheetIcon, Upload } from "lucide-react";
 import {
-  nexusApi, type NexusSheet, type NexusSheetCellStyle, type NexusSheetColumn, type NexusSheetColumnColor, type NexusSheetRow,
+  ApiError, nexusApi, type NexusSheet, type NexusSheetCellStyle, type NexusSheetColumn, type NexusSheetColumnColor, type NexusSheetRow,
   type NexusSheetSettings,
 } from "@/lib/nexus-api";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -555,10 +555,31 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       },
     });
   };
+  // Column saves go one at a time, each with the structureVersion the previous one answered, so the
+  // server can refuse a list based on columns someone else has changed since (race audit 16 Oct 2026,
+  // H6) without our own back-to-back edits (resize, then rename) tripping over each other.
+  const columnChain = useRef<Promise<unknown>>(Promise.resolve());
   const saveColumns = useMutation({
-    mutationFn: (columns: NexusSheetColumn[]) => nexusApi.updateSheet(sheetId as string, { columns }),
-    onSuccess: (res) => qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, columns: res.columns } : old)),
-    onError: (e) => notifyError(e, t("Couldn't save the column.")),
+    mutationFn: (columns: NexusSheetColumn[]) => {
+      const run = columnChain.current.catch(() => {}).then(() =>
+        nexusApi.updateSheet(sheetId as string, { columns, structureVersion: qc.getQueryData<NexusSheet>(key)?.structureVersion }));
+      columnChain.current = run;
+      return run;
+    },
+    onSuccess: (res) => qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, columns: res.columns, structureVersion: res.structureVersion } : old)),
+    onError: (e) => {
+      const p = e instanceof ApiError ? (e.payload as { code?: string; current?: { columns?: NexusSheetColumn[]; structureVersion?: number } } | null) : null;
+      if (e instanceof ApiError && e.status === 409 && p?.code === "SHEET_STRUCTURE_CHANGED") {
+        // Someone else changed the columns: show theirs, and say the change didn't go through.
+        if (p.current?.columns) {
+          qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, columns: p.current!.columns!, structureVersion: p.current!.structureVersion } : old));
+        }
+        qc.invalidateQueries({ queryKey: key });
+        notify(t("Someone else changed the columns just now. The latest version is shown; please make your change again."));
+        return;
+      }
+      notifyError(e, t("Couldn't save the column."));
+    },
   });
 
   /**

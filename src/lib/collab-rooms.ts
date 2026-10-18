@@ -5,8 +5,8 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { createLogger } from "@/lib/logger"
-import { canonicalDoc, sanitizeDoc, type BlockDoc, type BlockNode } from "@/lib/blockdoc"
-import { bodyAccess, loadBody, parseRoomKey, saveBody, type BodyKind } from "@/lib/block-bodies"
+import { canonicalDoc, docToText, sanitizeDoc, type BlockDoc, type BlockNode } from "@/lib/blockdoc"
+import { BodyConflictError, bodyAccess, loadBody, parseRoomKey, saveBody, type BodyKind } from "@/lib/block-bodies"
 import { FRAGMENT, fragmentBlocks, nodesToY, ydocFromJson, ydocToJson } from "@/lib/collab-ydoc"
 import { planBlockMerge } from "@/lib/block-merge"
 
@@ -79,6 +79,8 @@ type CollabGlobal = {
    * items are refused). So a route hands the edit to the instance that owns the rooms.
    */
   applyEdit?: (opts: BlockEditOptions) => Promise<BlockEditResult>
+  /** flushRoom as the socket server's instance has it (same reason as applyEdit). */
+  flush?: (key: string) => Promise<FlushResult>
 }
 const g = globalThis as unknown as { __nexusCollab?: CollabGlobal }
 const state: CollabGlobal = g.__nexusCollab ?? (g.__nexusCollab = { rooms: new Map(), loading: new Map(), io: null, busBound: false })
@@ -178,7 +180,15 @@ async function persistOnce(room: Room) {
   if (!stored) return resetRoom(room, "deleted")
   if (canonicalDoc(stored.json) !== room.persistedCanon) return resetRoom(room, "external")
   if (canon !== room.persistedCanon) {
-    await saveBody(stored, json, { actorId: room.lastEditorId, prev: room.persisted, fromRoom: true })
+    // Compare-and-swap (race audit 16 Oct 2026, M10): the check above ran before the write; a REST save landing
+    // in between used to be overwritten by this one. Now saveBody re-reads the body under the row lock and
+    // refuses unless it is still what this room last persisted — then the other write wins, as designed.
+    try {
+      await saveBody(stored, json, { actorId: room.lastEditorId, prev: room.persisted, fromRoom: true, expect: { canon: room.persistedCanon } })
+    } catch (error) {
+      if (error instanceof BodyConflictError) return resetRoom(room, "external")
+      throw error
+    }
     room.persisted = json
     room.persistedCanon = canon
   }
@@ -308,6 +318,7 @@ function onAccessChanged(projectId: string | null, userIds: string[] | null) {
 export function attachCollabSocket(io: IOServer, socket: Socket) {
   state.io = io
   state.applyEdit = applyBlockEdit
+  state.flush = flushRoom
   bindBus()
   socket.data.collabRooms = new Set<string>()
 
@@ -404,6 +415,35 @@ function bindBus() {
   eventBus.on(BUS_EVENTS.ACCESS_CHANGED, (data: { projectId?: string | null; userIds?: string[] | null }) => {
     onAccessChanged(data?.projectId ?? null, Array.isArray(data?.userIds) ? data.userIds : null)
   })
+}
+
+/**
+ * Before a write from outside the room (a REST save, an older app's description PATCH): save what the live
+ * editors typed and the room has not persisted yet (race audit 16 Oct 2026, H9). Until then the external write
+ * landed, the room was reset by COLLAB_EXTERNAL_WRITE, and up to SAVE_MAX_WAIT_MS of typing was thrown away
+ * without ever being stored. Now it is stored first; the external write then either sees it (a REST save with
+ * a base gets its 409 and merges) or replaces it knowingly, and the caller records what it replaced
+ * (`replaced`, the text the room held) so it can be recovered. A keystroke arriving in the few ms between
+ * this flush and the external write is the one edit still lost: the room's own CAS (persistOnce) refuses to
+ * write it over the external save.
+ */
+export type FlushResult = { flushed: boolean; replaced: string | null }
+
+export function flushLiveRoom(key: string): Promise<FlushResult> {
+  return state.flush ? state.flush(key) : flushRoom(key)
+}
+
+async function flushRoom(key: string): Promise<FlushResult> {
+  const room = state.rooms.get(key)
+  if (!room || room.dead) return { flushed: false, replaced: null }
+  if (room.timer) { clearTimeout(room.timer); room.timer = null }
+  const wasDirty = room.dirty
+  try {
+    await persist(room)
+  } catch (error) {
+    log.warn("flush before an external write failed", { key, error: String(error) })
+  }
+  return { flushed: wasDirty, replaced: room.dead ? null : docToText(room.persisted).slice(0, 20_000) }
 }
 
 /** For a REST save: is someone editing this body live right now? */

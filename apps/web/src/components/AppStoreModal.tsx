@@ -47,7 +47,7 @@ export function AppStoreModal() {
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[85] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[85] grid grid-cols-1 place-items-center p-4">
           <EscClose onClose={later} />
           <motion.div
             className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm"

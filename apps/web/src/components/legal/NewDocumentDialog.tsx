@@ -102,6 +102,15 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated, parent, fromR
       onCreated(res.id);
     },
     onError: (e: Error) => {
+      // Someone else (or another tab) made this request's document a moment ago (race audit 16 Oct 2026,
+      // H5): nothing was numbered here. Show theirs instead of a bare error.
+      if ((e as { payload?: { code?: string } }).payload?.code === "LEGAL_REQUEST_HAS_DOCUMENT") {
+        toast.error(t("This request already has a document — someone made it a moment ago. Open it from the request."));
+        void qc.invalidateQueries({ queryKey: ["legal", "requests"] });
+        void qc.invalidateQueries({ queryKey: ["legal", "documents"] });
+        onOpenChange(false);
+        return;
+      }
       const fe = fieldErrorsOf(e);
       const pr = templateProblems(e);
       setErrors(fe);

@@ -7,8 +7,9 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
-  CircleDashed,
   Columns3,
+  Loader,
+  Users,
   Eye,
   EyeOff,
   Flag,
@@ -21,7 +22,6 @@ import {
   Tags,
   Trash2,
   Type,
-  User,
   Rows3,
   CircleDot,
   X,
@@ -59,10 +59,11 @@ import {
 // ─── small parts ─────────────────────────────────────────────────────────────────────────────────────
 
 export function PropIcon({ def, className }: { def?: PropDef; className?: string }) {
-  const cls = cn("h-3.5 w-3.5 shrink-0 text-muted-foreground", className);
+  // Notion's property glyphs (16 Oct 2026 pass): 16px, the status sunburst, two people for a person field.
+  const cls = cn("h-4 w-4 shrink-0 text-muted-foreground", className);
   if (!def) return <CircleDot className={cls} />;
   if (def.key === "section") return <Columns3 className={cls} />;
-  if (def.key === "status") return <CircleDashed className={cls} />;
+  if (def.key === "status") return <Loader className={cls} />;
   if (def.key === "priority") return <Flag className={cls} />;
   if (def.key === "subtasks") return <ListChecks className={cls} />;
   if (def.key === "comments") return <MessageSquare className={cls} />;
@@ -78,7 +79,7 @@ export function PropIcon({ def, className }: { def?: PropDef; className?: string
     case "multi":
       return <Tags className={cls} />;
     case "person":
-      return <User className={cls} />;
+      return <Users className={cls} />;
     case "date":
       return <Calendar className={cls} />;
     case "number":
@@ -95,7 +96,7 @@ export function usePropLabel() {
   return (def?: PropDef) => (!def ? t("Deleted property") : def.builtin ? t(def.label) : def.label);
 }
 
-export const menuItemCls = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
+export const menuItemCls = "flex min-h-7 w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
 export const fieldCls = "h-8 rounded-md border border-border bg-card px-2 text-sm text-foreground outline-none transition-colors hover:border-foreground/20 focus:border-[color:var(--accent-foreground)] focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/20";
 /** A SelectPicker sized like `fieldCls` (the view popovers' h-8 fields). */
 export const pickerCls = "h-8 rounded-md bg-card px-2 text-sm";
@@ -108,12 +109,13 @@ export function PropPicker({ defs, onPick, exclude = [], placeholder }: { defs: 
   const [q, setQ] = useState("");
   const list = defs.filter((d) => !d.hidden && !exclude.includes(d.key) && label(d).toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div className="w-60">
-      <div className="relative p-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder ?? t("Search properties…")} className={cn(fieldCls, "w-full pl-7")} />
+    // Notion's "Filter by…" / "Sort by…" menu: the search field on top, then 28px rows of glyph + name.
+    <div className="w-72">
+      <div className="relative px-2 pb-1 pt-2">
+        <Search className="pointer-events-none absolute left-4 top-[calc(50%+2px)] h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder ?? t("Search properties…")} placeholder={placeholder ?? t("Search properties…")} className="h-7 w-full rounded-lg border border-border bg-muted/40 pl-7 pr-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/80 focus:border-ring focus:bg-card focus-visible:ring-2 focus-visible:ring-ring/25" />
       </div>
-      <div className="max-h-72 overflow-y-auto p-1">
+      <div className="max-h-80 overflow-y-auto p-1">
         {list.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("No properties match.")}</p>}
         {list.map((d) => (
           <button key={d.key} type="button" onClick={() => onPick(d.key)} className={menuItemCls}>
@@ -139,8 +141,9 @@ export function ToolbarButton({ icon: Icon, label, active, count, onClick, disab
       disabled={disabled}
       aria-label={label}
       className={cn(
-        "inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
-        active ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground hover:text-foreground",
+        "inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
+        // An applied filter or sort tints its icon (Notion), in NEXUS's violet.
+        active ? "bg-accent text-sidebar-primary" : "text-muted-foreground hover:text-foreground",
         showLabel && "lg:px-2",
         className,
       )}
@@ -314,13 +317,13 @@ export function FilterGroupEditor({ group, defs, depth, onChange, onRemove }: { 
       <div className="flex flex-wrap items-center gap-1 pt-0.5">
         <Popover open={adding} onOpenChange={setAdding}>
           <PopoverTrigger asChild>
-            <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("Add rule")}</button>
+            <button type="button" className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-4 w-4" />{t("Add filter rule")}</button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-0"><PropPicker defs={defs} onPick={(key) => { onChange({ ...group, rules: [...group.rules, defaultRule(defs, key)] }); setAdding(false); }} /></PopoverContent>
+          <PopoverContent align="start" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop"><PropPicker defs={defs} placeholder={t("Filter by…")} onPick={(key) => { onChange({ ...group, rules: [...group.rules, defaultRule(defs, key)] }); setAdding(false); }} /></PopoverContent>
         </Popover>
         {depth < 2 && (
-          <button type="button" onClick={() => onChange({ ...group, rules: [...group.rules, { id: newId(), mode: group.mode === "and" ? "or" : "and", rules: [] }] })} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-            <Plus className="h-3.5 w-3.5" />{t("Add rule group")}
+          <button type="button" onClick={() => onChange({ ...group, rules: [...group.rules, { id: newId(), mode: group.mode === "and" ? "or" : "and", rules: [] }] })} className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <Plus className="h-4 w-4" />{t("Add rule group")}
           </button>
         )}
         {onRemove && (
@@ -358,7 +361,7 @@ export function FilterChips({ filter, defs, onChange, dirty, canSave, onSave, on
   const [adding, setAdding] = useState(false);
   const advancedCount = countRules(filter.advanced);
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2 md:px-8">
+    <div className="flex flex-wrap items-center gap-1.5 nx-gx pb-2">
       {sortLabel && (
         <span className="inline-flex h-7 items-center gap-1 rounded-full border border-border bg-card px-2.5 text-xs text-foreground"><ArrowUpDown className="h-3 w-3 text-muted-foreground" />{sortLabel}</span>
       )}
@@ -396,10 +399,10 @@ export function FilterChips({ filter, defs, onChange, dirty, canSave, onSave, on
         <PopoverTrigger asChild>
           <button type="button" className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3 w-3" />{t("Filter")}</button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-0">
-          <PropPicker defs={defs} onPick={(key) => { onChange({ ...filter, simple: [...filter.simple, defaultRule(defs, key)] }); setAdding(false); }} />
+        <PopoverContent align="start" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop">
+          <PropPicker defs={defs} placeholder={t("Filter by…")} onPick={(key) => { onChange({ ...filter, simple: [...filter.simple, defaultRule(defs, key)] }); setAdding(false); }} />
           <div className="border-t border-border p-1">
-            <button type="button" onClick={() => { onChange({ ...filter, advanced: filter.advanced ?? { id: newId(), mode: "and", rules: [] } }); setAdding(false); }} className={menuItemCls}><ListFilter className="h-3.5 w-3.5 text-muted-foreground" />{t("Advanced filter (And / Or)")}</button>
+            <button type="button" onClick={() => { onChange({ ...filter, advanced: filter.advanced ?? { id: newId(), mode: "and", rules: [] } }); setAdding(false); }} className={cn(menuItemCls, "text-muted-foreground")}><Plus className="h-4 w-4" />{t("Add advanced filter")}</button>
           </div>
         </PopoverContent>
       </Popover>
@@ -427,11 +430,10 @@ export function FilterButton({ filter, defs, onChange, chipsOpen, onToggleChips 
       <PopoverTrigger asChild>
         <span><ToolbarButton icon={ListFilter} label={t("Filter")} /></span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0">
-        <div className={panelTitleCls}>{t("Filter by")}</div>
-        <PropPicker defs={defs} onPick={(key) => { onChange({ ...filter, simple: [defaultRule(defs, key)] }); setOpen(false); if (!chipsOpen) onToggleChips(); }} />
+      <PopoverContent align="end" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop">
+        <PropPicker defs={defs} placeholder={t("Filter by…")} onPick={(key) => { onChange({ ...filter, simple: [defaultRule(defs, key)] }); setOpen(false); if (!chipsOpen) onToggleChips(); }} />
         <div className="border-t border-border p-1">
-          <button type="button" onClick={() => { onChange({ ...filter, advanced: { id: newId(), mode: "and", rules: [] } }); setOpen(false); if (!chipsOpen) onToggleChips(); }} className={menuItemCls}><ListFilter className="h-3.5 w-3.5 text-muted-foreground" />{t("Advanced filter (And / Or)")}</button>
+          <button type="button" onClick={() => { onChange({ ...filter, advanced: { id: newId(), mode: "and", rules: [] } }); setOpen(false); if (!chipsOpen) onToggleChips(); }} className={cn(menuItemCls, "text-muted-foreground")}><Plus className="h-4 w-4" />{t("Add advanced filter")}</button>
         </div>
       </PopoverContent>
     </Popover>
@@ -447,7 +449,7 @@ export function SortEditor({ sort, defs, onChange }: { sort: SortRule[]; defs: P
   const usable = sortableProps(defs);
   const move = (i: number, d: -1 | 1) => { const n = [...sort]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); onChange(n); };
   return (
-    <div className="w-[min(92vw,380px)] space-y-1.5 p-2">
+    <div className="w-[min(92vw,400px)] space-y-1 p-2">
       {sort.length === 0 && <p className="px-1 py-1 text-sm text-muted-foreground">{t("Tasks are in their manual order. Add a sort to order them by a property.")}</p>}
       {sort.map((s, i) => (
         <div key={`${s.prop}-${i}`} className="flex items-center gap-1.5">
@@ -460,14 +462,15 @@ export function SortEditor({ sort, defs, onChange }: { sort: SortRule[]; defs: P
           </div>
         </div>
       ))}
-      <div className="flex items-center gap-1 pt-0.5">
+      {/* Notion's sort menu: "+ Add sort" and "Delete sort" are rows of the menu, under the rules. */}
+      <div className={cn("-mx-1 flex flex-col", sort.length > 0 && "mt-1 border-t border-border pt-1")}>
         <Popover open={adding} onOpenChange={setAdding}>
           <PopoverTrigger asChild>
-            <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("Add sort")}</button>
+            <button type="button" className={cn(menuItemCls, "text-muted-foreground hover:text-foreground")}><Plus className="h-4 w-4" />{t("Add sort")}</button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-0"><PropPicker defs={usable} exclude={sort.map((s) => s.prop)} onPick={(key) => { onChange([...sort, { prop: key, dir: "asc" }]); setAdding(false); }} /></PopoverContent>
+          <PopoverContent align="start" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop"><PropPicker defs={usable} exclude={sort.map((s) => s.prop)} placeholder={t("Sort by…")} onPick={(key) => { onChange([...sort, { prop: key, dir: "asc" }]); setAdding(false); }} /></PopoverContent>
         </Popover>
-        {sort.length > 0 && <button type="button" onClick={() => onChange([])} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />{t("Delete sort")}</button>}
+        {sort.length > 0 && <button type="button" onClick={() => onChange([])} className={cn(menuItemCls, "text-muted-foreground hover:bg-destructive/10 hover:text-destructive")}><Trash2 className="h-4 w-4" />{t("Delete sort")}</button>}
       </div>
     </div>
   );
@@ -480,7 +483,7 @@ export function SortButton({ sort, defs, onChange }: { sort: SortRule[]; defs: P
       <PopoverTrigger asChild>
         <span><ToolbarButton icon={ArrowUpDown} label={t("Sort")} active={sort.length > 0} count={sort.length} /></span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0"><SortEditor sort={sort} defs={defs} onChange={onChange} /></PopoverContent>
+      <PopoverContent align="end" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop"><SortEditor sort={sort} defs={defs} onChange={onChange} /></PopoverContent>
     </Popover>
   );
 }

@@ -140,7 +140,7 @@ function Modal({ open, onClose, children, label }: { open: boolean; onClose: () 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/40 p-4 dark:bg-scrim" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center bg-black/40 p-4 dark:bg-scrim" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={label} className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>{children}</div>
     </div>
   );
@@ -997,31 +997,74 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const again = useRef(false);
   const [rev, setRev] = useState(0);
 
+  // What the server holds, key by key (JSON), and its updatedAt: the base of every save (race audit 16 Oct
+  // 2026, H7). Only the keys changed since are sent, with `baseUpdatedAt`; when someone else saved meanwhile
+  // the server answers 409 FORM_CHANGED with its copy. If they changed other parts, theirs is taken in and this
+  // change goes again on top; if they changed the same part, theirs is shown and the person is told.
+  type Payload = ReturnType<typeof payloadOf>;
+  const payloadOf = useCallback((d: FormDraft) => ({
+    name: d.name.trim() || t("Untitled form"),
+    description: d.description.trim() ? d.description : null,
+    fields: cleanFields(d.fields),
+    isPublic: d.isPublic,
+    requireAuth: d.requireAuth,
+    accessSchedule: d.accessSchedule,
+    branding: d.branding,
+    settings: d.settings,
+  }), [t]);
+  const snapshotOf = useCallback((f: NexusForm) => {
+    const p = payloadOf(initialDraft(f, t)) as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(p).map((k) => [k, JSON.stringify(p[k] ?? null)])) as Record<keyof Payload, string>;
+  }, [payloadOf, t]);
+  const savedRef = useRef<Record<string, string> | null>(form ? snapshotOf(form) : null);
+  const baseRef = useRef<string | undefined>(form?.updatedAt);
+
   const flush = useCallback(async (): Promise<void> => {
     if (inflight.current) { again.current = true; return inflight.current; }
     if (!dirty.current) return;
     dirty.current = false;
-    const d = draftRef.current;
-    const payload = {
-      name: d.name.trim() || t("Untitled form"),
-      description: d.description.trim() ? d.description : null,
-      fields: cleanFields(d.fields),
-      isPublic: d.isPublic,
-      requireAuth: d.requireAuth,
-      accessSchedule: d.accessSchedule,
-      branding: d.branding,
-      settings: d.settings,
-    };
+    const full = payloadOf(draftRef.current) as Record<string, unknown>;
     setSave("saving");
     inflight.current = (async () => {
+      const id = metaRef.current.id;
+      const saved = savedRef.current;
+      const changed = id && saved ? Object.keys(full).filter((k) => JSON.stringify(full[k] ?? null) !== saved[k]) : Object.keys(full);
       try {
-        const id = metaRef.current.id;
-        const out = id ? await nexusApi.updateForm(id, payload) : await nexusApi.createForm({ ...payload, projectId });
+        if (id && changed.length === 0) { setSave(dirty.current ? "pending" : "saved"); return; }
+        const patch = Object.fromEntries(changed.map((k) => [k, full[k]]));
+        const out = id
+          ? await nexusApi.updateForm(id, { ...(patch as Parameters<typeof nexusApi.updateForm>[1]), ...(baseRef.current ? { baseUpdatedAt: baseRef.current } : {}) })
+          : await nexusApi.createForm({ ...(full as Payload), projectId });
+        savedRef.current = snapshotOf(out);
+        baseRef.current = out.updatedAt ?? baseRef.current;
         setMeta((m) => ({ ...m, id: out.id, slug: out.slug ?? m.slug }));
         if (!id) onCreatedRef.current?.(out.id);
         setSave(dirty.current ? "pending" : "saved");
         qc.invalidateQueries({ queryKey: ["nexus", "forms"] });
-      } catch {
+      } catch (e) {
+        const server = e instanceof ApiError && e.status === 409 ? (e.payload as { code?: string; form?: NexusForm } | null) : null;
+        if (server?.code === "FORM_CHANGED" && server.form && saved) {
+          const theirs = snapshotOf(server.form);
+          const theirDraft = initialDraft(server.form, t);
+          const clash = changed.filter((k) => theirs[k as keyof Payload] !== saved[k]);
+          // What is changed here (against the old base) stays; everything else becomes theirs.
+          setDraft((cur) => {
+            const mine = payloadOf(cur) as Record<string, unknown>;
+            const next = { ...theirDraft } as Record<string, unknown>;
+            if (!clash.length) for (const k of Object.keys(mine)) if (JSON.stringify(mine[k] ?? null) !== saved[k]) next[k] = (cur as Record<string, unknown>)[k];
+            return next as FormDraft;
+          });
+          savedRef.current = theirs;
+          baseRef.current = server.form.updatedAt ?? baseRef.current;
+          if (clash.length) {
+            setSave("saved");
+            toast.warning(t("Someone else changed this form at the same time"), { description: t("Their version is shown now. Make your change again.") });
+          } else {
+            dirty.current = true;
+            again.current = true;
+          }
+          return;
+        }
         dirty.current = true;
         setSave("error");
       }
@@ -1029,7 +1072,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     await inflight.current;
     inflight.current = null;
     if (again.current) { again.current = false; await flush(); }
-  }, [projectId, qc, t]);
+  }, [payloadOf, projectId, qc, snapshotOf, t]);
 
   useEffect(() => {
     if (!dirty.current) return;

@@ -240,6 +240,15 @@ export function emitAutomationsChanged(projectId: string, automationId: string |
  * listener that throws would otherwise surface there as a failed write: logAudit would return null and
  * a restorable delete would lose the link to its audit row. A ping is never worth that.
  */
+/**
+ * `gideon-credits` { summary } to `user:<id>` (GIDEON credits, 18 Oct 2026): an answer was billed, or a BoD
+ * changed this person's limits / gave a bonus. The summary is the person's own numbers, so it travels in full;
+ * the composer meter redraws without a refetch. Apps that do not know the event ignore it.
+ */
+export function emitGideonCredits(userId: string, summary: unknown) {
+  publishSafely(BUS_EVENTS.GIDEON_CREDITS, { userId, summary })
+}
+
 function publishSafely(event: string, data: unknown) {
   try {
     eventBus.emit(event, data)

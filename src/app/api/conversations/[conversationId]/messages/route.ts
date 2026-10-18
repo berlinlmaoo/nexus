@@ -5,6 +5,17 @@ import { CHAT_MESSAGE_INCLUDE, conversationAccess, canPostInConversation } from 
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
+import { advanceLastReadAt, lockConversationClock } from "@/lib/chat-order"
+import {
+  CHAT_FILE_PREFIX,
+  CHAT_STORED_NAME,
+  cleanFileName,
+  clientDrawsChatFiles,
+  docSpecOfPath,
+  shapeMessageForOldApp,
+} from "@/lib/chat-files"
+import { stat } from "fs/promises"
+import path from "path"
 import {
   aroundSplit,
   canReplyTo,
@@ -14,12 +25,21 @@ import {
   parseLimit,
   shapeAroundPage,
   shapePage,
-  nextLastReadAt,
   SYSTEM_MESSAGE_REPLY,
   SYSTEM_MESSAGE_REPLY_MESSAGE,
 } from "@/lib/chat-rules"
 
 const messageInclude = CHAT_MESSAGE_INCLUDE
+
+/**
+ * Documents (18 Oct 2026): an app that only knows pictures gets a document's message without its path
+ * and with its name in the text (chat-files.ts shapeForOldApp). The web and apps sending
+ * `X-Nexus-Caps: chat-files` get it as stored.
+ */
+function forClient<P extends { messages: Parameters<typeof shapeMessageForOldApp>[0][] }>(req: NextRequest, page: P): P {
+  if (clientDrawsChatFiles(req.headers.get("x-nexus-client"), req.headers.get("x-nexus-caps"))) return page
+  return { ...page, messages: page.messages.map((m) => shapeMessageForOldApp(m)) }
+}
 
 /** CHAT-CONTRACT: at most 30 messages a minute per person (a stuck retry loop, a script, a flood). */
 const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
@@ -84,7 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
           take: split.newer + 1,
         }),
       ])
-      return NextResponse.json(shapeAroundPage(older, anchor, newer, split))
+      return NextResponse.json(forClient(req, shapeAroundPage(older, anchor, newer, split)))
     }
 
     if (afterId) {
@@ -104,7 +124,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: limit + 1,
       })
-      return NextResponse.json(shapePage(rows, limit, "newer"))
+      return NextResponse.json(forClient(req, shapePage(rows, limit, "newer")))
     }
 
     if (before.kind === "invalid") {
@@ -120,7 +140,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     })
-    return NextResponse.json(shapePage(rows, limit, "older"))
+    return NextResponse.json(forClient(req, shapePage(rows, limit, "older")))
   } catch (error) {
     console.error("messages GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -149,15 +169,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       return NextResponse.json({ error: "You can view this project but not post in it.", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
     }
 
-    const { content, mentionedUserIds, attachmentUrl, attachmentType, replyToId } = await req.json()
+    const { content, mentionedUserIds, attachmentUrl, attachmentType, attachmentName, replyToId } = await req.json()
     const text = typeof content === "string" ? content.trim() : ""
     // Only accept an attachment path this server itself handed out. Taking an arbitrary URL here
     // would turn every message into an open redirect and let anyone point the chat at a remote host.
-    const attachment = typeof attachmentUrl === "string" && attachmentUrl.startsWith("/api/files/chat/")
+    const attachment = typeof attachmentUrl === "string" && attachmentUrl.startsWith(CHAT_FILE_PREFIX)
       ? attachmentUrl
       : null
     // A picture on its own is a message; text is only required when there is nothing else.
     if (!text && !attachment) return NextResponse.json({ error: "content required" }, { status: 400 })
+
+    // A document (18 Oct 2026): its type comes from the stored file's extension, never from the client;
+    // its size from the disk, and it must be a file the upload route really wrote. Its name is the one
+    // the sender gave it (cleaned). A picture is taken exactly as before.
+    let fileFields: { attachmentType: string; attachmentName: string; attachmentSize: number } | null = null
+    const doc = docSpecOfPath(attachment)
+    if (attachment && doc) {
+      const stored = attachment.slice(CHAT_FILE_PREFIX.length)
+      const size = CHAT_STORED_NAME.test(stored)
+        ? await stat(path.join(process.cwd(), "public", "uploads", "chat", stored)).then((s) => (s.isFile() ? s.size : null), () => null)
+        : null
+      if (size === null) return NextResponse.json({ error: "That file is not on the server. Upload it again.", code: "UNKNOWN_ATTACHMENT" }, { status: 400 })
+      fileFields = {
+        attachmentType: doc.mime,
+        attachmentName: cleanFileName(typeof attachmentName === "string" ? attachmentName : "", doc.ext),
+        attachmentSize: size,
+      }
+    }
 
     // A reply may only quote a message from this same conversation. Without the check, a crafted
     // replyToId would pull a preview out of a chat the reader has no access to.
@@ -176,25 +214,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       quotedId = quoted.id
     }
 
-    const message = await prisma.message.create({
-      data: {
-        conversationId,
-        userId,
-        content: text,
-        attachmentUrl: attachment,
-        attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
-        replyToId: quotedId,
-      },
-      include: messageInclude,
-    })
-    await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-    // Writing in a room means you have seen it: your read position moves to your own message.
-    if (access.member) {
-      await prisma.conversationMember.update({
-        where: { id: access.member.id },
-        data: { lastReadAt: nextLastReadAt(access.member.lastReadAt, message.createdAt) },
+    // Stamped under the room's lock, strictly after the newest message (lib/chat-order.ts, race audit M17):
+    // an `after=` poll can no longer step over a message that commits later.
+    const message = await prisma.$transaction(async (tx) => {
+      const createdAt = await lockConversationClock(tx, conversationId)
+      const row = await tx.message.create({
+        data: {
+          conversationId,
+          userId,
+          content: text,
+          attachmentUrl: attachment,
+          attachmentType: fileFields?.attachmentType ?? (attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null),
+          attachmentName: fileFields?.attachmentName ?? null,
+          attachmentSize: fileFields?.attachmentSize ?? null,
+          replyToId: quotedId,
+          createdAt,
+        },
+        include: messageInclude,
       })
-    }
+      await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: createdAt } })
+      return row
+    }, { timeout: 15_000, maxWait: 10_000 })
+    // Writing in a room means you have seen it: your read position moves to your own message — never back
+    // (GREATEST in SQL, race audit M18).
+    if (access.member) await advanceLastReadAt(prisma, access.member.id, message.createdAt)
 
     const memberIds = (
       await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } })
@@ -211,7 +254,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       rawContent: content,
     }))
 
-    return NextResponse.json({ message }, { status: 201 })
+    return NextResponse.json({ message: forClient(req, { messages: [message] }).messages[0] }, { status: 201 })
   } catch (error) {
     console.error("messages POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -39,12 +39,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
       where: {
         conversationId,
         kind: MESSAGE_KIND_USER,
-        content: { contains: parsed.q, mode: "insensitive" },
+        // A document is found by its file name too (18 Oct 2026).
+        OR: [
+          { content: { contains: parsed.q, mode: "insensitive" } },
+          { attachmentName: { contains: parsed.q, mode: "insensitive" } },
+        ],
         ...(cursor ? olderThan(cursor.createdAt, cursor.id) : {}),
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
-      select: { id: true, createdAt: true, content: true, user: { select: { id: true, name: true } } },
+      select: { id: true, createdAt: true, content: true, attachmentName: true, user: { select: { id: true, name: true } } },
     })
     const hasMore = rows.length > limit
     const page = hasMore ? rows.slice(0, limit) : rows
@@ -54,7 +58,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
         messageId: m.id,
         createdAt: m.createdAt,
         sender: { id: m.user.id, name: m.user.name },
-        snippet: searchSnippet(m.content, parsed.q),
+        snippet: searchSnippet(
+          m.content.toLowerCase().includes(parsed.q.toLowerCase()) || !m.attachmentName ? m.content : `📎 ${m.attachmentName}`,
+          parsed.q,
+        ),
       })),
       nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
     })

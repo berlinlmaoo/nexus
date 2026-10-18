@@ -606,6 +606,10 @@ export function initializeSocketServer(
     io.to(`user:${data.userId}`).emit("new-notification", data.notification)
   })
 
+  eventBus.on(BUS_EVENTS.GIDEON_CREDITS, (data: { userId: string; summary: unknown }) => {
+    if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("gideon-credits", { summary: data.summary ?? null })
+  })
+
   eventBus.on(BUS_EVENTS.SPRINT_UPDATED, (data: { projectId: string; sprint: unknown }) => {
     emitGuarded(`project:${data.projectId}`, "sprint-updated", stripPrivatePeople(data.sprint))
   })

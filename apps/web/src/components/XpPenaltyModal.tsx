@@ -72,7 +72,7 @@ export function XpPenaltyModal() {
   return createPortal(
     <AnimatePresence>
       {shouldShow && (
-        <div className="fixed inset-0 z-[90] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center p-4">
           <EscClose onClose={dismiss} />
           <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={dismiss} />
           <motion.div

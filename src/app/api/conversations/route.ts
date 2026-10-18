@@ -7,6 +7,7 @@ import { chatUnreadForUser } from "@/lib/chat-unread"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 import { hasProjectWideAccess, memberAccessLevel } from "@/lib/rbac"
+import { clientDrawsChatFiles, shapeForOldApp } from "@/lib/chat-files"
 
 const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
 
@@ -25,7 +26,7 @@ const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
  * (lib/chat-membership.ts) and scripts/chat-membership-backfill.cjs covers the rows from before.
  * Rooms the caller can no longer open (they left the project's or the room's workspace) are left out.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -75,7 +76,9 @@ export async function GET() {
           include: { user: { select: { id: true, name: true } } },
         })
       : []
-    const lastOf = new Map(lastMessages.map((m) => [m.conversationId, m]))
+    // An app that only knows pictures reads a document as its name (chat-files.ts, 18 Oct 2026).
+    const drawsFiles = clientDrawsChatFiles(req.headers.get("x-nexus-client"), req.headers.get("x-nexus-caps"))
+    const lastOf = new Map(lastMessages.map((m) => [m.conversationId, drawsFiles ? m : shapeForOldApp(m)]))
 
     const unread = await chatUnreadForUser(userId, { conversationIds: ids })
     // One lookup for the whole list, and none when there is no group in it.

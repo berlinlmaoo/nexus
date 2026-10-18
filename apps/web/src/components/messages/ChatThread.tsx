@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowDown, Clock, Copy, ImagePlus, Loader2, Reply, RotateCw, Send, X } from "lucide-react";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { AlertCircle, ArrowDown, Clock, Copy, Download, Loader2, Paperclip, Reply, RotateCw, Send, X } from "lucide-react";
 import { EscClose } from "@/hooks/use-escape";
-import { ApiError, fmtTime, nexusApi, type NexusConversation, type NexusMessage, type NexusMessagePage, type NexusUser } from "@/lib/nexus-api";
+import { ApiError, fmtTime, isAbort, nexusApi, type NexusConversation, type NexusMessage, type NexusMessagePage, type NexusUser } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { useTypers, useTypingSender, type Typer } from "@/lib/chat-typing";
 import { Avatar, AvatarFace } from "@/components/Avatar";
@@ -12,6 +12,11 @@ import { localeOf, useLang, t as translate } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { MessageText, safeHref } from "@/components/messages/MessageText";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
+import { humanSize } from "@/lib/vault-media";
+import {
+  attachmentDisplayName, CHAT_ACCEPT, checkChatFile, fileIconFor, fileTypeLabel, isDocAttachment, isImageFile, openHref,
+  type LocalFileProblem,
+} from "@/lib/chat-files";
 
 
 /** The sender's photo beside their bubble (initials when there is none), as everywhere else in NEXUS. */
@@ -66,11 +71,87 @@ function dayLabel(value?: string | null) {
 /** How much of a quoted message a preview shows before it trails off. */
 const QUOTE_LIMIT = 80;
 
-/** The one line that stands in for a quoted message: its text, cut short, or a marker for a bare picture. */
-function quoteSnippet(content?: string | null, attachmentType?: string | null) {
+/**
+ * The one line that stands in for a quoted message: its text, cut short, or a marker for a bare
+ * attachment — a document by its name ("📎 Laporan.pdf").
+ */
+function quoteSnippet(content?: string | null, attachmentType?: string | null, attachmentName?: string | null) {
   const text = (content ?? "").trim();
-  if (!text) return attachmentType ? `📎 ${translate("Attachment")}` : "";
+  if (!text) {
+    if (attachmentName && isDocAttachment(attachmentType)) return `📎 ${attachmentName}`;
+    return attachmentType ? `📎 ${translate("Attachment")}` : "";
+  }
   return text.length > QUOTE_LIMIT ? `${text.slice(0, QUOTE_LIMIT)}…` : text;
+}
+
+/**
+ * A document in a message (18 Oct 2026): type icon, name, type and size, and a download button. A PDF
+ * opens in the browser's viewer in a new tab; everything else downloads under the name it was sent as.
+ * `sending`: the placeholder of an outgoing message, not a link yet.
+ */
+function FileCard({ url, name, size, type, mine, sending = false }: {
+  url?: string | null;
+  name: string;
+  size?: number | null;
+  type?: string | null;
+  mine: boolean;
+  sending?: boolean;
+}) {
+  const { t } = useLang();
+  const Icon = fileIconFor(name, type);
+  const href = url ? attachmentHref(url) : null;
+  const pdf = fileTypeLabel(name) === "PDF";
+  const meta = [fileTypeLabel(name), humanSize(size ?? null)].filter(Boolean).join(" · ");
+  const body = (
+    <>
+      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg", mine ? "bg-primary-foreground/15 text-primary-foreground" : "bg-primary/10 text-primary")}>
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold" title={name}>{name}</span>
+        {meta && <span className={cn("block text-[11px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{meta}</span>}
+      </span>
+    </>
+  );
+  return (
+    <div className={cn("mb-1 flex w-72 max-w-full items-center gap-1 rounded-xl p-1.5", mine ? "bg-primary-foreground/10" : "bg-background ring-1 ring-border")}>
+      {href && !sending ? (
+        <a
+          href={pdf ? openHref(href, name) : href}
+          {...(pdf ? { target: "_blank", rel: "noopener noreferrer" } : { download: name })}
+          title={pdf ? t("Open {name}", { name }) : t("Download {name}", { name })}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          {body}
+        </a>
+      ) : (
+        <span className="flex min-w-0 flex-1 items-center gap-2.5 p-0.5">{body}</span>
+      )}
+      {href && !sending && (
+        <a
+          href={href}
+          download={name}
+          aria-label={t("Download {name}", { name })}
+          title={t("Download")}
+          className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50", mine ? "text-primary-foreground hover:bg-primary-foreground/15" : "text-muted-foreground hover:bg-accent")}
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+/** What the composer holds before Send: a picture (shown) or a document (named). */
+type PendingAttachment = { url: string; type: string; kind: "image" | "file"; name: string; size: number };
+/** A file on its way up. */
+type UploadingFile = { name: string; size: number; image: boolean; pct: number; abort: AbortController };
+
+/** The words for a file that can't be sent, in the person's language. */
+function fileProblemText(p: LocalFileProblem): string {
+  if (p.code === "TOO_LARGE") return translate("That file is too big. The limit is {n} MB.", { n: p.maxMb });
+  if (p.code === "EMPTY_FILE") return translate("That file is empty.");
+  return translate("That file type can't be sent. Send a photo, PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP file.");
 }
 
 /** The token being typed right after an "@", or null when the caret isn't in one. */
@@ -195,6 +276,9 @@ type Outgoing = {
   content: string;
   attachmentUrl?: string;
   attachmentType?: string;
+  attachmentName?: string;
+  attachmentSize?: number;
+  attachmentKind?: "image" | "file";
   replyTo: NexusMessage | null;
   mentionedUserIds: string[];
   status: "sending" | "failed";
@@ -244,8 +328,11 @@ export function ChatThread({
   const { socket, connected, join } = useRealtime();
   const visible = usePageVisible();
   const [input, setInput] = useState("");
-  const [pending, setPending] = useState<{ url: string; type: string } | null>(null);
+  const [pending, setPending] = useState<PendingAttachment | null>(null);
+  const [uploading, setUploading] = useState<UploadingFile | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0);
   // Tag (name without spaces, lowercased) → user id, remembered as you pick from the list. Sending
   // structured ids keeps two people with the same display name from being confused for each other.
   const [tagged, setTagged] = useState<Record<string, string>>({});
@@ -285,7 +372,9 @@ export function ChatThread({
     retry: false,
     // The socket is what keeps an open thread live; while it's down, ask every 10 s instead
     // (a near-empty `after=` request on current servers). Never from a background tab.
-    refetchInterval: connected ? false : 10_000,
+    // While it is up, still every 20 s (race audit 16 Oct 2026, M19): an event can be lost in a
+    // blue-green switch or a dropped connection, and this only adds what came after the last message.
+    refetchInterval: connected ? 20_000 : 10_000,
   });
   const thread = messagesQuery.data;
   const messages = useMemo(() => thread?.messages ?? [], [thread]);
@@ -350,10 +439,12 @@ export function ChatThread({
     return () => ro.disconnect();
   }, []);
 
-  // Switching rooms must not carry a half-written message or an unsent picture across.
+  // Switching rooms must not carry a half-written message or an unsent picture across; an upload still
+  // on its way is stopped.
   useEffect(() => {
     setInput(""); setPending(null); setTagged({}); setUploadError(null); setReplyTo(null);
-    setOlderFailed(false); setNewBelow(0);
+    setOlderFailed(false); setNewBelow(0); setDragOver(false); dragDepth.current = 0;
+    setUploading((u) => { u?.abort.abort(); return null; });
   }, [conversationId]);
   // A room left while reading an older stretch opens at its newest messages next time.
   useEffect(() => () => {
@@ -375,7 +466,7 @@ export function ChatThread({
       try {
         const res = await nexusApi.sendMessage(o.conversationId, o.content, {
           ...(o.mentionedUserIds.length ? { mentionedUserIds: o.mentionedUserIds } : {}),
-          ...(o.attachmentUrl ? { attachmentUrl: o.attachmentUrl, attachmentType: o.attachmentType } : {}),
+          ...(o.attachmentUrl ? { attachmentUrl: o.attachmentUrl, attachmentType: o.attachmentType, ...(o.attachmentName ? { attachmentName: o.attachmentName } : {}) } : {}),
           ...(o.replyTo ? { replyToId: o.replyTo.id } : {}),
         });
         if (res?.message?.id) addToThread(qc, o.conversationId, [{ conversationId: o.conversationId, ...res.message }]);
@@ -659,13 +750,66 @@ export function ChatThread({
     setTagged((cur) => ({ ...cur, [tag.toLowerCase()]: u.id }));
   };
 
-  const upload = useMutation({
-    mutationFn: (file: File) => nexusApi.uploadChatImage(conversationId, file),
-    onSuccess: (res) => { setPending({ url: res.url, type: res.type }); setUploadError(null); },
-    onError: () => setUploadError(t("Couldn't upload that picture.")),
-  });
+  // One picture or document per message: picked, dropped on the thread, or pasted into the box. Checked
+  // here first (type, size) so a wrong file is refused at once; the server checks again, bytes included.
+  const startUpload = (file: File, extra = 0) => {
+    if (uploading) return;
+    const problem = checkChatFile(file);
+    if (problem) { setUploadError(fileProblemText(problem)); return; }
+    const image = isImageFile(file);
+    const abort = new AbortController();
+    const forRoom = conversationId;
+    setUploadError(extra > 0 ? t("One file per message. Only the first one was attached.") : null);
+    setPending(null);
+    setUploading({ name: file.name || t("File"), size: file.size, image, pct: 0, abort });
+    nexusApi
+      .uploadChatFile(conversationId, file, (pct) => setUploading((u) => (u && u.abort === abort ? { ...u, pct } : u)), { signal: abort.signal })
+      .then((res) => {
+        if (abort.signal.aborted || forRoom !== conversationId) return;
+        const kind = res.kind ?? (res.type?.startsWith("image/") ? "image" : "file");
+        setPending({ url: res.url, type: res.type, kind, name: res.name ?? file.name, size: res.size ?? file.size });
+      })
+      .catch((e: unknown) => {
+        if (isAbort(e) || abort.signal.aborted) return;
+        const code = e instanceof ApiError ? (e.payload as { code?: string } | null)?.code : undefined;
+        if (code === "TOO_LARGE") {
+          const max = Number((e as ApiError).payload && ((e as ApiError).payload as { maxBytes?: number }).maxBytes) || (image ? 8 : 25) * 1024 * 1024;
+          setUploadError(fileProblemText({ code: "TOO_LARGE", maxMb: Math.round(max / (1024 * 1024)) }));
+        } else if (code === "UNSUPPORTED_TYPE") {
+          setUploadError(t("That file can't be sent: it isn't the type its name says, or the type isn't supported."));
+        } else if (e instanceof ApiError && e.status === 403) {
+          setUploadError(t("You can't send files in this chat."));
+        } else if (e instanceof ApiError && e.status === 429) {
+          setUploadError(t("Sending too fast. Wait a moment, then retry."));
+        } else {
+          setUploadError(image ? t("Couldn't upload that picture.") : t("Couldn't upload that file. Try again."));
+        }
+      })
+      .finally(() => setUploading((u) => (u && u.abort === abort ? null : u)));
+  };
+  const cancelUpload = () => setUploading((u) => { u?.abort.abort(); return null; });
+  const takeFiles = (files: FileList | File[] | null | undefined): boolean => {
+    const list = Array.from(files ?? []);
+    if (list.length === 0) return false;
+    startUpload(list[0], list.length - 1);
+    return true;
+  };
+  // Dropping files anywhere on the thread. Counted enter/leave so moving over a child doesn't flicker.
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  const dropProps = readOnly ? {} : {
+    onDragEnter: (e: React.DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current += 1; setDragOver(true); },
+    onDragOver: (e: React.DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; },
+    onDragLeave: (e: React.DragEvent) => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDragOver(false); },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragOver(false);
+      takeFiles(e.dataTransfer.files);
+    },
+  };
 
-  const busy = upload.isPending;
+  const busy = !!uploading;
   // A picture on its own is a message, so an empty box is only a problem when nothing is attached.
   const canSend = (input.trim().length > 0 || !!pending) && !busy;
   const submit = () => {
@@ -679,7 +823,7 @@ export function ChatThread({
       tempId: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       conversationId,
       content,
-      ...(pending ? { attachmentUrl: pending.url, attachmentType: pending.type } : {}),
+      ...(pending ? { attachmentUrl: pending.url, attachmentType: pending.type, attachmentKind: pending.kind, ...(pending.kind === "file" ? { attachmentName: pending.name, attachmentSize: pending.size } : {}) } : {}),
       replyTo,
       mentionedUserIds,
       status: "sending",
@@ -712,7 +856,7 @@ export function ChatThread({
       >
         <span className="min-w-0 flex-1">
           <span className={cn("block font-semibold", mine ? "text-primary-foreground/90" : "text-foreground")}>{quoted.user?.name ?? t("A member")}</span>
-          <span className={cn("block truncate", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{!(quoted.content ?? "").trim() && thumb ? `📷 ${t("Photo")}` : quoteSnippet(quoted.content, quoted.attachmentType)}</span>
+          <span className={cn("block truncate", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{!(quoted.content ?? "").trim() && thumb ? `📷 ${t("Photo")}` : quoteSnippet(quoted.content, quoted.attachmentType, quoted.attachmentName)}</span>
         </span>
         {thumb && <img src={thumb} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded object-cover" />}
       </button>
@@ -720,7 +864,14 @@ export function ChatThread({
   };
 
   return (
-    <div lang={lang} className="flex h-full flex-col">
+    <div lang={lang} className="relative flex h-full flex-col" {...dropProps}>
+      {dragOver && (
+        <div aria-hidden className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-background/90 text-center">
+          <Paperclip className="h-6 w-6 text-primary" />
+          <p className="text-sm font-semibold">{t("Drop to attach")}</p>
+          <p className="px-6 text-xs text-muted-foreground">{t("Photos up to 8 MB. PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP up to 25 MB.")}</p>
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
       <div ref={scrollRef} onScroll={onScroll} className="h-full space-y-1.5 overflow-y-auto overscroll-contain p-4">
         {messagesQuery.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
@@ -782,7 +933,8 @@ export function ChatThread({
               </div>
             );
           }
-          const href = m.attachmentUrl ? attachmentHref(m.attachmentUrl) : null;
+          const isDoc = !!m.attachmentUrl && isDocAttachment(m.attachmentType);
+          const href = m.attachmentUrl && !isDoc ? attachmentHref(m.attachmentUrl) : null;
           return (
             <div key={m.id}>
               {showDay && <div className="my-3 text-center text-[11px] font-semibold text-muted-foreground">{day}</div>}
@@ -795,6 +947,9 @@ export function ChatThread({
                 >
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
                   {renderQuote(m.replyTo, mine)}
+                  {isDoc && (
+                    <FileCard url={m.attachmentUrl} name={attachmentDisplayName(m.attachmentName, m.attachmentUrl)} size={m.attachmentSize} type={m.attachmentType} mine={mine} />
+                  )}
                   {href && (
                     <a aria-label={translate("Open image")} href={href} target="_blank" rel="noopener noreferrer" className="mb-1 block">
                       <img src={href} alt="" loading="lazy" onLoad={onMediaLoad} className="max-h-72 w-auto max-w-full rounded-xl object-cover" />
@@ -853,8 +1008,9 @@ export function ChatThread({
           return (
             <div key={o.tempId} className="flex flex-col items-end gap-1">
               <div className={cn("max-w-[78%] rounded-2xl bg-primary px-3.5 py-2 text-sm text-primary-foreground", failed ? "opacity-70 ring-2 ring-destructive/60" : "opacity-80")}>
-                {renderQuote(o.replyTo ? { id: o.replyTo.id, content: o.replyTo.content, attachmentUrl: o.replyTo.attachmentUrl, attachmentType: o.replyTo.attachmentType, user: o.replyTo.user } : null, true)}
-                {o.attachmentUrl && <img src={o.attachmentUrl} alt="" onLoad={onMediaLoad} className="mb-1 max-h-72 w-auto max-w-full rounded-xl object-cover" />}
+                {renderQuote(o.replyTo ? { id: o.replyTo.id, content: o.replyTo.content, attachmentUrl: o.replyTo.attachmentUrl, attachmentType: o.replyTo.attachmentType, attachmentName: o.replyTo.attachmentName, user: o.replyTo.user } : null, true)}
+                {o.attachmentUrl && o.attachmentKind === "file" && <FileCard name={o.attachmentName ?? t("File")} size={o.attachmentSize} type={o.attachmentType} mine sending />}
+                {o.attachmentUrl && o.attachmentKind !== "file" && <img src={o.attachmentUrl} alt="" onLoad={onMediaLoad} className="mb-1 max-h-72 w-auto max-w-full rounded-xl object-cover" />}
                 {o.content && <MessageText text={o.content} mine />}
                 <span className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
                   {failed ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
@@ -907,41 +1063,79 @@ export function ChatThread({
           <div className="mb-2 flex items-center gap-2 rounded-xl border-l-2 border-primary bg-muted/60 px-3 py-1.5">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold text-primary">{t("Replying to {name}", { name: replyTo.user?.name ?? t("A member") })}</div>
-              <div className="truncate text-xs text-muted-foreground">{quoteSnippet(replyTo.content, replyTo.attachmentType)}</div>
+              <div className="truncate text-xs text-muted-foreground">{quoteSnippet(replyTo.content, replyTo.attachmentType, replyTo.attachmentName)}</div>
             </div>
             <button onClick={() => setReplyTo(null)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title={t("Cancel reply")} aria-label={t("Cancel reply")}><X className="h-4 w-4" /></button>
           </div>
         )}
 
-        {pending && (
+        {pending?.kind === "image" && (
           <div className="mb-2 flex items-center gap-2">
             <img src={pending.url} alt="" className="h-14 w-14 rounded-lg object-cover ring-1 ring-border" />
             <button onClick={() => setPending(null)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title={t("Remove picture")} aria-label={t("Remove picture")}><X className="h-4 w-4" /></button>
           </div>
         )}
-        {uploadError && <p className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
+        {(pending?.kind === "file" || uploading) && (() => {
+          const name = uploading?.name ?? pending?.name ?? "";
+          const size = uploading?.size ?? pending?.size ?? 0;
+          const Icon = fileIconFor(name, pending?.type);
+          return (
+            <div className="mb-2 flex w-full max-w-sm items-center gap-2.5 rounded-xl border border-border bg-muted/50 p-2">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold" title={name}>{name}</span>
+                {uploading ? (
+                  <span className="mt-1 flex items-center gap-2">
+                    <span
+                      role="progressbar"
+                      aria-label={t("Uploading {name}", { name })}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={uploading.pct}
+                      className="h-1.5 flex-1 overflow-hidden rounded-full bg-border"
+                    >
+                      <span className="block h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${uploading.pct}%` }} />
+                    </span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{uploading.pct}%</span>
+                  </span>
+                ) : (
+                  <span className="block text-[11px] text-muted-foreground">{[fileTypeLabel(name), humanSize(size)].filter(Boolean).join(" · ")}</span>
+                )}
+              </span>
+              <button
+                onClick={uploading ? cancelUpload : () => setPending(null)}
+                className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                title={uploading ? t("Cancel upload") : t("Remove file")}
+                aria-label={uploading ? t("Cancel upload") : t("Remove file")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })()}
+        {uploadError && <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
 
         <div className="flex items-end gap-2">
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept={CHAT_ACCEPT}
             className="hidden"
             onChange={(e) => {
-              const f = e.target.files?.[0];
+              const files = e.target.files ? Array.from(e.target.files) : [];
               // Reset first: picking the same file twice in a row fires no change event otherwise.
               e.target.value = "";
-              if (f) upload.mutate(f);
+              takeFiles(files);
             }}
           />
           <button
             onClick={() => fileRef.current?.click()}
             disabled={busy}
-            title={t("Send a picture")}
-            aria-label={t("Send a picture")}
+            title={t("Attach a photo or file")}
+            aria-label={t("Attach a photo or file")}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition-all hover:bg-accent active:scale-[0.95] disabled:opacity-50"
           >
-            {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </button>
           {/* The hint is drawn over the box, cut with an ellipsis, rather than as a placeholder: a
               placeholder wraps to a second, hidden line on a narrow screen. */}
@@ -951,6 +1145,10 @@ export function ChatThread({
             value={input}
             onChange={(e) => { setInput(e.target.value); typing.onInput(e.target.value); }}
             onBlur={typing.stop}
+            // A file pasted into the box (a copied PDF, a screenshot) is attached, not typed.
+            onPaste={(e) => {
+              if (e.clipboardData?.files?.length && takeFiles(e.clipboardData.files)) e.preventDefault();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 // Enter picks the highlighted name while the mention list is open, and only sends

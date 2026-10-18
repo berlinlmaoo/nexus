@@ -1,4 +1,5 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
+import { GideonCreditsAdmin } from "@/components/gideon/GideonCreditsAdmin";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -389,7 +390,7 @@ function Admin() {
         </div>
       )}
       {teamExit && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setTeamExit(null)}>
+        <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setTeamExit(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-bold">{t("Remove from {team}?", { team: teamExit.teamName })}</div>
             <p className="mt-2 text-sm text-muted-foreground"><b className="text-foreground">{teamExit.userName}</b> {t("leaves this team.")}</p>
@@ -590,7 +591,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Pemilih: daftar yang bisa dicari, bukan <select> dengan 22 opsi sepanjang satu kalimat. Yang
           sudah dipakai orang lain tetap terlihat tapi tidak bisa dipilih, lengkap dengan nama pemakainya. */}
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Google Workspace account for {name}", { name: user.name }) : t("Google Workspace account for this person")}</div>
@@ -634,7 +635,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Formulir buat mailbox baru. Modal sendiri: ini mengisi seat lisensi berbayar, dan formulir
           yang ditempel di dalam baris tabel terbaca seperti sesuatu yang boleh diisi asal-asalan. */}
       {making && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setMaking(false)}>
+        <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setMaking(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Create a work email for {name}", { name: user.name }) : t("Create a work email for this person")}</div>
@@ -770,7 +771,9 @@ function UserRow(props: UserRowProps) {
           )}
         </td>
         <td className="px-4 py-3 text-right">
-          <div className="flex items-center justify-end gap-2">
+          {/* Phone: role chip above Details, so Details is always on screen instead of past the swipe edge
+              (owner, 18 Oct 2026). sm+ keeps one row. */}
+          <div className="flex flex-col items-end justify-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             {orgInfo ? (
               <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             ) : deactivated ? (
@@ -2341,18 +2344,19 @@ function AnnouncementsAdmin() {
  * showed the questions would change how people use it, and the ones who most need the help would
  * stop asking.
  */
-/** Control Room › GIDEON: Insights (every run, 12 Oct 2026) and People (who uses it, counts only). */
+/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only) and Credits (18 Oct 2026). */
 function GideonAdmin() {
   const { t } = useLang();
-  const [tab, setTab] = useState<"insights" | "people">("insights");
+  const [tab, setTab] = useState<"insights" | "people" | "credits">("insights");
   const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
   return (
     <div className="space-y-4">
       <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-background p-0.5">
         <button type="button" className={btn(tab === "insights")} onClick={() => setTab("insights")}>{t("Insights")}</button>
         <button type="button" className={btn(tab === "people")} onClick={() => setTab("people")}>{t("People")}</button>
+        <button type="button" className={btn(tab === "credits")} onClick={() => setTab("credits")}>{t("Credits")}</button>
       </div>
-      {tab === "insights" ? <GideonInsights /> : <GideonUsage />}
+      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : <GideonCreditsAdmin />}
     </div>
   );
 }

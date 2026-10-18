@@ -14,6 +14,7 @@ import { deleteLegalFile, DOCX_MIME, readLegalFile, storeLegalFile } from "@/lib
 import { docxToPdf, pdfConfigured } from "@/lib/legal/pdf"
 import { dateFromDay } from "@/lib/legal/documents"
 import { linkProblem } from "@/lib/legal/links"
+import { linkRequestToDocumentTx, lockLegalRequest, requestGenerateProblem } from "@/lib/legal/requests"
 
 // Make a document from a template (owner, 14 Oct 2026). Order is deliberate:
 //   1. check EVERYTHING — the form, the number's own fields, and a dry run of the fill — before a number
@@ -25,7 +26,13 @@ import { linkProblem } from "@/lib/legal/links"
 //      good DOCX, and the PDF can be made again from the document screen.
 
 export class LegalGenerateError extends Error {
-  constructor(message: string, readonly status = 422, readonly fieldErrors: FieldErrors = {}, readonly problems: string[] = []) {
+  constructor(
+    message: string,
+    readonly status = 422,
+    readonly fieldErrors: FieldErrors = {},
+    readonly problems: string[] = [],
+    readonly code?: string,
+  ) {
     super(message)
   }
 }
@@ -40,6 +47,8 @@ type GenerateInput = {
   dealId?: string | null
   /** An addendum: the signed document it amends. */
   parentDocumentId?: string | null
+  /** Made for this Legal request: re-checked and linked inside the transaction (race audit H5). */
+  requestId?: string | null
 }
 
 const parentSelect = {
@@ -150,10 +159,16 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   }
   const counterparty = ((input.counterparty ?? "").trim() || parent?.counterparty || "").slice(0, 200)
   const peek = parent ? await peekAddendum(parent) : null
-  const title = (
-    (input.title ?? "").trim() ||
-    (parent ? `${template.name} ${ordinalWord(peek!.seq)} — ${parent.title}` : `${template.name}${counterparty ? ` — ${counterparty}` : ""}`)
-  ).slice(0, 200)
+  // An addendum's default title names its ordinal ("Addendum Kedua — …"). The peek is only a guess made
+  // outside the number's lock (race audit 16 Oct 2026, Legal LOW): the title is made again from the number
+  // actually issued, inside the transaction. `title` here is what the dry run and the checks use.
+  const typedTitle = (input.title ?? "").trim()
+  const titleFor = (seq: number | null) =>
+    (
+      typedTitle ||
+      (parent ? `${template.name} ${ordinalWord(seq ?? peek!.seq)} — ${parent.title}` : `${template.name}${counterparty ? ` — ${counterparty}` : ""}`)
+    ).slice(0, 200)
+  const title = titleFor(null)
   // An addendum stays with its parent's project / deal unless told otherwise (and only one this person can open).
   let projectId = input.projectId || null
   let dealId = input.dealId || null
@@ -180,12 +195,21 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   try {
     created = await prisma.$transaction(
       async (tx) => {
+        // A document for a request: one at a time per request, decided again here (race audit H5). The
+        // request lock comes before the number's lock, so a refused second press never takes a number.
+        if (input.requestId) {
+          await lockLegalRequest(tx, input.requestId)
+          const problem = await requestGenerateProblem(input.requestId, parent?.id ?? null, tx)
+          if (problem) throw new LegalGenerateError(problem.error, problem.status, {}, [], problem.code)
+        }
         const issued: IssuedLegalNumber = series
           ? await allocateLegalNumber(tx, { series, companyCode: company.code, fields: values, at: docDate, issuedById: actor.userId, subject: title })
           : await allocateAddendumNumber(tx, { parent: parent!, issuedById: actor.userId, subject: title })
+        const finalTitle = parent ? titleFor(issued.seq) : title
+        if (finalTitle !== title) await tx.documentNumber.update({ where: { id: issued.id }, data: { subject: finalTitle } })
         let docx = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, issued.number), ...(parent ? parentAutoValues(parent, issued.seq) : {}) })
         if (kopBytes) docx = applyKop(docx, kopBytes)
-        const fileName = `${downloadBaseName(issued.number, title, "REV 1")}.docx`
+        const fileName = `${downloadBaseName(issued.number, finalTitle, "REV 1")}.docx`
         storedKey = await storeLegalFile(fileName, docx)
         const doc = await tx.legalDocument.create({
           data: {
@@ -196,7 +220,7 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
             documentNumberId: issued.id,
             number: issued.number,
             docType: template.docType,
-            title,
+            title: finalTitle,
             counterparty,
             docDate,
             status: "DRAFT",
@@ -218,6 +242,7 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
         if (issued.reusedFromDocumentId) {
           await tx.legalDocument.updateMany({ where: { id: issued.reusedFromDocumentId }, data: { numberReusedById: doc.id } })
         }
+        if (input.requestId) await linkRequestToDocumentTx(tx, input.requestId, doc.id, parent?.id ?? null, actor.userId)
         return { id: doc.id, number: issued.number, docx, fileName }
       },
       { timeout: 30_000, maxWait: 15_000 },
@@ -261,7 +286,14 @@ export async function makePdfForVersion(documentId: string, version: number, doc
     const pdf = await docxToPdf(docx ?? (await readLegalFile(row.docxKey)))
     const key = await storeLegalFile((fileName ?? row.fileName).replace(/\.docx$/i, ".pdf"), pdf)
     const old = row.pdfKey
-    await prisma.legalDocumentVersion.update({ where: { id: row.id }, data: { pdfKey: key } })
+    // Two remakes at once (a retry, or two people pressing Make PDF): only the one that still sees the
+    // PDF it started from swaps it in; the other deletes its own file instead of orphaning it (race
+    // audit 16 Oct 2026, Legal LOW).
+    const swapped = await prisma.legalDocumentVersion.updateMany({ where: { id: row.id, pdfKey: old }, data: { pdfKey: key } })
+    if (swapped.count === 0) {
+      await deleteLegalFile(key)
+      return null
+    }
     await deleteLegalFile(old)
     return null
   } catch (error) {

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getVaultActor, canModifyItem, isBodPlus } from "@/lib/vault"
+import { getVaultActor, canModifyItem, isBodPlus, lockVaultTree } from "@/lib/vault"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitVaultChanged } from "@/lib/socket-emitter"
 
@@ -34,14 +34,24 @@ export async function POST(request: NextRequest) {
     // The rows go (the quota is freed now); they are kept first, files included, so Control Room →
     // Audit can bring the whole trash back as it was. The files leave the disk with the 90-day purge
     // of copies (lib/deletion-snapshot.ts), once nothing points at them.
+    // Race audit 16 Oct 2026 (M15): an item restored between the read above and the delete used to be
+    // destroyed anyway. Under the Vault's exclusive tree lock (which a restore takes too), the list is cut
+    // down to what is STILL in the trash before the copy is kept and the rows go. `ids` is the same array
+    // restorableDelete was given as rootIds, so the copy covers exactly what is deleted.
+    const workspaceId = actor.workspaceId
     const ids = mine.map((t) => t.id)
     await restorableDelete({
+      before: async (tx) => {
+        await lockVaultTree(tx, workspaceId, "exclusive")
+        const still = new Set((await tx.vaultItem.findMany({ where: { id: { in: ids }, deletedAt: { not: null } }, select: { id: true } })).map((r) => r.id))
+        for (let i = ids.length - 1; i >= 0; i--) if (!still.has(ids[i])) ids.splice(i, 1)
+      },
       entityType: "vault_trash", entityId: actor.workspaceId, rootIds: ids,
       entityName: `Vault trash · ${ids.length} ${ids.length === 1 ? "item" : "items"}`,
       workspaceId: actor.workspaceId, userId: actor.userId, request,
       metadata: { purged: ids.length, scope: isBodPlus(actor.orgRole) ? "all" : "own" },
       meta: { open: { type: "vault", id: actor.workspaceId } },
-      remove: (tx) => tx.vaultItem.deleteMany({ where: { id: { in: ids } } }),
+      remove: (tx) => tx.vaultItem.deleteMany({ where: { id: { in: ids }, deletedAt: { not: null } } }),
     })
     emitVaultChanged(actor.workspaceId, actor.userId)
 

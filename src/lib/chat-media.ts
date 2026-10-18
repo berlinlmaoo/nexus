@@ -69,10 +69,14 @@ export type MediaItem = {
   url: string
   attachmentType?: string | null
   title?: string
+  /** docs (18 Oct 2026): the file's own name and size, when it was sent with them. */
+  name?: string | null
+  size?: number | null
 }
 
-/** The name a document goes by: its caption, else the file name at the end of its path. */
-function docTitle(content: string, url: string): string {
+/** The name a document goes by: the name it was sent as, else its caption, else the end of its path. */
+function docTitle(content: string, url: string, name?: string | null): string {
+  if (name) return name
   const caption = content.replace(/\s+/g, " ").trim()
   if (caption) return caption.length > 120 ? caption.slice(0, 119).trimEnd() + "…" : caption
   const last = url.split("?")[0].split("/").filter(Boolean).pop() ?? url
@@ -98,7 +102,7 @@ export async function mediaPage(
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
-    select: { id: true, createdAt: true, content: true, attachmentUrl: true, attachmentType: true, user: { select: { id: true, name: true } } },
+    select: { id: true, createdAt: true, content: true, attachmentUrl: true, attachmentType: true, attachmentName: true, attachmentSize: true, user: { select: { id: true, name: true } } },
   })
   const hasMore = rows.length > limit
   const page = hasMore ? rows.slice(0, limit) : rows
@@ -112,7 +116,7 @@ export async function mediaPage(
         ...base,
         url: m.attachmentUrl,
         attachmentType: m.attachmentType,
-        ...(type === "docs" ? { title: docTitle(m.content, m.attachmentUrl) } : {}),
+        ...(type === "docs" ? { title: docTitle(m.content, m.attachmentUrl, m.attachmentName), name: m.attachmentName, size: m.attachmentSize } : {}),
       })
     }
   }

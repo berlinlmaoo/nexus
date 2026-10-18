@@ -40,7 +40,10 @@ vi.mock('@/lib/prisma', () => {
     pipelineDealChange: { createMany: vi.fn(async () => ({ count: 0 })), findMany: vi.fn(async () => []) },
     workspaceMember: { findFirst: vi.fn(async () => ({ id: 'm' })) },
     user: { findUnique: vi.fn(async () => ({ name: 'Rina Finance', email: 'rina@x' })) },
-    $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    // An interactive transaction (the PATCH runs under the deal's row lock, race audit M6) gets the same mock.
+    $transaction: vi.fn(async (ops: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) => (typeof ops === 'function' ? ops(prisma) : Promise.all(ops))),
+    $queryRaw: vi.fn(async () => []),
+    $executeRaw: vi.fn(async () => 0),
   }
   return { default: prisma }
 })

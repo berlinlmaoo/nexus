@@ -194,6 +194,18 @@ export type RemoteApplyResult = {
   parentIds: Set<string>;
 };
 
+/**
+ * An event older than what this tab already holds (race audit 16 Oct 2026, M20): two edits of one task a
+ * moment apart can announce themselves in the opposite order, and applying the older one last put stale
+ * values back on screen. Compared by the row's updatedAt; an event or a card without one is applied as before.
+ */
+export function isStaleTaskEvent(cached: { updatedAt?: string | null } | null | undefined, incoming: object): boolean {
+  const at = (incoming as { updatedAt?: unknown }).updatedAt;
+  const a = typeof cached?.updatedAt === "string" ? Date.parse(cached.updatedAt) : NaN;
+  const b = typeof at === "string" ? Date.parse(at) : NaN;
+  return Number.isFinite(a) && Number.isFinite(b) && b < a;
+}
+
 const emptyResult = (): RemoteApplyResult => ({ refetchProjects: new Set(), touchedProjects: new Set(), parentIds: new Set() });
 
 /**
@@ -236,6 +248,7 @@ export function applyRemoteTask(qc: QueryClient, kind: "created" | "updated", ta
     const order = task.listOrder as { taskListId?: unknown; ids?: unknown } | undefined;
 
     if (found && foundList) {
+      if (isStaleTaskEvent(found, task)) continue;
       const next: NexusTask = { ...found, ...patch };
       if (Array.isArray(task.customFieldValues)) next.customFieldValues = withFieldDefs(data, task.customFieldValues);
       const moveTo = target && target.id !== foundList.id ? target : null;
@@ -304,11 +317,11 @@ export function applyRemoteTask(qc: QueryClient, kind: "created" | "updated", ta
   // Flat lists (Calendar / Sheet task column) and the open popup: the fields that changed.
   for (const [key, data] of qc.getQueriesData<NexusTask[]>({ queryKey: ["nexus", "project-calendar-tasks"] })) {
     if (!Array.isArray(data) || !data.some((x) => x.id === task.id)) continue;
-    qc.setQueryData<NexusTask[]>(key, data.map((x) => (x.id === task.id ? { ...x, ...patch } : x)));
+    qc.setQueryData<NexusTask[]>(key, data.map((x) => (x.id === task.id && !isStaleTaskEvent(x, task) ? { ...x, ...patch } : x)));
   }
   const detailKey = ["task", task.id];
   const detail = qc.getQueryData<NexusTask>(detailKey);
-  if (detail) {
+  if (detail && !isStaleTaskEvent(detail, task)) {
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(patch)) if (v === null || typeof v !== "object" || Array.isArray(v)) safe[k] = v;
     qc.setQueryData<NexusTask>(detailKey, { ...detail, ...safe, ...(Array.isArray(task.assignees) ? { assignees: task.assignees as NexusTask["assignees"] } : {}) });

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { POSITION_ID_ORDER, TASK_ORDER } from "@/lib/task-order"
 import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
@@ -57,11 +58,11 @@ export async function GET(
               },
               // Ties (every task the apps create is position 0) in a fixed order: without it Postgres
               // returned them in a different order after any write and cards jumped around the column.
-              orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+              orderBy: TASK_ORDER,
             },
             // Tasks linked into this project from other projects ("Also in projects").
             taskProjects: {
-              orderBy: { position: "asc" },
+              orderBy: POSITION_ID_ORDER,
               include: {
                 task: {
                   include: {
@@ -79,7 +80,7 @@ export async function GET(
               },
             },
           },
-          orderBy: { position: "asc" },
+          orderBy: POSITION_ID_ORDER,
         },
         members: {
           include: { user: { select: USER_CARD_SELECT } },

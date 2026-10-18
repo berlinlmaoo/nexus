@@ -8,7 +8,17 @@ import { animate as fmAnimate, motion, useMotionValue, useReducedMotion } from "
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
-  AlignLeft,
+  ArrowUp,
+  CheckSquare,
+  CircleDot,
+  Flag,
+  Hash,
+  Loader,
+  Tags,
+  Type,
+  UserRound,
+  Users,
+  Maximize2,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -21,18 +31,16 @@ import {
   ListChecks,
   Loader2,
   MapPin,
-  MessageCircle,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   Plus,
+  Reply,
   Search,
-  Send,
-  SlidersHorizontal,
   Star,
   Trash2,
   FolderInput,
   Trophy,
-  User,
   UserPlus,
   X,
   Sparkles,
@@ -74,6 +82,7 @@ import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
 import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { LoadError, retryTransient } from "@/components/LoadError";
 import { EmptyAction } from "@/components/EmptyState";
+import { Link } from "@tanstack/react-router";
 
 // The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
 // rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
@@ -156,10 +165,9 @@ function CreatedByLine({ creator, createdAt }: { creator: NexusUser; createdAt: 
     ? when.toLocaleDateString(lang.locale, { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric" })
     : null;
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
-      <span>{lang.t("Created by")}</span>
-      <MiniAvatar user={creator} size={18} />
-      <span className="font-semibold text-foreground">{displayName(creator)}</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1.5 text-sm text-muted-foreground">
+      <MiniAvatar user={creator} size={20} />
+      <span className="text-foreground">{displayName(creator)}</span>
       {creator.deactivatedAt && <PersonLeftTag />}
       {date && <span>· {date}</span>}
     </div>
@@ -181,14 +189,45 @@ function isDoneStatus(s?: string | null) {
   return (s ?? "").toUpperCase() === "DONE";
 }
 
-/** White card with an uppercase icon label — the old-NEXUS task-detail section. */
+/** One property of the task page (Notion's row, 16 Oct 2026): the icon and name in a ~160px muted column on the
+ *  left, the value on the right, which reads as text until hovered or clicked. */
+function PropRow({ icon: Icon, label, aside, hint, children }: { icon: typeof Plus; label: string; aside?: ReactNode; hint?: string; children: ReactNode }) {
+  return (
+    <div role="listitem" className="group/prop flex min-h-9 items-start gap-1 rounded-lg">
+      <div className="flex h-9 w-[136px] shrink-0 items-center gap-2 px-1.5 text-sm text-muted-foreground sm:w-40 pointer-coarse:h-11" title={hint ?? label}>
+        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="min-w-0 truncate">{label}</span>
+        {aside}
+      </div>
+      <div className="flex min-h-9 min-w-0 flex-1 items-center py-0.5 text-sm pointer-coarse:min-h-11">{children}</div>
+    </div>
+  );
+}
+
+/** The glyph of a project field on its property row (the table's header glyphs). */
+function fieldIcon(type?: string | null): typeof Plus {
+  switch ((type ?? "").toUpperCase()) {
+    case "NUMBER": return Hash;
+    case "SELECT": case "STATUS": return CircleDot;
+    case "MULTI_SELECT": return Tags;
+    case "DATE": return Calendar;
+    case "URL": return Link2;
+    case "FILE": return Paperclip;
+    case "PLACE": return MapPin;
+    case "PERSON": return Users;
+    case "CHECKBOX": return CheckSquare;
+    default: return Type;
+  }
+}
+
+/** A section under the page body (subtasks, attachments, activity). */
 function SecCard({ icon: Icon, label, action, children, className }: { icon: typeof Plus; label: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     // Flat sections divided by a hairline (Notion's page), not a stack of floating shadow cards; the
     // heading reads in sentence case (audit, 12 Oct 2026).
     <section className={cn("border-t border-border/70 pt-4", className)}>
-      <div className="mb-2.5 flex min-h-7 items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><Icon className="h-4 w-4" />{label}</span>
+      <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 font-display text-[15px] font-bold text-foreground"><Icon className="h-4 w-4 text-muted-foreground" />{label}</h3>
         {action}
       </div>
       {children}
@@ -196,7 +235,13 @@ function SecCard({ icon: Icon, label, action, children, className }: { icon: typ
   );
 }
 
-export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; onClose: () => void; morphId?: string }) {
+export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
+  taskId: string; onClose: () => void; morphId?: string;
+  /** Opened at /tasks/$id: the dialog IS the page, so it has no "Open as page" link. */
+  asPage?: boolean;
+}) {
+  // A task opens CENTRED, NEXUS's own popup (owner, 16 Oct 2026: the right-hand side peek of the first Notion pass
+  // was taken back out); inside, it reads as a Notion page: title, property rows, comments, then the body.
   const qc = useQueryClient();
   const reduce = useReducedMotion();
   const morph = !!morphId && !reduce;
@@ -206,7 +251,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // yank or blur it (the rect is just a number snapshot).
   const asideRef = useRef<HTMLElement | null>(null);
   const panelRectRef = useRef<DOMRect | null>(null); // panel's natural (untransformed) rect, measured once
-  const sourceRect = useRef<DOMRect | null>(morphId && lastMorph && lastMorph.id === morphId ? lastMorph.rect : null);
+  const sourceRect = useRef<DOMRect | null>(morph && lastMorph && lastMorph.id === morphId ? lastMorph.rect : null);
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const msx = useMotionValue(1);
@@ -281,7 +326,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const openSubRef = useRef<string | null>(null);
   useEffect(() => {
     // defaultPrevented: Esc already closed a menu or the delete alert (Radix) — leave the panel open.
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !openSubRef.current) requestClose(); };
+    // ProseMirror marks every Escape typed in the description as handled, so that alone kept the popup open while
+    // typing in the body (QA 16 Oct 2026); there it closes unless the slash / mention / block menu is open.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || openSubRef.current) return;
+      const inBody = !!(e.target as HTMLElement | null)?.closest?.(".ProseMirror");
+      const bodyMenu = !!document.querySelector('.nx-menu[role="listbox"], .nx-menu[role="menu"]');
+      if (!e.defaultPrevented || (inBody && !bodyMenu)) requestClose();
+    };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -344,6 +396,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // a title you typed is ever written back, so a focus + blur can't put an old title over a new one
   // (bug hunt C-BUG-3, 12 Oct 2026).
   const titleDirty = useRef(false);
+  // The title grows with its text (one line for a short name, no blank second line).
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [title, task.data?.id]);
   useEffect(() => {
     if (t && !titleDirty.current) setTitle(t.title ?? "");
   }, [t?.id, t?.title]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -399,6 +459,16 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     // The composer keeps the text (C-BUG-7); this says why it didn't go.
     onError: (e: unknown) => toast.error(tr("Couldn't send the comment. Your text is still there — try again."), { description: friendlyError(e) }),
   });
+  const editComment = useMutation({
+    mutationFn: ({ commentId, content }: { commentId: string; content: string }) => nexusApi.updateComment(taskId, commentId, content),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't edit the comment."), { description: friendlyError(e) }),
+  });
+  const replyComment = useMutation({
+    mutationFn: ({ parentId, content, mentionedUserIds }: { parentId: string; content: string; mentionedUserIds?: string[] }) => nexusApi.addComment(taskId, content, { parentId, mentionedUserIds }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't send the reply."), { description: friendlyError(e) }),
+  });
   const delComment = useMutation({
     mutationFn: (commentId: string) => nexusApi.deleteComment(taskId, commentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
@@ -452,7 +522,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-followers", taskId] }),
   });
   const setCfMut = useMutation({
-    mutationFn: ({ id, value }: { id: string; value: unknown }) => nexusApi.setCustomFieldValue(id, taskId, value),
+    mutationFn: ({ id, value, prev }: { id: string; value: unknown; prev?: unknown }) => nexusApi.saveCustomFieldValue(id, taskId, value, prev),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-cf", taskId] }); if (projectId) qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); },
   });
   const [cfAdding, setCfAdding] = useState(false);
@@ -504,8 +574,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
   if (typeof document === "undefined") return null;
 
+  const sortedComments = [...(comments.data?.comments ?? [])].sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
+  const me = projectMembers.find((m) => m.id === currentUserId) ?? (currentUserId ? ({ id: currentUserId } as NexusUser) : null);
+  const done = isDoneStatus(t?.status);
+
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center p-0 sm:p-4">
       <motion.div
         className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm"
         style={{ opacity: backdropO }}
@@ -521,8 +595,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         ref={asideRef}
         role="dialog"
         aria-modal="true"
+        aria-label={task.data?.title || tr("Task")}
         style={{ x: mx, y: my, scaleX: msx, scaleY: msy, opacity: asideO, transformOrigin: "top left", pointerEvents: closing ? "none" : undefined, ...(morph ? { borderRadius: 24 } : null) }}
-        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-[min(92dvh,880px)] sm:max-h-[92dvh] sm:rounded-3xl sm:border"
+        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-[min(92dvh,900px)] sm:max-h-[92dvh] sm:rounded-3xl sm:border"
       >
             {/* inner scroll region — separate from the animated shell so the transform never breaks scrolling on iOS.
                 During the morph the content fades in just after the box starts so it doesn't look stretched. */}
@@ -532,35 +607,39 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               transition={{ delay: morph ? 0.05 : 0, duration: 0.16 }}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
             >
-            {/* header. On a phone (audit 12 Oct 2026): the actions row first with 44px targets and Close at the far
-                end, the secondary actions in a ⋯ menu (Delete no longer sits next to Close), the breadcrumb on its own line. */}
-        <div className="sticky top-0 z-10 flex flex-col-reverse gap-0.5 border-b border-border bg-card/85 px-5 pb-2.5 pt-1.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
-          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
+        {/* Top bar, quiet like a Notion page's: open as page + the breadcrumb on the left; on the right the actions
+            people use (watch, favourite, like, the BoD quest), the rest (copy, delete) behind ···, then Close.
+            Phone: 44px targets, the breadcrumb on its own line under the actions. */}
+        <div className="sticky top-0 z-10 flex flex-col-reverse gap-0.5 bg-card/90 px-4 pb-2 pt-1.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-2.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+            {!asPage && (
+              <Link to="/tasks/$taskId" params={{ taskId }} className="-ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" title={tr("Open as page")} aria-label={tr("Open as page")}><Maximize2 className="h-4 w-4" /></Link>
+            )}
             {t?.taskList?.project && (
               <>
-                <ProjectMarkFor projectId={t.taskList.project.id} icon={(t.taskList.project as { icon?: string | null }).icon} size={14} />
+                <ProjectMarkFor projectId={t.taskList.project.id} icon={(t.taskList.project as { icon?: string | null }).icon} size={16} />
                 <span className="truncate">{t.taskList.project.name}</span>
                 <span className="text-muted-foreground/50">/</span>
                 <span className="truncate">{t.taskList?.name}</span>
               </>
             )}
           </div>
-          <div className="-mr-3 flex items-center justify-end gap-0.5 sm:mr-0 sm:gap-1">
+          <div className="-mr-2 flex items-center justify-end gap-0.5 sm:mr-0">
             {/* Task actions only once there IS a task: a deleted or foreign task kept Watch/Star/Like/Move/Delete
                 live over its error (QA 13 Oct 2026). Close stays. */}
             {t && (<>
             <button
               onClick={() => followMut.mutate()}
-              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] sm:h-auto sm:min-w-0", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
+              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold transition-colors active:scale-[0.97] sm:h-8 sm:min-w-8", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
               title={followers.data?.isFollowing ? tr("Following") : tr("Follow")}
               aria-label={followers.data?.isFollowing ? tr("Following") : tr("Follow")}
               aria-pressed={!!followers.data?.isFollowing}
             >
-              <Eye className="h-4 w-4" /> {followers.data?.followers?.length ?? 0}
+              <Eye className="h-4 w-4" /> <span className="tabular-nums">{followers.data?.followers?.length ?? 0}</span>
             </button>
             <button
               onClick={() => favMut.mutate()}
-              className={cn("hidden rounded-lg p-1.5 transition-colors active:scale-[0.95] sm:inline-flex", isFavorited ? "text-amber-500" : "text-muted-foreground hover:bg-accent")}
+              className={cn("grid h-11 w-11 place-items-center rounded-lg transition-colors active:scale-[0.95] sm:h-8 sm:w-8", isFavorited ? "text-amber-500" : "text-muted-foreground hover:bg-accent")}
               title={tr("Favorite")}
               aria-label={tr("Favorite")}
               aria-pressed={isFavorited}
@@ -572,47 +651,39 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               // POST on this route TOGGLES, so a double-click sent two POSTs and the second one took
               // the like straight back off. One request at a time.
               disabled={likeMut.isPending}
-              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60 sm:h-auto sm:min-w-0", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
+              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60 sm:h-8 sm:min-w-8", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
               title={tr("Like")}
               aria-label={tr("Like")}
               aria-pressed={!!t?.liked}
             >
-              <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
+              <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> <span className="tabular-nums">{t?.likeCount ?? 0}</span>
             </button>
-            {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Make a quest")} aria-label={tr("Make a quest")}>
+            {canMakeQuest && (
+              <button onClick={() => setQuestOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:grid" title={tr("Make a quest")} aria-label={tr("Make a quest")}>
                 <Trophy className="h-4 w-4" />
               </button>
             )}
-            {/* Copy this one task into another project (the bulk bar covers many at once, but it's
-                gated behind the project's duplicate-mode toggle — this is always available). */}
-            <button onClick={() => setCopyOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Copy to another project")} aria-label={tr("Copy to another project")}>
-              <FolderInput className="h-4 w-4" />
-            </button>
-            {canDeleteTask && <button onClick={() => setConfirmDelete(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:inline-flex" title={tr("Delete task")} aria-label={tr("Delete task")}>
-              <Trash2 className="h-4 w-4" />
-            </button>}
-            {/* Phone: the secondary actions behind ⋯ */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:hidden" aria-label={tr("More actions")}>
+                <button type="button" className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent data-[state=open]:bg-accent sm:h-8 sm:w-8" title={tr("More actions")} aria-label={tr("More actions")}>
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="z-[60] w-56">
-                <DropdownMenuItem onSelect={() => favMut.mutate()} className="min-h-11">
-                  <Star className={cn("h-4 w-4", isFavorited && "fill-amber-500 text-amber-500")} />{tr("Favorite")}
-                </DropdownMenuItem>
-                {canMakeQuest && t && (
-                  <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-11"><Trophy className="h-4 w-4" />{tr("Make a quest")}</DropdownMenuItem>
+              <DropdownMenuContent align="end" className="z-[60] w-60">
+                {canMakeQuest && (
+                  <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-9 sm:hidden"><Trophy className="h-4 w-4" />{tr("Make a quest")}</DropdownMenuItem>
                 )}
-                <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-11"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>
+                {/* Can view members can't copy (owner, 18 Oct 2026); the server already refuses (NEEDS_EDIT_ACCESS). */}
+                {canEditTask && <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-9"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>}
+                {!asPage && (
+                  <DropdownMenuItem asChild className="min-h-9"><Link to="/tasks/$taskId" params={{ taskId }}><Maximize2 className="h-4 w-4" />{tr("Open as page")}</Link></DropdownMenuItem>
+                )}
                 {canDeleteTask && <DropdownMenuSeparator />}
-                {canDeleteTask && <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-11 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>}
+                {canDeleteTask && <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-9 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
             </>)}
-            <button onClick={requestClose} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:h-auto sm:w-auto sm:p-1.5" title={tr("Close")} aria-label={tr("Close")}>
+            <button onClick={requestClose} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:h-8 sm:w-8" title={tr("Close")} aria-label={tr("Close")}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -658,7 +729,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         )}
 
         {t && (
-          <div className="flex flex-1 flex-col gap-5 px-5 py-5 sm:px-8 sm:py-6">
+          // The task as a page (16 Oct 2026, Notion's anatomy in NEXUS's look): title, one row per property, the
+          // comments, then the body; subtasks, attachments and activity follow as sections.
+          <div className="flex flex-1 flex-col gap-6 px-5 pb-10 pt-3 sm:px-12 sm:pt-6">
             {/* Quest nudge: this task is part of one or more task-bundle quests → motivate finishing it. */}
             {(t.quests ?? []).map((q) => (
               <div key={q.id} className="flex items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
@@ -675,98 +748,102 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{lvl === "COMMENT" ? tr("You can comment on this task, but not change it.") : tr("View only: you can read this task, but not change it.")}</p>
             )}
             <fieldset disabled={!canEditTask} className="contents [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-60 [&_input:disabled]:opacity-60">
-            {/* toolbar: mark done + status + priority (old-NEXUS pills). Phone: Mark done on its own row, status and
-                priority side by side below it (they wrapped raggedly, audit 12 Oct 2026). */}
-            <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
-              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("col-span-2 inline-flex items-center justify-center gap-2 rounded-full sm:justify-start border px-3.5 py-2 text-xs font-bold transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
-                {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? tr("Done") : tr("Mark done")}
-              </button>
-              {/* Section = the project's board column (TaskList). Falls back to global status if the
-                  task isn't in a project (no sections). */}
-              {sections.length > 0 && projectId && usesStatusOptions(sections) ? (
-                // Status = the project's status options, grouped To-do / In progress / Complete (owner,
-                // 12 Oct 2026, Notion's picker). Picking one moves the task there; the server sets its status.
-                <StatusPicker
-                  projectId={projectId}
-                  sections={sections}
-                  value={t.taskListId}
-                  onPick={(id) => update.mutate({ taskListId: id } as never)}
-                  trigger={
-                    <button type="button" className="inline-flex min-w-0 items-center justify-between gap-1 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:bg-muted" aria-label={tr("Status")}>
-                      <StatusPill option={sections.find((x) => x.id === t.taskListId) ?? null} size="md" />
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  }
-                />
-              ) : sections.length > 0 ? (
-                <SelectPicker
-                  variant="pill"
-                  ariaLabel={tr("Section")}
-                  value={t.taskListId ?? ""}
-                  onChange={(v) => update.mutate({ taskListId: v } as never)}
-                  options={sections.map((s) => ({ value: s.id, label: s.name }))}
-                  className="w-full justify-between py-1.5 text-xs font-bold uppercase tracking-wider sm:w-auto sm:max-w-[200px]"
-                />
-              ) : (
-                <SelectPicker
-                  variant="pill"
-                  ariaLabel={tr("Status")}
-                  value={t.status ?? "TODO"}
-                  onChange={(v) => update.mutate({ status: v as never })}
-                  options={STATUS_OPTIONS.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))}
-                  className="w-full justify-between py-1 pl-1 pr-2.5 sm:w-auto"
-                />
+            <div className="flex flex-col gap-2">
+              {/* parent breadcrumb — this task is a SUBTASK; tap to open the parent */}
+              {t.parent && (
+                <button
+                  onClick={() => setOpenSub(t.parent!.id)}
+                  className="inline-flex max-w-full items-center gap-1.5 self-start rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground transition hover:opacity-80"
+                >
+                  <ListChecks className="h-3 w-3 shrink-0" />
+                  <span className="shrink-0 text-accent-foreground/70">{tr("Subtask of")}</span>
+                  <span className="truncate">{t.parent.title}</span>
+                </button>
               )}
-              <SelectPicker
-                variant="pill"
-                ariaLabel={tr("Priority")}
-                value={t.priority ?? "NONE"}
-                onChange={(v) => update.mutate({ priority: v as never })}
-                options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))}
-                className="w-full justify-between py-1 pl-1 pr-2.5 sm:w-auto"
+              {/* title: the page heading */}
+              <textarea
+                ref={titleRef}
+                value={title}
+                aria-label={tr("Task title")}
+                data-keep-font
+                onChange={(e) => { titleDirty.current = true; setTitle(e.target.value.replace(/\n/g, " ")); }}
+                onBlur={commitTitle}
+                // A title is one line (C-BUG-25): Enter saves it, it never adds a line break.
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); (e.currentTarget as HTMLTextAreaElement).blur(); } }}
+                rows={1}
+                placeholder={tr("Untitled")}
+                className="w-full resize-none overflow-hidden rounded-lg bg-transparent font-display text-[1.75rem] font-bold leading-tight tracking-tight text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:bg-muted/40 sm:text-[2rem]"
               />
             </div>
 
-            {/* parent breadcrumb — this task is a SUBTASK; tap to open the parent */}
-            {t.parent && (
-              <button
-                onClick={() => setOpenSub(t.parent!.id)}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground transition hover:opacity-80"
-              >
-                <ListChecks className="h-3 w-3 shrink-0" />
-                <span className="shrink-0 text-accent-foreground/70">{tr("Subtask of")}</span>
-                <span className="truncate">{t.parent.title}</span>
-              </button>
-            )}
-
-            {/* title */}
-            <textarea
-              value={title}
-              aria-label={tr("Task title")}
-              data-keep-font
-              onChange={(e) => { titleDirty.current = true; setTitle(e.target.value.replace(/\n/g, " ")); }}
-              onBlur={commitTitle}
-              // A title is one line (C-BUG-25): Enter saves it, it never adds a line break.
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); (e.currentTarget as HTMLTextAreaElement).blur(); } }}
-              rows={2}
-              className="w-full resize-none rounded-lg bg-transparent font-display text-2xl font-bold leading-tight tracking-tight text-foreground outline-none transition-colors focus:bg-muted/50 sm:text-[1.75rem]"
-            />
-
-            {/* assigned personnel + due date (2-col) */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SecCard icon={User} label={tr("Assignees")}>
-                <div className="flex flex-wrap items-center gap-2">
+            {/* Properties: one row each, the name on the left, the value on the right reading as text until hovered. */}
+            <div role="list" aria-label={tr("Properties")} className="-mx-1.5 flex flex-col">
+              <PropRow icon={Loader} label={tr("Status")}>
+                <div className="flex min-w-0 items-center gap-1">
+                  {/* Done is a tick on the Status row (it was the big "Mark done" button). */}
+                  <button type="button" onClick={() => update.mutate({ status: (done ? "TODO" : "DONE") as never })} aria-pressed={done} aria-label={done ? tr("Move back to To-do") : tr("Mark done")} title={done ? tr("Move back to To-do") : tr("Mark done")} className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors pointer-coarse:h-11 pointer-coarse:w-11", done ? "text-success" : "text-muted-foreground/60 hover:bg-success/10 hover:text-success")}>
+                    {done ? <CheckCircle2 className="h-[18px] w-[18px]" /> : <Circle className="h-[18px] w-[18px]" />}
+                  </button>
+                  {/* Section = the project's board column (TaskList). Falls back to global status if the
+                      task isn't in a project (no sections). */}
+                  {sections.length > 0 && projectId && usesStatusOptions(sections) ? (
+                    // Status = the project's status options, grouped To-do / In progress / Complete (owner,
+                    // 12 Oct 2026, Notion's picker). Picking one moves the task there; the server sets its status.
+                    <StatusPicker
+                      projectId={projectId}
+                      sections={sections}
+                      value={t.taskListId}
+                      onPick={(id) => update.mutate({ taskListId: id } as never)}
+                      trigger={
+                        <button type="button" className="group/sp inline-flex min-h-8 min-w-0 items-center gap-1 rounded-lg px-1.5 transition-colors hover:bg-muted data-[state=open]:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={tr("Status")}>
+                          <StatusPill option={sections.find((x) => x.id === t.taskListId) ?? null} size="md" />
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/sp:opacity-100 pointer-coarse:opacity-100" />
+                        </button>
+                      }
+                    />
+                  ) : sections.length > 0 ? (
+                    <SelectPicker
+                      ariaLabel={tr("Section")}
+                      value={t.taskListId ?? ""}
+                      onChange={(v) => update.mutate({ taskListId: v } as never)}
+                      options={sections.map((s) => ({ value: s.id, label: s.name }))}
+                      className="max-w-full"
+                    />
+                  ) : (
+                    <SelectPicker
+                      ariaLabel={tr("Status")}
+                      value={t.status ?? "TODO"}
+                      onChange={(v) => update.mutate({ status: v as never })}
+                      options={STATUS_OPTIONS.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))}
+                      className="max-w-full"
+                    />
+                  )}
+                </div>
+              </PropRow>
+              <PropRow icon={Flag} label={tr("Priority")}>
+                <SelectPicker
+                  ariaLabel={tr("Priority")}
+                  value={t.priority ?? "NONE"}
+                  onChange={(v) => update.mutate({ priority: v as never })}
+                  options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))}
+                  className="max-w-full"
+                />
+              </PropRow>
+              <PropRow icon={Users} label={tr("Assignees")}>
+                <div className="flex min-h-8 flex-wrap items-center gap-1.5 px-1">
                   {(t.assignees ?? []).map((a) => (
-                    <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
+                    <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-0.5 pl-0.5 pr-1.5 text-sm">
                       <MiniAvatar user={a.user} size={22} /> {a.user?.name}
                       {a.user?.deactivatedAt && <PersonLeftTag />}
                       <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="grid place-items-center rounded-full p-0.5 text-muted-foreground hover:text-destructive pointer-coarse:-m-3.5 pointer-coarse:size-11"><X className="h-3 w-3" /></button>
                     </span>
                   ))}
                   <div className="relative">
-                    <button aria-label={tr("Add assignee")} onClick={() => { setAssignSearch(""); setShowAssignPicker((v) => !v); }} className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-4 w-4" /></button>
+                    <button aria-label={tr("Add assignee")} onClick={() => { setAssignSearch(""); setShowAssignPicker((v) => !v); }} className={cn("inline-flex h-7 items-center gap-1 rounded-full text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11", (t.assignees?.length ?? 0) === 0 ? "px-1" : "w-7 justify-center pointer-coarse:w-11")}>
+                      {(t.assignees?.length ?? 0) === 0 ? <span className="text-muted-foreground/70">{tr("Not set")}</span> : <Plus className="h-4 w-4" />}
+                    </button>
                     {showAssignPicker && (
-                      <div className="absolute z-20 mt-1 w-60 rounded-xl border border-border bg-popover p-1 shadow-pop">
+                      <div className="absolute z-20 mt-1 w-64 rounded-xl border border-border bg-popover p-1 shadow-pop">
                         <div className="relative p-1">
                           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                           <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder={tr("Search team members…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
@@ -784,87 +861,87 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     )}
                   </div>
                 </div>
-              </SecCard>
-              <SecCard icon={Calendar} label={tr("Due date")}>
+              </PropRow>
+              <PropRow icon={Calendar} label={tr("Due date")}>
                 {/* Date + optional time; DateField returns a UTC ISO string for the API. */}
-                <DateField withTime value={t.dueDate ?? null} onChange={(v) => update.mutate({ dueDate: v })} ariaLabel={tr("Due date")} placeholder={tr("No due date")} className="h-10 rounded-xl border border-border bg-background px-3 font-semibold hover:bg-background hover:border-primary/40" />
-              </SecCard>
-            </div>
-
-            {/* who created it — every task, not only projects with a CREATED field (owner, 8 Oct 2026) */}
-            {t.creator?.name && <CreatedByLine creator={t.creator} createdAt={t.createdAt ?? null} />}
-
-            {/* fields — project fields listed directly (no separate "custom" category) + inline "+ new field" */}
-            {projectId && (
-              <SecCard
-                icon={SlidersHorizontal}
-                label={tr("Fields")}
-                action={
-                  <button onClick={() => setCfAdding((v) => !v)} title={tr("New field")} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
-                    <Plus className="h-3.5 w-3.5" /> {tr("New field")}
-                  </button>
-                }
-              >
-                {cfAdding && (
-                  <div className="mb-3">
-                    <FieldEditor saving={createCf.isPending} onSave={(p) => createCf.mutate(p)} onCancel={() => setCfAdding(false)} />
-                  </div>
-                )}
-                {(customFields.data?.fields?.length ?? 0) > 0 ? (
-                  <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
-                    {customFields.data!.fields.map((f) => (
-                      <div key={f.id} className="relative mb-3 min-w-0">
-                        {ai.aiFields.has(f.id) && (
-                          <span className="absolute right-0 top-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : undefined}>
-                            <Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}
-                          </span>
-                        )}
-                        <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
+                <DateField withTime value={t.dueDate ?? null} onChange={(v) => update.mutate({ dueDate: v })} ariaLabel={tr("Due date")} placeholder={tr("Not set")} className="rounded-lg" />
+              </PropRow>
+              {/* who created it — every task, not only projects with a CREATED field (owner, 8 Oct 2026) */}
+              {t.creator?.name && (
+                <PropRow icon={UserRound} label={tr("Created by")}>
+                  <CreatedByLine creator={t.creator} createdAt={t.createdAt ?? null} />
+                </PropRow>
+              )}
+              {/* the project's fields, each a row */}
+              {projectId && (customFields.data?.fields ?? []).map((f) => (
+                <PropRow key={f.id} icon={fieldIcon(f.type)} label={f.name}
+                  aside={ai.aiFields.has(f.id) ? <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : tr("AI Autofill")}><Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}</span> : null}>
+                  <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value, prev: f.value })} bare />
+                </PropRow>
+              ))}
+              {/* also in projects (multi-project links) */}
+              <PropRow icon={FolderPlus} label={tr("Also in projects")} hint={tr("Mention another division by linking this task to another project in the same workspace.")}>
+                <div className="flex min-h-8 flex-wrap items-center gap-1.5 px-1">
+                  {(t.taskProjects ?? []).map((tp) => (
+                    <span key={tp.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-sm">
+                      <ProjectMarkFor projectId={tp.project?.id} icon={tp.project ? (tp.project as { icon?: string | null }).icon : null} size={14} /> {tp.project?.name}
+                      <button aria-label={tr("Unlink {name}", { name: tp.project?.name ?? tr("project") })} onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                    </span>
+                  ))}
+                  <div className="relative">
+                    <button aria-label={tr("Link to another project")} title={tr("Mention another division by linking this task to another project in the same workspace.")} onClick={() => setShowProjPicker((v) => !v)} className={cn("inline-flex h-7 items-center rounded-full text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11", (t.taskProjects?.length ?? 0) === 0 ? "px-1" : "w-7 justify-center pointer-coarse:w-11")}>
+                      {(t.taskProjects?.length ?? 0) === 0 ? <span className="text-muted-foreground/70">{tr("Only in its home project.")}</span> : <Plus className="h-4 w-4" />}
+                    </button>
+                    {showProjPicker && (
+                      <div className="absolute left-0 z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
+                        {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
+                        {(candidateProjects.data ?? []).filter((p) => p.id !== projectId && !(t.taskProjects ?? []).some((tp) => tp.project?.id === p.id)).map((p) => (
+                          <button key={p.id} onClick={() => linkProjectMut.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={16} /><span className="truncate">{p.name}</span></button>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                ) : !cfAdding ? (
-                  <p className="text-xs text-muted-foreground">{tr("No fields yet. Add one with New field.")}</p>
-                ) : null}
-              </SecCard>
-            )}
-
-            {/* also in projects (multi-project links) */}
-            <SecCard
-              icon={FolderPlus}
-              label={tr("Also in projects")}
-              action={
-                <div className="relative">
-                  <button aria-label={tr("Link to another project")} onClick={() => setShowProjPicker((v) => !v)} className="grid h-7 w-7 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /></button>
-                  {showProjPicker && (
-                    <div className="absolute right-0 z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
-                      {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
-                      {(candidateProjects.data ?? []).filter((p) => p.id !== projectId && !(t.taskProjects ?? []).some((tp) => tp.project?.id === p.id)).map((p) => (
-                        <button key={p.id} onClick={() => linkProjectMut.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={16} /><span className="truncate">{p.name}</span></button>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              }
-            >
-              <p className="mb-3 -mt-1 text-xs text-muted-foreground">{tr("Mention another division by linking this task to another project in the same workspace.")}</p>
-              <div className="flex flex-wrap gap-2">
-                {(t.taskProjects ?? []).map((tp) => (
-                  <span key={tp.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
-                    <ProjectMarkFor projectId={tp.project?.id} icon={tp.project ? (tp.project as { icon?: string | null }).icon : null} size={14} /> {tp.project?.name}
-                    <button aria-label={tr("Unlink {name}", { name: tp.project?.name ?? tr("project") })} onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
-                  </span>
-                ))}
-                {(t.taskProjects?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("Only in its home project.")}</p>}
-              </div>
-            </SecCard>
+              </PropRow>
+              {/* "+ Add a property": a new project field, made right here */}
+              {projectId && !cfAdding && canEditTask && (
+                <button type="button" onClick={() => setCfAdding(true)} className="mt-0.5 flex h-9 items-center gap-2 rounded-lg px-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:h-11">
+                  <Plus className="h-4 w-4" /> {tr("Add a property")}
+                </button>
+              )}
+              {cfAdding && (
+                <div className="mt-2 rounded-xl border border-border p-3 shadow-soft">
+                  <FieldEditor saving={createCf.isPending} onSave={(p) => createCf.mutate(p)} onCancel={() => setCfAdding(false)} />
+                </div>
+              )}
+            </div>
+            </fieldset>
 
-            {/* description: a block document (slash menu, @mentions, live with everyone who has it open) */}
-            <SecCard icon={AlignLeft} label={tr("Description")}>
-              <Suspense fallback={<div className="min-h-[72px] animate-pulse rounded-md bg-muted/40" aria-busy />}>
+            {/* comments: open for Can comment too, so outside the editing fieldset */}
+            <section aria-label={tr("Comments")} className="border-b border-border/70 pb-5">
+              <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{tr("Comments")}</h3>
+              <div className="space-y-4">
+                {sortedComments.map((c) => (
+                  <CommentItem key={c.id} comment={c} currentUserId={currentUserId} me={me} members={projectMembers} canReply={canCommentTask}
+                    onReact={(commentId, emoji, has) => reactMut.mutate({ commentId, emoji, has })}
+                    onDelete={(commentId) => delComment.mutate(commentId)}
+                    onEdit={(commentId, content) => editComment.mutateAsync({ commentId, content }).then(() => true, () => false)}
+                    replyPending={replyComment.isPending}
+                    onReply={(content, mentionedUserIds) => replyComment.mutateAsync({ parentId: c.id, content, mentionedUserIds }).then(() => true, () => false)} />
+                ))}
+                {canCommentTask && <CommentComposer me={me} members={projectMembers} pending={addComment.isPending} draftKey={`nx-comment-draft:${taskId}`} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />}
+                {!canCommentTask && sortedComments.length === 0 && comments.data && <p className="text-sm text-muted-foreground">{tr("No comments yet.")}</p>}
+              </div>
+            </section>
+
+            <fieldset disabled={!canEditTask} className="contents [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-60 [&_input:disabled]:opacity-60">
+            {/* the page body: the description is the page itself (a block document: slash menu, @mentions, live) */}
+            {/* An empty body is one placeholder line (Notion), not a tall blank band. */}
+            <div aria-label={tr("Description")} className="-mt-1">
+              <Suspense fallback={<div className="h-7 animate-pulse rounded-md bg-muted/40" aria-busy />}>
                 <TaskBodyEditor taskId={t.id} projectId={projectId ?? null} onOpenTask={setOpenSub} />
               </Suspense>
-            </SecCard>
+            </div>
 
             {/* subtasks — Asana-style: each is a full task (own assignee/due/comments), hidden
                 from the board; tap the circle to toggle done, tap the title to open its panel */}
@@ -879,23 +956,24 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     </div>
                   )}
                   {subs.length > 0 && (
-                    <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                    <div className="-mx-1.5">
                       {subs.map((st) => (
-                        <div key={st.id} className="flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-accent/40">
+                        <div key={st.id} className="flex min-h-9 items-center gap-2 rounded-lg px-1.5 text-sm transition-colors hover:bg-muted/60">
                           <button
                             onClick={() => toggleSubtask.mutate({ id: st.id, done: st.status !== "DONE" })}
                             disabled={toggleSubtask.isPending}
                             title={st.status === "DONE" ? tr("Move back to To-do") : tr("Mark done")}
+                            aria-label={st.status === "DONE" ? tr("Move back to To-do") : tr("Mark done")}
                             className="shrink-0 transition active:scale-90 disabled:opacity-50"
                           >
                             {st.status === "DONE"
                               ? <CheckCircle2 className="h-[18px] w-[18px] text-success" />
                               : <Circle className="h-[18px] w-[18px] text-muted-foreground/50 hover:text-success" />}
                           </button>
-                          <button onClick={() => setOpenSub(st.id)} className={cn("min-w-0 flex-1 truncate text-left hover:text-primary", st.status === "DONE" && "text-muted-foreground line-through")}>
+                          <button onClick={() => setOpenSub(st.id)} className={cn("min-w-0 flex-1 truncate py-1.5 text-left hover:text-primary", st.status === "DONE" && "text-muted-foreground line-through")}>
                             {st.title}
                           </button>
-                          {st.dueDate && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">{fmtDue(st.dueDate)}</span>}
+                          {st.dueDate && <span className="shrink-0 text-xs text-muted-foreground">{fmtDue(st.dueDate)}</span>}
                           {(st.assignees ?? []).slice(0, 2).map((a, i) =>
                             <MiniAvatar key={a.user?.id ?? i} user={a.user} size={20} />
                           )}
@@ -903,24 +981,28 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       ))}
                     </div>
                   )}
-                  {/* inline add — Enter or the button spawns a real task linked to this one.
+                  {/* inline add — Enter spawns a real task linked to this one.
                       Needs a project home (taskList) so the backend can validate the parent. */}
-                  {!!projectId && !!t.taskList?.id && (
-                  <div className="mt-2 flex items-center gap-2">
+                  {!!projectId && !!t.taskList?.id && canEditTask && (
+                  <div className="-mx-1.5 flex min-h-9 items-center gap-2 rounded-lg px-1.5 text-sm transition-colors focus-within:bg-muted/60 hover:bg-muted/60">
+                    {addSubtask.isPending ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     <input
                       value={newSubTitle}
+                      aria-label={tr("Add subtask")}
                       onChange={(e) => setNewSubTitle(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && newSubTitle.trim() && !addSubtask.isPending) addSubtask.mutate(newSubTitle.trim()); }}
-                      placeholder={tr("+ Add subtask… (Enter)")}
-                      className="min-w-0 flex-1 rounded-xl border border-dashed border-border bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary"
+                      placeholder={tr("Add subtask… (Enter)")}
+                      className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-muted-foreground"
                     />
-                    <button aria-label={tr("Add subtask")}
-                      onClick={() => { if (newSubTitle.trim()) addSubtask.mutate(newSubTitle.trim()); }}
-                      disabled={addSubtask.isPending || !newSubTitle.trim()}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.97] dark:disabled:bg-muted dark:disabled:text-muted-foreground disabled:opacity-40"
-                    >
-                      {addSubtask.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                    </button>
+                    {newSubTitle.trim() && (
+                      <button aria-label={tr("Add subtask")}
+                        onClick={() => { if (newSubTitle.trim()) addSubtask.mutate(newSubTitle.trim()); }}
+                        disabled={addSubtask.isPending}
+                        className="inline-flex h-7 shrink-0 items-center rounded-full bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.97] disabled:opacity-40"
+                      >
+                        {tr("Add")}
+                      </button>
+                    )}
                   </div>
                   )}
                   {addSubtask.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{(addSubtask.error as Error)?.message ?? tr("Couldn't add subtask.")}</p>}
@@ -933,7 +1015,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               icon={Paperclip}
               label={tr("Attachments")}
               action={
-                <div className="flex items-center gap-2">
+                // Can view / Can comment: no Upload (it read as live in the disabled fieldset, QA 16 Oct 2026).
+                !canEditTask ? undefined : <div className="flex items-center gap-2">
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
@@ -975,7 +1058,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    {canEditTask && <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>}
                   </div>
                 ))}
                 {(attachments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
@@ -989,7 +1072,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             </SecCard>
 
             {previewAtt && createPortal(
-              <div className="fixed inset-0 z-[90] grid place-items-center p-4" onClick={() => setPreviewAtt(null)}>
+              <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center p-4" onClick={() => setPreviewAtt(null)}>
                 <div className="absolute inset-0 bg-foreground/60 dark:bg-scrim backdrop-blur-sm" />
                 <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -1042,17 +1125,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
             </fieldset>
 
-            {/* comments */}
-            <SecCard icon={MessageCircle} label={tr("Comments")}>
-              {canCommentTask && <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />}
-              <div className="space-y-3">
-                {(comments.data?.comments ?? []).map((c) => (
-                  <CommentItem key={c.id} comment={c} currentUserId={currentUserId} onReact={(emoji, has) => reactMut.mutate({ commentId: c.id, emoji, has })} onDelete={() => delComment.mutate(c.id)} />
-                ))}
-                {comments.data && (comments.data.comments?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("No comments yet.")}</p>}
-              </div>
-            </SecCard>
-
             {/* activity */}
             {(t.activityLogs?.length ?? 0) > 0 && (
               <SecCard icon={Activity} label={tr("Activity")}>
@@ -1103,7 +1175,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
     onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the quest")),
   });
   return createPortal(
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>
@@ -1165,13 +1237,18 @@ function fmtCreatedDateTime(ts: string, locale: string): string {
  *  decision 21, R20-WD-7: blank as Notion, the dashes were noise down whole columns). */
 const EMPTY_CELL = "";
 
-export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean }) {
+export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft, bare }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean;
+  /** A property row of the task page: no label (the row has it), the value reads as text until hovered or
+   *  clicked, "Empty" when there is none; unlike a table cell it keeps the full editors (a place's map link). */
+  bare?: boolean }) {
   const { t: tr, locale } = useLang();
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
-  // In a table cell (hideLabel) the editor reads as plain text until hovered, like a Notion property.
-  const cls = hideLabel
-    ? "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-muted focus:border-primary focus:bg-background focus:placeholder:text-transparent"
+  // In a table cell (hideLabel) or a property row (bare) the editor reads as plain text until hovered, like a Notion property.
+  const ghost = hideLabel || bare;
+  const empty = hideLabel ? EMPTY_CELL : bare ? tr("Not set") : undefined;
+  const cls = ghost
+    ? cn("w-full min-w-0 appearance-none truncate border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background focus:placeholder:text-transparent", bare ? "min-h-8 rounded-lg placeholder:text-muted-foreground/70" : "rounded-md placeholder:text-muted-foreground/60")
     : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
 
   const strVal = typeof field.value === "string" ? field.value : "";
@@ -1202,17 +1279,17 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         value={strVal}
         onChange={(v) => onSet(v)}
         clearable
-        placeholder={hideLabel ? EMPTY_CELL : tr("Not set")}
+        placeholder={empty ?? tr("Not set")}
         ariaLabel={field.name}
         // A value no longer in the option list still shows (and stays pickable), as the <select> kept it.
         options={(strVal && !choices.includes(strVal) ? [...choices, strVal] : choices).map((c) => ({ value: c, label: c, color: choiceColor(field, c, choices) }))}
-        variant={hideLabel ? "ghost" : "field"}
-        className={hideLabel ? "w-full" : "min-h-[34px] w-full"}
+        variant={ghost ? "ghost" : "field"}
+        className={hideLabel ? "w-full" : bare ? "max-w-full rounded-lg" : "min-h-[34px] w-full"}
       />
     );
   } else if (type === "MULTI_SELECT") {
     body = (
-      <div className="flex flex-wrap gap-1.5">
+      <div className={cn("flex flex-wrap gap-1.5", bare && "px-1.5 py-1")}>
         {choices.map((c) => {
           const on = arrVal.includes(c);
           return (
@@ -1235,9 +1312,9 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     );
   } else if (type === "PLACE") {
     body = (
-      <div className="space-y-1.5">
-        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} placeholder={tr("Location / place name")} className={cls} />
-        <input value={place.mapUrl} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, mapUrl: v })); }} onBlur={() => commit(place, true)} placeholder={tr("Google Maps link")} className={cls} />
+      <div className={cn(bare ? "w-full space-y-0.5" : "space-y-1.5")}>
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} placeholder={tr("Location / place name")} className={cls} />
+        <input value={place.mapUrl} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, mapUrl: v })); }} onBlur={() => commit(place, true)} aria-label={tr("Google Maps link")} placeholder={tr("Google Maps link")} className={cls} />
       </div>
     );
   } else if (type === "CREATED") {
@@ -1246,17 +1323,23 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     const ts = (meta?.timestamp || strVal || "").trim();
     const name = meta?.userName?.trim();
     const when = ts ? fmtCreatedDateTime(ts, locale) : "";
-    body = (
+    body = bare ? (
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1.5 py-1 text-sm">
+        {name ? <span className="text-foreground">{name}</span> : null}
+        {name && creatorLeft && <PersonLeftTag />}
+        <span className="text-muted-foreground">{name ? "· " : ""}{when || strVal || tr("Not set")}</span>
+      </div>
+    ) : (
       <div className="w-full rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
         {name ? <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">{name}{creatorLeft && <PersonLeftTag />}</div> : null}
         <div className={cn("text-muted-foreground", name ? "text-xs" : "text-sm")}>{when || strVal || "—"}</div>
       </div>
     );
-  } else if (type === "URL" && hideLabel) {
+  } else if (type === "URL" && ghost) {
     // One line in a table cell: the address, then an icon that opens it (WD-11).
     body = (
       <div className="flex min-w-0 items-center gap-1">
-        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} placeholder={EMPTY_CELL} className={cls} />
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} placeholder={bare ? "https://…" : EMPTY_CELL} className={cls} />
         {strVal.trim() && <a href={strVal} target="_blank" rel="noopener noreferrer" aria-label={tr("Open link")} title={tr("Open link")} className="shrink-0 text-muted-foreground hover:text-primary"><Link2 className="h-3.5 w-3.5" /></a>}
       </div>
     );
@@ -1272,14 +1355,14 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
       </div>
     );
   } else if (type === "FILE") {
-    body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} compact={hideLabel} />;
+    body = <div className={cn(bare && "px-1.5 py-1")}><FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} compact={hideLabel} /></div>;
   } else if (type === "NUMBER") {
     // The field's own format (Rupiah, Percent, a currency… and Bar / Ring), Indonesian grouping; a click edits.
     // Rupiah keeps its "Rp" box that groups while typing. In a table cell numbers sit right-aligned (Notion).
-    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={hideLabel} align={hideLabel ? "end" : "start"} placeholder={hideLabel ? EMPTY_CELL : tr("Not set")} />;
+    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={ghost} align={hideLabel ? "end" : "start"} placeholder={empty ?? tr("Not set")} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
-    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? EMPTY_CELL : tr("Not set")} />;
+    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : bare ? "rounded-lg" : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={empty ?? tr("Not set")} />;
   } else {
     body = (
       <input
@@ -1287,13 +1370,15 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={() => commit(local, local !== shownVal)}
-        placeholder={hideLabel ? EMPTY_CELL : undefined}
+        aria-label={ghost ? field.name : undefined}
+        placeholder={empty}
         className={cls}
       />
     );
   }
 
   if (hideLabel) return <div className="block">{body}</div>;
+  if (bare) return <div className="flex w-full min-w-0 items-center">{body}</div>;
   return (
     <label className="block space-y-1">
       <span className="text-[11px] font-semibold text-muted-foreground">{field.name}</span>
@@ -1381,13 +1466,32 @@ function FileFieldEditor({ projectId, value, onSet, compact }: { projectId?: str
 
 /** Comment input with @-mention autocomplete (project members). Tracks the EXACT userIds picked and sends
  *  them as `mentionedUserIds` so the backend notifies the right person regardless of name. */
-function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => Promise<boolean> }) {
+function CommentComposer({ me, members, pending, onSubmit, draftKey, autoFocus, placeholder, onCancel, avatarSize = 24 }: { me: NexusUser | null; members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => Promise<boolean>;
+  /** sessionStorage key: an unsent comment survives closing the popup (Notion keeps the draft). */
+  draftKey?: string; autoFocus?: boolean; placeholder?: string;
+  /** Esc in an empty box (a reply box) closes it. */
+  onCancel?: () => void; avatarSize?: number }) {
   const { t: tr } = useLang();
-  const [text, setText] = useState("");
+  const [text, setTextState] = useState(() => {
+    if (!draftKey) return "";
+    try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; }
+  });
+  const setText = (v: string | ((cur: string) => string)) => setTextState((cur) => {
+    const next = typeof v === "function" ? v(cur) : v;
+    if (draftKey) { try { if (next) sessionStorage.setItem(draftKey, next); else sessionStorage.removeItem(draftKey); } catch { /* private mode */ } }
+    return next;
+  });
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [query, setQuery] = useState<string | null>(null); // active "@…" token being typed (null = closed)
   const [active, setActive] = useState(0);
   const ref = useRef<HTMLTextAreaElement>(null);
+  // Grows with what is typed, from one line ("Add a comment…").
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+  }, [text]);
 
   const matches = useMemo(() => {
     if (query === null) return [];
@@ -1440,13 +1544,17 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[active]); return; }
       if (e.key === "Escape") { e.preventDefault(); setQuery(null); return; }
     }
+    if (e.key === "Escape" && onCancel && !text.trim()) { e.preventDefault(); onCancel(); return; }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
   };
 
   return (
-    <div className="flex items-start gap-2">
-      <div className="relative flex-1">
-        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={2} placeholder={tr("Write a comment… (@ to mention)")} className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
+    // Notion's comment line in NEXUS's shape: your avatar, a borderless "Add a comment…", the send arrow once
+    // there is text. Enter sends, Shift+Enter breaks the line, @ mentions a project member.
+    <div className="group flex items-start gap-2.5 rounded-xl border border-transparent px-1 py-1 transition-colors focus-within:border-border focus-within:bg-background focus-within:shadow-soft">
+      <span className="mt-0.5"><MiniAvatar user={me} size={avatarSize} /></span>
+      <div className="relative min-w-0 flex-1">
+        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={1} autoFocus={autoFocus} aria-label={placeholder ?? tr("Add a comment…")} placeholder={placeholder ?? tr("Add a comment…")} className="block w-full resize-none overflow-y-auto bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70" />
         {query !== null && matches.length > 0 && (
           <div className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
             {matches.map((u, i) => (
@@ -1457,16 +1565,82 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
           </div>
         )}
       </div>
-      <button aria-label={tr("Send comment")} disabled={!text.trim() || pending} onClick={submit} className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary dark:disabled:bg-muted dark:disabled:text-muted-foreground text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
-        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+      <button aria-label={tr("Send comment")} disabled={!text.trim() || pending} onClick={submit} className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:bg-muted disabled:text-muted-foreground pointer-coarse:h-11 pointer-coarse:w-11", !text.trim() && !pending && "opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100")}>
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
       </button>
     </div>
   );
 }
 
-function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: NexusComment; currentUserId?: string; onReact: (emoji: string, has: boolean) => void; onDelete: () => void }) {
+/** One comment's own line: avatar, name, time, "edited", and for your own comment Edit and Delete (Notion). */
+function CommentLine({ comment, isMine, size, onEdit, onDelete, actions }: { comment: NexusComment; isMine: boolean; size: number; onEdit: (content: string) => Promise<boolean>; onDelete: () => void; actions?: ReactNode }) {
+  const { t: tr } = useLang();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.content);
+  const [saving, setSaving] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+  }, [draft, editing]);
+  const save = () => {
+    const next = draft.trim();
+    if (!next || saving) return;
+    if (next === comment.content.trim()) { setEditing(false); return; }
+    setSaving(true);
+    void onEdit(next).then((ok) => { setSaving(false); if (ok) setEditing(false); });
+  };
+  const edited = comment.isEdited;
+  const tool = "grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/line:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100";
+  const indent = size + 10;
+  return (
+    <div className="group/line">
+      <div className="flex items-center gap-2.5">
+        <MiniAvatar user={comment.user} size={size} />
+        <span className="min-w-0 truncate text-sm font-semibold">{displayName(comment.user)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}{edited ? ` · ${tr("edited")}` : ""}</span>
+        <div className="ml-auto flex shrink-0 items-center">
+          {actions}
+          {isMine && !editing && (
+            <>
+              <button type="button" onClick={() => { setDraft(comment.content); setEditing(true); }} aria-label={tr("Edit comment")} title={tr("Edit comment")} className={cn(tool, "hover:bg-accent hover:text-foreground")}><Pencil className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={onDelete} aria-label={tr("Delete comment")} title={tr("Delete comment")} className={cn(tool, "hover:bg-destructive/10 hover:text-destructive")}><Trash2 className="h-3.5 w-3.5" /></button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="mt-1 rounded-xl border border-border bg-background px-2 py-1 shadow-soft" style={{ marginLeft: indent }}>
+          <textarea ref={ref} autoFocus value={draft} rows={1} aria-label={tr("Edit comment")} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+              else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+            }}
+            className="block w-full resize-none overflow-y-auto bg-transparent py-1 text-sm leading-relaxed outline-none" />
+          <div className="flex justify-end gap-1.5 pb-0.5">
+            <button type="button" onClick={() => setEditing(false)} className="h-7 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent pointer-coarse:h-11">{tr("Cancel")}</button>
+            <button type="button" onClick={save} disabled={!draft.trim() || saving} className="inline-flex h-7 items-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 pointer-coarse:h-11">{saving && <Loader2 className="h-3 w-3 animate-spin" />}{tr("Save")}</button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed" style={{ marginLeft: indent }}>{comment.content}</p>
+      )}
+    </div>
+  );
+}
+
+function CommentItem({ comment, currentUserId, me, members, canReply, onReact, onDelete, onEdit, onReply, replyPending }: {
+  comment: NexusComment; currentUserId?: string; me: NexusUser | null; members: NexusUser[]; canReply: boolean;
+  onReact: (commentId: string, emoji: string, has: boolean) => void; onDelete: (commentId: string) => void;
+  onEdit: (commentId: string, content: string) => Promise<boolean>;
+  onReply: (content: string, mentionedUserIds: string[]) => Promise<boolean>; replyPending: boolean;
+}) {
   const { t: tr } = useLang();
   const [showEmoji, setShowEmoji] = useState(false);
+  const [replying, setReplying] = useState(false);
   const grouped = useMemo(() => {
     const map = new Map<string, { count: number; mine: boolean }>();
     for (const r of comment.reactions ?? []) {
@@ -1477,46 +1651,39 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
     }
     return Array.from(map.entries());
   }, [comment.reactions, currentUserId]);
-  const isMine = comment.user?.id && comment.user.id === currentUserId;
+  const mine = (c: NexusComment) => !!c.user?.id && c.user.id === currentUserId;
 
   return (
-    <div className="rounded-xl bg-muted/50 p-3">
-      <div className="flex items-center gap-2">
-        <MiniAvatar user={comment.user} size={24} />
-        <span className="text-sm font-semibold">{displayName(comment.user)}</span>
-        <span className="text-[11px] text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}</span>
-        {isMine && <button onClick={onDelete} aria-label={tr("Delete comment")} className="ml-auto rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>}
-      </div>
-      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+    // A thread as on a Notion page: avatar, name and time on one line, the text under it, replies indented below.
+    <div className="group/comment -mx-1 rounded-xl px-1 py-1 transition-colors hover:bg-muted/40">
+      <CommentLine comment={comment} isMine={mine(comment)} size={24} onEdit={(content) => onEdit(comment.id, content)} onDelete={() => onDelete(comment.id)}
+        actions={canReply ? <button type="button" onClick={() => setReplying(true)} aria-label={tr("Reply")} title={tr("Reply")} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"><Reply className="h-3.5 w-3.5" /></button> : null} />
+      <div className="ml-[34px] mt-1.5 flex flex-wrap items-center gap-1.5">
         {grouped.map(([emoji, info]) => (
-          <button key={emoji} onClick={() => onReact(emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
+          <button key={emoji} onClick={() => onReact(comment.id, emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
             {emoji} {info.count}
           </button>
         ))}
         <div className="relative">
-          <button onClick={() => setShowEmoji((v) => !v)} aria-label={tr("Add reaction")} className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent"><Plus className="h-3 w-3" /></button>
+          <button onClick={() => setShowEmoji((v) => !v)} aria-label={tr("Add reaction")} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-[opacity,background-color] hover:bg-accent focus-visible:opacity-100 pointer-coarse:opacity-100", grouped.length === 0 && !showEmoji && "opacity-0 group-hover/comment:opacity-100")}><Plus className="h-3 w-3" /></button>
           {showEmoji && (
             <div className="absolute z-20 mt-1 flex gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-pop">
               {REACTION_EMOJIS.map((e) => (
-                <button key={e} onClick={() => { onReact(e, false); setShowEmoji(false); }} className="rounded-lg px-1.5 py-1 text-base transition-colors hover:bg-accent">{e}</button>
+                <button key={e} onClick={() => { onReact(comment.id, e, false); setShowEmoji(false); }} className="rounded-lg px-1.5 py-1 text-base transition-colors hover:bg-accent">{e}</button>
               ))}
             </div>
           )}
         </div>
       </div>
-      {(comment.replies?.length ?? 0) > 0 && (
-        <div className="mt-2 space-y-2 border-l-2 border-border pl-3">
-          {comment.replies!.map((r) => (
-            <div key={r.id} className="text-sm">
-              <div className="flex items-center gap-2">
-                <MiniAvatar user={r.user} size={20} />
-                <span className="font-semibold">{r.user?.name}</span>
-                <span className="text-[11px] text-muted-foreground">{fmtDate(r.createdAt)}</span>
-              </div>
-              <p className="mt-1 whitespace-pre-wrap leading-relaxed">{r.content}</p>
-            </div>
+      {((comment.replies?.length ?? 0) > 0 || replying) && (
+        <div className="ml-[34px] mt-2 space-y-2 border-l-2 border-border pl-3">
+          {(comment.replies ?? []).map((r) => (
+            <CommentLine key={r.id} comment={r} isMine={mine(r)} size={20} onEdit={(content) => onEdit(r.id, content)} onDelete={() => onDelete(r.id)} />
           ))}
+          {replying && (
+            <CommentComposer me={me} members={members} pending={replyPending} autoFocus avatarSize={20} placeholder={tr("Write a reply…")} onCancel={() => setReplying(false)}
+              onSubmit={(content, ids) => onReply(content, ids).then((ok) => { if (ok) setReplying(false); return ok; })} />
+          )}
         </div>
       )}
     </div>

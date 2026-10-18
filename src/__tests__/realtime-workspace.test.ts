@@ -114,6 +114,26 @@ vi.mock("@/lib/prisma", () => {
       findUnique: async ({ where }: { where: { id: string } }) => m.folders.get(where.id) ?? null,
     },
   }
+  // The Vault PATCH runs in a transaction under advisory locks (race audit 16 Oct 2026, M16): locks are no-ops
+  // here, the row lock reads the row, and the cycle check climbs the fake tree.
+  const raw = (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join("?"), values })
+  Object.assign(prisma, {
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+    $executeRaw: async () => 0,
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const q = raw(strings, ...values)
+      if (q.sql.includes("WITH RECURSIVE up")) {
+        const [target, item] = q.values as [string, string]
+        for (let cur: string | null = target; cur; cur = m.vault.get(cur)?.parentId ?? null) if (cur === item) return [{ hit: true }]
+        return [{ hit: false }]
+      }
+      if (q.sql.includes("FOR UPDATE")) {
+        const row = m.vault.get(q.values[0] as string)
+        return row ? [{ parentId: row.parentId, deletedAt: row.deletedAt ?? null, name: row.name }] : []
+      }
+      return []
+    },
+  })
   // lib/vault.ts takes the named export.
   return { default: prisma, prisma }
 })

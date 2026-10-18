@@ -230,6 +230,14 @@ export const updateTaskSchema = z.object({
   taskListId: idString.optional(),
   position: z.number().int().min(0).optional(),
   assigneeIds: z.array(idString).max(50).optional(),
+  // Race audit 16 Oct 2026 (H8, M13): edits relative to what is stored NOW, applied under the task's row lock,
+  // so two people changing the same list at once both land. `baseAssigneeIds` = the list the client saw
+  // when it sends a whole `assigneeIds`: a stored list that differs answers 409 ASSIGNEES_CHANGED.
+  addAssigneeIds: z.array(idString).max(50).optional(),
+  removeAssigneeIds: z.array(idString).max(50).optional(),
+  baseAssigneeIds: z.array(idString).max(50).optional(),
+  addTags: z.array(z.string().max(50)).max(20).optional(),
+  removeTags: z.array(z.string().max(50)).max(20).optional(),
   estimatedHours: z.number().min(0).max(9999).nullable().optional(),
   actualHours: z.number().min(0).max(9999).nullable().optional(),
   taskType: z.enum(["TASK", "MILESTONE", "APPROVAL"]).optional(),

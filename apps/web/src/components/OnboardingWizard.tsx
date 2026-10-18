@@ -87,7 +87,7 @@ export function OnboardingWizard() {
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 dark:bg-scrim p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] grid grid-cols-1 place-items-center bg-black/60 dark:bg-scrim p-4 backdrop-blur-sm">
       {/* Required (profile photo + full name): no Esc, no close. A modal for assistive tech and the app's
           own shortcuts all the same. */}
       <div role="dialog" aria-modal="true" aria-label={t("Welcome to NEXUS")} className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">

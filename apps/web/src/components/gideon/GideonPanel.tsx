@@ -3,19 +3,23 @@ import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIc
 import { docTitle } from "@/lib/doc-title";
 import { chatTitleText } from "@/lib/gideon-chat-title";
 import { isEditableTarget, modKey } from "@/lib/keyboard";
-import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
-  FolderKanban, History, ImagePlus, ListChecks, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2, MoreHorizontal, PanelRight,
-  Paperclip, Pencil, Plus, Search, ShieldCheck, SquarePen, Trash2, UserRound, X,
+  AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
+  ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
+  MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
+import { GideonCreditMeter } from "./GideonCreditMeter";
+import { CREDITS_KEY } from "@/lib/gideon-credits";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
+import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
@@ -55,7 +59,7 @@ import {
 /** What was typed in the composer and not sent, kept while the panel is closed and reopened (bughunt G-BUG-2). */
 let composerDraft = "";
 
-type ChatTurn = GideonTurn & { streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean };
+type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean; creditNotice?: string | null };
 
 function fromHistory(row: GideonTurn): ChatTurn {
   const m = row.meta;
@@ -183,6 +187,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   /** Proposals waiting for this person that no turn on screen shows (e.g. from an @GIDEON comment or AI Autofill). */
   const [waiting, setWaiting] = useState<GideonProposal[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  /** The person pressed Stop on the answer that is streaming. */
+  const stoppedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -335,6 +341,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
     const controller = new AbortController();
     abortRef.current = controller;
+    stoppedRef.current = false;
     let acc = "";
     let wroteSomething = false;
     let liveChatId: string | null = fresh ? null : chatId;
@@ -395,6 +402,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             return { ...x, proposals };
           });
           break;
+        case "credits":
+          // GIDEON credits (18 Oct 2026): the new balance after this answer moves the meter at once; a
+          // notice (phase 2: answered by Aphrodite, or out of credits) is shown on the answer itself.
+          if (ev.summary) qc.setQueryData(CREDITS_KEY, ev.summary);
+          if (ev.notice) { const n = ev.notice; patchLast((x) => ({ ...x, creditNotice: L.lang === "id" ? n.id : n.en })); }
+          break;
         case "error":
           patchLast((x) => ({ ...x, failed: true, content: acc ? `${acc}\n\n${ev.content ?? ""}` : ev.content ?? t("Something went wrong.") }));
           break;
@@ -424,6 +437,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     });
     setImage(null);
     setDoc(null);
+    if (stoppedRef.current && abortRef.current === controller) {
+      stoppedRef.current = false;
+      patchLast((x) => ({ ...x, stopped: true }));
+    }
     patchLast((x) => ({ ...x, streaming: false, steps: (x.steps ?? []).map((s) => (s.status === "running" ? { ...s, status: "done" } : s)) }));
     setBusy(false);
     if (wroteSomething) qc.invalidateQueries({ queryKey: ["nexus"] });
@@ -436,19 +453,48 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     if (p.status === "APPLIED") qc.invalidateQueries({ queryKey: ["nexus"] });
   };
 
-  const suggestions = useMemo(() => {
+  // Notion AI's starters: one icon and one line each.
+  const suggestions = useMemo((): Array<{ icon: typeof FileText; text: string }> => {
     const c = pageContext;
-    if (c?.docId) return [t("Summarize this page"), t("Find the action items in this page"), t("What questions does this page leave open?")];
-    if (c?.taskId) return [t("What's the latest on this task?"), t("Break this task into subtasks"), t("Draft a status comment for this task")];
-    if (c) return [
-      t("Summarize where {name} stands this week", { name: c.projectName }),
-      t("What's overdue in {name}, and who owns it?", { name: c.projectName }),
-      t("Turn the next steps of {name} into tasks", { name: c.projectName }),
+    if (c?.docId) return [
+      { icon: AlignLeft, text: t("Summarize this page") },
+      { icon: ListChecks, text: t("Find the action items in this page") },
+      { icon: HelpCircle, text: t("What questions does this page leave open?") },
     ];
-    return [t("What's on my calendar this week?"), t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
+    if (c?.taskId) return [
+      { icon: Clock, text: t("What's the latest on this task?") },
+      { icon: ListTree, text: t("Break this task into subtasks") },
+      { icon: MessageSquare, text: t("Draft a status comment for this task") },
+    ];
+    if (c) return [
+      { icon: AlignLeft, text: t("Summarize where {name} stands this week", { name: c.projectName }) },
+      { icon: AlarmClock, text: t("What's overdue in {name}, and who owns it?", { name: c.projectName }) },
+      { icon: ListTree, text: t("Turn the next steps of {name} into tasks", { name: c.projectName }) },
+    ];
+    return [
+      { icon: CalendarClock, text: t("What's on my calendar this week?") },
+      { icon: AlarmClock, text: t("What's overdue for me?") },
+      { icon: AlignLeft, text: t("Summarize my week across projects") },
+      { icon: Search, text: t("What did my team decide recently? Cite the sources.") },
+    ];
   }, [pageContext, t]);
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
+  const tierDef = GIDEON_TIERS.find((x) => x.id === tier) ?? GIDEON_TIERS[1];
+
+  /** Stop: the answer so far stays on screen. The server finishes the run and keeps it in the chat. */
+  const stop = () => {
+    stoppedRef.current = true;
+    abortRef.current?.abort();
+  };
+
+  // The box grows with what is typed (Notion AI), up to 40% of the screen, then scrolls.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input, view]);
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
   // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going.
   const [waitingOpen, setWaitingOpen] = useState<boolean | null>(null);
@@ -482,46 +528,65 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   };
 
   const isPage = variant === "page";
+  // Notion AI's panel: a plain white sheet, one hairline against the page, no card chrome. The
+  // floating window keeps a soft edge on a desktop and fills the screen on a phone.
   const root = cn(
-    "flex h-full w-full flex-col overflow-hidden bg-card",
-    variant === "float" && "rounded-3xl border border-border shadow-pop",
+    isPage ? "bg-background" : "bg-card", "flex h-full w-full flex-col overflow-hidden",
+    variant === "float" && "md:rounded-2xl md:border md:border-border md:shadow-pop",
     variant === "side" && "border-l border-border",
   );
+  const iconBtn = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const headerTitle = chatTitle && !fresh ? chatTitleText(chatTitle) || t("Untitled chat") : t("New chat");
+  // On the full page from md up the chat list is its own column, so the title is only a label there.
+  const titleIsToggle = !isPage;
+  // The full page's chat list column folds away (owner, 16 Oct 2026), remembered per browser.
+  const [listOpen, setListOpenState] = useState(() => { try { return localStorage.getItem("gideon-chatlist-open") !== "0"; } catch { return true; } });
+  const setListOpen = (open: boolean) => { setListOpenState(open); try { localStorage.setItem("gideon-chatlist-open", open ? "1" : "0"); } catch { /* private mode */ } };
 
   const header = (
-    <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-bold">{name}</div>
-        <div className="truncate text-[11px] text-muted-foreground">{chatTitle && !fresh ? chatTitleText(chatTitle) : t("Acts in NEXUS as you")}</div>
-      </div>
-      {/* The full page keeps its chat list in a left column from md up; on a phone that column is hidden,
-          so the page gets the same history toggle as the panel (UI tour 13 Oct 2026: no way back to an old
-          chat at 440 px). */}
-      <button type="button" onClick={() => setView((v) => (v === "history" ? "chat" : "history"))} title={t("Chat history")} aria-label={t("Chat history")} aria-pressed={view === "history"} className={cn("rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", view === "history" && "bg-accent text-foreground", isPage && "md:hidden")}>
-        <History className="h-4 w-4" />
+    <div className={cn("flex h-11 shrink-0 items-center gap-0.5 px-2", isPage && "border-b border-border/60 md:px-3")}>
+      {isPage && (
+        <button type="button" onClick={() => setListOpen(!listOpen)} aria-expanded={listOpen}
+          title={listOpen ? t("Hide chat list") : t("Show chat list")} aria-label={listOpen ? t("Hide chat list") : t("Show chat list")}
+          className={cn(iconBtn, "mr-1 hidden md:grid")}>
+          {listOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </button>
+      )}
+      {/* Notion AI: the chat's title is the way into the history ("New AI chat ⌄"). On the full page the
+          title stays a toggle below md, where the chat list column is hidden (UI tour 13 Oct 2026). */}
+      <button
+        type="button"
+        onClick={() => setView((v) => (v === "history" ? "chat" : "history"))}
+        title={t("Chat history")}
+        aria-label={`${headerTitle}. ${t("Chat history")}`}
+        aria-expanded={view === "history"}
+        className={cn(
+          "flex min-w-0 items-center gap-1.5 rounded-md py-1 pl-1 pr-1.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          view === "history" && "bg-accent",
+          !titleIsToggle && listOpen && "md:pointer-events-none",
+        )}
+      >
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground"><GideonMark className="h-3.5 w-3.5" /></span>
+        {isPage && <><span className="hidden shrink-0 text-sm font-medium text-muted-foreground sm:inline">{name}</span><span aria-hidden className="hidden px-0.5 text-muted-foreground/60 sm:inline">/</span></>}
+        <span className="truncate text-sm font-medium">{headerTitle}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", view === "history" && "rotate-180", !titleIsToggle && listOpen && "md:hidden")} />
       </button>
-      <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
-      {/* The tier picker shows on the phone too, as on the desktop (it was hidden below sm). */}
-      <span className="contents" title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}>
-        <SelectPicker
-          variant="field"
-          size="sm"
-          align="end"
-          value={tier}
-          onChange={(v) => {
-            const next = v as GideonTier;
-            setTier(next);
-            try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
-          }}
-          ariaLabel={t("GIDEON tier")}
-          options={GIDEON_TIERS.map((x) => ({ value: x.id, label: x.name }))}
-          className="h-7 px-2 text-[11px] font-semibold text-muted-foreground"
-        />
-      </span>
+      <div className="min-w-2 flex-1" />
+      <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className={iconBtn}><SquarePen className="h-4 w-4" /></button>
+      {!isPage && (
+        <button
+          type="button"
+          onClick={() => setGideonLayout(layout === "side" ? "float" : "side")}
+          title={layout === "side" ? t("Floating window") : t("Side panel")}
+          aria-label={layout === "side" ? t("Floating window") : t("Side panel")}
+          className={cn(iconBtn, "hidden md:grid")}
+        >
+          {layout === "side" ? <Minimize2 className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+        </button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" aria-label={t("More")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
+          <button type="button" aria-label={t("More")} title={t("More")} className={iconBtn}><MoreHorizontal className="h-4 w-4" /></button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
@@ -549,80 +614,41 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           <DropdownMenuItem onSelect={() => !busy && setConfirmClear(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />{t("Clear all chat history")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {onClose && !isPage && <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>}
+      {onClose && !isPage && (
+        <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} title={t("Close GIDEON")} className={iconBtn}>
+          {variant === "side" ? <ChevronsRight className="h-4 w-4" /> : <X className="h-4 w-4" />}
+        </button>
+      )}
     </div>
   );
 
-  const body = view === "history" ? (
-    <ChatHistoryList
-      activeId={fresh ? null : chatId}
-      onPick={(id) => { openChat(id); if (isPage) router.history.replace(`/gideon?chat=${id}`); }}
-      onNew={() => { newChat(); if (isPage) router.history.replace("/gideon"); }}
-    />
-  ) : (
-    <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
-      <div className={cn("mx-auto w-full space-y-4", isPage && "max-w-3xl")}>
-        {openWaiting.length > 0 && (
-          <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
-            <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold text-amber-700 dark:text-amber-400">
-              <ShieldCheck className="h-3.5 w-3.5" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
-              {waitingShown ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            </button>
-            {waitingShown && openWaiting.map((p) => <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
-          </section>
-        )}
-        {loading && turns.length === 0 && (
-          <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-        )}
-        {!loading && turns.length === 0 && loadFailed && (
-          <LoadError compact error={loadFailed.error} what={t("this conversation")} onRetry={() => openChat(loadFailed.id)}
-            notFoundTitle={t("This conversation doesn't exist any more")} notFoundMessage={t("It was deleted, or the link is wrong. Start a new chat below.")} />
-        )}
-        {!loading && turns.length === 0 && !loadFailed && (
-          <div className={cn("flex flex-col items-center justify-center text-center", isPage ? "pt-[12vh]" : "pt-8")}>
-            <span className="mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-border bg-background"><GideonMark className="h-7 w-7 text-foreground/80" /></span>
-            <p className={cn("font-bold tracking-tight", isPage ? "text-2xl" : "text-base")}>
-              {pageContext ? t("Ask {assistant} about {name}", { assistant: name, name: chipLabel(pageContext) }) : t("What can {assistant} do for you?", { assistant: name })}
-            </p>
-            <p className="mt-1 max-w-sm text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
-            <div className="mt-5 flex w-full max-w-md flex-col gap-1.5">
-              {suggestions.map((s) => (
-                <button key={s} type="button" onClick={() => void send(s)} className="rounded-xl border border-border bg-background px-3 py-2 text-left text-xs font-medium transition-colors hover:border-primary/40 hover:bg-accent">{s}</button>
-              ))}
-            </div>
-          </div>
-        )}
-        {turns.map((turn, i) => turn.role === "user" ? (
-          <div key={i} className="flex justify-end">
-            <div className="max-w-[85%] rounded-2xl bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
-              {turn.attachments && turn.attachments.length > 0 && (
-                <div className="mb-1.5 flex flex-col gap-2">
-                  {turn.attachments.map((a, j) => <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble />)}
-                </div>
-              )}
-              <span className="whitespace-pre-wrap">{turn.content}</span>
-            </div>
-          </div>
-        ) : (
-          <AssistantTurn
-            key={i}
-            turn={turn}
-            onDecided={onDecided}
-            question={turns[i - 1]?.role === "user" ? turns[i - 1].content : ""}
-            projectId={pageContext?.projectId ?? refs.find((r) => r.kind === "project")?.id ?? null}
-            editorTarget={editorTarget}
-          />
-        ))}
-      </div>
-    </div>
+  const isEmpty = view === "chat" && !loading && turns.length === 0 && !loadFailed;
+  // The full page with nothing asked yet is Notion AI's home: the greeting, the box under it in the middle
+  // of the page, the starters under the box. Once a question is sent the box moves to the bottom.
+  const centeredHome = isPage && isEmpty;
+  // Sending from the centred box moves it to the bottom; keep the cursor in it (keyboard devices only).
+  useEffect(() => {
+    if (!isPage || centeredHome || window.matchMedia?.("(pointer: coarse)").matches) return;
+    inputRef.current?.focus();
+  }, [isPage, centeredHome]);
+  const greeting = pageContext ? t("Ask {assistant} about {name}", { assistant: name, name: chipLabel(pageContext) }) : t("What can {assistant} do for you?", { assistant: name });
+
+  const waitingSection = openWaiting.length > 0 && (
+    <section className="space-y-2 rounded-xl border border-border bg-muted/30 p-2.5">
+      <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
+        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
+        {waitingShown ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+      </button>
+      {waitingShown && openWaiting.map((p) => <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
+    </section>
   );
 
-  const composer = view === "chat" || isPage ? (
-    <div className="border-t border-border p-3">
+  const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
-        {mention && <MentionPicker query={mention.query} onPick={addRef} onClose={() => setMention(null)} />}
+        {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
+        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
             {pageContext && (
               <ContextChip
                 icon={pageContext.docId ? FileText : pageContext.taskId ? ListChecks : FolderKanban}
@@ -637,7 +663,6 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             ))}
           </div>
         )}
-        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-muted/40 focus-within:border-primary/50">
           <textarea
             ref={inputRef}
             value={input}
@@ -651,17 +676,18 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
             }}
             placeholder={t("Ask anything. Type @ to add a page")}
-            rows={isPage ? 3 : 2}
-            className="w-full resize-none bg-transparent px-3 pt-3 text-sm outline-none placeholder:text-muted-foreground"
+            aria-label={t("Ask {assistant}", { assistant: name })}
+            rows={centeredHome ? 2 : 1}
+            className={cn("block max-h-[40vh] min-h-[2.75rem] w-full resize-none bg-transparent px-3.5 pt-3 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/80", isPage && "text-[15px]")}
           />
           {(image || doc) && (
-            <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-2">
+            <div className="flex flex-col gap-2 px-3.5 py-2">
               {image && <GideonAttachmentChip kind="image" src={image} onRemove={() => setImage(null)} />}
               {doc && <GideonAttachmentChip kind="document" name={doc.name} onRemove={() => setDoc(null)} />}
             </div>
           )}
-          {attachError && <div className="border-t border-border/60 px-3 py-2 text-xs font-semibold text-destructive">{attachError}</div>}
-          <div className="flex items-center gap-1 px-2 pb-2 pt-1">
+          {attachError && <div className="px-3.5 py-1.5 text-xs font-medium text-destructive">{attachError}</div>}
+          <div className="flex items-center gap-0.5 px-2 pb-2 pt-1">
             <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = "";
@@ -677,52 +703,168 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             }} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" title={t("Add")} aria-label={t("Add photos, files or pages")} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Plus className="h-4 w-4" /></button>
+                <button type="button" title={t("Add photos, files or pages")} aria-label={t("Add photos, files or pages")} className={iconBtn}><Plus className="h-4 w-4" /></button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuContent align="start" side="top" className="w-60">
                 <DropdownMenuItem onSelect={() => imageInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4" />{t("Add a photo")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => fileInput.current?.click()}><Paperclip className="mr-2 h-4 w-4" />{t("Add a file (PDF, Word, Excel, text…)")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => window.setTimeout(startMention, 0)}><AtSign className="mr-2 h-4 w-4" />{t("Add a page, task or project")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <button type="button" onClick={startMention} title={t("Add a page, task or project")} aria-label={t("Add a page, task or project")} className={iconBtn}><AtSign className="h-4 w-4" /></button>
+            {/* Notion AI's approval mode: an icon in the narrow panel, the mode's name on the full page. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" title={t(modeDef.blurb)}>
-                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{t(modeDef.name)}</span><ChevronDown className="h-3 w-3 shrink-0" />
+                <button type="button" aria-label={`${t("Choose approval mode")}: ${t(modeDef.name)}`} title={`${t(modeDef.name)}. ${t(modeDef.blurb)}`} className={cn("inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === "dont_ask" && "text-amber-700 dark:text-amber-400")}>
+                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72">
-                <DropdownMenuLabel className="text-xs">{t("Before GIDEON changes something")}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
+              <DropdownMenuContent align="start" side="top" className="w-72">
+                <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("Before GIDEON changes something")}</DropdownMenuLabel>
                 {GIDEON_APPROVAL_MODES.map((m) => (
                   <DropdownMenuItem
                     key={m.id}
                     onSelect={() => { setMode(m.id); try { localStorage.setItem("gideon-approval", m.id); } catch { /* private mode */ } }}
                     className="flex items-start gap-2 py-2"
                   >
-                    <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", m.id === mode ? "opacity-100" : "opacity-0")} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold">{t(m.name)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm">{t(m.name)}</span>
                       <span className="block text-xs text-muted-foreground">{t(m.blurb)}</span>
                     </span>
+                    <Check className={cn("mt-0.5 h-4 w-4 shrink-0", m.id === mode ? "opacity-100" : "opacity-0")} />
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <button
-              type="button"
-              onClick={() => void send()}
-              disabled={!input.trim() || busy}
-              aria-label={t("Send")}
-              className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-40"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
+            <div className="min-w-1 flex-1" />
+            {/* The tier (model) picker sits by the send button, where Notion AI keeps its model menu. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" aria-label={`${t("GIDEON tier")}: ${tierDef.name}`} title={t(tierDef.blurb)} className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {tierDef.name}<ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-64">
+                <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("GIDEON tier")}</DropdownMenuLabel>
+                {GIDEON_TIERS.map((x) => (
+                  <DropdownMenuItem
+                    key={x.id}
+                    onSelect={() => { setTier(x.id); try { localStorage.setItem("gideon-tier", x.id); } catch { /* private mode */ } }}
+                    className="flex items-start gap-2 py-2"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm">GIDEON {x.name}{x.id === GIDEON_DEFAULT_TIER && <span className="ml-1.5 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-sidebar-primary">{t("Default")}</span>}</span>
+                      <span className="block text-xs text-muted-foreground">{t(x.blurb)}</span>
+                    </span>
+                    <Check className={cn("mt-0.5 h-4 w-4 shrink-0", x.id === tier ? "opacity-100" : "opacity-0")} />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {busy ? (
+              <button
+                type="button"
+                onClick={stop}
+                aria-label={t("Stop")}
+                title={t("Stop")}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition-transform hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Square className="h-2.5 w-2.5 fill-current" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void send()}
+                disabled={!input.trim()}
+                aria-label={t("Send")}
+                title={t("Send")}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
+        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. */}
+        <div className="flex min-h-6 items-center px-1 pt-1">
+          <GideonCreditMeter />
+        </div>
+      </div>
+  );
+
+  const composer = (view === "chat" || isPage) && !centeredHome ? (
+    <div className="px-3 pb-3 pt-1">{composerBox}</div>
+  ) : null;
+
+  const body = view === "history" ? (
+    <ChatHistoryList
+      activeId={fresh ? null : chatId}
+      onPick={(id) => { openChat(id); if (isPage) router.history.replace(`/gideon?chat=${id}`); }}
+      onNew={() => { newChat(); if (isPage) router.history.replace("/gideon"); }}
+    />
+  ) : centeredHome ? (
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 py-8">
+        {waitingSection}
+        <div className="flex flex-col items-center text-center">
+          <span className="mb-4 grid h-16 w-16 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-8 w-8 text-foreground" /></span>
+          <h1 className="text-balance font-display text-2xl font-bold tracking-tight sm:text-[2rem] sm:leading-tight">{greeting}</h1>
+        </div>
+        {composerBox}
+        <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
+          {suggestions.map((s) => (
+            <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <s.icon className="h-4 w-4 shrink-0" /><span className="min-w-0 text-left">{s.text}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mx-auto max-w-md text-center text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
       </div>
     </div>
-  ) : null;
+  ) : (
+    <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-2">
+      <div className={cn("mx-auto flex w-full flex-1 flex-col gap-4", isPage && "max-w-3xl pt-4")}>
+        {waitingSection}
+        {loading && turns.length === 0 && (
+          <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        )}
+        {!loading && turns.length === 0 && loadFailed && (
+          <LoadError compact error={loadFailed.error} what={t("this conversation")} onRetry={() => openChat(loadFailed.id)}
+            notFoundTitle={t("This conversation doesn't exist any more")} notFoundMessage={t("It was deleted, or the link is wrong. Start a new chat below.")} />
+        )}
+        {isEmpty && (
+          // Notion AI's panel: the greeting and the starters sit at the bottom, right above the box.
+          <div className="mt-auto flex flex-col items-start px-1 pt-8">
+            <span className="mb-3 grid h-11 w-11 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-6 w-6 text-foreground" /></span>
+            <p className="font-display text-lg font-bold leading-snug tracking-tight">{greeting}</p>
+            <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
+            <div role="menu" aria-label={t("Suggestions")} className="-mx-1.5 mt-3 flex w-[calc(100%+0.75rem)] flex-col">
+              {suggestions.map((s) => (
+                <button key={s.text} role="menuitem" type="button" onClick={() => void send(s.text)} className="flex min-h-8 w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none">
+                  <s.icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0">{s.text}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {turns.map((turn, i) => turn.role === "user" ? (
+          <UserTurn key={i} turn={turn} />
+        ) : (
+          <AssistantTurn
+            key={i}
+            turn={turn}
+            onDecided={onDecided}
+            question={turns[i - 1]?.role === "user" ? turns[i - 1].content : ""}
+            projectId={pageContext?.projectId ?? refs.find((r) => r.kind === "project")?.id ?? null}
+            editorTarget={editorTarget}
+            isLast={i === turns.length - 1}
+            large={isPage}
+          />
+        ))}
+      </div>
+    </div>
+  );
+
 
   return (
     <div
@@ -741,7 +883,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       {header}
       {isPage ? (
         <div className="flex min-h-0 flex-1">
-          <aside className="hidden w-72 shrink-0 flex-col border-r border-border md:flex">
+          <aside className={cn("hidden w-64 shrink-0 flex-col border-r border-border/60 bg-muted/20", listOpen && "md:flex")}>
             <ChatHistoryList activeId={fresh ? null : chatId} onPick={(id) => { openChat(id); router.history.replace(`/gideon?chat=${id}`); }} onNew={() => { newChat(); router.history.replace("/gideon"); }} />
           </aside>
           <div className="flex min-w-0 flex-1 flex-col">{body}{composer}</div>
@@ -786,19 +928,47 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
 function ContextChip({ icon: Icon, mark, label, hint, onRemove }: { icon: typeof FileText; mark?: import("react").ReactNode; label: string; hint?: string; onRemove?: () => void }) {
   const { t } = useLang();
+  // Notion AI's context pill inside the box: page icon, title, × on hover.
   return (
-    <span title={hint} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-      {mark ?? <Icon className="h-3 w-3 shrink-0" />}
+    <span title={hint} className="group/chip inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-border/80 bg-muted/40 pl-2 pr-1 text-xs text-foreground/80">
+      {mark ?? <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
       <span className="max-w-[16rem] truncate">{label}</span>
-      {onRemove && <button type="button" onClick={onRemove} aria-label={t("Remove this context")} className="-mr-1 rounded-full p-0.5 hover:bg-accent hover:text-foreground"><X className="h-3 w-3" /></button>}
+      {onRemove && <button type="button" onClick={onRemove} aria-label={t("Remove this context")} title={t("Remove this context")} className="grid h-4 w-4 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-3 w-3" /></button>}
     </span>
+  );
+}
+
+/** The person's message: a soft grey bubble on the right, copy under it on hover (Notion AI). */
+function UserTurn({ turn }: { turn: ChatTurn }) {
+  const { t } = useLang();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="group -mb-2 flex flex-col items-end gap-0.5">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent/70 px-3.5 py-2 text-sm leading-relaxed text-foreground">
+        {turn.attachments && turn.attachments.length > 0 && (
+          <div className="mb-1.5 flex flex-col gap-2">
+            {turn.attachments.map((a, j) => <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble />)}
+          </div>
+        )}
+        <span className="whitespace-pre-wrap break-words">{turn.content}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => { void navigator.clipboard?.writeText(turn.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
+        aria-label={copied ? t("Copied") : t("Copy")}
+        title={copied ? t("Copied") : t("Copy")}
+        className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 pointer-coarse:opacity-100!"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
   );
 }
 
 type PickItem = GideonContextRef & { sub: string | null };
 
 /** Pages to attach with "@": projects, tasks and docs from the normal search (the person's own access). */
-function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
+function MentionPicker({ query, below = false, onPick, onClose }: { query: string; below?: boolean; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
   const { t } = useLang();
   const [items, setItems] = useState<PickItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -844,7 +1014,7 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
     return () => window.removeEventListener("gideon-mention-key", onKey);
   }, [items, index, onPick, onClose]);
   return (
-    <div role="listbox" aria-label={t("Add a page, task or project")} className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-pop">
+    <div role="listbox" aria-label={t("Add a page, task or project")} className={cn("absolute left-0 z-50 w-full max-w-sm overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-pop", below ? "top-full mt-2 max-h-[min(45vh,360px)]" : "bottom-full mb-2 max-h-[min(50vh,420px)]")}>
       <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">{t("Add context")}</div>
       {!query.trim() && <div className="px-2 pb-2 text-xs text-muted-foreground">{t("Type to search projects, tasks and docs you can see.")}</div>}
       {query.trim() && loading && items.length === 0 && <div className="flex items-center gap-2 px-2 pb-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />{t("Searching…")}</div>}
@@ -878,7 +1048,18 @@ function dayBucket(iso: string): "today" | "yesterday" | "week" | "older" {
 
 /** The conversation list with search (Notion AI "Chats"). */
 export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string | null; onPick: (id: string) => void; onNew: () => void }) {
-  const { t } = useLang();
+  const { t, locale } = useLang();
+  /** Notion's short age on the right of a row: "44m", "3h", then the date. */
+  const ago = (iso: string) => {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(ms)) return "";
+    const min = Math.floor(ms / 60_000);
+    if (min < 1) return t("now");
+    if (min < 60) return t("{n}m", { n: min });
+    const h = Math.floor(min / 60);
+    if (h < 24) return t("{n}h", { n: h });
+    return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
+  };
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -912,12 +1093,12 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 p-3">
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 focus-within:border-primary/50">
+      <div className="flex items-center gap-1 px-2 pb-1 pt-2">
+        <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-muted/60 px-2.5 focus-within:ring-2 focus-within:ring-ring">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search chats")} aria-label={t("Search chats")} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </label>
-        <button type="button" onClick={onNew} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border hover:bg-accent"><SquarePen className="h-4 w-4" /></button>
+        <button type="button" onClick={onNew} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><SquarePen className="h-4 w-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {rows === null && <div className="grid h-24 place-items-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
@@ -929,23 +1110,26 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
           </div>
         )}
         {groups.filter((g) => g.items.length).map((g) => (
-          <div key={g.key} className="mb-2">
-            <div className="px-2 pb-1 pt-2 text-[11px] font-semibold text-muted-foreground">{g.label}</div>
+          <div key={g.key} className="mb-1">
+            <div className="px-2 pb-1 pt-3 text-xs font-medium text-muted-foreground">{g.label}</div>
             {g.items.map((r) => (
-              <div key={r.id} className={cn("group flex items-center gap-1 rounded-lg", r.id === activeId ? "bg-accent" : "hover:bg-accent/60")}>
+              <div key={r.id} className={cn("group flex h-8 items-center gap-1 rounded-md pr-1", r.id === activeId ? "bg-accent text-accent-foreground" : "hover:bg-muted")}>
                 {renaming?.id === r.id ? (
-                  <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} className="m-1 min-w-0 flex-1 rounded-md border border-primary/50 bg-background px-2 py-1 text-sm outline-none" />
+                  <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} className="mx-1 h-7 min-w-0 flex-1 rounded-md border border-ring bg-background px-2 text-sm outline-none" />
                 ) : (
-                  <button type="button" onClick={() => onPick(r.id)} className="min-w-0 flex-1 px-2 py-1.5 text-left">
-                    <span className="block truncate text-sm">{chatTitleText(r.title) || t("Untitled chat")}</span>
-                    {r.match && <span className="block truncate text-[11px] text-muted-foreground">{r.match}</span>}
+                  <button type="button" onClick={() => onPick(r.id)} title={r.match ?? undefined} className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-sm">{chatTitleText(r.title) || t("Untitled chat")}{r.match && <span className="ml-1.5 text-xs text-muted-foreground">{r.match}</span>}</span>
                   </button>
                 )}
                 {renaming?.id !== r.id && (
-                  <span className="flex shrink-0 opacity-0 pointer-coarse:opacity-100! transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                    <button type="button" onClick={() => setRenaming({ id: r.id, title: r.title ?? "" })} aria-label={t("Rename")} className="rounded-md p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => setDeleting(r)} aria-label={t("Delete this chat")} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </span>
+                  <>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground group-hover:hidden group-focus-within:hidden pointer-coarse:hidden">{ago(r.updatedAt)}</span>
+                    <span className="hidden shrink-0 group-hover:flex group-focus-within:flex pointer-coarse:flex">
+                      <button type="button" onClick={() => setRenaming({ id: r.id, title: r.title ?? "" })} aria-label={t("Rename")} title={t("Rename")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => setDeleting(r)} aria-label={t("Delete this chat")} title={t("Delete this chat")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </span>
+                  </>
                 )}
               </div>
             ))}
@@ -1030,7 +1214,7 @@ function PersonalizeDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 }
 
 /** "Save as doc": a new page in a project the person can add pages to (default: the chat's project). */
-function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; question: string; projectId: string | null }) {
+function SaveAsDocButton({ markdown, question, projectId, className }: { markdown: string; question: string; projectId: string | null; className?: string }) {
   const { t } = useLang();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -1054,8 +1238,8 @@ function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; 
   return (
     <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (!v) setFind(""); else window.setTimeout(() => findRef.current?.focus(), 30); if (v && !projects) nexusApi.projects().then((p) => setProjects(p.map((x) => ({ id: x.id, name: x.name })))).catch(() => setProjects([])); }}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground">
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <FilePlus2 className="h-3 w-3" />}{t("Save as doc")}
+        <button type="button" aria-label={t("Save as doc")} title={t("Save as doc")} className={className}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePlus2 className="h-4 w-4" />}
         </button>
       </DropdownMenuTrigger>
       {/* Opens above the button (the answer stays readable) with a search box: people can be in 90+ projects (bughunt G-BUG-3). */}
@@ -1092,12 +1276,16 @@ function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; 
     </DropdownMenu>
   );
 }
-function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
+function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isLast = false, large = false }: {
   turn: ChatTurn;
   onDecided: (p: GideonProposal) => void;
   question: string;
   projectId: string | null;
   editorTarget: ReturnType<typeof useGideonEditorTarget>;
+  /** The newest answer keeps its actions visible; older ones show them on hover (Notion AI). */
+  isLast?: boolean;
+  /** The full page reads at 15px. */
+  large?: boolean;
 }) {
   const L = useLang();
   const { t } = L;
@@ -1113,22 +1301,45 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
   const sources = useMemo(() => citedSources(turn.content, turn.sources ?? []), [turn.content, turn.sources]);
   const cards = turn.cards ?? [];
   const proposals = turn.proposals ?? [];
-  const showSteps = turn.streaming || open;
+  const showSteps = open;
+  const thinking = turn.streaming && !turn.content;
+  const actionBtn = "grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
-    <div className="group flex flex-col gap-2">
-      {steps.length > 0 && (
-        <div className="text-xs text-muted-foreground">
-          <button type="button" onClick={() => setOpen((v) => !v)} disabled={turn.streaming} className="inline-flex items-center gap-1 rounded-md py-0.5 font-medium hover:text-foreground disabled:cursor-default">
-            {turn.streaming && running.length > 0 ? <Loader2 className="h-3 w-3 animate-spin" /> : open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {turn.streaming && running.length > 0 ? stepText(running[running.length - 1], t) : L.tn(steps.length, "1 step", "{n} steps")}
-            {!turn.streaming && failed > 0 && <span className="text-destructive">· {L.tn(failed, "1 failed", "{n} failed")}</span>}
-          </button>
+    <div className="group flex flex-col gap-2.5">
+      {turn.creditNotice && (
+        <div role="note" className="flex items-start gap-2 rounded-lg border border-border bg-accent/60 px-3 py-2 text-xs text-accent-foreground">
+          <GideonMark className="mt-px h-3.5 w-3.5 shrink-0 text-sidebar-primary" />
+          <span>{turn.creditNotice}</span>
+        </div>
+      )}
+      {/* What GIDEON is doing, as one quiet line (Notion AI's "Thinking…" / "Searching…"). Done, it folds
+          into "N steps" that opens the list. */}
+      {(steps.length > 0 || thinking) && (
+        <div className="text-[13px] text-muted-foreground">
+          {turn.streaming && (thinking || running.length > 0) ? (
+            <div className="flex items-center gap-2" role="status" aria-live="polite">
+              <GideonMark className="h-3.5 w-3.5 shrink-0 animate-pulse text-sidebar-primary" />
+              <span className="gideon-shimmer truncate">{running.length > 0 ? stepText(running[running.length - 1], t) : t("Thinking…")}</span>
+              {steps.length > 0 && (
+                <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="ml-auto shrink-0 rounded px-1 text-xs hover:text-foreground">
+                  {L.tn(steps.length, "1 step", "{n} steps")}
+                </button>
+              )}
+            </div>
+          ) : (
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {turn.streaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {L.tn(steps.length, "1 step", "{n} steps")}
+              {failed > 0 && <span className="text-destructive">· {L.tn(failed, "1 failed", "{n} failed")}</span>}
+              <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
+            </button>
+          )}
           {showSteps && (
-            <ol className="mt-1 space-y-0.5 border-l border-border pl-3">
+            <ol className="ml-1.5 mt-1.5 space-y-1 border-l border-border pl-3">
               {steps.map((s) => (
                 <li key={s.id} className="flex items-start gap-1.5">
-                  {s.status === "running" ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin" /> : s.status === "error" ? <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                  {s.status === "running" ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin" /> : s.status === "error" ? <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0">{stepText(s, t)}{s.status === "error" && s.error ? <span className="block text-destructive/80">{s.error}</span> : null}</span>
                 </li>
               ))}
@@ -1137,10 +1348,15 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
         </div>
       )}
 
-      {(turn.content || (turn.streaming && !steps.length)) && (
-        <div className={cn("max-w-full rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed", turn.failed ? "border border-destructive/30 bg-destructive/5" : "bg-muted")}>
-          {turn.content ? <GideonMarkdown text={turn.content} sources={turn.sources} /> : <Loader2 className="h-4 w-4 animate-spin" />}
+      {turn.content && (
+        // Notion AI: the answer is plain text on the page, no bubble.
+        <div className={cn("max-w-full leading-[1.65] text-foreground", large ? "text-[15px]" : "text-sm", turn.failed && "rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2")}>
+          {turn.failed && <AlertTriangle className="mb-1 h-4 w-4 text-destructive" aria-hidden />}
+          <GideonMarkdown text={turn.content} sources={turn.sources} />
         </div>
+      )}
+      {turn.stopped && !turn.streaming && (
+        <div className="text-xs text-muted-foreground">{turn.content ? t("Stopped") : t("You stopped this answer.")}</div>
       )}
 
       {proposals.length > 0 && (
@@ -1156,32 +1372,36 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
       )}
 
       {sources.length > 0 && !turn.streaming && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-muted-foreground">{t("Sources")}</span>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-0.5 text-xs text-muted-foreground">{t("Sources")}</span>
           {sources.slice(0, 8).map((r, n) => <SourceChip key={`${r.kind}-${r.id}`} source={r} n={n + 1} />)}
-          {sources.length > 8 && <span className="text-[11px] text-muted-foreground">{t("+{n} more", { n: sources.length - 8 })}</span>}
+          {sources.length > 8 && <span className="text-xs text-muted-foreground">{t("+{n} more", { n: sources.length - 8 })}</span>}
         </div>
       )}
 
       {!turn.streaming && turn.content && !turn.failed && (
-        <div className="flex flex-wrap gap-0.5 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <div className={cn("-ml-1.5 flex items-center gap-0.5 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100!", isLast ? "opacity-100" : "opacity-0")}>
           <button
             type="button"
             onClick={() => { void navigator.clipboard?.writeText(turn.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label={copied ? t("Copied") : t("Copy")}
+            title={copied ? t("Copied") : t("Copy")}
+            className={actionBtn}
           >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copied ? t("Copied") : t("Copy")}
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </button>
           {editorTarget && (
             <button
               type="button"
               onClick={() => { editorTarget.insert(markdownToDoc(turn.content)); toast.success(t("Inserted into the page")); }}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={t("Insert into page")}
+              title={t("Insert into page")}
+              className={actionBtn}
             >
-              <ArrowDownToLine className="h-3 w-3" />{t("Insert into page")}
+              <ArrowDownToLine className="h-4 w-4" />
             </button>
           )}
-          <SaveAsDocButton markdown={turn.content} question={question} projectId={projectId} />
+          <SaveAsDocButton markdown={turn.content} question={question} projectId={projectId} className={actionBtn} />
         </div>
       )}
     </div>
@@ -1200,7 +1420,7 @@ function SourceChip({ source, n }: { source: GideonRef; n?: number }) {
     <a
       href={source.url}
       onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(source.url); }}
-      className="inline-flex max-w-[14rem] items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground"
+      className="inline-flex h-6 max-w-[14rem] items-center gap-1 rounded-full bg-muted/70 px-2 text-xs text-foreground/80 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={source.excerpt ? `${source.title}\n${source.excerpt}` : source.title}
     >
       {n ? <span className="tabular-nums text-muted-foreground">{n}</span> : null}
@@ -1219,12 +1439,12 @@ function ResultCard({ card }: { card: GideonCard }) {
     <a
       href={card.url}
       onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(card.url); }}
-      className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-accent/40"
+      className="flex items-center gap-2.5 rounded-lg border border-border bg-background px-2.5 py-2 transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"><Icon className="h-4 w-4" /></span>
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-foreground/80"><Icon className="h-4 w-4" /></span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">{verb}</span>
-        <span className="block truncate text-sm font-semibold">{card.title}</span>
+        <span className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400"><Check className="h-3 w-3" />{verb}</span>
+        <span className="block truncate text-sm font-medium">{card.title}</span>
         <span className="block truncate text-[11px] text-muted-foreground">
           {[card.projectName, card.status ? t(STATUS_WORD[card.status] ?? card.status) : null, due, card.assignees?.length ? card.assignees.join(", ") : null].filter(Boolean).join(" · ")}
         </span>
@@ -1283,22 +1503,16 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
     proposal.status === "FAILED" ? t("Couldn't apply: {reason}", { reason: proposal.error ?? "" }) :
     proposal.status === "APPLYING" ? t("Applying…") : null;
   return (
-    <div className={cn("overflow-hidden rounded-xl border bg-background", open ? "border-amber-500/40" : "border-border opacity-90")}>
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-        <ShieldCheck className={cn("h-4 w-4 shrink-0", open ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-semibold text-muted-foreground">{open ? t("Waiting for your approval") : title}</span>
-          <span className="block truncate text-sm font-semibold" title={proposal.summary}>{open ? title : proposal.summary}</span>
-        </span>
-      </div>
+    <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
+      <ProposalHead open={open} title={title} summary={proposal.summary} />
       {open && proposal.diff.length > 0 && (
-        <dl className="space-y-1 px-3 py-2 text-xs">
+        <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
           {proposal.diff.map((row, i) => (
-            <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2">
+            <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2 rounded-md bg-muted/40 px-2 py-1">
               <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
               <dd className="min-w-0 break-words">
-                {row.from != null && row.from !== "" && <><span className="text-muted-foreground line-through decoration-muted-foreground/60">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden>→</span> </>}
-                <span className="font-medium">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
+                {row.from != null && row.from !== "" && <><span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden className="text-muted-foreground">→</span> </>}
+                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
               </dd>
             </div>
           ))}
@@ -1308,11 +1522,11 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
       {proposal.status === "APPLIED" && proposal.card && <div className="px-3 pb-3"><ResultCard card={proposal.card} /></div>}
       {error && <div className="px-3 pb-2 text-xs font-medium text-destructive">{error}</div>}
       {open && (
-        <div className="flex justify-end gap-2 border-t border-border/60 px-3 py-2">
-          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent disabled:opacity-50">
+        <div className="flex justify-end gap-1.5 border-t border-border/60 px-2.5 py-2">
+          <button type="button" onClick={() => void decide("discard")} disabled={!!pending} className={PROPOSAL_DISCARD}>
             {pending === "discard" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Discard")}
           </button>
-          <button type="button" onClick={() => void decide("apply")} disabled={!!pending} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+          <button type="button" onClick={() => void decide("apply")} disabled={!!pending} className={PROPOSAL_APPLY}>
             {pending === "apply" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Apply")}
           </button>
         </div>
@@ -1342,14 +1556,14 @@ function GideonAttachmentChip({ kind, name, src, link, onRemove, onBubble }: {
       {kind === "image" && src && !thumbFailed ? (
         <img src={src} alt="" loading="lazy" onError={() => setThumbFailed(true)} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
       ) : (
-        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg", onBubble ? "bg-primary-foreground/15" : "bg-muted")}>
+        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg", onBubble ? "bg-background/70" : "bg-muted")}>
           {kind === "image" ? <ImagePlus className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </span>
       )}
       <span className="flex-1 truncate text-xs" title={label}>{label}</span>
     </>
   );
-  const tone = onBubble ? "text-primary-foreground/80" : "text-muted-foreground";
+  const tone = onBubble ? "text-foreground/80" : "text-muted-foreground";
   if (link) {
     return <a href={link.href} download={link.download} target="_blank" rel="noreferrer" className={cn("flex items-center gap-2 transition-opacity hover:opacity-80", tone)}>{body}</a>;
   }

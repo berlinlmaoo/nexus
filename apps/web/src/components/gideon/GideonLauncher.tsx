@@ -53,7 +53,7 @@ export function GideonLauncher() {
 
   if (onFullPage) return null;
   const panel = (
-    <Suspense fallback={<div className="h-full w-full rounded-2xl border border-border bg-card" aria-busy />}>
+    <Suspense fallback={<div className="h-full w-full bg-card md:rounded-2xl md:border md:border-border" aria-busy />}>
     <GideonPanel
       key={nonce}
       onClose={closeGideon}
@@ -69,11 +69,13 @@ export function GideonLauncher() {
   );
   return (
     <>
+      {/* Notion AI: docked, a full-height column on the right; floating, a window bottom-right. On a phone
+          both fill the screen, as Notion's mobile AI does (a 78vh card left the page peeking around it). */}
       {open && layout === "side" && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[440px] shadow-pop md:w-[440px]">{panel}</div>
+        <div className="fixed inset-0 z-50 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-y-0 md:left-auto md:right-0 md:w-[420px] md:pb-0 md:pt-0 md:shadow-[-8px_0_24px_-12px_rgba(15,15,15,0.12)]">{panel}</div>
       )}
       {open && layout !== "side" && (
-        <div className={cn("fixed bottom-4 right-4 z-50 h-[78vh] w-[calc(100vw-2rem)] md:bottom-6 md:right-6", wide ? "max-w-2xl" : "max-w-md")}>{panel}</div>
+        <div className={cn("fixed inset-0 z-50 bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-auto md:bottom-5 md:right-5 md:h-[min(78vh,760px)] md:w-[calc(100vw-2.5rem)] md:bg-transparent md:pb-0 md:pt-0", wide ? "md:max-w-2xl" : "md:max-w-[420px]")}>{panel}</div>
       )}
     </>
   );

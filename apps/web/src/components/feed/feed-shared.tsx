@@ -110,7 +110,7 @@ export function Lightbox({ images, index, onClose }: { images: FeedImage[]; inde
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[80] grid place-items-center bg-black/90 p-4"
+        className="fixed inset-0 z-[80] grid grid-cols-1 place-items-center bg-black/90 p-4"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
       >

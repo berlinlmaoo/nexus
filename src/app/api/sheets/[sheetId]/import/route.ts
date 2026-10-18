@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { parseCsv } from "@/lib/csv"
 import {
-  MAX_COLUMNS, coerceCellValue, normalizeColumns, resolveSheetAccess, safeUrl,
+  MAX_COLUMNS, coerceCellValue, normalizeColumns, lockSheetRows, lockSheetStructure, resolveSheetAccess, safeUrl,
   type SheetColumn, type LinkCell,
 } from "@/lib/project-sheets"
 import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
@@ -180,11 +180,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
     if (structureChanged) {
       const result = normalizeColumns(columns, access.sheet.columns)
       if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 })
-      finalColumns = result.columns
-      await prisma.projectSheet.update({
-        where: { id: sheetId },
-        data: { columns: finalColumns as unknown as object },
-      })
+      finalColumns = await writeImportColumns(sheetId, result.columns)
       // Re-resolve the header now that every column has a real id.
       const nameToId = new Map(finalColumns.filter((c) => c.name).map((c) => [c.name.trim().toLowerCase(), c.id]))
       header.forEach((name, i) => {
@@ -225,11 +221,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       const changed = retyped.some((c, i) =>
         c.type !== finalColumns[i].type || (c.options ?? []).length !== (finalColumns[i].options ?? []).length)
       if (changed) {
-        finalColumns = retyped
-        await prisma.projectSheet.update({
-          where: { id: sheetId },
-          data: { columns: finalColumns as unknown as object },
-        })
+        finalColumns = await writeImportColumns(sheetId, retyped)
       }
     }
 
@@ -253,11 +245,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       }
     }
 
-    const last = await prisma.sheetRow.findFirst({
-      where: { sheetId }, orderBy: { position: "desc" }, select: { position: true },
-    })
-    let pos = (last?.position ?? -1) + 1
-
     const data = body.map((line) => {
       const cells: Record<string, unknown> = {}
       line.forEach((raw, i) => {
@@ -269,9 +256,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
         const v = coerceCellValue(typeById.get(colId) ?? "text", value, { detect: true })
         if (v !== null) cells[colId] = v
       })
-      return { sheetId, position: pos++, cells: cells as object }
+      return { sheetId, cells: cells as object }
     })
-    if (data.length) await prisma.sheetRow.createMany({ data })
+    // Positions after the last row, picked under the sheet's row lock (race audit 16 Oct 2026, H6).
+    if (data.length) {
+      await prisma.$transaction(async (tx) => {
+        await lockSheetRows(tx, sheetId)
+        const last = await tx.sheetRow.findFirst({ where: { sheetId }, orderBy: { position: "desc" }, select: { position: true } })
+        let pos = (last?.position ?? -1) + 1
+        await tx.sheetRow.createMany({ data: data.map((d) => ({ ...d, position: pos++ })) })
+      }, { timeout: 60_000 })
+    }
 
     logAudit({
       action: "update", entityType: "project_sheet", entityId: sheetId, entityName: access.sheet.name,
@@ -288,4 +283,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
     console.error("Error importing sheet:", error)
     return NextResponse.json({ error: "Filenya nggak kebaca — pastikan .csv atau .xlsx yang valid." }, { status: 422 })
   }
+}
+
+/**
+ * Write the import's column list under the sheet's row lock, keeping any column someone added since this
+ * request read the sheet (race audit 16 Oct 2026, H6), and bump structureVersion.
+ */
+async function writeImportColumns(sheetId: string, cols: SheetColumn[]): Promise<SheetColumn[]> {
+  return prisma.$transaction(async (tx) => {
+    const fresh = await lockSheetStructure(tx, sheetId)
+    const merged = normalizeColumns(cols, fresh?.columns ?? [], { keepMissing: true })
+    const next = "error" in merged ? cols : merged.columns
+    await tx.projectSheet.update({ where: { id: sheetId }, data: { columns: next as unknown as object, structureVersion: { increment: 1 } } })
+    return next
+  })
 }

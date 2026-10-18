@@ -9,7 +9,7 @@ const MAX_SLOT_MS = 24 * 60 * 60 * 1000
 
 /**
  * GET /api/room-bookings/availability?startsAt=ISO&endsAt=ISO — every room for one slot (free, or booked by
- * whom until when, and its capacity when known), plus the nearest free slots (same day, ±2 h) when no room
+ * whom until when), plus the nearest free slots (same day, ±2 h) when no room
  * is free. The room picker on GIDEON's book_room card reads it, again whenever a slot chip is picked; the
  * slot is re-checked on Apply anyway. `excludeBookingId` (optional, 16 Oct 2026): the booking a move card is
  * moving, so its own current slot does not show as taken by itself.

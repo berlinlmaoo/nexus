@@ -2805,6 +2805,12 @@ model Message {
   /// text only, which is what all 500k+ of them are today.
   attachmentUrl  String?
   attachmentType String?
+  /// A document's name as it was sent ("Laporan Q3.pdf") and its size in bytes (18 Oct 2026,
+  /// src/lib/chat-files.ts). The file itself is stored under a random name. Null on pictures sent by
+  /// the apps and on every message before documents. Partial index Message_attachmentUrl_idx
+  /// (prisma/sql/2026-10-18-chat-file-attachments.sql) finds a message by its file.
+  attachmentName String?
+  attachmentSize Int?
 
   /// The message this one replies to. Self-relation, nullable because every existing row predates
   /// replies. SetNull rather than Cascade on purpose: deleting a quoted message must not delete the
@@ -2966,6 +2972,10 @@ model ProjectSheet {
   /// tabColor?, hiddenRows?: rowId[], hiddenCols?: colId[], merges?: [{ r, c, rs, cs }] }.
   /// See readSheetSettings in src/lib/project-sheets.ts. prisma/sql/2026-10-11-sheet-formatting.sql.
   settings    Json     @default("{}")
+  /// Bumped by every write of `columns` (race audit 16 Oct 2026, H6). A structure PATCH that sends the
+  /// version it last saw gets 409 SHEET_STRUCTURE_CHANGED when someone else changed the columns since.
+  /// prisma/sql/2026-10-16-sheet-structure-version.sql.
+  structureVersion Int @default(0)
   position    Int      @default(0)
   createdById String?
   createdAt   DateTime @default(now())
@@ -3273,6 +3283,11 @@ model Complaint {
   resolvedBy    User?              @relation("ComplaintResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+  /// GIDEON auto-support's claim on this ticket while it writes an answer (race audit 16 Oct 2026, M21):
+  /// set with a compare-and-swap before the thread is read, cleared when the review ends, so two triggers
+  /// (ticket created + a reply, a re-review sweep) never answer the same ticket twice. A claim older than
+  /// lib/gideon-ticket.ts REVIEW_CLAIM_MS is stale (a crashed process) and may be taken over.
+  gideonReviewingAt DateTime?
   messages      ComplaintMessage[]
   events        ComplaintEvent[]
   // Evidence photos. A separate table rather than parallel `String[]` columns (url/mime/size arrays
@@ -3499,6 +3514,86 @@ model GideonRunStep {
   @@index([runId, createdAt])
 }
 
+/// GIDEON credits (owner, 18 Oct 2026): one row per GIDEON answer, priced from what the model was actually
+/// paid for (fresh input, cached input, output incl. reasoning) — 1 credit = USD 0.001, rounded up. The
+/// split says which bucket paid: the daily allowance first, then the period's monthly pool, then "over"
+/// (phase 1 never blocks). Written under a per-user advisory lock (lib/gideon-credits.ts). No FK on
+/// userId, like GideonRun: a ledger row must never stop an account from being removed.
+model GideonCreditUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  /// The company workspace when the person is a member of it, else null.
+  workspaceId      String?
+  /// Workspace role at the time (ONE_ABOVE_ALL | BOD | MANAGER | STAFF), null = not a company member.
+  role             String?
+  /// The GideonRun this answer belongs to. Unique: an answer is billed once, however often it is reported.
+  runId            String?  @unique
+  /// CHAT | WRITE | MENTION | SCHEDULE | AUTOFILL | TICKET | REFLECTION
+  trigger          String
+  /// The tier that answered (astra | luna | terra | experimental).
+  tier             String
+  /// The tier the person picked, when it differs (served by terra because they were out of credits).
+  requestedTier    String?
+  model            String
+  inputTokens      Int      @default(0)
+  cachedTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  outputTokens     Int      @default(0)
+  reasoningTokens  Int      @default(0)
+  apiCalls         Int      @default(0)
+  /// Real model cost in millionths of a USD.
+  costMicroUsd     Int      @default(0)
+  credits          Int      @default(0)
+  dailyCredits     Int      @default(0)
+  poolCredits      Int      @default(0)
+  overCredits      Int      @default(0)
+  /// False for system jobs done for the person (reflection summaries, support tickets): recorded, not charged.
+  billable         Boolean  @default(true)
+  unlimited        Boolean  @default(false)
+  /// Answered by terra because the person had no credits left (phase 2).
+  fallback         Boolean  @default(false)
+  /// Hermes session id (state.db) the numbers were read from.
+  sessionId        String?
+  /// state.db | runner
+  source           String?
+  /// Asia/Jakarta date "YYYY-MM-DD" of the answer: the daily allowance's day.
+  dayKey           String
+  /// Attendance period "YYYY-MM" (28th → 27th): the monthly pool's period.
+  periodKey        String
+  createdAt        DateTime @default(now())
+
+  @@index([userId, dayKey])
+  @@index([userId, periodKey])
+  @@index([periodKey])
+  @@index([createdAt])
+}
+
+/// A BoD / One Above All override of one person's GIDEON credits. Null fields follow the role default.
+model GideonCreditOverride {
+  userId       String   @id
+  dailyLimit   Int?
+  monthlyLimit Int?
+  unlimited    Boolean?
+  note         String?
+  updatedById  String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+/// One-off bonus credits, added to the person's monthly pool for one period.
+model GideonCreditBonus {
+  id          String   @id @default(cuid())
+  userId      String
+  periodKey   String
+  credits     Int
+  reason      String?
+  grantedById String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, periodKey])
+  @@index([periodKey])
+}
+
 /// A write GIDEON wanted to make and the person has to approve first (approval mode). Applying runs the
 /// exact same /api/gideon/tools action, as the same person, so every permission check runs again.
 model GideonProposal {
@@ -3719,9 +3814,29 @@ model VaultItem {
   // berlaku global, bukan per-induk, jadi menyalinnya akan melarang Brand/Logo dan Clients/Logo
   // hidup bersama. Keunikan per-induk juga tidak bisa dinyatakan di Postgres karena baris dengan
   // parentId NULL tidak pernah bertabrakan. Jadi: dicek di route, dan diberi akhiran "(2)".
+  // Since 16 Oct 2026 (race audit, LOW) the database guarantees it too: a partial EXPRESSION index over
+  // (workspaceId, COALESCE(parentId, ''), lower(name)) WHERE deletedAt IS NULL, which Prisma cannot express —
+  // prisma/sql/2026-10-16-vault-live-name-unique.sql. Writers retry a refused name (lib/vault.ts withFreeName).
   @@index([workspaceId, parentId, position])
   @@index([workspaceId, deletedAt])
   @@index([parentId])
+}
+
+/// A chunked Vault upload's declared size, held against the workspace quota while its chunks arrive (race
+/// audit 16 Oct 2026, H10): refreshed by every chunk, deleted by the finalize that creates the file, ignored
+/// once expired. The quota check (lib/vault.ts vaultQuotaProblemTx) counts live files + live reservations of
+/// other uploads, under the per-workspace advisory lock. prisma/sql/2026-10-16-vault-upload-reservation.sql.
+model VaultUploadReservation {
+  id          String   @id @default(cuid())
+  userId      String
+  uploadId    String
+  workspaceId String
+  bytes       BigInt
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, uploadId])
+  @@index([workspaceId, expiresAt])
 }
 
 // Tautan berbagi, terpisah dari itemnya.
@@ -4033,6 +4148,10 @@ model PipelinePaymentTerm {
   paidAmount  Float        @default(0)
   paidAt      DateTime?
   note        String       @default("")
+  /// The key a client sent with "Add term" (race audit 16 Oct 2026, M7): a repeat with the same key on the
+  /// same deal returns this term instead of adding another. Unique per dealId WHERE NOT NULL — a partial
+  /// index, so it lives in prisma/sql/2026-10-16-race-pr4-idempotency.sql, not here.
+  clientRequestId String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -4196,6 +4315,10 @@ model OutletSalesEvent {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  /// The key a client sent with "Add night" (race audit 16 Oct 2026, M9): a repeat with the same key in the
+  /// same project returns this event. Unique per projectId WHERE NOT NULL — partial index in
+  /// prisma/sql/2026-10-16-race-pr4-idempotency.sql.
+  clientRequestId String?
   @@index([projectId, date])
 }
 
