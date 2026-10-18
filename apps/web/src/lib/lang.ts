@@ -72,6 +72,7 @@ import { ID_R20WEB } from "@/lib/i18n/id-r20web";
 import { ID_GIDEON_CALENDAR } from "@/lib/i18n/id-gideon-calendar";
 import { ID_NOTION_VIEWS } from "@/lib/i18n/id-notion-views";
 import { ID_MEETINGS } from "@/lib/i18n/id-meetings";
+import { ID_GIDEON_PERF } from "@/lib/i18n/id-gideon-perf";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -92,6 +93,7 @@ const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDA
 Object.assign(ID, ID_RACE_COLLAB);
 // Meeting notes, Beta (18 Oct 2026).
 Object.assign(ID, ID_MEETINGS);
+Object.assign(ID, ID_GIDEON_PERF);
 
 function read(): Lang {
   try {

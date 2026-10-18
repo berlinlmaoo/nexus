@@ -13,6 +13,7 @@ import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { sessionVersionRejects } from "@/lib/session-version"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { resolveAuditAccess } from "@/lib/audit-query"
+import { isOrgBodPlus } from "@/lib/org"
 import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
 import { attachCollabSocket } from "@/lib/collab-rooms"
 import { onSlotDemoted } from "@/lib/bluegreen"
@@ -149,6 +150,9 @@ export function initializeSocketServer(
       // row alone outlived a removal from the company until 8 Oct 2026.
       case "conversation":
         return { ok: (await conversationMemberAccess(userId, id)).ok }
+      // Control Room › GIDEON › Performance (18 Oct 2026): BoD / One Above All of the company workspace only.
+      case "gideon":
+        return { ok: id === "perf" && (await isOrgBodPlus(userId).catch(() => false)) }
       case "sheet": {
         const access = await resolveSheetAccess(userId, id, ["VIEWER"])
         if (!access.allowed) return { ok: false }
@@ -613,6 +617,21 @@ export function initializeSocketServer(
   // GIDEON tier availability (18 Oct 2026): the same public fact for everyone, so it goes to every socket.
   eventBus.on(BUS_EVENTS.GIDEON_TIERS, (data: { tiers: unknown }) => {
     io.emit("gideon-tiers", { tiers: data?.tiers ?? null })
+  })
+
+  // GIDEON performance panel (lib/gideon-perf.ts, 18 Oct 2026). GPU samples go out as they come (≤ every 5 s, and
+  // only while someone watches); "runs" pings (an answer started/ended) are folded into one per 2 s.
+  ;(globalThis as unknown as { __gideonPerfWatchers?: () => number }).__gideonPerfWatchers = () => io.sockets.adapter.rooms.get("gideon:perf")?.size ?? 0
+  let perfRunsTimer: ReturnType<typeof setTimeout> | null = null
+  eventBus.on(BUS_EVENTS.GIDEON_PERF, (data: { kind?: string; live?: unknown }) => {
+    if (!io.sockets.adapter.rooms.get("gideon:perf")?.size) return
+    if (data?.kind === "runs") {
+      if (perfRunsTimer) return
+      perfRunsTimer = setTimeout(() => { perfRunsTimer = null; io.to("gideon:perf").emit("gideon-perf", { kind: "runs" }) }, 2000)
+      perfRunsTimer.unref?.()
+      return
+    }
+    io.to("gideon:perf").emit("gideon-perf", { kind: data?.kind ?? "gpu", live: data?.live ?? null })
   })
 
   // A meeting recording moved (lib/meeting-notes.ts): ids + status only, to its uploader and its project's room

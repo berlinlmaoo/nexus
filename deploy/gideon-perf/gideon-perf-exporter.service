@@ -1,0 +1,34 @@
+# GIDEON performance exporter (Control Room > GIDEON > Performance, 18 Oct 2026). Install on the GPU host:
+#   install -D -m 0755 gideon-perf-exporter.py /usr/local/lib/gideon-perf/gideon-perf-exporter.py
+#   install -m 0644 gideon-perf-exporter.service /etc/systemd/system/
+#   /etc/gideon-perf/exporter.env  NEXUS_PERF_URL=…/api/gideon/perf/ingest, MODEL0_URL=…, WHISPER_URL=… (optional)
+#   /etc/gideon-perf/ingest.secret the shared secret (0600 root), the same value as GIDEON_PERF_INGEST_SECRET in NEXUS
+#   systemctl daemon-reload && systemctl enable --now gideon-perf-exporter
+# Off switch: systemctl disable --now gideon-perf-exporter
+[Unit]
+Description=GIDEON performance exporter (GPU + Model 0 telemetry to NEXUS)
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/gideon-perf/exporter.env
+LoadCredential=ingest:/etc/gideon-perf/ingest.secret
+# The meeting transcriber's secret, for its queue (drop this line where there is no transcriber).
+LoadCredential=whisper:/etc/nexus-whisper/secret.env
+StateDirectory=gideon-perf
+ExecStart=/usr/bin/python3 -I /usr/local/lib/gideon-perf/gideon-perf-exporter.py
+Restart=always
+RestartSec=15
+MemoryMax=128M
+CPUQuota=20%
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
