@@ -43,12 +43,14 @@ import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppAttendanceRouteImport } from './routes/_app/attendance'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
+import { Route as AppMeetingsIndexRouteImport } from './routes/_app/meetings.index'
 import { Route as SsoAgentsStateRouteImport } from './routes/sso.agents.$state'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppReportsUserIdRouteImport } from './routes/_app/reports.$userId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
 import { Route as AppPeopleUserIdRouteImport } from './routes/_app/people.$userId'
 import { Route as AppMessagesConversationIdRouteImport } from './routes/_app/messages.$conversationId'
+import { Route as AppMeetingsMeetingIdRouteImport } from './routes/_app/meetings.$meetingId'
 import { Route as AppFoldersFolderIdRouteImport } from './routes/_app/folders.$folderId'
 import { Route as AppDocsDocIdRouteImport } from './routes/_app/docs.$docId'
 
@@ -221,6 +223,11 @@ const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   path: '/projects/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMeetingsIndexRoute = AppMeetingsIndexRouteImport.update({
+  id: '/meetings/',
+  path: '/meetings/',
+  getParentRoute: () => AppRoute,
+} as any)
 const SsoAgentsStateRoute = SsoAgentsStateRouteImport.update({
   id: '/sso/agents/$state',
   path: '/sso/agents/$state',
@@ -252,6 +259,11 @@ const AppMessagesConversationIdRoute =
     path: '/$conversationId',
     getParentRoute: () => AppMessagesRoute,
   } as any)
+const AppMeetingsMeetingIdRoute = AppMeetingsMeetingIdRouteImport.update({
+  id: '/meetings/$meetingId',
+  path: '/meetings/$meetingId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppFoldersFolderIdRoute = AppFoldersFolderIdRouteImport.update({
   id: '/folders/$folderId',
   path: '/folders/$folderId',
@@ -298,12 +310,14 @@ export interface FileRoutesByFullPath {
   '/v/$slug': typeof VSlugRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/people/$userId': typeof AppPeopleUserIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
+  '/meetings/': typeof AppMeetingsIndexRoute
   '/projects/': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -341,12 +355,14 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/people/$userId': typeof AppPeopleUserIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
+  '/meetings': typeof AppMeetingsIndexRoute
   '/projects': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesById {
@@ -386,12 +402,14 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/_app/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
   '/_app/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/_app/people/$userId': typeof AppPeopleUserIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/reports/$userId': typeof AppReportsUserIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
+  '/_app/meetings/': typeof AppMeetingsIndexRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
 }
 export interface FileRouteTypes {
@@ -431,12 +449,14 @@ export interface FileRouteTypes {
     | '/v/$slug'
     | '/docs/$docId'
     | '/folders/$folderId'
+    | '/meetings/$meetingId'
     | '/messages/$conversationId'
     | '/people/$userId'
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
     | '/sso/agents/$state'
+    | '/meetings/'
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -474,12 +494,14 @@ export interface FileRouteTypes {
     | '/'
     | '/docs/$docId'
     | '/folders/$folderId'
+    | '/meetings/$meetingId'
     | '/messages/$conversationId'
     | '/people/$userId'
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
     | '/sso/agents/$state'
+    | '/meetings'
     | '/projects'
   id:
     | '__root__'
@@ -518,12 +540,14 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/docs/$docId'
     | '/_app/folders/$folderId'
+    | '/_app/meetings/$meetingId'
     | '/_app/messages/$conversationId'
     | '/_app/people/$userId'
     | '/_app/projects/$projectId'
     | '/_app/reports/$userId'
     | '/_app/tasks/$taskId'
     | '/sso/agents/$state'
+    | '/_app/meetings/'
     | '/_app/projects/'
   fileRoutesById: FileRoutesById
 }
@@ -782,6 +806,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/meetings/': {
+      id: '/_app/meetings/'
+      path: '/meetings'
+      fullPath: '/meetings/'
+      preLoaderRoute: typeof AppMeetingsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/sso/agents/$state': {
       id: '/sso/agents/$state'
       path: '/sso/agents/$state'
@@ -823,6 +854,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/messages/$conversationId'
       preLoaderRoute: typeof AppMessagesConversationIdRouteImport
       parentRoute: typeof AppMessagesRoute
+    }
+    '/_app/meetings/$meetingId': {
+      id: '/_app/meetings/$meetingId'
+      path: '/meetings/$meetingId'
+      fullPath: '/meetings/$meetingId'
+      preLoaderRoute: typeof AppMeetingsMeetingIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/folders/$folderId': {
       id: '/_app/folders/$folderId'
@@ -900,9 +938,11 @@ interface AppRouteChildren {
   AppVaultRoute: typeof AppVaultRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFoldersFolderIdRoute: typeof AppFoldersFolderIdRoute
+  AppMeetingsMeetingIdRoute: typeof AppMeetingsMeetingIdRoute
   AppPeopleUserIdRoute: typeof AppPeopleUserIdRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
   AppTasksTaskIdRoute: typeof AppTasksTaskIdRoute
+  AppMeetingsIndexRoute: typeof AppMeetingsIndexRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
 }
 
@@ -930,9 +970,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppVaultRoute: AppVaultRoute,
   AppIndexRoute: AppIndexRoute,
   AppFoldersFolderIdRoute: AppFoldersFolderIdRoute,
+  AppMeetingsMeetingIdRoute: AppMeetingsMeetingIdRoute,
   AppPeopleUserIdRoute: AppPeopleUserIdRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
   AppTasksTaskIdRoute: AppTasksTaskIdRoute,
+  AppMeetingsIndexRoute: AppMeetingsIndexRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
 }
 

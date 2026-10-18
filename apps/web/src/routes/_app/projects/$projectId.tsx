@@ -19,6 +19,9 @@ import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtDate, isTransientError, memberLevelOf, nexusApi, retryTransient, statusLabel, type ProjectAccessLevel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
+import { BetaBadge } from "@/components/meetings/BetaBadge";
+import { useMeetingNotesEnabled } from "@/lib/meetings";
+import { Mic as MeetingMic } from "lucide-react";
 import { openGideon } from "@/lib/gideon";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import type { OutletView } from "@/components/outlet-sales/OutletSalesView";
@@ -131,6 +134,7 @@ const loadComposer = () => import("@/components/tasks/TaskComposer");
 const TaskDetailPanel = named(loadTaskPanel, "TaskDetailPanel");
 const TaskComposer = named(loadComposer, "TaskComposer");
 const ProjectSettingsDrawer = named(() => import("@/components/projects/ProjectSettingsDrawer"), "ProjectSettingsDrawer");
+const NewMeetingDialog = named(() => import("@/components/meetings/NewMeetingDialog"), "NewMeetingDialog");
 const AddProjectMembersDialog = named(() => import("@/components/projects/AddProjectMembersDialog"), "AddProjectMembersDialog");
 const AutomationsView = named(() => import("@/components/automations/AutomationsView"), "AutomationsView");
 const GideonProjectCard = named(() => import("@/components/gideon/GideonProjectCard"), "GideonProjectCard");
@@ -309,6 +313,10 @@ function ProjectDetail() {
   useRealtimeRoom(`project:${projectId}`);
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Meeting notes, Beta (18 Oct 2026): a recording → minutes + tasks in this project. Desktop header; on a phone it is
+  // in Ask GIDEON's + menu (the header row has room for icons only there).
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const meetingsOn = useMeetingNotesEnabled();
   const [autofillOpen, setAutofillOpen] = useState(false);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [specialView, setSpecialView] = useState<ViewId>("pipeline");
@@ -788,6 +796,7 @@ function ProjectDetail() {
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
             {data && <Button size="sm" variant="ghost" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
+            {data && meetingsOn && data.viewerAccessLevel !== "VIEW" && data.viewerAccessLevel !== "COMMENT" && <Button size="sm" variant="ghost" aria-label={`${tr("Meeting notes")} (${tr("Beta")})`} className="max-md:hidden" onPointerEnter={() => void import("@/components/meetings/NewMeetingDialog")} onClick={() => setMeetingOpen(true)}><MeetingMic className="h-3.5 w-3.5" />{tr("Meeting notes")}<BetaBadge /></Button>}
             {data && <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="ghost" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
             </motion.div>}
@@ -923,6 +932,7 @@ function ProjectDetail() {
       <Suspense fallback={null}>
       {openTaskId && <TaskDetailPanel key={openTaskId} taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
       {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
+      {meetingOpen && data && <NewMeetingDialog open={meetingOpen} onOpenChange={setMeetingOpen} projectId={data.id} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
       </Suspense>

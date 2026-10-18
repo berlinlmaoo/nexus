@@ -8,7 +8,7 @@ import { useRouter } from "@tanstack/react-router";
 import {
   AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
   ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, Info, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
-  MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
+  MoreHorizontal, Mic, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -39,6 +39,9 @@ import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LoadError } from "@/components/LoadError";
+import { BetaBadge } from "@/components/meetings/BetaBadge";
+import { NewMeetingDialog } from "@/components/meetings/NewMeetingDialog";
+import { TIER_REASON, useGideonTiers, useMeetingNotesEnabled } from "@/lib/meetings";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
@@ -184,6 +187,13 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       return GIDEON_DEFAULT_APPROVAL;
     }
   });
+  /** Meeting notes (Beta, 18 Oct 2026): the "Meeting recording" dialog from the + menu. */
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const meetingsOn = useMeetingNotesEnabled();
+  /** Which tiers can answer now (Model 0 is away while the office GPU transcribes a meeting). Live over the socket. */
+  const tierStatus = useGideonTiers();
+  /** The answer was refused because the chosen tier is away: the composer offers GIDEON Phaëthon. */
+  const [tierRefused, setTierRefused] = useState(false);
   /** Proposals waiting for this person that no turn on screen shows (e.g. from an @GIDEON comment or AI Autofill). */
   const [waiting, setWaiting] = useState<GideonProposal[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -320,6 +330,9 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
     if (!text || busy) return;
+    // The chosen tier is away (Model 0 lent the GPU to a meeting transcript): nothing is sent, the notice says why.
+    if (tierAway) { setTierRefused(true); return; }
+    setTierRefused(false);
     setInput("");
     setMention(null);
     setAttachError(null);
@@ -408,6 +421,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           if (ev.summary) qc.setQueryData(CREDITS_KEY, ev.summary);
           if (ev.notice) { const n = ev.notice; patchLast((x) => ({ ...x, creditNotice: L.lang === "id" ? n.id : n.en })); }
           break;
+        case "tier_unavailable":
+          // Refused by the server (the tier went away between the picker and the send): offer Phaëthon.
+          setTierRefused(true);
+          void qc.invalidateQueries({ queryKey: ["gideon-tiers"] });
+          break;
         case "error":
           patchLast((x) => ({ ...x, failed: true, content: acc ? `${acc}\n\n${ev.content ?? ""}` : ev.content ?? t("Something went wrong.") }));
           break;
@@ -481,6 +499,9 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
   const tierDef = GIDEON_TIERS.find((x) => x.id === tier) ?? GIDEON_TIERS[1];
+  const tierInfo = tierStatus.data?.[tier as keyof NonNullable<typeof tierStatus.data>];
+  const tierAway = tierInfo ? !tierInfo.available : false;
+  const pickTier = (id: GideonTier) => { setTier(id); setTierRefused(false); try { localStorage.setItem("gideon-tier", id); } catch { /* private mode */ } };
 
   /** Stop: the answer so far stays on screen. The server finishes the run and keeps it in the chat. */
   const stop = () => {
@@ -688,6 +709,13 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             </div>
           )}
           {attachError && <div className="px-3.5 py-1.5 text-xs font-medium text-destructive">{attachError}</div>}
+          {(tierAway || (tierRefused && tier === "experimental")) && (
+            <div role="status" className="mx-2 mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">{t("GIDEON {name} is unavailable right now.", { name: tierDef.name })}{tierInfo?.reason && TIER_REASON[tierInfo.reason] ? ` ${t(TIER_REASON[tierInfo.reason])}` : ""}</span>
+              <button type="button" onClick={() => pickTier(GIDEON_DEFAULT_TIER)} className="shrink-0 rounded-md bg-card px-2 py-0.5 font-semibold text-foreground shadow-sm hover:bg-accent">{t("Use GIDEON Phaëthon")}</button>
+            </div>
+          )}
           <div className="flex items-center gap-0.5 px-2 pb-2 pt-1">
             <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={(e) => {
               const file = e.target.files?.[0];
@@ -713,11 +741,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
                   { icon: ImagePlus, label: t("Upload a photo"), hint: t("Screenshots and pictures"), run: () => imageInput.current?.click() },
                   { icon: Paperclip, label: t("Upload a file"), hint: t("PDF, Word, Excel or text"), run: () => fileInput.current?.click() },
                   { icon: AtSign, label: t("Mention a page, task or project"), hint: t("Give GIDEON context from NEXUS"), run: () => window.setTimeout(startMention, 0) },
-                ]).map(({ icon: Icon, label, hint, run }) => (
+                  ...(meetingsOn ? [{ icon: Mic, label: t("Meeting recording"), hint: t("Minutes and tasks from a recording"), run: () => setMeetingOpen(true), beta: true }] : []),
+                ] as Array<{ icon: typeof Mic; label: string; hint: string; run: () => void; beta?: boolean }>).map(({ icon: Icon, label, hint, run, beta }) => (
                   <DropdownMenuItem key={label} onSelect={run} className="items-start gap-3 rounded-lg px-2.5 py-2">
                     <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"><Icon className="h-4 w-4" /></span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{label}</span>
+                      <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium"><span className="truncate">{label}</span>{beta && <BetaBadge />}</span>
                       <span className="block truncate text-xs text-muted-foreground">{hint}</span>
                     </span>
                   </DropdownMenuItem>
@@ -753,25 +782,34 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             {/* The tier (model) picker sits by the send button, where Notion AI keeps its model menu. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" aria-label={`${t("GIDEON tier")}: ${tierDef.name}`} title={t(tierDef.blurb)} className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button type="button" aria-label={`${t("GIDEON tier")}: ${tierDef.name}${tierAway ? ` (${t("Unavailable right now")})` : ""}`} title={tierAway ? t("Unavailable right now") : t(tierDef.blurb)} className={cn("inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", tierAway && "text-amber-700 dark:text-amber-400")}>
                   {tierDef.name}<ChevronDown className="h-3 w-3" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top" className="w-64">
                 <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("GIDEON tier")}</DropdownMenuLabel>
-                {GIDEON_TIERS.map((x) => (
+                {GIDEON_TIERS.map((x) => {
+                  const st = tierStatus.data?.[x.id as keyof NonNullable<typeof tierStatus.data>];
+                  const away = st ? !st.available : false;
+                  return (
                   <DropdownMenuItem
                     key={x.id}
-                    onSelect={() => { setTier(x.id); try { localStorage.setItem("gideon-tier", x.id); } catch { /* private mode */ } }}
+                    disabled={away}
+                    onSelect={() => pickTier(x.id)}
                     className="flex items-start gap-2 py-2"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm">GIDEON {x.name}{x.id === GIDEON_DEFAULT_TIER && <span className="ml-1.5 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-sidebar-primary">{t("Default")}</span>}</span>
-                      <span className="block text-xs text-muted-foreground">{t(x.blurb)}</span>
+                      {away ? (
+                        <span className="block text-xs font-medium text-amber-700 dark:text-amber-400">{t("Unavailable right now")}{st?.reason && TIER_REASON[st.reason] ? ` · ${t(TIER_REASON[st.reason])}` : ""}</span>
+                      ) : (
+                        <span className="block text-xs text-muted-foreground">{t(x.blurb)}</span>
+                      )}
                     </span>
                     <Check className={cn("mt-0.5 h-4 w-4 shrink-0", x.id === tier ? "opacity-100" : "opacity-0")} />
                   </DropdownMenuItem>
-                ))}
+                  );
+                })}
               </DropdownMenuContent>
             </DropdownMenu>
             {busy ? (
@@ -788,7 +826,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               <button
                 type="button"
                 onClick={() => void send()}
-                disabled={!input.trim()}
+                disabled={!input.trim() || tierAway}
                 aria-label={t("Send")}
                 title={t("Send")}
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted"
@@ -911,6 +949,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       )}
 
       <PersonalizeDialog open={personalizeOpen} onOpenChange={setPersonalizeOpen} />
+      {meetingsOn && <NewMeetingDialog open={meetingOpen} onOpenChange={setMeetingOpen} projectId={pageContext?.projectId ?? null} />}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
