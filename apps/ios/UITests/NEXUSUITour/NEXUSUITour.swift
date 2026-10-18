@@ -644,6 +644,9 @@ final class NEXUSUITour: XCTestCase {
                 if action.kind == "replace" { app.typeKey("a", modifierFlags: .command) }
                 target.typeText(action.text ?? "")
                 pause(0.5)
+            case "dismissKeyboard":
+                let done = app.buttons["keyboard.dismiss"]
+                if done.exists && done.isHittable { press(done); pause(1) }
             case "reveal":
                 for _ in 0..<10 {
                     let target = app.descendants(matching: .any).matching(textMatch).firstMatch

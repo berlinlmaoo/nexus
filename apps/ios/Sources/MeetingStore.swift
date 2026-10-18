@@ -70,8 +70,15 @@ final class MeetingStore {
             var body = fields; body["version"] = current.version
             do {
                 let response: MeetingEnvelope = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id), method: "PATCH", body: body)
-                if pending.isEmpty { meeting = response.meeting }
-                else { meeting?.version = response.meeting.version }
+                var updated = response.meeting
+                // PATCH omits the GET-only project/member enrichment. Keep it for PIC and
+                // speaker suggestions until the project changes or a fresh GET replaces it.
+                if updated.projectId == current.projectId {
+                    updated.members = updated.members ?? current.members
+                    updated.project = updated.project ?? current.project
+                }
+                if pending.isEmpty { meeting = updated }
+                else { meeting?.version = updated.version }
                 failure = nil
                 if fields["speakers"] != nil && response.meeting.status == "READY" { notice = T("Saved. To use the new names in the minutes, choose Write the minutes again.") }
             } catch let error as NativeAPIError where error.code == "VERSION_CONFLICT" {

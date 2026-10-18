@@ -69,7 +69,7 @@ struct SetPresenceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var later = false
-    @State private var start = Date()
+    @State private var start = Date().addingTimeInterval(3600)
     @State private var clearAfter = "60"
     @State private var end = Date().addingTimeInterval(3600)
     @State private var displayedManualId: String?
@@ -79,7 +79,7 @@ struct SetPresenceSheet: View {
     private var starts: Date { later ? start : Date() }
     private var ends: Date {
         switch clearAfter {
-        case "today": return PresenceTime.todayEnd(starts)
+        case "today": return PresenceTime.todayEnd(Date())
         case "pick": return end
         default: return starts.addingTimeInterval(Double(clearAfter).map { $0 * 60 } ?? 3600)
         }

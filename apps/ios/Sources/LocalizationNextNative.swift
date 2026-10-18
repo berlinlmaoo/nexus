@@ -330,6 +330,7 @@ extension AppLanguage {
         "Preparing your status: %@": "Menyiapkan statusmu: %@",
         "Starts at": "Mulai pada",
         "Meeting": "Meeting",
+        "Include task": "Sertakan task",
     ]
 }
 

@@ -154,9 +154,10 @@ private struct GideonPersonChats: View {
 struct NativeOptionalDay: View {
     let label: String
     @Binding var value: Date?
+    var controlID: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle(T(label), isOn: Binding(get: { value != nil }, set: { value = $0 ? CalDays.date(CalDays.wibToday()) : nil })).font(NXFont.text(12))
+            Toggle(T(label), isOn: Binding(get: { value != nil }, set: { value = $0 ? CalDays.date(CalDays.wibToday()) : nil })).font(NXFont.text(12)).accessibilityIdentifier(controlID ?? "native.day." + label)
             if value != nil { DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date).labelsHidden().environment(\.timeZone, TimeZone(secondsFromGMT: 0)!) }
         }.padding(8).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(NX.border))
     }
