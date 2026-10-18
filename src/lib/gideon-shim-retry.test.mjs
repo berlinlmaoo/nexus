@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import {
   SHIM_RESTART, isNonModelFailure, isShimRestartResponse, isShimStoppedResponse, isGatewayDown, connectionDropKind, retryDelayMs,
-  fetchShim, shimFailureKind, shimRestartedSince, ShimRestartError,
+  fetchShim, shimFailureKind, shimRestartedSince, ShimRestartError, waitForFreshShim,
 } from "./gideon-shim-retry.ts"
 
 const H = (o = {}) => new Headers(o)
@@ -131,6 +131,23 @@ const URL_CHAT = "http://relay:8766/chat"
   assert.equal(await shimFailureKind(new TypeError("terminated"), URL_STREAM, Date.now(), s2.impl), "terminated")
   assert.equal(await shimFailureKind(new Error("Unexpected token"), URL_STREAM, Date.now(), s2.impl), "Unexpected token")
   assert.equal(await shimFailureKind(new ShimRestartError(), URL_STREAM, Date.now()), SHIM_RESTART)
+}
+
+// ── waitForFreshShim: draining → down → fresh ready ──
+{
+  const fresh = new Date(Date.now() + 1000).toISOString()
+  const old = new Date(Date.now() - 3600_000).toISOString()
+  const { impl, calls } = scripted([resp(200, { "x-gideon-shim": "draining", "x-gideon-shim-started": old }, "ok"), fetchError("ECONNREFUSED"), resp(200, { "x-gideon-shim": "ready", "x-gideon-shim-started": fresh }, "ok")])
+  assert.equal(await waitForFreshShim(URL_STREAM, Date.now(), 5000, impl, 1), true)
+  assert.equal(calls.length, 3)
+  const s2 = scripted(Array.from({ length: 50 }, () => resp(200, { "x-gideon-shim": "draining" }, "ok")))
+  assert.equal(await waitForFreshShim(URL_STREAM, Date.now(), 30, s2.impl, 5), false, "gives up after maxMs")
+}
+{ // fetchShim without a sleep stub waits for the fresh shim before its one retry
+  const fresh = new Date(Date.now() + 1000).toISOString()
+  const { impl, calls } = scripted([resp(503, { "x-gideon-shim": "restarting", "retry-after": "1" }), resp(200, { "x-gideon-shim": "ready", "x-gideon-shim-started": fresh }, "ok"), resp(200)])
+  const r = await fetchShim(URL_STREAM, { method: "POST" }, { stream: true, fetchImpl: impl })
+  assert.equal(r.res.status, 200); assert.equal(r.retried, true); assert.deepEqual(calls, [URL_STREAM, "http://relay:8766/health", URL_STREAM])
 }
 
 console.log("gideon-shim-retry: all assertions passed")
