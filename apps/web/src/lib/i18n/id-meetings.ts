@@ -136,5 +136,6 @@ export const ID_MEETINGS: Record<string, string> = {
   "Writing the minutes failed. Try again.": "Menulis notulen gagal. Coba lagi.",
   "The upload didn't finish.": "Unggahan tidak selesai.",
   "This file isn't audio of the type its name says.": "File ini bukan audio sesuai tipe di namanya.",
+  "The office GPU was busy for too long. Try again.": "GPU kantor terlalu lama sibuk. Coba lagi.",
   "Deleted before the transcript finished.": "Dihapus sebelum transkrip selesai.",
 };
