@@ -111,11 +111,15 @@ data class VaultState(
     val busy: Boolean = false,
     val notice: String? = null,
     val opening: String? = null,
+    val linkedItem: VaultItem? = null,
 )
 
-class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
-    val folder: String? = handle.get<String>("folder")?.takeIf { it.isNotBlank() }
-    val trash: Boolean = handle.get<String>("trash") == "1"
+class VaultViewModel(app: Application, private val handle: SavedStateHandle) : AndroidViewModel(app) {
+    var folder: String? = handle.get<String>("folder")?.takeIf { it.isNotBlank() }
+        private set
+    var trash: Boolean = handle.get<String>("trash") == "1"
+        private set
+    private var loadGeneration = 0
     private val c = (app as NexusApplication).container
     val api = VaultApi(c.api, c.uploads)
     private val res get() = getApplication<Application>().resources
@@ -125,11 +129,22 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     init { load() }
 
     fun load() = viewModelScope.launch {
+        val generation = ++loadGeneration
         try {
-            val l = api.list(folder, trash, _state.value.query.ifBlank { null })
-            _state.update { it.copy(list = l, loading = false, error = null) }
-        } catch (e: ApiError) { _state.update { it.copy(loading = false, error = if (it.list == null) e.describe(res) else null, notice = if (it.list != null) e.describe(res) else null) } }
+            val linked = handle.get<String>("item")?.takeIf { it.isNotBlank() }?.let { api.item(it) }
+            val linkedTrash = linked?.let { it.trashed == true || it.deletedAt != null } ?: trash
+            val linkedFolder = if (linked == null) folder else if (linkedTrash) null else if (linked.isFolder) linked.id else linked.parentId
+            val l = api.list(linkedFolder, linkedTrash, _state.value.query.ifBlank { null })
+            if (generation != loadGeneration) return@launch
+            folder = linkedFolder; trash = linkedTrash
+            handle["folder"] = folder; handle["trash"] = if (trash) "1" else ""
+            _state.update { it.copy(list = l, loading = false, error = null, linkedItem = linked?.takeUnless { item -> item.isFolder || linkedTrash } ?: it.linkedItem) }
+            // The route is a one-shot intent; refreshes must not reopen a dismissed viewer.
+            handle["item"] = null
+        } catch (e: ApiError) { if (generation == loadGeneration) _state.update { it.copy(loading = false, error = if (it.list == null) e.describe(res) else null, notice = if (it.list != null) e.describe(res) else null) } }
     }
+
+    fun consumedLinkedItem() = _state.update { it.copy(linkedItem = null) }
 
     fun search(q: String) { _state.update { it.copy(query = q) }; load() }
     fun dismiss() = _state.update { it.copy(notice = null) }
@@ -208,6 +223,13 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
     var moving by remember { mutableStateOf<VaultItem?>(null) }
     var viewing by remember { mutableStateOf<Int?>(null) }
+    var linkedViewing by remember { mutableStateOf<VaultItem?>(null) }
+    LaunchedEffect(s.linkedItem) {
+        s.linkedItem?.let { item ->
+            if (item.isMedia) linkedViewing = item else vm.open(item, false)
+            vm.consumedLinkedItem()
+        }
+    }
     // Any vault change in the company (upload, move, trash, …): refetch this folder (VAULT-MOVE-DND). The
     // screen's own fallback pace covers a server without the ping.
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.folder to vm.trash, liveMs = null, fallbackMs = 60_000,
@@ -373,6 +395,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         val media = s.list?.items?.let { VaultRules.gallery(it).media }.orEmpty()
         if (media.isNotEmpty()) VaultViewer(media, start, onClose = { viewing = null }, onSave = { vm.open(it, true) }, onShare = { sharing = it })
     }
+    linkedViewing?.let { item -> VaultViewer(listOf(item), 0, onClose = { linkedViewing = null }, onSave = { vm.open(it, true) }, onShare = { sharing = it }) }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

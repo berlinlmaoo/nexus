@@ -4,6 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LinksTest {
+    @Test fun peopleAndGideonSchemeLinksStayNative() {
+        assertEquals(Target.Profile("User-ID"), Links.parse("nexus://people/User-ID?from=messages#profile"))
+        assertEquals(Target.Profile("u1"), Links.parse("nexus://people/u1/"))
+        assertEquals(Target.Gideon, Links.parse("nexus://gideon"))
+        assertEquals(Target.Gideon, Links.parse("/gideon"))
+    }
+
+    @Test fun vaultItemLinksKeepTheirTargetSeparateFromTheFolder() {
+        assertEquals(Target.Vault(null, "item-ID"), Links.parse("/vault?item=item-ID"))
+        assertEquals(Target.Vault("folder", "item-ID"), Links.parse("nexus://vault?folder=folder&item=item-ID"))
+        assertEquals(Target.Vault("legacy"), Links.parse("/vault?id=legacy&item="))
+    }
     @Test fun attendanceFocusLinks() {
         assertEquals(Target.Attendance(requestId = "r1"), Links.parse("/attendance?request=r1"))
         assertEquals(Target.Attendance(offsiteId = "rec9"), Links.parse("/attendance?offsite=rec9"))

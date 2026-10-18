@@ -10,6 +10,7 @@ import java.net.URLDecoder
 
 /** Where a link, a push or an inbox row wants to go (API.md §3.3, PRD §4.6). */
 sealed interface Target {
+    data object Gideon : Target
     data object GideonMemory : Target
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
@@ -39,7 +40,7 @@ sealed interface Target {
     /** The Knowledge Library, or one doc. */
     data class Docs(val docId: String?) : Target
     /** Z Vault (a folder), and a `/v/<slug>` share link (members only). `/s/` is never claimed. */
-    data class Vault(val folderId: String?) : Target
+    data class Vault(val folderId: String?, val itemId: String? = null) : Target
     data class VaultShare(val slug: String) : Target
     /** Reports: mine / my team, or one person's. */
     data class Reports(val userId: String?) : Target
@@ -103,13 +104,13 @@ object Links {
 
     private fun parseScheme(link: String): Target? {
         // nexus://attendance?request=… → host is the screen.
-        val rest = link.substringAfter("://")
+        val rest = link.substringAfter("://").substringBefore('#')
         val screen = rest.substringBefore('?').substringBefore('/').lowercase()
         val query = rest.substringAfter('?', "").takeIf { '?' in rest }
         // nexus://projects/<id>?view=board (iOS TourDriver routes): the project, on that view.
         val sub = rest.substringBefore('?').substringAfter('/', "").trimEnd('/')
         if (screen == "projects" && sub.isNotEmpty() && '/' !in sub) return Target.Project(sub, queryMap(query)["view"], queryMap(query)["date"])
-        if (screen in setOf("meetings", "folders") && sub.isNotEmpty() && '/' !in sub) return parsePath("/$screen/$sub", query)
+        if (screen in setOf("meetings", "folders", "people") && sub.isNotEmpty() && '/' !in sub) return parsePath("/$screen/$sub", query)
         return parsePath("/$screen", query)
     }
 
@@ -135,6 +136,7 @@ object Links {
             Regex("^/people/([^/]+)$").matches(p) -> Target.Profile(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/folders/([^/]+)$").matches(p) -> Target.Calendar(date = q["date"], folder = path.trimEnd('/').substringAfterLast('/'))
             p == "/settings" -> if (q["section"] == "gideon-memory") Target.GideonMemory else Target.Settings
+            p == "/gideon" -> Target.Gideon
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
             p == "/complaints" -> Target.Tickets(q["id"] ?: q["c"])
@@ -144,7 +146,7 @@ object Links {
             p == "/submissions" -> Target.Submissions(q["id"], q["legal"])
             p == "/legal" -> Target.Legal(q["tab"], q["request"], q["doc"])
             p == "/docs" -> Target.Docs(null)
-            p == "/vault" -> Target.Vault(q["folder"] ?: q["id"])
+            p == "/vault" -> Target.Vault(q["folder"] ?: q["id"], q["item"]?.takeIf { it.isNotBlank() })
             p == "/reports" -> Target.Reports(null)
             p == "/leaderboard" -> Target.Leaderboard
             p == "/room-booking" -> Target.RoomBooking

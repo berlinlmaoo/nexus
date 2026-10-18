@@ -309,7 +309,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             is Target.LegalRequestForm -> { container.router.consumed(t); nav.navigate("legal-request-form/${enc(t.linkId)}") }
             is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/${enc(it)}" } ?: "docs") }
-            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=") }
+            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=&item=${enc(t.itemId.orEmpty())}") }
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
@@ -325,6 +325,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
             Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
             Target.GideonMemory -> { container.router.consumed(t); nav.navigate("gideon-memory") }
+            Target.Gideon -> { container.router.consumed(t); nav.navigate("gideon") }
             is Target.Meetings -> { container.router.consumed(t); nav.navigate("meetings?project=${enc(t.projectId.orEmpty())}") }
             is Target.Meeting -> { container.router.consumed(t); nav.navigate("meeting/${enc(t.id)}") }
             is Target.NewMeeting -> { container.router.consumed(t); nav.navigate("meeting-new?project=${enc(t.projectId.orEmpty())}") }
@@ -473,9 +474,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("docs") { DocsScreen(onBack = { nav.popBackStack() }, onOpenDoc = { nav.navigate("doc/$it") }) }
             composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onGideon = { nav.navigate("gideon") }) }
-            composable("vault?folder={folder}&trash={trash}", arguments = listOf(
+            composable("vault?folder={folder}&trash={trash}&item={item}", arguments = listOf(
                 androidx.navigation.navArgument("folder") { nullable = true; defaultValue = null },
                 androidx.navigation.navArgument("trash") { nullable = true; defaultValue = null },
+                androidx.navigation.navArgument("item") { nullable = true; defaultValue = null },
             )) {
                 CompanyOnly(onBack = { nav.popBackStack() }) {
                     VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
