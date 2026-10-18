@@ -541,9 +541,9 @@ private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDe
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                 val across = stringResource(R.string.col_across)
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_left)) }, onClick = { menu = null
-                    if (!vm.moveSection(lane.id, -1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                    if (!vm.moveSection(lane.id, -1)) id.znetworks.nexus.ui.components.UiNotice.show(across) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_right)) }, onClick = { menu = null
-                    if (!vm.moveSection(lane.id, 1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                    if (!vm.moveSection(lane.id, 1)) id.znetworks.nexus.ui.components.UiNotice.show(across) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_status_type)) }, onClick = { menu = null; dialog = "type" })
                 if (lanes.size > 1) {
                     HorizontalDivider(color = c.border)

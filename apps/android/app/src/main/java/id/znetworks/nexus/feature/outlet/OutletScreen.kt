@@ -204,7 +204,7 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
     // A ping on the project room: refetch whatever month is shown (an event may have moved between months).
     LiveRefresh(vm.projectId, liveMs = null, fallbackMs = 60_000,
         matches = { it.name == RealtimeEvents.OUTLET_SALES_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }
-    LaunchedEffect(s.notice) { s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.noticeShown() } }
+    LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     var detail by remember { mutableStateOf<OutletEvent?>(null) }
     val d = s.data
     val addEvent = { date: String? -> vm.openForm(null, date ?: d?.today?.takeIf { it.startsWith(s.month.orEmpty()) } ?: s.day); goTo(OutletView.FORM) }
@@ -250,7 +250,7 @@ internal fun copyFormLink(context: android.content.Context, projectId: String, e
     val url = id.znetworks.nexus.core.net.NexusConfig.base + "/projects/$projectId?view=form" + (eventId?.let { "&event=$it" } ?: "")
     val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("NEXUS", url))
-    Toast.makeText(context, context.getString(R.string.os_link_copied), Toast.LENGTH_LONG).show()
+    id.znetworks.nexus.ui.components.UiNotice.show(context.getString(R.string.os_link_copied))
 }
 
 @Composable

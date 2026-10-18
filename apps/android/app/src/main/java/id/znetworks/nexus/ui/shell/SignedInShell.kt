@@ -393,7 +393,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             id.znetworks.nexus.core.tour.TourMode.status("settled ${g.id}")
         }
     }
+    val notices = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(Unit) { id.znetworks.nexus.ui.components.UiNotice.messages.collect { notices.showSnackbar(it) } }
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(notices) },
         containerColor = Nx.colors.background,
         bottomBar = {
             if (!rail && !sidebar) ShellBar(tabs, current, badgeOn, rail = false) { goTab(it) }

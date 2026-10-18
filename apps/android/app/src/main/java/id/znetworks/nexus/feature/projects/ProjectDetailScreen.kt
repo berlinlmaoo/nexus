@@ -518,10 +518,10 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     LaunchedEffect(vm.projectId) {
         (context.applicationContext as NexusApplication).container.realtime.events.collect { e ->
             if (id.znetworks.nexus.core.realtime.RealtimeEvents.revoked(e, vm.projectId))
-                android.widget.Toast.makeText(context, context.getString(R.string.acc_changed), android.widget.Toast.LENGTH_LONG).show()
+                id.znetworks.nexus.ui.components.UiNotice.show(context.getString(R.string.acc_changed))
         }
     }
-    LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
+    LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
     val meId = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
     val access = s.access
