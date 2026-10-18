@@ -637,7 +637,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
-        {mention && <MentionPicker query={mention.query} onPick={addRef} onClose={() => setMention(null)} />}
+        {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
           <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
@@ -956,7 +956,7 @@ function UserTurn({ turn }: { turn: ChatTurn }) {
 type PickItem = GideonContextRef & { sub: string | null };
 
 /** Pages to attach with "@": projects, tasks and docs from the normal search (the person's own access). */
-function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
+function MentionPicker({ query, below = false, onPick, onClose }: { query: string; below?: boolean; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
   const { t } = useLang();
   const [items, setItems] = useState<PickItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -1002,7 +1002,7 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
     return () => window.removeEventListener("gideon-mention-key", onKey);
   }, [items, index, onPick, onClose]);
   return (
-    <div role="listbox" aria-label={t("Add a page, task or project")} className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-pop">
+    <div role="listbox" aria-label={t("Add a page, task or project")} className={cn("absolute left-0 z-50 w-full max-w-sm overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-pop", below ? "top-full mt-2 max-h-[min(45vh,360px)]" : "bottom-full mb-2 max-h-[min(50vh,420px)]")}>
       <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">{t("Add context")}</div>
       {!query.trim() && <div className="px-2 pb-2 text-xs text-muted-foreground">{t("Type to search projects, tasks and docs you can see.")}</div>}
       {query.trim() && loading && items.length === 0 && <div className="flex items-center gap-2 px-2 pb-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />{t("Searching…")}</div>}
