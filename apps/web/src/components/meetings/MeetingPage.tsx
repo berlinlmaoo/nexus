@@ -511,7 +511,7 @@ function ProposalCard({ p, members, readOnly, actionText, onChange, onRemove }: 
                   {picked.length ? <><span className="flex -space-x-1">{picked.slice(0, 3).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={18} />)}</span><span className="max-w-[10rem] truncate">{picked.map((u) => u.name).join(", ")}</span></> : <><User className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-muted-foreground">{t("PIC")}</span></>}
                 </button>} />
             )}
-            <DateField value={p.dueDate} onChange={(v) => onChange({ ...p, dueDate: v ? v.slice(0, 10) : null })} disabled={readOnly} placeholder={t("Due date")} ariaLabel={t("Due date")} className="h-7 rounded-full border border-border px-2 text-xs" />
+            <DateField value={p.dueDate} onChange={(v) => onChange({ ...p, dueDate: v ? v.slice(0, 10) : null })} disabled={readOnly} placeholder={t("Due date")} ariaLabel={t("Due date")} className="!min-h-7 h-7 !w-auto rounded-full border border-border px-2 text-xs" />
             {(p.description || actionText || !readOnly) && (
               <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}{t("Details")}</button>
             )}
