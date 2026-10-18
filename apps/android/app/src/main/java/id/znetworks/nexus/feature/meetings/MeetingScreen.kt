@@ -55,6 +55,7 @@ import java.time.LocalDate
     var transcript by rememberSaveable(id) { mutableStateOf(false) }
     var find by rememberSaveable(id) { mutableStateOf("") }
     var seek by remember { mutableStateOf<Double?>(null) }
+    val playback = rememberMeetingPlayback(m, seek) { seek = null }
     LaunchedEffect(id) { vm.open(id); runCatching { vm.api.projects() }.getOrNull()?.let { projects = it } }
     LaunchedEffect(state.notice) { state.notice?.let { android.widget.Toast.makeText(context, context.getString(it), android.widget.Toast.LENGTH_LONG).show(); vm.noticeSeen() } }
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
@@ -107,7 +108,7 @@ import java.time.LocalDate
                         else Text(when (m.detectedLanguage ?: m.language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); "auto" -> stringResource(R.string.meet_auto); else -> m.detectedLanguage ?: m.language }, color = c.foreground)
                     }
                     MeetingProperty(stringResource(R.string.meet_recorded_by)) { Text(m.createdBy?.name ?: "—", color = c.foreground) }
-                    MeetingPlayer(m, seek) { seek = null }
+                    MeetingPlayer(m, playback)
                 }
             }
             state.error?.let { error -> item { Text(stringResource(error), color = c.dangerText); if (state.dirty) TextButton(onClick = { scope.launch { vm.save() } }) { Text(stringResource(R.string.gx_try_again)) } } }
@@ -117,7 +118,7 @@ import java.time.LocalDate
                     val current = when (m.status) { "QUEUED" -> 1; "APPLYING" -> 3; else -> stages.indexOf(m.status).coerceAtLeast(0) }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) { stages.forEachIndexed { i, stage -> Text((if (i < current) "✓ " else "${i + 1}. ") + meetingStatus(stage), color = if (i <= current) c.foreground else c.mutedFg, fontSize = 11.sp) } }
                     LinearProgressIndicator(progress = { m.progress.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                    Text(stringResource(when (m.status) { "TRANSCRIBING" -> R.string.meet_transcribing_hint; "SUMMARIZING" -> R.string.meet_summarizing_hint; else -> R.string.meet_upload_hint }), color = c.mutedFg, fontSize = 12.sp)
+                    Text(stringResource(when { m.status == "TRANSCRIBING" && m.transcribeStats?.stage == "speakers" -> R.string.meet_telling_voices; m.status == "TRANSCRIBING" -> R.string.meet_transcribing_hint; m.status == "SUMMARIZING" -> R.string.meet_summarizing_hint; else -> R.string.meet_upload_hint }), color = c.mutedFg, fontSize = 12.sp)
                     MeetingQueueBlock(m)
                     if (m.status == "UPLOADING") NxButton(stringResource(R.string.meet_resume_upload), { if (!MeetingFiles.resume(context, container.sessionStore.current!!.userId, m)) UiNotice.show(context.getString(R.string.meet_missing_local)) })
                 }
@@ -136,6 +137,7 @@ import java.time.LocalDate
                 item { MeetingSection(stringResource(R.string.meet_overview)) { MeetingText(m.overview.orEmpty(), editable) { change("overview", JsonPrimitive(it)) } } }
                 item { MeetingSection(stringResource(R.string.meet_mom)) {
                     Text(stringResource(R.string.meet_attendees), fontWeight = FontWeight.SemiBold)
+                    if (MeetingRules.voices(m).isNotEmpty()) Text(stringResource(R.string.meet_attendee_voices_hint), color = c.mutedFg, fontSize = 12.sp)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) { minutes.attendees.forEachIndexed { i, attendee ->
                         if (editable) NxButton("$attendee ×", { mom(minutes.copy(attendees = minutes.attendees.filterIndexed { j, _ -> i != j })) }, compact = true)
                         else Text(attendee, modifier = Modifier.padding(6.dp), color = c.foreground)
@@ -161,19 +163,6 @@ import java.time.LocalDate
                     }
                     if (editable) TextButton(onClick = { mom(minutes.copy(actionItems = minutes.actionItems + MeetingAction())) }) { Text(stringResource(R.string.meet_add)) }
                 } }
-                if (m.transcript.any { it.speaker != null }) item { MeetingSection(stringResource(R.string.meet_speaker_mapping)) {
-                    val speakers = m.speakers ?: m.speakersMap.orEmpty()
-                    m.transcript.mapNotNull { it.speaker }.distinct().forEach { speaker ->
-                        Text(speaker, color = c.mutedFg)
-                        if (editable) {
-                            GPicker(stringResource(R.string.meet_name), speakers[speaker]?.name, m.projectMembers.map { it.id to it.name }) { user ->
-                                val next = speakers + (speaker to MeetingSpeaker(m.projectMembers.firstOrNull { it.id == user }?.name.orEmpty(), user))
-                                change("speakers", JsonObject(next.mapValues { (_, v) -> NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), v) }))
-                            }
-                            MeetingText(speakers[speaker]?.name.orEmpty(), true, stringResource(R.string.meet_name)) { name -> change("speakers", JsonObject(speakers.mapValues { (_, v) -> NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), v) } + (speaker to NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), MeetingSpeaker(name))))) }
-                        } else Text(speakers[speaker]?.name ?: speaker)
-                    }
-                } }
                 if (m.status == "READY") {
                     item { Text(stringResource(R.string.meet_tasks), fontWeight = FontWeight.SemiBold); Text(stringResource(R.string.meet_selected, m.proposals.count { it.include }.toString(), m.proposals.size.toString()), fontSize = 12.sp, color = c.mutedFg) }
                     items(m.proposals, key = { it.key }) { task -> MeetingSection("", card = true) {
@@ -193,6 +182,7 @@ import java.time.LocalDate
                     if (editable) item { TextButton(onClick = { proposals(m.proposals + MeetingProposal(java.util.UUID.randomUUID().toString())) }) { Text(stringResource(R.string.meet_add_task)) } }
                 } else items(m.tasks, key = { it.id }) { task -> TextButton(onClick = { container.router.open(Target.Task(task.id)) }) { Text(task.title) } }
             }
+            if (MeetingRules.voices(m).isNotEmpty()) item { MeetingSpeakers(m, state.busy, { change("speakers", it) }, { seek = it }) }
             item {
                 TextButton(onClick = { transcript = !transcript }) { Text((if (transcript) "▾ " else "▸ ") + stringResource(R.string.meet_transcript)) }
                 if (transcript) {
@@ -203,7 +193,10 @@ import java.time.LocalDate
             if (transcript) items(m.transcript.withIndex().filter { it.value.text.contains(find, true) }, key = { "segment:${it.index}" }) { (_, segment) ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { seek = segment.start }, enabled = m.audio.available) { Text(MeetingRules.timestamp(segment.start)) }
-                    SelectionContainer { Text(segment.text, color = c.foreground, fontSize = 13.sp, modifier = Modifier.weight(1f)) }
+                    SelectionContainer(Modifier.weight(1f)) { Column {
+                        segment.speaker?.let { label -> Text(((m.speakers ?: m.speakersMap.orEmpty())[label]?.name?.takeIf { it.isNotBlank() } ?: voiceLabel(label)) + ":", color = voiceColor(label), fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
+                        Text(segment.text, color = c.foreground, fontSize = 13.sp)
+                    } }
                 }
             }
         }
@@ -261,18 +254,20 @@ import java.time.LocalDate
     }
 }
 
-@Composable private fun MeetingPlayer(meeting: Meeting, seek: Double?, onSeek: () -> Unit) {
+private data class MeetingPlayback(val busy: Boolean, val playing: Boolean, val position: Float, val duration: Float?, val problem: Int?, val toggle: () -> Unit, val scrub: (Float) -> Unit)
+
+@Composable private fun rememberMeetingPlayback(meeting: Meeting?, seek: Double?, onSeek: () -> Unit): MeetingPlayback {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     val scope = rememberCoroutineScope()
-    var player by remember(meeting.id) { mutableStateOf<MediaPlayer?>(null) }
+    var player by remember(meeting?.id) { mutableStateOf<MediaPlayer?>(null) }
     var busy by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
     var position by remember { mutableFloatStateOf(0f) }
     var problem by remember { mutableStateOf<Int?>(null) }
-    DisposableEffect(meeting.id) { onDispose { player?.release(); player = null } }
+    DisposableEffect(meeting?.id) { onDispose { player?.release(); player = null } }
     fun play(at: Double? = null) {
-        if (busy || !meeting.audio.available) return
+        if (busy || meeting?.audio?.available != true) return
         val existing = player
         if (existing != null) {
             runCatching { if (at != null) existing.seekTo((at * 1000).toInt()); existing.start(); playing = true }
@@ -294,18 +289,23 @@ import java.time.LocalDate
         }
     }
     LaunchedEffect(seek) { if (seek != null) { play(seek); onSeek() } }
-    LaunchedEffect(meeting.audio.available) { if (!meeting.audio.available) { player?.release(); player = null; playing = false } }
+    LaunchedEffect(meeting?.audio?.available) { if (meeting?.audio?.available != true) { player?.release(); player = null; playing = false } }
     LaunchedEffect(playing) { while (playing) { position = (player?.currentPosition ?: 0) / 1000f; delay(500) } }
+    return MeetingPlayback(busy, playing, position, player?.takeIf { !busy }?.let { (it.duration / 1000f).coerceAtLeast(1f) }, problem,
+        { if (playing) { player?.pause(); playing = false } else play() }, { position = it; player?.seekTo((it * 1000).toInt()) })
+}
+
+@Composable private fun MeetingPlayer(meeting: Meeting, playback: MeetingPlayback) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.meet_file), color = Nx.colors.mutedFg, fontSize = 12.sp)
-            IconButton(onClick = { if (playing) { player?.pause(); playing = false } else play() }, enabled = meeting.audio.available && !busy) { Icon(if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, stringResource(if (playing) R.string.meet_pause_audio else R.string.meet_play)) }
-            Text(MeetingRules.timestamp(position.toDouble()), color = Nx.colors.mutedFg, fontSize = 12.sp)
-            if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            IconButton(onClick = playback.toggle, enabled = meeting.audio.available && !playback.busy) { Icon(if (playback.playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, stringResource(if (playback.playing) R.string.meet_pause_audio else R.string.meet_play)) }
+            Text(MeetingRules.timestamp(playback.position.toDouble()), color = Nx.colors.mutedFg, fontSize = 12.sp)
+            if (playback.busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
         }
-        if (player != null && !busy) Slider(position, { position = it; player?.seekTo((it * 1000).toInt()) }, valueRange = 0f..((player?.duration ?: 1000) / 1000f).coerceAtLeast(1f))
+        playback.duration?.let { Slider(playback.position, playback.scrub, valueRange = 0f..it) }
         if (!meeting.audio.available) Text(stringResource(if (meeting.audio.deletedAt != null) R.string.meet_audio_gone else R.string.meet_audio_not_uploaded), color = Nx.colors.mutedFg, fontSize = 12.sp)
-        problem?.let { Text(stringResource(it), color = Nx.colors.dangerText, fontSize = 12.sp) }
+        playback.problem?.let { Text(stringResource(it), color = Nx.colors.dangerText, fontSize = 12.sp) }
         meeting.audio.deleteAfter?.takeIf { meeting.audio.available }?.let { Text(stringResource(R.string.meet_audio_retention, meetingDateTime(it)), color = Nx.colors.mutedFg, fontSize = 11.sp) }
     }
 }

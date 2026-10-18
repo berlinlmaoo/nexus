@@ -18,7 +18,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 
-data class RecordingState(val file: String? = null, val seconds: Double = 0.0, val paused: Boolean = false, val recording: Boolean = false, val finished: Boolean = false, val limitReached: Boolean = false, val failed: Boolean = false, val recordedAt: String? = null)
+data class RecordingState(val file: String? = null, val seconds: Double = 0.0, val paused: Boolean = false, val recording: Boolean = false, val finished: Boolean = false, val limitReached: Boolean = false, val failed: Boolean = false, val recordedAt: String? = null, val introEndSec: Double? = null)
 object MeetingRecording {
     val state = MutableStateFlow(RecordingState())
     fun command(context: Context, action: String) {
@@ -47,7 +47,11 @@ class MeetingRecordingService : Service() {
         notifications.createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.meet_recording_channel), NotificationManager.IMPORTANCE_LOW))
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) { "start" -> start(); "pause" -> pause(); "resume" -> resume(); "stop" -> finish() }
+        when (intent?.action) {
+            "start" -> start(); "pause" -> pause(); "resume" -> resume(); "stop" -> finish()
+            "intro-done" -> if (recorder != null) MeetingRecording.state.value = MeetingRecording.state.value.copy(introEndSec = elapsed() / 1000.0)
+            "intro-undo" -> MeetingRecording.state.value = MeetingRecording.state.value.copy(introEndSec = null)
+        }
         return START_NOT_STICKY
     }
     private fun requestFocus(): Boolean {
@@ -119,7 +123,7 @@ class MeetingRecordingService : Service() {
         focus?.let { audio.abandonAudioFocusRequest(it) }; focus = null
         MeetingRecording.state.value = s.copy(seconds = seconds, recording = false, finished = !broken, failed = broken, limitReached = limit)
         if (broken) s.file?.let { File(MeetingFiles.directory(this), it).delete() }
-        if (s.file != null && !broken) getSharedPreferences("meeting-recording", MODE_PRIVATE).edit().putString("file", s.file).putString("at", s.recordedAt).putFloat("seconds", seconds.toFloat()).apply()
+        if (s.file != null && !broken) getSharedPreferences("meeting-recording", MODE_PRIVATE).edit().putString("file", s.file).putString("at", s.recordedAt).putFloat("seconds", seconds.toFloat()).putFloat("introEndSec", s.introEndSec?.toFloat() ?: -1f).apply()
         if (limit) notifications.notify(ID + 1, NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_stat_nexus).setContentTitle(getString(R.string.meet_limit_reached)).setContentIntent(openIntent()).setAutoCancel(true).build())
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }

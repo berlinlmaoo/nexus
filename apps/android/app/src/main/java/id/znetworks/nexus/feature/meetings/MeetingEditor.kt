@@ -106,7 +106,8 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
                     val response = api.patch(key, version, JsonObject(fields))
                     val fresh = if ("projectId" in fields) api.get(key) else response
                     version = fresh.version
-                    mutable.update { it.copy(meeting = meetingAcknowledge(fresh, fields, pending, it.meeting), dirty = pending.isNotEmpty(), error = null) }
+                    mutable.update { it.copy(meeting = meetingAcknowledge(fresh, fields, pending, it.meeting), dirty = pending.isNotEmpty(), error = null,
+                        notice = if ("speakers" in fields && fresh.status == "READY") R.string.meet_speakers_saved else it.notice) }
                 } catch (e: CancellationException) { requeue(fields); throw e
                 } catch (e: ApiError.Http) {
                     val remote = e.body?.get("meeting")?.let { runCatching { NexusJson.decodeFromJsonElement(Meeting.serializer(), it) }.getOrNull() }

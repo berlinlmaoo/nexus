@@ -3206,4 +3206,27 @@
     <string name="ws_join_not_eligible">Akunmu sudah berada di workspace bersama orang lain. Minta admin workspace itu untuk menambahkanmu.</string>
     <string name="ws_join_already">Kamu sudah ada di workspace itu.</string>
     <string name="ws_join_failed">Gagal bergabung. Coba lagi.</string>
+    <string name="meet_tell_speakers">Bedakan pembicara</string>
+    <string name="meet_intro_hint">Mulai dengan perkenalan singkat supaya GIDEON bisa membedakan suara. “Halo, saya Berlin…”</string>
+    <string name="meet_voice_privacy">Suara hanya dipakai untuk memberi label rekaman ini.</string>
+    <string name="meet_intro_start">Mulai dengan perkenalan.</string>
+    <string name="meet_introductions">Perkenalan</string>
+    <string name="meet_intro_turns">Tiap orang menyebut namanya bergantian, lalu ketuk Selesai.</string>
+    <string name="meet_intro_done">Selesai perkenalan</string>
+    <string name="meet_intro_finished">Perkenalan selesai di %1$s</string>
+    <string name="meet_intro_until">· perkenalan sampai %1$s</string>
+    <string name="meet_telling_voices">Membedakan suara…</string>
+    <string name="meet_speakers">Pembicara</string>
+    <string name="meet_voices">%1$s suara</string>
+    <string name="meet_speakers_hint">GIDEON membedakan suara dan membaca nama dari perkenalan. Suara hanya dipakai untuk memberi label rekaman ini.</string>
+    <string name="meet_speaker_number">Pembicara %1$s</string>
+    <string name="meet_who">Siapa ini?</string>
+    <string name="meet_voice_name">Nama untuk %1$s</string>
+    <string name="meet_not_named">Belum diberi nama</string>
+    <string name="meet_from_introductions">Dari perkenalan</string>
+    <string name="meet_set_by_hand">Diisi manual</string>
+    <string name="meet_voice_lines">%1$s baris · %2$s</string>
+    <string name="meet_listen">Dengarkan %1$s</string>
+    <string name="meet_speakers_saved">Tersimpan. Supaya notulen memakai nama baru, pilih Tulis ulang notulen.</string>
+    <string name="meet_attendee_voices_hint">Nama diambil dari perkenalan di awal. Kalau ada suara yang salah, betulkan di bagian Pembicara di bawah notulen.</string>
 </resources>

@@ -106,6 +106,8 @@ import java.io.File
     var duration by rememberSaveable { mutableStateOf<Double?>(null) }
     var source by rememberSaveable { mutableStateOf("upload") }
     var recordedAt by rememberSaveable { mutableStateOf<String?>(null) }
+    var speakerLabels by rememberSaveable { mutableStateOf(true) }
+    var introEndSec by rememberSaveable { mutableStateOf<Double?>(null) }
     var projects by remember { mutableStateOf<List<MeetingProject>>(emptyList()) }
     var projectsFailed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -120,11 +122,12 @@ import java.io.File
             val name = prefs.getString("file", null)
             if (name != null && File(MeetingFiles.directory(context), name).isFile && prefs.getString("user", null) == container.sessionStore.current?.userId) {
                 localName = name; fileName = context.getString(R.string.meet_recording_entry) + ".m4a"; source = "record"; duration = prefs.getFloat("seconds", 0f).toDouble(); recordedAt = prefs.getString("at", null)
+                introEndSec = prefs.getFloat("introEndSec", -1f).takeIf { it >= 0 }?.toDouble()
             }
         }
     }
     LaunchedEffect(recording.finished, recording.file) {
-        if (recording.finished && recording.file != null) { localName = recording.file; fileName = title.ifBlank { context.getString(R.string.meet_recording_entry) } + ".m4a"; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt }
+        if (recording.finished && recording.file != null) { localName = recording.file; fileName = title.ifBlank { context.getString(R.string.meet_recording_entry) } + ".m4a"; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt; introEndSec = recording.introEndSec }
     }
     LaunchedEffect(uploadedId) {
         val id = uploadedId ?: return@LaunchedEffect
@@ -154,7 +157,7 @@ import java.io.File
                     Triple(dest, name, seconds)
                 }
                 localName = prepared.first.name; fileName = prepared.second; duration = prepared.third; mime = context.contentResolver.getType(uri) ?: "audio/" + fileName.substringAfterLast('.')
-                source = "upload"; recordedAt = null
+                source = "upload"; recordedAt = null; introEndSec = null
                 if (title.isBlank()) title = fileName.substringBeforeLast('.')
             } catch (e: CancellationException) { throw e
             } catch (e: Exception) { file?.delete(); problem = (e as? MeetingFileProblem)?.resource ?: R.string.meet_audio_missing }
@@ -168,7 +171,7 @@ import java.io.File
     }
     fun discardLocal() {
         localName?.let { name -> val file = File(MeetingFiles.directory(context), name); if (file.canonicalFile.parentFile == MeetingFiles.directory(context).canonicalFile) file.delete() }
-        localName = null; fileName = ""; duration = null
+        localName = null; fileName = ""; duration = null; introEndSec = null
         context.getSharedPreferences("meeting-recording", Context.MODE_PRIVATE).edit().clear().apply()
         MeetingRecording.state.value = RecordingState()
     }
@@ -182,11 +185,31 @@ import java.io.File
                 MeetingProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
                 MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.People, null, tint = c.mutedFg)
+                    Text(stringResource(R.string.meet_tell_speakers), Modifier.weight(1f), color = c.foreground)
+                    Switch(speakerLabels, { speakerLabels = it }, enabled = !busy)
+                }
+                if (speakerLabels) {
+                    Text(stringResource(R.string.meet_intro_hint), color = c.mutedFg, fontSize = 12.sp)
+                    Text(stringResource(R.string.meet_voice_privacy), color = c.mutedFg, fontSize = 12.sp)
+                }
+                if (!recording.recording && speakerLabels && localName == null) Text(stringResource(R.string.meet_intro_start), color = c.mutedFg, fontSize = 12.sp)
                 if (!recording.recording) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NxButton(stringResource(R.string.meet_upload), { if (localName != null) discard = "upload" else picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, enabled = !busy)
                     NxButton(stringResource(R.string.meet_record), { if (localName != null) discard = "record" else permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy, icon = Icons.Outlined.Mic)
                 }
                 if (recording.recording) {
+                    if (speakerLabels) {
+                        if (recording.introEndSec == null) Column(Modifier.fillMaxWidth().background(c.accentBg, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.meet_introductions), color = c.violetText, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.meet_intro_turns), color = c.foreground, fontSize = 12.sp)
+                            NxButton(stringResource(R.string.meet_intro_done), { MeetingRecording.command(context, "intro-done") }, compact = true)
+                        } else Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(stringResource(R.string.meet_intro_finished, MeetingRules.timestamp(recording.introEndSec!!)), Modifier.weight(1f), color = c.mutedFg, fontSize = 12.sp)
+                            TextButton(onClick = { MeetingRecording.command(context, "intro-undo") }) { Text(stringResource(R.string.audit_undo)) }
+                        }
+                    }
                     Text(stringResource(if (recording.paused) R.string.meet_paused else R.string.meet_recording) + " · " + MeetingRules.timestamp(recording.seconds), color = c.foreground, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         NxButton(stringResource(if (recording.paused) R.string.meet_resume else R.string.meet_pause), { MeetingRecording.command(context, if (recording.paused) "resume" else "pause") })
@@ -198,6 +221,7 @@ import java.io.File
                 if (localName != null) {
                     Text(fileName, color = c.foreground)
                     duration?.let { Text(MeetingRules.timestamp(it), color = c.mutedFg) }
+                    if (speakerLabels && source == "record") introEndSec?.let { Text(stringResource(R.string.meet_intro_until, MeetingRules.timestamp(it)), color = c.mutedFg, fontSize = 12.sp) }
                     TextButton(onClick = { discard = "remove" }, enabled = !busy) { Text(stringResource(R.string.meet_remove), color = c.dangerText) }
                 }
                 Text(stringResource(R.string.meet_max, config.meetingMaxMinutes.toString()), fontSize = 12.sp, color = c.mutedFg)
@@ -208,7 +232,7 @@ import java.io.File
                     busy = true; problem = null
                     scope.launch {
                         try {
-                            val answer = api.create(buildJsonObject { put("fileName", fileName); put("mime", mime); put("size", file.length()); put("title", title.ifBlank { fileName.substringBeforeLast('.') }); project?.let { put("projectId", it) }; put("language", language); put("source", source); recordedAt?.let { put("recordedAt", it) }; duration?.let { put("durationSec", it) } })
+                            val answer = api.create(buildJsonObject { put("fileName", fileName); put("mime", mime); put("size", file.length()); put("title", title.ifBlank { fileName.substringBeforeLast('.') }); project?.let { put("projectId", it) }; put("language", language); put("source", source); recordedAt?.let { put("recordedAt", it) }; duration?.let { put("durationSec", it) }; put("speakerLabels", speakerLabels); if (speakerLabels && source == "record") introEndSec?.let { put("introEndSec", it) } })
                             MeetingFiles.enqueue(context, container.sessionStore.current!!.userId, answer.meeting.id, file, minOf(answer.upload.chunkBytes, answer.upload.maxChunkBytes))
                             context.getSharedPreferences("meeting-recording", Context.MODE_PRIVATE).edit().clear().apply()
                             MeetingRecording.state.value = RecordingState()

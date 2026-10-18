@@ -16,6 +16,29 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class MeetingsTest {
+    @Test fun speakerEditsPreserveOtherAutomaticNamesAndClearTheEditedAutoFlag() {
+        val original = mapOf("Speaker 1" to MeetingSpeaker("Berlin", "u1", true), "Speaker 2" to MeetingSpeaker("Rina", "u2", true))
+        val changed = MeetingRules.nameVoice(original, "Speaker 1", "Bagas", "u3")
+        assertEquals(MeetingSpeaker("Bagas", "u3"), changed["Speaker 1"])
+        assertNull(changed["Speaker 1"]?.auto)
+        assertEquals(original["Speaker 2"], changed["Speaker 2"])
+        assertFalse("Speaker 1" in MeetingRules.nameVoice(changed, "Speaker 1", " "))
+        assertEquals(120, MeetingRules.nameVoice(original, "Speaker 1", "a".repeat(130))["Speaker 1"]?.name?.length)
+        assertEquals(0, MeetingRules.voiceIndex("Speaker 11"))
+        assertEquals(9, MeetingRules.voiceIndex("Speaker 10"))
+    }
+    @Test fun speakerPipelineAndNamesSurviveWholeMapAutosave() {
+        val meeting = NexusJson.decodeFromString(Meeting.serializer(), """{"id":"m","status":"READY","speakerLabels":true,"introEndSec":7.2,"transcribeStats":{"stage":"speakers"},"speakers":{"Speaker 1":{"name":"Berlin","userId":"u1","auto":true}},"transcript":[{"start":0,"end":3,"text":"Hi","speaker":"Speaker 1"},{"start":4,"end":6,"text":"Next","speaker":"Speaker 2"},{"start":7,"end":8,"text":"Again","speaker":"Speaker 1"}]}""")
+        assertEquals(listOf("Speaker 1", "Speaker 2"), MeetingRules.voices(meeting))
+        assertEquals("speakers", meeting.transcribeStats?.stage)
+        assertEquals(7.2, meeting.introEndSec!!, .001)
+        val map = MeetingRules.nameVoice(meeting.speakers!!, "Speaker 2", "Rina")
+        val fields = mapOf("speakers" to JsonObject(map.mapValues { NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), it.value) }))
+        val saved = meetingAcknowledge(meeting.copy(version = 4), fields, emptyMap())
+        assertEquals(true, saved.speakers?.get("Speaker 1")?.auto)
+        assertEquals("Rina", saved.speakers?.get("Speaker 2")?.name)
+        assertEquals(4, saved.version)
+    }
     @get:Rule val temp = TemporaryFolder()
     private fun client(server: MockWebServer) = MeetingsApi(ApiClient(server.url("/"), ClientIdentity("0.1.6", 13, 36), { Session("t", "c", "u") }, mayCarrySession = { true }))
     private fun body(received: Long, status: String = "UPLOADING") = NexusJson.encodeToString(MeetingEnvelope.serializer(), MeetingEnvelope(Meeting("meeting-uuid", status = status, audio = MeetingAudio(bytes = 8, received = received))))

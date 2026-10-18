@@ -24,6 +24,7 @@ import java.net.URLEncoder
     val overview: String? = null, val mom: MeetingMom? = null, val proposals: List<MeetingProposal> = emptyList(),
     val speakers: Map<String, MeetingSpeaker>? = null, val speakersMap: Map<String, MeetingSpeaker>? = null,
     val transcript: List<MeetingSegment> = emptyList(), val members: List<GTaskMember>? = null,
+    val speakerLabels: Boolean = true, val introEndSec: Double? = null, val transcribeStats: MeetingTranscribeStats? = null,
     val tasks: List<MeetingTask> = emptyList(),
 ) {
     val working get() = status in setOf("UPLOADING", "QUEUED", "TRANSCRIBING", "SUMMARIZING", "APPLYING")
@@ -37,7 +38,8 @@ import java.net.URLEncoder
 @Serializable data class MeetingTopic(val title: String = "", val points: List<String> = emptyList())
 @Serializable data class MeetingAction(val text: String = "", val owner: String? = null, val due: String? = null)
 @Serializable data class MeetingProposal(val key: String, val include: Boolean = true, val title: String = "", val description: String = "", val assigneeIds: List<String> = emptyList(), val dueDate: String? = null, val actionIndex: Int? = null)
-@Serializable data class MeetingSpeaker(val name: String = "", val userId: String? = null)
+@Serializable data class MeetingSpeaker(val name: String = "", val userId: String? = null, val auto: Boolean? = null)
+@Serializable data class MeetingTranscribeStats(val position: Int? = null, val state: String? = null, val stage: String? = null)
 @Serializable data class MeetingSegment(val start: Double = 0.0, val end: Double = 0.0, val text: String = "", val speaker: String? = null)
 @Serializable data class MeetingTask(val id: String, val title: String = "", val status: String? = null, val dueDate: String? = null, val projectId: String? = null, val assignees: List<GTaskMember> = emptyList())
 @Serializable data class MeetingDoc(val id: String, val title: String = "", val url: String? = null)
@@ -50,6 +52,11 @@ import java.net.URLEncoder
 @Serializable data class MeetingChanged(val meetingId: String, val projectId: String? = null, val status: String? = null, val progress: Double? = null, val version: Int? = null, val deleted: Boolean = false)
 
 object MeetingRules {
+    fun voices(meeting: Meeting) = meeting.transcript.mapNotNull { it.speaker }.distinct()
+    fun voiceIndex(label: String) = ((label.removePrefix("Speaker ").toIntOrNull() ?: 1).coerceAtLeast(1) - 1) % 10
+    /** Keep other voices, including their automatic provenance; a hand edit removes only this voice's auto flag. */
+    fun nameVoice(map: Map<String, MeetingSpeaker>, label: String, name: String, userId: String? = null): Map<String, MeetingSpeaker> =
+        if (name.isBlank()) map - label else map + (label to MeetingSpeaker(name.take(120), userId))
     val extensions = setOf("m4a", "mp4", "mov", "mp3", "wav", "webm", "ogg", "oga", "opus", "aac", "flac", "3gp", "amr")
     fun accepts(name: String) = name.substringAfterLast('.', "").lowercase() in extensions
     fun editableProjects(projects: List<MeetingProject>) = projects.filter { it.archivedAt == null && (it.viewerAccessLevel == null || it.viewerAccessLevel in setOf("EDIT", "FULL")) }

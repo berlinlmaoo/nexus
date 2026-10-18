@@ -3257,4 +3257,27 @@
     <string name="ws_join_not_eligible">Your account already shares a workspace with other people. Ask that workspace\'s admin to add you instead.</string>
     <string name="ws_join_already">You are already in that workspace.</string>
     <string name="ws_join_failed">Couldn\'t join. Try again.</string>
+    <string name="meet_tell_speakers">Tell speakers apart</string>
+    <string name="meet_intro_hint">Start with a quick round of introductions so GIDEON can tell voices apart. “Hi, I\'m Berlin…”</string>
+    <string name="meet_voice_privacy">Voices are only used to label this recording.</string>
+    <string name="meet_intro_start">Start with a round of introductions.</string>
+    <string name="meet_introductions">Introductions</string>
+    <string name="meet_intro_turns">Each person says their name in turn, then tap Done.</string>
+    <string name="meet_intro_done">Done with introductions</string>
+    <string name="meet_intro_finished">Introductions done at %1$s</string>
+    <string name="meet_intro_until">· introductions until %1$s</string>
+    <string name="meet_telling_voices">Telling the voices apart…</string>
+    <string name="meet_speakers">Speakers</string>
+    <string name="meet_voices">%1$s voices</string>
+    <string name="meet_speakers_hint">GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.</string>
+    <string name="meet_speaker_number">Speaker %1$s</string>
+    <string name="meet_who">Who is this?</string>
+    <string name="meet_voice_name">Name for %1$s</string>
+    <string name="meet_not_named">Not named</string>
+    <string name="meet_from_introductions">From introductions</string>
+    <string name="meet_set_by_hand">Set by hand</string>
+    <string name="meet_voice_lines">%1$s lines · %2$s</string>
+    <string name="meet_listen">Listen %1$s</string>
+    <string name="meet_speakers_saved">Saved. To use the new names in the minutes, choose Write the minutes again.</string>
+    <string name="meet_attendee_voices_hint">Names come from the introductions at the start. If a voice is wrong, fix it under Speakers below the minutes.</string>
 </resources>
