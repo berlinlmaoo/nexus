@@ -97,6 +97,160 @@ export function transcriptLines(segments: TranscriptSegment[], speakerName?: (la
   return segments.map((s) => `[${clock(s.start)}] ${s.speaker ? `${speakerName ? speakerName(s.speaker) : s.speaker}: ` : ""}${s.text}`)
 }
 
+// ---------------------------------------------------------------- speakers (owner, 19 Oct 2026)
+
+/**
+ * "Speaker N" → a person. auto = read from the round of introductions (introNames); a hand-made entry has no
+ * `auto` and always wins over an automatic one (mergeSpeakers).
+ */
+export type SpeakerEntry = { name: string; userId: string | null; auto?: boolean }
+export type SpeakerMap = Record<string, SpeakerEntry>
+export type NameCandidate = { id: string; name: string; inProject?: boolean }
+
+/** Without the record screen's marker, introductions are looked for in the first two minutes only. */
+export const INTRO_DEFAULT_SEC = 120
+
+const NAME_STOP = new Set([
+  "dari", "mau", "akan", "pegang", "di", "yang", "sudah", "juga", "adalah", "sebagai", "bagian", "lagi", "setuju", "kerja", "bekerja",
+  "ikut", "cuma", "hanya", "baru", "tadi", "nanti", "rasa", "kira", "pikir", "punya", "minta", "mohon", "bisa", "tidak", "nggak", "gak",
+  "enggak", "belum", "masih", "selaku", "yg", "dan", "atau", "untuk", "dengan", "ke", "ini", "itu", "sini", "situ", "kan", "sih", "dong",
+  "ya", "oke", "ok", "mulai", "pimpin", "memimpin", "bertugas", "tugas", "tim", "team", "divisi", "jadi", "perwakilan", "wakil", "pic",
+  "the", "a", "an", "from", "working", "here", "going", "not", "just", "also", "on", "in", "at", "with", "and", "sorry", "fine", "good",
+  "happy", "glad", "sure", "ready", "back", "joining", "speaking", "leading", "responsible", "currently", "still", "very", "so", "now",
+  "pak", "bu", "bapak", "ibu", "mas", "mbak", "kak", "bang",
+])
+const INTRO_TRIGGER = /(?<=^|[\s,.;:!?"“(])(?:nama\s*(?:saya|aku|gue|gw)(?:\s+adalah)?|namaku|saya|aku|gue|gw|panggil(?:\s+(?:saja|aja))?|dipanggil|my\s+name\s+is|my\s+name's|i'm|i\s+am|this\s+is|call\s+me)\s+((?:[\p{L}][\p{L}'-]*[ \t]*){1,3})/giu
+
+function editSim(a: string, b: string): number {
+  if (a === b) return 1
+  const m = a.length, n = b.length
+  if (!m || !n) return 0
+  let prev = Array.from({ length: n + 1 }, (_, j) => j)
+  for (let i = 1; i <= m; i++) {
+    const cur = [i]
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    prev = cur
+  }
+  return 1 - prev[n] / Math.max(m, n)
+}
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim()
+
+/**
+ * The person a heard name means: the candidate whose full name or first name is (nearly) the heard name. Project
+ * members first, then the workspace; two equally good people → null (better "Speaker 2" than the wrong person).
+ */
+export function matchHeardName(heard: string, candidates: NameCandidate[]): NameCandidate | null {
+  const h = fold(heard)
+  if (h.length < 2) return null
+  const words = h.split(" ")
+  let best: { c: NameCandidate; score: number }[] = []
+  for (const c of candidates) {
+    const full = fold(c.name)
+    if (!full) continue
+    const parts = full.split(" ")
+    let score = 0
+    // "Berlin" ~ "Berlin", "Galang" ~ "Galang Pratama", "Dimas Putra" ~ "Dimas Putra Wijaya"
+    for (let k = Math.min(words.length, 3); k >= 1; k--) {
+      const said = words.slice(0, k).join(" ")
+      // the full name, its first k words, or (one word said) any other word of it, a little less sure
+      const s = Math.max(editSim(said, full), editSim(said, parts.slice(0, k).join(" ")), ...parts.slice(1).map((p) => (k === 1 ? editSim(said, p) * 0.95 : 0)))
+      // more words heard and matching = surer ("Ayu Lestari" beats "Ayu Wandira" though both start "Ayu")
+      score = Math.max(score, s + (s >= 0.8 ? 0.03 * (k - 1) : 0))
+    }
+    if (score >= 0.8) best.push({ c, score: score + (c.inProject ? 0.05 : 0) })
+  }
+  if (!best.length) return null
+  best = best.sort((a, b) => b.score - a.score)
+  if (best.length > 1 && best[0].score - best[1].score < 0.02 && fold(best[0].c.name) !== fold(best[1].c.name)) return null
+  return best[0].c
+}
+
+/**
+ * The names in "saya Berlin" / "nama saya Dimas Putra" / "I'm Ayu": capitalised words that are not filler.
+ * `sure` = said with a naming phrase ("nama saya", "panggil saja", "my name is"), or one word that ends the
+ * phrase ("saya Ayu, …"). Only a sure name that matches nobody is used as heard: "Saya Backend Engineer" is not.
+ */
+function heardNames(text: string): Array<{ name: string; sure: boolean }> {
+  const out: Array<{ name: string; sure: boolean }> = []
+  const FOLLOW = new Set(["dari", "di", "dan", "from", "here", "yang", "selaku", "sebagai"])
+  for (const m of text.matchAll(INTRO_TRIGGER)) {
+    const strong = /nama|panggil|my\s+name|call\s+me/i.test(m[0].slice(0, m[0].length - m[1].length))
+    const words = m[1].trim().split(/\s+/).map((w) => w.replace(/[.'-]+$/g, "")).filter(Boolean)
+    const name: string[] = []
+    let next: string | undefined
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]
+      if (NAME_STOP.has(w.toLowerCase()) || !/^\p{Lu}/u.test(w)) { next = w; break }
+      name.push(w)
+      if (name.length === 2) { next = words[i + 1]; break }
+    }
+    if (!name.length) continue
+    const after = text.slice((m.index ?? 0) + m[0].length).trimStart()
+    const ended = name.length === words.length && (!after || /^[,.;:!?)]/.test(after))
+    const sure = strong || (name.length === 1 && (ended || (next !== undefined && FOLLOW.has(next.toLowerCase()))))
+    out.push({ name: name.join(" "), sure })
+  }
+  return out
+}
+
+/**
+ * Names for the voices, read from the round of introductions at the start ("Halo, saya Berlin…"). Only segments
+ * before `introEndSec` (the record screen's "Done with introductions"; INTRO_DEFAULT_SEC without it) count. Each
+ * voice gets the name it said most; a person is given to one voice only (the one that said it most, then the
+ * first). A heard name that matches nobody is kept as heard (no userId).
+ */
+export function introNames(segments: TranscriptSegment[], introEndSec: number | null | undefined, candidates: NameCandidate[]): SpeakerMap {
+  const end = introEndSec && introEndSec > 0 ? introEndSec + 1 : INTRO_DEFAULT_SEC
+  const votes = new Map<string, Map<string, { n: number; first: number; who: NameCandidate | null; heard: string }>>()
+  for (const s of segments) {
+    if (s.start >= end) break
+    if (!s.speaker) continue
+    for (const { name: heard, sure } of heardNames(s.text)) {
+      const who = matchHeardName(heard, candidates)
+      if (!who && !sure) continue
+      const key = who ? `u:${who.id}` : `h:${fold(heard)}`
+      const per = votes.get(s.speaker) ?? new Map()
+      const v = per.get(key) ?? { n: 0, first: s.start, who, heard }
+      v.n++
+      per.set(key, v)
+      votes.set(s.speaker, per)
+    }
+  }
+  const claims: Array<{ label: string; key: string; n: number; first: number; who: NameCandidate | null; heard: string }> = []
+  for (const [label, per] of votes) for (const [key, v] of per) claims.push({ label, key, ...v })
+  // A name that is someone in the workspace beats one that is not ("saya Dimas. Saya backend engineer" →
+  // Dimas, not "Backend"), then the most said, then the first said.
+  claims.sort((a, b) => Number(Boolean(b.who)) - Number(Boolean(a.who)) || b.n - a.n || a.first - b.first)
+  const out: SpeakerMap = {}
+  const taken = new Set<string>()
+  for (const c of claims) {
+    if (out[c.label] || taken.has(c.key)) continue
+    taken.add(c.key)
+    out[c.label] = c.who ? { name: c.who.name, userId: c.who.id, auto: true } : { name: c.heard.slice(0, 120), userId: null, auto: true }
+  }
+  return out
+}
+
+/** Automatic names under the hand-made ones: a label someone named by hand keeps that name. */
+export function mergeSpeakers(current: unknown, auto: SpeakerMap): SpeakerMap {
+  const cur = cleanSpeakers(current)
+  const out: SpeakerMap = { ...auto }
+  for (const [k, v] of Object.entries(cur)) if (!v.auto) out[k] = v
+  return out
+}
+
+export function cleanSpeakers(raw: unknown): SpeakerMap {
+  const out: SpeakerMap = {}
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 40)) {
+    const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>
+    const name = typeof o.name === "string" ? o.name.replace(/\s+/g, " ").trim().slice(0, 120) : ""
+    if (k.length > 40 || !name) continue
+    out[k] = { name, userId: typeof o.userId === "string" && o.userId ? o.userId.slice(0, 40) : null, ...(o.auto === true ? { auto: true } : {}) }
+  }
+  return out
+}
+
 /** Lines grouped into chunks of at most `maxChars` (a single over-long line is cut). */
 export function chunkLines(lines: string[], maxChars: number): string[] {
   const chunks: string[] = []
@@ -128,7 +282,7 @@ export type MeetingPromptMeta = {
 /** Rules every meeting prompt starts with (same text each time: friendly to the provider's prompt cache). */
 const RULES = [
   "You are GIDEON, writing meeting minutes inside NEXUS. Do NOT call any tools: everything you may use is below.",
-  "The transcript comes from automatic speech recognition: names and words can be misheard, there are no speaker labels unless a line says so. Never invent facts, names, numbers or dates that the transcript does not support.",
+  "The transcript comes from automatic speech recognition: names and words can be misheard. A line starts with its speaker when the voice was recognised (a person's name, or \"Speaker N\" for a voice nobody named); lines without one have no known speaker, and a label can be wrong when people talk over each other. Never invent facts, names, numbers or dates that the transcript does not support.",
   "Write in the language mostly spoken in the meeting (Indonesian stays Indonesian; keep English terms people used as they said them).",
   "Do not mention models, providers or yourself.",
 ]

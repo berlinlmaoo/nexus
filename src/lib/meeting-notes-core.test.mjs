@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import {
   audioBytesMatch, buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanProposals, cleanSegments, clock, compactNotes, draftToProposals,
-  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines,
+  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines, introNames, matchHeardName, mergeSpeakers, cleanSpeakers,
 } from "./meeting-notes-core.ts"
 
 const bytes = (s, pad = 16) => { const b = new Uint8Array(Math.max(pad, s.length)); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b }
@@ -73,3 +73,55 @@ assert.ok(json.includes('"kind":"task"') && json.includes('"id":"task1"'))
 assert.ok(json.includes('"type":"details"') && json.includes("Transkrip"))
 assert.ok(json.includes('"type":"taskList"'))
 console.log("meeting-notes-core: ok")
+
+// Speaker names from the round of introductions (19 Oct 2026)
+{
+  const people = [
+    { id: "u1", name: "Berlin Bagas Putro", inProject: true }, { id: "u2", name: "Sinta Maharani", inProject: true },
+    { id: "u3", name: "Dimas Prasetyo" }, { id: "u4", name: "Ayu Lestari" }, { id: "u5", name: "Ayu Wandira" }, { id: "u6", name: "Galang" },
+  ]
+  assert.equal(matchHeardName("Berlin", people)?.id, "u1")
+  assert.equal(matchHeardName("Sinta", people)?.id, "u2")
+  assert.equal(matchHeardName("Dimaz", people)?.id, "u3") // misheard by one letter
+  assert.equal(matchHeardName("Ayu", people), null) // two Ayus: better "Speaker 4" than the wrong one
+  assert.equal(matchHeardName("Ayu Lestari", people)?.id, "u4")
+  assert.equal(matchHeardName("Budi", people), null)
+  const segs = cleanSegments([
+    { start: 0.9, end: 5, text: "Oke, sebelum mulai kita perkenalan dulu ya.", speaker: "Speaker 1" },
+    { start: 5.7, end: 9, text: "Halo, saya Berlin, saya pegang produk Nexus.", speaker: "Speaker 1" },
+    { start: 10.4, end: 14, text: "Halo semuanya, saya Sinta dari Tim Marketing.", speaker: "Speaker 2" },
+    { start: 16, end: 19, text: "Hi, Namasaya Dimas. Saya Butkin Engineer.", speaker: "Speaker 3" },
+    { start: 20.6, end: 23, text: "Halo, saya Ayu, saya desainer.", speaker: "Speaker 4" },
+    { start: 25, end: 27, text: "Saya setuju. Saya Budi, ikut juga.", speaker: "Speaker 5" },
+    { start: 300, end: 303, text: "Saya Galang, telat join.", speaker: "Speaker 6" },
+  ])
+  const map = introNames(segs, 24, people)
+  assert.deepEqual(map["Speaker 1"], { name: "Berlin Bagas Putro", userId: "u1", auto: true })
+  assert.deepEqual(map["Speaker 2"], { name: "Sinta Maharani", userId: "u2", auto: true })
+  assert.deepEqual(map["Speaker 3"], { name: "Dimas Prasetyo", userId: "u3", auto: true }) // the matched name beats "Butkin"
+  assert.deepEqual(map["Speaker 4"], { name: "Ayu", userId: null, auto: true }) // ambiguous → as heard, no account
+  assert.equal(map["Speaker 5"], undefined) // after the marker
+  assert.equal(map["Speaker 6"], undefined)
+  // No marker: the first two minutes
+  assert.equal(introNames(segs, null, people)["Speaker 5"]?.name, "Budi")
+  // The same person claimed by two voices: the one that said it first keeps it
+  const twice = introNames(cleanSegments([{ start: 1, end: 2, text: "Saya Berlin.", speaker: "Speaker 1" }, { start: 3, end: 4, text: "Saya Berlin juga.", speaker: "Speaker 2" }]), 10, people)
+  assert.equal(twice["Speaker 1"]?.userId, "u1")
+  assert.equal(twice["Speaker 2"], undefined)
+  // English intros
+  assert.equal(introNames(cleanSegments([{ start: 1, end: 2, text: "Hi everyone, I'm Galang.", speaker: "Speaker 1" }, { start: 2, end: 3, text: "My name is Sinta.", speaker: "Speaker 2" }]), 5, people)["Speaker 2"]?.userId, "u2")
+  // Hand-made names win over the introductions; automatic ones are replaced
+  const merged = mergeSpeakers({ "Speaker 1": { name: "Pak Berlin", userId: null }, "Speaker 2": { name: "Old", userId: null, auto: true } }, map)
+  assert.equal(merged["Speaker 1"].name, "Pak Berlin")
+  assert.equal(merged["Speaker 2"].name, "Sinta Maharani")
+  assert.deepEqual(cleanSpeakers({ "Speaker 1": { name: "  A  b ", userId: 5 }, ["x".repeat(41)]: { name: "z" }, "Speaker 2": { name: "" } }), { "Speaker 1": { name: "A b", userId: null } })
+}
+console.log("speakers ok")
+{
+  const none = introNames(cleanSegments([{ start: 1, end: 2, text: "Saya Backend Engineer di sini.", speaker: "Speaker 1" }, { start: 3, end: 4, text: "Saya Rudi dari finance.", speaker: "Speaker 2" }, { start: 5, end: 6, text: "Nama saya Joko Susilo.", speaker: "Speaker 3" }, { start: 7, end: 8, text: "Saya Kiki.", speaker: "Speaker 4" }]), 10, [])
+  assert.equal(none["Speaker 1"], undefined)
+  assert.equal(none["Speaker 2"]?.name, "Rudi")
+  assert.equal(none["Speaker 3"]?.name, "Joko Susilo")
+  assert.equal(none["Speaker 4"]?.name, "Kiki")
+  console.log("heard names ok")
+}

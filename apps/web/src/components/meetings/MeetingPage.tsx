@@ -3,7 +3,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, AudioLines, Calendar, Check, ChevronDown, ChevronRight, CircleDot, Clock, FileText, FolderKanban, Languages, ListChecks, Loader2,
-  MoreHorizontal, Plus, RefreshCw, Search, Trash2, User, UserPlus, X,
+  MoreHorizontal, Plus, RefreshCw, Search, Trash2, User, UserPlus, Users, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -20,8 +20,8 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  applyMeeting, clock, deleteMeeting, durationText, etaText, MeetingApiError, meetingKey, patchMeeting, retryMeeting, useMeeting,
-  type MeetingFull, type Mom, type TaskProposal,
+  applyMeeting, clock, deleteMeeting, durationText, etaText, MeetingApiError, meetingKey, patchMeeting, retryMeeting, speakerIndex, speakerLabelsOf, useMeeting,
+  type MeetingFull, type Mom, type SpeakerMap, type TaskProposal,
 } from "@/lib/meetings";
 import { BetaBadge } from "./BetaBadge";
 
@@ -197,6 +197,23 @@ export function MeetingPage({ id }: { id: string }) {
   const included = draft.proposals.filter((p) => p.include);
   const members = m.members ?? [];
   const langLabel = (l: string | null) => (l === "id" ? t("Indonesian") : l === "en" ? t("English") : l ? l.toUpperCase() : t("Detect automatically"));
+  const speakerMap: SpeakerMap = m.speakers ?? {};
+  const voices = speakerLabelsOf(m.transcript);
+  const canNameSpeakers = Boolean(m.can.edit && m.status !== "APPLIED" && m.status !== "APPLYING");
+  const saveSpeakers = async (next: SpeakerMap) => {
+    try {
+      const r = await patchMeeting(m.id, { version: version.current, speakers: next });
+      version.current = r.meeting.version;
+      qc.setQueryData(meetingKey(m.id), r.meeting);
+      if (m.status === "READY") toast(t("Saved. To use the new names in the minutes, choose Write the minutes again."));
+    } catch (e) {
+      if (e instanceof MeetingApiError && e.code === "VERSION_CONFLICT") {
+        const fresh = (e.body?.meeting ?? null) as MeetingFull | null;
+        if (fresh) { qc.setQueryData(meetingKey(m.id), fresh); version.current = fresh.version; }
+        toast.warning(t("Someone else changed this meeting. It has been reloaded."));
+      } else toast.error(e instanceof Error ? e.message : t("Couldn't save."));
+    }
+  };
   const seek = (sec: number) => { const a = audioRef.current; if (a) { a.currentTime = sec; void a.play().catch(() => {}); } };
 
   return (
@@ -291,7 +308,7 @@ export function MeetingPage({ id }: { id: string }) {
             <Section title={t("Minutes of meeting")}>
               <SubHead>{t("Attendees")}</SubHead>
               <Attendees value={draft.mom.attendees} members={members} readOnly={!editable} onChange={(v) => update((d) => ({ ...d, mom: { ...d.mom, attendees: v } }))} />
-              <p className="mt-1 text-xs text-muted-foreground">{t("The transcript has no speaker names. Add who was there so GIDEON's minutes and your tasks name the right people.")}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{voices.length ? t("Names come from the introductions at the start. If a voice is wrong, fix it under Speakers below the minutes.") : t("The transcript has no speaker names. Add who was there so GIDEON's minutes and your tasks name the right people.")}</p>
 
               <SubHead>{t("Topics")}</SubHead>
               <div className="space-y-3">
@@ -362,7 +379,8 @@ export function MeetingPage({ id }: { id: string }) {
           </>
         )}
 
-        {m.transcript.length > 0 && <Transcript segments={m.transcript} onSeek={m.audio.available ? seek : undefined} />}
+        {voices.length > 0 && <Speakers voices={voices} map={speakerMap} segments={m.transcript} members={members} readOnly={!canNameSpeakers} onChange={(v) => void saveSpeakers(v)} onSeek={m.audio.available ? seek : undefined} />}
+        {m.transcript.length > 0 && <Transcript segments={m.transcript} speakers={speakerMap} onSeek={m.audio.available ? seek : undefined} />}
       </div>
 
       {m.status === "READY" && m.can.apply && (
@@ -544,6 +562,8 @@ function Pipeline({ m }: { m: MeetingFull }) {
     ? t("The upload hasn't finished. Keep the tab that is uploading open.")
     : q?.waiting
       ? `${t("Waiting for the transcription server…")} ${q.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line")}.`
+      : m.status === "TRANSCRIBING" && m.transcribeStats?.stage === "speakers"
+        ? t("Telling the voices apart…")
       : m.status === "TRANSCRIBING"
         ? t("Transcribing on the office server. GIDEON Model 0 is paused meanwhile.")
         : t("GIDEON is reading the transcript and writing the minutes.");
@@ -569,7 +589,95 @@ function Pipeline({ m }: { m: MeetingFull }) {
   );
 }
 
-function Transcript({ segments, onSeek }: { segments: MeetingFull["transcript"]; onSeek?: (sec: number) => void }) {
+/** One colour per voice (the same in Speakers and the transcript). */
+const VOICE_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-teal-500", "bg-fuchsia-500", "bg-lime-600", "bg-orange-500", "bg-indigo-500"];
+const VOICE_TEXT = ["text-violet-700 dark:text-violet-300", "text-sky-700 dark:text-sky-300", "text-emerald-700 dark:text-emerald-300", "text-amber-700 dark:text-amber-300", "text-rose-700 dark:text-rose-300", "text-teal-700 dark:text-teal-300", "text-fuchsia-700 dark:text-fuchsia-300", "text-lime-700 dark:text-lime-300", "text-orange-700 dark:text-orange-300", "text-indigo-700 dark:text-indigo-300"];
+const voiceColor = (label: string) => VOICE_COLORS[(Math.max(1, speakerIndex(label)) - 1) % VOICE_COLORS.length];
+const voiceText = (label: string) => VOICE_TEXT[(Math.max(1, speakerIndex(label)) - 1) % VOICE_TEXT.length];
+/** "Speaker 2" in the person's language. */
+function useVoiceLabel() {
+  const { t } = useLang();
+  return (label: string) => (/^Speaker \d+$/.test(label) ? t("Speaker {n}", { n: speakerIndex(label) }) : label);
+}
+
+/**
+ * Speakers (owner, 19 Oct 2026): every voice GIDEON told apart, the name it read from the introductions, and a
+ * field to correct it. A name typed by hand wins over the introductions (also after a retry); clearing it goes
+ * back to "Speaker N".
+ */
+function Speakers({ voices, map, segments, members, readOnly, onChange, onSeek }: {
+  voices: string[]; map: SpeakerMap; segments: MeetingFull["transcript"]; members: Array<{ id: string; name: string | null }>;
+  readOnly?: boolean; onChange: (next: SpeakerMap) => void; onSeek?: (sec: number) => void;
+}) {
+  const { t } = useLang();
+  const voiceLabel = useVoiceLabel();
+  const stats = useMemo(() => {
+    const out: Record<string, { lines: number; sec: number; first: { start: number; text: string } | null }> = {};
+    for (const s of segments) {
+      if (!s.speaker) continue;
+      const o = (out[s.speaker] ??= { lines: 0, sec: 0, first: null });
+      o.lines++;
+      o.sec += Math.max(0, s.end - s.start);
+      if (!o.first) o.first = { start: s.start, text: s.text };
+    }
+    return out;
+  }, [segments]);
+  const listId = "meeting-speaker-people";
+  const commit = (label: string, raw: string) => {
+    const name = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+    const cur = map[label];
+    if ((cur?.name ?? "") === name) return;
+    const next: SpeakerMap = { ...map };
+    if (!name) delete next[label];
+    else {
+      const member = members.find((p) => (p.name ?? "").toLowerCase() === name.toLowerCase());
+      next[label] = { name: member?.name ?? name, userId: member?.id ?? null };
+    }
+    onChange(next);
+  };
+  return (
+    <section className="mb-8">
+      <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Users className="h-5 w-5 text-muted-foreground" />{t("Speakers")}<span className="text-sm font-normal text-muted-foreground">{t("{n} voices", { n: voices.length })}</span></h2>
+      <p className="mt-1 text-xs text-muted-foreground">{t("GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.")}</p>
+      <datalist id={listId}>{members.filter((p) => p.name).map((p) => <option key={p.id} value={p.name as string} />)}</datalist>
+      <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
+        {voices.map((label) => {
+          const e = map[label];
+          const st = stats[label];
+          return (
+            <li key={label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
+              <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", voiceColor(label))} aria-hidden />
+              <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">{voiceLabel(label)}</span>
+              <div className="min-w-0 flex-1 basis-40">
+                {readOnly ? (
+                  <span className="text-sm font-medium">{e?.name ?? <span className="text-muted-foreground">{t("Not named")}</span>}</span>
+                ) : (
+                  <input key={`${label}:${e?.name ?? ""}`} defaultValue={e?.name ?? ""} list={listId} maxLength={120} aria-label={t("Name for {voice}", { voice: voiceLabel(label) })}
+                    placeholder={t("Who is this?")} onBlur={(ev) => commit(label, ev.currentTarget.value)} onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); ev.currentTarget.blur(); } }}
+                    className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-sm font-medium outline-none hover:border-border focus:border-sidebar-primary focus:bg-background" />
+                )}
+              </div>
+              {e?.auto && <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-sidebar-primary">{t("From introductions")}</span>}
+              {e && !e.auto && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t("Set by hand")}</span>}
+              {st && (
+                <span className="w-full pl-[6.25rem] text-xs text-muted-foreground max-sm:pl-5">
+                  {t("{n} lines", { n: st.lines })} · {st.sec < 60 ? t("{s} s", { s: Math.max(1, Math.round(st.sec)) }) : durationText(st.sec, t)}
+                  {st.first && (onSeek
+                    ? <> · <button type="button" onClick={() => onSeek(st.first!.start)} className="text-sidebar-primary hover:underline">{t("Listen")} {clock(st.first.start)}</button></>
+                    : null)}
+                  {st.first && <span className="block truncate italic">“{st.first.text}”</span>}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Transcript({ segments, speakers, onSeek }: { segments: MeetingFull["transcript"]; speakers?: SpeakerMap; onSeek?: (sec: number) => void }) {
+  const voiceLabel = useVoiceLabel();
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [find, setFind] = useState("");
@@ -593,7 +701,7 @@ function Transcript({ segments, onSeek }: { segments: MeetingFull["transcript"];
             {shown.slice(0, 3000).map((s, i) => (
               <div key={i} className="flex gap-3 rounded-md px-1.5 py-1 text-sm hover:bg-muted/40">
                 {onSeek ? <button type="button" onClick={() => onSeek(s.start)} className="w-14 shrink-0 text-left font-mono text-xs leading-5 text-sidebar-primary hover:underline">{clock(s.start)}</button> : <span className="w-14 shrink-0 font-mono text-xs leading-5 text-muted-foreground">{clock(s.start)}</span>}
-                <span className="min-w-0 flex-1 leading-5">{s.speaker ? <span className="font-medium">{s.speaker}: </span> : null}{s.text}</span>
+                <span className="min-w-0 flex-1 leading-5">{s.speaker ? <span className={cn("font-semibold", voiceText(s.speaker))}>{speakers?.[s.speaker]?.name ?? voiceLabel(s.speaker)}: </span> : null}{s.text}</span>
               </div>
             ))}
             {!shown.length && <p className="px-2 py-3 text-sm text-muted-foreground">{t("No line matches.")}</p>}

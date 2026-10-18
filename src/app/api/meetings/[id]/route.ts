@@ -6,8 +6,8 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { cleanMom, cleanProposals, MEETING_LANGUAGES } from "@/lib/meeting-notes-core"
-import { emitMeetingChanged, isMeetingId, meetingAccess, removeAudio, serializeMeeting } from "@/lib/meeting-notes"
+import { cleanMom, cleanProposals, cleanSpeakers, MEETING_LANGUAGES } from "@/lib/meeting-notes-core"
+import { emitMeetingChanged, isMeetingId, meetingAccess, removeAudio, serializeMeeting, speakerCandidates } from "@/lib/meeting-notes"
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -65,11 +65,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (body.proposals !== undefined) data.proposals = cleanProposals(body.proposals) as unknown as Prisma.InputJsonValue
     }
     if (body.speakers && typeof body.speakers === "object" && !Array.isArray(body.speakers)) {
-      const clean: Record<string, { name: string; userId: string | null }> = {}
-      for (const [k, v] of Object.entries(body.speakers as Record<string, unknown>).slice(0, 20)) {
-        const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>
-        const name = typeof o.name === "string" ? o.name.trim().slice(0, 120) : ""
-        if (k.length <= 40 && name) clean[k] = { name, userId: typeof o.userId === "string" ? o.userId.slice(0, 40) : null }
+      // { "Speaker N": { name, userId?, auto? } }. An entry sent without auto: true is a hand-made name and wins
+      // over the introductions from then on (also after a retry). A label left out goes back to "Speaker N".
+      // userId only when that person can be named here (a project member or someone in the workspace).
+      const clean = cleanSpeakers(body.speakers)
+      const ids = [...new Set(Object.values(clean).map((v) => v.userId).filter((x): x is string => Boolean(x)))]
+      if (ids.length) {
+        const ok = new Set((await speakerCandidates(row).catch(() => [])).map((c) => c.id))
+        for (const v of Object.values(clean)) if (v.userId && !ok.has(v.userId)) v.userId = null
       }
       data.speakers = clean as unknown as Prisma.InputJsonValue
     }
