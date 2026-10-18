@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -169,7 +170,20 @@ fun AttendanceScreen(
 
     val capturing = s.capturing
     if (capturing != null) {
-        LivenessCaptureScreen(onCaptured = vm::onSelfie, onCancel = vm::cancelCapture)
+        Dialog(onDismissRequest = vm::cancelCapture, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            val view = androidx.compose.ui.platform.LocalView.current
+            androidx.compose.runtime.SideEffect {
+                (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { window ->
+                    androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = false
+                        isAppearanceLightNavigationBars = false
+                    }
+                }
+            }
+            Box(Modifier.fillMaxSize().background(Color.Black).then(Modifier.systemBarsPadding())) {
+                LivenessCaptureScreen(onCaptured = vm::onSelfie, onCancel = vm::cancelCapture)
+            }
+        }
         return
     }
 
@@ -326,6 +340,11 @@ private val PIN_DROP = 90.dp
 @Composable
 private fun HeroMap(s: AttendanceUiState, mod: Modifier, centerOnMe: Boolean) {
     val here = s.here
+    if (here == null) {
+        Box(mod.background(Nx.colors.muted), contentAlignment = Alignment.Center) {
+            Text(stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you), color = Nx.colors.mutedFg, fontSize = 13.sp)
+        }
+    }
     val rec = s.today?.today ?: s.today?.pendingCheckout
     // Location-free members are not tied to an office: the map follows them (iOS 5ba2e93).
     if (s.today?.noGeofence == true || (centerOnMe && here != null)) {
