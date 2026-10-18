@@ -534,6 +534,8 @@ final class NEXUSUITour: XCTestCase {
                 guard button.waitForExistence(timeout: 15) else {
                     return "wrong-screen: \(screen.id) (no \"\(Self.labels(step)[0])\" button found)"
                 }
+                revealNativeTab(button)
+                guard button.isHittable else { return "wrong-screen: \(screen.id) (button is offscreen: \(Self.labels(step)[0]))" }
                 // A sheet over it (the button is no longer hittable), a chip now selected, or a new picture.
                 guard tapUntil(button, landed: { !button.exists || !button.isHittable || button.isSelected }) else {
                     return "wrong-screen: \(screen.id) (tapped \"\(Self.labels(step)[0])\", nothing opened)"
@@ -627,6 +629,25 @@ final class NEXUSUITour: XCTestCase {
             }
         }
         return nil
+    }
+
+    /// Native tab strips can expose an offscreen button to accessibility without an activation point.
+    @MainActor
+    private func revealNativeTab(_ button: XCUIElement) {
+        for _ in 0..<8 {
+            guard button.exists, !button.isHittable else { return }
+            let frame = button.frame
+            let window = app.windows.firstMatch.frame
+            guard frame.maxX > window.maxX || frame.minX < window.minX else { return }
+            let strip = app.scrollViews.allElementsBoundByIndex.first { scroll in
+                guard scroll.exists else { return false }
+                let rect = scroll.frame
+                return rect.height <= 100 && rect.width > 150 && frame.midY >= rect.minY && frame.midY <= rect.maxY
+            }
+            guard let strip else { return }
+            if frame.maxX > window.maxX { strip.swipeLeft() } else { strip.swipeRight() }
+            pause(0.4)
+        }
     }
 
     /// The labels of one `appTaps` / `webTaps` step: "?Add|Tambah" → ["Add", "Tambah"].
