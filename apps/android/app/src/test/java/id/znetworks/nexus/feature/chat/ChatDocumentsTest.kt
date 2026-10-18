@@ -26,4 +26,10 @@ class ChatDocumentsTest {
         val doc = NexusJson.decodeFromString(ChatMediaItem.serializer(), """{"name":"Budget.xlsx","size":123}""")
         assertEquals("Budget.xlsx", doc.name); assertEquals(123L, doc.size)
     }
+    @Test fun documentQuotesUseTheNameAndPhotosKeepTheirOwnPreview() {
+        assertEquals("📎 Budget.xlsx", ChatDocuments.preview("application/vnd.ms-excel", "Budget.xlsx", "Files"))
+        assertEquals("📎 Files", ChatDocuments.preview("application/pdf", null, "Files"))
+        assertNull(ChatDocuments.preview("image/png", "Photo.png", "Files"))
+        assertNull(ChatDocuments.preview(null, null, "Files"))
+    }
 }

@@ -552,7 +552,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                             m.replyTo?.let { r ->
                                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(fg.copy(alpha = 0.12f), RoundedCornerShape(8.dp)).padding(6.dp)) {
                                     Text(r.user?.name ?: "", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = fg.copy(alpha = 0.9f))
-                                    Text(r.content.ifBlank { r.attachmentName?.let { "📄 $it" } ?: ("📷 " + stringResource(R.string.chat_photo)) }, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(ChatDocuments.preview(r.attachmentType, r.attachmentName, stringResource(R.string.files)) ?: r.content.ifBlank { "📷 " + stringResource(R.string.chat_photo) }, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             if (m.isImage) {
@@ -606,7 +606,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     Icon(Icons.AutoMirrored.Filled.Reply, null, tint = c.violetText, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.chat_replying_to, r.user?.name ?: ""), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.violetText)
-                        Text(r.content.ifBlank { r.attachmentName?.let { "📄 $it" } ?: "📷" }, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(ChatDocuments.preview(r.attachmentType, r.attachmentName, stringResource(R.string.files)) ?: r.content.ifBlank { "📷" }, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     IconButton(onClick = { vm.reply(null) }, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
                 }

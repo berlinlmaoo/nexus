@@ -234,7 +234,7 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
                 val last = conv.lastMessage
                 val preview = when {
                     last == null -> stringResource(R.string.chat_no_message)
-                    last.attachmentUrl != null && !last.isImage -> "📄 " + (last.attachmentName ?: stringResource(R.string.files))
+                    last.attachmentUrl != null && !last.isImage -> ChatDocuments.preview(last.attachmentType, last.attachmentName, stringResource(R.string.files)) ?: stringResource(R.string.files)
                     last.content.isBlank() && last.attachmentUrl != null -> "📷 " + stringResource(R.string.chat_photo)
                     last.isSystem -> ChatSystemText.sentence(last.event, last.content, meId, ChatSystemText.Words.of(LocalContext.current.resources))
                     else -> when (val p = ChatPayload.parse(last.content)) {

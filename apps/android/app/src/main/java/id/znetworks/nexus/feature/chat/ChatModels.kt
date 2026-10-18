@@ -118,6 +118,9 @@ object ChatDocuments {
     const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
     val extensions = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip")
     private val images = setOf("png", "jpg", "jpeg", "webp", "gif")
+    fun preview(type: String?, name: String?, fallback: String): String? =
+        if ((!type.isNullOrBlank() || !name.isNullOrBlank()) && !type.orEmpty().startsWith("image/"))
+            "📎 " + (name?.takeIf { it.isNotBlank() } ?: fallback) else null
     fun accepts(name: String, bytes: Long): Boolean {
         val ext = name.substringAfterLast('.', "").lowercase()
         return when (ext) {
