@@ -194,6 +194,7 @@ final class AppRouter {
     /// tapped on a cold start arrives before any screen exists, and one tapped while signed out
     /// must survive the login it caused.
     var focus: NotificationTarget?
+    var gideonAdminTab: String?
 
     /// A task, project or submission opened from a notification, drawn as a sheet above either
     /// shape. These three are not screens in the More launcher and have no tab of their own, so
@@ -257,6 +258,9 @@ final class AppRouter {
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
     func open(_ target: NotificationTarget) {
         switch target {
+        case .gideonPerformance:
+            gideonAdminTab = "performance"
+            go(.admin)
         case .screen(let screen):
             go(screen)
         case .task, .project, .submission, .legalRequest:
@@ -277,6 +281,7 @@ final class AppRouter {
     /// `taskId`, `projectId` (src/lib/apns.ts) — plus the two the app schedules itself.
     func openNotification(_ info: [String: String]) {
         let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
+        if value("type") == "GIDEON_ALERT" { open(.gideonPerformance); return }
         if let id = value("taskId") { open(.task(id)); return }
         // A link into a project's tab (an outlet's report form) keeps its view, event and day.
         if let link = value("link").flatMap(NXProjectLink.init(path:)) {

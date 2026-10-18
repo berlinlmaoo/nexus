@@ -8,6 +8,7 @@ import SwiftUI
 /// and slot); the server keeps a move's card open with the reason when the slot was taken meanwhile.
 struct GideonBookingChangeCard: View {
     let proposal: GideonProposal
+    let readOnly: Bool
     let change: GideonBookingChange
     let onApply: (GideonBookingChoice) -> Void
     let onDiscard: () -> Void
@@ -19,7 +20,8 @@ struct GideonBookingChangeCard: View {
     @State private var availability: GideonRoomAvailability?
     @State private var loadFailed = false
 
-    init(proposal: GideonProposal, change: GideonBookingChange, onApply: @escaping (GideonBookingChoice) -> Void, onDiscard: @escaping () -> Void) {
+    init(proposal: GideonProposal, change: GideonBookingChange, readOnly: Bool = false, onApply: @escaping (GideonBookingChoice) -> Void, onDiscard: @escaping () -> Void) {
+        self.readOnly = readOnly
         self.proposal = proposal
         self.change = change
         self.onApply = onApply
@@ -56,7 +58,7 @@ struct GideonBookingChangeCard: View {
                     slotBox(label: T("Moves to"), room: room ?? change.after?.room, startsAt: startsAt, endsAt: endsAt, bookedBy: nil, highlighted: true, struck: false)
                 }
             }
-            if proposal.isPending {
+            if proposal.isPending && !readOnly {
                 if change.isMove {
                     if availability == nil && !loadFailed {
                         HStack(spacing: 6) { ProgressView().controlSize(.small); Text(T("Checking the rooms…")) }
@@ -88,7 +90,7 @@ struct GideonBookingChangeCard: View {
                     .disabled(choice == nil)
                 }
             } else {
-                Text(statusText).font(NXFont.text(12, .semibold))
+                Text(readOnly ? gideonProposalState(proposal, readOnly: true) : statusText).font(NXFont.text(12, .semibold))
                     .foregroundStyle(proposal.status == "APPLIED" ? NX.success : (proposal.status == "FAILED" ? NX.danger : NX.mutedFg))
             }
         }
@@ -96,7 +98,7 @@ struct GideonBookingChangeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.3)))
-        .task(id: "\(startsAt)|\(endsAt)|\(proposal.error ?? "")") { if proposal.isPending && change.isMove { await load() } }
+        .task(id: "\(startsAt)|\(endsAt)|\(proposal.error ?? "")") { if proposal.isPending && !readOnly && change.isMove { await load() } }
     }
 
     private func slotBox(label: String?, room: String?, startsAt: String, endsAt: String, bookedBy: String?, highlighted: Bool, struck: Bool) -> some View {

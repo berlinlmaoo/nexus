@@ -104,6 +104,8 @@ struct GideonPanel: View {
     /// GIDEON's own page in the iPad / Mac sidebar (or pushed in More on a phone): no Close button (it is
     /// not a sheet), and — like the web's /gideon — a new chat with no page context when it opens.
     var embedded = false
+    /// OAA transcripts reuse the same turn renderer without touching the signed-in chat store.
+    var reviewTurns: [GideonTurn]? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -197,6 +199,19 @@ struct GideonPanel: View {
     }
 
     var body: some View {
+        if let reviewTurns {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(reviewTurns) { turn in bubble(turn) }
+                }.padding(.vertical, 12)
+            }
+            .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
+            .navigationDestination(item: $openRef) { ref in refDestination(ref) }
+        } else { interactiveBody }
+    }
+
+    private var interactiveBody: some View {
         stackIfNeeded {
             screen
                 .navigationDestination(item: $openRef) { ref in refDestination(ref) }
@@ -626,7 +641,7 @@ struct GideonPanel: View {
     /// The answer (web AssistantTurn): what GIDEON did, the answer as Markdown on a soft panel, the
     /// changes waiting for Apply, what it made, the sources, then Copy · Save as doc.
     private func assistantTurn(_ turn: GideonTurn) -> some View {
-        let live = chat.answeringId == turn.id
+        let live = reviewTurns == nil && chat.answeringId == turn.id
         return VStack(alignment: .leading, spacing: 8) {
             GideonStepsLine(steps: turn.steps, streaming: live)
             if !turn.content.isEmpty {
@@ -643,7 +658,7 @@ struct GideonPanel: View {
             ForEach(turn.proposals) { p in proposalCard(p) }
             ForEach(turn.cards) { card in cardRow(card) }
             if !turn.sources.isEmpty && !live { sourcesBlock(turn.sources) }
-            if !turn.content.isEmpty && !live { answerActions(turn) }
+            if !turn.content.isEmpty && !live && reviewTurns == nil { answerActions(turn) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, wide ? 0 : 24)
@@ -767,19 +782,19 @@ struct GideonPanel: View {
     /// one (GideonBookingChangeCard, 16 Oct 2026); every other change is a diff.
     @ViewBuilder private func proposalCard(_ p: GideonProposal) -> some View {
         if p.action == "delete_task", let task = p.taskDelete {
-            GideonDeleteTaskCard(proposal: p, task: task,
+            GideonDeleteTaskCard(proposal: p, task: task, readOnly: reviewTurns != nil,
                                 onApply: { decision = GideonDecision(proposal: p, apply: true) },
                                 onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
-        } else if p.action == "create_task", let target = p.taskTarget, p.isPending {
+        } else if p.action == "create_task", let target = p.taskTarget, p.isPending, reviewTurns == nil {
             GideonCreateTaskCard(proposal: p, target: target,
                                  onApply: { choice in decision = GideonDecision(proposal: p, apply: true, task: choice) },
                                  onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else if p.action == "book_room", let b = p.booking {
-            GideonBookRoomCard(proposal: p, booking: b,
+            GideonBookRoomCard(proposal: p, booking: b, readOnly: reviewTurns != nil,
                                onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else if p.action == "move_room_booking" || p.action == "cancel_room_booking", let c = p.bookingChange {
-            GideonBookingChangeCard(proposal: p, change: c,
+            GideonBookingChangeCard(proposal: p, change: c, readOnly: reviewTurns != nil,
                                     onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                     onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else {
@@ -802,7 +817,7 @@ struct GideonPanel: View {
                     Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
                 }
             }
-            if p.isPending {
+            if p.isPending && reviewTurns == nil {
                 Text(T("Waiting for your approval")).font(NXFont.text(12, .medium)).foregroundStyle(NX.warning)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
@@ -814,7 +829,7 @@ struct GideonPanel: View {
                     .buttonStyle(.nxPrimary)
                 }
             } else {
-                Text(proposalStatus(p)).font(NXFont.text(12, .semibold))
+                Text(reviewTurns != nil ? gideonProposalState(p, readOnly: true) : proposalStatus(p)).font(NXFont.text(12, .semibold))
                     .foregroundStyle(p.status == "APPLIED" ? NX.success : (p.status == "FAILED" ? NX.danger : NX.mutedFg))
             }
         }

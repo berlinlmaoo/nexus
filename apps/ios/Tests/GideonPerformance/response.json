@@ -1,0 +1,780 @@
+{
+  "now": "2026-10-18T16:08:41.815Z",
+  "thresholds": {
+    "model0DownMin": 5,
+    "errorRatePct": 5,
+    "errorRateWindowMin": 15,
+    "errorRateMinAnswers": 5,
+    "vramFullPct": 98,
+    "gpuHotC": 85,
+    "sustainMin": 2
+  },
+  "telemetry": {
+    "lastAt": "2026-10-18T16:08:37.348Z",
+    "stale": false,
+    "cadenceSec": 5
+  },
+  "tiers": [
+    {
+      "id": "astra",
+      "status": "online",
+      "reason": null,
+      "inFlight": 0,
+      "answers15m": 0,
+      "failures15m": 0,
+      "errorRate": null,
+      "p50Ms": null,
+      "p95Ms": null,
+      "avgCredits15m": null,
+      "avgCredits24h": 249,
+      "answers24h": 2
+    },
+    {
+      "id": "luna",
+      "status": "online",
+      "reason": null,
+      "inFlight": 0,
+      "answers15m": 1,
+      "failures15m": 0,
+      "errorRate": 0,
+      "p50Ms": 5742,
+      "p95Ms": 5742,
+      "avgCredits15m": 18,
+      "avgCredits24h": 14.9,
+      "answers24h": 486
+    },
+    {
+      "id": "terra",
+      "status": "online",
+      "reason": null,
+      "inFlight": 0,
+      "answers15m": 0,
+      "failures15m": 0,
+      "errorRate": null,
+      "p50Ms": null,
+      "p95Ms": null,
+      "avgCredits15m": null,
+      "avgCredits24h": 1.3,
+      "answers24h": 469
+    },
+    {
+      "id": "experimental",
+      "status": "online",
+      "reason": null,
+      "inFlight": 0,
+      "answers15m": 1,
+      "failures15m": 0,
+      "errorRate": 0,
+      "p50Ms": 46199,
+      "p95Ms": 46199,
+      "avgCredits15m": 0,
+      "avgCredits24h": 0,
+      "answers24h": 349
+    }
+  ],
+  "tierStatus": {
+    "astra": {
+      "available": true,
+      "reason": null,
+      "since": null
+    },
+    "luna": {
+      "available": true,
+      "reason": null,
+      "since": null
+    },
+    "terra": {
+      "available": true,
+      "reason": null,
+      "since": null
+    },
+    "experimental": {
+      "available": true,
+      "reason": null,
+      "since": null
+    }
+  },
+  "live": {
+    "at": "2026-10-18T16:08:37.348Z",
+    "gpu": {
+      "name": "NVIDIA GeForce RTX 5070",
+      "util": 0,
+      "memUsedMiB": 8160,
+      "memTotalMiB": 12227,
+      "tempC": 26,
+      "powerW": 8.43,
+      "powerLimitW": 250
+    },
+    "engine": {
+      "up": true,
+      "model": {
+        "name": "m0-q35-9b:latest",
+        "sizeBytes": 7380035173,
+        "sizeVramBytes": 7380035173,
+        "gpuShare": 1,
+        "contextLength": null,
+        "expiresAt": null
+      }
+    },
+    "whisper": {
+      "up": true,
+      "busy": false,
+      "queued": 0
+    }
+  },
+  "model0": {
+    "recent": [
+      {
+        "at": "2026-10-18T16:01:47.532Z",
+        "evalTps": 68.54,
+        "promptTps": 3069.65,
+        "outTokens": 55,
+        "totalMs": 3615
+      },
+      {
+        "at": "2026-10-18T10:29:03.538Z",
+        "evalTps": 6.28,
+        "promptTps": 128.94,
+        "outTokens": 603,
+        "totalMs": 169537
+      },
+      {
+        "at": "2026-10-18T10:21:10.320Z",
+        "evalTps": 10.19,
+        "promptTps": 704.62,
+        "outTokens": 266,
+        "totalMs": 29525
+      },
+      {
+        "at": "2026-10-18T10:20:39.264Z",
+        "evalTps": 10.45,
+        "promptTps": 724.29,
+        "outTokens": 593,
+        "totalMs": 59996
+      },
+      {
+        "at": "2026-10-18T10:19:37.911Z",
+        "evalTps": 10.96,
+        "promptTps": 705.25,
+        "outTokens": 203,
+        "totalMs": 21725
+      },
+      {
+        "at": "2026-10-18T10:19:14.692Z",
+        "evalTps": 11.01,
+        "promptTps": 644.57,
+        "outTokens": 122,
+        "totalMs": 14462
+      },
+      {
+        "at": "2026-10-18T10:15:41.984Z",
+        "evalTps": 9.9,
+        "promptTps": 177.54,
+        "outTokens": 2046,
+        "totalMs": 220056
+      },
+      {
+        "at": "2026-10-18T10:06:59.766Z",
+        "evalTps": 8.71,
+        "promptTps": 770.26,
+        "outTokens": 399,
+        "totalMs": 53542
+      }
+    ],
+    "loads": [
+      {
+        "at": "2026-10-18T16:01:43.641Z",
+        "loadSec": 39.72
+      },
+      {
+        "at": "2026-10-18T10:02:38.686Z",
+        "loadSec": 17.61
+      },
+      {
+        "at": "2026-10-18T09:52:54.189Z",
+        "loadSec": 18.33
+      },
+      {
+        "at": "2026-10-18T09:51:39.482Z",
+        "loadSec": 9.3
+      },
+      {
+        "at": "2026-10-18T09:42:01.305Z",
+        "loadSec": 9.79
+      }
+    ],
+    "avgEvalTps24h": 72.9,
+    "gens24h": 543
+  },
+  "hours": [
+    {
+      "t": "2026-10-17T17:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T18:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T19:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T20:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T21:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T22:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-17T23:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T00:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T01:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T02:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T03:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T04:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 6,
+        "terra": 0,
+        "experimental": 2
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 5079,
+        "terra": null,
+        "experimental": 68821
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T05:00:00.000Z",
+      "questions": {
+        "astra": 2,
+        "luna": 45,
+        "terra": 91,
+        "experimental": 2
+      },
+      "p50Ms": {
+        "astra": 12925,
+        "luna": 16473,
+        "terra": 3164,
+        "experimental": 51407
+      },
+      "credits": 2672,
+      "inputTokens": 1222144,
+      "cachedTokens": 3135744,
+      "cacheHit": 0.7195558949656348
+    },
+    {
+      "t": "2026-10-18T06:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 196,
+        "terra": 68,
+        "experimental": 6
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 9962,
+        "terra": 7798,
+        "experimental": 140304
+      },
+      "credits": 3298,
+      "inputTokens": 1704493,
+      "cachedTokens": 5056200,
+      "cacheHit": 0.7478819109224454
+    },
+    {
+      "t": "2026-10-18T07:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 170,
+        "terra": 285,
+        "experimental": 22
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 6722,
+        "terra": 6885,
+        "experimental": 96873
+      },
+      "credits": 1550,
+      "inputTokens": 2001839,
+      "cachedTokens": 7792762,
+      "cacheHit": 0.79561811655217
+    },
+    {
+      "t": "2026-10-18T08:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 2,
+        "terra": 0,
+        "experimental": 168
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 19645,
+        "terra": null,
+        "experimental": 4317
+      },
+      "credits": 16,
+      "inputTokens": 577675,
+      "cachedTokens": 1706128,
+      "cacheHit": 0.7470556786202663
+    },
+    {
+      "t": "2026-10-18T09:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 11,
+        "terra": 0,
+        "experimental": 138
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 8909,
+        "terra": null,
+        "experimental": 9735
+      },
+      "credits": 145,
+      "inputTokens": 736115,
+      "cachedTokens": 2294059,
+      "cacheHit": 0.7570717061132463
+    },
+    {
+      "t": "2026-10-18T10:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 55,
+        "terra": 25,
+        "experimental": 10
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 8916,
+        "terra": 6040,
+        "experimental": 51850
+      },
+      "credits": 577,
+      "inputTokens": 355112,
+      "cachedTokens": 1179938,
+      "cacheHit": 0.7686642128920882
+    },
+    {
+      "t": "2026-10-18T11:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T12:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T13:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T14:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T15:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 0,
+        "terra": 0,
+        "experimental": 0
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": null,
+        "terra": null,
+        "experimental": null
+      },
+      "credits": 0,
+      "inputTokens": 0,
+      "cachedTokens": 0,
+      "cacheHit": null
+    },
+    {
+      "t": "2026-10-18T16:00:00.000Z",
+      "questions": {
+        "astra": 0,
+        "luna": 1,
+        "terra": 0,
+        "experimental": 1
+      },
+      "p50Ms": {
+        "astra": null,
+        "luna": 5742,
+        "terra": null,
+        "experimental": 46199
+      },
+      "credits": 18,
+      "inputTokens": 18089,
+      "cachedTokens": 0,
+      "cacheHit": 0
+    }
+  ],
+  "quality": {
+    "routerMisses24h": 4,
+    "answers24h": 1306,
+    "recentMisses": [
+      {
+        "at": "2026-10-18T07:09:17.615Z",
+        "tier": "terra"
+      },
+      {
+        "at": "2026-10-18T07:06:24.071Z",
+        "tier": "terra"
+      },
+      {
+        "at": "2026-10-18T06:40:56.276Z",
+        "tier": "terra"
+      },
+      {
+        "at": "2026-10-18T06:40:48.032Z",
+        "tier": "terra"
+      }
+    ],
+    "topTools": [
+      {
+        "tool": "search_workspace",
+        "calls": 1551,
+        "failures": 29
+      },
+      {
+        "tool": "list_tasks",
+        "calls": 221,
+        "failures": 1
+      },
+      {
+        "tool": "get_project_summary",
+        "calls": 153,
+        "failures": 30
+      },
+      {
+        "tool": "get_doc",
+        "calls": 98,
+        "failures": 9
+      },
+      {
+        "tool": "search_deals",
+        "calls": 66,
+        "failures": 0
+      },
+      {
+        "tool": "get_task",
+        "calls": 50,
+        "failures": 6
+      }
+    ],
+    "failingTools": [
+      {
+        "tool": "get_project_summary",
+        "calls": 153,
+        "failures": 30
+      },
+      {
+        "tool": "search_workspace",
+        "calls": 1551,
+        "failures": 29
+      },
+      {
+        "tool": "search_tasks",
+        "calls": 37,
+        "failures": 11
+      },
+      {
+        "tool": "get_doc",
+        "calls": 98,
+        "failures": 9
+      },
+      {
+        "tool": "get_task",
+        "calls": 50,
+        "failures": 6
+      },
+      {
+        "tool": "create_task",
+        "calls": 7,
+        "failures": 3
+      }
+    ],
+    "thumbsDown": null
+  },
+  "alerts": [
+    {
+      "key": "model0_down",
+      "active": false,
+      "since": null,
+      "value": null
+    },
+    {
+      "key": "error_rate",
+      "active": false,
+      "since": null,
+      "value": null
+    },
+    {
+      "key": "vram_full",
+      "active": false,
+      "since": null,
+      "value": "67%"
+    },
+    {
+      "key": "gpu_hot",
+      "active": false,
+      "since": null,
+      "value": "26\u00b0C"
+    }
+  ]
+}

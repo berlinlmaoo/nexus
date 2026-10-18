@@ -240,7 +240,7 @@ struct AdminView: View {
                 case "announcements": AdminAnnouncementsSection()
                 case "extra-dayoff": AdminExtraDayOffSection()
                 case "suspects": AdminSuspectSection()
-                case "gideon": AdminGideonUsageSection()
+                case "gideon": GideonControlRoomView()
                 case "app": AdminAppInstallsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
@@ -258,7 +258,9 @@ struct AdminView: View {
         .task {
             await viewer.loadIfNeeded()
             workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId
+            if router.gideonAdminTab != nil { showTab("gideon") }
         }
+        .onChange(of: router.gideonAdminTab) { _, tab in if tab != nil { showTab("gideon") } }
     }
 
     /// Switches to the tab with this id, when this viewer has it.
@@ -1154,6 +1156,7 @@ struct CreateAnnouncementSheet: View {
 struct AdminGideonUsageSection: View {
     @State private var data: GideonUsage?
     @State private var loading = true
+    @State private var reviewPerson: String?
     /// Why it didn't load (LoadErrorView: offline / no access / server, with Try again).
     @State private var failure: Error?
 
@@ -1180,7 +1183,7 @@ struct AdminGideonUsageSection: View {
                     } else {
                         VStack(spacing: 0) {
                             ForEach(rows, id: \.id) { row in
-                                personRow(row)
+                                Button { reviewPerson = row.id } label: { personRow(row) }.buttonStyle(.plain).accessibilityIdentifier("gideon.personRow." + row.id)
                                 if row.id != rows.last?.id { Divider().overlay(NX.border) }
                             }
                         }
@@ -1192,11 +1195,12 @@ struct AdminGideonUsageSection: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .modifier(GideonPersonPresentation(person: $reviewPerson))
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)").font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
+            Text(AppNumber.int(value)).font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
             Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1214,7 +1218,7 @@ struct AdminGideonUsageSection: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 1) {
-                Text("\(row.asked ?? 0)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(AppNumber.int(row.asked ?? 0)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
                 Text(T("questions")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
             }
         }

@@ -352,7 +352,7 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
 }
 
 /// Wire shapes. The server answers history as `{messages:[{role,content,tools,attachments}]}`.
-private struct GideonHistoryResponse: Decodable {
+struct GideonHistoryResponse: Decodable {
     let messages: [Row]?
     /// The conversation this is (dev server): absent from older servers.
     let chat: ChatRef?
@@ -364,6 +364,7 @@ private struct GideonHistoryResponse: Decodable {
         let proposals: [GideonProposal]?
     }
     struct Row: Decodable {
+        let id: String?
         let role: String?
         let content: String?
         let tools: [String]?
@@ -500,7 +501,12 @@ enum GideonClient {
         let (data, response) = try await fetch(request)
         try check(response)
         let decoded = try JSONDecoder().decode(GideonHistoryResponse.self, from: data)
-        let turns: [GideonTurn] = (decoded.messages ?? []).compactMap { row in
+        let turns = historyTurns(decoded.messages ?? [])
+        return (turns, decoded.chat?.id, decoded.chat?.title)
+    }
+
+    static func historyTurns(_ rows: [GideonHistoryResponse.Row]) -> [GideonTurn] {
+        rows.compactMap { row in
             guard let role = GideonTurn.Role(rawValue: row.role ?? ""), let content = row.content else { return nil }
             // A kept file with no url is dropped rather than drawn. A chip that opens nothing is
             // precisely what this feature exists to stop showing, so an attachment the server can
@@ -513,14 +519,13 @@ enum GideonClient {
                                         url: url,
                                         mime: item.mime ?? "")
             }
-            var turn = GideonTurn(role: role, content: content, tools: row.tools ?? [], attachments: carried)
+            var turn = GideonTurn(id: row.id ?? UUID().uuidString, role: role, content: content, tools: row.tools ?? [], attachments: carried)
             turn.steps = row.meta?.steps ?? []
             turn.sources = row.meta?.sources ?? []
             turn.cards = row.meta?.cards ?? []
             turn.proposals = row.meta?.proposals ?? []
             return turn
         }
-        return (turns, decoded.chat?.id, decoded.chat?.title)
     }
 
     /// The person's conversations, newest first; `q` searches titles and messages.

@@ -353,6 +353,7 @@ func notificationFilterTabs(_ list: [NexusNotification]) -> [NotificationFilterT
 /// screens in both shapes of the app; the others carry the id of a single record, which no
 /// eighteen-case screen enum has room for.
 enum NotificationTarget: Hashable {
+    case gideonPerformance
     case task(String)
     case project(String)
     case submission(String)
@@ -388,6 +389,7 @@ enum NotificationTarget: Hashable {
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
         switch self {
+        case .gideonPerformance:                 return .admin
         case .screen(let s):                     return s
         case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard: return .attendance
         case .complaint:                         return .tickets
@@ -461,7 +463,9 @@ enum NotificationTarget: Hashable {
         case "complaints":
             if let id = Self.queryValue("id", in: path) { self = .complaint(id) } else { self = .screen(.tickets) }
         case "settings":                self = .screen(.settings)
-        case "admin":                   self = .screen(.admin)
+        case "admin":
+            if Self.queryValue("tab", in: path) == "gideon", Self.queryValue("gideon", in: path) == "performance" { self = .gideonPerformance }
+            else { self = .screen(.admin) }
         case "dashboard":
             if let id = Self.queryValue("announcement", in: path) { self = .announcement(id) } else { self = .screen(.dashboard) }
         default:                        return nil

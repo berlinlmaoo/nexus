@@ -9,6 +9,8 @@ swiftc Sources/LegalModels.swift Tests/LegalModels/main.swift -o "$NATIVE_CHECK_
 "$NATIVE_CHECK_TMP/legal"
 swiftc Sources/TaskEditSafety.swift Tests/TaskEditSafety/main.swift -o "$NATIVE_CHECK_TMP/tasks"
 "$NATIVE_CHECK_TMP/tasks"
+swiftc Sources/GideonPerformanceModels.swift Tests/GideonPerformance/main.swift -o "$NATIVE_CHECK_TMP/performance"
+"$NATIVE_CHECK_TMP/performance" Tests/GideonPerformance/response.json
 swiftc Sources/GideonTaskModels.swift Tests/GideonTasks/main.swift -o "$NATIVE_CHECK_TMP/gideon-tasks"
 "$NATIVE_CHECK_TMP/gideon-tasks"
 swiftc Sources/GideonCreditModels.swift Tests/GideonCredits/Stub.swift Tests/GideonCredits/main.swift -o "$NATIVE_CHECK_TMP/credits"
