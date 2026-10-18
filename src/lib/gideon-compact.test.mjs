@@ -6,7 +6,7 @@ const row = {
   id: "t1", title: "Monthly Schedule Z NET", description: "  Jadwal  bulanan\n untuk Z NET ".repeat(20), status: "TODO", priority: "HIGH",
   dueDate: "2026-09-12T17:00:00.000Z", // 13 Sep 00:00 WIB
   taskList: { name: "To Do", projectId: "p1", project: { id: "p1", name: "FRAMEWORKZ : Z Creative Task" } },
-  assignees: [{ user: { name: "Irvandes Hasri Ilham Maulana" } }],
+  assignees: [{ user: { name: "Dimas Saputra Raka Pratama" } }],
   customFieldValues: [
     { value: "LIVESET", customField: { name: "CONTENT TYPE", type: "SELECT" } },
     { value: "[]", customField: { name: "Tipe", type: "MULTI_SELECT" } },
@@ -21,7 +21,7 @@ assert.equal(c.progress, "To do")
 assert.equal(c.priority, "High")
 assert.equal(c.due, "2026-09-13")
 assert.equal(c.overdue, true)
-assert.deepEqual(c.assignees, ["Irvandes Hasri Ilham Maulana"])
+assert.deepEqual(c.assignees, ["Dimas Saputra Raka Pratama"])
 assert.equal(c.project, "FRAMEWORKZ : Z Creative Task")
 assert.equal(c.projectId, "p1")
 assert.deepEqual(c.fields, { "CONTENT TYPE": "LIVESET", Tags: "A, B" })
