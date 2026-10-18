@@ -2568,3 +2568,40 @@ Every endpoint heading in §2, in document order.
 
 Both the conditional-request cache and disk cache include the folder selection. Folder changes refetch items and overdue and reject answers from a previous selection. `/folders/<id>`, the project tree/calendar buttons and Audit folder restore links open `/calendar?folder=<id>`; the separate folder calendar and curated `aggregateProjectIds` writes are removed. Other Calendar link filters combine with `folder`.
 
+## 19 Oct: GIDEON cards, reminders and availability
+
+`GET /api/gideon/task-targets?projectId=` supplies project-specific sections and PICs for create-task cards. Project choices are restricted to editable projects; changing project clears old target choices. Delete-task cards require a centred destructive confirmation and send `{decision:"apply",confirm:{taskId}}`.
+
+The 18 additional tool actions use `{decision:"apply",confirm:{proposalId}}` at `POST /api/gideon/proposals/:id`. Ordinary proposal fields are retained, including dated diffs and `extra.preview`, `link`, `note`, and `sheetEdit.cells` (Cell / Before / After). Full previews are selectable; cell changes have a bounded scroll area. Read-only Control Room transcripts never expose decision controls. Unknown actions retain summary/diff rendering. Export links under `/api/gideon/files/:id` use the authenticated downloader and native share sheet.
+
+`GET /api/reminders?done=1` returns upcoming/done lists. `POST /api/reminders {text,remindAt}` sends an ISO instant derived from the WIB date/time picker; `DELETE /api/reminders/:id` cancels after confirmation. `reminders-changed` refreshes the native list; notification links `/reminders` open it. Errors are mapped by TEXT, TIME_PAST, TIME_FAR, TIME_BAD, TOO_MANY and NOT_FOUND.
+
+`GET /api/gideon/tiers`, config `gideonTiers`, and socket `gideon-tiers {tiers}` populate one session-wide availability store. Refresh on entry/reconnect; retain the selected unavailable tier, disable Send, and offer the explicit Phaëthon fallback. SSE `tier_unavailable` / error `model0_unavailable` refresh availability and show localised, non-retryable copy.
+
+## 19 Oct: meeting notes Beta
+
+Config controls visibility (`meetingNotesEnabled`) and limits (`meetingMaxMinutes`, `meetingMaxMB`, `meetingAudioRetentionDays`). Defaults: true, 180 minutes, 500 MB, 30 days. All requests use the normal authenticated client.
+
+| Endpoint | Native behavior |
+|---|---|
+| `GET /api/meetings?projectId=&limit=50` | Own/project list, settings, queue state |
+| `POST /api/meetings` | File metadata, optional project, language/source/recordedAt/durationSec, speakerLabels and optional introEndSec; receives upload chunk limits |
+| `PUT /api/meetings/:id/audio?offset=` | Raw bytes, application/octet-stream; resume from server audio.received or OFFSET_MISMATCH.received |
+| `POST /api/meetings/:id/audio/complete` | Finish or resume INCOMPLETE bytes; NOT_UPLOADING opens the existing meeting |
+| `GET /api/meetings/:id` | Full review, members, transcript, speaker map, transcribeStats and permissions |
+| `PATCH /api/meetings/:id` | Changed fields plus version; VERSION_CONFLICT loads the full remote meeting and shows the conflict toast |
+| `POST /api/meetings/:id/apply` | Project/title/overview/mom/proposals/lang; selected tasks only; ALREADY_APPLIED displays the existing result |
+| `POST /api/meetings/:id/retry` | Failed-stage retry; `{stage:"minutes"}` for confirmed rewrite |
+| `DELETE /api/meetings/:id` | Confirmed deletion; saved project page/tasks survive |
+| `GET /api/meetings/:id/audio` | Authenticated local playback; AUDIO_GONE handling |
+
+Recording uses a microphone foreground service, AAC/m4a mono at 48 kbps, explicit pause/resume/stop, interruption pause and maximum duration stop. Introduction timestamps use recording time with pauses excluded and survive recovery of a finished local recording. Upload uses owner-bound private files and expedited network-constrained WorkManager; account changes prevent uploads under another session. Shared audio opens the native New meeting page.
+
+Autosave is serialised and versioned. PATCH/conflict responses may omit `members`; preserve the same project's list and fetch full members after project changes. Keep unfinished task rows locally after normalisation. Speaker PATCH sends the whole map: preserve untouched automatic names, omit auto for a hand edit, remove a cleared name. Names can be edited before APPLYING; Speakers and transcript share the approved ten-colour palette. Audio playback remains active when its row scrolls off-screen so transcript/voice Listen controls can seek.
+
+`meeting-changed` refreshes the meeting/list, project room membership follows the chosen project, and deleted events leave the page. READY/FAILED Inbox rows use server texts, microphone marks and `/meetings/:id`; push data `meetingId` resolves to the same target. Audit restore entity `meeting_note` with `{type:"meeting",id}` also opens the native meeting.
+
+## 19 Oct: Control Room GIDEON Performance
+
+`GET /api/gideon/perf` is no-store and gated to company BoD/OAA; 403 and `join-denied` remove the panel. `/admin?tab=gideon&gideon=performance` selects it. Join `gideon:perf` only while RESUMED and leave on background/disposal. `gideon-perf` GPU samples replace live readings; engine flips, gpu+model0 and runs debounce a REST refresh by 1.5 seconds; alerts/reconnect refresh immediately. Poll every 60 seconds while visible and recompute stale readings after 180 seconds. Nullable measurements display an em dash, Model 0 is free, and quiet credit averages fall back to 24 hours. No ingest endpoint is called by Android.
+
