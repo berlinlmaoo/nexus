@@ -993,6 +993,22 @@ struct ChatThreadView: View {
             guard let item else { return }
             Task { await uploadPhoto(item) }
         }
+        #if targetEnvironment(macCatalyst)
+        // Present the native panel from the chat itself. Wrapping UIDocumentPicker in a
+        // SwiftUI sheet can close its panel without handing the file back on Catalyst.
+        .fileImporter(isPresented: $showDocumentPicker, allowedContentTypes: [
+            .pdf, .plainText, .commaSeparatedText, .zip,
+            UTType(filenameExtension: "doc")!, UTType(filenameExtension: "docx")!,
+            UTType(filenameExtension: "xls")!, UTType(filenameExtension: "xlsx")!,
+            UTType(filenameExtension: "ppt")!, UTType(filenameExtension: "pptx")!
+        ], allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let files):
+                if let file = files.first { Task { await uploadDocument(file) } }
+            case .failure(let error): notice = error.localizedDescription
+            }
+        }
+        #else
         .sheet(isPresented: $showDocumentPicker) {
             DocumentPicker(types: [.pdf, .plainText, .commaSeparatedText, .zip,
                 UTType(filenameExtension: "doc")!, UTType(filenameExtension: "docx")!,
@@ -1001,6 +1017,7 @@ struct ChatThreadView: View {
                 if let file = files.first { Task { await uploadDocument(file) } }
             }
         }
+        #endif
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
                       matching: .images, photoLibrary: .shared())
         .fullScreenCover(isPresented: $showCamera) {
@@ -2041,6 +2058,10 @@ struct ChatThreadView: View {
         uploadingPhoto = true
         notice = nil
         defer { uploadingPhoto = false }
+        #if targetEnvironment(macCatalyst)
+        let scoped = file.startAccessingSecurityScopedResource()
+        defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+        #endif
         do {
             let maxBytes = 25 * 1024 * 1024
             if let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > maxBytes {
