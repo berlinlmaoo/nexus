@@ -6,6 +6,18 @@
  */
 export const ID_MEETINGS: Record<string, string> = {
   "Action items": "Action item",
+  "Waiting for the transcription server…": "Menunggu server transkripsi…",
+  "#{n} in line": "antrean ke-{n}",
+  "next in line": "berikutnya di antrean",
+  "ready in {eta}": "siap dalam {eta}",
+  "Ready in {eta}": "Siap dalam {eta}",
+  "about {m} min": "sekitar {m} menit",
+  "about {h} h {m} min": "sekitar {h} jam {m} menit",
+  "a rough estimate": "perkiraan kasar",
+  "Writing the minutes · ready in {eta}": "Menulis notulen · siap dalam {eta}",
+  "Transcribing · ready in {eta}": "Mentranskrip · siap dalam {eta}",
+  "You can leave this page — we'll notify you when it's ready.": "Kamu boleh tinggalkan halaman ini — kami kabari lewat notifikasi saat sudah siap.",
+  "Open meeting": "Buka meeting",
   "Add action item": "Tambah action item",
   "Add attendee": "Tambah peserta",
   "Add from project": "Tambah dari project",

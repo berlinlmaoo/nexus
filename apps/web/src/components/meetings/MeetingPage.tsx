@@ -20,7 +20,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  applyMeeting, clock, deleteMeeting, durationText, MeetingApiError, meetingKey, patchMeeting, retryMeeting, useMeeting,
+  applyMeeting, clock, deleteMeeting, durationText, etaText, MeetingApiError, meetingKey, patchMeeting, retryMeeting, useMeeting,
   type MeetingFull, type Mom, type TaskProposal,
 } from "@/lib/meetings";
 import { BetaBadge } from "./BetaBadge";
@@ -537,13 +537,15 @@ function Pipeline({ m }: { m: MeetingFull }) {
   ];
   const at = m.status === "QUEUED" ? 1 : steps.findIndex((s) => s.key === m.status);
   const position = m.transcribeStats?.position;
+  const q = m.queue;
   const line = m.status === "UPLOADING"
     ? t("The upload hasn't finished. Keep the tab that is uploading open.")
-    : m.status === "QUEUED" || (m.status === "TRANSCRIBING" && m.transcribeStats?.state === "queued")
-      ? (position && position > 1 ? t("Waiting for {n} other recordings to finish.", { n: position - 1 }) : t("Starting the transcript…"))
+    : q?.waiting
+      ? `${t("Waiting for the transcription server…")} ${q.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line")}.`
       : m.status === "TRANSCRIBING"
         ? t("Transcribing on the office server. GIDEON Model 0 is paused meanwhile.")
         : t("GIDEON is reading the transcript and writing the minutes.");
+  void position;
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-4" aria-live="polite">
       <ol className="flex items-center gap-2 text-xs font-medium">
@@ -559,7 +561,8 @@ function Pipeline({ m }: { m: MeetingFull }) {
       {(m.status === "TRANSCRIBING" || m.status === "SUMMARIZING" || m.status === "UPLOADING") && (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-sidebar-primary transition-[width] duration-500" style={{ width: `${Math.max(3, Math.round((m.progress || 0) * 100))}%` }} /></div>
       )}
-      <p className="mt-2 text-xs text-muted-foreground">{t("You can leave this page. You'll get a notification when it's ready.")}</p>
+      {q && <p className="mt-2 text-sm font-medium tabular-nums">{t("Ready in {eta}", { eta: etaText(q.etaSec, t) })}<span className="font-normal text-muted-foreground"> · {t("a rough estimate")}</span></p>}
+      <p className="mt-1 text-xs text-muted-foreground">{t("You can leave this page — we'll notify you when it's ready.")}</p>
     </div>
   );
 }

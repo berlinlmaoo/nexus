@@ -9,7 +9,7 @@ import { BetaBadge } from "@/components/meetings/BetaBadge";
 import { NewMeetingDialog } from "@/components/meetings/NewMeetingDialog";
 import { MeetingStatusChip } from "@/components/meetings/MeetingPage";
 import { useLang } from "@/lib/lang";
-import { durationText, useMeetingList, useMeetingNotesEnabled } from "@/lib/meetings";
+import { durationText, queueLine, useMeetingList, useMeetingNotesEnabled } from "@/lib/meetings";
 
 /** Meeting notes (Beta, 18 Oct 2026): the person's recordings, newest first. ?projectId= shows a project's. */
 export const Route = createFileRoute("/_app/meetings/")({
@@ -52,6 +52,7 @@ function MeetingsPage() {
                   <span className="block truncate text-xs text-muted-foreground">
                     {[m.project?.name, new Date(m.recordedAt ?? m.createdAt).toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { dateStyle: "medium" }), durationText(m.durationSec, t)].filter(Boolean).join(" · ")}
                   </span>
+                  {queueLine(m.queue, m.status, t) && <span className="mt-0.5 block truncate text-xs font-medium text-sidebar-primary">{queueLine(m.queue, m.status, t)}</span>}
                 </span>
                 <MeetingStatusChip status={m.status} className="shrink-0" />
               </Link>
