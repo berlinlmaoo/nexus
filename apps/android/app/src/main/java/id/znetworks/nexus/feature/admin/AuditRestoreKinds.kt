@@ -31,7 +31,7 @@ object OpenField : kotlinx.serialization.KSerializer<JsonElement> {
 
 /** A screen this app has for "Open …". */
 data class RestoreTarget(val kind: Kind, val id: String? = null, val date: String? = null) {
-    enum class Kind { PROJECT, TASK, DOC, FOLDER, ATTENDANCE, ROOMS, CALENDAR, VAULT, WIRE, CHAT }
+    enum class Kind { PROJECT, TASK, DOC, FOLDER, ATTENDANCE, ROOMS, CALENDAR, VAULT, WIRE, CHAT, MEETING }
 }
 
 object RestoreKinds {
@@ -47,11 +47,13 @@ object RestoreKinds {
         "pipeline_deal", // PIPELINE-DASHBOARD, 9 Oct
         "pipeline_term", // PIPELINE-DASHBOARD §11.2, 9 Oct (opens its deal's board)
         "outlet_sales_event", // OUTLET-SALES, 10 Oct (opens its outlet)
+        "meeting_note",
     )
     private val VAULT = setOf("vault_file", "vault_folder", "vault_trash")
 
     /** The button per kind; a kind this app doesn't know (a newer server) says plain "Restore". */
     fun button(type: String?): Int = when (type) {
+        "meeting_note" -> R.string.meet_restore
         "project" -> R.string.au_restore_project; "task" -> R.string.au_restore_task
         "comment", "sheet_comment" -> R.string.au_rb_comment; "attachment", "vault_file" -> R.string.au_rb_file
         "proof_annotation" -> R.string.au_rb_annotation; "doc" -> R.string.au_rb_doc; "project_page" -> R.string.au_rb_page
@@ -76,6 +78,7 @@ object RestoreKinds {
 
     /** One line under the explanation, where the kind needs it said. [soft]: the delete only flipped a flag. */
     fun note(type: String?, soft: Boolean): Int? = when (type) {
+        "meeting_note" -> R.string.meet_restore_note
         "project" -> R.string.au_restore_folder
         "task_list" -> R.string.au_note_task_list; "project_folder" -> R.string.au_note_project_folder; "org_unit" -> R.string.au_note_org_unit
         "sheet_rows" -> R.string.au_note_sheet_rows; "project_sheet_column" -> R.string.au_note_column; "project_sheet" -> R.string.au_note_sheet
@@ -174,6 +177,7 @@ object RestoreKinds {
             "calendar", "calendar_event" -> RestoreTarget(RestoreTarget.Kind.CALENDAR, date = o.date)
             "post" -> RestoreTarget(RestoreTarget.Kind.WIRE, o.id)
             "chat" -> withId(RestoreTarget.Kind.CHAT)
+            "meeting", "meeting_note" -> withId(RestoreTarget.Kind.MEETING)
             else -> o.projectId?.let { RestoreTarget(RestoreTarget.Kind.PROJECT, it) } // a sheet, page, form, P&L…: its project
         }
     }
@@ -184,6 +188,7 @@ object RestoreKinds {
         RestoreTarget.Kind.ATTENDANCE -> R.string.au_open_attendance; RestoreTarget.Kind.ROOMS -> R.string.au_open_room
         RestoreTarget.Kind.CALENDAR -> R.string.au_open_calendar; RestoreTarget.Kind.VAULT -> R.string.au_open_vault
         RestoreTarget.Kind.WIRE -> R.string.au_open_wire; RestoreTarget.Kind.CHAT -> R.string.au_open_chat
+        RestoreTarget.Kind.MEETING -> R.string.meet_open
     }
 
     /** No copy on a delete: why, for a kind that is restorable today. Null = say nothing (not a restorable kind, or not a delete). */

@@ -70,6 +70,10 @@ import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.gideon.RemindersScreen
+import id.znetworks.nexus.feature.meetings.MeetingsScreen
+import id.znetworks.nexus.feature.meetings.MeetingScreen
+import id.znetworks.nexus.feature.meetings.NewMeetingScreen
+import androidx.navigation.navArgument
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.calendar.CalendarScreen
 import id.znetworks.nexus.feature.calendar.TaskPreviewScreen
@@ -319,6 +323,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
             Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
+            is Target.Meetings -> { container.router.consumed(t); nav.navigate("meetings?project=${enc(t.projectId.orEmpty())}") }
+            is Target.Meeting -> { container.router.consumed(t); nav.navigate("meeting/${enc(t.id)}") }
+            is Target.NewMeeting -> { container.router.consumed(t); nav.navigate("meeting-new?project=${enc(t.projectId.orEmpty())}") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
             is Target.Chat -> {
@@ -533,6 +540,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     RestoreTarget.Kind.ATTENDANCE -> "attendance"; RestoreTarget.Kind.ROOMS -> "rooms"
                     RestoreTarget.Kind.CALENDAR -> t.date?.let { "calendar?date=$it" } ?: "calendar"
                     RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"; RestoreTarget.Kind.CHAT -> "chat/${t.id}"
+                    RestoreTarget.Kind.MEETING -> "meeting/${t.id}"
                 }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable(Tab.CHAT.route) { MessagesScreen(onBack = null, onOpenChat = { nav.navigate("chat/$it") }) }
@@ -574,6 +582,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable("reminders") { RemindersScreen { nav.popBackStack() } }
+            composable("meetings?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> MeetingsScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
+            composable("meeting-new?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> NewMeetingScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
+            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })

@@ -3,6 +3,7 @@ package id.znetworks.nexus.feature.inbox
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Timeline
@@ -243,6 +244,7 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
 
 /** The kind's icon (web notificationMark, lucide → Material). */
 internal fun inboxIcon(type: String?): ImageVector = when (InboxRules.mark(type)) {
+    InboxRules.Mark.MEETING -> androidx.compose.material.icons.Icons.Filled.Mic
     InboxRules.Mark.OUTSIDE -> Icons.AutoMirrored.Filled.DirectionsWalk
     InboxRules.Mark.MENTION -> Icons.Filled.AlternateEmail
     InboxRules.Mark.ASSIGNED -> Icons.Filled.PersonAdd
@@ -264,6 +266,7 @@ internal fun inboxIcon(type: String?): ImageVector = when (InboxRules.mark(type)
 private fun inboxTone(type: String?): Pair<Color, Color> {
     val c = Nx.colors
     val ink = when (InboxRules.mark(type)) {
+        InboxRules.Mark.MEETING -> if (type == "meeting_notes_failed") c.dangerText else c.violetText
         InboxRules.Mark.MENTION -> Color(0xFF0284C7)
         InboxRules.Mark.ASSIGNED, InboxRules.Mark.STATUS -> c.foreground
         InboxRules.Mark.COMPLETED -> c.success

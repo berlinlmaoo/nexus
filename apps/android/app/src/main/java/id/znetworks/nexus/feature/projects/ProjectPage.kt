@@ -254,7 +254,7 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
-                  onAdd: (() -> Unit)? = null, onDetails: (() -> Unit)? = null) {
+                  onAdd: (() -> Unit)? = null, onDetails: (() -> Unit)? = null, onMeetings: (() -> Unit)? = null) {
     val c = Nx.colors
     if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
         var menu by remember { mutableStateOf(false) }
@@ -289,6 +289,7 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
                 var actions by remember { mutableStateOf(false) }
                 androidx.compose.material3.IconButton(onClick = { actions = true }) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more)) }
                 DropdownMenu(actions, { actions = false }) {
+                    if (onMeetings != null) DropdownMenuItem(text = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_title)); id.znetworks.nexus.feature.meetings.MeetingBeta() } }, onClick = { actions = false; onMeetings() })
                     (selected as? PageTabItem.View)?.let { v -> DropdownMenuItem(text = { Text(stringResource(R.string.col_options)) }, onClick = { actions = false; onViewMenu(v.view) }) }
                     if (canAddView) DropdownMenuItem(text = { Text(stringResource(R.string.view_add)) }, onClick = { actions = false; onAddView() })
                 }
@@ -338,6 +339,7 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
         }
         if (!dividerDrawn && canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))
     }
+    if (onMeetings != null) TextButton(onClick = onMeetings) { Text(stringResource(R.string.meet_title)); Spacer(Modifier.width(4.dp)); id.znetworks.nexus.feature.meetings.MeetingBeta() }
     // "Add task" at the end of the tabs, always in reach (web phone).
     if (onAdd != null) {
         Spacer(Modifier.width(6.dp))

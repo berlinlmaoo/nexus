@@ -138,10 +138,16 @@ class MainActivity : AppCompatActivity() {
         val router = (application as NexusApplication).container.router
         val data = intent.data
         val target = when {
+            intent.action == Intent.ACTION_SEND && (intent.type?.startsWith("audio/") == true || intent.type == "video/mp4") -> {
+                @Suppress("DEPRECATION") val shared = if (android.os.Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java) else intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+                (application as NexusApplication).container.meetingSharedAudio.value = shared?.toString()
+                id.znetworks.nexus.core.nav.Target.NewMeeting()
+            }
             data != null -> Links.parse(data.toString())
             intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) -> Links.forNotification(
                 intent.getStringExtra(EXTRA_TYPE), intent.getStringExtra(EXTRA_LINK),
                 intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_PROJECT_ID),
+                intent.getStringExtra(EXTRA_MEETING_ID),
             )
             else -> null
         }
@@ -156,6 +162,8 @@ class MainActivity : AppCompatActivity() {
         intent.data = null
         intent.removeExtra(EXTRA_TYPE)
         intent.removeExtra(EXTRA_LINK)
+        intent.removeExtra(EXTRA_MEETING_ID)
+        if (intent.action == Intent.ACTION_SEND) intent.action = null
     }
 
     companion object {
@@ -163,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_LINK = "link"
         const val EXTRA_TASK_ID = "taskId"
         const val EXTRA_PROJECT_ID = "projectId"
+        const val EXTRA_MEETING_ID = "meetingId"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
     }
 }

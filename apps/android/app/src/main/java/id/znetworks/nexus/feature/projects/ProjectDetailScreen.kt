@@ -502,6 +502,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val meetingContainer = (context.applicationContext as NexusApplication).container
+    val meetingConfig by meetingContainer.remoteConfig.body.collectAsStateWithLifecycle()
     // Duplicate + date…: the ids waiting for the optional due-date popup.
     var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
     var dueFor by remember { mutableStateOf<List<String>?>(null) }
@@ -617,7 +619,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                 onAdd = onAdd, addInTabs = tabsShown)
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
-                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null)
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null,
+                    onMeetings = if (meetingConfig.meetingNotesEnabled) ({ meetingContainer.router.open(id.znetworks.nexus.core.nav.Target.Meetings(vm.projectId)) }) else null)
             }
             androidx.compose.material3.HorizontalDivider(color = c.border)
             // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.

@@ -100,6 +100,7 @@ class AppContainer(private val context: Context) {
     val viewer = Viewer(api)
     val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope)
     val gideonTiers = id.znetworks.nexus.feature.gideon.GideonTiers(api)
+    val meetingSharedAudio = MutableStateFlow<String?>(null)
     val offline: id.znetworks.nexus.core.offline.OfflineSync by lazy {
         id.znetworks.nexus.core.offline.DiskFiles.init(context.cacheDir)
         id.znetworks.nexus.core.offline.OfflineSync(context, this)
@@ -231,6 +232,8 @@ class AppContainer(private val context: Context) {
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
                 gideonTiers.clear()
+                meetingSharedAudio.value = null
+                id.znetworks.nexus.feature.meetings.MeetingFiles.clear(context)
                 calendar.clear()
                 badges.clear()
                 realtime.reset()

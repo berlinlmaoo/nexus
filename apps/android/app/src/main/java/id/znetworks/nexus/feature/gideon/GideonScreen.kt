@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -102,6 +103,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val chat = container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
     val tiers by container.gideonTiers.state.collectAsStateWithLifecycle()
+    val config by container.remoteConfig.body.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { container.gideonTiers.seed(container.remoteConfig.current.gideonTiers); container.gideonTiers.refresh() }
     val c = Nx.colors
     val res = context.resources
@@ -188,6 +190,11 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                     Box {
                         IconButton(onClick = { attachMenu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.mutedFg) }
                         DropdownMenu(attachMenu, { attachMenu = false }) {
+                            if (config.meetingNotesEnabled) DropdownMenuItem(text = { Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_recording_entry)); id.znetworks.nexus.feature.meetings.MeetingBeta() }
+                                Text(stringResource(R.string.meet_entry_hint), color = c.mutedFg, fontSize = 11.sp)
+                            } }, leadingIcon = { Icon(Icons.Outlined.Mic, null) }, onClick = { attachMenu = false; container.router.open(id.znetworks.nexus.core.nav.Target.NewMeeting(s.project?.first)) })
+                            if (config.meetingNotesEnabled) DropdownMenuItem(text = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_title)); id.znetworks.nexus.feature.meetings.MeetingBeta() } }, onClick = { attachMenu = false; container.router.open(id.znetworks.nexus.core.nav.Target.Meetings(s.project?.first)) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, onClick = { attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, onClick = { attachMenu = false; files.launch(arrayOf("*/*")) })
                             // "Add a page, task or project": starts an "@" at the end of the draft (web startMention).

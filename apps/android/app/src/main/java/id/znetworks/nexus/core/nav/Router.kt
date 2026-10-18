@@ -14,6 +14,9 @@ sealed interface Target {
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
     data object Inbox : Target
     data object Reminders : Target
+    data class Meetings(val projectId: String? = null) : Target
+    data class Meeting(val id: String) : Target
+    data class NewMeeting(val projectId: String? = null) : Target
     /** A top-level tab by route ("tasks", "projects"). */
     data class Tab(val route: String) : Target
     /** [view]: a link's `?view=` (board, list, table, calendar, timeline, overview, forms…). */
@@ -64,7 +67,9 @@ object Links {
      * Push/inbox precedence (iOS AppRouter.openNotification): taskId → projectId → http link →
      * link path → keyword fallback on `type`, finally Inbox. Unknown types never break routing.
      */
-    fun forNotification(type: String?, link: String?, taskId: String?, projectId: String?): Target {
+    fun forNotification(type: String?, link: String?, taskId: String?, projectId: String?, meetingId: String? = null): Target {
+        if (!meetingId.isNullOrBlank()) return Target.Meeting(meetingId)
+        if (type?.startsWith("meeting_notes_") == true && !link.isNullOrBlank()) parse(link)?.let { return it }
         if (!taskId.isNullOrBlank()) return Target.Task(taskId)
         if (!projectId.isNullOrBlank()) return Target.Project(projectId)
         if (!link.isNullOrBlank()) {
@@ -103,6 +108,7 @@ object Links {
         // nexus://projects/<id>?view=board (iOS TourDriver routes): the project, on that view.
         val sub = rest.substringBefore('?').substringAfter('/', "").trimEnd('/')
         if (screen == "projects" && sub.isNotEmpty() && '/' !in sub) return Target.Project(sub, queryMap(query)["view"], queryMap(query)["date"])
+        if (screen in setOf("meetings", "folders") && sub.isNotEmpty() && '/' !in sub) return parsePath("/$screen/$sub", query)
         return parsePath("/$screen", query)
     }
 
@@ -146,6 +152,9 @@ object Links {
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
             p == "/admin" -> if (q["tab"] == "gideon" && q["gideon"] == "performance") Target.GideonPerformance else Target.Admin
             p == "/reminders" -> Target.Reminders
+            p == "/meetings" -> Target.Meetings(q["projectId"])
+            p == "/meetings/new" -> Target.NewMeeting(q["projectId"])
+            Regex("^/meetings/([^/]+)$").matches(p) -> Target.Meeting(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))
