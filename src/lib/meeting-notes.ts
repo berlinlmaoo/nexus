@@ -96,6 +96,50 @@ export async function meetingAccess(userId: string, row: { createdById: string; 
 
 const num = (b: bigint | number | null | undefined) => (b === null || b === undefined ? 0 : Number(b))
 
+// ---------------------------------------------------------------- queue / ETA (owner, 18 Oct 2026)
+
+/** Measured on the office GPU: ~1.8 min per hour of audio, plus ~45 s per job (model load, Model 0 window). */
+const TRANSCRIBE_SEC_PER_AUDIO_SEC = 1.8 / 60
+const TRANSCRIBE_JOB_OVERHEAD_SEC = 45
+/** GIDEON writing the minutes: ~40 s, plus ~1 min per hour of audio (more parts to read). */
+const SUMMARY_BASE_SEC = 40
+const SUMMARY_SEC_PER_AUDIO_SEC = 60 / 3600
+
+function audioSecOf(r: { durationSec: number | null; audioBytes: bigint | number }): number {
+  // Unknown duration: estimated from the size at ~48 kbit/s.
+  return r.durationSec && r.durationSec > 0 ? r.durationSec : Math.max(60, Number(r.audioBytes) / 6000)
+}
+const transcribeSec = (r: { durationSec: number | null; audioBytes: bigint | number }) => TRANSCRIBE_JOB_OVERHEAD_SEC + audioSecOf(r) * TRANSCRIBE_SEC_PER_AUDIO_SEC
+const summarySec = (r: { durationSec: number | null; audioBytes: bigint | number }) => SUMMARY_BASE_SEC + audioSecOf(r) * SUMMARY_SEC_PER_AUDIO_SEC
+
+export type MeetingQueue = { waiting: boolean; position: number | null; etaSec: number }
+
+/**
+ * Where a meeting stands in line and roughly how long until the minutes are ready. Position counts the
+ * recordings still waiting for (or in) the transcriber that started before this one (ids never leave the server),
+ * and the transcriber's own queue position when it is higher (dev and prod share it).
+ */
+export async function meetingQueue(row: NonNullable<MeetingRow>): Promise<MeetingQueue | null> {
+  if (!["QUEUED", "TRANSCRIBING", "SUMMARIZING"].includes(row.status)) return null
+  const own = { durationSec: row.durationSec, audioBytes: row.audioBytes }
+  if (row.status === "SUMMARIZING") return { waiting: false, position: null, etaSec: Math.round(summarySec(own) * (1 - Math.min(0.9, row.progress || 0))) }
+  const stats = (row.transcribeStats && typeof row.transcribeStats === "object" ? row.transcribeStats : {}) as { state?: string; position?: number | null }
+  const running = row.status === "TRANSCRIBING" && stats.state === "running"
+  const since = row.stageStartedAt ?? row.createdAt
+  const ahead = running ? [] : await prisma.meetingNote.findMany({
+    where: { id: { not: row.id }, status: { in: ["QUEUED", "TRANSCRIBING"] }, OR: [{ stageStartedAt: { lt: since } }, { stageStartedAt: null, createdAt: { lt: since } }] },
+    select: { durationSec: true, audioBytes: true, progress: true, status: true },
+    take: 50,
+  }).catch(() => [])
+  const transPos = typeof stats.position === "number" && stats.position > 0 ? stats.position : null
+  const position = running ? 0 : Math.max(ahead.length + 1, transPos ?? 0)
+  // Recordings ahead that this server cannot see (the other server's) count as an average 30-minute meeting.
+  const unseen = Math.max(0, position - 1 - ahead.length)
+  const aheadSec = ahead.reduce((n, r) => n + transcribeSec(r) * (r.status === "TRANSCRIBING" ? 1 - Math.min(0.9, r.progress || 0) : 1), 0) + unseen * transcribeSec({ durationSec: 1800, audioBytes: 0 })
+  const ownSec = transcribeSec(own) * (running ? 1 - Math.min(0.9, row.progress || 0) : 1) + summarySec(own)
+  return { waiting: !running, position: running ? null : position, etaSec: Math.round(aheadSec + ownSec) }
+}
+
 export async function serializeMeeting(row: NonNullable<MeetingRow>, access: MeetingAccess, opts: { full?: boolean } = {}) {
   const [project, creator, doc, tasks] = await Promise.all([
     row.projectId ? prisma.project.findUnique({ where: { id: row.projectId }, select: { id: true, name: true, icon: true } }).catch(() => null) : null,
@@ -137,6 +181,7 @@ export async function serializeMeeting(row: NonNullable<MeetingRow>, access: Mee
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     beta: true,
+    queue: await meetingQueue(row).catch(() => null),
     can: { edit: access.edit && !["APPLYING", "APPLIED"].includes(row.status), apply: access.edit && row.status === "READY", delete: access.remove, retry: access.edit && (row.status === "FAILED" || row.status === "READY") },
   }
   if (!opts.full) return base
@@ -172,9 +217,74 @@ async function patchMeeting(id: string, data: Prisma.MeetingNoteUpdateInput, whe
   const res = await prisma.meetingNote.updateMany({ where: { id, ...where }, data: { ...data, version: { increment: 1 } } as Prisma.MeetingNoteUpdateManyMutationInput })
   if (res.count) {
     const row = await prisma.meetingNote.findUnique({ where: { id } })
-    if (row) emitMeetingChanged(row)
+    if (row) {
+      emitMeetingChanged(row)
+      // A meeting that just failed tells its uploader why (and whether a retry can help). Only the update that
+      // made it FAILED gets here (conditional updates), and the dedupe key makes a repeat a no-op anyway.
+      if (data.status === "FAILED" && row.status === "FAILED") void notifyMeeting(row, "failed")
+    }
   }
   return res.count > 0
+}
+
+// ---------------------------------------------------------------- notifications (owner, 18 Oct 2026)
+
+/** The Indonesian twin of each failure sentence (the row keeps the English one; clients translate it themselves). */
+const FAIL_ID: Record<string, string> = {
+  audio_missing: "Rekamannya sudah tidak ada di server.",
+  too_large: "Rekaman terlalu besar untuk ditranskrip.",
+  transcriber_unreachable: "Layanan transkripsi tidak bisa dihubungi.",
+  too_long: "Rekaman lebih panjang dari batas.",
+  undecodable: "File ini tidak berisi audio yang bisa dibaca.",
+  gpu_busy: "GPU kantor terlalu lama sibuk.",
+  transcribe_failed: "Transkrip gagal.",
+  no_speech: "Tidak ada suara bicara di rekaman.",
+  owner_gone: "Orang yang mengunggah ini sudah tidak bisa memakai GIDEON.",
+  gideon_off: "GIDEON belum tersambung di server ini.",
+  credits_exhausted: "Kredit GIDEON-mu habis untuk hari ini.",
+  gideon_failed: "GIDEON tidak bisa menulis notulen.",
+  upload_abandoned: "Unggahan tidak selesai.",
+  unsupported_type: "File ini bukan audio sesuai tipe di namanya.",
+}
+/** Failures a retry cannot fix (the file itself is the problem, or it is gone). */
+export const MEETING_FINAL_ERRORS = new Set(["unsupported_type", "too_long", "too_large", "undecodable", "upload_abandoned", "audio_missing", "no_speech", "owner_gone", "deleted"])
+
+/**
+ * READY / FAILED → an in-app notification + push to the uploader (APNs / FCM / web), deep-linked to /meetings/<id>.
+ * One per outcome: the dedupe key carries the stage's start (a retry starts a new stage, so its outcome is told
+ * again; a ticker that runs the same stage twice is told once). No project id on purpose: clients open the
+ * project for a notification that carries one, and this one belongs to the meeting. Never throws.
+ */
+export async function notifyMeeting(row: NonNullable<MeetingRow>, kind: "ready" | "failed"): Promise<void> {
+  try {
+    if (kind === "failed" && row.errorCode === "deleted") return
+    const title = (row.title || row.audioName || "Meeting").slice(0, 120)
+    const stage = (row.stageStartedAt ?? row.createdAt).getTime()
+    const retry = kind === "failed" && !MEETING_FINAL_ERRORS.has(row.errorCode ?? "")
+    const why = (row.error || "Something went wrong.").replace(/\s*Try again(?: later)?\.?$/i, "").trim()
+    const whyId = FAIL_ID[row.errorCode ?? ""] ?? "Terjadi kesalahan."
+    const texts = kind === "ready"
+      ? bi(
+          [`Meeting notes ready: ${title}`, "Review the minutes and tasks, then press Apply."],
+          [`Catatan meeting siap: ${title}`, "Cek notulen dan task-nya, lalu tekan Terapkan."],
+        )
+      : bi(
+          [`Meeting notes failed: ${title}`, `${why}${retry ? " Open the meeting and press Try again." : ""}`],
+          [`Catatan meeting gagal: ${title}`, `${whyId}${retry ? " Buka meeting-nya lalu tekan Coba lagi." : ""}`],
+        )
+    await createInAppNotification({
+      userId: row.createdById,
+      type: kind === "ready" ? "meeting_notes_ready" : "meeting_notes_failed",
+      ...texts,
+      link: `/meetings/${row.id}`,
+      push: true,
+      pushData: { meetingId: row.id },
+      pushThreadId: `meeting-${row.id}`,
+      dedupeKey: `meeting-${kind}:${row.id}:${stage}`,
+    })
+  } catch (error) {
+    log.warn("meeting notification failed", { meetingId: row.id, kind, error: String(error) })
+  }
 }
 
 // ---------------------------------------------------------------- upload
@@ -529,17 +639,8 @@ export async function summarizeMeeting(id: string): Promise<void> {
       audioDeleteAfter: new Date(Date.now() + (await meetingSettings()).retentionDays * 86_400_000),
     }, { status: "SUMMARIZING" })
     if (ok) {
-      createInAppNotification({
-        userId: creator.id,
-        type: "meeting_notes_ready",
-        ...bi(
-          ["Your meeting notes are ready", `“${row.title || draft.title || "Meeting"}”: check the minutes and the proposed tasks, then apply.`],
-          ["Catatan meeting-mu sudah siap", `“${row.title || draft.title || "Meeting"}”: cek notulen dan usulan task, lalu terapkan.`],
-        ),
-        ...(project ? { projectId: project.id } : {}),
-        link: `/meetings/${id}`,
-        push: true,
-      }).catch(() => {})
+      const ready = await prisma.meetingNote.findUnique({ where: { id } })
+      if (ready?.status === "READY") await notifyMeeting(ready, "ready")
     }
   } catch (error) {
     log.error("summarize failed", { meetingId: id, error: String(error) })

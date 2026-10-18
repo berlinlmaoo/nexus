@@ -9,7 +9,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  clock, createMeeting, isMeetingAudio, MeetingApiError, MEETING_AUDIO_ACCEPT, readDuration, uploadMeetingAudio, useWebAppConfig, type MeetingLanguage,
+  clock, createMeeting, etaText, getMeeting, isMeetingAudio, MeetingApiError, MEETING_AUDIO_ACCEPT, readDuration, uploadMeetingAudio, useWebAppConfig, type Meeting, type MeetingLanguage,
 } from "@/lib/meetings";
 import { BetaBadge } from "./BetaBadge";
 
@@ -34,6 +34,8 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
+  /** Uploaded: the meeting waits for the transcriber; the dialog says so (place in line, rough time) before closing. */
+  const [sent, setSent] = useState<Meeting | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const projects = useQuery({ queryKey: ["nexus", "projects"], queryFn: () => nexusApi.projects(), enabled: open, staleTime: 60_000 });
@@ -41,7 +43,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   useEffect(() => {
     if (!open) return;
     setProjectId(initialProject ?? "");
-    setFile(null); setDuration(null); setTitle(""); setError(null); setProgress(0); setBusy(false); setMode("upload");
+    setFile(null); setDuration(null); setTitle(""); setError(null); setProgress(0); setBusy(false); setMode("upload"); setSent(null);
   }, [open, initialProject]);
 
   const projectOptions = useMemo(() => (projects.data ?? [])
@@ -72,9 +74,10 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
         fileName: file.name, mime: file.type, size: file.size, title: title.trim(), projectId: projectId || null, language,
         source: mode === "record" ? "record" : "upload", recordedAt: new Date(file.lastModified || Date.now()).toISOString(), durationSec: duration,
       });
-      await uploadMeetingAudio(meeting.id, file, upload.chunkBytes, setProgress, ctl.signal);
-      onOpenChange(false);
-      router.history.push(`/meetings/${meeting.id}`);
+      const queued = await uploadMeetingAudio(meeting.id, file, upload.chunkBytes, setProgress, ctl.signal);
+      setSent(queued);
+      // The queue estimate is computed when the server lists it; refresh it once the job is in line.
+      window.setTimeout(() => { void getMeeting(meeting.id).then((m) => setSent((cur) => (cur && cur.id === m.id ? m : cur))).catch(() => {}); }, 2500);
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
       setError(e instanceof MeetingApiError || e instanceof Error ? e.message : t("Upload failed. Try again."));
@@ -88,6 +91,37 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
     if (!v && busy) { abort.current?.abort(); toast(t("Upload cancelled.")); }
     onOpenChange(v);
   };
+
+  if (sent) {
+    const q = sent.queue;
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">{t("Uploaded")}<BetaBadge /></DialogTitle>
+            <DialogDescription>{sent.title || sent.audio.name}</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-muted/20 p-4" aria-live="polite">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Loader2 className="h-4 w-4 animate-spin" /></span>
+              <div className="min-w-0 text-sm">
+                <div className="font-semibold">{t("Waiting for the transcription server…")}</div>
+                <div className="mt-0.5 text-muted-foreground tabular-nums">
+                  {q?.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line")}
+                  {q ? ` · ${t("ready in {eta}", { eta: etaText(q.etaSec, t) })}` : ""}
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-sm">{t("You can leave this page — we'll notify you when it's ready.")}</p>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">{t("Close")}</button>
+            <button type="button" onClick={() => { onOpenChange(false); router.history.push(`/meetings/${sent.id}`); }} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sidebar-primary px-3 py-2 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90">{t("Open meeting")}</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={close}>

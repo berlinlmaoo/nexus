@@ -38,8 +38,28 @@ export type Meeting = {
   createdAt: string;
   updatedAt: string;
   beta: true;
+  /** Waiting for / in the transcriber, or writing the minutes: place in line and a rough time left. Null otherwise. */
+  queue: MeetingQueue | null;
   can: { edit: boolean; apply: boolean; delete: boolean; retry: boolean };
 };
+
+export type MeetingQueue = { waiting: boolean; position: number | null; etaSec: number };
+
+/** "about 4 min" / "about 1 h 10 min" (rounded up to a minute). */
+export function etaText(sec: number, t: (s: string, v?: Record<string, string | number>) => string): string {
+  const m = Math.max(1, Math.ceil(sec / 60));
+  return m >= 60 ? t("about {h} h {m} min", { h: Math.floor(m / 60), m: m % 60 }) : t("about {m} min", { m });
+}
+
+/** The honest one-liner for a meeting that is not ready yet (page, list, upload dialog). */
+export function queueLine(q: MeetingQueue | null | undefined, status: MeetingStatus, t: (s: string, v?: Record<string, string | number>) => string): string | null {
+  if (!q) return null;
+  if (q.waiting) {
+    const where = q.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line");
+    return `${t("Waiting for the transcription server…")} ${where} · ${t("ready in {eta}", { eta: etaText(q.etaSec, t) })}`;
+  }
+  return status === "SUMMARIZING" ? t("Writing the minutes · ready in {eta}", { eta: etaText(q.etaSec, t) }) : t("Transcribing · ready in {eta}", { eta: etaText(q.etaSec, t) });
+}
 
 export type MeetingFull = Meeting & {
   overview: string | null;
