@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -144,7 +146,7 @@ private fun QuadrantRow(b: CalendarGlance.Bar, today: String, onClick: () -> Uni
     val day = b.day?.let { d ->
         when (d) {
             today -> stringResource(R.string.wcal_today); CalendarGlance.addDays(today, 1) -> stringResource(R.string.wcal_tomorrow)
-            else -> DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()).format(LocalDate.parse(d))
+            else -> AppDateFormats.ofPattern("EEE d MMM", Locale.getDefault()).format(LocalDate.parse(d))
         } + (b.time?.let { " · " + clock(it) } ?: "")
     } ?: stringResource(R.string.wcal_no_due)
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

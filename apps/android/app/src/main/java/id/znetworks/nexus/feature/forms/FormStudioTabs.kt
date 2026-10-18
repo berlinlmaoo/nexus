@@ -1,4 +1,5 @@
 package id.znetworks.nexus.feature.forms
+import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.content.ClipData
 import android.content.Intent
@@ -190,7 +191,6 @@ private fun ScheduleCard(s: BuilderSchedule, edit: ((BuilderSchedule) -> Builder
     }
 }
 
-private val INSTANT_TEXT = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
 
 /** Opens / Closes: an ISO instant shown in the phone's time, or nothing ("Right away" / "Never"). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -204,7 +204,7 @@ private fun InstantRow(title: String, empty: String, value: String, onChange: (S
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, fontSize = 15.sp, color = c.foreground, modifier = Modifier.width(72.dp))
         if (at != null) {
-            NxButton(INSTANT_TEXT.withLocale(Locale.getDefault()).format(at.atZone(zone)), { step = 1 }, compact = true, modifier = Modifier.weight(1f, fill = false))
+            NxButton(AppDateFormats.localizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT, Locale.getDefault()).format(at.atZone(zone)), { step = 1 }, compact = true, modifier = Modifier.weight(1f, fill = false))
             val clear = stringResource(R.string.fs_clear)
             Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = clear) { onChange("") }
                 .semantics { contentDescription = clear }, contentAlignment = Alignment.Center) {

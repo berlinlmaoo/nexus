@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.feature.attendance.history.MapFrame
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.NearMe
@@ -389,7 +391,7 @@ private fun Hero(s: AttendanceUiState, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Short date in the app's language, as iOS AppDateLocale ("Wed, 14 Oct" / "Rab, 14 Okt").
-        Text(DateTimeFormatter.ofPattern("EEE, d MMM", id.znetworks.nexus.core.i18n.AppLanguage.locale()).format(zoned), color = Color.White.copy(alpha = 0.9f),
+        Text(AppDateFormats.ofPattern("EEE, d MMM", id.znetworks.nexus.core.i18n.AppLanguage.locale()).format(zoned), color = Color.White.copy(alpha = 0.9f),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
         Text(DateTimeFormatter.ofPattern("HH:mm:ss").format(zoned), color = Color.White, fontFamily = DisplayFont,
             fontWeight = FontWeight.Bold, fontSize = 46.sp)

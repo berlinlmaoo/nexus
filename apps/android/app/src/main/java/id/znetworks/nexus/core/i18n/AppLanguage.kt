@@ -30,7 +30,7 @@ object AppLanguage {
     /**
      * Dates and numbers in the app's language, not the phone's (owner, 14 Oct 2026; iOS AppDateLocale): an English app
      * on an Indonesian phone says "Wed, 14 Oct", an Indonesian one "Rab, 14 Okt". Rupiah amounts keep id-ID on purpose.
-     * English is en-150: day first and 24-hour like en-GB, but "1 Sep" as web and iOS, where en-GB says "1 Sept" (run 9).
+     * English uses en-150 for day-first dates and 24-hour time; AppDateFormats pins "Sep" across ICU/CLDR versions.
      */
     fun locale(tag: String = current): java.util.Locale =
         if (tag == INDONESIAN) java.util.Locale.forLanguageTag("id-ID") else ENGLISH_FORMATS

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance.reflections
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -127,7 +129,7 @@ fun ReflectionsDialog(onClose: () -> Unit, vm: ReflectionsViewModel = viewModel(
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
                 Text(stringResource(R.string.reflections_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
                 IconButton(onClick = { vm.shift(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
-                Text(DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()).format(s.month), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(AppDateFormats.ofPattern("MMM yyyy", Locale.getDefault()).format(s.month), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = { vm.shift(1) }, enabled = s.month.isBefore(YearMonth.from(OfficeTime.today()))) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next))
                 }
@@ -158,7 +160,7 @@ fun ReflectionsDialog(onClose: () -> Unit, vm: ReflectionsViewModel = viewModel(
                     items(data.days.sortedByDescending { it.date }, key = { it.date }) { d ->
                         Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp)).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(runCatching { DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(d.date.take(10))) }.getOrDefault(d.date),
+                            Text(runCatching { AppDateFormats.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(d.date.take(10))) }.getOrDefault(d.date),
                                 fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             d.summary?.takeIf { it.isNotBlank() }?.let { Text("✨ $it", fontSize = 12.sp, color = c.violetText) }
                             Text(d.reflection, fontSize = 13.sp, color = c.foreground)

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.drawBehind
@@ -533,7 +535,7 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Schedule, null, tint = c.mutedFg, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.size(4.dp))
-                Text(tally?.nextDue?.let { stringResource(R.string.project_next_due, DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it)) }
+                Text(tally?.nextDue?.let { stringResource(R.string.project_next_due, AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it)) }
                     ?: stringResource(R.string.project_no_deadline), fontSize = 11.sp, color = c.mutedFg)
             }
         }

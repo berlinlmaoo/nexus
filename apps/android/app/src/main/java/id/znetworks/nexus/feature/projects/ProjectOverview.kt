@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -226,7 +228,7 @@ private fun dueLabel(t: BoardTask): String {
         d < 0 -> pluralStringResource(R.plurals.ov_days_late, (-d).toInt(), (-d).toInt())
         d == 0L -> stringResource(R.string.ov_today)
         d == 1L -> stringResource(R.string.ov_tomorrow)
-        else -> dueDate(t.dueDate)?.let { DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault()).format(it) }.orEmpty()
+        else -> dueDate(t.dueDate)?.let { AppDateFormats.ofPattern("EEE, d MMM", Locale.getDefault()).format(it) }.orEmpty()
     }
 }
 

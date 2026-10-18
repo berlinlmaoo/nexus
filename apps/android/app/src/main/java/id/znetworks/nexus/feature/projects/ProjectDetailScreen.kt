@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -812,7 +814,7 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
                     TaskEnums.PRIORITIES.reversed().forEach { p -> FilterChip(prio == p, { prio = p }, { Text(priorityLabel(p), fontSize = 12.sp) }) }
                 }
                 OutlinedButton(onClick = { picking = true }) {
-                    Text(due?.let { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
+                    Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
                 NewTaskFields(fields, values) { id, v -> values = values + (id to v) }
             }

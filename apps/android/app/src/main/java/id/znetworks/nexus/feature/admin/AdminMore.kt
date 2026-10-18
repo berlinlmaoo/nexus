@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.PhoneIphone
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -440,6 +442,6 @@ object AppInstallsLogic {
     fun versionLabel(d: InstallDevice) = d.appVersion?.let { v -> v + (d.buildNumber?.let { " ($it)" } ?: "") }
     /** "24 Sep" of the last activity (web only), or null when the person never signed in. */
     fun activity(lastActiveAt: String?): String? = lastActiveAt?.let {
-        runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
+        runCatching { AppDateFormats.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
     }
 }

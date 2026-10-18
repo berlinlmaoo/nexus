@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.inbox
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Check
@@ -270,7 +272,7 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
             Text(item.message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.inbox_new), fontSize = 14.sp, color = c.mutedFg, maxLines = 3)
             // The day only (web fmtDay).
             item.createdAt?.let {
-                Text(runCatching { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
+                Text(runCatching { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
                     fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
         }

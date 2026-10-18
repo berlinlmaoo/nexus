@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -226,7 +228,7 @@ fun PropValue(item: CardProps.Item) {
             PillText(priorityLabel(item.priority), tone, Modifier.clip(CircleShape).background(tone.copy(alpha = 0.14f)).padding(horizontal = 7.dp, vertical = 2.dp))
         }
         is CardProps.Item.People -> AvatarStack(item.people, size = 20.dp)
-        is CardProps.Item.When -> IconText(Icons.Outlined.Schedule, item.date?.let { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: item.raw,
+        is CardProps.Item.When -> IconText(Icons.Outlined.Schedule, item.date?.let { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: item.raw,
             if (item.overdue) c.danger else c.mutedFg, if (item.overdue) FontWeight.Medium else FontWeight.Normal)
         is CardProps.Item.Number -> Text(item.text, fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         is CardProps.Item.Options -> {

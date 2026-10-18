@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Place
@@ -483,7 +485,7 @@ fun ReflectionsScreen(userId: String?, onBack: () -> Unit) {
                 if (d.days.isEmpty()) Text(stringResource(R.string.aa_no_reflections), fontSize = 13.sp, color = c.mutedFg)
                 d.days.sortedByDescending { it.date }.forEach { r ->
                     AdminCard {
-                        Text(runCatching { DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(r.date)) }.getOrDefault(r.date), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+                        Text(runCatching { AppDateFormats.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(r.date)) }.getOrDefault(r.date), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                         Text(r.reflection, fontSize = 14.sp, color = c.foreground)
                         r.summary?.let { Text("GIDEON: $it", fontSize = 12.sp, color = c.violetText) }
                     }

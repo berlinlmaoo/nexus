@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -301,7 +303,7 @@ private fun BoardCard(s: Submission, onClick: () -> Unit) {
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
             itemVerticalAlignment = Alignment.CenterVertically) {
             s.category?.takeIf { it.isNotBlank() }?.let { Text("🏷 $it", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.muted).padding(horizontal = 6.dp, vertical = 2.dp)) }
-            id.znetworks.nexus.feature.projects.dueDate(s.date)?.let { Text("📅 " + java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it), fontSize = 11.sp, color = c.mutedFg) }
+            id.znetworks.nexus.feature.projects.dueDate(s.date)?.let { Text("📅 " + AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it), fontSize = 11.sp, color = c.mutedFg) }
             if (s.commentCount > 0) Text("💬 ${s.commentCount}", fontSize = 11.sp, color = c.mutedFg)
             if (s.proofs.isNotEmpty()) Text("📎 " + stringResource(R.string.sub_proof), fontSize = 11.sp, color = c.success)
         }
@@ -316,7 +318,7 @@ private fun BoardCard(s: Submission, onClick: () -> Unit) {
 
 /** "20 Sep, 19:14" in office time. */
 private fun submittedText(iso: String?): String = iso?.let {
-    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
+    runCatching { AppDateFormats.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
         .format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
 }.orEmpty()
 

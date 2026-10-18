@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -108,7 +110,7 @@ fun DuplicateDateDialog(count: Int, busy: Boolean, onDismiss: () -> Unit, onConf
                 Text(stringResource(R.string.bulk_dup_label), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp))
                     .clickable { picking = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(date?.let { DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.bulk_dup_pick),
+                    Text(date?.let { AppDateFormats.ofPattern("EEE, d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.bulk_dup_pick),
                         color = if (date == null) c.mutedFg else c.foreground, modifier = Modifier.weight(1f))
                     if (date != null) IconButton(onClick = { date = null }, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.bulk_dup_clear), tint = c.mutedFg) }
                     else Icon(Icons.Filled.CalendarMonth, null, tint = c.mutedFg)

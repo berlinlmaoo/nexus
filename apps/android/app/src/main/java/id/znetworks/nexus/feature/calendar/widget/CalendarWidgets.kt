@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar.widget
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.ui.theme.NightHues
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -584,7 +586,7 @@ private fun WeekWidget(lc: Context, d: WidgetData.Ready) {
     Column(GlanceModifier.fillMaxSize()) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(lc.getString(R.string.wcal_week_name), maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = fg(), fontSize = fs(13f), fontWeight = FontWeight.Bold))
-            val f = DateTimeFormatter.ofPattern("d MMM", locale(lc))
+            val f = AppDateFormats.ofPattern("d MMM", locale(lc))
             Text(f.format(LocalDate.parse(week.first().day)) + " – " + f.format(LocalDate.parse(week.last().day)), maxLines = 1, style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         Spacer(GlanceModifier.height(4.dp))

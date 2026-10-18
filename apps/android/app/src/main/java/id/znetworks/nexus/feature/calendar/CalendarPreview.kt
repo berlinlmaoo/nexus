@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -152,7 +154,7 @@ private val todoWord @Composable get() = stringResource(R.string.cal_status_todo
 
 /** "4 Okt, 15.12" in WIB. */
 private fun commentTime(iso: String?): String? = iso?.let { runCatching { Instant.parse(it).atZone(OfficeTime.ZONE) }.getOrNull() }?.let { z ->
-    DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(z) + ", " + clock("%02d:%02d".format(z.hour, z.minute))
+    AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(z) + ", " + clock("%02d:%02d".format(z.hour, z.minute))
 }
 
 @Composable

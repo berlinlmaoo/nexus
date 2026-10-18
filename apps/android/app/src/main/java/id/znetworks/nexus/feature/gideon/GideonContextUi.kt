@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -522,7 +524,7 @@ internal object BookRoomTime {
 
     fun slot(startsAt: String, endsAt: String): String {
         val s = at(startsAt) ?: return ""
-        val day = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", AppLanguage.locale()).format(s)
+        val day = AppDateFormats.ofPattern("EEE d MMM", AppLanguage.locale()).format(s)
         return "$day · ${clock(startsAt)}–${clock(endsAt)}"
     }
 }

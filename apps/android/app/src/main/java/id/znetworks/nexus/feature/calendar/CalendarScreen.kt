@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.ui.theme.NightHues
 import androidx.compose.ui.platform.LocalDensity
 import androidx.activity.compose.BackHandler
@@ -585,10 +587,10 @@ internal fun monthLabel(day: String): String = DateTimeFormatter.ofPattern("LLLL
 internal fun weekLabel(day: String): String {
     val mon = LocalDate.parse(CalendarCore.mondayOf(day)); val sun = mon.plusDays(6)
     val l = Locale.getDefault()
-    return if (mon.month == sun.month) "${mon.dayOfMonth}–${DateTimeFormatter.ofPattern("d MMM yyyy", l).format(sun)}"
-    else "${DateTimeFormatter.ofPattern("d MMM", l).format(mon)} – ${DateTimeFormatter.ofPattern("d MMM yyyy", l).format(sun)}"
+    return if (mon.month == sun.month) "${mon.dayOfMonth}–${AppDateFormats.ofPattern("d MMM yyyy", l).format(sun)}"
+    else "${AppDateFormats.ofPattern("d MMM", l).format(mon)} – ${AppDateFormats.ofPattern("d MMM yyyy", l).format(sun)}"
 }
-internal fun longDay(day: String): String = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale.getDefault()).format(LocalDate.parse(day)).replaceFirstChar { it.titlecase(Locale.getDefault()) }
+internal fun longDay(day: String): String = AppDateFormats.ofPattern("EEEE, d MMM yyyy", Locale.getDefault()).format(LocalDate.parse(day)).replaceFirstChar { it.titlecase(Locale.getDefault()) }
 internal fun shortDay(day: String): String = DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()).format(LocalDate.parse(day)).replaceFirstChar { it.titlecase(Locale.getDefault()) }
 /** "19.00" in Indonesian, "19:00" in English (times are WIB from the server). */
 internal fun clock(time: String): String = if (Locale.getDefault().language in setOf("in", "id")) time.replace(':', '.') else time

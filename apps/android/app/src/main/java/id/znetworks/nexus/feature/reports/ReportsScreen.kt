@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.reports
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -86,7 +88,7 @@ private fun PeriodBar(offset: Int, period: ReportPeriod?, onChange: (Int) -> Uni
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
         IconButton(onClick = { onChange(offset - 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
         val label = period?.let { p ->
-            val f = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+            val f = AppDateFormats.ofPattern("d MMM", Locale.getDefault())
             listOfNotNull(dueDate(p.from)?.let(f::format), dueDate(p.to)?.let(f::format)).joinToString(" – ")
         }.orEmpty()
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {

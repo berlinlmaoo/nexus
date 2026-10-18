@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
 
@@ -16,7 +18,7 @@ object ChatMute {
     fun untilText(mutedUntil: String?, locale: java.util.Locale = java.util.Locale.getDefault()): String? {
         val t = mutedUntil?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() } ?: return null
         if (t.isAfter(java.time.Instant.now().plusSeconds(5L * 365 * 86_400))) return null
-        return java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", locale).format(t.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
+        return AppDateFormats.ofPattern("d MMM, HH:mm", locale).format(t.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
     }
 }
 

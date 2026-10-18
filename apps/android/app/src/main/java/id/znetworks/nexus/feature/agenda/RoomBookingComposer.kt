@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.agenda
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -179,7 +181,7 @@ fun BookingComposer(booking: Booking?, api: AgendaApi, onDismiss: () -> Unit, on
             Field(stringResource(R.string.rb_date)) {
                 Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).clickable { pickDate = true }
                     .padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.getDefault()).format(date), fontSize = 15.sp, color = c.foreground)
+                    Text(AppDateFormats.ofPattern("EEE, d MMM yyyy", Locale.getDefault()).format(date), fontSize = 15.sp, color = c.foreground)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

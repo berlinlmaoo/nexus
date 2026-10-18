@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -111,7 +113,7 @@ fun DueLabel(iso: String?, done: Boolean) {
         d == today -> Nx.colors.warning
         else -> Nx.colors.mutedFg
     }
-    Text("📅 " + DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(d), fontSize = 11.sp, color = tone, fontWeight = FontWeight.SemiBold)
+    Text("📅 " + AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(d), fontSize = 11.sp, color = tone, fontWeight = FontWeight.SemiBold)
 }
 
 /**

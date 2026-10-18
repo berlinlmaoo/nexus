@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -173,9 +175,9 @@ class SuspectsApi(private val api: ApiClient) {
 
 private val clock = DateTimeFormatter.ofPattern("HH:mm")
 private fun hhmm(iso: String?) = iso?.let { runCatching { clock.format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: "--:--"
-private fun dayLabel(key: String) = runCatching { LocalDate.parse(key.take(10)).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())) }.getOrDefault(key)
+private fun dayLabel(key: String) = runCatching { LocalDate.parse(key.take(10)).format(AppDateFormats.ofPattern("EEE d MMM", Locale.getDefault())) }.getOrDefault(key)
 private fun longDate(key: String) = runCatching { LocalDate.parse(key.take(10)).format(DateTimeFormatter.ofPattern("d MMMM", Locale.getDefault())) }.getOrDefault(key)
-private fun warnedAt(iso: String?) = iso?.let { runCatching { DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() }.orEmpty()
+private fun warnedAt(iso: String?) = iso?.let { runCatching { AppDateFormats.ofPattern("d MMM HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() }.orEmpty()
 
 /** NOFACE's orange (web orange-600): between the danger red of FAKE and the amber of CHECK. */
 private val NoFaceTint = Color(0xFFEA580C)

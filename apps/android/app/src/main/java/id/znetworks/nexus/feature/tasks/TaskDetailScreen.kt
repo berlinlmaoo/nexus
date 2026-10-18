@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.tasks
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.withStyle
@@ -304,11 +306,11 @@ private fun ControlChip(text: String, icon: ImageVector, tone: Color, onClick: (
 }
 
 private fun dayText(iso: String?): String? =
-    dueDate(iso)?.let { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) }
+    dueDate(iso)?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) }
 
 /** "28 Sep, 14:05" in office time, for comments, files and time entries. */
 internal fun whenText(iso: String?): String = iso?.let {
-    runCatching { DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
+    runCatching { AppDateFormats.ofPattern("d MMM, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
 }.orEmpty()
 
 internal fun sizeText(bytes: Long?): String = when {

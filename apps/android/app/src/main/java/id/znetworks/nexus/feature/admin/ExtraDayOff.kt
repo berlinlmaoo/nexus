@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,7 +126,7 @@ class DayOffBonusApi(private val api: ApiClient) {
 
 private sealed interface Pending { data object Grant : Pending; data class Revoke(val g: DayOffBonus) : Pending }
 
-private val bonusDay = DateTimeFormatter.ofPattern("d MMM yyyy")
+private val bonusDay = AppDateFormats.ofPattern("d MMM yyyy")
 private fun day(iso: String?) = iso?.let { runCatching { bonusDay.format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull() }.orEmpty()
 
 @Composable

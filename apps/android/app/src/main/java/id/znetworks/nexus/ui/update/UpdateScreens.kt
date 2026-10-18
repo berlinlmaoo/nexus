@@ -1,5 +1,7 @@
 package id.znetworks.nexus.ui.update
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -125,7 +127,7 @@ fun UpdateRequiredScreen(
 @Composable
 fun GraceNoticeDialog(grace: VersionGate.Grace, storeUrl: String?, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val date = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(grace.deadline.atZone(OfficeTime.ZONE))
+    val date = AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(grace.deadline.atZone(OfficeTime.ZONE))
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.update_soon_title)) },

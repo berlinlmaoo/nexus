@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.height
@@ -258,7 +260,7 @@ private fun PhaseStepper(deal: PipelineDeal) {
 
 /** "9 Okt 2026" for a yyyy-MM-dd day. */
 internal fun dayLabel(iso: String): String =
-    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(iso.take(10))) }.getOrDefault(iso)
+    runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(iso.take(10))) }.getOrDefault(iso)
 
 /** A value the server works out: shown, not edited. */
 @Composable
@@ -272,7 +274,7 @@ internal fun ReadOnly(label: String, value: String) {
 
 /** "9 Okt 2026, 15:35" in Jakarta time. */
 internal fun stamp(iso: String?): String = iso?.let { runCatching {
-    java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
+    AppDateFormats.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
 }.getOrNull() }.orEmpty()
 
 @Composable
@@ -336,7 +338,7 @@ internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         OutlinedButton(onClick = { open = true }) {
-            Text(iso?.let { runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
+            Text(iso?.let { runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
         }
     }
     if (open) {

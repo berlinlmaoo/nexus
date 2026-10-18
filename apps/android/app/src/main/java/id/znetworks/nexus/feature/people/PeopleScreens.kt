@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.offset
@@ -124,7 +126,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                     // "Current period · 1 Oct – 31 Oct" (web header; end is exclusive).
                     PeopleLogic.periodDays(b.period)?.let { (from, to) ->
                         item {
-                            val f = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+                            val f = AppDateFormats.ofPattern("d MMM", Locale.getDefault())
                             Text(stringResource(R.string.lb_current_period) + " · " + f.format(from) + " – " + f.format(to), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(bottom = 8.dp))
                         }
                     }
@@ -291,7 +293,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     }
                 }
                 r?.person?.email?.let { FactRow(Icons.Filled.Email, it, middleEllipsis = true) }
-                r?.person?.joinedAt?.let { dueDate(it) }?.let { FactRow(Icons.Filled.CalendarMonth, stringResource(R.string.pf_joined, DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it))) }
+                r?.person?.joinedAt?.let { dueDate(it) }?.let { FactRow(Icons.Filled.CalendarMonth, stringResource(R.string.pf_joined, AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it))) }
                 if (!isMe && r?.person?.leftAt == null) {
                     var opening by remember { mutableStateOf(false) }
                     var dmError by remember { mutableStateOf<String?>(null) }

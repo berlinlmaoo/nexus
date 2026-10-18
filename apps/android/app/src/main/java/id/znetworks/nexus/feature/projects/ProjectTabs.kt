@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.drawBehind
@@ -132,7 +134,7 @@ private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit)
         verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
 }
 
-private fun dayLabel(iso: String?): String = dueDate(iso)?.let { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: "—"
+private fun dayLabel(iso: String?): String = dueDate(iso)?.let { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: "—"
 
 // region Spreadsheet
 
@@ -259,7 +261,7 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
-                                Text(if (day == 1) DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
+                                Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
                                 Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
                             }
                         }

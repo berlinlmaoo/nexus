@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
@@ -147,7 +149,7 @@ internal fun chatTime(iso: String?): String {
     val t = iso?.let { runCatching { Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta")) }.getOrNull() } ?: return ""
     val today = java.time.LocalDate.now(ZoneId.of("Asia/Jakarta"))
     return if (t.toLocalDate() == today) DateTimeFormatter.ofPattern("HH:mm").format(t)
-    else DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(t)
+    else AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(t)
 }
 
 @Composable

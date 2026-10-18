@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.core.realtime.RealtimeEvents
 import id.znetworks.nexus.core.realtime.LiveRefresh
 import androidx.compose.runtime.collectAsState
@@ -221,7 +223,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
                 AuditLogic.byDay(l).forEach { (day, rows) ->
                     item(key = "d$day") {
                         Text(day?.let { d -> when (d) { OfficeTime.today() -> stringResource(R.string.au_today); OfficeTime.today().minusDays(1) -> stringResource(R.string.au_yesterday)
-                            else -> DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale.getDefault()).format(d) } } ?: "—",
+                            else -> AppDateFormats.ofPattern("EEEE, d MMM yyyy", Locale.getDefault()).format(d) } } ?: "—",
                             fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 8.dp))
                     }
                     items(rows, key = { it.id }) { log ->
@@ -286,7 +288,7 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(x.entry.user?.name, x.entry.user?.avatar, 26.dp); Spacer(Modifier.width(8.dp))
                     Text((x.entry.user?.name ?: stringResource(R.string.au_system)) + " · " + (x.entry.createdAt?.let { runCatching {
-                        DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: ""), fontSize = 12.sp, color = c.mutedFg)
+                        AppDateFormats.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: ""), fontSize = 12.sp, color = c.mutedFg)
                 }
                 x.restore?.let { rs ->
                     RestoreCard(x.entry, rs, restoredNow, restoring, restoreError, onRestore = { confirm = true }, onOpenTarget = onOpenTarget, canRestore = x.canRestore)
@@ -341,7 +343,7 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
     }
 }
 
-private fun fullTime(iso: String?) = iso?.let { runCatching { DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() }.orEmpty()
+private fun fullTime(iso: String?) = iso?.let { runCatching { AppDateFormats.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() }.orEmpty()
 
 /** On a delete row: whether it can still come back (iOS AuditRestorePill). */
 @Composable

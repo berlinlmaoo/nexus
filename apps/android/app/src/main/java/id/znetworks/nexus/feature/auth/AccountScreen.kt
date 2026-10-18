@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Lock
@@ -451,7 +453,7 @@ private fun sessionMeta(r: UserSession): String {
 }
 
 private fun dateOf(iso: String?): String? = iso?.let {
-    runCatching { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
+    runCatching { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
 }
 
 @Composable
@@ -472,7 +474,7 @@ private fun UpdateRow() {
     val gate by (context.applicationContext as NexusApplication).container.versionGate.state.collectAsStateWithLifecycle()
     val grace = gate.grace
     val text = when {
-        grace != null -> stringResource(R.string.update_grace_body, DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault())
+        grace != null -> stringResource(R.string.update_grace_body, AppDateFormats.ofPattern("d MMM, HH:mm", Locale.getDefault())
             .format(grace.deadline.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)))
         gate.available != null -> stringResource(R.string.update_available, gate.available!!)
         else -> return
