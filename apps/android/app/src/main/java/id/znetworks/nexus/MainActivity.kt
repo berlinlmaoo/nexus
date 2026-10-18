@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 current == null -> LoginScreen()
                 else -> NexusTheme(theme) {
-                    SignedInShell(session = current, gateState = gateState, onSignOut = container.auth::signOut)
+                    androidx.compose.runtime.key(current.userId) { SignedInShell(session = current, gateState = gateState, onSignOut = container.auth::signOut) }
                     val grace = gateState.grace
                     if (gateState.graceNoticeDue && grace != null) {
                         GraceNoticeDialog(grace, gateState.storeUrl, onDismiss = gate::graceNoticeSeen)

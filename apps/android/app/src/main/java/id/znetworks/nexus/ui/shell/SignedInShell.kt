@@ -270,6 +270,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         container.announcements.refresh()
     }
+    // The stored user id can predate a server id change (UUIDv7 switch, 18 Oct 2026): the token still works,
+    // but "mine" checks compare against the old id. Take the server's id; MainActivity keys the shell on it.
+    LaunchedEffect(session.userId) {
+        val fresh = runCatching { id.znetworks.nexus.feature.auth.ProfileApi(container.api).profile().id }.getOrNull()
+        if (!fresh.isNullOrBlank() && fresh != session.userId) {
+            container.sessionStore.current?.takeIf { it.token == session.token }?.let { container.sessionStore.save(it.copy(userId = fresh)) }
+        }
+    }
 
     // Links: switch to the owning screen; attendance focus is claimed by that screen itself.
     LaunchedEffect(pending) {
