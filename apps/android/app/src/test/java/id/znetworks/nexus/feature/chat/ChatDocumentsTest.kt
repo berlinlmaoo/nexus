@@ -11,6 +11,9 @@ class ChatDocumentsTest {
         assertFalse(ChatDocuments.accepts("Empty.txt", 0))
         assertFalse(ChatDocuments.accepts("Large.zip", ChatDocuments.MAX_BYTES + 1))
         assertFalse(ChatDocuments.accepts("Script.exe", 100))
+        assertTrue(ChatDocuments.accepts("Photo.PNG", ChatDocuments.MAX_IMAGE_BYTES))
+        assertTrue(ChatDocuments.accepts("Animated.gif", 1024))
+        assertFalse(ChatDocuments.accepts("Photo.jpg", ChatDocuments.MAX_IMAGE_BYTES + 1))
     }
     @Test fun metadataAndOldMessagesDecode() {
         val m = NexusJson.decodeFromString(Message.serializer(), """{"id":"a","content":"","attachmentUrl":"/api/files/a.pdf","attachmentType":"application/pdf","attachmentKind":"file","attachmentName":"Report.pdf","attachmentSize":1234}""")

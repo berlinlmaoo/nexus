@@ -2,7 +2,11 @@
 
 ## Fix 21 (18 Oct 2026, `feat/android-r21`, DEV only)
 
-In progress. No APK publication, version change, push or production access.
+In progress. No APK publication, version change, push or production access. Latest green: 756 JVM tests + assembleDebug.
+
+- Owner appendices re-read as clean UTF-8: every API request advertises `X-Nexus-Caps: chat-files`; replies, message previews and Docs retain document names/sizes; Files also accepts the server's supported image formats within 8 MB. Permanent EN/ID AI disclaimer and per-account one-time BoD review notice added with the owner's exact wording. Credit limits are server-controlled; decoding tests cover Staff 250/2,500 and Manager 750/7,500 without baking policy into Android.
+- Device flows passed: inline task creation, title edit, comment and guarded description save; chat text send, document picker/upload/send, native file card, authenticated download/open chooser/share; GIDEON answer, Stop and usage history; Legal page and inline edit opened without saving existing content; phone Control Room Details opens a person. Re-shot Outlet Calendar/day after correcting initial tab selection, and Attendance without touching check-in.
+- Pending appended OAA chat review: this checkout and the deployed web Control Room bundle currently contain usage + credits admin APIs but no person-chat/transcript contract. Re-check before completion; never substitute a person's own chat endpoint or enable BoD transcript access.
 
 - Verified already present: Home gradient cards with numeric totals including 0/0; Messages / Pesan navigation; Artemis / Phaëthon (default) / Aphrodite / Model 0 tiers; configurable dev host with a placeholder committed default.
 - Owner decisions: podium now groups everyone by the three best distinct scores, with stacked faces, tie counts, wrapping names and fixed 2/1/3 steps; room capacity removed from GIDEON; Legal version rows use REV; explicit Details action on Control Room user rows; form-copy menu hidden below Can edit.

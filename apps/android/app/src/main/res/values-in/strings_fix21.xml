@@ -15,7 +15,7 @@
     <string name="gc_waiting_approval">Menunggu persetujuanmu</string>
     <string name="r21_new">Baru</string>
     <string name="r21_new_details">Task baru dengan detail…</string>
-    <string name="chat_file_rules">Pilih file PDF, Word, Excel, PowerPoint, CSV, TXT atau ZIP maksimal 25 MB.</string>
+    <string name="chat_file_rules">Pilih PNG, JPG, WEBP atau GIF maksimal 8 MB, atau PDF, Word, Excel, PowerPoint, CSV, TXT atau ZIP maksimal 25 MB.</string>
     <string name="chat_file_download">Unduh atau bagikan file</string>
     <string name="gc_title">Kredit GIDEON</string>
     <string name="gc_unlimited">Tanpa batas</string>

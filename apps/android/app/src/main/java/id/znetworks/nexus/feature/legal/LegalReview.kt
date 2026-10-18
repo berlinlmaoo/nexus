@@ -171,7 +171,11 @@ private fun ParagraphRow(p: LgParagraph, editor: LgEditorModel, indentScale: Dou
         Box(Modifier.weight(1f).padding(start = (l.indentLeft.coerceAtLeast(0.0) * 4 / 3 * indentScale).dp)) {
             when {
                 editor.editing == p.index -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(text, { editor.edits[p.index] = it }, textStyle = typography, modifier = Modifier.fillMaxWidth())
+                    val runs = l.runs.orEmpty().filter { it.text.isNotBlank() }
+                    OutlinedTextField(text, { editor.edits[p.index] = it }, textStyle = typography.copy(
+                        fontWeight = if (runs.isNotEmpty() && runs.all { it.b }) FontWeight.Bold else weight,
+                        fontStyle = if (runs.isNotEmpty() && runs.all { it.i }) FontStyle.Italic else FontStyle.Normal,
+                        textDecoration = if (runs.isNotEmpty() && runs.all { it.u }) TextDecoration.Underline else TextDecoration.None), modifier = Modifier.fillMaxWidth())
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         NxButton(stringResource(R.string.lg_undo), { editor.edits.remove(p.index); editor.editing = null }, kind = NxButtonKind.GHOST, compact = true)
                         Spacer(Modifier.weight(1f))

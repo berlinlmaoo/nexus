@@ -115,8 +115,17 @@ data class ChatUpload(val url: String, val type: String? = null, val kind: Strin
 
 object ChatDocuments {
     const val MAX_BYTES = 25L * 1024 * 1024
+    const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
     val extensions = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip")
-    fun accepts(name: String, bytes: Long) = bytes in 1..MAX_BYTES && name.substringAfterLast('.', "").lowercase() in extensions
+    private val images = setOf("png", "jpg", "jpeg", "webp", "gif")
+    fun accepts(name: String, bytes: Long): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            in images -> bytes in 1..MAX_IMAGE_BYTES
+            in extensions -> bytes in 1..MAX_BYTES
+            else -> false
+        }
+    }
 }
 
 /**

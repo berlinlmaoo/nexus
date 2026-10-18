@@ -100,7 +100,11 @@ for(const screen of config.screens) {
       await tap('New project|Proyek baru'); actionResult=await tap('New project|Proyek baru');
       if(!actionResult) { await pause(1200);actionResult=await tap('New project|Proyek baru'); }
       if(actionResult) await tap('Dashboards|Dashboard');
-    } else if(screen.id==='settings-security') actionResult=await tap('Security|Keamanan');
+    } else if(screen.id==='settings-security') {
+      const tab=nodes().find(n=>n.text==='Profile'||n.text==='Profil');
+      if(tab) { adb('shell','input','swipe','950',String(Math.round(tab.y)),'180',String(Math.round(tab.y)),'400');await pause(400); }
+      actionResult=await tap('Security|Keamanan');
+    }
     else if(screen.id==='outlet-settings') actionResult=await tap('Report settings|Pengaturan laporan');
     else if(screen.id==='outlet-day') {
       const day=nodes().find(n=>n.text==='15');

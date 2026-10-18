@@ -15,7 +15,7 @@
     <string name="gc_waiting_approval">Waiting for your approval</string>
     <string name="r21_new">New</string>
     <string name="r21_new_details">New task with details…</string>
-    <string name="chat_file_rules">Choose a PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP file up to 25 MB.</string>
+    <string name="chat_file_rules">Choose PNG, JPG, WEBP or GIF up to 8 MB, or PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP up to 25 MB.</string>
     <string name="chat_file_download">Download or share file</string>
     <string name="gc_title">GIDEON credits</string>
     <string name="gc_unlimited">Unlimited</string>
