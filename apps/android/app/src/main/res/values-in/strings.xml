@@ -3285,4 +3285,5 @@
     <string name="gm_paused">Memori GIDEON sedang mati.</string>
     <string name="gm_full">Memori GIDEON penuh (%1$s). Hapus sesuatu untuk menambah.</string>
     <string name="gm_failed">Tidak bisa menyimpan. Coba lagi.</string>
+    <string name="gm_edit_memory">Ubah memori</string>
 </resources>

@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
@@ -77,8 +79,9 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.gm_use), Modifier.weight(1f), color = c.foreground)
-                    Switch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy)
+                    val label = stringResource(R.string.gm_use)
+                    Text(label, Modifier.weight(1f), color = c.foreground)
+                    Switch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy, modifier = Modifier.semantics { contentDescription = label })
                 }
                 Text(stringResource(R.string.gm_off_hint), color = c.mutedFg, fontSize = 12.sp)
             }
@@ -104,7 +107,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
                         Text(stringResource(label), color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(8.dp))) {
                             rows.forEachIndexed { index, memory ->
-                                key(memory.id) { if (index > 0) HorizontalDivider(color = c.border); MemoryRow(memory, busy, data.textMax, act = ::act) }
+                                key(memory.id) { if (index > 0) HorizontalDivider(color = c.border); MemoryRow(memory, busy, data.paused, data.textMax, act = ::act) }
                             }
                         }
                     }
@@ -118,7 +121,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
         dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
 }
 
-@Composable private fun MemoryRow(memory: GMemory, busy: Boolean, limit: Int, act: (suspend () -> Unit) -> Unit) {
+@Composable private fun MemoryRow(memory: GMemory, busy: Boolean, paused: Boolean, limit: Int, act: (suspend () -> Unit) -> Unit) {
     val context = LocalContext.current
     val store = (context.applicationContext as NexusApplication).container.gideonMemories
     val c = Nx.colors
@@ -127,7 +130,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, draft); editing = false } }
     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (editing) {
-            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, singleLine = true, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
+            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
                 if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = memory.text; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
             }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }))
             Row { TextButton(onClick = { draft = memory.text; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
@@ -136,7 +139,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
             if (memory.kind == "DATE") MemoryRules.date(memory.monthDay, LocalConfiguration.current.locales[0])?.let { Text(it, color = c.mutedFg, fontSize = 12.sp) }
             if (memory.status == "PENDING") Column {
                 Text(stringResource(R.string.gm_suggested), color = c.warningFg, fontSize = 12.sp)
-                TextButton(onClick = { act { store.save(memory) } }, enabled = !busy) { Text(stringResource(R.string.gm_save)) }
+                TextButton(onClick = { act { store.save(memory) } }, enabled = !busy && !paused) { Text(stringResource(R.string.gm_save)) }
             }
             Row {
                 TextButton(onClick = { editing = true }, enabled = !busy) { Text(stringResource(R.string.gm_edit)) }
