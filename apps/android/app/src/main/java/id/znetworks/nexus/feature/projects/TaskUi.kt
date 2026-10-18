@@ -76,7 +76,7 @@ fun priorityLabel(p: String?): String = stringResource(
 @Composable
 fun priorityColor(p: String?): Color = when (p.orEmpty().uppercase()) {
     "URGENT" -> Nx.colors.danger
-    "HIGH" -> Nx.colors.coral
+    "HIGH" -> Nx.colors.priorityHighText
     "MEDIUM" -> Nx.colors.blue
     else -> Nx.colors.mutedFg   // LOW is neutral (AVATARS-PRIORITY)
 }
@@ -148,7 +148,7 @@ fun TaskCard(
                 Spacer(Modifier.size(8.dp))
             }
             if (onToggleDone != null) {
-                IconButton(onClick = onToggleDone, modifier = Modifier.size(24.dp)) {
+                IconButton(onClick = onToggleDone, modifier = Modifier.size(48.dp)) {
                     Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
                         tint = if (t.isDone) c.success else c.mutedFg)
                 }

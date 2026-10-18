@@ -86,7 +86,7 @@ private fun periodKey(offset: Int): String? = if (offset == 0) null else YearMon
 private fun PeriodBar(offset: Int, period: ReportPeriod?, onChange: (Int) -> Unit) {
     val c = Nx.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-        IconButton(onClick = { onChange(offset - 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+        IconButton(onClick = { onChange(offset - 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
         val label = period?.let { p ->
             val f = AppDateFormats.ofPattern("d MMM", Locale.getDefault())
             listOfNotNull(dueDate(p.from)?.let(f::format), dueDate(p.to)?.let(f::format)).joinToString(" – ")
@@ -95,7 +95,7 @@ private fun PeriodBar(offset: Int, period: ReportPeriod?, onChange: (Int) -> Uni
             Text(stringResource(if (offset == 0) R.string.rp_this_period else R.string.rp_period), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground)
             Text(label, fontSize = 11.sp, color = c.mutedFg)
         }
-        IconButton(onClick = { onChange(offset + 1) }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+        IconButton(onClick = { onChange(offset + 1) }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
     }
 }
 

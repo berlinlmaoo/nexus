@@ -154,9 +154,9 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             if (s.task != null) {
                 IconButton(onClick = vm::toggleFollow, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Notifications, stringResource(R.string.r21_follow), tint = if (s.following) c.violetText else c.mutedFg) }
-                IconButton(onClick = vm::toggleFavorite, enabled = !s.busy, modifier = Modifier.size(40.dp)) { Icon(if (s.favorite) Icons.Filled.Star else Icons.Filled.StarBorder, stringResource(R.string.r21_favorite), tint = c.mutedFg) }
-                IconButton(onClick = vm::toggleLike, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.ThumbUp, stringResource(R.string.r21_like), tint = if (s.task?.liked == true) c.violetText else c.mutedFg) }
-                if (s.isBoD && s.access.canEdit) IconButton(onClick = { requestQuest = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.EmojiEvents, stringResource(R.string.td_make_quest), tint = c.mutedFg) }
+                IconButton(onClick = vm::toggleFavorite, enabled = !s.busy, modifier = Modifier.size(48.dp)) { Icon(if (s.favorite) Icons.Filled.Star else Icons.Filled.StarBorder, stringResource(R.string.r21_favorite), tint = c.mutedFg) }
+                IconButton(onClick = vm::toggleLike, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.ThumbUp, stringResource(R.string.r21_like), tint = if (s.task?.liked == true) c.violetText else c.mutedFg) }
+                if (s.isBoD && s.access.canEdit) IconButton(onClick = { requestQuest = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.EmojiEvents, stringResource(R.string.td_make_quest), tint = c.mutedFg) }
             }
             if (s.task != null) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }

@@ -102,9 +102,9 @@ private fun attApi(): AttendanceAdminApi {
 @Composable
 private fun MonthBar(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+        IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
         Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Nx.colors.foreground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
     }
 }
 
@@ -177,7 +177,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
                             if (m.flexiTimeEnabled) "Flexi" else null, if (m.noGeofenceMode) stringResource(R.string.location_free) else null).joinToString(" · "),
                             fontSize = 11.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
         }

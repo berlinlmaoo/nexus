@@ -35,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -169,7 +170,7 @@ fun HeaderIconButton(
     val shape = RoundedCornerShape(8.dp)
     Box {
         Box(
-            Modifier.size(size).clip(shape)
+            Modifier.size(size.coerceAtLeast(48.dp)).clip(shape)
                 .background(if (primary) c.onyx else c.card)
                 .then(if (primary) Modifier else Modifier.border(1.dp, c.border, shape))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = contentDescription, onClick = onClick)
@@ -198,7 +199,13 @@ data class PageTab<K>(val key: K, val label: String, val count: Int? = null, val
 @Composable
 fun <K> PageTabs(tabs: List<PageTab<K>>, value: K, onChange: (K) -> Unit, modifier: Modifier = Modifier) {
     val c = Nx.colors
-    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    val scroll = rememberScrollState()
+    Row(modifier.fillMaxWidth().drawWithContent {
+        drawContent()
+        val edge = 24.dp.toPx()
+        if (scroll.canScrollForward) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, c.background), startX = size.width - edge), topLeft = androidx.compose.ui.geometry.Offset(size.width - edge, 0f), size = androidx.compose.ui.geometry.Size(edge, size.height))
+        if (scroll.canScrollBackward) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.background, androidx.compose.ui.graphics.Color.Transparent), endX = edge), size = androidx.compose.ui.geometry.Size(edge, size.height))
+    }.horizontalScroll(scroll).padding(end = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         tabs.forEach { t ->
             val on = t.key == value
             Column(
@@ -240,7 +247,7 @@ fun <K> Segmented(options: List<Pair<K, String>>, value: K, onChange: (K) -> Uni
                 Modifier.clip(RoundedCornerShape(7.dp)).background(if (on) c.card else c.muted)
                     .then(if (on) Modifier.border(1.dp, c.border, RoundedCornerShape(7.dp)) else Modifier)
                     .clickable(role = Role.RadioButton) { onChange(key) }.semantics { selected = on }
-                    .defaultMinSize(minHeight = 34.dp).padding(horizontal = 12.dp),
+                    .defaultMinSize(minHeight = 48.dp).padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(label, fontFamily = TextFont, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = if (on) c.foreground else c.mutedFg, maxLines = 1)

@@ -633,7 +633,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                     id.znetworks.nexus.ui.components.CompactSearchField(s.query, vm::setQuery, stringResource(R.string.board_search), Modifier.weight(1f)) {
                         // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
                         Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
-                        IconButton(onClick = { vm.setQuery("") }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search), modifier = Modifier.size(18.dp)) }
+                        IconButton(onClick = { vm.setQuery("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search), modifier = Modifier.size(18.dp)) }
                     }
                     if (view != null && s.taskProject) {
                         Spacer(Modifier.width(8.dp))

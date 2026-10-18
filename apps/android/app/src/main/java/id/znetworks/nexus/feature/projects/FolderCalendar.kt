@@ -245,10 +245,10 @@ private fun MonthCalendar(tasks: List<BoardTask>, colorOf: (String?) -> String, 
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { picked = null; month = month.minusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+                IconButton(onClick = { picked = null; month = month.minusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
                 Text(month.atDay(1).format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())).replaceFirstChar { it.titlecase() },
                     fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                IconButton(onClick = { picked = null; month = month.plusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+                IconButton(onClick = { picked = null; month = month.plusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             }
             Row { java.time.DayOfWeek.entries.forEach { d -> Text(d.getDisplayName(TextStyle.SHORT, Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
             // Monday first.

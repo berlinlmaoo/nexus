@@ -10,7 +10,7 @@ class PriorityHighRedTest {
     @Test fun highIsDanger() {
         val ui = File("src/main/java/id/znetworks/nexus/feature/projects/TaskUi.kt").readText()
         assertTrue("\"URGENT\" -> Nx.colors.danger" in ui)
-        assertTrue("\"HIGH\" -> Nx.colors.coral" in ui)
+        assertTrue("\"HIGH\" -> Nx.colors.priorityHighText" in ui)
         assertFalse("\"HIGH\" -> Nx.colors.warning" in ui)
         assertTrue("\"HIGH\" -> Color(0xFFF97316)" in File("src/main/java/id/znetworks/nexus/feature/projects/ProjectTabs.kt").readText())
     }

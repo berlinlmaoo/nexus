@@ -131,9 +131,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                         }
                     }
                     item {
-                        androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            placeholder = { Text(stringResource(R.string.lb_search_people)) }, shape = RoundedCornerShape(10.dp),
-                            leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, null) })
+                        id.znetworks.nexus.ui.components.CompactSearchField(query, { query = it }, stringResource(R.string.lb_search_people), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
                     }
                     // The web card: "XP ranking for everyone", the podium (2 · 1 · 3), then one list of everyone.
                     if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(PeopleLogic.podium(b.rows)) } }
@@ -178,7 +176,7 @@ private fun Podium(top: List<List<BoardRow>>) {
         2 -> Step(if (dark) Color(0x3394A3B8) else Color(0xFFE2E8F0), if (dark) Color(0xFFE2E8F0) else Color(0xFF475569), Color(0xFFCBD5E1), Color(0xFF94A3B8), 96.dp, 56.dp)
         else -> Step(if (dark) Color(0x40FB923C) else Color(0xFFFDBA74), if (dark) Color(0xFFFED7AA) else Color(0xFF7C2D12), Color(0xFFFDBA74), Color(0xFFF97316), 80.dp, 56.dp)
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(10.dp)) {
         Text(stringResource(R.string.lb_ranking_everyone), fontSize = 14.sp, color = c.mutedFg)
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
@@ -202,9 +200,9 @@ private fun Podium(top: List<List<BoardRow>>) {
                             contentAlignment = Alignment.Center) { Icon(Icons.Outlined.WorkspacePremium, null, tint = st.crown, modifier = Modifier.size(14.dp)) }
                     }
                     Spacer(Modifier.height(8.dp))
-                    if (entry.size > 1) Text(stringResource(R.string.lb_tied, entry.size), fontSize = 12.sp, color = c.mutedFg)
-                    Text(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, textAlign = TextAlign.Center)
-                    if (entry.size > 2) Text(stringResource(R.string.lb_more, entry.size - 2), fontSize = 11.sp, color = c.mutedFg)
+                    Text(if (entry.size > 1) stringResource(R.string.lb_tied, entry.size) else "", fontSize = 12.sp, color = c.mutedFg, minLines = 1)
+                    Text(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, minLines = 2, textAlign = TextAlign.Center)
+                    Text(if (entry.size > 2) stringResource(R.string.lb_more, entry.size - 2) else "", fontSize = 11.sp, color = c.mutedFg, minLines = 1)
                     Text(r?.let { "%,d".format(Locale.getDefault(), it.totalXp) + " XP" } ?: "—", fontSize = 13.sp, color = c.mutedFg)
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.fillMaxWidth().height(st.height).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(st.bar),
@@ -345,13 +343,13 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val prev = r.period.previousKey != null; val next = r.period.nextKey != null
                 IconButton(onClick = { period = r.period.previousKey }, enabled = prev, modifier = Modifier.size(48.dp).alpha(if (prev) 1f else 0.35f)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(r.period.label ?: r.period.key, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
                     Text(stringResource(R.string.pf_period_note), fontSize = 11.sp, color = c.mutedFg)
                 }
                 IconButton(onClick = { period = r.period.nextKey }, enabled = next, modifier = Modifier.size(48.dp).alpha(if (next) 1f else 0.35f)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             }
             r.summary?.let { sm ->
                 Card {

@@ -238,7 +238,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
                         Icon(Icons.Filled.Delete, null, tint = c.dangerText, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.delete_account), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(18.dp))
                     }
                 }
                 SettingsTab.SECURITY -> {

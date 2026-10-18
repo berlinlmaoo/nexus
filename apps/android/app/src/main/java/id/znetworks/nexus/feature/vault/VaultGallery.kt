@@ -167,7 +167,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
                             Row(Modifier.fillMaxWidth().clickable { at = f.id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Folder, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
                                 Text(f.name, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                             }
                             HorizontalDivider(color = c.border.copy(alpha = 0.5f))
                         }

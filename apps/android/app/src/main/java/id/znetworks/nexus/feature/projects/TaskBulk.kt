@@ -112,7 +112,7 @@ fun DuplicateDateDialog(count: Int, busy: Boolean, onDismiss: () -> Unit, onConf
                     .clickable { picking = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(date?.let { AppDateFormats.ofPattern("EEE, d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.bulk_dup_pick),
                         color = if (date == null) c.mutedFg else c.foreground, modifier = Modifier.weight(1f))
-                    if (date != null) IconButton(onClick = { date = null }, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.bulk_dup_clear), tint = c.mutedFg) }
+                    if (date != null) IconButton(onClick = { date = null }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.bulk_dup_clear), tint = c.mutedFg) }
                     else Icon(Icons.Filled.CalendarMonth, null, tint = c.mutedFg)
                 }
                 Text(stringResource(R.string.bulk_dup_keep), fontSize = 11.sp, color = c.mutedFg)

@@ -164,7 +164,7 @@ private fun ParagraphRow(p: LgParagraph, editor: LgEditorModel, indentScale: Dou
         .then(if (ticked) Modifier.border(1.dp, c.violet.copy(alpha = 0.45f), RoundedCornerShape(8.dp)) else Modifier)
         .padding(top = (l.spaceBefore * 4 / 3 * zoom).dp, bottom = (l.spaceAfter * 4 / 3 * zoom).dp), verticalAlignment = Alignment.Top) {
         if (!p.editable) Box(Modifier.width(28.dp).padding(top = 3.dp)) { Icon(Icons.Filled.Lock, lockReason, tint = Color.Gray, modifier = Modifier.size(12.dp)) }
-        else IconButton(onClick = { editor.toggle(p.index) }, modifier = Modifier.size(28.dp)) {
+        else IconButton(onClick = { editor.toggle(p.index) }, modifier = Modifier.size(48.dp)) {
             Icon(if (ticked) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, stringResource(R.string.lg_select_paragraph, p.index + 1),
                 tint = (if (ticked) c.violetText else c.mutedFg).copy(alpha = if (p.editable) 1f else 0.3f), modifier = Modifier.size(20.dp))
         }
@@ -322,7 +322,7 @@ private fun ProposalCard(doc: LgDocument, proposal: LgProposal, answering: Boole
                 proposal.changes.forEach { ch ->
                     Row(verticalAlignment = Alignment.Top) {
                         val on = ch.index in chosen
-                        IconButton(onClick = { if (on) chosen.remove(ch.index) else chosen.add(ch.index) }, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = { if (on) chosen.remove(ch.index) else chosen.add(ch.index) }, modifier = Modifier.size(48.dp)) {
                             Icon(if (on) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, stringResource(R.string.lg_apply_to_paragraph, ch.index + 1),
                                 tint = if (on) c.violetText else c.mutedFg, modifier = Modifier.size(20.dp))
                         }

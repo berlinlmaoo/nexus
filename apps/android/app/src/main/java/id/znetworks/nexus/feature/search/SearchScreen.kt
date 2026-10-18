@@ -191,7 +191,7 @@ private fun Hit(icon: ImageVector, tint: Color, title: String, sub: String?, mar
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!sub.isNullOrBlank()) Text(sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
         }
-        if (onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg.copy(alpha = 0.5f))
+        if (onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg.copy(alpha = 0.5f))
     }
 }
 

@@ -209,13 +209,13 @@ internal fun FolderNode(f: ProjectFolder, depth: Int, scope: String, a: TreeActi
                     modifier = Modifier.background(c.muted, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
                 // Every task due across this folder's projects. Its own action, set apart from the row (owner, 10 Oct).
                 Spacer(Modifier.size(10.dp))
-                IconButton(onClick = { a.openFolderView(f.id) }, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = { a.openFolderView(f.id) }, modifier = Modifier.size(48.dp)) {
                     Box(Modifier.size(30.dp).clip(CircleShape).background(c.violet.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText, modifier = Modifier.size(18.dp))
                     }
                 }
                 if (s.canManage) DragHandle(a.drag, TreeDrag.FolderItem(f))
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.fm_open_view)) }, onClick = { menu = false; a.openFolderView(f.id) })

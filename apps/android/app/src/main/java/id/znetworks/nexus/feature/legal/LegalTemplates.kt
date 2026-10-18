@@ -122,7 +122,7 @@ fun LegalTemplatesPane(nav: LegalNav) {
                                     overflow = TextOverflow.Ellipsis)
                             }
                             Text(lgDate(tpl.updatedAt), fontSize = 12.sp, color = c.mutedFg)
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                         }
                     }
                 }

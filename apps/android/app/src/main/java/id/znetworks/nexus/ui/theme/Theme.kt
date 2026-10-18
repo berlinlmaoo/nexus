@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
  */
 @Immutable
 data class NxColors(
+    val priorityHighText: Color = Color(0xFF9A3412),
     val background: Color,
     val card: Color,
     val foreground: Color,
@@ -72,6 +73,7 @@ val NxLight = NxColors(
 )
 
 val NxDark = NxColors(
+    priorityHighText = Color(0xFFFDBA74),
     background = Color(0xFF0D1017), card = Color(0xFF1C2130), foreground = Color(0xFFE8EAEF),
     mutedFg = Color(0xFFA6B0BD), muted = Color(0xFF252C3D), border = Color(0xFF333B52),
     onyx = Color(0xFFE8EAEF), violet = Color(0xFF6F5AE6), violetText = Color(0xFFB3A6FF),

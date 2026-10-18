@@ -193,7 +193,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                         Text(stringResource(R.string.pl_fold), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                         Text(stringResource(R.string.pl_fold_note), fontSize = 12.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
                 Group(stringResource(R.string.pl_s_followup), stringResource(R.string.pl_s_every)) {
                     TextSave(stringResource(R.string.pl_f_next_action), deal.text("nextAction")) { save(one("nextAction", JsonPrimitive(it))) }

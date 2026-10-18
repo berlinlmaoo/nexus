@@ -201,7 +201,7 @@ fun OrgChartScreen(onBack: () -> Unit) {
             if (trail.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp).padding(bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 trail.forEachIndexed { i, u ->
-                    if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
+                    if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(14.dp))
                     if (i == trail.lastIndex) Text(u.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                     else Text(u.name, fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp))
                         .clickable { setView(if (i == 0) "ringkas" else "u:${u.id}") }.padding(horizontal = 4.dp, vertical = 2.dp))

@@ -184,8 +184,8 @@ class CalendarAuditTest {
     }
 
     @Test fun viewSwitchShowsItsState() {
-        // Audit 3 #6: the selected view shows a check in place of its icon (not colour alone), and the switch is never empty.
+        // Approved web parity: labelled tabs use the shared raised-thumb control and selected semantics.
         val screen = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt").readText()
-        assertTrue("Icon(if (on) Icons.Filled.Check else icon, null, Modifier.size(20.dp))" in screen)
+        assertTrue("Segmented(listOf(CalView.MONTH to stringResource(R.string.cal_month), CalView.PEOPLE to stringResource(R.string.cal_people)), view, onPick)" in screen)
     }
 }

@@ -200,7 +200,7 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
                     .clickable(onClick = onOpenMedia).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.PermMedia, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
                     Text(stringResource(R.string.ci_media), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
-                    Text("${x.counts.total}", fontSize = 13.sp, color = c.mutedFg); Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Text("${x.counts.total}", fontSize = 13.sp, color = c.mutedFg); Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
                 if (legacy) Text(stringResource(R.string.ci_legacy), fontSize = 12.sp, color = c.mutedFg)
                 // A project room's people follow the project.

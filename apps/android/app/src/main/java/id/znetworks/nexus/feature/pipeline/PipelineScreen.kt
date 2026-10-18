@@ -458,10 +458,10 @@ private fun FiltersMenu(pms: List<Pair<String, String>>, bds: List<Pair<String, 
         DropdownMenu(open, { open = false }) {
             when (level) {
                 null -> {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                     if (services.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_service)) }, onClick = { level = "service" },
-                        trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                        trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_clear_filters)) }, enabled = pm != null || bd != null || service != null,
                         onClick = { open = false; onPm(null); onBd(null); onService(null) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_export)) }, leadingIcon = { Icon(Icons.Filled.Download, null) }, onClick = { open = false; onExport() })
@@ -618,7 +618,7 @@ private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel
         val total = col.sumOf { it.value }
         if (total > 0) Text(" · " + PipelineFormat.idr(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(36.dp)) {
+        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
     }
 }

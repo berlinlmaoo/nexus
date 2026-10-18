@@ -389,7 +389,7 @@ private fun ReflectionsLink(onOpen: () -> Unit) {
             Text(stringResource(R.string.reflections_title), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = c.foreground)
             Text(stringResource(R.string.reflections_link_sub), fontSize = 11.sp, lineHeight = 14.sp, color = c.mutedFg, maxLines = 2)
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(18.dp))
     }
 }
 

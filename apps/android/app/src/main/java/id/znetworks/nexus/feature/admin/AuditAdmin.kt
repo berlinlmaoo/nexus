@@ -391,7 +391,7 @@ internal fun RestoreCard(e: AuditEntry, r: AuditRestoreDetail, restoredNow: Audi
         target?.let { t ->
             TextButton(onClick = { onOpenTarget(t) }, modifier = Modifier.heightIn(min = 44.dp)) {
                 Text(stringResource(RestoreKinds.openLabel(t.kind)), color = c.violetText, fontWeight = FontWeight.SemiBold)
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.violetText, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.violetText, modifier = Modifier.size(16.dp))
             }
         }
     } else AdminCard(stringResource(R.string.au_bring_back)) {

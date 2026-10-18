@@ -150,7 +150,7 @@ private fun ContextChip(label: String, mark: @Composable () -> Unit, onRemove: (
         Spacer(Modifier.width(5.dp))
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 220.dp))
-        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.gx_remove_context), tint = c.mutedFg, modifier = Modifier.size(14.dp))
         }
     }

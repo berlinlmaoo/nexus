@@ -346,7 +346,7 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
             Row(Modifier.clip(RoundedCornerShape(8.dp)).background(c.onyx), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.r21_new), color = c.background, fontSize = 13.sp,
                     modifier = Modifier.clickable(onClick = onAdd).padding(horizontal = 10.dp, vertical = 10.dp))
-                androidx.compose.material3.IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) {
+                androidx.compose.material3.IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.more), tint = c.background, modifier = Modifier.size(16.dp))
                 }
             }
@@ -529,7 +529,7 @@ private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDe
     var menu by remember { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf<String?>(null) }
     Box {
-        androidx.compose.material3.IconButton(onClick = { menu = "root" }, modifier = Modifier.size(32.dp)) {
+        androidx.compose.material3.IconButton(onClick = { menu = "root" }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.MoreHoriz, stringResource(R.string.col_options), tint = c.mutedFg, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(menu != null, { menu = null }) {
@@ -538,7 +538,7 @@ private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDe
                     onClick = { menu = null; vm.colorSection(lane.id, k) })
             } else {
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_rename)) }, onClick = { menu = null; dialog = "rename" })
-                DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                 val across = stringResource(R.string.col_across)
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_left)) }, onClick = { menu = null
                     if (!vm.moveSection(lane.id, -1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
@@ -913,9 +913,9 @@ fun ProjectSelectionBar(count: Int, busy: Boolean, lanes: List<Lane>, members: L
             DropdownMenu(menu != null, { menu = null }) {
                 when (menu) {
                     "root" -> {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_status)) }, onClick = { menu = "status" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_priority)) }, onClick = { menu = "priority" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
-                        if (members.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.bulk_assign)) }, onClick = { menu = "assign" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_status)) }, onClick = { menu = "status" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_priority)) }, onClick = { menu = "priority" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                        if (members.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.bulk_assign)) }, onClick = { menu = "assign" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.bulk_due)) }, onClick = { menu = null; onDue() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.bulk_due_clear)) }, onClick = { menu = null; onClearDue() })
                     }

@@ -156,7 +156,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         Text(if (unplaced == 0) stringResource(R.string.ad_chart_all_placed) else stringResource(R.string.ad_chart_unplaced, unplaced),
                             fontSize = 12.sp, color = if (unplaced == 0) c.mutedFg else c.warning)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
             // Bagan IP & Divisi (5 Oct 2026, replaces Teams): everyone here can read it; BoD / OAA edit it.
@@ -168,7 +168,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         Text(stringResource(R.string.oc_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(stringResource(if (isBoD) R.string.oc_entry_sub_edit else R.string.oc_entry_sub_read), fontSize = 12.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
             item {

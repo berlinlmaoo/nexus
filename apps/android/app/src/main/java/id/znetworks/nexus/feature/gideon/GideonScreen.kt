@@ -384,7 +384,7 @@ private fun ChatList(s: GideonChat.State, indonesian: Boolean, onPick: (String) 
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(c.foreground),
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 12.dp),
                 decorationBox = { inner -> if (s.query.isEmpty()) Text(stringResource(R.string.gx_search_chats), fontSize = 15.sp, color = c.mutedFg); inner() })
-            if (s.query.isNotEmpty()) IconButton(onClick = { onQuery("") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
+            if (s.query.isNotEmpty()) IconButton(onClick = { onQuery("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
         }
         val rows = s.chats
         when {

@@ -230,11 +230,11 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
         }
         val today = OfficeTime.today()
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+            IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
             Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month).replaceFirstChar(Char::titlecase),
                 fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+            IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             // "Today" (web): back to this month with today picked.
             id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.cal_today), { offset = 0; selected = today.dayOfMonth }, compact = true)
         }

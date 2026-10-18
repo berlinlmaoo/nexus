@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -613,7 +614,7 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel, shortHeight: Boolean
         // Narrow or large text: the view switch gets its own row and the period may wrap, so "October 2026"
         // or "14–20 Sep 2026" is never cut (audit 3 #1). A phone on its side keeps everything in one row and
         // the scope in a menu, so the grid gets the height (audit 3 #4).
-        val roomy = maxWidth >= 380.dp && fontScale <= 1.15f // inner width: a 411 dp phone fits one row, a 360 dp one does not
+        val roomy = maxWidth >= 600.dp && fontScale <= 1.15f // inner width: a 411 dp phone fits one row, a 360 dp one does not
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { vm.shiftMonth(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (people) R.string.cal_prev_week else R.string.cal_prev_month)) }
@@ -641,20 +642,8 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel, shortHeight: Boolean
 /** Month | People: icons labelled for TalkBack; the selected one shows M3's check in its place (audit 3 #6). */
 @Composable
 private fun ViewSwitch(view: CalView, onPick: (CalView) -> Unit) {
-    val c = Nx.colors
-    val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
-        inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
-    SingleChoiceSegmentedButtonRow {
-        listOf(Triple(CalView.MONTH, Icons.Filled.CalendarMonth, R.string.cal_month), Triple(CalView.PEOPLE, Icons.Filled.People, R.string.cal_people)).forEachIndexed { i, (v, icon, label) ->
-            val name = stringResource(label)
-            val on = view == v
-            SegmentedButton(selected = on, onClick = { onPick(v) }, colors = colors, shape = SegmentedButtonDefaults.itemShape(i, 2),
-                // The icon slot does not show without a label: the content itself is the check or the view's icon.
-                icon = {}, modifier = Modifier.semantics { contentDescription = name }) {
-                Icon(if (on) Icons.Filled.Check else icon, null, Modifier.size(20.dp))
-            }
-        }
-    }
+    id.znetworks.nexus.ui.components.Segmented(listOf(CalView.MONTH to stringResource(R.string.cal_month), CalView.PEOPLE to stringResource(R.string.cal_people)), view, onPick)
+
 }
 
 /** The scope as a compact menu (a phone on its side): still shown once, still a view (contract 2). */
@@ -717,24 +706,22 @@ internal fun activeFilterChips(d: CalDerived): List<Pair<String, (CalendarCore.F
 @Composable
 internal fun Choice(options: List<String>, selected: Int, modifier: Modifier = Modifier.fillMaxWidth(), enabled: (Int) -> Boolean = { true }, onPick: (Int) -> Unit) {
     val c = Nx.colors
-    val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
-        inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
-    SingleChoiceSegmentedButtonRow(modifier) {
+    Row(modifier.clip(RoundedCornerShape(12.dp)).background(c.muted).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEachIndexed { i, label ->
-            SegmentedButton(selected = i == selected, onClick = { onPick(i) }, enabled = enabled(i), colors = colors,
-                shape = SegmentedButtonDefaults.itemShape(i, options.size)) {
-                // One line that shrinks at large font sizes rather than breaking a word ("Everyon/e") (audit 2 #6).
-                Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center,
-                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (i == selected) c.card else Color.Transparent)
+                .selectable(selected = i == selected, enabled = enabled(i), role = Role.RadioButton) { onPick(i) }.heightIn(min = 48.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                Text(label, color = if (i == selected) c.foreground else c.mutedFg, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 2)
             }
         }
     }
+
 }
 
 /**
  * Chips per unit at the focus level and the breadcrumb. A unit with children zooms (chevron); a leaf
  * filters (selected chip). Each says which it does (audit #32).
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
     val c = Nx.colors
@@ -749,7 +736,7 @@ internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
                 }
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             d.legend.forEach { l ->
                 val u = d.ix.byId[l.unitId]
                 val focusable = u != null && d.ix.children[u.id].orEmpty().isNotEmpty()

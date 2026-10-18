@@ -277,10 +277,10 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!item.read && onMarkRead != null) androidx.compose.material3.IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+            if (!item.read && onMarkRead != null) androidx.compose.material3.IconButton(onClick = onMarkRead, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Filled.Check, stringResource(R.string.inbox_mark_read), tint = c.mutedFg, modifier = Modifier.size(18.dp))
             }
-            if (onDelete != null) androidx.compose.material3.IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            if (onDelete != null) androidx.compose.material3.IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.Delete, stringResource(R.string.inbox_delete), tint = c.mutedFg, modifier = Modifier.size(18.dp))
             }
             if (!item.read) Box(Modifier.padding(start = 2.dp).size(8.dp).background(c.onyx, CircleShape))

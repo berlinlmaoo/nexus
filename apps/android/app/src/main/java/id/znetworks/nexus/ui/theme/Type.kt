@@ -26,22 +26,22 @@ val TextFont = variable(R.font.inter, *allWeights)
 
 val NexusTypography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = DisplayFont),
-        displayMedium = displayMedium.copy(fontFamily = DisplayFont),
-        displaySmall = displaySmall.copy(fontFamily = DisplayFont),
-        headlineLarge = headlineLarge.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        headlineMedium = headlineMedium.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        headlineSmall = headlineSmall.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        titleLarge = titleLarge.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        titleMedium = titleMedium.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        titleSmall = titleSmall.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        displayLarge = displayLarge.copy(letterSpacing = 0.sp, fontFamily = DisplayFont),
+        displayMedium = displayMedium.copy(letterSpacing = 0.sp, fontFamily = DisplayFont),
+        displaySmall = displaySmall.copy(letterSpacing = 0.sp, fontFamily = DisplayFont),
+        headlineLarge = headlineLarge.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        headlineMedium = headlineMedium.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        headlineSmall = headlineSmall.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        titleLarge = titleLarge.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        titleMedium = titleMedium.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
+        titleSmall = titleSmall.copy(letterSpacing = 0.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
         // Body ~15–16 sp like the dev web's 16 px root (redesign, 13 Oct 2026); Material's 14 sp read small.
-        bodyLarge = bodyLarge.copy(fontFamily = TextFont, fontSize = 16.sp, lineHeight = 23.sp),
-        bodyMedium = bodyMedium.copy(fontFamily = TextFont, fontSize = 15.sp, lineHeight = 21.sp),
-        bodySmall = bodySmall.copy(fontFamily = TextFont),
-        labelLarge = labelLarge.copy(fontFamily = TextFont, fontWeight = FontWeight.SemiBold),
-        labelMedium = labelMedium.copy(fontFamily = TextFont, fontWeight = FontWeight.SemiBold),
-        labelSmall = labelSmall.copy(fontFamily = TextFont, fontWeight = FontWeight.Bold),
+        bodyLarge = bodyLarge.copy(letterSpacing = 0.sp, fontFamily = TextFont, fontSize = 16.sp, lineHeight = 23.sp),
+        bodyMedium = bodyMedium.copy(letterSpacing = 0.sp, fontFamily = TextFont, fontSize = 15.sp, lineHeight = 21.sp),
+        bodySmall = bodySmall.copy(letterSpacing = 0.sp, fontFamily = TextFont),
+        labelLarge = labelLarge.copy(letterSpacing = 0.sp, fontFamily = TextFont, fontWeight = FontWeight.SemiBold),
+        labelMedium = labelMedium.copy(letterSpacing = 0.sp, fontFamily = TextFont, fontWeight = FontWeight.SemiBold),
+        labelSmall = labelSmall.copy(letterSpacing = 0.sp, fontFamily = TextFont, fontWeight = FontWeight.Bold),
     )
 }
 
