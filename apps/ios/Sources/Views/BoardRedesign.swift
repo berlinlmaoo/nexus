@@ -500,11 +500,11 @@ enum BoardAlert: Identifiable {
     }
 }
 
-/// A manual reorder's previous column order, for Undo.
+/// The relative moves that put only this drag's cards back, for Undo.
 struct ReorderUndo: Identifiable {
     let id = UUID()
     let laneId: String
-    let order: [String]
+    let moves: [TaskReorderMove]
     let count: Int
 }
 

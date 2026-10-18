@@ -11,6 +11,8 @@ extension AppLanguage {
     static let indonesianLegal: [String: String] = [
         "%@, uploaded %@": "%@, diunggah %@",
         "%d numbers issued. Next today: %@": "%d nomor sudah terbit. Berikutnya hari ini: %@",
+        "1 paragraph changed": "1 paragraf berubah",
+        "GIDEON may change only the paragraph you ticked.": "GIDEON hanya boleh mengubah paragraf yang kamu centang.",
         "%d paragraphs changed": "%d paragraf berubah",
         "%d unchanged paragraphs": "%d paragraf tidak berubah",
         "%d–%d of %d": "%d–%d dari %d",

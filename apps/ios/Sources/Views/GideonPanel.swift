@@ -1006,6 +1006,8 @@ struct GideonPanel: View {
         @Bindable var chat = chat
         return VStack(alignment: .leading, spacing: 0) {
             TextField(T("Ask anything. Type @ to add a page"), text: $chat.draft, axis: .vertical)
+                .accessibilityLabel(T("Ask anything. Type @ to add a page"))
+                .accessibilityIdentifier("gideon.composer")
                 .font(NXFont.text(15))
                 .lineLimit(wide ? 3...10 : 2...6)
                 .textFieldStyle(.plain)
@@ -1100,6 +1102,7 @@ struct GideonPanel: View {
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .accessibilityIdentifier("gideon.approvalMode")
         .help(approvalMode.blurb)
     }
 

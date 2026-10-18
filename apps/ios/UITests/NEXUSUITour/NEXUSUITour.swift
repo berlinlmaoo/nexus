@@ -201,14 +201,15 @@ final class NEXUSUITour: XCTestCase {
                     return
                 }
                 dismissSystemAlerts()
-                let settled = waitForSpinnersToStop(timeout: 25)
+                let validScreen = status == "ready:\(screen.id)"
+                let settled = validScreen && waitForSpinnersToStop(timeout: 25)
                 pause(1.5)
                 dismissSystemAlerts()
                 windowBehind = false
                 let first = snap(screen.id)
-                var more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
-                                         pages: screen.pages, sideways: screen.sideways)
-                if screen.pane == "trailing", let main = scrollTarget(in: app, web: false),
+                var more = validScreen ? snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
+                                         pages: screen.pages, sideways: screen.sideways) : 0
+                if validScreen, screen.pane == "trailing", let main = scrollTarget(in: app, web: false),
                    let pane = scrollTarget(in: app, web: false, rightOf: main.visible) {
                     more += snapMorePages(screen.id, prefix: "tour-", first: takeShot(app), in: app, web: false,
                                           pages: screen.pages, sideways: 0, target: pane, pageOffset: 1 + more)
@@ -568,8 +569,8 @@ final class NEXUSUITour: XCTestCase {
             pause(2.0)
         }
         for action in screen.appActions ?? [] {
-            let match = NSPredicate(format: "label CONTAINS %@", action.label)
-            let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", action.label, action.label)
+            let match = NSPredicate(format: "label CONTAINS %@ OR identifier == %@", action.label, action.label)
+            let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@ OR identifier == %@", action.label, action.label, action.label)
             switch action.kind {
             case "tap":
                 let button = app.buttons.matching(match).firstMatch
@@ -618,6 +619,12 @@ final class NEXUSUITour: XCTestCase {
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
+            case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
+            case "checkValue":
+                let target = app.textViews.matching(identifier: action.label).firstMatch
+                guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
+                    return "wrong-screen: missing expected text in \(action.label)"
+                }
             case "wait": pause(Double(action.text ?? "2") ?? 2)
             case "absent":
                 let target = app.descendants(matching: .any).matching(match).firstMatch
@@ -639,13 +646,14 @@ final class NEXUSUITour: XCTestCase {
             let frame = button.frame
             let window = app.windows.firstMatch.frame
             guard frame.maxX > window.maxX || frame.minX < window.minX else { return }
-            let strip = app.scrollViews.allElementsBoundByIndex.first { scroll in
-                guard scroll.exists else { return false }
-                let rect = scroll.frame
-                return rect.height <= 100 && rect.width > 150 && frame.midY >= rect.minY && frame.midY <= rect.maxY
-            }
-            guard let strip else { return }
-            if frame.maxX > window.maxX { strip.swipeLeft() } else { strip.swipeRight() }
+            guard frame.midY > window.minY, frame.midY < window.maxY else { return }
+            // SwiftUI does not always expose the horizontal strip as an accessibility ScrollView.
+            // Drag the visible row at the tab's y coordinate, just as a finger would.
+            let right = frame.maxX > window.maxX
+            let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: right ? window.width - 24 : 24, dy: frame.midY - window.minY))
+            let end = origin.withOffset(CGVector(dx: right ? 24 : window.width - 24, dy: frame.midY - window.minY))
+            start.press(forDuration: 0.05, thenDragTo: end)
             pause(0.4)
         }
     }

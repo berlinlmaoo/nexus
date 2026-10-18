@@ -33,3 +33,24 @@ struct TaskVersionTracker {
         return f.date(from: value)
     }
 }
+
+/// Undo moves only the dragged cards back before their original untouched neighbours. Replaying a
+/// whole old lane order would also undo another person's intervening reorder or newly inserted cards.
+struct TaskReorderMove: Equatable {
+    let movedIds: [String]
+    let beforeId: String?
+
+    static func restoring(movedIds: Set<String>, in order: [String]) -> [TaskReorderMove] {
+        var moves: [TaskReorderMove] = []
+        var run: [String] = []
+        for id in order {
+            if movedIds.contains(id) { run.append(id) }
+            else if !run.isEmpty {
+                moves.append(TaskReorderMove(movedIds: run, beforeId: id))
+                run = []
+            }
+        }
+        if !run.isEmpty { moves.append(TaskReorderMove(movedIds: run, beforeId: nil)) }
+        return moves
+    }
+}

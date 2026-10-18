@@ -2052,7 +2052,7 @@ struct ProjectDetailView: View {
         lanes = lanes.map { l -> ProjectDetail.Lane in l.id == laneId ? l.with(tasks: arranged) : l }
         do {
             try await APIClient.shared.reorderTasks(taskListId: laneId, movedIds: order.filter { set.contains($0) }, beforeId: beforeId)
-            reorderUndo = ReorderUndo(laneId: laneId, order: order, count: moved.count)
+            reorderUndo = ReorderUndo(laneId: laneId, moves: TaskReorderMove.restoring(movedIds: set, in: order), count: moved.count)
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
             await reloadQuietly()
@@ -2120,7 +2120,13 @@ struct ProjectDetailView: View {
 
     private func undoReorder(_ r: ReorderUndo) async {
         reorderUndo = nil
-        try? await APIClient.shared.reorderTasks(taskListId: r.laneId, orderedIds: r.order, movedId: nil)
+        do {
+            for move in r.moves {
+                try await APIClient.shared.reorderTasks(taskListId: r.laneId, movedIds: move.movedIds, beforeId: move.beforeId)
+            }
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
+        }
         await reloadQuietly()
     }
 
