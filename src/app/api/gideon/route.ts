@@ -132,9 +132,12 @@ const FACT_RE = /\d|\b(jangan|never|selalu|always|pilih|pilihnya|pakai|keputusan
 
 type HistoryMode = "window" | "wide" | "pinned" | "facts"
 const HISTORY_MODES = new Set<HistoryMode>(["window", "wide", "pinned", "facts"])
-const DEFAULT_HISTORY_MODE: HistoryMode = "window"
+const DEFAULT_HISTORY_MODE: HistoryMode = "facts"
 
-/** Which history shape to use: AppSetting "gideon-history" { mode } (DEV recall tests, 18 Oct 2026), else the default. */
+// Recall tests (18 Oct 2026, gideon-eval/recall.mjs, chats of 20/40/80 turns, early facts at turns 2-5 + one mid-chat):
+// window 0/5 at every length, wide 5/5 only at 20 turns, pinned and facts 5/5 everywhere; facts was the cheapest
+// (Phaethon ~2,8 credits per answer vs pinned ~3,5), so it is the default.
+/** Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts. */
 async function historyMode(): Promise<HistoryMode> {
   const v = await getAppSetting<{ mode?: string }>("gideon-history").catch(() => null)
   return v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE
