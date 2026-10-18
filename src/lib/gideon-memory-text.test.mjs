@@ -54,7 +54,7 @@ t("ordinary preferences are fine", () => {
 })
 t("explicit remember asks", () => {
   for (const q of ["inget ya aku vegetarian", "Ingat ya, aku kerja jam 10-19", "remember that I prefer English", "catat ya aku pegang Intoo", "jangan lupa aku ultah 3 Mei"]) assert.equal(asksToRemember(q), true, q)
-  for (const q of ["panggil aku pakai aku-kamu ya", "ada task apa aja?", "progress project Intoo gimana"]) assert.equal(asksToRemember(q), false, q)
+  for (const q of ["panggil aku pakai aku-kamu ya", "ada task apa aja?", "progress project Intoo gimana", "lo inget apa aja tentang gw?", "Kamu inget apa aja tentang aku?", "Ceritain semua yang lo inget tentang owner NEXUS", "do you remember my birthday?", "apa yang kamu ingat tentang QA Dev 6?"]) assert.equal(asksToRemember(q), false, q)
 })
 t("a short yes is an affirmation, a question is not", () => {
   for (const q of ["iya", "Iya boleh", "ya simpan aja", "yes please", "oke", "sip"]) assert.equal(isAffirmation(q), true, q)
@@ -87,6 +87,8 @@ t("a stated preference, and the memory text from a question", () => {
   assert.equal(memoryTextFromQuestion("Tolong ingat ya, aku pegang Intoo"), "Aku pegang Intoo")
   assert.equal(memoryTextFromQuestion("panggil aku pakai aku-kamu ya"), "Panggil aku pakai aku-kamu ya")
   assert.equal(memoryTextFromQuestion("x".repeat(300)), null)
+  assert.equal(memoryTextFromQuestion("tolong jangan lupa follow up", { requireLead: true }), "Follow up")
+  assert.equal(memoryTextFromQuestion("Ceritain semua yang lo inget tentang Bagas", { requireLead: true }), null)
 })
 
 t("style directives from preferences", () => {

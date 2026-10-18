@@ -182,7 +182,9 @@ export async function suggestMemoryFromQuestion(userId: string, question: string
   const explicit = asksToRemember(question)
   const pref = statesPreference(question)
   if (!explicit && !pref) return null
-  const text = memoryTextFromQuestion(question)
+  // Never a question ("…?"): asking what it remembers, or whether it can do something, is not a memory.
+  if (/\?\s*$/.test(question.trim())) return null
+  const text = memoryTextFromQuestion(question, { requireLead: explicit && !pref })
   if (!text) return null
   const touched = await prisma.gideonRunStep.count({ where: { runId, tool: { in: ["remember", "forget"] } } })
   if (touched) return null

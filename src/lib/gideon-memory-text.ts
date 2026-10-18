@@ -55,8 +55,11 @@ export function memoryRisk(text: string): "secret" | "sensitive" | null {
 
 /** The question asks GIDEON to remember something ("inget ya…", "remember that…", "catat ya…"). */
 const EXPLICIT_RE = /\b(inget(in)?|ingat(kan)?|ingetin|remember|catat|dicatat|simpan|disimpan|jangan lupa|don'?t forget|note that|keep in mind|save (this|that))\b/i
+/** Asking what GIDEON remembers ("lo inget apa aja tentang gw?", "do you remember…?") is not asking it to remember. */
+const RECALL_Q_RE = /\b(inget|ingat|remember)\b[^.!\n]*\?|\b(apa|what)\b[^.!?\n]{0,30}\b(inget|ingat|remember)|\b(masih|still|do you|did you|kamu|lo|lu)\s+(inget|ingat|remember)\b/i
 export function asksToRemember(question: string): boolean {
-  return EXPLICIT_RE.test(question || "")
+  const q = question || ""
+  return EXPLICIT_RE.test(q) && !RECALL_Q_RE.test(q)
 }
 
 /** A short yes to GIDEON's "Aku ingat ya: …?" typed as a reply (clients without the chip, or people who just type). */
@@ -91,11 +94,14 @@ export function statesPreference(question: string): boolean {
 }
 
 /** The memory a question carries, in the person's own words: "inget ya: X" → "X". Null when it is too long. */
-export function memoryTextFromQuestion(question: string): string | null {
-  const s = (question || "").replace(/\s+/g, " ").trim()
+export function memoryTextFromQuestion(question: string, opts: { requireLead?: boolean } = {}): string | null {
+  const raw = (question || "").replace(/\s+/g, " ").trim()
+  const s = raw
     .replace(/^(tolong\s+|please\s+|btw[,\s]+)?(inget(in)?|ingat(kan)?|remember( that)?|catat|jangan lupa|don'?t forget|note( that)?)(\s+(ya|yah|yaa|dong|deh))?[\s,:!.-]*/i, "")
     .trim()
   if (!s || s.length > MEMORY_TEXT_MAX) return null
+  // requireLead: only "inget ya: …" at the START counts (a remember word in the middle is usually something else).
+  if (opts.requireLead && s === raw) return null
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
