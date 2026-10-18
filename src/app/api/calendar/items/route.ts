@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { addDays, CALENDAR_TZ, dayDiff, dayStartUtc, isDayKey, wibDay } from "@/lib/calendar/core"
 import {
-  buildCalendarItems, calendarCaller, calendarJson, extraPeople, holidaysBetween, loadStructure, loadTaskRows, ROW_CAP, rulesOf,
+  buildCalendarItems, calendarCaller, calendarJson, extraPeople, folderParam, folderProjectIds, holidaysBetween, loadStructure, loadTaskRows, ROW_CAP, rulesOf,
 } from "@/lib/calendar/server"
 
 /** Longest range one call may ask for, inclusive: two months. */
@@ -13,6 +13,9 @@ const MAX_DAYS = 62
  * GET /api/calendar/items?from=YYYY-MM-DD&to=YYYY-MM-DD — every task the caller may see whose due date
  * falls on those WIB days (inclusive), each placed under the Bagan cards of its PICs, plus tanggal
  * merah. Masked rows (private projects, decision 1) carry no id, title or project. See lib/calendar.
+ * `&folder=<id>[,<id>…]` (the Folder filter, 18 Oct 2026): only tasks of the projects in those folders
+ * and their subfolders (home or linked project), and only the ones this caller sees in full — no
+ * masked rows. A folder that is unknown or empty gives no items.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -32,16 +35,22 @@ export async function GET(req: NextRequest) {
     if (caller.kind !== "ok") {
       return calendarJson(req, { ...base, access: caller.kind, structureVersion: null, rules: null, items: [], people: {}, holidays: [], truncated: false })
     }
+    const folders = folderParam(sp)
+    const projectIds = folders ? await folderProjectIds(folders) : undefined
     const [s, { rows, truncated }, holidays] = await Promise.all([
       loadStructure(),
-      loadTaskRows({ gte: dayStartUtc(from), lt: dayStartUtc(addDays(to, 1)) }, { take: ROW_CAP }),
+      projectIds?.length === 0
+        ? { rows: [], truncated: false }
+        : loadTaskRows({ gte: dayStartUtc(from), lt: dayStartUtc(addDays(to, 1)) }, { take: ROW_CAP, projectIds }),
       holidaysBetween(from, to),
     ])
-    const items = await buildCalendarItems(rows, caller, s)
+    const built = await buildCalendarItems(rows, caller, s)
+    const items = folders ? built.filter((i) => !i.masked) : built
     return calendarJson(req, {
       ...base,
       access: caller.access,
       structureVersion: s.version,
+      ...(folders ? { folder: folders } : {}),
       rules: rulesOf(caller.settings),
       items,
       people: await extraPeople(items, s),

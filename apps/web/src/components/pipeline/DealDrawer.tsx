@@ -202,7 +202,7 @@ function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; pr
     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
       {folder ? (
         <>
-          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className={primary}>
+          <Link to="/calendar" search={{ folder: folder.id }} className={primary}>
             <Folder className="h-4 w-4 shrink-0" />
             <span className="truncate">{t("Open execution folder")}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
