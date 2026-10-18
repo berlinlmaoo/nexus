@@ -49,7 +49,8 @@ struct GideonActionCard: View {
                     if let link = proposal.extra?.link {
                         Button(T("Open")) { if let url = URL(string: link, relativeTo: Config.baseURL)?.absoluteURL {
                             if let ref = GideonLinkTarget.ref(for: url), ["doc", "task"].contains(ref.kind), let onOpen { onOpen(ref) }
-                            else { router.open(url) }
+                            else if ["f", "v"].contains(url.path.split(separator: "/").first.map(String.init) ?? "") { router.open(url) }
+                            else { router.openNotification(["link": url.path + (url.query.map { "?" + $0 } ?? "")]) }
                         } }
                     }
                     if let note = proposal.extra?.note { Text(note).font(NXFont.text(12)).textSelection(.enabled) }
