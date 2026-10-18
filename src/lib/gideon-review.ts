@@ -15,7 +15,7 @@ import { proposalView, type GideonRunMeta } from "@/lib/gideon-runs"
  *
  * Owner's decisions, deliberately: viewing a chat sends NO notification to the person, writes NO audit-log
  * entry and asks for NO reason. Transparency is the one-time notice every user gets in the GIDEON panel
- * ("GIDEON chats can be reviewed by members of the Board of Directors for work purposes.") and the line in
+ * ("GIDEON chats can be reviewed by the Board of Directors for work purposes.") and the line in
  * the privacy policy. Chats the person deleted are included, marked deleted, until the 90-day purge
  * (lib/gideon-chat-retention.ts).
  *

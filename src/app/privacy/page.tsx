@@ -81,7 +81,7 @@ export default function PrivacyPolicyPage() {
             tim.
           </p>
           <p>
-            Chat GIDEON (asisten AI di NEXUS) bisa ditinjau oleh anggota BoD untuk keperluan kerja.
+            Chat GIDEON (asisten AI di NEXUS) bisa ditinjau oleh BoD untuk keperluan kerja.
           </p>
           <p>
             Data disimpan di server milik Z Networks. Satu-satunya pihak ketiga yang menerima data
