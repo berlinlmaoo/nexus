@@ -8,8 +8,9 @@
     <string name="g19_default">Default</string>
     <string name="g19_experimental">Eksperimental</string>
     <string name="g19_unavailable">Sedang tidak tersedia</string>
-    <string name="g19_use_phaethon">Pakai Phaëthon</string>
-    <string name="g19_transcribing">Mentranskrip meeting</string>
-    <string name="g19_loading">Memuat kembali</string>
-    <string name="g19_down">Mesin lokal tidak tersedia</string>
+    <string name="g19_use_phaethon">Pakai GIDEON Phaëthon</string>
+    <string name="g19_transcribing">GPU kantor sedang mentranskrip meeting.</string>
+    <string name="g19_loading">Sedang dinyalakan lagi.</string>
+    <string name="g19_down">Model lokal tidak merespons.</string>
+    <string name="g19_notice">GIDEON %1$s sedang tidak tersedia.</string>
 </resources>

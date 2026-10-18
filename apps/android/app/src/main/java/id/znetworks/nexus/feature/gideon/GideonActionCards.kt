@@ -104,7 +104,8 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
         if (p.isPending) Text(stringResource(R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
         if (deleting && p.taskDelete != null) {
             val d = p.taskDelete
-            listOf("Project" to d.projectName, "Status" to listOfNotNull(d.status, d.progress).distinct().joinToString(" · "), "Due" to actionDay(d.due, d.dueDay, locale), "Assignees" to d.assignees.joinToString(", ")).forEach { (label, value) ->
+            val progress = d.progress?.let { id.znetworks.nexus.feature.projects.taskStatusLabel(it.uppercase().replace(' ', '_')) }
+            listOf("Project" to d.projectName, "Status" to listOfNotNull(d.status, progress).distinct().joinToString(" · "), "Due" to if (d.dueDay == null) stringResource(R.string.gt_no_due) else actionDay(d.due, d.dueDay, locale), "Assignees" to d.assignees.joinToString(", ").ifEmpty { stringResource(R.string.td_unassigned) }).forEach { (label, value) ->
                 GProperty(fieldLabel(label)) { Text(value?.ifBlank { "—" } ?: "—", color = c.foreground, fontSize = 13.sp) }
             }
             if (p.isPending) Text(stringResource(R.string.gt_delete_warning), color = c.mutedFg, fontSize = 12.sp)
@@ -118,7 +119,7 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
                 }
             }
         }
-        if (preview != null) SelectionContainer { Text(preview, color = c.foreground, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().heightIn(max = 256.dp).background(c.muted, RoundedCornerShape(8.dp)).verticalScroll(rememberScrollState()).padding(10.dp)) }
+        if (preview != null && cells.isEmpty()) SelectionContainer { Text(preview, color = c.foreground, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().heightIn(max = 256.dp).background(c.muted, RoundedCornerShape(8.dp)).verticalScroll(rememberScrollState()).padding(10.dp)) }
         if (cells.isNotEmpty()) Column(Modifier.heightIn(max = 256.dp).verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
             Row { listOf(R.string.gt_cell, R.string.gt_before, R.string.gt_after).forEach { Text(stringResource(it), fontWeight = FontWeight.SemiBold, modifier = Modifier.width(120.dp).padding(6.dp)) } }
             cells.forEach { cell -> Row {

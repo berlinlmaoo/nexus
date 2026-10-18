@@ -104,6 +104,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val s by chat.state.collectAsStateWithLifecycle()
     val tiers by container.gideonTiers.state.collectAsStateWithLifecycle()
     val config by container.remoteConfig.body.collectAsStateWithLifecycle()
+    LaunchedEffect(s.error?.kind) { if (s.error?.kind == GideonProblem.Kind.TIER_UNAVAILABLE) container.gideonTiers.refresh() }
     LaunchedEffect(Unit) { container.gideonTiers.seed(container.remoteConfig.current.gideonTiers); container.gideonTiers.refresh() }
     val c = Nx.colors
     val res = context.resources
@@ -178,7 +179,10 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
         GideonCreditMeter(container.api, s.thinking)
         if (!tiers.available(s.tier)) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.g19_unavailable), color = c.warningFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.g19_notice, s.tier.label), color = c.warningFg, fontSize = 12.sp)
+                Text(stringResource(when (tiers.tiers[s.tier.key]?.reason) { "transcribing" -> R.string.g19_transcribing; "loading" -> R.string.g19_loading; else -> R.string.g19_down }), color = c.mutedFg, fontSize = 11.sp)
+            }
             TextButton(onClick = { chat.setTier(GideonTier.LUNA) }) { Text(stringResource(R.string.g19_use_phaethon)) }
         }
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.

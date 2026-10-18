@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.RadioButtonChecked
@@ -265,14 +266,14 @@ internal fun DecisionDialog(p: GProposal, apply: Boolean, onConfirm: () -> Unit,
 internal fun ResultCard(card: GCard) {
     val c = Nx.colors
     val shape = RoundedCornerShape(12.dp)
-    val verb = stringResource(when (card.action) { "created" -> R.string.gx_card_created; "commented" -> R.string.gx_card_commented; else -> R.string.gx_card_updated })
+    val verb = stringResource(when (card.action) { "deleted" -> R.string.gt_delete_task_done; "created" -> R.string.gx_card_created; "commented" -> R.string.gx_card_commented; else -> R.string.gx_card_updated })
     Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (card.action == "created") Icons.Outlined.AddCircle else Icons.Outlined.Edit, null, tint = c.success, modifier = Modifier.size(18.dp))
+        Icon(if (card.action == "created") Icons.Outlined.AddCircle else if (card.action == "deleted") Icons.Outlined.Delete else Icons.Outlined.Edit, null, tint = if (card.action == "deleted") c.dangerText else c.success, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(card.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_kind_task), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(verb, card.projectName?.takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(verb, card.projectName?.takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
         }
     }
 }
