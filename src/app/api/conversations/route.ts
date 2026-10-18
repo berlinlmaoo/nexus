@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
+import { resolveLegacyIds } from "@/lib/legacy-ids"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, memberManagerContext, visibleRoomIds, workspaceForNewRoom } from "@/lib/chat-access"
 import { chatUnreadForUser } from "@/lib/chat-unread"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
@@ -130,7 +131,11 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
     const { type, userIds, name } = await req.json()
-    const others: string[] = Array.isArray(userIds) ? userIds.filter((u: string) => u && u !== userId) : []
+    // Released apps may still hold ids from before the UUIDv7 conversion (cached people lists, old links):
+    // resolve them here, because the reachability check below compares the ids in JS, not in Prisma.
+    const asked: string[] = Array.isArray(userIds) ? userIds.filter((u: unknown): u is string => typeof u === "string" && !!u) : []
+    const legacy = await resolveLegacyIds(asked)
+    const others: string[] = Array.from(new Set(asked.map((u) => legacy.get(u) ?? u))).filter((u) => u !== userId)
     if (others.length === 0) return NextResponse.json({ error: "userIds required" }, { status: 400 })
 
     // Only people the caller shares at least one workspace with. Otherwise anyone who signs up could
@@ -148,11 +153,15 @@ export async function POST(req: NextRequest) {
     }
 
     // DM dedupe: find an existing 1:1 between exactly these two users.
-    if (type === "DM" && others.length === 1) {
-      const existing = await prisma.conversation.findFirst({
+    const isDm = type === "DM" && others.length === 1
+    const findDm = (db: Prisma.TransactionClient | typeof prisma) =>
+      db.conversation.findFirst({
         where: { type: "DM", members: { every: { userId: { in: [userId, others[0]] } } }, AND: [{ members: { some: { userId } } }, { members: { some: { userId: others[0] } } }] },
         include: memberInclude,
+        orderBy: { createdAt: "asc" },
       })
+    if (isDm) {
+      const existing = await findDm(prisma)
       if (existing && (existing.members?.length ?? 0) === 2) return NextResponse.json({ conversation: existing })
     }
 
@@ -163,7 +172,15 @@ export async function POST(req: NextRequest) {
     const isGroup = type === "GROUP"
     // A new group opens with its own log line, "Budi created the group “QA”", written with it: the
     // people put in it get one push each from that line (chat-system.ts). A DM has none.
-    const { conversation, system } = await prisma.$transaction(async (tx) => {
+    const { conversation, system, reused } = await prisma.$transaction(async (tx) => {
+      // Two taps on "Message", or both people opening a DM to each other at the same moment, used to make
+      // two DMs (QA final 19 Oct 2026: 10 parallel requests -> 8 rooms). One lock per pair, then look again.
+      if (isDm) {
+        const pair = [userId, others[0]].sort().join("|")
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dm|${pair}`})::int8)`
+        const existing = await findDm(tx)
+        if (existing && (existing.members?.length ?? 0) === 2) return { conversation: existing, system: null, reused: true }
+      }
       const created = await tx.conversation.create({
         data: {
           type: isGroup ? "GROUP" : "DM",
@@ -173,15 +190,16 @@ export async function POST(req: NextRequest) {
         },
         include: memberInclude,
       })
-      if (!isGroup) return { conversation: created, system: null }
+      if (!isGroup) return { conversation: created, system: null, reused: false }
       const [actor, ...targets] = await systemPeople(tx, allMembers)
       const system = await writeSystemMessage(tx, {
         conversationId: created.id,
         actorId: userId,
         event: { type: "group_created", actor, targets, ...(created.name ? { name: created.name } : {}) },
       })
-      return { conversation: created, system }
+      return { conversation: created, system, reused: false }
     })
+    if (reused) return NextResponse.json({ conversation })
     if (system) {
       announceSystemMessage({ conversationId: conversation.id, message: system, memberIds: allMembers })
     } else {

@@ -7,6 +7,8 @@ import { formatBookingSlot } from "@/lib/room-booking-format"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { isRecordNotFound } from "@/lib/prisma-errors"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 /**
  * Room Booking — the one path that makes a booking (POST /api/room-bookings and GIDEON book_room), the one
@@ -229,6 +231,8 @@ export async function createRoomBooking(input: {
     push: true,
   }).catch(() => null)
 
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(booking.workspaceId, { kind: "bookings", actorId: input.userId })
   return { ok: true, booking }
 }
 
@@ -345,6 +349,8 @@ export async function updateRoomBooking(input: { userId: string; bookingId: stri
       push: true,
     }).catch(() => null)
   }
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(booking.workspaceId, { kind: "bookings", actorId: input.userId })
   return { ok: true, booking, before: existing }
 }
 
@@ -373,13 +379,21 @@ export async function deleteRoomBooking(input: { userId: string; bookingId: stri
       push: true,
     }).catch(() => null)
   }
-  await restorableDelete({
-    entityType: "room_booking", entityId: bookingId,
-    entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
-    workspaceId: existing.workspaceId, userId, request: input.request,
-    metadata: { room: existing.room, createdById: existing.createdById, ...(input.via ? { via: input.via } : {}) },
-    meta: { open: { type: "room_booking", id: bookingId } },
-    remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
-  })
+  try {
+    await restorableDelete({
+      entityType: "room_booking", entityId: bookingId,
+      entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
+      workspaceId: existing.workspaceId, userId, request: input.request,
+      metadata: { room: existing.room, createdById: existing.createdById, ...(input.via ? { via: input.via } : {}) },
+      meta: { open: { type: "room_booking", id: bookingId } },
+      remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
+    })
+  } catch (err) {
+    // Two deletes at once (two managers, a double tap): the second finds the row gone — a 404, not a 500.
+    if (isRecordNotFound(err)) return { ok: false, status: 404, body: { error: "Booking not found" } }
+    throw err
+  }
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(existing.workspaceId, { kind: "bookings", actorId: userId })
   return { ok: true, before: existing }
 }

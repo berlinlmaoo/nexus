@@ -125,7 +125,7 @@ export function originTabOf(req: { headers: { get(name: string): string | null }
   return v && /^[A-Za-z0-9_-]{6,64}$/.test(v) ? v : null
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal" | "bookings"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
