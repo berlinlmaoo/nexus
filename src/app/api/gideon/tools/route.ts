@@ -40,7 +40,7 @@ import { ORG_WORKSPACE_ID } from '@/lib/org'
 import { listDocuments } from '@/lib/legal/archive'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
-  resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
+  resolveRunForToolCall, stepArg, stepLabel, WRITE_ACTIONS, type GideonDiffRow } from '@/lib/gideon-runs'
 import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 import { MEMORY_ACTIONS, MemoryRefusal, runMemoryTool } from '@/lib/gideon-memory'
@@ -1500,7 +1500,8 @@ export async function POST(req: Request) {
 
   // Which conversation this call belongs to (steps, sources, cards, approval). No run = exactly the
   // behaviour every caller had before 12 Oct 2026.
-  const run = await resolveRunForToolCall(req.headers.get('x-gideon-run'), auth.actor.id).catch(() => null)
+  const headerRun = req.headers.get('x-gideon-run')
+  const run = await resolveRunForToolCall(headerRun, auth.actor.id).catch(() => null)
   // GIDEON Memory (19 Oct 2026): the asking person's OWN memories only (actor-scoped); writes only inside their own
   // CHAT run, where the chat route parked what they actually wrote. Never a proposal card: the chip is the consent.
   if (MEMORY_ACTIONS.has(action)) {
@@ -1526,6 +1527,11 @@ export async function POST(req: Request) {
       }
       return refusal ? ok({ saved: false, refused: err.code, note: message }) : error(message, 400)
     }
+  }
+  // A chat names its run; when that run is gone, finished, stale or someone else's, its approval mode can no longer
+  // be honoured, so a WRITE is refused instead of running with no card at all (19 Oct 2026 privacy gate). Reads go on.
+  if (!run && headerRun && WRITE_ACTIONS.has(action)) {
+    return error('This chat run is no longer active, so nothing can be changed from it. Ask the person to send the message again.', 409)
   }
   if (!run) {
     try {

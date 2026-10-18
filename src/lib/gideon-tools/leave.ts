@@ -132,6 +132,9 @@ async function describeSubmit(actor: User, input: Input) {
   }
 }
 
+const NOT_THEIR_APPROVER =
+  "This person is not the approver for that person (the Approval chart decides who is), so nothing about that person's requests can be read or decided here. Tell them so in one sentence, WITHOUT any type, date, reason or status (you were not given any), and point them to the person's approver."
+
 /** The pending request the approver means: requestId, or the person's name (+ date) among the ones they may decide. */
 async function findDecidable(actor: User, input: Input) {
   const ctx = await getAttendanceWorkspaceContext(actor.id)
@@ -146,6 +149,10 @@ async function findDecidable(actor: User, input: Input) {
     const who = str(input.person) ?? str(input.who) ?? str(input.name)
     if (!who) throw new Error("Say which request: requestId (from nexus_get_my_inbox) or the person's name (+ date).")
     const p = await findPerson(who, { exclude: actor.id })
+    // Whether this approver may decide for that person is asked BEFORE their requests are read: the lists and the
+    // "has no pending request" answer below are what the Approvals page shows only to that person's approver
+    // (19 Oct 2026 privacy gate: a BoD outside the tree learned type + date of someone's sick leave here).
+    if (!(await canUserReviewRequest(actor.id, p.id, ctx.workspace.id, ctx)).ok) throw new Error(NOT_THEIR_APPROVER)
     const date = str(input.date)
     const rows = await prisma.attendanceRequest.findMany({
       where: { userId: p.id, workspaceId: ctx.workspace.id, status: "PENDING", ...(date && DAY.test(date) ? { startDate: { lte: utcDay(date) }, endDate: { gte: utcDay(date) } } : {}) },
@@ -159,9 +166,10 @@ async function findDecidable(actor: User, input: Input) {
     req = real[0]
   }
   if (req.userId === actor.id) throw new Error("Nobody approves or rejects their own request. Tell the person to ask their approver.")
-  if (req.status !== "PENDING") throw new Error(`That request is already ${req.status.toLowerCase()}.`)
+  // Before the status: "already approved" about someone else's request is itself a fact about them.
   const verdict = await canUserReviewRequest(actor.id, req.userId, ctx.workspace.id, ctx)
-  if (!verdict.ok) throw new Error(`This person is not an approver for ${req.user?.name ?? "that person"} (the Approval chart decides who is). Tell them so.`)
+  if (!verdict.ok) throw new Error(NOT_THEIR_APPROVER)
+  if (req.status !== "PENDING") throw new Error(`That request is already ${req.status.toLowerCase()}.`)
   return req
 }
 

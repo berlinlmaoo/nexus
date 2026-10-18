@@ -429,6 +429,13 @@ export async function POST(req: NextRequest) {
     let shimSince = 0
     try {
       if (runId) await sendEvent({ type: 'run', id: runId })
+      // No run = no approval mode the tools can check, and the tools then write with no card at all. Fail closed
+      // (19 Oct 2026 privacy gate): the person sends the message again.
+      if (!runId) {
+        failure = 'no run'
+        await sendEvent({ type: 'error', content: uiLang === 'en' ? 'GIDEON could not start this answer. Please send it again.' : 'GIDEON gagal memulai jawaban ini. Coba kirim lagi.' })
+        return
+      }
       const url = process.env.GIDEON_CHAT_URL
       if (!url) {
         failure = 'not configured'

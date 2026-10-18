@@ -116,7 +116,12 @@ async function planBulk(actor: User, input: Input): Promise<Planned[]> {
     if (!t) throw new Error(`No task with id ${c.taskId}. Find tasks with nexus_list_tasks / nexus_search_tasks first.`)
     const projectId = t.taskList.projectId
     const { allowed } = await checkProjectAccess(actor.id, projectId, ["MEMBER"])
-    if (!allowed) throw new Error(`This person cannot edit tasks in ${t.taskList.project?.name ?? "that project"} (needs Can edit), so “${t.title}” cannot be changed. Leave it out or tell them.`)
+    if (!allowed) {
+      // A task in a project this person cannot even open is answered exactly like a missing one: its title and
+      // project name are not theirs to learn (19 Oct 2026 privacy gate).
+      if (!(await checkProjectAccess(actor.id, projectId, ["VIEWER"])).allowed) throw new Error(`No task with id ${c.taskId}. Find tasks with nexus_list_tasks / nexus_search_tasks first.`)
+      throw new Error(`This person cannot edit tasks in ${t.taskList.project?.name ?? "that project"} (needs Can edit), so “${t.title}” cannot be changed. Leave it out or tell them.`)
+    }
     const body: Record<string, unknown> = {}
     const lines: string[] = []
     if (c.status) {
@@ -200,7 +205,10 @@ async function describeSubtasks(actor: User, input: Input) {
   const parent = await prisma.task.findUnique({ where: { id: parentId }, select: { id: true, title: true, taskListId: true, taskList: { select: { projectId: true, project: { select: { name: true } } } } } })
   if (!parent) throw new Error("No task with that id.")
   const { allowed } = await checkProjectAccess(actor.id, parent.taskList.projectId, ["MEMBER"])
-  if (!allowed) throw new Error(`This person cannot add tasks in ${parent.taskList.project?.name ?? "that project"} (needs Can edit).`)
+  if (!allowed) {
+    if (!(await checkProjectAccess(actor.id, parent.taskList.projectId, ["VIEWER"])).allowed) throw new Error("No task with that id.")
+    throw new Error(`This person cannot add tasks in ${parent.taskList.project?.name ?? "that project"} (needs Can edit).`)
+  }
   const who = input.assignees !== undefined ? await personIds(strArray(input.assignees), parent.taskList.projectId) : { ids: [], names: [] }
   const dueRaw = str(input.dueDate)
   const due = dueRaw ? parseDueInput(dueRaw) : null

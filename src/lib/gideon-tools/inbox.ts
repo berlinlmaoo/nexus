@@ -146,12 +146,14 @@ async function approvals(actor: User, limit: number) {
     select: { summary: true, createdAt: true },
   })
   if (proposals.length) out.gideonCards = { waiting: proposals.length, items: proposals.map((p) => ({ summary: clip(p.summary, 100), made: whenWib(p.createdAt) })) }
-  if (isBodPlus(ctx.workspaceRole)) {
-    const where = { status: { in: ["OPEN" as const, "AWAITING_DECISION" as const] } }
+  if (ctx.workspace && isBodPlus(ctx.workspaceRole)) {
+    // The BoD's OWN workspace only, like the web Support inbox (/api/complaints): a personal workspace makes its
+    // owner One Above All there, and without this filter that role listed every company ticket (19 Oct 2026).
+    const where = { workspaceId: ctx.workspace.id, status: { in: ["OPEN" as const, "AWAITING_DECISION" as const] } }
     const [tickets, n, corrections] = await Promise.all([
       prisma.complaint.findMany({ where, orderBy: { lastMessageAt: "asc" }, take: limit, select: { subject: true, status: true, category: true, lastMessageAt: true, reporter: { select: { name: true } } } }),
       prisma.complaint.count({ where }),
-      prisma.attendanceCorrection.count({ where: { status: "PENDING" } }),
+      prisma.attendanceCorrection.count({ where: { workspaceId: ctx.workspace.id, status: "PENDING" } }),
     ])
     if (n) out.supportTickets = { open: n, items: tickets.map((t) => ({ subject: clip(t.subject, 90), from: t.reporter?.name ?? null, category: t.category, status: t.status === "AWAITING_DECISION" ? "Awaiting decision" : "Open", last: whenWib(t.lastMessageAt) })), where: `${PUBLIC_BASE}/complaints` }
     if (corrections) out.attendanceCorrections = { waiting: corrections, where: `${PUBLIC_BASE}/complaints` }
