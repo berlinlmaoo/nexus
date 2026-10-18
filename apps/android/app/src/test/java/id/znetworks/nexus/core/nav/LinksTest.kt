@@ -18,7 +18,7 @@ class LinksTest {
         assertEquals(Target.Announcement("a1"), Links.parse("/dashboard?announcement=a1"))
         assertEquals(Target.Tab("home"), Links.parse("/dashboard"))
         assertEquals(Target.Profile("u1"), Links.parse("/people/u1"))
-        assertEquals(Target.Folder("f1"), Links.parse("https://nexus.znetworks.id/folders/f1"))
+        assertEquals(Target.Calendar(folder = "f1"), Links.parse("https://nexus.znetworks.id/folders/f1"))
         assertEquals(Target.Inbox, Links.parse("/inbox"))
         assertEquals(Target.Settings, Links.parse("nexus://settings"))
     }

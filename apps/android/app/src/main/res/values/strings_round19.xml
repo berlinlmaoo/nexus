@@ -1,0 +1,8 @@
+<resources>
+    <string name="cal_folder">Folder</string>
+    <string name="cal_folders">Folders</string>
+    <string name="cal_search_folders">Search folders…</string>
+    <string name="cal_no_folder_matches">No folder matches.</string>
+    <string name="cal_show_all_folders">Show all (%1$d)</string>
+    <string name="cal_remove_folder_filter">Remove the folder filter %1$s</string>
+</resources>

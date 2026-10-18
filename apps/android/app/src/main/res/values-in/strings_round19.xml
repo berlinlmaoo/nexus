@@ -1,0 +1,8 @@
+<resources>
+    <string name="cal_folder">Folder</string>
+    <string name="cal_folders">Folder</string>
+    <string name="cal_search_folders">Cari folder…</string>
+    <string name="cal_no_folder_matches">Tidak ada folder yang cocok.</string>
+    <string name="cal_show_all_folders">Tampilkan semua (%1$d)</string>
+    <string name="cal_remove_folder_filter">Hapus filter folder %1$s</string>
+</resources>

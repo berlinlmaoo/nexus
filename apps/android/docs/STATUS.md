@@ -1,3 +1,10 @@
+## Android 19 October — in progress
+
+Review fixes through 63f7486a retained. Priority colours committed; Home GIDEON remains bottom-left (verified on Pixel_7).
+
+Calendar: folder entries and legacy links open the main Calendar; server folder filtering, separate range/folder caches, filters/search/count/chips/reset and empty-month wording implemented. Removed the separate folder calendar and curated project writes. Web comparison also corrected day/week rendering when all tasks are outside the organisation chart. 778 JVM tests + assembleDebug green. Pixel_7 with host GPU against DEV: descendant-folder task, folder search, No division day panel and unknown-folder empty state checked; screenshots `round19-calendar-folder.png`, `round19-calendar-filters.png`, `round19-calendar-day.png`, `round19-calendar-empty.png` in the owner's nexus-shots directory. Staff/OAA positive account checks remain unavailable with the supplied BoD QA account; no roles were changed.
+
+Remaining: GIDEON cards and reminders (including items 13/14), meetings and Performance. No release or version change.
 # NEXUS Android: status
 
 ## Owner parity follow-up (18 Oct 2026)

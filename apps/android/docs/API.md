@@ -2560,3 +2560,11 @@ Every endpoint heading in §2, in document order.
 | 2.6 | `GET /api/gideon/usage` |
 | 2.6 | `GET /api/app/version-policy` |
 | 2.6 | `GET /api/app/latest` |
+# 19 Oct: one Calendar, folder filter
+
+`GET /api/calendar/structure` includes `folders: [{id,name,icon,color,parentId,depth}]` in server tree order, already limited to folders the viewer can use. Missing `folders` decodes as an empty list.
+
+`GET /api/calendar/items?from=&to=&folder=<id>[,<id>…]` and `GET /api/calendar/overdue?folder=…` narrow tasks on the server by home/linked project in those folders or descendants. Normal visibility still applies; masked rows are dropped under this filter. Unknown/empty folders return no items. IDs accept UUIDv7 dashes; at most 50. Items responses echo `folder: [ids]`. No folder parameter preserves existing behavior.
+
+Both the conditional-request cache and disk cache include the folder selection. Folder changes refetch items and overdue and reject answers from a previous selection. `/folders/<id>`, the project tree/calendar buttons and Audit folder restore links open `/calendar?folder=<id>`; the separate folder calendar and curated `aggregateProjectIds` writes are removed. Other Calendar link filters combine with `folder`.
+

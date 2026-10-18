@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -244,7 +245,7 @@ class CalDay(val data: CalData, day: String, lens: CalLens, collapsed: Set<Strin
     val rows: List<PanelRow> = buildRows(lens, collapsed)
 
     private fun buildRows(lens: CalLens, collapsed: Set<String>): List<PanelRow> {
-        val root = tree.root ?: return emptyList()
+        val root = tree.root
         val me = data.index.me?.userId
         val out = mutableListOf<PanelRow>()
         fun people(n: CalendarCore.TreeNode): List<CalendarCore.PersonRow> =
@@ -283,10 +284,10 @@ class CalDay(val data: CalData, day: String, lens: CalLens, collapsed: Set<Strin
             out += PanelRow.End("e:$key", key)
         }
         // The focus card's own tasks first (as a card of its own), then one card per unit under it.
-        if (root.items.isNotEmpty() || (lens == CalLens.PERSON && (root.people.isNotEmpty() || root.loose.isNotEmpty())))
+        if (root != null && (root.items.isNotEmpty() || (lens == CalLens.PERSON && (root.people.isNotEmpty() || root.loose.isNotEmpty()))))
             card(CalendarCore.TreeNode(root.unit, root.items.size, root.items, root.people, root.loose, emptyList()), own = true)
-        root.children.forEach { card(it, own = false) }
-        if (lens == CalLens.PERSON && tree.unplaced.isNotEmpty()) {
+        root?.children?.forEach { card(it, own = false) }
+        if (tree.unplaced.isNotEmpty()) {
             out += PanelRow.UnplacedHead("unplaced", tree.unplaced.size)
             tree.unplaced.sortedBy { if (it.userId == me) 0 else 1 }.forEach { p ->
                 out += PanelRow.Person("p:unplaced:${p.userId}", p.userId, null, p.items.size, 0, "unplaced", p.userId == me)
@@ -343,7 +344,7 @@ class CalDerived(val s: CalState, val index: CalIndex, val data: CalData, val da
 internal fun rememberDerived(s: CalState, dark: Boolean): CalDerived? {
     val structure = s.structure ?: return null
     val index = remember(structure, dark) { CalIndex(structure, dark) }
-    val data = remember(index, s.items, s.itemsRange, s.overdue, s.filters, s.focusId, s.range, s.view, s.day.substring(0, 7), s.day == s.today) { CalData(index, s) }
+    val data = remember(index, s.items, s.itemsRange, s.itemsFolder, s.overdue, s.filters, s.focusId, s.range, s.view, s.day.substring(0, 7), s.day == s.today) { CalData(index, s) }
     val day = remember(data, s.day, s.lens, s.collapsed) { CalDay(data, s.day, s.lens, s.collapsed) }
     // The same handle while nothing it exposes changed: polls, opening a task or a refresh flag skip every row (audit 2 #21).
     return remember(index, data, day, s.filters, s.day, s.view, s.lens, s.collapsed, s.offline, s.loadedAt, s.rangeError, s.divisionFallback, s.railAll, s.hintSeen) {
@@ -369,7 +370,7 @@ fun CalendarScreen(
     onOpenTask: (String) -> Unit,
     onOpenMyMission: () -> Unit,
     date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null,
-    nonce: String? = null,
+    nonce: String? = null, folder: String? = null, unit: String? = null, person: String? = null, project: String? = null, prio: String? = null, done: String? = null, overdue: String? = null,
     onOpenPreview: (String, String?) -> Unit = { _, _ -> },
     vm: CalendarViewModel = viewModel(),
 ) {
@@ -378,7 +379,7 @@ fun CalendarScreen(
     val config by container.remoteConfig.body.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     // Runs again on every return to this entry and on rotation; the VM applies a link only once.
-    LaunchedEffect(date, view, lens, focus, scope, task, nonce) { vm.applyLink(date, view, lens, focus, scope, task, nonce) }
+    LaunchedEffect(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) { vm.applyLink(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) }
     // On show and every return to the foreground, then every calendarPollSeconds while visible (with ETag).
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -673,6 +674,14 @@ internal fun ActiveFilters(d: CalDerived, vm: CalendarViewModel) {
     if (d.filterCount == 0) return
     val chips = activeFilterChips(d)
     FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        f.folders.forEach { id ->
+            val name = d.s.structure?.folders?.firstOrNull { it.id == id }?.name ?: stringResource(R.string.cal_folder)
+            val removeDescription = stringResource(R.string.cal_remove_folder_filter, name)
+            InputChip(selected = true, onClick = { vm.setFilters(f.copy(folders = f.folders - id)) }, label = { Text(name, maxLines = 1) },
+                leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
+                trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(InputChipDefaults.IconSize)) },
+                modifier = Modifier.semantics { contentDescription = removeDescription })
+        }
         chips.forEach { (label, remove) ->
             val removeLabel = stringResource(R.string.cal_remove_filter, label)
             InputChip(selected = true, onClick = { vm.setFilters(remove(f)) }, label = { Text(label, maxLines = 1) },
@@ -880,7 +889,7 @@ internal fun noticeKeys(data: CalData): List<String> {
     if (s.items?.truncated == true) out += "truncated"
     val monthItems = data.all.count { CalendarCore.sameMonth(it.day, s.day) }
     if (s.view == CalView.MONTH) {
-        if (monthItems == 0 && s.items != null) out += "emptymonth"
+        if (monthItems == 0 && s.items != null) out += if (s.filters.folders.isNotEmpty()) "nomatch" else "emptymonth"
         else if (data.monthShown == 0 && data.filterCount > 0) out += "nomatch"
     }
     return out
@@ -938,7 +947,7 @@ internal fun LazyListScope.dayPanel(d: CalDerived, vm: CalendarViewModel, headFo
         }
         return
     }
-    if (d.tree.root == null || d.dayPart.rows.isEmpty()) {
+    if (d.dayPart.rows.isEmpty()) {
         item(key = "dayempty") {
             val hidden = d.all.any { it.day == s.day } && d.filterCount > 0
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1020,7 +1029,7 @@ private fun PanelRowView(d: CalDerived, vm: CalendarViewModel, r: PanelRow) {
     when (r) {
         is PanelRow.Card -> CardHeader(d, vm, r)
         is PanelRow.End -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(12.dp).cardPiece(d, r.cardUnit, top = false, bottom = true)) {}
-        is PanelRow.UnplacedHead -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), style = MicroLabel, color = c.mutedFg,
+        is PanelRow.UnplacedHead -> Text("${stringResource(R.string.cal_no_division)} · ${r.count}", style = MicroLabel, color = c.mutedFg,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp).cardPiece(d, "unplaced", top = true, bottom = false).padding(16.dp).semantics { heading() })
         is PanelRow.Sub -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
             if (r.unit.isGroup) Text("${r.unit.name.uppercase(Locale.getDefault())} · ${r.count}", style = MicroLabel, color = c.mutedFg,

@@ -62,7 +62,6 @@ import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
 import id.znetworks.nexus.feature.admin.orgchart.OrgChartScreen
-import id.znetworks.nexus.feature.projects.FolderCalendarScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
 import id.znetworks.nexus.feature.admin.AuditEntryScreen
@@ -230,7 +229,7 @@ internal object ShellTabs {
     fun ownerOf(route: String?): String? {
         val r = route ?: return null
         return when {
-            r.startsWith("project/") || r.startsWith("folder/") || r.startsWith("task/") || r.startsWith("task-preview/") ||
+            r.startsWith("project/") || r.startsWith("task/") || r.startsWith("task-preview/") ||
                 r.startsWith("form-builder/") || r.startsWith("form-responses/") -> "projects"
             r.startsWith("chat") -> "messages"
             r.startsWith("team-calendar") || r.startsWith("calendar-list") -> "calendar"
@@ -314,12 +313,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 if (t.view == "quadrant") nav.navigate("calendar-list?q=${enc(t.q.orEmpty())}&scope=${enc(t.scope.orEmpty())}") { launchSingleTop = true }
                 // A fresh nonce: the same link tapped again (a widget, a notification) is applied again,
                 // while the entry never re-applies one it already used (CalendarLinkGate).
-                else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
+                else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString(), folder = t.folder, unit = t.unit, person = t.person, project = t.project, prio = t.prio, done = t.done, overdue = t.overdue)) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
-            is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${enc(t.id)}") }
             is Target.Chat -> {
                 container.router.consumed(t)
                 // Already in that thread (a push tapped while reading it): stay, no second copy (CHAT-REPORT P0).
@@ -485,12 +483,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
             // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
-            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}",
-                arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}&folder={folder}&unit={unit}&person={person}&project={project}&prio={prio}&done={done}&overdue={overdue}",
+                arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n", "folder", "unit", "person", "project", "prio", "done", "overdue").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
                 val a = e.arguments
                 CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
                     date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"),
-                    nonce = a?.getString("n"),
+                    nonce = a?.getString("n"), folder = a?.getString("folder"), unit = a?.getString("unit"), person = a?.getString("person"), project = a?.getString("project"), prio = a?.getString("prio"), done = a?.getString("done"), overdue = a?.getString("overdue"),
                     onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } })
             }
             composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
@@ -517,7 +515,6 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ))
             }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }, onOpenChart = { nav.navigate("admin-chart") }) }
-            composable("folder/{id}") { e -> FolderCalendarScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             // Teams are gone (deleted on the server 30 Sep 2026): a team link opens the Bagan IP & Divisi that replaced them.
             composable("admin-team/{id}") { OrgChartScreen(onBack = { nav.popBackStack() }) }
             composable("org-chart") { OrgChartScreen(onBack = { nav.popBackStack() }) }
@@ -529,7 +526,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 // A restored thing of any kind, on the screen this app has for it (RESTORE-ALL-TYPES).
                 onOpenTarget = { t -> nav.navigate(when (t.kind) {
                     RestoreTarget.Kind.PROJECT -> "project/${t.id}"; RestoreTarget.Kind.TASK -> "task/${t.id}"
-                    RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> "folder/${t.id}"
+                    RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> calendarRoute(folder = t.id)
                     RestoreTarget.Kind.ATTENDANCE -> "attendance"; RestoreTarget.Kind.ROOMS -> "rooms"
                     RestoreTarget.Kind.CALENDAR -> t.date?.let { "calendar?date=$it" } ?: "calendar"
                     RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"; RestoreTarget.Kind.CHAT -> "chat/${t.id}"
@@ -574,7 +571,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
-                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })
             }
             composable(Tab.MORE.route) {
@@ -588,7 +585,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
                     onOpenDoc = { nav.navigate("doc/$it") },
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
-                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     initialView = entry.arguments?.getString("view"),
                     initialDate = entry.arguments?.getString("date"),
                     onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
@@ -875,7 +872,7 @@ private fun TabLabel(text: String) = androidx.compose.foundation.text.BasicText(
 )
 
 /** `calendar?date=…`, with only the arguments that are set (each one encoded). */
-internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null, nonce: String? = null): String {
-    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task, "n" to nonce).filter { it.second != null }
+internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null, nonce: String? = null, folder: String? = null, unit: String? = null, person: String? = null, project: String? = null, prio: String? = null, done: String? = null, overdue: String? = null): String {
+    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task, "n" to nonce, "folder" to folder, "unit" to unit, "person" to person, "project" to project, "prio" to prio, "done" to done, "overdue" to overdue).filter { it.second != null }
     return if (args.isEmpty()) "calendar" else "calendar?" + args.joinToString("&") { (k, v) -> "$k=${android.net.Uri.encode(v)}" }
 }

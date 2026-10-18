@@ -123,12 +123,17 @@ object CalendarCore {
         val priorities: List<String> = emptyList(),
         val hideDone: Boolean = false,
         val overdueOnly: Boolean = false,
+        /** Applied by the server, including linked projects and descendants; never filtered locally. */
+        val folders: List<String> = emptyList(),
     )
     val NO_FILTERS = Filters()
 
     fun activeFilterCount(f: Filters): Int =
         (if (f.scope != Scope.ALL) 1 else 0) + (if (f.units.isNotEmpty()) 1 else 0) + (if (f.people.isNotEmpty()) 1 else 0) +
-            (if (f.projects.isNotEmpty()) 1 else 0) + (if (f.priorities.isNotEmpty()) 1 else 0) + (if (f.hideDone) 1 else 0) + (if (f.overdueOnly) 1 else 0)
+            (if (f.projects.isNotEmpty()) 1 else 0) + (if (f.folders.isNotEmpty()) 1 else 0) + (if (f.priorities.isNotEmpty()) 1 else 0) + (if (f.hideDone) 1 else 0) + (if (f.overdueOnly) 1 else 0)
+
+    fun folderKey(folders: List<String>): String? = folders.distinct().sorted().joinToString(",").takeIf { it.isNotEmpty() }
+    fun linkIds(value: String): List<String> = value.split(',').filter { it.matches(Regex("[\\w-]{1,64}")) }.distinct().take(50)
 
     class FilterContext(val ix: Index, val meId: String?, val myHomes: List<String>, val today: String, val nowMs: Long, val windowDays: Int)
 
@@ -344,7 +349,7 @@ object CalendarCore {
             for (k in n.children) walk(k, depth + 1)
         }
         tree.root?.let { walk(it, 0) }
-        if (tree.root != null && tree.unplaced.isNotEmpty()) {
+        if (tree.unplaced.isNotEmpty()) {
             out += WeekRow.Unplaced(0, tree.unplaced.size)
             for (p in tree.unplaced) out += WeekRow.Person(null, p.userId, 1, split(p.items))
         }

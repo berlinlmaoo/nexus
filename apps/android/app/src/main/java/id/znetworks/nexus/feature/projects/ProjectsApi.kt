@@ -112,10 +112,6 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun setFolderPin(folderId: String, pinned: Boolean) =
         post("/api/project-folders/pins", buildJsonObject { put("folderId", folderId); put("pinned", pinned) })
 
-    /** The folder calendar's project subset ([] = all of the folder's projects, now and later). */
-    suspend fun setFolderAggregate(id: String, projectIds: List<String>) =
-        patch("/api/project-folders/$id", JsonObject(mapOf("aggregateProjectIds" to kotlinx.serialization.json.JsonArray(projectIds.map { JsonPrimitive(it) }))))
-
     /** The task status a section stands for (DEV-REDESIGN §1): tasks moved in take it; null = a plain section. */
     suspend fun setSectionStatus(projectId: String, sectionId: String, taskStatus: String?) =
         patch("/api/projects/$projectId/sections", JsonObject(mapOf("id" to JsonPrimitive(sectionId), "taskStatus" to (taskStatus?.let { JsonPrimitive(it) } ?: JsonNull))))

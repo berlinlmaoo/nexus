@@ -30,6 +30,21 @@ class CalendarAuditTest {
         return CalDay(CalData(index, s), s.day, s.lens, s.collapsed)
     }
 
+    @Test fun tasksOutsideTheChartRemainVisibleWithoutAnyDivisionTasks() {
+        val base = state("2026-09-18", "items-2026-09-18.bod.json")
+        val task = CalItem(key = "outside", id = "outside", day = base.day, assigneeIds = listOf("outside-person"), unplacedIds = listOf("outside-person"))
+        val s = base.copy(items = base.items!!.copy(items = listOf(task)))
+        for (lens in CalLens.entries) {
+            val panel = day(s.copy(lens = lens))
+            assertNull(panel.tree.root)
+            assertEquals(listOf(task), panel.rows.filterIsInstance<PanelRow.Task>().map { it.item })
+            assertEquals(1, panel.tree.total)
+        }
+        val ix = CalendarCore.Index(structure0.units, structure0.people)
+        val rows = CalendarCore.weekRows(listOf(task), ix, ix.top!!.id, "2026-09-14", s.today, s.nowMs, s.windowDays)
+        assertEquals("outside-person", rows.filterIsInstance<CalendarCore.WeekRow.Person>().single().userId)
+    }
+
     @Test fun diskCacheIsPerUserAndPerRange() {
         val dir = Files.createTempDirectory("calcache").toFile()
         val cache = CalendarDiskCache(dir)
@@ -50,7 +65,7 @@ class CalendarAuditTest {
         assertTrue(d.rows.isNotEmpty())
         assertEquals(d.rows.size, d.rows.map { it.key }.toSet().size)
         // Every card opens with a header and closes with an end piece.
-        assertEquals(d.rows.count { it is PanelRow.Card }, d.rows.count { it is PanelRow.End })
+        assertEquals(d.rows.count { it is PanelRow.Card || it is PanelRow.UnplacedHead }, d.rows.count { it is PanelRow.End })
         assertTrue(d.rows.first() is PanelRow.Card)
         // Every task of the day is a row of its own.
         assertTrue(d.rows.count { it is PanelRow.Task } >= d.tree.total)

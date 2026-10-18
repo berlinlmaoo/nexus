@@ -40,10 +40,9 @@ sealed interface Target {
     data class Reports(val userId: String?) : Target
     data object Leaderboard : Target
     data class Profile(val userId: String) : Target
-    data class Folder(val id: String) : Target
     data object RoomBooking : Target
     /** The master Calendar (replaces Team Calendar): `/calendar?date=&view=&lens=&focus=&scope=&task=`. */
-    data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null, val q: String? = null) : Target
+    data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null, val q: String? = null, val folder: String? = null, val unit: String? = null, val person: String? = null, val project: String? = null, val prio: String? = null, val done: String? = null, val overdue: String? = null) : Target
     /** Control Room (manager and above). */
     data object Admin : Target
     data class Announcement(val id: String) : Target
@@ -125,7 +124,7 @@ object Links {
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/dashboard" -> Target.Tab("home")
             Regex("^/people/([^/]+)$").matches(p) -> Target.Profile(path.trimEnd('/').substringAfterLast('/'))
-            Regex("^/folders/([^/]+)$").matches(p) -> Target.Folder(path.trimEnd('/').substringAfterLast('/'))
+            Regex("^/folders/([^/]+)$").matches(p) -> Target.Calendar(date = q["date"], folder = path.trimEnd('/').substringAfterLast('/'))
             p == "/settings" -> Target.Settings
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
@@ -140,7 +139,7 @@ object Links {
             p == "/reports" -> Target.Reports(null)
             p == "/leaderboard" -> Target.Leaderboard
             p == "/room-booking" -> Target.RoomBooking
-            p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"], q["q"])
+            p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"], q["q"], q["folder"], q["unit"], q["person"], q["project"], q["prio"], q["done"], q["overdue"])
             // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
             p == "/admin" -> Target.Admin
