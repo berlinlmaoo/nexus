@@ -99,8 +99,16 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
             if (snapshot.loaded && data.memories.isEmpty()) item { EmptyState(Icons.Outlined.Psychology, stringResource(R.string.gm_empty), stringResource(R.string.gm_empty_hint), stringResource(R.string.gm_add), { addFocus.requestFocus() }, actionEnabled = MemoryRules.canAdd(data) && !busy) }
             listOf("PREFERENCE" to R.string.gm_preferences, "PERSON" to R.string.gm_about, "DATE" to R.string.gm_dates, "FACT" to R.string.gm_notes).forEach { (type, label) ->
                 val rows = data.memories.filter { it.kind == type || type == "FACT" && it.kind !in setOf("PREFERENCE", "PERSON", "DATE", "FACT") }
-                if (rows.isNotEmpty()) item { Text(stringResource(label), color = c.foreground, fontWeight = FontWeight.SemiBold) }
-                items(rows, key = { it.id }) { memory -> MemoryRow(memory, busy, data.textMax, act = ::act) }
+                if (rows.isNotEmpty()) item(key = type) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(label), color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(8.dp))) {
+                            rows.forEachIndexed { index, memory ->
+                                key(memory.id) { if (index > 0) HorizontalDivider(color = c.border); MemoryRow(memory, busy, data.textMax, act = ::act) }
+                            }
+                        }
+                    }
+                }
             }
             if (data.memories.isNotEmpty()) item { TextButton(onClick = { confirm = true }, enabled = !busy) { Text(stringResource(R.string.gm_forget_all), color = c.dangerText) } }
         }
@@ -117,10 +125,10 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     var editing by remember(memory.id) { mutableStateOf(false) }
     var draft by remember(memory.id, memory.text) { mutableStateOf(memory.text) }
     fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, draft); editing = false } }
-    Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (editing) {
-            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
-                if (it.type != KeyEventType.KeyUp) false else when (it.key) { Key.Escape -> { draft = memory.text; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
+            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, singleLine = true, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = memory.text; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
             }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }))
             Row { TextButton(onClick = { draft = memory.text; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
         } else {

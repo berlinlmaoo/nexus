@@ -288,10 +288,11 @@ private fun FreshChat(onAsk: (String) -> Unit) {
 private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, readOnly: Boolean = false, onDecide: (GDecision) -> Unit) {
     val c = Nx.colors
     val list = rememberLazyListState()
-    LaunchedEffect(s.messages.size, s.thinking) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
+    val transcriptIds = s.messages.flatMap { it.proposals }.map { it.id }.toSet()
+    val pending = s.pending.filter { it.id !in transcriptIds }
+    LaunchedEffect(s.messages.size, s.thinking, pending.size) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(pending.size + s.messages.lastIndex) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        val transcriptIds = s.messages.flatMap { it.proposals }.map { it.id }.toSet()
-        items(s.pending.filter { it.id !in transcriptIds }, key = { "pending:${it.id}" }) { p ->
+        items(pending, key = { "pending:${it.id}" }) { p ->
             when {
                 p.action == "create_task" && p.taskTarget != null && p.isPending -> CreateTaskCard(p, p.id in s.deciding, onDecide)
                 p.action == "delete_task" || p.extra != null -> ActionCard(p, p.id in s.deciding, onDecide)
