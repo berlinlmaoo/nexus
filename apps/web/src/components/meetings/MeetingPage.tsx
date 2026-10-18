@@ -637,7 +637,7 @@ function Speakers({ voices, map, segments, members, readOnly, onChange, onSeek }
   };
   return (
     <section className="mb-8">
-      <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Users className="h-5 w-5 text-muted-foreground" />{t("Speakers")}<span className="text-sm font-normal text-muted-foreground">{t("{n} voices", { n: voices.length })}</span></h2>
+      <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Users className="h-5 w-5 text-muted-foreground" />{t("Speakers")}<span className="text-sm font-normal text-muted-foreground">{voices.length === 1 ? t("1 voice") : t("{n} voices", { n: voices.length })}</span></h2>
       <p className="mt-1 text-xs text-muted-foreground">{t("GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.")}</p>
       <datalist id={listId}>{members.filter((p) => p.name).map((p) => <option key={p.id} value={p.name as string} />)}</datalist>
       <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
