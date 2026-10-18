@@ -29,7 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.AssignmentTurnedIn
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.ConfirmationNumber
@@ -46,7 +46,7 @@ import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -88,7 +88,7 @@ internal fun ShellNav.Item.icon(): ImageVector = when (this) {
     ShellNav.Item.GIDEON -> Icons.Outlined.AutoAwesome
     ShellNav.Item.NOTIFICATIONS -> Icons.Outlined.Inbox
     ShellNav.Item.THREADS -> Icons.Outlined.AlternateEmail
-    ShellNav.Item.VAULT -> Icons.Outlined.Storage
+    ShellNav.Item.VAULT -> Icons.Outlined.Inventory2
     ShellNav.Item.MY_TASKS -> Icons.Outlined.CheckBox
     ShellNav.Item.SUBMISSIONS -> Icons.Outlined.Description
     ShellNav.Item.CALENDAR -> Icons.Outlined.CalendarMonth
@@ -96,7 +96,7 @@ internal fun ShellNav.Item.icon(): ImageVector = when (this) {
     ShellNav.Item.PROJECTS -> Icons.Outlined.Folder
     ShellNav.Item.LEGAL -> Icons.Outlined.Balance
     ShellNav.Item.LEADERBOARD -> Icons.Outlined.EmojiEvents
-    ShellNav.Item.REPORTS -> Icons.Outlined.BarChart
+    ShellNav.Item.REPORTS -> Icons.Outlined.Assessment
     ShellNav.Item.FORMS -> Icons.AutoMirrored.Outlined.Assignment
     ShellNav.Item.ATTENDANCE -> Icons.Outlined.AssignmentTurnedIn
     ShellNav.Item.TICKETS -> Icons.Outlined.ConfirmationNumber
@@ -178,7 +178,7 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, onItem: (ShellNa
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val name = session.userName.ifBlank { session.userEmail }
                 FooterCard(onClick = { onItem(ShellNav.Item.SETTINGS) }) {
-                    Avatar(name, avatar, size = 36.dp)
+                    Avatar(name, avatar, size = 36.dp, userId = session.userId)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -186,6 +186,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, onItem: (ShellNa
                     }
                     Icon(Icons.Outlined.Settings, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
                 }
+                // Own status entry under the identity card, like the web More sheet on phones (presence spec).
+                id.znetworks.nexus.feature.presence.SetStatusEntry(card = true)
                 FooterCard(onClick = { container.appearance.set(if (dark) AppTheme.LIGHT else AppTheme.DARK) }) {
                     Icon(if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, null, tint = c.foreground, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
@@ -245,7 +247,7 @@ internal fun ShellSidebar(session: Session, current: ShellNav.Item?, onItem: (Sh
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val name = session.userName.ifBlank { session.userEmail }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { onItem(ShellNav.Item.SETTINGS) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(name, avatar, size = 28.dp)
+                    Avatar(name, avatar, size = 28.dp, userId = session.userId)
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)

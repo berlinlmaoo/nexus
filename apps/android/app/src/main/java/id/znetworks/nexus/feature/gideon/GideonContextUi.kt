@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.RadioButtonChecked
@@ -148,7 +151,7 @@ private fun ContextChip(label: String, mark: @Composable () -> Unit, onRemove: (
         Spacer(Modifier.width(5.dp))
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 220.dp))
-        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.gx_remove_context), tint = c.mutedFg, modifier = Modifier.size(14.dp))
         }
     }
@@ -174,7 +177,7 @@ internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode)
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text(approvalName(mode), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1)
+            Text(approvalName(mode), modifier = Modifier.weight(1f, fill = false), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Icon(Icons.Filled.ArrowDropDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(open, { open = false }) {
@@ -195,11 +198,12 @@ internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode)
  * asked first in a centred dialog. Once decided, the status line (and what Apply made).
  */
 @Composable
-internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -> Unit) {
+internal fun ProposalCard(p: GProposal, deciding: Boolean, readOnly: Boolean = false, onDecide: (Boolean) -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(12.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(c.warning.copy(alpha = 0.06f)).border(1.dp, c.warning.copy(alpha = 0.3f), shape).padding(12.dp),
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (p.isPending) Text(stringResource(if (readOnly) R.string.gp_pending_read_only else R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.warningFg, modifier = Modifier.size(14.dp).padding(top = 2.dp))
             Spacer(Modifier.width(6.dp))
@@ -211,24 +215,24 @@ internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -
                 Text(row.field.orEmpty(), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
                 Spacer(Modifier.width(6.dp))
                 row.fromText?.takeIf { it.isNotEmpty() }?.let {
-                    Text(if (status) taskStatusLabel(it) else it, fontSize = 12.sp, color = c.mutedFg, textDecoration = TextDecoration.LineThrough,
+                    Text(if (status) taskStatusLabel(it) else it, fontSize = 12.sp, color = c.dangerText, textDecoration = TextDecoration.LineThrough,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = c.mutedFg, modifier = Modifier.size(10.dp))
                 Spacer(Modifier.width(4.dp))
                 val to = row.toText
-                Text(if (to == null) "—" else if (status) taskStatusLabel(to) else to, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                Text(if (to == null) "—" else if (status) taskStatusLabel(to) else to, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.success,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
         }
-        if (p.isPending) {
+        if (p.isPending && !readOnly) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (deciding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                NxButton(stringResource(R.string.gx_discard), { onDecide(false) }, kind = NxButtonKind.BORDERED, enabled = !deciding, compact = true)
+                NxButton(stringResource(R.string.gx_discard), { onDecide(false) }, kind = NxButtonKind.GHOST, enabled = !deciding, compact = true)
                 NxButton(stringResource(R.string.gx_apply), { onDecide(true) }, kind = NxButtonKind.PRIMARY, icon = Icons.Filled.Check, enabled = !deciding, compact = true)
             }
-        } else {
+        } else if (!p.isPending) {
             val text = when (GideonReview.status(p)) {
                 GideonReview.Status.APPLIED -> stringResource(R.string.gx_applied)
                 GideonReview.Status.DISCARDED -> stringResource(R.string.gx_discarded)
@@ -251,7 +255,7 @@ internal fun DecisionDialog(p: GProposal, apply: Boolean, onConfirm: () -> Unit,
         text = p.summary?.takeIf { it.isNotBlank() }?.let { s -> { Text(s) } },
         confirmButton = {
             TextButton(onClick = { onDismiss(); onConfirm() }) {
-                Text(stringResource(if (apply) R.string.gx_apply else R.string.gx_discard), color = if (apply) c.foreground else c.dangerText, fontWeight = FontWeight.Bold)
+                Text(if (apply && (p.action == "delete_task" || p.extra != null)) actionLabel(p.action, apply = true) else stringResource(if (apply) R.string.gx_apply else R.string.gx_discard), color = if (apply && p.action in setOf("delete_task", "cancel_reminder")) c.dangerText else c.foreground, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
@@ -262,14 +266,14 @@ internal fun DecisionDialog(p: GProposal, apply: Boolean, onConfirm: () -> Unit,
 internal fun ResultCard(card: GCard) {
     val c = Nx.colors
     val shape = RoundedCornerShape(12.dp)
-    val verb = stringResource(when (card.action) { "created" -> R.string.gx_card_created; "commented" -> R.string.gx_card_commented; else -> R.string.gx_card_updated })
+    val verb = stringResource(when (card.action) { "deleted" -> R.string.gt_delete_task_done; "created" -> R.string.gx_card_created; "commented" -> R.string.gx_card_commented; else -> R.string.gx_card_updated })
     Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (card.action == "created") Icons.Outlined.AddCircle else Icons.Outlined.Edit, null, tint = c.success, modifier = Modifier.size(18.dp))
+        Icon(if (card.action == "created") Icons.Outlined.AddCircle else if (card.action == "deleted") Icons.Outlined.Delete else Icons.Outlined.Edit, null, tint = if (card.action == "deleted") c.dangerText else c.success, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(card.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_kind_task), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(verb, card.projectName?.takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(verb, card.projectName?.takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
         }
     }
 }
@@ -360,7 +364,7 @@ internal fun BookRoomCard(
 
 /**
  * Every room for one slot as rows (the book_room card and the move card): free ones selectable, busy ones disabled
- * with who holds them until when, the capacity when it is known.
+ * with who holds them until when.
  */
 @Composable
 internal fun RoomRows(rooms: List<GRoomSlot>, selected: String?, enabled: Boolean, onPick: (String) -> Unit) {
@@ -376,8 +380,7 @@ internal fun RoomRows(rooms: List<GRoomSlot>, selected: String?, enabled: Boolea
                 tint = if (isSelected) c.violetText else c.mutedFg, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                val seats = r.capacity?.let { " · " + stringResource(R.string.gx_room_seats, it) }.orEmpty()
-                Text(roomLabel(r.room) + seats, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
+                Text(roomLabel(r.room), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
                 r.busy?.let { b ->
                     Text(stringResource(R.string.gx_room_booked_by, b.by ?: stringResource(R.string.gx_someone), BookRoomTime.clock(b.endsAt)),
                         fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -522,7 +525,7 @@ internal object BookRoomTime {
 
     fun slot(startsAt: String, endsAt: String): String {
         val s = at(startsAt) ?: return ""
-        val day = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", AppLanguage.locale()).format(s)
+        val day = AppDateFormats.ofPattern("EEE d MMM", AppLanguage.locale()).format(s)
         return "$day · ${clock(startsAt)}–${clock(endsAt)}"
     }
 }

@@ -319,7 +319,7 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
                 LeadChip(lead == null || !leadValid, { lead = null }) { Text(stringResource(R.string.oc_lead_none), fontSize = 12.sp) }
                 candidates.forEach { p ->
                     LeadChip(lead == p.userId, { lead = p.userId }) {
-                        Avatar(p.name, p.avatar, 20.dp); Spacer(Modifier.width(6.dp))
+                        Avatar(p.name, p.avatar, 20.dp, userId = p.userId); Spacer(Modifier.width(6.dp))
                         Text(p.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Spacer(Modifier.width(4.dp))
                         Text(leadUnit?.let { p.titles[it] } ?: ROLE_SUB[p.role] ?: p.role, fontSize = 12.sp, color = c.mutedFg)
@@ -379,7 +379,7 @@ private fun TitleRow(api: OrgChartApi, person: OrgPerson, unitId: String, leader
         }
     }
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(person.name, person.avatar, 28.dp); Spacer(Modifier.width(8.dp))
+        Avatar(person.name, person.avatar, 28.dp, userId = person.userId); Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(person.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(ROLE_SUB[person.role] ?: person.role, fontSize = 11.sp, color = c.mutedFg)
@@ -484,7 +484,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
     SheetFrame(onClose, header = {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(person.name, person.avatar, 32.dp); Spacer(Modifier.width(10.dp))
+                Avatar(person.name, person.avatar, 32.dp, userId = person.userId); Spacer(Modifier.width(10.dp))
                 Text(person.label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
             }
@@ -515,7 +515,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                             api.setReportsTo(person.userId, u.id, l.userId)
                         }) { unitIds = unitIds + u.id; reportsTo = reportsTo + (u.id to l.userId) }
                     }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(l.name, l.avatar, 24.dp); Spacer(Modifier.width(8.dp))
+                    Avatar(l.name, l.avatar, 24.dp, userId = l.userId); Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(l.label + (t?.let { " — $it" } ?: ""), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(u.name, fontSize = 11.sp, color = c.mutedFg, maxLines = 1)

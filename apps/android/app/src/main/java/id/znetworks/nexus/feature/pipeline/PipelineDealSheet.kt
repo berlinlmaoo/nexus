@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.height
@@ -102,7 +104,9 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
     var laterOpen by remember(deal.id) { mutableStateOf(false) }
-    val save = { fields: JsonObject -> vm.update(deal.id, fields) }
+    val save = { fields: JsonObject -> vm.update(deal.id, JsonObject(fields + buildMap {
+        if ("links" in fields) put("linksBase", deal.raw["links"] ?: JsonArray(emptyList()))
+    })) }
     val v = data.vocab
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
@@ -189,7 +193,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                         Text(stringResource(R.string.pl_fold), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                         Text(stringResource(R.string.pl_fold_note), fontSize = 12.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
                 Group(stringResource(R.string.pl_s_followup), stringResource(R.string.pl_s_every)) {
                     TextSave(stringResource(R.string.pl_f_next_action), deal.text("nextAction")) { save(one("nextAction", JsonPrimitive(it))) }
@@ -256,7 +260,7 @@ private fun PhaseStepper(deal: PipelineDeal) {
 
 /** "9 Okt 2026" for a yyyy-MM-dd day. */
 internal fun dayLabel(iso: String): String =
-    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(iso.take(10))) }.getOrDefault(iso)
+    runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(iso.take(10))) }.getOrDefault(iso)
 
 /** A value the server works out: shown, not edited. */
 @Composable
@@ -270,7 +274,7 @@ internal fun ReadOnly(label: String, value: String) {
 
 /** "9 Okt 2026, 15:35" in Jakarta time. */
 internal fun stamp(iso: String?): String = iso?.let { runCatching {
-    java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
+    AppDateFormats.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
 }.getOrNull() }.orEmpty()
 
 @Composable
@@ -334,7 +338,7 @@ internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         OutlinedButton(onClick = { open = true }) {
-            Text(iso?.let { runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
+            Text(iso?.let { runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
         }
     }
     if (open) {

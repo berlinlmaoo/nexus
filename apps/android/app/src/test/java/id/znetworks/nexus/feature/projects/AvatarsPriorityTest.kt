@@ -25,7 +25,6 @@ class AvatarsPriorityTest {
         // In the title row (after the title column), not in the chips row below.
         assertTrue(card.indexOf("PriorityChip(t.priority") in card.indexOf("Text(t.title")..card.indexOf("FieldChipRow("))
         assertFalse("\"LOW\" -> Nx.colors.violetText" in ui)
-        assertTrue("PriorityChip(t.priority" in src("feature/projects/FolderCalendar.kt"))
         assertTrue("PriorityChip(t.priority)" in src("feature/projects/ProjectTabs.kt"))
     }
 

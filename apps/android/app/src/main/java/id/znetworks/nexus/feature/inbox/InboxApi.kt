@@ -34,9 +34,9 @@ data class InboxItem(
 ) {
     /** Shown in the app's language when the server sent both, else as stored. */
     fun title(lang: String = AppLanguage.serverCode(AppLanguage.current)): String? =
-        texts?.get(lang)?.title?.takeIf { it.isNotBlank() } ?: rawTitle
+        texts?.get(lang)?.title?.takeIf { it.isNotBlank() } ?: InboxLegacyText.translate(rawTitle, lang)
     fun message(lang: String = AppLanguage.serverCode(AppLanguage.current)): String? =
-        texts?.get(lang)?.message?.takeIf { it.isNotBlank() } ?: rawMessage
+        texts?.get(lang)?.message?.takeIf { it.isNotBlank() } ?: InboxLegacyText.message(rawMessage, lang, type)
     val title: String? get() = title()
     val message: String? get() = message()
 }

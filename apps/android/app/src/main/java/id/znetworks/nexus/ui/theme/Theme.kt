@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
  */
 @Immutable
 data class NxColors(
+    val priorityHighText: Color = Color(0xFF9A3412),
     val background: Color,
     val card: Color,
     val foreground: Color,
@@ -72,6 +73,7 @@ val NxLight = NxColors(
 )
 
 val NxDark = NxColors(
+    priorityHighText = Color(0xFFFDBA74),
     background = Color(0xFF0D1017), card = Color(0xFF1C2130), foreground = Color(0xFFE8EAEF),
     mutedFg = Color(0xFFA6B0BD), muted = Color(0xFF252C3D), border = Color(0xFF333B52),
     onyx = Color(0xFFE8EAEF), violet = Color(0xFF6F5AE6), violetText = Color(0xFFB3A6FF),
@@ -108,6 +110,18 @@ fun NexusLightTheme(content: @Composable () -> Unit) = NexusThemeOf(NxLight, dar
 
 @Composable
 private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.SideEffect {
+        val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>().firstOrNull()
+        activity?.window?.let { window ->
+            androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
     val scheme = if (dark) {
         darkColorScheme(
             // The dev web's --primary (13 Oct 2026 redesign): buttons, checks and switches in the light ink, never

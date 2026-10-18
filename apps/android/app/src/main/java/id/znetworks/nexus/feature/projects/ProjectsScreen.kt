@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.drawBehind
@@ -499,19 +501,19 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(28.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Box(Modifier.align(Alignment.TopEnd).offset(36.dp, (-36).dp).size(110.dp).background(accent.copy(alpha = 0.10f), CircleShape))
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 ProjectMark(p.icon, 44.dp, projectId = p.id)
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
                     Text(p.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.project_no_brief), fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
                 }
-                StatusChip(p.status)
                 trailing?.invoke()
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+            StatusChip(p.status)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Metric(stringResource(R.string.project_cards), "$total", Modifier.weight(1f))
                 Metric(stringResource(R.string.project_done), done?.toString() ?: "—", Modifier.weight(1f))
@@ -528,12 +530,12 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
                 modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape))
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (p.memberCount > 0) AvatarStack(p.members.map { it.user?.name to it.user?.avatar }, size = 24.dp, max = 4)
+                if (p.memberCount > 0) AvatarStack(p.members.map { it.user?.name to it.user?.avatar }, size = 24.dp, max = 4, userIds = p.members.map { it.uid })
                 else Text(stringResource(R.string.project_solo), fontSize = 11.sp, color = c.mutedFg)
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.Schedule, null, tint = c.mutedFg, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.size(4.dp))
-                Text(tally?.nextDue?.let { stringResource(R.string.project_next_due, DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it)) }
+                Text(tally?.nextDue?.let { stringResource(R.string.project_next_due, AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it)) }
                     ?: stringResource(R.string.project_no_deadline), fontSize = 11.sp, color = c.mutedFg)
             }
         }

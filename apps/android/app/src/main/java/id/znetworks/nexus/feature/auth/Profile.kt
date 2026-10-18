@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import id.znetworks.nexus.ui.theme.TextFont
@@ -22,6 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -104,7 +109,7 @@ fun rememberAvatarPicker(onPicked: (ByteArray?) -> Unit): () -> Unit {
  * address (read-only), one Save for name and phone.
  */
 @Composable
-fun ProfileCard() {
+fun ProfileCard(emailContent: @Composable () -> Unit = {}) {
     val c = Nx.colors
     val context = LocalContext.current
     val res = context.resources
@@ -119,7 +124,7 @@ fun ProfileCard() {
     var saved by remember { mutableStateOf(false) }
     var phoneBad by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { runCatching { api.profile() }.getOrNull()?.let { user = it; name = it.name ?: name; phone = it.phoneNumber.orEmpty() } }
+    LaunchedEffect(Unit) { runCatching { api.profile() }.getOrNull()?.let { user = it; name = it.name ?: name; phone = PhoneRules.display(it.phoneNumber) } }
     val pick = rememberAvatarPicker { jpeg ->
         if (jpeg == null) { problem = res.getString(R.string.chat_photo_unreadable); return@rememberAvatarPicker }
         scope.launch {
@@ -130,7 +135,7 @@ fun ProfileCard() {
     }
     SettingsBlock(stringResource(R.string.st_tab_profile), stringResource(R.string.st_profile_sub)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, user?.avatar, 72.dp); Spacer(Modifier.width(14.dp))
+            Avatar(name, user?.avatar, 72.dp, userId = user?.id); Spacer(Modifier.width(14.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     NxButton(stringResource(R.string.pf_change_photo), pick, compact = true, enabled = !photoBusy)
@@ -146,15 +151,15 @@ fun ProfileCard() {
                 Text(stringResource(R.string.st_photo_hint), fontSize = 12.sp, color = c.mutedFg)
             }
         }
-        OutlinedTextField(name, { name = it; saved = false }, singleLine = true, label = { Text(stringResource(R.string.st_full_name)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(phone, { phone = it; saved = false; phoneBad = false }, singleLine = true, label = { Text(stringResource(R.string.st_phone)) },
-            placeholder = { Text(stringResource(R.string.st_phone_ph), fontSize = 13.sp) }, isError = phoneBad,
-            supportingText = { Text(stringResource(if (phoneBad) R.string.st_phone_invalid else R.string.st_phone_hint)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+        PresenceLine(user?.id, chip = true)
+        ProfileEntry(stringResource(R.string.st_full_name), name, { name = it; saved = false })
+        emailContent()
         // Read-only: a BoD links it from Control Room; the person only needs to know which address it is.
         Text("Google Workspace", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
         val g = user?.googleWorkspaceEmail
-        Text(g ?: stringResource(R.string.pf_no_google), fontSize = if (g == null) 13.sp else 15.sp, color = if (g == null) c.mutedFg else c.foreground, maxLines = 1)
+        Text(g ?: stringResource(R.string.pf_no_google), fontSize = if (g == null) 13.sp else 15.sp, color = if (g == null) c.mutedFg else c.foreground, maxLines = 1, modifier = Modifier.fillMaxWidth().background(c.muted, RoundedCornerShape(12.dp)).padding(12.dp))
+        ProfileEntry(stringResource(R.string.st_phone), phone, { phone = it; saved = false; phoneBad = false }, KeyboardOptions(keyboardType = KeyboardType.Phone))
+        Text(stringResource(if (phoneBad) R.string.st_phone_invalid else R.string.st_phone_hint), fontSize = 12.sp, color = if (phoneBad) c.dangerText else c.mutedFg)
         problem?.let { Text(it, fontSize = 13.sp, color = c.dangerText) }
         if (saved) Text(stringResource(R.string.st_profile_saved), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.success)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -178,14 +183,24 @@ fun ProfileCard() {
 
 /** A settings card as the web's (`rounded-xl border bg-card p-6`): a plain title, an optional line under it. */
 @Composable
-internal fun SettingsBlock(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
+internal fun SettingsBlock(title: String, subtitle: String? = null, framed: Boolean = true, content: @Composable () -> Unit) {
     val c = Nx.colors
-    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(16.dp),
+    Column(Modifier.fillMaxWidth().then(if (framed) Modifier.background(c.card, RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(16.dp) else Modifier),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
             Text(title, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = c.foreground)
             subtitle?.let { Text(it, fontSize = 13.sp, color = c.mutedFg) }
         }
         content()
+    }
+}
+
+@Composable
+private fun ProfileEntry(label: String, value: String, onChange: (String) -> Unit, options: KeyboardOptions = KeyboardOptions.Default) {
+    val c = Nx.colors
+    Column {
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
+        TextField(value, onChange, singleLine = true, keyboardOptions = options, shape = RoundedCornerShape(12.dp),
+            colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent), modifier = Modifier.fillMaxWidth())
     }
 }

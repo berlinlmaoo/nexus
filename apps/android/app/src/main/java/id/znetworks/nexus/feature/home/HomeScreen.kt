@@ -109,6 +109,7 @@ import id.znetworks.nexus.feature.projects.PriorityChip
 import id.znetworks.nexus.feature.projects.Project
 import id.znetworks.nexus.feature.projects.ProjectsApi
 import id.znetworks.nexus.ui.components.Avatar
+import id.znetworks.nexus.ui.components.scrollEdges
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.async
@@ -127,6 +128,7 @@ import java.util.Locale
 
 data class HomeState(
     val game: Gamification? = null,
+    val avatar: String? = null,
     val projects: List<Project> = emptyList(),
     val tasks: List<BoardTask> = emptyList(),
     val unread: Int = 0,
@@ -151,6 +153,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun load() = viewModelScope.launch {
         shortcuts.refresh()
         val me = c.sessionStore.current?.userId ?: return@launch
+        val profile = async { runCatching { id.znetworks.nexus.feature.auth.ProfileApi(c.api).profile() }.getOrNull() }
         val game = async { runCatching { c.api.getCached("/api/gamification/me", "gamification", Gamification.serializer()) }.getOrNull() }
         val projects = async { runCatching { projectsApi.projects() }.getOrNull() }
         val tasks = async { runCatching { projectsApi.myTasks(me) }.getOrNull() }
@@ -170,6 +173,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { s ->
             s.copy(
                 game = g?.value ?: s.game,
+                avatar = profile.await()?.avatar ?: s.avatar,
                 projects = projects.await()?.value ?: s.projects,
                 tasks = t?.value ?: s.tasks,
                 unread = unread.await() ?: s.unread,
@@ -227,6 +231,7 @@ fun HomeScreen(
     val c = Nx.colors
     val context = LocalContext.current
     val session = (context.applicationContext as NexusApplication).container.sessionStore.current
+    val homeScroll = rememberScrollState()
     var stat by rememberSaveable { mutableStateOf<Int?>(null) }
     var levelOpen by rememberSaveable { mutableStateOf(false) }
     // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
@@ -236,7 +241,7 @@ fun HomeScreen(
     val statRects = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
     Box(Modifier.fillMaxSize()) {
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxSize().scrollEdges(homeScroll, c.background, vertical = true).verticalScroll(homeScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Greeting(session?.userName)
             AttendanceCard(s, onOpenAttendance)
             LevelCard(s.game) { levelOpen = true }
@@ -247,7 +252,7 @@ fun HomeScreen(
             QuickActions(onOpenAttendance, onOpenWeb)
             ShortcutsCard(vm.shortcuts, onOpenProject)
             AgendaCard(s.tasks, onOpenTask)
-            ProfileCard(session?.userName, s.game, onOpenSettings)
+            ProfileCard(session?.userName, s.avatar, s.game, onOpenSettings)
             Spacer(Modifier.height(72.dp))
         }
     }
@@ -255,7 +260,7 @@ fun HomeScreen(
     // The round GIDEON launcher with its mark (iOS / web), not a violet sparkle square.
     androidx.compose.material3.FloatingActionButton(onClick = onOpenGideon, containerColor = c.card, contentColor = c.foreground,
         shape = androidx.compose.foundation.shape.CircleShape,
-        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).border(1.dp, c.border, androidx.compose.foundation.shape.CircleShape)) {
+        modifier = Modifier.align(Alignment.BottomStart).padding(20.dp).size(52.dp).border(1.dp, c.border, androidx.compose.foundation.shape.CircleShape)) {
         id.znetworks.nexus.ui.components.GideonMark(24.dp, contentDescription = "GIDEON")
     }
     }
@@ -328,7 +333,7 @@ private fun AttendanceCard(s: HomeState, onOpen: () -> Unit) {
             Text(line, fontSize = 13.sp, color = tone, fontWeight = FontWeight.SemiBold)
         }
         if (notIn) Text(stringResource(R.string.home_att_check_in), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.violetText)
-        else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+        else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -738,6 +743,7 @@ private fun ShortcutRows(refs: List<ShortcutRef>, pinned: Boolean, shortcuts: Pr
 @Composable
 private fun AgendaCard(tasks: List<BoardTask>, onOpenTask: (String) -> Unit) {
     val c = Nx.colors
+    val agendaScroll = rememberScrollState()
     val today = OfficeTime.today()
     var picked by rememberSaveable { mutableStateOf(today.toString()) }
     val day = LocalDate.parse(picked)
@@ -747,7 +753,7 @@ private fun AgendaCard(tasks: List<BoardTask>, onOpenTask: (String) -> Unit) {
             Text(stringResource(R.string.home_agenda), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, modifier = Modifier.weight(1f))
             Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(day).replaceFirstChar(Char::titlecase), fontSize = 11.sp, color = c.mutedFg)
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.scrollEdges(agendaScroll, c.card).horizontalScroll(agendaScroll).padding(end = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (0 until 14).map { today.plusDays(it.toLong()) }.forEach { d ->
                 val on = d == day
                 val has = byDay[d].orEmpty().isNotEmpty()
@@ -782,13 +788,13 @@ private fun AgendaCard(tasks: List<BoardTask>, onOpenTask: (String) -> Unit) {
 }
 
 @Composable
-private fun ProfileCard(name: String?, g: Gamification?, onOpenSettings: () -> Unit) {
+private fun ProfileCard(name: String?, avatar: String?, g: Gamification?, onOpenSettings: () -> Unit) {
     val c = Nx.colors
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, null, 64.dp)
+            Avatar(name, avatar, 52.dp, userId = (LocalContext.current.applicationContext as NexusApplication).container.sessionStore.current?.userId)
             Spacer(Modifier.width(14.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProfileRow(stringResource(R.string.home_level), "${g?.xp?.level ?: 0} · ${g?.xp?.levelName ?: "—"}")
                 ProfileRow(stringResource(R.string.home_points_period), "%,d".format(Locale.getDefault(), g?.xp?.totalXp ?: 0))
             }
@@ -802,8 +808,8 @@ private fun ProfileCard(name: String?, g: Gamification?, onOpenSettings: () -> U
 @Composable
 private fun ProfileRow(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(110.dp)) { Caption(label) }
-        Text(value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Nx.colors.foreground, maxLines = 1)
+        Text(label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Nx.colors.mutedFg, modifier = Modifier.weight(1f).alignByBaseline())
+        Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Nx.colors.foreground, maxLines = 1, modifier = Modifier.alignByBaseline())
     }
 }
 

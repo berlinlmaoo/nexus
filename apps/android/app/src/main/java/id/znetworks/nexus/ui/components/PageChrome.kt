@@ -33,8 +33,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -73,6 +78,8 @@ fun PageHeader(
     onBack: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     tabs: (@Composable () -> Unit)? = null,
+    onTitleClick: (() -> Unit)? = null,
+    subtitleMaxLines: Int = 2,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Nx.colors
@@ -93,10 +100,10 @@ fun PageHeader(
                 Text(
                     title, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp,
                     letterSpacing = (-0.2).sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { heading() },
+                    modifier = Modifier.semantics { heading() }.then(if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier),
                 )
                 if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, fontFamily = TextFont, fontSize = 14.sp, lineHeight = 19.sp, color = c.mutedFg, maxLines = 2,
+                    Text(subtitle, fontFamily = TextFont, fontSize = 14.sp, lineHeight = 19.sp, color = c.mutedFg, maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
@@ -168,7 +175,7 @@ fun HeaderIconButton(
     val shape = RoundedCornerShape(8.dp)
     Box {
         Box(
-            Modifier.size(size).clip(shape)
+            Modifier.size(size.coerceAtLeast(48.dp)).clip(shape)
                 .background(if (primary) c.onyx else c.card)
                 .then(if (primary) Modifier else Modifier.border(1.dp, c.border, shape))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = contentDescription, onClick = onClick)
@@ -197,11 +204,19 @@ data class PageTab<K>(val key: K, val label: String, val count: Int? = null, val
 @Composable
 fun <K> PageTabs(tabs: List<PageTab<K>>, value: K, onChange: (K) -> Unit, modifier: Modifier = Modifier) {
     val c = Nx.colors
-    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    val scroll = rememberScrollState()
+    Row(modifier.fillMaxWidth().drawWithContent {
+        drawContent()
+        val edge = 24.dp.toPx()
+        if (scroll.canScrollForward) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, c.background), startX = size.width - edge), topLeft = androidx.compose.ui.geometry.Offset(size.width - edge, 0f), size = androidx.compose.ui.geometry.Size(edge, size.height))
+        if (scroll.canScrollBackward) drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.background, androidx.compose.ui.graphics.Color.Transparent), endX = edge), size = androidx.compose.ui.geometry.Size(edge, size.height))
+    }.horizontalScroll(scroll).padding(end = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         tabs.forEach { t ->
             val on = t.key == value
+            val selectedTab = remember(t.key) { BringIntoViewRequester() }
+            LaunchedEffect(on) { if (on) { androidx.compose.runtime.withFrameNanos { }; selectedTab.bringIntoView() } }
             Column(
-                Modifier.width(IntrinsicSize.Max).clickable(role = Role.Tab) { onChange(t.key) }.semantics { selected = on }.defaultMinSize(minHeight = 44.dp),
+                Modifier.width(IntrinsicSize.Max).bringIntoViewRequester(selectedTab).clickable(role = Role.Tab) { onChange(t.key) }.semantics { selected = on }.defaultMinSize(minHeight = 44.dp),
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 Row(Modifier.padding(top = 8.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -239,7 +254,7 @@ fun <K> Segmented(options: List<Pair<K, String>>, value: K, onChange: (K) -> Uni
                 Modifier.clip(RoundedCornerShape(7.dp)).background(if (on) c.card else c.muted)
                     .then(if (on) Modifier.border(1.dp, c.border, RoundedCornerShape(7.dp)) else Modifier)
                     .clickable(role = Role.RadioButton) { onChange(key) }.semantics { selected = on }
-                    .defaultMinSize(minHeight = 34.dp).padding(horizontal = 12.dp),
+                    .defaultMinSize(minHeight = 48.dp).padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(label, fontFamily = TextFont, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = if (on) c.foreground else c.mutedFg, maxLines = 1)
@@ -261,7 +276,7 @@ fun CompactSearchField(
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Nx.colors
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(22.dp)
     androidx.compose.foundation.text.BasicTextField(
         value, onValueChange, singleLine = true,
         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = c.foreground),

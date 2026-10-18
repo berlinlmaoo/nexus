@@ -201,7 +201,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         val next = edit(now.costs) ?: return
         if (next == now.costs) return
         if (!PipelineCosts.valid(next)) { _state.update { it.copy(notice = res.getString(R.string.pc_invalid)) }; return }
-        update(dealId, PipelineCosts.patch(next))
+        update(dealId, JsonObject(PipelineCosts.patch(next) + ("costsBase" to kotlinx.serialization.json.JsonArray(now.costs.map(PipelineCost::json)))))
     }
 
     /** Make (or find) the won deal's execution folder (§15), then open it; an answer without a folder opens the project. */
@@ -249,7 +249,12 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         }
     }
 
-    fun addTerm(dealId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) = term(R.string.pl_t_add_failed, { api.addTerm(projectId, dealId, fields) }, onDone)
+    private val termRequests = mutableMapOf<String, String>()
+    fun addTerm(dealId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) = term(R.string.pl_t_add_failed, {
+        val key = dealId + fields.toString()
+        val id = termRequests.getOrPut(key) { java.util.UUID.randomUUID().toString() }
+        api.addTerm(projectId, dealId, JsonObject(fields + ("clientRequestId" to JsonPrimitive(id)))).also { termRequests.remove(key) }
+    }, onDone)
     fun updateTerm(dealId: String, termId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) =
         term(R.string.pl_save_failed, { api.updateTerm(projectId, dealId, termId, fields) }, onDone)
     fun deleteTerm(dealId: String, termId: String) = term(R.string.pl_t_delete_failed, { api.deleteTerm(projectId, dealId, termId) })
@@ -453,10 +458,10 @@ private fun FiltersMenu(pms: List<Pair<String, String>>, bds: List<Pair<String, 
         DropdownMenu(open, { open = false }) {
             when (level) {
                 null -> {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                     if (services.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_service)) }, onClick = { level = "service" },
-                        trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                        trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_clear_filters)) }, enabled = pm != null || bd != null || service != null,
                         onClick = { open = false; onPm(null); onBd(null); onService(null) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_export)) }, leadingIcon = { Icon(Icons.Filled.Download, null) }, onClick = { open = false; onExport() })
@@ -563,14 +568,14 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
                 Text(reasonText(r) + if (more > 0) " " + stringResource(R.string.pl_more_reasons, more) else "", fontSize = 11.sp, color = healthColor(d.healthKey),
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            val people = listOfNotNull(d.pmShown?.let { it to d.pm?.avatar }, d.bdShown?.let { it to d.bd?.avatar }).distinctBy { it.first }
+            val people = listOfNotNull(d.pmShown?.let { Triple(it, d.pm?.avatar, d.pm?.id) }, d.bdShown?.let { Triple(it, d.bd?.avatar, d.bd?.id) }).distinctBy { it.third ?: it.first }
             val due = PipelineCard.nextDate(d)
             val noPm = d.pmShown == null && PipelineCard.needsPm(d)
             val services = d.services.joinToString(", ")
             if (people.isNotEmpty() || due != null || noPm || services.isNotEmpty()) {
                 androidx.compose.material3.HorizontalDivider(color = c.border)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    people.forEach { (n, a) -> Avatar(n, a, 18.dp); Spacer(Modifier.width(2.dp)) }
+                    people.forEach { (n, a, uid) -> Avatar(n, a, 18.dp, userId = uid); Spacer(Modifier.width(2.dp)) }
                     if (people.isNotEmpty()) Spacer(Modifier.width(2.dp))
                     when {
                         noPm -> Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger, maxLines = 1)
@@ -613,7 +618,7 @@ private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel
         val total = col.sumOf { it.value }
         if (total > 0) Text(" · " + PipelineFormat.idr(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(36.dp)) {
+        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
     }
 }

@@ -19,9 +19,9 @@ class ProfileTidyTest {
     }
 
     @Test fun avatarOpensOnlyALoadedPhoto() {
-        assertTrue(screen.contains("ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp)"))
+        assertTrue(screen.contains("ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp, userId = userId)"))
         // Initials or a failed load: the plain avatar, not clickable.
-        assertTrue(viewer.contains("if (i == null) { Avatar(name, url, size); return }"))
+        assertTrue(viewer.contains("if (i == null) { Avatar(name, url, size, userId = userId); return }"))
         // Page size, not the 300 px tile.
         assertTrue(viewer.contains("RemoteImages.load(context, url, 2048)"))
         assertTrue(viewer.contains("coerceIn(1f, 6f)")); assertTrue(viewer.contains("scale = 2.5f"))

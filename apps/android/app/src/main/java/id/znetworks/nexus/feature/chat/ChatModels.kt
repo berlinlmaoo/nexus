@@ -14,7 +14,8 @@ data class ChatMember(val id: String? = null, val userId: String? = null, val la
 }
 
 @Serializable
-data class ReplyRef(val id: String, val content: String = "", val attachmentType: String? = null, val user: ChatUser? = null)
+data class ReplyRef(val id: String, val content: String = "", val attachmentType: String? = null, val user: ChatUser? = null,
+                    val attachmentName: String? = null, val attachmentSize: Long? = null)
 
 @Serializable
 data class Message(
@@ -24,6 +25,9 @@ data class Message(
     val content: String = "",
     val attachmentUrl: String? = null,
     val attachmentType: String? = null,
+    val attachmentKind: String? = null,
+    val attachmentName: String? = null,
+    val attachmentSize: Long? = null,
     val replyToId: String? = null,
     val createdAt: String? = null,
     val user: ChatUser? = null,
@@ -100,13 +104,32 @@ data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMo
 @Serializable data class ChatMediaCounts(val photos: Int = 0, val links: Int = 0, val docs: Int = 0) { val total get() = photos + links + docs }
 @Serializable data class ChatInfo(val conversation: ChatInfoConversation, val members: List<ChatInfoMember> = emptyList(), val counts: ChatMediaCounts = ChatMediaCounts())
 @Serializable data class ChatMediaItem(val messageId: String? = null, val createdAt: String? = null, val sender: ChatRef? = null, val url: String? = null,
-                                       val attachmentType: String? = null, val title: String? = null)
+                                       val attachmentType: String? = null, val title: String? = null,
+                                       val name: String? = null, val size: Long? = null)
 @Serializable data class ChatMediaPage(val items: List<ChatMediaItem> = emptyList(), val nextCursor: String? = null)
 @Serializable data class ChatSearchHit(val messageId: String, val createdAt: String? = null, val sender: ChatRef? = null, val snippet: String? = null)
 @Serializable data class ChatSearchPage(val results: List<ChatSearchHit> = emptyList(), val nextCursor: String? = null)
 
 @Serializable
-data class ChatUpload(val url: String, val type: String? = null)
+data class ChatUpload(val url: String, val type: String? = null, val kind: String? = null, val name: String? = null, val size: Long? = null)
+
+object ChatDocuments {
+    const val MAX_BYTES = 25L * 1024 * 1024
+    const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
+    val extensions = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip")
+    private val images = setOf("png", "jpg", "jpeg", "webp", "gif")
+    fun preview(type: String?, name: String?, fallback: String): String? =
+        if ((!type.isNullOrBlank() || !name.isNullOrBlank()) && !type.orEmpty().startsWith("image/"))
+            "📎 " + (name?.takeIf { it.isNotBlank() } ?: fallback) else null
+    fun accepts(name: String, bytes: Long): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            in images -> bytes in 1..MAX_IMAGE_BYTES
+            in extensions -> bytes in 1..MAX_BYTES
+            else -> false
+        }
+    }
+}
 
 /**
  * Richer messages survive as plain strings (the web still reads them); the app upgrades the known

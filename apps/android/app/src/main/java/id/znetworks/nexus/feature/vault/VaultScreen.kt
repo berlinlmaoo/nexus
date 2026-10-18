@@ -111,11 +111,15 @@ data class VaultState(
     val busy: Boolean = false,
     val notice: String? = null,
     val opening: String? = null,
+    val linkedItem: VaultItem? = null,
 )
 
-class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
-    val folder: String? = handle.get<String>("folder")?.takeIf { it.isNotBlank() }
-    val trash: Boolean = handle.get<String>("trash") == "1"
+class VaultViewModel(app: Application, private val handle: SavedStateHandle) : AndroidViewModel(app) {
+    var folder: String? = handle.get<String>("folder")?.takeIf { it.isNotBlank() }
+        private set
+    var trash: Boolean = handle.get<String>("trash") == "1"
+        private set
+    private var loadGeneration = 0
     private val c = (app as NexusApplication).container
     val api = VaultApi(c.api, c.uploads)
     private val res get() = getApplication<Application>().resources
@@ -125,18 +129,29 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     init { load() }
 
     fun load() = viewModelScope.launch {
+        val generation = ++loadGeneration
         try {
-            val l = api.list(folder, trash, _state.value.query.ifBlank { null })
-            _state.update { it.copy(list = l, loading = false, error = null) }
-        } catch (e: ApiError) { _state.update { it.copy(loading = false, error = if (it.list == null) e.describe(res) else null, notice = if (it.list != null) e.describe(res) else null) } }
+            val linked = handle.get<String>("item")?.takeIf { it.isNotBlank() }?.let { api.item(it) }
+            val linkedTrash = linked?.let { it.trashed == true || it.deletedAt != null } ?: trash
+            val linkedFolder = if (linked == null) folder else if (linkedTrash) null else if (linked.isFolder) linked.id else linked.parentId
+            val l = api.list(linkedFolder, linkedTrash, _state.value.query.ifBlank { null })
+            if (generation != loadGeneration) return@launch
+            folder = linkedFolder; trash = linkedTrash
+            handle["folder"] = folder; handle["trash"] = if (trash) "1" else ""
+            _state.update { it.copy(list = l, loading = false, error = null, linkedItem = linked?.takeUnless { item -> item.isFolder || linkedTrash } ?: it.linkedItem) }
+            // The route is a one-shot intent; refreshes must not reopen a dismissed viewer.
+            handle["item"] = null
+        } catch (e: ApiError) { if (generation == loadGeneration) _state.update { it.copy(loading = false, error = if (it.list == null) e.describe(res) else null, notice = if (it.list != null) e.describe(res) else null) } }
     }
+
+    fun consumedLinkedItem() = _state.update { it.copy(linkedItem = null) }
 
     fun search(q: String) { _state.update { it.copy(query = q) }; load() }
     fun dismiss() = _state.update { it.copy(notice = null) }
 
     private fun act(block: suspend () -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
-        try { block() } catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
+        try { block() } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
         _state.update { it.copy(busy = false) }
         load()
     }
@@ -165,7 +180,7 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     withContext(Dispatchers.IO) { api.upload(picked, folder) { d, t -> _state.update { it.copy(upload = picked.name to (if (t > 0) d.toFloat() / t else 0f)) } } }
                     done++
                 } catch (e: ApiError) {
-                    _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.td_upload_failed)) }
+                    _state.update { it.copy(notice = e.describe(res)) }
                     break
                 }
             }
@@ -208,6 +223,13 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
     var moving by remember { mutableStateOf<VaultItem?>(null) }
     var viewing by remember { mutableStateOf<Int?>(null) }
+    var linkedViewing by remember { mutableStateOf<VaultItem?>(null) }
+    LaunchedEffect(s.linkedItem) {
+        s.linkedItem?.let { item ->
+            if (item.isMedia) linkedViewing = item else vm.open(item, false)
+            vm.consumedLinkedItem()
+        }
+    }
     // Any vault change in the company (upload, move, trash, …): refetch this folder (VAULT-MOVE-DND). The
     // screen's own fallback pace covers a server without the ping.
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.folder to vm.trash, liveMs = null, fallbackMs = 60_000,
@@ -241,7 +263,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         // The shelf's use against its 5 GB, in every mode (trash counts too); red past 90 % (web).
         VaultRules.usage(l?.quota)?.let { u ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                LinearProgressIndicator(progress = { u.percent / 100f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
+                LinearProgressIndicator(progress = { if (u.used > 0) (u.percent / 100f).coerceAtLeast(0.006f) else 0f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
                     // No Material stop dot at the far end: with a tiny share used it read as a lone dot (run 5).
                     drawStopIndicator = {}, gapSize = 0.dp,
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
@@ -314,7 +336,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                                 }
                             }
                         }
-                        HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 70.dp))
+                        HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.fillMaxWidth())
                         }
                     }
                     if (vm.trash) LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) { items(VaultRules.sorted(l.items), key = { it.id }) { itemRow(it) } }
@@ -373,6 +395,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         val media = s.list?.items?.let { VaultRules.gallery(it).media }.orEmpty()
         if (media.isNotEmpty()) VaultViewer(media, start, onClose = { viewing = null }, onSave = { vm.open(it, true) }, onShare = { sharing = it })
     }
+    linkedViewing?.let { item -> VaultViewer(listOf(item), 0, onClose = { linkedViewing = null }, onSave = { vm.open(it, true) }, onShare = { sharing = it }) }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -435,7 +458,7 @@ private fun ShareDialog(item: VaultItem, api: VaultApi, canExternal: Boolean, on
                     try {
                         val sh = api.share(item.id, internal, download, expires)
                         clipboard.setText(AnnotatedString(sh.url)); error = null; tick++
-                    } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+                    } catch (e: ApiError) { error = e.describe(res) }
                 }
             }) { Text(stringResource(R.string.vault_create_link)) }
         },
@@ -454,7 +477,7 @@ fun VaultPublicScreen(slug: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var p by remember { mutableStateOf<VaultPublic?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(slug) { try { p = api.public(slug) } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
+    LaunchedEffect(slug) { try { p = api.public(slug) } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }

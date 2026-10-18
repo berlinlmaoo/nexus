@@ -2,6 +2,8 @@ package id.znetworks.nexus.feature.projects
 
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -9,6 +11,7 @@ import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
@@ -143,6 +146,15 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
 
     fun save(vararg fields: Pair<String, JsonElement>) = act(R.string.ps_saved) { api.updateProject(projectId, JsonObject(fields.toMap())) }
 
+    /** The web saves the selection and its enabled state together, including removing the last member. */
+    fun autoAssignTo(ids: Set<String>) = act {
+        api.updateProject(projectId, JsonObject(mapOf(
+            "autoAssignEnabled" to JsonPrimitive(ids.isNotEmpty()),
+            "autoAssignAssigneeIds" to JsonArray(ids.map(::JsonPrimitive)),
+        )))
+        _state.update { it.copy(detail = it.detail?.copy(autoAssignEnabled = ids.isNotEmpty(), autoAssignAssigneeIds = ids.toList())) }
+    }
+
     /** PROJECT-ICON: upload, then store the returned url as the icon. */
     fun setPhoto(jpeg: ByteArray) = act(R.string.ps_saved) {
         val url = api.uploadProjectIcon(projectId, jpeg) ?: throw ApiError.Decoding(IllegalStateException("no url"))
@@ -253,21 +265,11 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             Section(stringResource(R.string.ps_customize)) {
                 // Only Auto assign is left (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct): duplicate mode is always on (multi-select
                 // on Board / List), P&L, Finance and the proof-before-Done rule are gone, and the server ignores those keys.
-                var autoIds by remember(d.autoAssignAssigneeIds) { mutableStateOf(d.autoAssignAssigneeIds.toSet()) }
-                Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true, enabled = !ro) { on ->
+                val autoIds = d.autoAssignAssigneeIds.toSet()
+                Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true, enabled = !ro && !s.busy) { on ->
                     if (on && autoIds.isEmpty()) vm.say(R.string.ps_auto_pick_first) else vm.save("autoAssignEnabled" to JsonPrimitive(on), "autoAssignAssigneeIds" to JsonArray(autoIds.map { JsonPrimitive(it) }))
                 }
-                Text(stringResource(R.string.ps_auto_to), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    d.members.forEach { m ->
-                        val uid = m.userId ?: m.user?.id ?: return@forEach
-                        FilterChip(uid in autoIds, {
-                            autoIds = if (uid in autoIds) autoIds - uid else autoIds + uid
-                            if (d.autoAssignEnabled == true && autoIds.isNotEmpty()) vm.save("autoAssignAssigneeIds" to JsonArray(autoIds.map { JsonPrimitive(it) }))
-                        }, { Text(m.user?.name ?: "—", fontSize = 12.sp) })
-                    }
-                }
-                if (autoIds.isEmpty()) Text(stringResource(R.string.ps_auto_pick_first), fontSize = 11.sp, color = c.mutedFg)
+                AutoAssignMembers(d.id, d.members, autoIds, enabled = !ro && !s.busy, onSelect = vm::autoAssignTo)
             }
             // Tabs: which ones this project shows (hiding deletes nothing).
             // A Pipeline Dashboard has no task tabs to choose (as the web's Tune).
@@ -310,7 +312,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                     var levelMenu by remember { mutableStateOf(false) }
                     var confirmRemove by remember { mutableStateOf(false) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.user?.name, m.user?.avatar, 30.dp)
+                        Avatar(m.user?.name, m.user?.avatar, 30.dp, userId = m.uid)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(m.user?.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
@@ -370,6 +372,44 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
 }
 
 @Composable
+private fun AutoAssignMembers(projectId: String, members: List<ProjectMemberRef>, ids: Set<String>, enabled: Boolean, onSelect: (Set<String>) -> Unit) {
+    val c = Nx.colors
+    var open by rememberSaveable(projectId) { mutableStateOf(ids.isEmpty()) }
+    val expanded = open || ids.isEmpty()
+    val selected = members.filter { it.uid in ids }
+    val shape = RoundedCornerShape(if (expanded) 16.dp else 24.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.muted.copy(alpha = 0.3f)).border(1.dp, c.border, shape)
+        .padding(horizontal = 8.dp, vertical = if (expanded) 8.dp else 0.dp)) {
+        if (!expanded) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                id.znetworks.nexus.ui.components.AvatarStack(selected.map { it.user?.name to it.user?.avatar }, size = 22.dp, userIds = selected.map { it.uid })
+                Text(selected.joinToString(", ") { it.user?.name ?: it.user?.email ?: it.uid }, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                TextButton(onClick = { open = true }, enabled = enabled) { Text(stringResource(R.string.change), fontSize = 12.sp, color = c.foreground) }
+            }
+        } else {
+            Text(stringResource(R.string.ps_auto_defaults, ids.size), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(4.dp))
+            if (members.isEmpty()) Text(stringResource(R.string.ps_auto_no_members), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(4.dp))
+            members.filter { it.uid.isNotBlank() }.forEach { member ->
+                val checked = member.uid in ids
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if (checked) c.onyx.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color.Transparent)
+                    .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Checkbox) { picked ->
+                        val next = if (picked) ids + member.uid else ids - member.uid
+                        if (picked) open = false // web: a pick folds the list; an un-pick keeps it open
+                        onSelect(next)
+                    }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(16.dp), tint = if (checked) c.foreground else c.mutedFg)
+                    Avatar(member.user?.name, member.user?.avatar, 22.dp, userId = member.uid)
+                    Text(member.user?.name ?: member.user?.email ?: member.uid, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (ids.isNotEmpty()) TextButton(onClick = { open = false }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.project_done), color = c.foreground) }
+        }
+    }
+}
+
+@Composable
 private fun Section(title: String, action: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
     val c = Nx.colors
     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
@@ -416,7 +456,7 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
                         options.forEach { o -> FilterChip(true, { options = options - o }, { Text("$o ✕", fontSize = 12.sp) }) }
                     }
                     OutlinedTextField(draft, { draft = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_add_option)) },
-                        trailingIcon = { IconButton(onClick = { if (draft.isNotBlank() && draft.trim() !in options) options = options + draft.trim(); draft = "" }) { Icon(Icons.Filled.Add, null) } },
+                        trailingIcon = { IconButton(onClick = { if (draft.isNotBlank() && draft.trim() !in options) options = options + draft.trim(); draft = "" }) { Icon(Icons.Filled.Add, stringResource(R.string.ps_add_option)) } },
                         modifier = Modifier.fillMaxWidth())
                 }
             }

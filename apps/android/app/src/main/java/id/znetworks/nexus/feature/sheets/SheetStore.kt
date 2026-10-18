@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.core.net.NexusJson
 import id.znetworks.nexus.core.realtime.RealtimeEvent
 import id.znetworks.nexus.core.realtime.RealtimeEvents
@@ -344,7 +345,18 @@ class SheetStore(app: Application, private val projectId: String) : AndroidViewM
         if (!online()) return
         viewModelScope.launch {
             _ui.update { it.copy(busy = true) }
-            try { block() } catch (e: ApiError) { _ui.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(fail)) } }
+            try { block() } catch (e: ApiError) {
+                _ui.update { it.copy(notice = e.describe(res)) }
+                if (e is ApiError.Http && e.code == "SHEET_STRUCTURE_CHANGED") {
+                    val held = _ui.value.data
+                    val current = e.body?.get("current") as? JsonObject
+                    if (held != null && current != null) {
+                        val merged = JsonObject(current + mapOf("id" to JsonPrimitive(held.id), "canEdit" to JsonPrimitive(held.canEdit), "canManage" to JsonPrimitive(held.canManage)))
+                        SheetParse.sheet(merged)?.let { fresh -> _ui.update { it.copy(data = fresh.copy(rows = held.rows, computed = held.computed)) } }
+                    }
+                    reload()
+                }
+            }
             _ui.update { it.copy(busy = false) }
         }
     }
@@ -379,7 +391,7 @@ class SheetStore(app: Application, private val projectId: String) : AndroidViewM
         val i = d.columns.indexOfFirst { it.id == colId }.takeIf { it >= 0 } ?: return@structure
         val list = d.columns.map { it.raw }.toMutableList()
         list.add(if (left) i else i + 1, buildJsonObject { put("name", ""); put("type", "text") })
-        api.setColumns(d.id, list); reload()
+        api.setColumns(d.id, list, d.structureVersion); reload()
     }
     fun deleteColumn(colId: String) {
         if ((_ui.value.data?.columns?.size ?: 0) <= 1) { _ui.update { it.copy(notice = res.getString(R.string.sh_need_column)) }; return }

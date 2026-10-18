@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import id.znetworks.nexus.ui.components.LeftTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -126,10 +128,12 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
     var inviting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
+    var totalUsers by remember { mutableStateOf<Int?>(null) }
     var memberships by remember { mutableStateOf<Map<String, UserMemberships>>(emptyMap()) }
     // Offboarded people (owner, 8 Oct): no membership left, so they'd read as "not in the workspace yet".
     var left by remember { mutableStateOf<List<AdminUserRow>>(emptyList()) }
     var reinstating by remember { mutableStateOf<AdminUserRow?>(null) }
+    LaunchedEffect(tick) { totalUsers = runCatching { api.adminUsers(1, "all").pagination.total }.getOrNull() }
     LaunchedEffect(tick) { try { roster = api.roster(); error = null } catch (e: ApiError) { error = e.describe(res) } }
     LaunchedEffect(tick, isBoD) { left = if (isBoD) api.leftUsers() else emptyList() }
     // One call for everyone (BoD; others get an empty map and no summary line), never one per row.
@@ -140,10 +144,17 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
         r == null -> TabEmpty(Icons.Filled.PersonAdd, error!!)
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(role == "ALL", { role = "ALL" }, { Text("Total · ${r.members.size}") })
-                    Roles.ALL.forEach { k -> FilterChip(role == k, { role = if (role == k) "ALL" else k }, { Text("${Roles.label(k)} · ${r.members.count { it.role == k }}") }) }
-                }
+                val stats = listOf(Triple("ALL", stringResource(R.string.audit_admin_total), totalUsers)) + Roles.ALL.map { Triple(it, if (it == "BOD") "Board" else Roles.label(it), r.members.count { m -> m.role == it }) }
+                stats.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { (key, label, count) ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(c.card).border(if (role == key) 2.dp else 1.dp, if (role == key) c.onyx else c.border, RoundedCornerShape(20.dp)).clickable { role = key }.padding(16.dp)) {
+                            Text(count?.toString() ?: "—", fontSize = 26.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, color = c.foreground)
+                            Text(label, fontSize = 13.sp, color = c.mutedFg)
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                } }
+                Text(stringResource(R.string.audit_admin_hierarchy), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().background(c.muted, RoundedCornerShape(12.dp)).padding(12.dp))
             }
             // BoD and One Above All only, as iOS and the server (a Manager's every save would be 403).
             if (isBoD) item {
@@ -156,7 +167,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         Text(if (unplaced == 0) stringResource(R.string.ad_chart_all_placed) else stringResource(R.string.ad_chart_unplaced, unplaced),
                             fontSize = 12.sp, color = if (unplaced == 0) c.mutedFg else c.warning)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
             // Bagan IP & Divisi (5 Oct 2026, replaces Teams): everyone here can read it; BoD / OAA edit it.
@@ -168,7 +179,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         Text(stringResource(R.string.oc_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(stringResource(if (isBoD) R.string.oc_entry_sub_edit else R.string.oc_entry_sub_read), fontSize = 12.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
             item {
@@ -181,16 +192,17 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             val shown = Roles.filter(r.members, role, q)
             if (shown.isEmpty()) item { Text(stringResource(R.string.ad_no_match), fontSize = 12.sp, color = c.mutedFg) }
             items(shown, key = { it.id }) { m ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).clickable { onOpenUser(m.userId) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(m.name, m.avatar, 34.dp); Spacer(Modifier.width(10.dp))
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).clickable { onOpenUser(m.userId) }.padding(10.dp), verticalAlignment = Alignment.Top) {
+                    Avatar(m.name, m.avatar, 34.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         m.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        PresenceLine(m.userId)
                         // Only what is ON: most people use none, and "off" badges on every row hide the few.
                         if (m.flexiTimeEnabled || m.noGeofenceMode || !m.googleWorkspaceEmail.isNullOrEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (m.flexiTimeEnabled) Text("⚡ Flexi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
                             if (m.noGeofenceMode) Text("📱 Mobile", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
-                            if (!m.googleWorkspaceEmail.isNullOrEmpty()) Text("@", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.violetText)
+                            if (!m.googleWorkspaceEmail.isNullOrEmpty()) Text("Google Workspace", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                         }
                         // BoD without an approver is the top of the chain, not a gap.
                         val approver = m.approver?.name?.takeIf { it.isNotEmpty() }
@@ -198,7 +210,10 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         else if (m.role == "STAFF" || m.role == "MANAGER") Text(stringResource(R.string.ad_not_placed), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
                         memberships[m.userId]?.let { Text(UsersLogic.membershipSummary(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg) }
                     }
-                    Pill(Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Pill(if (m.role == "BOD") "Board" else Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
+                        androidx.compose.material3.OutlinedButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
+                    }
                 }
             }
             // Signed up but not in this workspace yet: one tap brings them in (BoD).
@@ -208,7 +223,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 item { Text(stringResource(R.string.ad_not_in_ws, reg.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
                 items(reg, key = { "reg-" + it.id }) { u ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u.name, u.avatar, 30.dp); Spacer(Modifier.width(10.dp))
+                        Avatar(u.name, u.avatar, 30.dp, userId = u.id); Spacer(Modifier.width(10.dp))
                         Text(u.name ?: u.email ?: "—", fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
                         TextButton(onClick = {
                             val ws = r.workspaceId ?: return@TextButton
@@ -227,7 +242,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 item { Text(stringResource(R.string.off_left_section, gone.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
                 items(gone, key = { "left-" + it.id }) { u ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u.name, u.avatar, 30.dp); Spacer(Modifier.width(10.dp))
+                        Avatar(u.name, u.avatar, 30.dp, userId = u.id); Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(u.displayName, fontSize = 13.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (u.leftAt != null) LeftTag(u.leftAt) else Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
@@ -303,7 +318,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
         val canEdit = Roles.canEdit(r.role, m.role)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onOpenProfile(m.userId) }) {
-                Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
+                Avatar(m.name, m.avatar, 56.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
                 Column {
                     Text(m.displayName, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
                     Text(listOfNotNull(m.email, m.phoneNumber).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
@@ -402,7 +417,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                         items(candidates, key = { it.id }) { a ->
                             val loop = Roles.makesCycle(r.members, m.userId, a.userId)
                             Row(Modifier.fillMaxWidth().clickable(enabled = !loop) { picking = null; run { api.setApprover(m, ws, a.userId) } }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(a.name, a.avatar, 26.dp); Spacer(Modifier.width(8.dp))
+                                Avatar(a.name, a.avatar, 26.dp, userId = a.userId); Spacer(Modifier.width(8.dp))
                                 Text(a.displayName + " · " + Roles.label(a.role), fontSize = 13.sp, color = if (loop) c.mutedFg else c.foreground, modifier = Modifier.weight(1f))
                                 if (loop) Text(stringResource(R.string.ad_loop), fontSize = 10.sp, color = c.mutedFg)
                             }
@@ -440,7 +455,7 @@ private fun AccountCard(m: WsMember, onPhoto: (ByteArray?) -> Unit, onSave: (Map
     val pick = rememberAvatarPicker(onPhoto)
     AdminCard(stringResource(R.string.ad_account)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
+            Avatar(m.name, m.avatar, 56.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
             TextButton(onClick = pick) { Text(stringResource(R.string.pf_change_photo)) }
         }
         OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)

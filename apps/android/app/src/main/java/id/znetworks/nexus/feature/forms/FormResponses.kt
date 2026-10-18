@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -128,16 +130,15 @@ fun FormResponsesList(
     }
 }
 
-private val WHEN = DateTimeFormatter.ofPattern("d MMM HH:mm")
 
 @Composable
 private fun ResponseRow(r: FormResponseRow, onOpen: () -> Unit) {
     val c = Nx.colors
     val sender = r.submitter?.name?.takeIf { it.isNotBlank() } ?: r.submitter?.email?.takeIf { it.isNotBlank() } ?: stringResource(R.string.fr_unknown)
-    val time = r.createdAt?.let { runCatching { WHEN.withLocale(Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull() }
+    val time = r.createdAt?.let { runCatching { AppDateFormats.ofPattern("d MMM HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull() }
     val chip = r.task?.let { t -> t.section?.takeIf { it.isNotBlank() } ?: t.status?.let { s -> taskStatusLabel(s.uppercase()) } }
     Row(Modifier.fillMaxWidth().clickable(enabled = r.task != null, onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (r.submitter != null) Avatar(sender, r.submitter.avatar, size = 28.dp) else Box(Modifier.size(28.dp).background(c.muted, CircleShape))
+        if (r.submitter != null) Avatar(sender, r.submitter.avatar, size = 28.dp, userId = r.submitter.id) else Box(Modifier.size(28.dp).background(c.muted, CircleShape))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(r.task?.title ?: stringResource(R.string.fr_task_deleted), fontSize = 15.sp, fontWeight = FontWeight.Medium,

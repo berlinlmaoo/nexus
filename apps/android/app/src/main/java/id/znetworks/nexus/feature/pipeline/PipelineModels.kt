@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import id.znetworks.nexus.core.i18n.AppLanguage
 import id.znetworks.nexus.R
 import kotlinx.serialization.json.JsonArray
@@ -331,7 +333,7 @@ object PipelineCard {
     fun dateTone(day: String, today: String) = when { day < today -> Tone.PAST; day == today -> Tone.TODAY; else -> Tone.LATER }
     /** "4 Okt" / "4 Oct": the year goes without saying on a card. */
     fun shortDay(iso: String, id: Boolean = java.util.Locale.getDefault().language.let { it == "in" || it == "id" }): String = runCatching {
-        java.time.format.DateTimeFormatter.ofPattern("d MMM", if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS).format(java.time.LocalDate.parse(iso.take(10)))
+        AppDateFormats.ofPattern("d MMM", if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS).format(java.time.LocalDate.parse(iso.take(10)))
     }.getOrDefault(iso)
 }
 

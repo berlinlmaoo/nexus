@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.drawBehind
@@ -132,7 +134,7 @@ private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit)
         verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
 }
 
-private fun dayLabel(iso: String?): String = dueDate(iso)?.let { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: "—"
+private fun dayLabel(iso: String?): String = dueDate(iso)?.let { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: "—"
 
 // region Spreadsheet
 
@@ -181,7 +183,7 @@ fun SheetTab(projectId: String, lanes: List<Lane>, onOpen: (String) -> Unit) {
                     // Faces, then the names (AVATARS-PRIORITY).
                     cell(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), 140.dp, content = if (t.assignees.isEmpty()) null else ({
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp)
+                            id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp, userIds = t.assignees.map { it.userId ?: it.user?.id })
                             Spacer(Modifier.width(4.dp))
                             Text(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 fontSize = 12.sp, color = c.foreground.copy(alpha = 0.9f))
@@ -228,11 +230,11 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
         }
         val today = OfficeTime.today()
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+            IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
             Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month).replaceFirstChar(Char::titlecase),
                 fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+            IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             // "Today" (web): back to this month with today picked.
             id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.cal_today), { offset = 0; selected = today.dayOfMonth }, compact = true)
         }
@@ -247,7 +249,7 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 (0 until 7).forEach { i ->
                     val day = week.getOrNull(i)
-                    Box(Modifier.weight(1f).height(44.dp)) {
+                    Box(Modifier.weight(1f).height(44.dp).background(if (i >= 5) c.muted.copy(alpha = 0.4f) else Color.Transparent)) {
                         if (day != null) {
                             val on = selected == day
                             val has = byDay[day].orEmpty().isNotEmpty()
@@ -255,11 +257,12 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                             Column(
                                 Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
                                     .background(if (on) c.violet else if (has) c.violet.copy(alpha = 0.08f) else Color.Transparent)
-                                    .then(if (isToday && !on) Modifier.border(1.5.dp, c.foreground, RoundedCornerShape(10.dp)) else Modifier)
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
-                                Text("$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
+                                Box(Modifier.background(if (isToday) c.navy else Color.Transparent, CircleShape).padding(horizontal = 6.dp, vertical = 3.dp), contentAlignment = Alignment.Center) {
+                                    Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on || isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) c.onNavy else if (on) Color.White else c.foreground)
+                                }
                                 Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
                             }
                         }
@@ -314,10 +317,10 @@ private fun UndatedChips(undated: List<BoardTask>, onOpen: (String) -> Unit) {
 /** Bar colour by priority (web timeline). */
 private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
     "URGENT" -> Color(0xFFF43F5E)
-    "HIGH" -> Color(0xFFEF4444)
+    "HIGH" -> Color(0xFFF97316)
     "MEDIUM" -> Color(0xFF0EA5E9)
-    "LOW" -> Color(0xFF8B5CF6)
-    else -> Color(0xFF14B8A6)
+    "LOW" -> Color(0xFF10B981)
+    else -> Color(0xFF9CA3AF)
 }
 
 /**
@@ -381,6 +384,9 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
         Box(Modifier.width(1.dp).height(bodyH).background(c.border))
         Box(Modifier.weight(1f).horizontalScroll(h)) {
             Box(Modifier.width(dayW * dayCount).height(bodyH)) {
+                days.filter { it.dayOfWeek == DayOfWeek.SATURDAY || it.dayOfWeek == DayOfWeek.SUNDAY }.forEach { day ->
+                    Box(Modifier.offset(x = x(day), y = 74.dp).width(dayW).height(bodyH - 74.dp).background(c.muted.copy(alpha = 0.3f)))
+                }
                 Column(Modifier.fillMaxSize()) {
                     // Month row, then weekday + date (weekends tinted, today in a filled circle).
                     Row(Modifier.height(32.dp)) {
@@ -398,7 +404,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                             Column(Modifier.width(dayW).fillMaxHeight().background(if (weekend) c.muted.copy(alpha = 0.5f) else Color.Transparent),
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                 Text(d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()), fontSize = 10.sp, color = c.mutedFg)
-                                Box(Modifier.size(20.dp).background(if (isToday) c.onyx else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
+                                  Box(Modifier.size(20.dp).background(if (isToday) c.violet else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
                                     Text("${d.dayOfMonth}", fontSize = 11.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) c.background else c.mutedFg)
                                 }
                             }
@@ -408,21 +414,22 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
                         rows.forEach { (t, win) ->
                             Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                                // An undated row stays empty (web phone); "No date" was drawn across the today line.
+                                if (win == null) Text(stringResource(R.string.tl_no_date), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.offset(x = with(density) { h.value.toDp() }).background(c.background).padding(horizontal = 8.dp))
                                 if (win != null) Row(
                                     Modifier.offset(x = x(win.start) + 2.dp).width(maxOf(w(win) - 4.dp, dayW * 0.8f)).height(32.dp).clip(RoundedCornerShape(8.dp))
                                         .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     if (t.isDone) Text("✓ ", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color.White)
-                                    Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (w(win) >= 100.dp) Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
+                                if (win != null && w(win) < 100.dp) Text(t.title, color = c.foreground, fontSize = 12.sp, maxLines = 1, modifier = Modifier.offset(x = x(win.start) + maxOf(w(win), dayW) + 8.dp))
                             }
                         }
                     }
                 }
                 // Today's line down the body, at the centre of its column.
-                Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.onyx.copy(alpha = 0.55f)))
+                Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.violet.copy(alpha = 0.65f)))
             }
         }
     }

@@ -26,6 +26,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -76,6 +77,10 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
     fun set(x: CalendarCore.Filters) = vm.setFilters(x)
     var qPeople by rememberSaveable { mutableStateOf("") }
     var qProjects by rememberSaveable { mutableStateOf("") }
+    var qFolders by rememberSaveable { mutableStateOf("") }
+    var allFolders by rememberSaveable { mutableStateOf(false) }
+    val folders = d.s.structure?.folders.orEmpty()
+    val matchingFolders = folders.filter { qFolders.isBlank() || it.name.contains(qFolders.trim(), true) }
     BackHandler(onBack = onClose)
     // Selected people and projects stay listed (pinned first) even with no task in the range, so each can be
     // cleared on its own; the rest come from the range on screen (audit 2 #16).
@@ -123,6 +128,26 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
                     Text(name.ifEmpty { stringResource(R.string.cal_former_member) }, style = CalType.s14, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (folders.isNotEmpty()) {
+                item(key = "folderh") {
+                    Header(stringResource(R.string.cal_folders), f.folders.size)
+                    OutlinedTextField(qFolders, { qFolders = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_folders)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
+                    if (matchingFolders.isEmpty()) Text(stringResource(R.string.cal_no_folder_matches), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                }
+                items(if (allFolders) matchingFolders else matchingFolders.take(8), key = { "f:${it.id}" }) { folder ->
+                    val on = folder.id in f.folders
+                    CheckRow(on, { set(f.copy(folders = if (on) f.folders - folder.id else f.folders + folder.id)) },
+                        Modifier.padding(start = if (qFolders.isBlank()) (16 * folder.depth.coerceAtLeast(0)).dp else 0.dp)) {
+                        Icon(androidx.compose.material.icons.Icons.Outlined.Folder, null, Modifier.size(18.dp), tint = c.mutedFg)
+                        Spacer(Modifier.width(8.dp))
+                        Text(folder.name, style = CalType.s14, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (!allFolders && matchingFolders.size > 8) item(key = "foldersall") {
+                    TextButton(onClick = { allFolders = true }) { Text(stringResource(R.string.cal_show_all_folders, matchingFolders.size)) }
+                }
+            }
             item(key = "projh") {
                 Header(stringResource(R.string.cal_projects))
                 OutlinedTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
@@ -165,9 +190,13 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
 }
 
 @Composable
-private fun Header(title: String) {
+private fun Header(title: String, count: Int = 0) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     Text(title.uppercase(Locale.getDefault()), style = MicroLabel, color = Nx.colors.mutedFg,
         modifier = Modifier.padding(top = 18.dp, bottom = 6.dp).semantics { heading() })
+    if (count > 0) Text(count.toString(), style = CalType.s12, color = Nx.colors.mutedFg,
+        modifier = Modifier.padding(top = 12.dp).clip(CircleShape).background(Nx.colors.muted).padding(horizontal = 6.dp, vertical = 2.dp))
+    }
 }
 
 @Composable

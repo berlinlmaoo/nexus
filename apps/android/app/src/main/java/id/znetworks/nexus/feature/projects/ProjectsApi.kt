@@ -112,10 +112,6 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun setFolderPin(folderId: String, pinned: Boolean) =
         post("/api/project-folders/pins", buildJsonObject { put("folderId", folderId); put("pinned", pinned) })
 
-    /** The folder calendar's project subset ([] = all of the folder's projects, now and later). */
-    suspend fun setFolderAggregate(id: String, projectIds: List<String>) =
-        patch("/api/project-folders/$id", JsonObject(mapOf("aggregateProjectIds" to kotlinx.serialization.json.JsonArray(projectIds.map { JsonPrimitive(it) }))))
-
     /** The task status a section stands for (DEV-REDESIGN §1): tasks moved in take it; null = a plain section. */
     suspend fun setSectionStatus(projectId: String, sectionId: String, taskStatus: String?) =
         patch("/api/projects/$projectId/sections", JsonObject(mapOf("id" to JsonPrimitive(sectionId), "taskStatus" to (taskStatus?.let { JsonPrimitive(it) } ?: JsonNull))))
@@ -173,6 +169,10 @@ class ProjectsApi(private val api: ApiClient) {
     /** string for TEXT/SELECT/STATUS/NUMBER/DATE, string[] for MULTI_SELECT, {label,mapUrl} for PLACE. */
     suspend fun setFieldValue(fieldId: String, taskId: String, value: JsonElement) =
         patch("/api/custom-fields", buildJsonObject { put("id", fieldId); put("taskId", taskId); put("value", value) })
+
+    suspend fun setFieldChoices(fieldId: String, taskId: String, base: List<String>, chosen: List<String>) =
+        patch("/api/custom-fields", JsonObject(mapOf("id" to JsonPrimitive(fieldId), "taskId" to JsonPrimitive(taskId)) +
+            id.znetworks.nexus.core.net.ConcurrentEdits.delta(base, chosen, "addValues", "removeValues")))
 
     suspend fun createField(projectId: String, name: String, type: String, options: List<String>) = post("/api/custom-fields", buildJsonObject {
         put("projectId", projectId); put("name", name.trim()); put("type", type)
@@ -277,9 +277,10 @@ class ProjectsApi(private val api: ApiClient) {
             putJsonArray("auditLogIds") { auditLogIds.forEach { add(JsonPrimitive(it)) } }
         })).let { BatchResult(it.restored, it.failed) }
 
-    /** A column's top-level order, top first (manual order). */
-    suspend fun reorder(taskListId: String, orderedIds: List<String>, movedId: String?) = post("/api/tasks/reorder", buildJsonObject {
-        put("taskListId", taskListId); putJsonArray("orderedIds") { orderedIds.forEach { add(JsonPrimitive(it)) } }; movedId?.let { put("movedId", it) }
+    /** A relative move applied to the server's current column order; null anchor means the end. */
+    suspend fun reorder(taskListId: String, movedIds: List<String>, beforeId: String? = null) = post("/api/tasks/reorder", buildJsonObject {
+        put("taskListId", taskListId); putJsonArray("movedIds") { movedIds.forEach { add(JsonPrimitive(it)) } }
+        put("beforeId", beforeId?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
     })
 
     /** The copy's id (`{task, copiedTo}`). */

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,10 +75,11 @@ fun priorityLabel(p: String?): String = stringResource(
 
 @Composable
 fun priorityColor(p: String?): Color = when (p.orEmpty().uppercase()) {
-    // HIGH is red like URGENT again (owner, 10 Oct: "balikin merah"; iOS bf64885).
-    "URGENT", "HIGH" -> Nx.colors.danger
+    "URGENT" -> Nx.colors.danger
+    "HIGH" -> Nx.colors.priorityHighText
     "MEDIUM" -> Nx.colors.blue
-    else -> Nx.colors.mutedFg   // LOW is neutral (AVATARS-PRIORITY)
+    "LOW" -> Nx.colors.success
+    else -> Nx.colors.mutedFg
 }
 
 @Composable
@@ -111,7 +114,7 @@ fun DueLabel(iso: String?, done: Boolean) {
         d == today -> Nx.colors.warning
         else -> Nx.colors.mutedFg
     }
-    Text("📅 " + DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(d), fontSize = 11.sp, color = tone, fontWeight = FontWeight.SemiBold)
+    Text("📅 " + AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(d), fontSize = 11.sp, color = tone, fontWeight = FontWeight.SemiBold)
 }
 
 /**
@@ -146,7 +149,7 @@ fun TaskCard(
                 Spacer(Modifier.size(8.dp))
             }
             if (onToggleDone != null) {
-                IconButton(onClick = onToggleDone, modifier = Modifier.size(24.dp)) {
+                IconButton(onClick = onToggleDone, modifier = Modifier.size(48.dp)) {
                     Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
                         tint = if (t.isDone) c.success else c.mutedFg)
                 }
@@ -172,7 +175,7 @@ fun TaskCard(
             if (comments > 0) Text("💬 $comments", fontSize = 11.sp, color = c.mutedFg)
             if (t.questXp > 0) Pill("+${t.questXp} XP", c.violetText)
             Spacer(Modifier.weight(1f))
-            if (t.assignees.isNotEmpty()) AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 22.dp)
+            if (t.assignees.isNotEmpty()) AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 22.dp, userIds = t.assignees.map { it.userId ?: it.user?.id })
         }
     }
 }

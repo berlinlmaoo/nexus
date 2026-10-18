@@ -68,6 +68,8 @@ data class CalPerson(
 
 @Serializable data class CalMe(val userId: String, val role: String? = null, val homeUnitIds: List<String> = emptyList())
 
+@Serializable data class CalFolder(val id: String, val name: String = "", val icon: String? = null, val color: String? = null, val parentId: String? = null, val depth: Int = 0)
+
 /** `GET /api/calendar/structure`. For access none/off the arrays are empty and [version] is null. */
 @Serializable
 data class CalStructure(
@@ -77,6 +79,7 @@ data class CalStructure(
     val me: CalMe? = null,
     val units: List<CalUnit> = emptyList(),
     val people: List<CalPerson> = emptyList(),
+    val folders: List<CalFolder> = emptyList(),
 ) {
     val accessLevel get() = CalAccess.of(access)
     /** In Bagan order. */
@@ -166,6 +169,7 @@ data class CalItems(
     val people: Map<String, CalExtraPerson> = emptyMap(),
     val holidays: List<CalHoliday> = emptyList(),
     val truncated: Boolean = false,
+    val folder: List<String> = emptyList(),
 ) {
     val accessLevel get() = CalAccess.of(access)
     val rulesOrDefault get() = rules ?: CalRules()

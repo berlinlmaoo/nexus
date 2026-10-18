@@ -2,7 +2,10 @@ package id.znetworks.nexus.feature.gideon
 
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import android.net.Uri
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.alpha
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,11 +41,17 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MoreVert
+import id.znetworks.nexus.core.nav.Target
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -62,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -97,6 +107,10 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val container = (context.applicationContext as NexusApplication).container
     val chat = container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
+    val tiers by container.gideonTiers.state.collectAsStateWithLifecycle()
+    val config by container.remoteConfig.body.collectAsStateWithLifecycle()
+    LaunchedEffect(s.error?.kind) { if (s.error?.kind == GideonProblem.Kind.TIER_UNAVAILABLE) container.gideonTiers.refresh() }
+    LaunchedEffect(Unit) { container.gideonTiers.seed(container.remoteConfig.current.gideonTiers); container.gideonTiers.refresh() }
     val c = Nx.colors
     val res = context.resources
     val scope = rememberCoroutineScope()
@@ -105,6 +119,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     var upload by remember { mutableStateOf<GUpload?>(null) }
     var tierMenu by remember { mutableStateOf(false) }
     var attachMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var showChats by rememberSaveable { mutableStateOf(false) }
     // A fresh chat on every open (never the last one); a rotation keeps the one on screen.
@@ -112,6 +127,8 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew(project) } }
     // "Review before writing" is remembered on the device (iOS @AppStorage "gideon.approval", web localStorage).
     val prefs = remember { context.getSharedPreferences(GIDEON_PREFS, android.content.Context.MODE_PRIVATE) }
+    val reviewNoticeKey = "review-notice-bod-v1:" + container.sessionStore.current?.userId.orEmpty()
+    var showReviewNotice by remember(reviewNoticeKey) { mutableStateOf(!prefs.getBoolean(reviewNoticeKey, false)) }
     LaunchedEffect(Unit) { chat.setApproval(GideonApprovalMode.of(prefs.getString(KEY_APPROVAL, null))) }
     var decision by remember { mutableStateOf<GDecision?>(null) }
     val focus = remember { FocusRequester() }
@@ -123,20 +140,17 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { u -> scope.launch { readDoc(context, u, res)?.let { r -> r.fold({ upload = it }, { e -> note = e.message }) } } }
     }
-    fun send(text: String) { chat.ask(text, upload); draft = ""; upload = null }
+    fun send(text: String) { if (tiers.available(s.tier)) { chat.ask(text, upload); draft = ""; upload = null } }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         val title = if (showChats) stringResource(R.string.gx_chats)
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
-        PageHeader(title, onBack = back, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
-            if (!showChats) Box {
-                TextButton(onClick = { tierMenu = true }) { Text(s.tier.label, color = c.foreground) }
-                DropdownMenu(tierMenu, { tierMenu = false }) {
-                    GideonTier.entries.forEach { t ->
-                        DropdownMenuItem(text = { Column { Text(t.label, fontWeight = FontWeight.SemiBold); Text(stringResource(tierNote(t)), fontSize = 12.sp, color = c.mutedFg) } },
-                            leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) }, onClick = { tierMenu = false; chat.setTier(t) })
-                    }
+        PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
+            Box {
+                HeaderIconButton(Icons.Outlined.MoreVert, stringResource(R.string.more), { moreMenu = true })
+                DropdownMenu(moreMenu, { moreMenu = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.gm_title)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemory) })
                 }
             }
             HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
@@ -153,7 +167,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
-                s.messages.isEmpty() && !s.thinking -> FreshChat { send(it) }
+                s.messages.isEmpty() && s.pending.isEmpty() && !s.thinking -> FreshChat { send(it) }
                 else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
@@ -175,32 +189,74 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             MentionPicker(q, container.api) { ref -> chat.addRef(ref); draft = GideonMention.strip(draft); runCatching { focus.requestFocus() } }
         }
         ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
+        GideonCreditMeter(container.api, s.thinking)
+        if (!tiers.available(s.tier)) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.g19_notice, s.tier.label), color = c.warningFg, fontSize = 12.sp)
+                Text(stringResource(when (tiers.tiers[s.tier.key]?.reason) { "transcribing" -> R.string.g19_transcribing; "loading" -> R.string.g19_loading; else -> R.string.g19_down }), color = c.mutedFg, fontSize = 11.sp)
+            }
+            TextButton(onClick = { chat.setTier(GideonTier.LUNA) }) { Text(stringResource(R.string.g19_use_phaethon)) }
+        }
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
         Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
             Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
+                androidx.compose.material3.TextField(draft, { draft = it }, colors = androidx.compose.material3.TextFieldDefaults.colors(focusedContainerColor = c.card, unfocusedContainerColor = c.card, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent), placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
                     shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().focusRequester(focus))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         IconButton(onClick = { attachMenu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.mutedFg) }
                         DropdownMenu(attachMenu, { attachMenu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, onClick = { attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, onClick = { attachMenu = false; files.launch(arrayOf("*/*")) })
+                            if (config.meetingNotesEnabled) DropdownMenuItem(text = { Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_recording_entry)); id.znetworks.nexus.feature.meetings.MeetingBeta() }
+                                Text(stringResource(R.string.meet_entry_hint), color = c.mutedFg, fontSize = 11.sp)
+                            } }, leadingIcon = { Icon(Icons.Outlined.Mic, null) }, onClick = { attachMenu = false; container.router.open(id.znetworks.nexus.core.nav.Target.NewMeeting(s.project?.first)) })
+                            if (config.meetingNotesEnabled) DropdownMenuItem(text = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_title)); id.znetworks.nexus.feature.meetings.MeetingBeta() } }, leadingIcon = { Icon(Icons.Outlined.Description, null) }, onClick = { attachMenu = false; container.router.open(id.znetworks.nexus.core.nav.Target.Meetings(s.project?.first)) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, leadingIcon = { Icon(Icons.Outlined.AddPhotoAlternate, null) }, onClick = { attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, leadingIcon = { Icon(Icons.Outlined.AttachFile, null) }, onClick = { attachMenu = false; files.launch(arrayOf("*/*")) })
                             // "Add a page, task or project": starts an "@" at the end of the draft (web startMention).
                             DropdownMenuItem(text = { Text(stringResource(R.string.gx_add_page)) }, leadingIcon = { Icon(Icons.Filled.AlternateEmail, null) },
                                 onClick = { attachMenu = false; draft = GideonMention.start(draft); scope.launch { delay(50); runCatching { focus.requestFocus() } } })
                         }
                     }
-                    ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { send(draft) }, enabled = !s.thinking && (draft.isNotBlank() || upload != null)) {
-                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.foreground else c.mutedFg)
+                    Box(Modifier.weight(1f)) { ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() } }
+                    Box {
+                TextButton(onClick = { tierMenu = true }) { Text(s.tier.label + " ⌄", fontSize = 12.sp, color = c.foreground) }
+                DropdownMenu(tierMenu, { tierMenu = false }, shape = RoundedCornerShape(16.dp), containerColor = c.card, border = androidx.compose.foundation.BorderStroke(1.dp, c.border)) {
+                    GideonTier.entries.forEach { t ->
+                        DropdownMenuItem(modifier = Modifier.heightIn(min = 72.dp), enabled = tiers.available(t), text = { Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(t.label, fontWeight = FontWeight.SemiBold)
+                                if (t == GideonTier.LUNA || t == GideonTier.EXPERIMENTAL) Text(stringResource(if (t == GideonTier.LUNA) R.string.g19_default else R.string.g19_experimental), fontSize = 10.sp,
+                                    color = if (t == GideonTier.EXPERIMENTAL) c.warningFg else c.mutedFg,
+                                    modifier = Modifier.background(if (t == GideonTier.EXPERIMENTAL) c.warning.copy(alpha = 0.12f) else c.muted, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
+                            }
+                            if (!tiers.available(t)) {
+                                Text(stringResource(R.string.g19_unavailable), fontSize = 12.sp, color = c.mutedFg)
+                                Text(stringResource(when (tiers.tiers[t.key]?.reason) { "transcribing" -> R.string.g19_transcribing; "loading" -> R.string.g19_loading; else -> R.string.g19_down }), fontSize = 11.sp, color = c.mutedFg)
+                            }
+                        } },
+                            leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) }, onClick = { tierMenu = false; chat.setTier(t) })
+                    }
+                }
+            }
+
+                    if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
+                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) {
+                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.background else c.mutedFg)
                     }
                 }
             }
         }
+        Text(stringResource(R.string.gc_ai_disclaimer), fontSize = 11.sp, color = c.mutedFg,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))
     }
-    decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking) }, onDismiss = { decision = null }) }
+    if (showReviewNotice) AlertDialog(onDismissRequest = {
+        prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false
+    }, text = { Text(stringResource(R.string.gc_review_notice)) }, confirmButton = {
+        TextButton(onClick = { prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false }) { Text("OK") }
+    })
+    decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking, d.task) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
 }
 
@@ -232,43 +288,81 @@ private fun FreshChat(onAsk: (String) -> Unit) {
 }
 
 @Composable
-private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, onDecide: (GDecision) -> Unit) {
+private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, readOnly: Boolean = false, onDecide: (GDecision) -> Unit) {
     val c = Nx.colors
     val list = rememberLazyListState()
-    LaunchedEffect(s.messages.size, s.thinking) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
+    val transcriptIds = s.messages.flatMap { it.proposals }.map { it.id }.toSet()
+    val pending = s.pending.filter { it.id !in transcriptIds }
+    LaunchedEffect(s.messages.size, s.thinking, pending.size) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(pending.size + s.messages.lastIndex) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        items(pending, key = { "pending:${it.id}" }) { p ->
+            when {
+                p.action == "create_task" && p.taskTarget != null && p.isPending -> CreateTaskCard(p, p.id in s.deciding, onDecide)
+                p.action == "delete_task" || p.extra != null -> ActionCard(p, p.id in s.deciding, onDecide)
+                else -> ProposalCard(p, p.id in s.deciding) { onDecide(GDecision(p, it)) }
+            }
+        }
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
+            if (readOnly) m.createdAt?.let { Text(id.znetworks.nexus.feature.chat.chatTime(it), fontSize = 11.sp, color = c.mutedFg) }
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Column(Modifier.widthIn(max = 320.dp).background(c.muted, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
                     m.attachments.forEach { a -> Text("📎 " + (a.name?.takeIf { it.isNotBlank() && it != "image" } ?: stringResource(R.string.gd_image_attached)), fontSize = 12.sp, color = c.mutedFg) }
                     SelectionContainer { Text(m.content, fontSize = 15.sp, lineHeight = 21.sp, color = c.foreground) }
                 }
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                m.steps.forEach { st -> StepLine(st) }
+                if (m.steps.isNotEmpty()) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Text(if (m.steps.any { it.status == "running" }) stringResource(R.string.gc_thinking) else androidx.compose.ui.res.pluralStringResource(R.plurals.gc_step_count, m.steps.size, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
+                    if (expanded) m.steps.forEach { st -> StepLine(st) }
+                }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
+                MemoryRules.chatMemories(m, readOnly).forEach { memory -> GideonMemoryChip(memory) }
                 // Review before writing: the changes waiting for Apply, then what GIDEON made directly.
                 m.proposals.forEach { p ->
                     val b = p.booking
                     // A room booking has its own card with the room picker; every other change is a diff.
                     val change = p.bookingChange
-                    if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = { x, y -> loadRooms(x, y, null) },
+                    if (readOnly) {
+                        if (p.action == "delete_task" || p.extra != null) ActionCard(p, false, {}, readOnly = true)
+                        else ProposalCard(p, deciding = false, readOnly = true) {}
+                        b?.let { Text(listOfNotNull(it.room, it.startsAt, it.endsAt).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg) }
+                        change?.let { Text(listOfNotNull(it.before.room, it.before.startsAt, it.after?.room, it.after?.startsAt).joinToString(" → "), fontSize = 12.sp, color = c.mutedFg) }
+                    }
+                    else if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = { x, y -> loadRooms(x, y, null) },
                         onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
                     // Moving / cancelling one (16 Oct 2026): the booking before and after.
                     else if ((p.action == "move_room_booking" || p.action == "cancel_room_booking") && change != null)
                         BookingChangeCard(p, change, deciding = p.id in s.deciding, loadRooms = loadRooms,
                             onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
+                    else if (p.action == "create_task" && p.taskTarget != null && p.isPending) CreateTaskCard(p, p.id in s.deciding, onDecide)
+                    else if (p.action == "delete_task" || p.extra != null) ActionCard(p, p.id in s.deciding, onDecide)
                     else ProposalCard(p, deciding = p.id in s.deciding) { apply -> onDecide(GDecision(p, apply)) }
                 }
                 m.cards.forEach { card -> ResultCard(card) }
+                if (readOnly && m.credits != null) Text((GideonTier.entries.firstOrNull { it.key == m.tier }?.label ?: "GIDEON") + " · " +
+                    stringResource(R.string.gp_credits_count, m.credits), fontSize = 11.sp, color = c.mutedFg)
             }
         }
         if (s.thinking) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.gx_working), fontSize = 13.sp, color = c.mutedFg)
+                ThinkingLine()
             }
         }
     }
+}
+
+/** Shares the normal rendering but has no composer, mutations, approval controls or room requests. */
+@Composable
+internal fun GideonReadOnlyTranscript(messages: List<GMessage>) {
+    Transcript(GideonChat.State(messages = messages), false, loadRooms = { _, _, _ -> null }, readOnly = true) {}
+}
+
+@Composable
+private fun ThinkingLine() {
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val alpha by transition.animateFloat(0.4f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "thinkingAlpha")
+    Text(stringResource(R.string.gc_thinking), fontSize = 13.sp, color = Nx.colors.mutedFg, modifier = Modifier.alpha(alpha))
 }
 
 @Composable
@@ -289,6 +383,8 @@ fun stepText(st: GStep): String {
     return when (t.kind) {
         GideonSteps.Kind.LIST_PROJECTS -> stringResource(R.string.gx_step_list_projects)
         GideonSteps.Kind.LOOKUP_PEOPLE -> stringResource(R.string.gx_step_people)
+        GideonSteps.Kind.PERSON_STATUS -> if (a != null) stringResource(R.string.prs_step_get, a) else st.label.orEmpty()
+        GideonSteps.Kind.MY_STATUS -> if (a != null) stringResource(R.string.prs_step_set, a) else st.label.orEmpty()
         GideonSteps.Kind.LIST_TASKS -> pick(R.string.gx_step_list_tasks, R.string.gx_step_list_tasks_in)
         GideonSteps.Kind.SEARCH_TASKS -> pick(R.string.gx_step_search_tasks, R.string.gx_step_search_tasks_q)
         GideonSteps.Kind.SEARCH_WORKSPACE -> pick(R.string.gx_step_search_ws, R.string.gx_step_search_ws_q)
@@ -316,6 +412,7 @@ fun stepText(st: GStep): String {
 /** A failure in the app's language. */
 @Composable
 fun problemText(p: GideonProblem): String = when (p.kind) {
+    GideonProblem.Kind.TIER_UNAVAILABLE -> stringResource(R.string.g19_unavailable)
     GideonProblem.Kind.UNREACHABLE -> stringResource(R.string.gx_unreachable)
     GideonProblem.Kind.BUSY -> stringResource(R.string.gx_busy)
     GideonProblem.Kind.NOT_CONNECTED -> stringResource(R.string.gx_not_connected)
@@ -346,7 +443,7 @@ private fun ChatList(s: GideonChat.State, indonesian: Boolean, onPick: (String) 
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(c.foreground),
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 12.dp),
                 decorationBox = { inner -> if (s.query.isEmpty()) Text(stringResource(R.string.gx_search_chats), fontSize = 15.sp, color = c.mutedFg); inner() })
-            if (s.query.isNotEmpty()) IconButton(onClick = { onQuery("") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
+            if (s.query.isNotEmpty()) IconButton(onClick = { onQuery("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
         }
         val rows = s.chats
         when {

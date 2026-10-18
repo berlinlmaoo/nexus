@@ -167,6 +167,7 @@ fun RoomBookingScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { runCatching { container.viewer.load(); canAdminister = container.viewer.canAdminister } }
     // iOS RoomBookingView / web: one month at a time (WIB), every booking of it by day, ‹ Today › to move.
     var monthKey by rememberSaveable { mutableStateOf(java.time.YearMonth.from(OfficeTime.today()).toString()) }
+    var showPast by rememberSaveable(monthKey) { mutableStateOf(false) }
     val month = java.time.YearMonth.parse(monthKey)
     val thisMonth = java.time.YearMonth.from(OfficeTime.today())
     var list by remember { mutableStateOf<List<Booking>?>(null) }
@@ -199,8 +200,17 @@ fun RoomBookingScreen(onBack: () -> Unit) {
                 stringResource(R.string.rb_nothing_in, DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(month).replaceFirstChar { it.titlecase(Locale.getDefault()) }),
                 stringResource(R.string.rb_empty_sub), stringResource(R.string.rb_new), { composing = true to null }, Modifier.fillMaxSize())
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Soonest first, the whole month (past days included), as the web's agenda.
-                AgendaLogic.byDay(l, past = false).forEach { (day, items) ->
+                val earlier = l.filter { runCatching { Instant.parse(it.endsAt).isBefore(Instant.now()) }.getOrDefault(false) }
+                val upcoming = l.filterNot { it in earlier }
+                if (earlier.isNotEmpty()) item {
+                    id.znetworks.nexus.ui.components.NxButton(androidx.compose.ui.res.pluralStringResource(if (showPast) R.plurals.rb_hide_earlier else R.plurals.rb_show_earlier, earlier.size, earlier.size), { showPast = !showPast })
+                }
+                if (upcoming.isEmpty() && !showPast) item {
+                    id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.CalendarMonth,
+                        stringResource(R.string.rb_no_more_in, DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(month)),
+                        stringResource(R.string.rb_empty_sub), stringResource(R.string.rb_new), { composing = true to null })
+                }
+                AgendaLogic.byDay(if (showPast) l else upcoming, past = false).forEach { (day, items) ->
                     item(key = "d$day") {
                         Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()).format(day).replaceFirstChar(Char::titlecase),
                             fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 8.dp))

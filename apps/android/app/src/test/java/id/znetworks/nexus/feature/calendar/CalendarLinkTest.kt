@@ -65,7 +65,7 @@ class CalendarLinkTest {
         assertTrue(opens.size >= 2)
         opens.forEach { assertTrue(it.value, "launchSingleTop = true" in it.value) }
         assertTrue("&n={n}" in shell)
-        assertTrue("vm.applyLink(date, view, lens, focus, scope, task, nonce)" in screen)
+        assertTrue("vm.applyLink(date, view, lens, focus, scope, task, nonce, folder" in screen)
         assertTrue("if (!linkGate.take(" in vm)
     }
 

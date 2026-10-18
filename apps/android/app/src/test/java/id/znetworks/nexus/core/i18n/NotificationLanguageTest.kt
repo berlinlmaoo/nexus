@@ -51,7 +51,7 @@ class NotificationLanguageTest {
 
     @Test fun languageIsSentToTheServer() {
         val app = File("src/main/java/id/znetworks/nexus/NexusApplication.kt").readText()
-        val container = File("src/main/java/id/znetworks/nexus/core/AppContainer.kt").readText()
+        val container = File("src/main/java/id/znetworks/nexus/core/AppContainer.kt").readText().replace("\r\n", "\n")
         // Launch, sign-in, and every change of the picker.
         assertTrue(app.contains("AppLanguage.onChosen = { container.sendUiLanguage() }"))
         assertTrue(app.contains("container.sendUiLanguage(); container.push.register()"))

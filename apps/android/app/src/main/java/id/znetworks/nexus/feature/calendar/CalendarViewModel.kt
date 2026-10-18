@@ -75,9 +75,11 @@ data class CalState(
     val railAll: Boolean = false,
     /** The person has used focus once: the hint under the legend has done its job (audit 2 #12). */
     val hintSeen: Boolean = false,
+    val itemsFolder: String? = null,
 ) {
     /** [items] belongs to the range on screen; otherwise it is loading or failed, never "empty". */
-    val current get() = items != null && itemsRange == range
+    val folderKey get() = CalendarCore.folderKey(filters.folders)
+    val current get() = items != null && itemsRange == range && itemsFolder == folderKey
     val access get() = items?.accessLevel ?: structure?.accessLevel
     /** The server's today (WIB) once it answered; the phone's office day before that. */
     val today get() = items?.today ?: OfficeTime.today().toString()
@@ -97,6 +99,7 @@ data class CalState(
 @Serializable private data class Saved(
     val scope: String = "ALL", val units: List<String> = emptyList(), val people: List<String> = emptyList(), val projects: List<String> = emptyList(),
     val priorities: List<String> = emptyList(), val hideDone: Boolean = false, val overdueOnly: Boolean = false, val collapsed: List<String> = emptyList(),
+    val folders: List<String> = emptyList(),
 )
 
 /**
@@ -119,12 +122,16 @@ class CalendarDiskCache(private val root: File) {
 
     fun saveStructure(userId: String, s: CalStructure, now: Long = System.currentTimeMillis()) { write(File(dir(userId), "structure.json"), s, CalStructure.serializer(), now) }
     fun structure(userId: String): Entry<CalStructure>? = read(File(dir(userId), "structure.json"), CalStructure.serializer())
-    fun saveItems(userId: String, range: Pair<String, String>, items: CalItems, now: Long = System.currentTimeMillis()) {
-        write(File(dir(userId), "items-${range.first}-${range.second}.json"), items, CalItems.serializer(), now)
+    private fun itemsFile(userId: String, range: Pair<String, String>, folder: String?): File {
+        val suffix = folder?.let { "-" + java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }.orEmpty()
+        return File(dir(userId), "items-${range.first}-${range.second}$suffix.json")
+    }
+    fun saveItems(userId: String, range: Pair<String, String>, items: CalItems, now: Long = System.currentTimeMillis(), folder: String? = null) {
+        write(itemsFile(userId, range, folder), items, CalItems.serializer(), now)
         // Keep the 6 ranges looked at last.
         dir(userId).listFiles { f -> f.name.startsWith("items-") && f.name.endsWith(".json") }?.sortedByDescending { it.lastModified() }?.drop(6)?.forEach { it.delete() }
     }
-    fun items(userId: String, range: Pair<String, String>): Entry<CalItems>? = read(File(dir(userId), "items-${range.first}-${range.second}.json"), CalItems.serializer())
+    fun items(userId: String, range: Pair<String, String>, folder: String? = null): Entry<CalItems>? = read(itemsFile(userId, range, folder), CalItems.serializer())
 }
 
 /**
@@ -155,7 +162,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
         val saved = runCatching { NexusJson.decodeFromString(Saved.serializer(), prefs.getString("saved", null) ?: "{}") }.getOrDefault(Saved())
         _state.update {
             it.copy(filters = CalendarCore.Filters(runCatching { CalendarCore.Scope.valueOf(saved.scope) }.getOrDefault(CalendarCore.Scope.ALL),
-                saved.units, saved.people, saved.projects, saved.priorities, saved.hideDone, saved.overdueOnly), collapsed = saved.collapsed.toSet(),
+                saved.units, saved.people, saved.projects, saved.priorities, saved.hideDone, saved.overdueOnly, saved.folders), collapsed = saved.collapsed.toSet(),
                 // Zoom, day, view and lens survive rotation and process death (audit #32).
                 focusId = handle.get<String>(FOCUS), day = handle.get<String>(DAY) ?: it.day,
                 view = handle.get<String>(VIEW)?.let { v -> runCatching { CalView.valueOf(v) }.getOrNull() } ?: it.view,
@@ -169,7 +176,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
         val f = s.filters
         runCatching {
             prefs.edit().putString("saved", NexusJson.encodeToString(Saved.serializer(),
-                Saved(f.scope.name, f.units, f.people, f.projects, f.priorities, f.hideDone, f.overdueOnly, s.collapsed.toList()))).apply()
+                Saved(f.scope.name, f.units, f.people, f.projects, f.priorities, f.hideDone, f.overdueOnly, s.collapsed.toList(), f.folders))).apply()
         }
     }
 
@@ -183,8 +190,9 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
      * back-stack entry (audit P0): coming back from the task, rotating, or the process being restored
      * must not open the task again, or Back could never leave it. A new link carries a new `n`.
      */
-    fun applyLink(date: String?, view: String?, lens: String?, focus: String?, scope: String?, task: String?, nonce: String? = null) {
-        if (!linkGate.take(CalendarLinkGate.key(date, view, lens, focus, scope, task, nonce))) return
+    fun applyLink(date: String?, view: String?, lens: String?, focus: String?, scope: String?, task: String?, nonce: String? = null,
+                  folder: String? = null, unit: String? = null, person: String? = null, project: String? = null, prio: String? = null, done: String? = null, overdue: String? = null) {
+        if (!linkGate.take(CalendarLinkGate.key(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue))) return
         _state.update { s ->
             s.copy(
                 day = date?.takeIf(CalDays::isDayKey) ?: s.day,
@@ -192,17 +200,21 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                 lens = if (lens == "person") CalLens.PERSON else if (lens != null) CalLens.DIVISION else s.lens,
                 focusId = focus ?: s.focusId,
                 divisionFallback = if (scope != null) scope == "division" && s.structure?.me?.homeUnitIds?.isEmpty() == true else s.divisionFallback,
-                filters = when (scope) {
+                filters = (when (scope) {
                     "me" -> s.filters.copy(scope = CalendarCore.Scope.ME)
                     // Without a Bagan card this becomes Mine with the note (settleScope, contract 3).
                     "division" -> s.filters.copy(scope = if (s.structure?.me?.homeUnitIds?.isEmpty() == true) CalendarCore.Scope.ME else CalendarCore.Scope.DIVISION)
                     // A widget on "Everyone" opens everyone (audit #33).
                     "all" -> s.filters.copy(scope = CalendarCore.Scope.ALL)
                     else -> s.filters
-                },
+                }).let { f -> f.copy(folders = folder?.let(CalendarCore::linkIds) ?: f.folders,
+                    units = unit?.let(CalendarCore::linkIds) ?: f.units, people = person?.let(CalendarCore::linkIds) ?: f.people,
+                    projects = project?.let(CalendarCore::linkIds) ?: f.projects, priorities = prio?.let(CalendarCore::linkIds) ?: f.priorities,
+                    hideDone = done?.let { it == "0" } ?: f.hideDone, overdueOnly = overdue?.let { it == "1" } ?: f.overdueOnly) },
+                overdue = if (folder != null) emptyList() else s.overdue,
             )
         }
-        if (scope != null) save()
+        if (listOf(scope, folder, unit, person, project, prio, done, overdue).any { it != null }) save()
         keep()
         val loading = refresh()
         // The task is looked up after the cache and the first answer, so a task already on the phone opens (audit 2 #25).
@@ -215,16 +227,18 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
             if (pulled) _state.update { it.copy(refreshing = true) }
             val uid = c.sessionStore.current?.userId
             val asked = _state.value.range
+            val askedFolder = _state.value.folderKey
             // Cold open, or a range not loaded this session: what the disk has, at once.
             if (uid != null && !_state.value.current) {
                 val st = if (_state.value.structure == null) withContext(Dispatchers.IO) { cache.structure(uid) } else null
-                val it = withContext(Dispatchers.IO) { cache.items(uid, asked) }
+                val it = withContext(Dispatchers.IO) { cache.items(uid, asked, askedFolder) }
                 if (st != null) { structureFromDisk = true; settleScope(st.value) }
                 if (st != null || it != null) _state.update { s ->
-                    val take = it != null && !s.current && s.range == asked
+                    val take = it != null && !s.current && s.range == asked && s.folderKey == askedFolder
                     s.copy(structure = s.structure ?: st?.value,
                         items = if (take) it!!.value else s.items,
                         itemsRange = if (take) asked else s.itemsRange,
+                        itemsFolder = if (take) askedFolder else s.itemsFolder,
                         loadedAt = if (take) it!!.savedAt else s.loadedAt,
                         offline = if (take) true else s.offline,
                         loading = false)
@@ -237,10 +251,11 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                     structureFromDisk = false
                     val today = _state.value.today
                     // Today's rail only: fetched beside /items, and only when today is in the range.
-                    val overdueJob = if (today >= asked.first && today <= asked.second) async { runCatching { api.overdue().value.items }.getOrNull() } else null
+                    val overdueJob = if (today >= asked.first && today <= asked.second) async { runCatching { api.overdue(askedFolder).value.items }.getOrNull() } else null
                     val (from, to) = asked
-                    val fetched = api.items(from, to)
+                    val fetched = api.items(from, to, askedFolder)
                     val items = fetched.value
+                    if (_state.value.range != asked || _state.value.folderKey != askedFolder) return@coroutineScope
                     if (items.structureVersion != null && items.structureVersion != structure.version) { structure = api.structure().value; structureChanged = true }
                     failedSinceSuccess = false
                     val now = System.currentTimeMillis()
@@ -250,20 +265,21 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                     if (!fetched.changed && !structureChanged && st.current && st.itemsRange == asked && !st.offline && st.rangeError == null) {
                         if (st.loading || st.refreshing) _state.update { it.copy(loading = false, refreshing = false) }
                         val overdue = overdueJob?.await()
-                        if (overdue != null && items.accessLevel.hasData && overdue != st.overdue) _state.update { it.copy(overdue = overdue) }
+                        if (overdue != null && items.accessLevel.hasData && overdue != st.overdue && _state.value.folderKey == askedFolder && _state.value.range == asked) _state.update { it.copy(overdue = overdue) }
                         return@coroutineScope
                     }
                     settleScope(structure)
                     _state.update { it.copy(structure = structure, items = items, loading = false, refreshing = false, error = null,
-                        itemsRange = asked, loadedAt = now, offline = false, rangeError = null,
+                        itemsRange = asked, itemsFolder = askedFolder, loadedAt = now, offline = false, rangeError = null,
                         overdue = if (items.accessLevel.hasData) it.overdue else emptyList()) }
-                    if (uid != null) withContext(Dispatchers.IO) { cache.saveStructure(uid, structure, now); cache.saveItems(uid, asked, items, now) }
+                    if (uid != null) withContext(Dispatchers.IO) { cache.saveStructure(uid, structure, now); cache.saveItems(uid, asked, items, now, askedFolder) }
                     // What the screen just saw, the widgets see too (throttled to 5 min).
                     c.refreshCalendarWidgets()
                     val overdue = overdueJob?.await()
-                    if (overdue != null && items.accessLevel.hasData) _state.update { it.copy(overdue = overdue) }
+                    if (overdue != null && items.accessLevel.hasData && _state.value.folderKey == askedFolder) _state.update { it.copy(overdue = overdue) }
                 }
             } catch (e: ApiError) {
+                if (_state.value.range != asked || _state.value.folderKey != askedFolder) return@withLock
                 // Data of the range on screen stays, with a snackbar ("Data as of 14.05"); a range never
                 // loaded says why, with Try again — never "no tasks".
                 val reason = e.describe(res)
@@ -301,7 +317,12 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
         if (unitId != null) prefs.edit().putBoolean("hintSeen", true).apply()
         keep()
     }
-    fun setFilters(f: CalendarCore.Filters) { _state.update { it.copy(filters = f) }; save() }
+    fun setFilters(f: CalendarCore.Filters) {
+        val changed = _state.value.folderKey != CalendarCore.folderKey(f.folders)
+        _state.update { it.copy(filters = f, loading = if (changed) true else it.loading, rangeError = if (changed) null else it.rangeError, overdue = if (changed) emptyList() else it.overdue) }
+        save()
+        if (changed) refresh()
+    }
     /** Reset clears the filters, never the scope: the scope is a view, not a filter (contract 2). */
     fun resetFilters() = setFilters(CalendarCore.NO_FILTERS.copy(scope = _state.value.filters.scope))
     /** "My division" without a Bagan card is Mine plus a note; a disabled scope is never saved (contract 3). */

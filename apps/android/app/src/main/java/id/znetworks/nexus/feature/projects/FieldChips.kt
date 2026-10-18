@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -73,7 +75,7 @@ object FieldChips {
             }.takeIf { it.isNotEmpty() }?.let { FieldChip(id, it, FieldChip.Tone.NEUTRAL) }
             "PLACE" -> ((value as? JsonObject)?.get("label") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { FieldChip(id, it, FieldChip.Tone.NEUTRAL) }
             "DATE", "CREATED" -> raw.takeIf { it.isNotEmpty() }?.let {
-                FieldChip(id, dueDate(it)?.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())) ?: it, FieldChip.Tone.NEUTRAL)
+                FieldChip(id, dueDate(it)?.format(AppDateFormats.ofPattern("d MMM", Locale.getDefault())) ?: it, FieldChip.Tone.NEUTRAL)
             }
             else -> (valueText(value) ?: raw).takeIf { it.isNotEmpty() }?.let { FieldChip(id, it, FieldChip.Tone.NEUTRAL) }
         }

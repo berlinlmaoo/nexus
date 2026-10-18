@@ -29,7 +29,7 @@ class ProjectMarkTest {
 
     @Test fun projectsNeverDrawAnEmoji() {
         listOf("feature/projects/ProjectsScreen.kt", "feature/projects/ProjectDetailScreen.kt", "feature/home/HomeScreen.kt",
-            "feature/projects/FolderCalendar.kt", "feature/admin/Teams.kt").forEach { f ->
+            "feature/admin/Teams.kt").forEach { f ->
             val s = src(f)
             assertFalse(f, Regex("""IconTile\((p|it|ref)\.icon""").containsMatchIn(s))
             // ProjectsScreen keeps ProjectIcon.emoji for FOLDER icons (IconTile, EmojiRow).

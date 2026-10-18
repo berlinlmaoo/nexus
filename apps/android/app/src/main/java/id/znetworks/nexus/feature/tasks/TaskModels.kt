@@ -37,6 +37,8 @@ data class ActivityLog(val id: String, val action: String? = null, val details: 
 @Serializable
 data class TaskDetail(
     val id: String,
+    val updatedAt: String? = null,
+    val tags: List<String> = emptyList(),
     val title: String = "",
     val description: JsonElement? = null,
     val status: String? = null,

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.content.Context
 import android.content.Intent
 import android.webkit.MimeTypeMap
@@ -234,7 +236,7 @@ fun lgStageTone(stage: String): LgTone = when (stage) {
 }
 
 /** "2026-09-30" → "30 Sep 2026" in the interface language. */
-fun lgDay(day: String?): String = LegalLogic.parseDay(day)?.let { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: "—"
+fun lgDay(day: String?): String = LegalLogic.parseDay(day)?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: "—"
 
 /** An ISO timestamp → "14 Oct" this year, "14 Oct 2025" otherwise, in Jakarta. */
 fun lgDate(iso: String?): String {

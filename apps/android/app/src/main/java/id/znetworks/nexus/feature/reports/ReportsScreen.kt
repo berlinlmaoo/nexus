@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.reports
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,16 +86,16 @@ private fun periodKey(offset: Int): String? = if (offset == 0) null else YearMon
 private fun PeriodBar(offset: Int, period: ReportPeriod?, onChange: (Int) -> Unit) {
     val c = Nx.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-        IconButton(onClick = { onChange(offset - 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+        IconButton(onClick = { onChange(offset - 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
         val label = period?.let { p ->
-            val f = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+            val f = AppDateFormats.ofPattern("d MMM", Locale.getDefault())
             listOfNotNull(dueDate(p.from)?.let(f::format), dueDate(p.to)?.let(f::format)).joinToString(" – ")
         }.orEmpty()
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(if (offset == 0) R.string.rp_this_period else R.string.rp_period), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground)
             Text(label, fontSize = 11.sp, color = c.mutedFg)
         }
-        IconButton(onClick = { onChange(offset + 1) }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+        IconButton(onClick = { onChange(offset + 1) }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
     }
 }
 
@@ -159,7 +161,7 @@ private fun RosterCard(r: RosterRow, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(r.name, r.avatar, 32.dp); Spacer(Modifier.width(10.dp))
+            Avatar(r.name, r.avatar, 32.dp, userId = r.userId); Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(r.name ?: r.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f, fill = false))
@@ -225,7 +227,7 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
         else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             savedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.warning) }
             if (!rep.person.isSelf) Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(rep.person.name, rep.person.avatar, 40.dp); Spacer(Modifier.width(10.dp))
+                Avatar(rep.person.name, rep.person.avatar, 40.dp, userId = rep.person.id); Spacer(Modifier.width(10.dp))
                 Text(rep.person.name ?: "—", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
                 id.znetworks.nexus.ui.components.LeftTag(rep.person.leftAt, Modifier.padding(start = 8.dp))
             }

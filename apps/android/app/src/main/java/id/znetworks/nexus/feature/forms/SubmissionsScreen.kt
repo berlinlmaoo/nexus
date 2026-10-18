@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -116,7 +118,7 @@ fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms:
                 stringResource(R.string.sub_open_forms), onOpenForms, Modifier.fillMaxSize())
             else -> Column(Modifier.fillMaxSize()) {
                 if (legal.isNotEmpty()) id.znetworks.nexus.feature.legal.MyLegalRequestsStrip(legal, onOpenLegal)
-                if (d.submissions.isNotEmpty()) SubmissionBoardView(d, onOpen)
+                if (d.submissions.isNotEmpty()) SubmissionBoardView(d, onOpen, hasLegalRequests = legal.isNotEmpty())
             }
         }
     }
@@ -129,7 +131,7 @@ fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms:
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
+internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit, hasLegalRequests: Boolean = false) {
     val c = Nx.colors
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("submissions", android.content.Context.MODE_PRIVATE) }
@@ -168,6 +170,7 @@ internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
             Text(stringResource(R.string.sub_read_only_web), fontSize = 12.sp, color = c.mutedFg)
         }
         if (board.columns.all { it.second.isEmpty() }) {
+            if (hasLegalRequests && kind == null && project == null && !mine) return@Column
             EmptyState(Icons.Filled.Description, stringResource(if (mine) R.string.sub_none_needs_me else R.string.sub_none_here),
                 stringResource(if (mine) R.string.sub_none_needs_me_sub else R.string.sub_try_filter), stringResource(R.string.show_all),
                 { kind = null; mine = false; pickProject(null) }, Modifier.fillMaxSize())
@@ -301,13 +304,13 @@ private fun BoardCard(s: Submission, onClick: () -> Unit) {
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
             itemVerticalAlignment = Alignment.CenterVertically) {
             s.category?.takeIf { it.isNotBlank() }?.let { Text("🏷 $it", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.muted).padding(horizontal = 6.dp, vertical = 2.dp)) }
-            id.znetworks.nexus.feature.projects.dueDate(s.date)?.let { Text("📅 " + java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it), fontSize = 11.sp, color = c.mutedFg) }
+            id.znetworks.nexus.feature.projects.dueDate(s.date)?.let { Text("📅 " + AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it), fontSize = 11.sp, color = c.mutedFg) }
             if (s.commentCount > 0) Text("💬 ${s.commentCount}", fontSize = 11.sp, color = c.mutedFg)
             if (s.proofs.isNotEmpty()) Text("📎 " + stringResource(R.string.sub_proof), fontSize = 11.sp, color = c.success)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s.projectName.orEmpty(), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (s.handlers.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(s.handlers.map { it.name to it.avatar }, size = 20.dp)
+            if (s.handlers.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(s.handlers.map { it.name to it.avatar }, size = 20.dp, userIds = s.handlers.map { it.id })
         }
         if (s.needsAction) Text("⚠ " + stringResource(R.string.sub_needs_reply), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF92400E),
             modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFFEF3C7)).padding(horizontal = 6.dp, vertical = 2.dp))
@@ -316,7 +319,7 @@ private fun BoardCard(s: Submission, onClick: () -> Unit) {
 
 /** "20 Sep, 19:14" in office time. */
 private fun submittedText(iso: String?): String = iso?.let {
-    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
+    runCatching { AppDateFormats.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
         .format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
 }.orEmpty()
 

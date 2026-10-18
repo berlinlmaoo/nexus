@@ -48,7 +48,10 @@ object TourMode {
         wantsDev = intent.getStringExtra("nexusServer") == "dev"
         project = intent.getStringExtra("nexusTourProject")
         form = intent.getStringExtra("nexusTourForm")
-        if (step == "screen") screen?.let { id -> routeFor(id, project, form)?.let { _go.value = Go(id, it.first, it.second) } ?: status("unknown-screen $id") }
+        if (step == "screen") screen?.let { id ->
+            val route = intent.getStringExtra("nexusTourRoute")?.let { it to false } ?: routeFor(id, project, form)
+            route?.let { _go.value = Go(id, it.first, it.second) } ?: status("unknown-screen $id")
+        }
     }
 
     fun consumed() { _go.value = null }
@@ -70,6 +73,13 @@ object TourMode {
             "submissions" -> "submissions" to false
             "room-booking" -> "rooms" to false
             "projects" -> "projects" to true
+            "project-templates" -> "projects" to true
+            "outlet-overview", "outlet-calendar", "outlet-day", "outlet-settings" ->
+                if (p.isEmpty()) null else "project/$p?view=${if (id == "outlet-overview" || id == "outlet-settings") "overview" else "calendar"}" to false
+            "legal-archive" -> "legal?tab=documents" to false
+            "legal-templates" -> "legal?tab=templates" to false
+            "legal-requests" -> "legal?tab=requests" to false
+            "legal-settings" -> "legal?tab=settings" to false
             "project-overview", "project-board", "project-list", "project-table", "project-calendar", "project-timeline", "project-sheet" ->
                 if (p.isEmpty()) null else "project/$p?view=${id.removePrefix("project-")}" to false
             "form-builder" -> if (p.isEmpty() || form.isNullOrEmpty()) null else "form-builder/$p?form=$form" to false
@@ -77,6 +87,7 @@ object TourMode {
             "attendance" -> "attendance" to false
             "tickets" -> "tickets" to false
             "settings" -> "account" to false
+            "settings-security" -> "account" to false
             "more" -> "more" to true
             else -> null
         }

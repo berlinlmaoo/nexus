@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Place
@@ -100,9 +102,9 @@ private fun attApi(): AttendanceAdminApi {
 @Composable
 private fun MonthBar(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+        IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
         Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Nx.colors.foreground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
     }
 }
 
@@ -167,7 +169,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
             if (roster == null) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             members.forEach { m ->
                 Row(Modifier.fillMaxWidth().clickable { onOpenMember(m.userId) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(8.dp))
+                    Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(listOfNotNull(m.attendanceShiftStartTime?.let { "$it–${m.attendanceShiftEndTime}" },
@@ -175,7 +177,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
                             if (m.flexiTimeEnabled) "Flexi" else null, if (m.noGeofenceMode) stringResource(R.string.location_free) else null).joinToString(" · "),
                             fontSize = 11.sp, color = c.mutedFg)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
                 }
             }
         }
@@ -483,7 +485,7 @@ fun ReflectionsScreen(userId: String?, onBack: () -> Unit) {
                 if (d.days.isEmpty()) Text(stringResource(R.string.aa_no_reflections), fontSize = 13.sp, color = c.mutedFg)
                 d.days.sortedByDescending { it.date }.forEach { r ->
                     AdminCard {
-                        Text(runCatching { DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(r.date)) }.getOrDefault(r.date), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+                        Text(runCatching { AppDateFormats.ofPattern("EEEE, d MMM", Locale.getDefault()).format(LocalDate.parse(r.date)) }.getOrDefault(r.date), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                         Text(r.reflection, fontSize = 14.sp, color = c.foreground)
                         r.summary?.let { Text("GIDEON: $it", fontSize = 12.sp, color = c.violetText) }
                     }

@@ -105,7 +105,6 @@
     <string name="gx_rooms_checking">Checking the rooms…</string>
     <string name="gx_rooms_failed">Couldn\'t check the rooms.</string>
     <string name="gx_room_named_busy">%1$s is booked then. Pick a free room below.</string>
-    <string name="gx_room_seats">%1$d seats</string>
     <string name="gx_room_booked_by">Booked by %1$s until %2$s</string>
     <string name="gx_someone">someone</string>
     <string name="gx_room_none_free">No room is free then. Nearest free times:</string>

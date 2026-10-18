@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.core.net.ConcurrentEdits
+import id.znetworks.nexus.ui.components.sentence
 import id.znetworks.nexus.core.net.Uploads
 import id.znetworks.nexus.feature.projects.BoardTask
 import id.znetworks.nexus.feature.projects.ProjectMemberRef
@@ -49,6 +51,8 @@ data class TaskDetailState(
     val busy: Boolean = false,
     val actionError: String? = null,
     val deleted: Boolean = false,
+    val following: Boolean = false,
+    val favorite: Boolean = false,
     /** The viewer's level in the task's project (13 Oct); unknown = nothing locked. */
     val access: id.znetworks.nexus.feature.projects.ProjectAccess = id.znetworks.nexus.feature.projects.ProjectAccess(null, null),
 )
@@ -70,7 +74,7 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun load() = viewModelScope.launch {
         try {
             val t = api.task(taskId)
-            _state.update { it.copy(task = t.value, savedAt = t.savedAtMillis, loading = false, error = null) }
+            _state.update { if (ConcurrentEdits.older(t.value.updatedAt, it.task?.updatedAt)) it else it.copy(task = t.value, savedAt = t.savedAtMillis, loading = false, error = null) }
             loadExtras(t.value.projectId)
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = e.describe(res)) }
@@ -78,6 +82,8 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     private fun loadExtras(projectId: String?) = viewModelScope.launch {
+        runCatching { api.followers(taskId) }.getOrNull()?.let { o -> _state.update { it.copy(following = o["isFollowing"] == JsonPrimitive(true)) } }
+        runCatching { api.favorites() }.getOrNull()?.let { a -> _state.update { it.copy(favorite = a.any { e -> (e as? JsonObject)?.get("targetId") == JsonPrimitive(taskId) }) } }
         val files = async { runCatching { api.attachments(taskId).value }.getOrNull() }
         val deps = async { runCatching { api.dependencies(taskId) }.getOrNull() }
         val time = async { runCatching { api.timeEntries(taskId) }.getOrNull() }
@@ -106,10 +112,36 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
     fun setStatus(s: String) = patch("status" to JsonPrimitive(s))
     fun setPriority(p: String) = patch("priority" to JsonPrimitive(p))
+    fun toggleFollow() = act(R.string.td_update_failed) { val o = api.follow(taskId); _state.update { it.copy(following = o["following"] == JsonPrimitive(true)) } }
+    fun toggleFavorite() = act(R.string.td_update_failed) { val o = api.favorite(taskId); _state.update { it.copy(favorite = o["favorited"] == JsonPrimitive(true)) } }
+    fun toggleLike() = act(R.string.td_update_failed) { api.like(taskId) }
+    fun copyTo(laneId: String, onDone: (String) -> Unit) = act(R.string.td_update_failed) {
+        projects.duplicateTaskId(taskId, JsonObject(mapOf("taskListId" to JsonPrimitive(laneId))))?.let(onDone)
+    }
     fun setDue(d: LocalDate?) = patch("dueDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setStart(d: LocalDate?) = patch("startDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
-    fun setDescription(text: String, onDone: () -> Unit) = patch("description" to JsonPrimitive(text), onDone = onDone)
-    fun setAssignees(ids: Set<String>) = patch("assigneeIds" to JsonArray(ids.map { JsonPrimitive(it) }))
+    /**
+     * On 409 DESCRIPTION_CHANGED the draft stays and [onConflict] gets the stored text as the new base, so the
+     * next Save (after the warning) is checked against what is stored now instead of failing again forever.
+     */
+    fun setDescription(text: String, baseText: String, onConflict: (String) -> Unit, onDone: () -> Unit) = act(R.string.td_update_failed) {
+        try {
+            api.saveDescription(taskId, text, baseText)
+        } catch (e: ApiError.Http) {
+            if (e.code == "DESCRIPTION_CHANGED") (e.body?.get("text") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let {
+                onConflict(it)
+                return@act
+            }
+            throw e
+        }
+        onDone()
+    }
+    fun setAssignees(ids: Set<String>, base: Set<String>) = act(R.string.td_update_failed) {
+        projects.updateTask(taskId, ConcurrentEdits.delta(base, ids, "addAssigneeIds", "removeAssigneeIds"))
+    }
+    fun setTags(tags: Set<String>, base: Set<String>) = act(R.string.td_update_failed) {
+        projects.updateTask(taskId, ConcurrentEdits.delta(base, tags, "addTags", "removeTags"))
+    }
 
     private fun patch(vararg fields: Pair<String, JsonElement>, onDone: () -> Unit = {}) = act(R.string.td_update_failed) {
         projects.updateTask(taskId, JsonObject(fields.toMap()))
@@ -215,7 +247,7 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
             block()
         } catch (e: ApiError) {
             // PROOF_REQUIRED and the like carry their own sentence.
-            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(fallback)) }
+            _state.update { it.copy(actionError = e.sentence(res, fallback)) }
         }
         _state.update { it.copy(busy = false) }
         load()

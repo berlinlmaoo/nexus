@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,7 +126,7 @@ class DayOffBonusApi(private val api: ApiClient) {
 
 private sealed interface Pending { data object Grant : Pending; data class Revoke(val g: DayOffBonus) : Pending }
 
-private val bonusDay = DateTimeFormatter.ofPattern("d MMM yyyy")
+private val bonusDay = AppDateFormats.ofPattern("d MMM yyyy")
 private fun day(iso: String?) = iso?.let { runCatching { bonusDay.format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull() }.orEmpty()
 
 @Composable
@@ -216,7 +218,7 @@ fun ExtraDayOffTab(isBoD: Boolean) {
                 val on = m.userId in selected
                 Row(Modifier.fillMaxWidth().clickable { selected = if (on) selected - m.userId else selected + m.userId }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(20.dp), tint = if (on) c.violet else c.mutedFg)
-                    Spacer(Modifier.width(10.dp)); Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(10.dp)); Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                     Text(m.displayName, fontSize = 14.sp, color = c.foreground, maxLines = 1, modifier = Modifier.weight(1f))
                     Pill(Roles.label(m.role), c.violetText)
                 }
@@ -260,7 +262,7 @@ fun ExtraDayOffTab(isBoD: Boolean) {
             grants.forEachIndexed { i, g ->
                 if (i > 0) HorizontalDivider(color = c.border)
                 Row(Modifier.fillMaxWidth().alpha(if (g.isActive) 1f else 0.5f).padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.Top) {
-                    Avatar(g.displayName, g.user?.avatar, 32.dp); Spacer(Modifier.width(10.dp))
+                    Avatar(g.displayName, g.user?.avatar, 32.dp, userId = g.userId); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(g.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1); Spacer(Modifier.width(6.dp))

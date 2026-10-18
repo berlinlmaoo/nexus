@@ -30,7 +30,7 @@
     <string name="sub_docs">SOPs, meeting notes, briefs and reference pages from every project you\'re in.</string>
     <string name="sub_forms">Forms that create a task each time someone submits them.</string>
     <string name="sub_inbox">Mentions, assignments, approvals and replies that need you.</string>
-    <string name="sub_leaderboard">Everyone\'s XP this month. It resets on the 1st.</string>
+    <string name="sub_leaderboard">Everyone\'s XP this period. It resets on the 28th.</string>
     <string name="sub_messages">Chat with your team and in project rooms.</string>
     <string name="sub_my_tasks">Tasks assigned to you, the most urgent first.</string>
     <string name="sub_reports_all">How everyone is doing this period.</string>

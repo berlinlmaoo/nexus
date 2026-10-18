@@ -369,7 +369,7 @@ private fun DocumentOverview(model: LgDocModel, doc: LgDocument, onUploadVersion
         LgListCard(doc.versions) { v ->
             Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Text("v${v.version}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.width(34.dp))
+                    Text(v.label.ifBlank { "REV ${v.version}" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.width(64.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(lgVersionKind(v.kind) + if (v.note.isEmpty()) "" else " — ${v.note}", fontSize = 14.sp, color = c.foreground, maxLines = 2,

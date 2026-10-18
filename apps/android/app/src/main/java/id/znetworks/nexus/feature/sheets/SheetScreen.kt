@@ -96,7 +96,7 @@ fun ProjectSheetTab(projectId: String, onOpenWeb: () -> Unit) {
     RealtimeRoom(s.sheetId?.let { "sheet:$it" })
     // Back in front: anything unsent goes at once.
     LifecycleResumeEffect(Unit) { store.flush(); onPauseOrDispose { } }
-    LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show(); store.noticeShown() } }
+    LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); store.noticeShown() } }
 
     val d = s.data
     Column(Modifier.fillMaxSize().background(c.background)) {

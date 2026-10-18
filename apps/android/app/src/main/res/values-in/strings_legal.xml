@@ -151,7 +151,7 @@
     <string name="lg_signed_uploaded_locked">Versi bertanda tangan terunggah. Dokumen kini berstatus ditandatangani dan terkunci.</string>
     <string name="lg_uploaded_as_version">Diunggah sebagai versi %1$d</string>
     <string name="lg_saved_as_version">Disimpan sebagai versi %1$d</string>
-    <string name="lg_from_template">dari %1$s v%2$d</string>
+    <string name="lg_from_template">dari %1$s REV %2$d</string>
     <string name="lg_void_title">Batalkan %1$s?</string>
     <string name="lg_void_released">Pembatalan tidak bisa diurungkan. Nomor %1$s akan dipakai lagi oleh dokumen berikutnya di seri ini.</string>
     <string name="lg_void_retired">Pembatalan tidak bisa diurungkan. Dokumen ini sudah ditandatangani, jadi nomornya tidak akan dipakai lagi.</string>

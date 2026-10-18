@@ -1,5 +1,7 @@
 package id.znetworks.nexus.ui.components
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
@@ -37,7 +39,7 @@ object LeftAt {
 fun LeftTag(leftAt: String?, modifier: Modifier = Modifier, compact: Boolean = false) {
     val day = LeftAt.date(leftAt) ?: return
     val c = Nx.colors
-    val short = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(day)
+    val short = AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(day)
     val long = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault()).format(day)
     val desc = stringResource(R.string.off_left_desc, long)
     Text(if (compact) stringResource(R.string.off_left) else stringResource(R.string.off_left_on, short),

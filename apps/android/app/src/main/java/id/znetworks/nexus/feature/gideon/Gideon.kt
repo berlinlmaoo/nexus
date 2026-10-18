@@ -6,6 +6,8 @@ import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.net.NexusJson
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +42,7 @@ import java.time.ZoneId
                                val projectName: String? = null, val status: String? = null)
 
 /** One row of a proposal's diff; `from` / `to` may arrive as a string, a number, a bool or null. */
-@Serializable data class GDiffRow(val field: String? = null, val from: JsonElement? = null, val to: JsonElement? = null) {
+@Serializable data class GDiffRow(val field: String? = null, val from: JsonElement? = null, val to: JsonElement? = null, val fromDay: String? = null, val toDay: String? = null) {
     val fromText: String? get() = GideonReview.loose(from)
     val toText: String? get() = GideonReview.loose(to)
 }
@@ -52,7 +54,8 @@ import java.time.ZoneId
  */
 @Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
                                    val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null,
-                                   val booking: GBooking? = null, val bookingChange: GBookingChange? = null) {
+                                   val booking: GBooking? = null, val bookingChange: GBookingChange? = null,
+                                   val taskDelete: GTaskDelete? = null, val taskTarget: GTaskTarget? = null, val extra: GExtra? = null) {
     val isPending: Boolean get() = status == "PENDING"
 }
 
@@ -82,15 +85,27 @@ data class GBookingChoice(val room: String, val startsAt: String, val endsAt: St
 @Serializable data class GBookingAfter(val room: String? = null, val candidates: List<String> = emptyList(), val startsAt: String = "", val endsAt: String = "")
 
 /** Apply / Discard of one proposal, as asked in the centred dialog. */
-data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null)
+data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null, val task: GTaskChoice? = null)
+
+@Serializable data class GTaskDelete(val taskId: String, val title: String = "", val projectName: String? = null, val status: String? = null, val progress: String? = null, val due: String? = null, val dueDay: String? = null, val assignees: List<String> = emptyList())
+@Serializable data class GProjectOption(val id: String, val name: String = "", val icon: String? = null)
+@Serializable data class GTaskTarget(val title: String = "", val projectId: String? = null, val taskListId: String? = null, val status: String? = null, val assigneeIds: List<String> = emptyList(), val dueDay: String? = null, val projects: List<GProjectOption> = emptyList())
+@Serializable data class GTaskMember(val id: String, val name: String = "", val avatar: String? = null)
+@Serializable data class GTaskSection(val id: String, val name: String = "", val taskStatus: String? = null)
+@Serializable data class GTaskTargets(val sections: List<GTaskSection> = emptyList(), val members: List<GTaskMember> = emptyList())
+@Serializable data class GTaskChoice(val projectId: String, val taskListId: String? = null, val assigneeIds: List<String> = emptyList(), val dueDate: String? = null)
+@Serializable data class GExtra(val preview: String? = null, val link: String? = null, val note: String? = null, val sheetEdit: GSheetEdit? = null)
+@Serializable data class GSheetEdit(val sheet: String? = null, val project: String? = null, val cells: List<GCellChange> = emptyList(), val newRows: JsonElement? = null)
+@Serializable data class GCellChange(val ref: String, val from: JsonElement? = null, val to: JsonElement? = null)
+@Serializable data class GProposals(val proposals: List<GProposal> = emptyList())
 
 /** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
 @Serializable data class GRoomAvailability(val rooms: List<GRoomSlot> = emptyList(), val freeSlots: List<GFreeSlot> = emptyList())
-@Serializable data class GRoomSlot(val room: String, val capacity: Int? = null, val free: Boolean = false, val busy: GRoomBusy? = null)
+@Serializable data class GRoomSlot(val room: String, val free: Boolean = false, val busy: GRoomBusy? = null)
 @Serializable data class GRoomBusy(val title: String? = null, val by: String? = null, val endsAt: String? = null)
 @Serializable data class GFreeSlot(val startsAt: String, val endsAt: String)
 
-@Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList())
+@Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList(), val memories: List<GMemory> = emptyList())
 
 @Serializable
 data class GMessage(
@@ -99,6 +114,10 @@ data class GMessage(
     val tools: List<String> = emptyList(),
     val attachments: List<GAttachment> = emptyList(),
     val meta: GMeta? = null,
+    val id: String? = null,
+    val createdAt: String? = null,
+    val tier: String? = null,
+    val credits: Int? = null,
 ) {
     val steps: List<GStep> get() = meta?.steps.orEmpty()
     val cards: List<GCard> get() = meta?.cards.orEmpty()
@@ -125,9 +144,9 @@ sealed interface GUpload {
 
 /** What one streamed answer amounted to (all frames read). */
 data class GStream(val text: String, val steps: List<GStep>, val chatId: String?, val chatTitle: String?, val error: String?,
-                   val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList()) {
+                   val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList(), val memories: List<GMemory> = emptyList()) {
     /** Text, a change made, or a change waiting for Apply: anything else is "GIDEON didn't answer". */
-    val answered: Boolean get() = text.isNotBlank() || cards.isNotEmpty() || proposals.isNotEmpty()
+    val answered: Boolean get() = text.isNotBlank() || cards.isNotEmpty() || proposals.isNotEmpty() || memories.isNotEmpty()
 }
 
 object GideonRules {
@@ -142,18 +161,22 @@ object GideonRules {
      * the interim text (a tool round started), `final` is the authoritative answer, `step` upserts a step by id,
      * `chat` names the conversation, `error` is a sentence, `done` stops. Bad frames are skipped.
      */
-    fun parse(raw: String, decode: (String) -> JsonObject?): GStream {
+    fun parse(raw: String, decode: (String) -> JsonObject?): GStream = parse(raw, true, decode)
+
+    fun parse(raw: String, complete: Boolean, decode: (String) -> JsonObject?): GStream {
         val text = StringBuilder(); var error: String? = null
         val steps = LinkedHashMap<String, GStep>()
         var chatId: String? = null; var chatTitle: String? = null
         val cards = ArrayList<GCard>()
         val proposals = LinkedHashMap<String, GProposal>()
+        val memories = LinkedHashMap<String, GMemory>()
         fun JsonObject.s(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull
         loop@ for (line in raw.lineSequence()) {
             val l = line.trim()
             if (!l.startsWith("data:")) continue
             val o = decode(l.removePrefix("data:").trim()) ?: continue
             when (o.s("type")) {
+                "memory" -> o["memory"]?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GMemory.serializer(), j) }.getOrNull() }?.let { memories[it.id] = it }
                 "text", "delta" -> o.s("content")?.let(text::append)
                 "reset" -> text.setLength(0)
                 "final" -> { text.setLength(0); o.s("content")?.let(text::append) }
@@ -166,14 +189,15 @@ object GideonRules {
                 "proposal" -> (o["proposal"] as? JsonObject)?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() }
                     ?.let { proposals[it.id] = it }
                 "chat" -> { chatId = o.s("id") ?: chatId; chatTitle = chatTitle ?: o.s("title") }
-                "error" -> error = o.s("content").orEmpty()
+                "tier_unavailable" -> error = "model0_unavailable"
+                "error" -> error = if (o.s("code") == "model0_unavailable" || error == "model0_unavailable") "model0_unavailable" else o.s("content").orEmpty()
                 "done" -> break@loop
             }
         }
         // A run that finished has no step left running.
-        val done = steps.values.map { if (it.status == "running") it.copy(status = "done") else it }
+        val done = steps.values.map { if (complete && it.status == "running") it.copy(status = "done") else it }
         val answer = text.toString().let { if (GideonProblem.isEmptyPlaceholder(it)) "" else it }
-        return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList())
+        return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList(), memories.values.toList())
     }
 }
 
@@ -182,7 +206,7 @@ object GideonRules {
  * route sentences. [kind] picks the app-language sentence; [raw] is a server sentence kept for OTHER.
  */
 data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String? = null) {
-    enum class Kind { UNREACHABLE, BUSY, NOT_CONNECTED, NO_ANSWER, TOO_LARGE, UNSUPPORTED, RATE_LIMITED, NO_DOCUMENTS, COULDNT_ANSWER, FAILED, OTHER }
+    enum class Kind { UNREACHABLE, BUSY, NOT_CONNECTED, NO_ANSWER, TOO_LARGE, UNSUPPORTED, RATE_LIMITED, NO_DOCUMENTS, COULDNT_ANSWER, FAILED, OTHER, TIER_UNAVAILABLE }
 
     companion object {
         val unreachable = GideonProblem(Kind.UNREACHABLE, true)
@@ -193,6 +217,7 @@ data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String
         /** A refusal as an HTTP status, before any answer streamed; [code] / [message] from the JSON body. */
         fun http(status: Int, code: String?, message: String?): GideonProblem {
             when (code.orEmpty().lowercase()) {
+                "model0_unavailable" -> return GideonProblem(Kind.TIER_UNAVAILABLE, false)
                 "file_too_large" -> return GideonProblem(Kind.TOO_LARGE, false)
                 "unsupported_file_type" -> return GideonProblem(Kind.UNSUPPORTED, false)
                 "not_configured", "gideon_unavailable" -> return notConnected
@@ -211,6 +236,7 @@ data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String
 
         /** An `error` event inside the stream: fixed server sentences (some Indonesian only) and "Gideon error (NNN).". */
         fun stream(content: String): GideonProblem {
+            if (content == "model0_unavailable") return GideonProblem(Kind.TIER_UNAVAILABLE, false)
             val s = content.trim(); val lower = s.lowercase()
             Regex("^gideon error \\((\\d{3})\\)").find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { status ->
                 return when (status) {
@@ -247,7 +273,7 @@ object GideonSteps {
     enum class Kind {
         LIST_PROJECTS, LOOKUP_PEOPLE, LIST_TASKS, SEARCH_TASKS, SEARCH_WORKSPACE, READ_PROJECT, READ_NAMED, READ_FIELDS, READ_TASK,
         SEARCH_DOCS, READ_DOC, CREATE_TASK, UPDATE_TASK, COMMENT, WRITE_DOC, LOOK_IMAGE, LABEL, WORKING,
-        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM, MOVE_BOOKING, CANCEL_BOOKING,
+        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM, MOVE_BOOKING, CANCEL_BOOKING, PERSON_STATUS, MY_STATUS,
     }
 
     /** [arg] is the step's own handle (≤ 60 chars) or null when the sentence has none. */
@@ -257,6 +283,8 @@ object GideonSteps {
         val a = s.arg?.trim()?.take(60)?.takeIf { it.isNotEmpty() }
         fun t(k: Kind, withArg: Boolean = true) = Text(k, if (withArg) a else null)
         return when (s.tool) {
+            "get_person_status", "nexus_get_person_status" -> t(Kind.PERSON_STATUS)
+            "set_my_status", "nexus_set_my_status" -> t(Kind.MY_STATUS)
             "list_projects" -> t(Kind.LIST_PROJECTS, false)
             "list_members" -> t(Kind.LOOKUP_PEOPLE, false)
             "list_tasks" -> t(Kind.LIST_TASKS)
@@ -332,7 +360,9 @@ object GideonChatGroups {
  * answer lands in its own chat (a generation number keeps a late answer out of a chat started since).
  * Cleared on logout (AppContainer).
  */
-class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) {
+class GideonChat(private val api: ApiClient, private val scope: CoroutineScope, private val onMemories: (List<GMemory>, String?) -> Unit = { _, _ -> }, private val memoryOwner: () -> String? = { null }) {
+    private var answerJob: Job? = null
+    fun stop() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.update { it.copy(thinking = false) }; loadChats() }
     data class State(
         val chatId: String? = null,
         val chatTitle: String? = null,
@@ -354,6 +384,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val approval: GideonApprovalMode = GideonApprovalMode.fallback,
         /** Proposals with an Apply / Discard on its way (their buttons wait). */
         val deciding: Set<String> = emptySet(),
+        val pending: List<GProposal> = emptyList(),
     )
 
     private val _state = MutableStateFlow(State())
@@ -371,6 +402,14 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         failed = null
         _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null,
             project = project, refs = emptyList(), deciding = emptySet()) }
+        refreshProposals()
+    }
+
+    fun refreshProposals() = scope.launch {
+        val gen = generation
+        runCatching { api.get("/api/gideon/proposals", GProposals.serializer()) }.getOrNull()?.let { proposals ->
+            if (gen == generation) _state.update { it.copy(pending = proposals.proposals) }
+        }
     }
 
     /** A page picked in the @ picker (once; at most [GideonMention.MAX_REFS]). */
@@ -385,21 +424,21 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
      * Apply or Discard a proposal (POST /api/gideon/proposals/:id {decision}); the card shows what came back. The
      * server re-checks access when applying, and a double tap applies once (409 still carries the proposal).
      */
-    fun decide(p: GProposal, apply: Boolean, booking: GBookingChoice? = null) {
+    fun decide(p: GProposal, apply: Boolean, booking: GBookingChoice? = null, task: GTaskChoice? = null) {
         if (p.id in _state.value.deciding) return
         _state.update { it.copy(deciding = it.deciding + p.id, error = null) }
         scope.launch {
             try {
                 val updated = try {
                     api.send(Request.Builder().url(api.url("/api/gideon/proposals/" + URLEncoder.encode(p.id, "UTF-8")))
-                        .post(GideonReview.body(apply, booking).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
+                        .post(GideonReview.body(apply, booking, p, task).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
                 } catch (e: ApiError.Http) {
                     val carried = if (GideonReview.carriesProposal(e.status)) (e.body?.get("proposal") as? JsonObject)
                         ?.let { j -> runCatching { api.json.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() } else null
                     carried ?: throw e
                 }
                 if (updated != null) {
-                    _state.update { it.copy(messages = GideonReview.replace(it.messages, updated)) }
+                    _state.update { it.copy(messages = GideonReview.replace(it.messages, updated), pending = it.pending.map { row -> if (row.id == updated.id) updated else row }) }
                     if (apply && !updated.error.isNullOrBlank()) _state.update { it.copy(error = GideonProblem(GideonProblem.Kind.OTHER, false, updated.error)) }
                 }
             } catch (e: ApiError) {
@@ -428,6 +467,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
 
     fun open(chatId: String) {
         val gen = ++generation
+        val sourceOwner = memoryOwner()
         failed = null
         _state.update { it.copy(chatId = chatId, chatTitle = it.chats?.firstOrNull { c -> c.id == chatId }?.title, messages = emptyList(),
             opening = true, thinking = false, error = null, openFailed = null, refs = emptyList(), deciding = emptySet()) }
@@ -435,6 +475,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
             try {
                 val h = api.get("/api/gideon/history?chatId=" + URLEncoder.encode(chatId, "UTF-8"), GHistory.serializer())
                 if (gen != generation) return@launch
+                onMemories(h.messages.flatMap { MemoryRules.chatMemories(it, readOnly = false) }, sourceOwner)
                 _state.update { it.copy(opening = false, chatTitle = h.chat?.title ?: it.chatTitle,
                     messages = h.messages.map { m -> m.copy(attachments = m.attachments.filter { a -> a.url != null }) }) }
             } catch (e: ApiError) {
@@ -460,7 +501,8 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val history = _state.value.messages + q
         val chatId = _state.value.chatId
         _state.update { it.copy(messages = history, thinking = true, error = null) }
-        scope.launch {
+        answerJob = scope.launch {
+            val sourceOwner = memoryOwner()
             var problem: GideonProblem? = null
             try {
                 val body = buildJsonObject {
@@ -480,15 +522,23 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                         null -> Unit
                     }
                 }
-                val raw = api.sendText(Request.Builder().url(api.url("/api/gideon")).header("Accept", "text/event-stream")
-                    .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000)
-                val r = GideonRules.parse(raw) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                val raw = StringBuilder()
+                fun paint(r: GStream) {
+                    if (gen != generation) return
+                    onMemories(r.memories, sourceOwner)
+                    _state.update { s -> s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
+                        messages = if (r.answered || r.steps.isNotEmpty()) history + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals, r.memories)) else history) }
+                }
+                api.sendEventLines(Request.Builder().url(api.url("/api/gideon")).header("Accept", "text/event-stream")
+                    .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000) { line ->
+                    raw.append(line).append('\n')
+                    if (line.startsWith("data:")) paint(GideonRules.parse(raw.toString(), complete = false) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() })
+                }
+                val r = GideonRules.parse(raw.toString()) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() }
                 if (gen != generation) return@launch
                 problem = r.error?.let(GideonProblem::stream) ?: if (!r.answered) GideonProblem.noAnswer else null
-                _state.update { s ->
-                    s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
-                        messages = if (r.answered) s.messages + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals)) else s.messages)
-                }
+                paint(r)
+            } catch (e: CancellationException) { throw e
             } catch (e: ApiError) {
                 problem = GideonProblem.from(e)
             }
@@ -533,5 +583,5 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
     }
 
     /** Logout: the next person never sees this transcript. */
-    fun reset() { generation++; failed = null; _state.value = State() }
+    fun reset() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.value = State() }
 }

@@ -34,14 +34,17 @@ import kotlinx.serialization.Serializable
     val calendarWidgets: Boolean? = null,
     /** Automatic offsite check-out after 2 h 30 outside (server cd89d72): off unless the server says so (owner, 8 Oct). */
     val outsideAutoCheckout: Boolean? = null,
+    val meetingNotesEnabled: Boolean? = null,
+    val presenceStatus: Boolean? = null,
 )
-@Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null, val calendarPollSeconds: Int? = null)
+@Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null, val calendarPollSeconds: Int? = null, val meetingMaxMinutes: Int? = null, val meetingMaxMB: Int? = null, val meetingAudioRetentionDays: Int? = null)
 @Serializable data class ConfigBanner(val id: String, val tone: String? = null, val title: String = "", val message: String = "", val link: String? = null)
 @Serializable data class ConfigBody(
     val flags: ConfigFlags? = null,
     val values: ConfigValues? = null,
     val texts: Map<String, Map<String, String>>? = null,
     val banner: ConfigBanner? = null,
+    val gideonTiers: Map<String, id.znetworks.nexus.feature.gideon.GTierAvailability>? = null,
 ) {
     // Reads, with the server's defaults.
     val requireAlwaysLocation get() = flags?.requireAlwaysLocation ?: true
@@ -53,6 +56,11 @@ import kotlinx.serialization.Serializable
     val calendarWidgets get() = flags?.calendarWidgets ?: true
     /** False (the default): no countdown and no "auto check-out at" anywhere; the reminders stay. */
     val outsideAutoCheckout get() = flags?.outsideAutoCheckout ?: false
+    val meetingNotesEnabled get() = flags?.meetingNotesEnabled ?: true
+    val presenceStatus get() = flags?.presenceStatus ?: true
+    val meetingMaxMinutes get() = values?.meetingMaxMinutes?.coerceAtLeast(1) ?: 180
+    val meetingMaxBytes get() = (values?.meetingMaxMB?.coerceAtLeast(1) ?: 500).toLong() * 1024 * 1024
+    val meetingAudioRetentionDays get() = values?.meetingAudioRetentionDays?.coerceAtLeast(1) ?: 30
     /** How often the Calendar polls while it is on screen (with If-None-Match). */
     val calendarPollSeconds get() = values?.calendarPollSeconds?.takeIf { it in 10..3600 } ?: 60
 

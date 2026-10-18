@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,7 +92,7 @@ private fun ago(iso: String?): String? = iso?.let { runCatching { Instant.parse(
     ?.let { DateUtils.getRelativeTimeSpanString(it.toEpochMilli(), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString() }
 
 private fun wib(iso: String?): String? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
-    ?.let { DateTimeFormatter.ofPattern("d MMM HH:mm:ss", Locale.getDefault()).withZone(ZoneId.of("Asia/Jakarta")).format(it) + " WIB" }
+    ?.let { AppDateFormats.ofPattern("d MMM HH:mm:ss", Locale.getDefault()).withZone(ZoneId.of("Asia/Jakarta")).format(it) + " WIB" }
 
 @Composable
 private fun rememberSay(): Say {

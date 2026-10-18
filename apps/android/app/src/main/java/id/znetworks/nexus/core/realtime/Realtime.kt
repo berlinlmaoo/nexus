@@ -57,6 +57,7 @@ data class RealtimeEvent(
     val typing: Boolean? = null,
     /** The payload as JSON text, for screens that read more than the ids (the Spreadsheet's `sheet-cells`). */
     val raw: String? = null,
+    val updatedAt: String? = null,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -83,7 +84,7 @@ object RealtimeEvents {
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure") + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -114,7 +115,7 @@ object RealtimeEvents {
             TYPING -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId"), personName = o.str("name"), avatar = o.str("avatar"),
                 typing = (o["typing"] as? JsonPrimitive)?.booleanOrNull)
             // the task itself / { taskId } / { taskId, comment }
-            "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
+            "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"), updatedAt = o.str("updatedAt"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
             PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
@@ -126,8 +127,8 @@ object RealtimeEvents {
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             // { room: "project:<id>" | "sheet:<id>", reason }
             JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
-                projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:")) }
-            else -> RealtimeEvent(name)
+                projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:"), raw = json) }
+            else -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), raw = json)
         }
     }
 

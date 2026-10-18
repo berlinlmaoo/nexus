@@ -286,6 +286,30 @@ class ApiClient(
         }
     }
 
+    /** SSE on OkHttp's worker thread. Cancellation closes the socket even while waiting for a line. */
+    suspend fun sendEventLines(request: Request, readTimeoutMs: Long, onLine: (String) -> Unit): Unit = suspendCancellableCoroutine { cont ->
+        val session = sessionProvider()
+        val prepared = request.newBuilder().apply {
+            if (session != null && mayCarrySession(request.url.host)) header("Cookie", "${session.cookieName}=${session.token}")
+        }.build()
+        val call = http.newBuilder().readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS).callTimeout(readTimeoutMs + 30_000, TimeUnit.MILLISECONDS)
+            .build().newCall(prepared)
+        cont.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { if (cont.isActive) cont.resumeWithException(ApiError.Transport(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    response.use { res ->
+                        if (!res.isSuccessful) throw classify(res.code, res.body.string(), session)
+                        val source = res.body.source()
+                        while (cont.isActive) { val line = source.readUtf8Line() ?: break; onLine(line) }
+                    }
+                    if (cont.isActive) cont.resume(Unit)
+                } catch (e: Exception) { if (cont.isActive) cont.resumeWithException(if (e is IOException) ApiError.Transport(e) else e) }
+            }
+        })
+    }
+
     private fun classify(status: Int, raw: String?, authedSession: Session?): ApiError {
         val body = ErrorBody.parse(json, raw)
         val code = ErrorBody.code(body)
@@ -309,6 +333,7 @@ class ApiClient(
         override fun intercept(chain: Interceptor.Chain): Response {
             val req = chain.request().newBuilder()
                 .header("X-Nexus-Client", identity.clientTag)
+                .header("X-Nexus-Caps", "chat-files")
                 // The in-app language (never the phone's): the server stores and pushes notifications in it
                 // (13 Oct 2026: English unless the person chose Indonesian; iOS 5aaa3fb).
                 .header("X-Nexus-Lang", id.znetworks.nexus.core.i18n.AppLanguage.serverCode(id.znetworks.nexus.core.i18n.AppLanguage.current))
@@ -330,6 +355,8 @@ class ApiClient(
             onUpgradeRequired: (ApiError.UpgradeRequired) -> Unit,
             routeInterceptor: Interceptor? = null,
         ) = ApiClient(NexusConfig.base.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired,
+            baseClient = OkHttpClient.Builder().dns(DevHostDns(NexusConfig.DEV_HOST, id.znetworks.nexus.BuildConfig.DEV_ADDRESS,
+                { id.znetworks.nexus.BuildConfig.DEBUG && NexusConfig.env == ServerEnv.DEV })).build(),
             routeInterceptor = routeInterceptor)
     }
 }

@@ -1,0 +1,30 @@
+<resources>
+    <string name="gp_pending_read_only">Not decided yet</string>
+    <plurals name="gp_answer_count"><item quantity="one">%1$d answer</item><item quantity="other">%1$d answers</item></plurals>
+    <plurals name="gp_message_count"><item quantity="one">%1$d message</item><item quantity="other">%1$d messages</item></plurals>
+    <plurals name="gp_credit_count"><item quantity="one">%1$d credit</item><item quantity="other">%1$d credits</item></plurals>
+    <string name="gp_overview">Overview</string>
+    <string name="gp_questions">%1$d questions · %2$d answers</string>
+    <string name="gp_tools">%1$d tool calls</string>
+    <string name="gp_chats">%1$d chats</string>
+    <string name="gp_deleted_count">%1$d deleted by user</string>
+    <string name="gp_last_used">Last used: %1$s</string>
+    <string name="gp_period_used">Credits this period: %1$d</string>
+    <string name="gp_today_used">Credits today: %1$d</string>
+    <string name="gp_limits">Daily limit %1$d · Period pool %2$d</string>
+    <string name="gp_tier_usage">%1$d answers · %2$d credits</string>
+    <string name="gp_chat_usage">%1$d messages · %2$d credits</string>
+    <string name="gp_credits_count">%1$d credits</string>
+    <string name="gp_search">Search their chats</string>
+    <string name="gp_from">From date</string>
+    <string name="gp_to">To date</string>
+    <string name="gp_all">All</string>
+    <string name="gp_kept">Kept</string>
+    <string name="gp_deleted">Deleted by user</string>
+    <string name="gp_oaa_only">Only the One Above All can read GIDEON chats.</string>
+    <string name="gp_empty">No GIDEON messages match these filters.</string>
+    <string name="gp_untitled">Untitled chat</string>
+    <string name="gp_read_only">Viewed as One Above All · read-only</string>
+    <string name="gp_back_chats">Back to chats</string>
+    <string name="gp_earlier">Show earlier messages</string>
+</resources>

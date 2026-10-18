@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -107,6 +110,7 @@ import id.znetworks.nexus.ui.components.NxButtonKind
 import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.theme.TextFont
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -143,7 +147,7 @@ fun ProjectPageHeader(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                 access.readOnlyChip?.let { l ->
                     val hint = stringResource(R.string.acc_hint)
                     Text(accessLabel(l), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
@@ -175,7 +179,7 @@ private fun MemberFaces(members: List<ProjectMemberRef>, onClick: () -> Unit) {
     val label = stringResource(R.string.pp_members_title, members.size)
     Row(Modifier.clip(CircleShape).clickable(role = Role.Button, onClickLabel = label, onClick = onClick).padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
         members.take(2).forEachIndexed { i, m ->
-            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(m.user?.name, m.user?.avatar, size = 24.dp, ring = true) }
+            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(m.user?.name, m.user?.avatar, size = 24.dp, ring = true, userId = m.uid) }
         }
         if (members.size > 2) {
             Box(Modifier.offset(x = (-12).dp).size(24.dp).background(c.muted, CircleShape).border(1.dp, c.background, CircleShape), contentAlignment = Alignment.Center) {
@@ -194,7 +198,7 @@ fun MembersDialog(members: List<ProjectMemberRef>, canAdd: Boolean, onAdd: () ->
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 members.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.user?.name, m.user?.avatar, size = 28.dp)
+                        Avatar(m.user?.name, m.user?.avatar, size = 28.dp, userId = m.uid)
                         Spacer(Modifier.width(10.dp))
                         Text(m.user?.name ?: m.user?.email ?: "—", fontSize = 15.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val lvl = AccessLevel.ofMember(m.role, m.accessLevel)
@@ -219,15 +223,18 @@ sealed class PageTabItem {
 }
 
 fun layoutTab(layout: String): ProjectTab = when (layout) {
-    "list" -> ProjectTab.LIST; "table" -> ProjectTab.TABLE; "calendar" -> ProjectTab.CALENDAR; "timeline" -> ProjectTab.TIMELINE; else -> ProjectTab.BOARD
+    "gallery" -> ProjectTab.GALLERY; "list" -> ProjectTab.LIST; "table" -> ProjectTab.TABLE; "calendar" -> ProjectTab.CALENDAR; "timeline" -> ProjectTab.TIMELINE; else -> ProjectTab.BOARD
 }
 
 private fun layoutIcon(layout: String): ImageVector = when (layout) {
-    "list" -> Icons.AutoMirrored.Outlined.ViewList; "table" -> Icons.Outlined.TableChart; "calendar" -> Icons.Outlined.CalendarMonth
+    "gallery" -> Icons.Outlined.Dashboard; "list" -> Icons.AutoMirrored.Outlined.ViewList; "table" -> Icons.Outlined.TableChart; "calendar" -> Icons.Outlined.CalendarMonth
     "timeline" -> Icons.Outlined.Timeline; else -> Icons.Outlined.ViewKanban
 }
 
 private fun moduleIcon(t: ProjectTab): ImageVector = when (t) {
+    ProjectTab.OUTLET_CALENDAR -> Icons.Outlined.CalendarMonth
+    ProjectTab.OUTLET_BOARD -> Icons.Outlined.ViewKanban
+    ProjectTab.OUTLET_FORM -> Icons.Outlined.Assignment
     ProjectTab.SHEET -> Icons.Outlined.GridOn; ProjectTab.PAGES -> Icons.Outlined.Description; ProjectTab.FORMS -> Icons.Outlined.Assignment
     ProjectTab.CHAT -> Icons.Outlined.ChatBubbleOutline; ProjectTab.AUTOMATIONS -> Icons.Outlined.Bolt; else -> Icons.Outlined.Dashboard
 }
@@ -245,9 +252,64 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
  * Pages, Forms, Chat, Automations. A long-press on a view opens its menu; a personal view carries a lock.
  */
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
-                  onAdd: (() -> Unit)? = null) {
+                  onAdd: (() -> Unit)? = null, onDetails: (() -> Unit)? = null, onMeetings: (() -> Unit)? = null) {
     val c = Nx.colors
+    if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
+        var menu by remember { mutableStateOf(false) }
+        val index = items.indexOf(selected).coerceAtLeast(0)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().clip(CircleShape).background(c.accentBg).clickable { menu = true }.heightIn(min = 48.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val title = when (val item = selected) {
+                        is PageTabItem.View -> viewLabel(item.view)
+                        is PageTabItem.Module -> stringResource(item.tab.label)
+                        else -> stringResource(R.string.ptab_overview)
+                    }
+                    Text(title, fontSize = 14.sp, color = c.violetText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.violetText, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(menu, { menu = false }) {
+                    items.forEach { item -> DropdownMenuItem(text = { Text(when(item) {
+                        is PageTabItem.View -> viewLabel(item.view)
+                        is PageTabItem.Module -> stringResource(item.tab.label)
+                        else -> stringResource(R.string.ptab_overview)
+                    }) }, onClick = { menu = false; onSelect(item) }) }
+                    if (canAddView) DropdownMenuItem(text = { Text(stringResource(R.string.view_add)) }, onClick = { menu = false; onAddView() })
+                }
+            }
+            androidx.compose.material3.IconButton(onClick = { onSelect(items[index - 1]) }, enabled = index > 0) {
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous))
+            }
+            androidx.compose.material3.IconButton(onClick = { onSelect(items[index + 1]) }, enabled = index < items.lastIndex) {
+                Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next))
+            }
+            Box {
+                var actions by remember { mutableStateOf(false) }
+                androidx.compose.material3.IconButton(onClick = { actions = true }) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more)) }
+                DropdownMenu(actions, { actions = false }) {
+                    if (onMeetings != null) DropdownMenuItem(text = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(stringResource(R.string.meet_title)); id.znetworks.nexus.feature.meetings.MeetingBeta() } }, onClick = { actions = false; onMeetings() })
+                    (selected as? PageTabItem.View)?.let { v -> DropdownMenuItem(text = { Text(stringResource(R.string.col_options)) }, onClick = { actions = false; onViewMenu(v.view) }) }
+                    if (canAddView) DropdownMenuItem(text = { Text(stringResource(R.string.view_add)) }, onClick = { actions = false; onAddView() })
+                }
+            }
+            if (onAdd != null) {
+                var create by remember { mutableStateOf(false) }
+                Box {
+                    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.onyx).heightIn(min = 48.dp).combinedClickable(onClick = onAdd, onLongClick = { create = true }).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Add, null, tint = c.background, modifier = Modifier.size(16.dp))
+                        Text(stringResource(R.string.r21_new), color = c.background, fontSize = 13.sp)
+                    }
+                    DropdownMenu(create, { create = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.pp_new_task)) }, onClick = { create = false; onAdd() })
+                        if (onDetails != null) DropdownMenuItem(text = { Text(stringResource(R.string.r21_new_details)) }, onClick = { create = false; onDetails() })
+                    }
+                }
+            }
+        }
+        return
+    }
     // The open tab is scrolled into view (it sat clipped under "Add task" on List / Table / Calendar / Timeline).
     val scroll = rememberScrollState()
     var selectedX by remember { mutableStateOf<Int?>(null) }
@@ -277,8 +339,25 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
         }
         if (!dividerDrawn && canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))
     }
+    if (onMeetings != null) TextButton(onClick = onMeetings) { Text(stringResource(R.string.meet_title)); Spacer(Modifier.width(4.dp)); id.znetworks.nexus.feature.meetings.MeetingBeta() }
     // "Add task" at the end of the tabs, always in reach (web phone).
-    if (onAdd != null) { Spacer(Modifier.width(6.dp)); HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true, size = 36.dp) }
+    if (onAdd != null) {
+        Spacer(Modifier.width(6.dp))
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(c.onyx), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.r21_new), color = c.background, fontSize = 13.sp,
+                    modifier = Modifier.clickable(onClick = onAdd).padding(horizontal = 10.dp, vertical = 10.dp))
+                androidx.compose.material3.IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.more), tint = c.background, modifier = Modifier.size(16.dp))
+                }
+            }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.pp_new_task)) }, onClick = { menu = false; onAdd() })
+                if (onDetails != null) DropdownMenuItem(text = { Text(stringResource(R.string.r21_new_details)) }, onClick = { menu = false; onDetails() })
+            }
+        }
+    }
     }
 }
 
@@ -359,7 +438,16 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
               props: PropCtx, linked: List<BoardLogic.LinkedLane>, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val dark = c.background.luminance() < 0.3f
-    LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val state = rememberLazyListState()
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
+    LaunchedEffect(inline) { if (inline != null) groups.indexOfFirst { it.key == inline }.takeIf { it >= 0 }?.let { state.scrollToItem(it + linked.size) } }
+    Column(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        groups.forEachIndexed { i, g -> Text(groupLabel(g, cfg.groupBy) + "  " + g.tasks.size,
+            fontSize = 13.sp, color = c.foreground, modifier = Modifier.clip(CircleShape).background(c.muted).clickable { scope.launch { state.animateScrollToItem(i + linked.size) } }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 14.dp)) }
+    }
+    LazyRow(state = state, contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         items(linked.size, key = { "linked-" + linked[it].sourceId }) { i -> LinkedColumn(linked[i], props, access, vm, onOpenTask) }
         items(groups.size, key = { groups[it].key }) { i ->
             val g = groups[i]
@@ -367,6 +455,7 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
             BoardColumn(g, cfg, lanes, access, vm, selected, props, onOpenTask, onDuplicateDate, dark, firstOfGroup = i == 0 || groups[i - 1].statusGroup != g.statusGroup)
         }
         if (access.canManage && cfg.groupBy == "section" && StatusOptions.inUse(lanes)) item(key = "+status") { AddStatusColumn(vm) }
+    }
     }
 }
 
@@ -403,20 +492,28 @@ private fun LinkedColumn(l: BoardLogic.LinkedLane, props: PropCtx, access: Proje
 private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>, props: PropCtx,
                         onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit, dark: Boolean, firstOfGroup: Boolean) {
     val c = Nx.colors
+    var collapsed by rememberSaveable(g.key) { mutableStateOf(false) }
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
     run {
             val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
-            Column(Modifier.width(284.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(tone?.lane ?: c.muted.copy(alpha = 0.5f)).padding(8.dp)) {
+            Column(Modifier.width(if (collapsed) 64.dp else (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 48).dp.coerceIn(284.dp, 348.dp)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(8.dp)) {
                 // The status group's name above the first column of each group (iOS).
-                if (g.statusGroup != null) Text(if (firstOfGroup) statusGroupLabel(g.statusGroup) else " ", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+
                 Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
+                    if (!collapsed) Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
+                    androidx.compose.material3.IconButton(onClick = { collapsed = !collapsed }) { Icon(if (collapsed) Icons.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (collapsed) R.string.expand else R.string.collapse), tint = c.mutedFg) }
+                    if (!collapsed) {
                     if (g.laneId != null && access.canManage) SectionStatusButton(g.laneId, lanes, vm)
+                    if (access.canEdit && groupCreate(g, cfg.groupBy, vm) != null) androidx.compose.material3.IconButton(onClick = { vm.requestInline(g.key) }) { Icon(Icons.Filled.Add, stringResource(R.string.pp_new_task), tint = c.mutedFg) }
+                    }
                 }
+                if (!collapsed) {
                 Spacer(Modifier.height(6.dp))
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
-                if (create != null) { InlineNewTask(create); Spacer(Modifier.height(6.dp)) }
+                if (create != null) { InlineNewTask(create, request = inline == g.key, consumed = vm::inlineConsumed); Spacer(Modifier.height(6.dp)) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
                     items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate, props) }
+                }
                 }
             }
     }
@@ -434,7 +531,7 @@ private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDe
     var menu by remember { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf<String?>(null) }
     Box {
-        androidx.compose.material3.IconButton(onClick = { menu = "root" }, modifier = Modifier.size(32.dp)) {
+        androidx.compose.material3.IconButton(onClick = { menu = "root" }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.MoreHoriz, stringResource(R.string.col_options), tint = c.mutedFg, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(menu != null, { menu = null }) {
@@ -443,12 +540,12 @@ private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDe
                     onClick = { menu = null; vm.colorSection(lane.id, k) })
             } else {
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_rename)) }, onClick = { menu = null; dialog = "rename" })
-                DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                 val across = stringResource(R.string.col_across)
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_left)) }, onClick = { menu = null
-                    if (!vm.moveSection(lane.id, -1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                    if (!vm.moveSection(lane.id, -1)) id.znetworks.nexus.ui.components.UiNotice.show(across) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_right)) }, onClick = { menu = null
-                    if (!vm.moveSection(lane.id, 1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                    if (!vm.moveSection(lane.id, 1)) id.znetworks.nexus.ui.components.UiNotice.show(across) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.col_status_type)) }, onClick = { menu = null; dialog = "type" })
                 if (lanes.size > 1) {
                     HorizontalDivider(color = c.border)
@@ -517,8 +614,11 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("view_collapsed", android.content.Context.MODE_PRIVATE) }
     var collapsed by remember(viewId) { mutableStateOf(prefs.getStringSet(viewId, emptySet()).orEmpty().toSet()) }
+    val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
+    val state = rememberLazyListState()
+    LaunchedEffect(inline) { if (inline != null) { collapsed = collapsed - inline; state.scrollToItem(0) } }
     fun toggle(k: String) { collapsed = if (k in collapsed) collapsed - k else collapsed + k; prefs.edit().putStringSet(viewId, collapsed).apply() }
-    LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = state, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         groups.forEach { g ->
             val open = g.key !in collapsed
             item(key = "h-" + g.key) {
@@ -531,7 +631,7 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
             }
             if (open) {
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
-                if (create != null) item(key = "n-" + g.key) { Box(Modifier.padding(start = 26.dp, bottom = 4.dp)) { InlineNewTask(create, flat = true) } }
+                if (create != null) item(key = "n-" + g.key) { Box(Modifier.padding(start = 26.dp, bottom = 4.dp)) { InlineNewTask(create, flat = true, request = inline == g.key, consumed = vm::inlineConsumed) } }
                 items(g.tasks, key = { g.key + "/" + it.id }) { t -> ListRow(t, lanes, vm, selected, access, props, onOpenTask, onDuplicateDate) }
             }
         }
@@ -552,9 +652,10 @@ private fun ListRow(t: BoardTask, lanes: List<Lane>, vm: ProjectDetailViewModel,
             .combinedClickable(onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) },
                 onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true })
             .padding(start = if (t.isSubtask) 30.dp else 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Top) {
-            Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
-                tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f),
-                modifier = Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) })
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) }, contentAlignment = Alignment.TopCenter) {
+                Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
+                    tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f), modifier = Modifier.padding(top = 1.dp).size(20.dp))
+            }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -629,16 +730,18 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
             }
             val circle = if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked
             val tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.6f)
-            Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
-                contentAlignment = Alignment.Center) {
+            Box(Modifier.padding(top = 1.dp).size(48.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
+                contentAlignment = Alignment.TopCenter) {
                 Icon(circle, stringResource(R.string.task_toggle_done), Modifier.size(18.dp), tint = tint)
             }
             Spacer(Modifier.width(8.dp))
-            Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
-                textDecoration = if (t.isDone) TextDecoration.LineThrough else null, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
+                    textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
+                PropLine(props.items(t))
+            }
             if (t.questXp > 0) { Spacer(Modifier.width(6.dp)); Pill("+${t.questXp} XP", c.violetText) }
         }
-        PropLine(props.items(t), Modifier.padding(start = 28.dp))
     }
 }
 
@@ -647,10 +750,11 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
  * waits (each title is sent on its own); a tap on ✕ closes it.
  */
 @Composable
-fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false) {
+fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false, request: Boolean = false, consumed: () -> Unit = {}) {
     val c = Nx.colors
     var composing by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
+    LaunchedEffect(request) { if (request) { composing = true; consumed() } }
     if (!composing) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { composing = true }.defaultMinSize(minHeight = 40.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -699,16 +803,18 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
         Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     val stick = Modifier.offset { androidx.compose.ui.unit.IntOffset(h.value, 0) }
-    Column(Modifier.fillMaxSize().horizontalScroll(h)) {
-        Row(Modifier.background(c.background)) {
-            headerCell(stringResource(R.string.pp_col_name), nameW)
-            cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
-        }
-        HorizontalDivider(Modifier.width(totalW), color = c.border)
+    Column(Modifier.fillMaxSize().padding(end = 12.dp)) {
+    if (h.maxValue > 0) Text(stringResource(R.string.table_scroll_hint), color = c.mutedFg, fontSize = 11.sp, modifier = Modifier.align(Alignment.End).padding(4.dp))
+    Column(Modifier.weight(1f).horizontalScroll(h)) {
         LazyColumn(Modifier.weight(1f).width(totalW), contentPadding = PaddingValues(bottom = 96.dp)) {
             groups.forEach { g ->
                 item(key = "h-" + g.key) {
                     Box(stick.padding(start = 10.dp, top = 12.dp, bottom = 6.dp)) { GroupPill(g, groupLabel(g, cfg.groupBy), "${g.tasks.size}") }
+                    Row(Modifier.background(c.background)) {
+                        headerCell(stringResource(R.string.pp_col_name), nameW)
+                        cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
+                    }
+                    HorizontalDivider(Modifier.width(totalW), color = c.border)
                 }
                 val limit = shown.value[g.key] ?: PAGE
                 items(g.tasks.take(limit), key = { g.key + "/" + it.id }) { t ->
@@ -723,6 +829,7 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
                 if (create != null) item(key = "n-" + g.key) { Box(stick.width(nameW + colW).padding(start = 6.dp)) { InlineNewTask(create, flat = true) } }
             }
         }
+    }
     }
 }
 
@@ -755,7 +862,7 @@ private fun TableRow(t: BoardTask, lanes: List<Lane>, cols: List<String>, props:
                     value == null -> Text("—", fontSize = 13.sp, color = c.mutedFg)
                     // Assignee: the faces and first names (one line).
                     value is CardProps.Item.People -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        id.znetworks.nexus.ui.components.AvatarStack(value.people, size = 20.dp)
+                        id.znetworks.nexus.ui.components.AvatarStack(value.people, size = 20.dp, userIds = value.userIds)
                         Spacer(Modifier.width(4.dp))
                         Text(value.people.mapNotNull { it.first?.substringBefore(' ') }.joinToString(", "), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
                     }
@@ -811,15 +918,15 @@ fun ProjectSelectionBar(count: Int, busy: Boolean, lanes: List<Lane>, members: L
             DropdownMenu(menu != null, { menu = null }) {
                 when (menu) {
                     "root" -> {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_status)) }, onClick = { menu = "status" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_priority)) }, onClick = { menu = "priority" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
-                        if (members.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.bulk_assign)) }, onClick = { menu = "assign" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_status)) }, onClick = { menu = "status" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.bulk_priority)) }, onClick = { menu = "priority" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
+                        if (members.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.bulk_assign)) }, onClick = { menu = "assign" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next)) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.bulk_due)) }, onClick = { menu = null; onDue() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.bulk_due_clear)) }, onClick = { menu = null; onClearDue() })
                     }
                     "status" -> StatusOptions.ordered(lanes).forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { menu = null; onMove(l.id) }) }
                     "priority" -> TaskEnums.PRIORITIES.forEach { p -> DropdownMenuItem(text = { Text(priorityLabel(p)) }, onClick = { menu = null; onPriority(p) }) }
-                    "assign" -> members.forEach { m -> DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { Avatar(m.user?.name, m.user?.avatar, size = 22.dp) },
+                    "assign" -> members.forEach { m -> DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { Avatar(m.user?.name, m.user?.avatar, size = 22.dp, userId = m.uid) },
                         onClick = { menu = null; onAssign(m.uid) }) }
                 }
             }

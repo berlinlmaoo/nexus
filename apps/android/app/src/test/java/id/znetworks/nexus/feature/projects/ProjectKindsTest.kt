@@ -40,7 +40,7 @@ class ProjectKindsTest {
         assertTrue(ProjectTabsLogic.locked("list", setOf("board"))); assertTrue(ProjectTabsLogic.locked("board", setOf("list")))
         assertFalse(ProjectTabsLogic.locked("board", emptySet())); assertFalse(ProjectTabsLogic.locked("sheet", setOf("board")))
         // Every tab drawn here has a server key, except the types' own tabs.
-        ProjectTab.entries.forEach { t -> assertEquals(t.name, t == ProjectTab.PIPELINE || t.name.startsWith("OUTLET_"), ProjectTabsLogic.key(t) == null) }
+        ProjectTab.entries.forEach { t -> assertEquals(t.name, t == ProjectTab.PIPELINE || t == ProjectTab.GALLERY || t.name.startsWith("OUTLET_"), ProjectTabsLogic.key(t) == null) }
     }
 
     @Test fun namedIcons() {

@@ -143,6 +143,7 @@ class LanRoute(
                         .header("Cookie", "${s.cookieName}=${s.token}")
                         .header("Accept", "application/json")
                         .header("X-Nexus-Client", identity.clientTag)
+                        .header("X-Nexus-Caps", "chat-files")
                         .header("User-Agent", identity.userAgent)
                         .build()
                     // 200 only: a 401 on the LAN host must not look like being signed out, and

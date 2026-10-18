@@ -26,10 +26,28 @@ fun ApiError.accessRefusal(res: Resources): String? {
 
 /** A refused write in words: an access refusal, else the server's sentence, else [fallback]. */
 fun ApiError.sentence(res: Resources, fallback: Int): String =
-    accessRefusal(res) ?: (this as? ApiError.Http)?.serverMessage ?: res.getString(fallback)
+    conflictOrVault(res) ?: accessRefusal(res) ?: (this as? ApiError.Http)?.serverMessage ?: res.getString(fallback)
+
+private fun ApiError.conflictOrVault(res: Resources): String? {
+    val key = when ((this as? ApiError.Http)?.code) {
+        "ASSIGNEES_CHANGED" -> R.string.r21_assignees_changed
+        "DESCRIPTION_CHANGED", "DOC_CHANGED", "FORM_CHANGED" -> R.string.r21_text_changed
+        "SHEET_STRUCTURE_CHANGED" -> R.string.r21_sheet_changed
+        "REORDER_ANCHOR_GONE" -> R.string.r21_reorder_changed
+        "TOO_MANY_TAGS" -> R.string.r21_tags_limit
+        "VAULT_FULL" -> R.string.r21_vault_full
+        "FOLDER_GONE" -> R.string.r21_folder_gone
+        "CYCLE" -> R.string.r21_folder_cycle
+        "GONE" -> R.string.r21_file_gone
+        "TOO_LARGE" -> R.string.chat_file_too_large
+        "UNSUPPORTED_TYPE" -> R.string.chat_file_unsupported
+        else -> return null
+    }
+    return res.getString(key)
+}
 
 fun ApiError.describe(res: Resources): String = when (this) {
-    is ApiError.Http -> accessRefusal(res) ?: serverMessage
+    is ApiError.Http -> conflictOrVault(res) ?: accessRefusal(res) ?: serverMessage
         ?: if (ApiError.isEdgeOnly(status)) res.getString(R.string.error_cant_reach)
         else res.getString(R.string.error_server_status, status)
     is ApiError.UpgradeRequired -> serverMessage ?: res.getString(R.string.update_required_title)

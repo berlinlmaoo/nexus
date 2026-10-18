@@ -1,5 +1,128 @@
 # NEXUS Android: status
 
+## Small polish — item 18 (19 Oct 2026)
+
+All three fixes are complete; reviewed head 578e7fab is retained. Green commits: f813b0d6 (menu icons/voice plurals), 405c537d (native links). **822 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** DEV verification used Pixel_7 with a visible window and host GPU; versionCode remains 13.
+
+| Fix | Verification |
+|---|---|
+| Composer + menu icons | Meeting notes, Gallery and Files now have matching leading icons; all labels align. Actions opened the meeting list and Android photo/file pickers. EN/light and ID/dark reviewed. |
+| Native links | Cold-start nexus://people/<id> opened the intended profile; nexus://gideon opened GIDEON. Vault item links resolved the actual parent and opened the native media viewer or authenticated PDF in Android's viewer; folder, trashed and missing targets were checked. Closing media left the parent folder visible without reopening. Router regression tests cover scheme IDs, GIDEON and item/folder separation. |
+| Meeting voice count | Android quantity resources render EN 1 voice / n voices and ID n suara. Existing QA meeting showed 1 voice and 1 suara on device; its data was not edited. |
+
+[15 reviewed screenshots](../../../../nexus-shots/round18-index.html). Only this round's QA image, PDF and folder were created and removed. English/light restored; Pixel_7 shut down. No push, publication or version change. Nothing remains for item 18.
+
+
+## Presence and GIDEON Memory — items 16/17 (19 Oct 2026)
+
+Both items are implemented on feat/android-r21, following the supplied native contracts and deployed DEV web reference. **820 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** QA used the supplied BoD session on **Pixel_7 / emulator-5556, visible window, host GPU**. No version change, push or publication. Small green commits use Berlin <bagasputro.bp@gmail.com>, with no attribution trailers.
+
+Presence uses server labels and tones, real user IDs on avatars, accessible long-press tooltips, profile/DM/contact-info/Control Room lines, own Settings/profile entry, 80-character status text, WIB scheduling and displayed-ID clearing. A session RAM store patches presence-changed by user ID, refreshes on reconnect/foreground, rejects stale reads/account responses and hides all presence when disabled. GIDEON set_my_status uses the extra-package proposal confirmation, circle-dot icon and EN/ID labels; dated diff values retain their WIB time.
+
+GIDEON Memory adds private Settings and chat-menu entries, settings links, RAM-only account-scoped data, SSE/history upserts, fully wrapped suggestion chips, Save/Don't save/Saved/Not saved states, grouped typed rows, date formatting, inline Return/Escape editing, delete/toast, pause and a centred forget-all alert. Pending badges and primary Save sit under the text and wrap together. Pausing disables Add and Settings suggestion Save. The Indonesian privacy sentence displays in full. OAA read-only transcripts explicitly suppress memories even if metadata contains them. Late reads, streams and history cannot undo a decision or cross accounts.
+
+| Device check | Result / screenshot evidence |
+|---|---|
+| Presence dialog, save and clear | Native save updated own profile; native clear removed only the displayed manual ID. Earlier scheduled status restored. item16-status-dialog, item16-status-saved, item16-status-cleared, item16-profile |
+| Realtime | A second-device API change appeared on the already-open native profile without reopening or foregrounding it. item16-realtime-profile |
+| DM and Control Room | Other-person status in DM header, contact info and people rows under email; visible Details retained. item16-dm-status, item16-dm-info, item16-control-room-people-id-dark, item16-avatar-tooltip, item16-board-avatars |
+| GIDEON status | A request in dont_ask still returned PENDING. Native centred approval applied this run's proposal; API/history confirmed APPLIED and own manual status. item16-gideon-status-card, item16-gideon-status-applied, item16-gideon-history-applied |
+| Memory chat decisions | Native Save persisted ACTIVE, the Saved line opened Settings; Don't save removed a second suggestion and showed Not saved. item17-chat-suggestion, item17-chat-saved, item17-chat-not-saved |
+| Memory Settings | Native Add, Return save, Escape cancel, Delete with Forgotten toast and Settings suggestion Save verified against API. Grouping and full text reviewed. item17-memory-edited, item17-edit-cancelled, item17-memory-deleted, item17-settings-saved-final |
+| Pause and destructive alert | Native pause persisted and disabled Add/Pending Save, then restored. Centred Forget everything alert has correct count and 30-day wording; Cancel retained records. item17-memory-paused-final, item17-forget-confirm |
+| EN/light and ID/dark | Status text/scheduling controls, grouped Memory rows, dates, primary Save and full privacy copy inspected. item16-status-id-dark, item16-status-scheduling-id-dark, item17-memory-id-dark-final, item17-memory-id-dark-rows |
+
+Coverage limits: no shared DEV flags, roles or attendance were changed. Non-offline/manual presence states, disable/reconnect/race/account rules, limits, 404 handling, OAA suppression and delete-all wire/state behavior have unit coverage. Forget everything was not applied live because existing memories belong to other QA work. No account was signed out. Shared QA data changed independently during the run; cleanup preserved all four unrelated memories present in its immediate snapshot. This round's temporary memories/chats were removed; existing records, the earlier scheduled status and pause preference were preserved. English/light restored. Pixel_7 shut down at completion.
+
+[Reviewed screenshot index](../../../../nexus-shots/round1617-index.html). Screenshots and private QA fixtures stay outside Git. Implementation commits start at 26326f83 (presence), bcf219e5 (memory), with green device-driven corrections through 58c73330. Nothing remains for items 16/17.
+
+
+## Android parity round — 19 Oct 2026
+
+All six items in round-android-19oct.md and additions 13/14 are implemented on feat/android-r21. Review fixes through 63f7486a are ancestors of this work. Compared against the deployed DEV web and the supplied native contracts; no release, version change or push. Implementation steps are small green commits authored as Berlin <bagasputro.bp@gmail.com>, without attribution trailers.
+
+Validation: **802 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS**. DEV QA used **Pixel_7 with a visible window and host GPU**. [Screenshot index](../../../../nexus-shots/round19-index.html) contains 46 reviewed captures in the owner's nexus-shots directory.
+
+| Item | Result and device evidence (round19-*.png) |
+|---|---|
+| 1. One Calendar | Folder links use the main Calendar, descendant/server filters, folder search/tree/count/chips/reset, separate folder caches and stale-answer rejection. Removed FolderCalendar and curated aggregate writes. Corrected day/week rows when all tasks are outside the org chart. calendar-folder, calendar-filters, calendar-day, calendar-empty |
+| 2. Task approval cards | Delete always confirms destructively and ends with the Audit recovery line. Create requires an editable project and loads that project's section/PIC choices; disabled Apply before choice. create-task-card, create-task-picked, own-delete-card, own-delete-confirm, own-delete-applied |
+| 3. Meeting notes Beta | Native GIDEON/project entries, recording/share/picker, foreground notification, interruptions, resumable background chunk upload, queue, editable review, versioned autosave, conflict recovery, PIC/date selection, Apply, failures/retry/rewrite/delete, transcript/player, Inbox/push/Audit routes. recording-paused, recording-notification, recording-interrupted, meeting-shared, meeting-uploaded, meeting-empty-task, meeting-conflict, meeting-applied, meeting-doc, meeting-failed, meeting-delete-confirm, meeting-inbox-open |
+| 3. Speaker appendix | Default-on switch/privacy copy, introductions Done/Undo and recovery, pause-excluding marker, speaker stage, automatic/manual naming, full-map saves, ten-colour Speakers/transcript, line/duration/first quote and Listen. meeting-speaker-switch, meeting-introductions, meeting-intro-done, meeting-intro-stopped, meeting-intro-recovered, meeting-speakers, meeting-transcript-speakers; Indonesian/dark variants |
+| 4. Performance | Company BoD/OAA Control Room subtab, alert deep link, four tier cards, GPU/model/transcriber, generations, hourly charts, quality/alerts, visible-only room membership, realtime/debounce/reconnect/polling and stale readings. performance-tiers, performance-gpu, performance-charts |
+| 5. Priority colours | Gray / green / blue / orange / red applied consistently. priority-board |
+| 6. Home GIDEON | Existing iOS-parity bottom-left placement retained. home |
+| 13. Tier names | Names only, Default badge and amber Experimental badge; selected unavailable tier remains selected, with disabled Send and explicit Phaëthon fallback. tier-picker |
+| 14. Tool cards/reminders | All 18 extra actions, approved EN/ID labels, dated diffs, full selectable previews, sheet Cell/Before/After, proposalId confirmation echo, result links/notes/errors and authenticated export downloads. Native WIB reminders from Inbox. sheet-action-card, own-reminder-applied, reminders, reminder-cancel |
+
+Live meeting QA: uploaded synthetic QA speech, reached READY, edited title/overview/attendees, played audio, searched transcript, retained a blank draft task while disabling Apply, kept PICs after autosave and exercised a real VERSION_CONFLICT. Apply created the minutes page and exactly one selected task with QA Dev 5 as PIC and the chosen date. Repeated Apply returned ALREADY_APPLIED with the same IDs. Native READY Inbox notification opened that meeting. Unsupported audio displayed the localised failure without an impossible retry. Centred Delete worked; deleting applied meeting notes preserved the project task until fixture cleanup. Recording kept running in the background, auto-paused on a simulated incoming call (cancelled afterward), and a recovered introductions recording uploaded introEndSec=13.04 with durationSec=13.041.
+
+GIDEON QA: a task-delete request in Don't ask still returned PENDING; the native red confirmation applied only this run's task. A separate native reminder approval succeeded and displayed Reminder set. Existing unrelated QA proposals and meetings were viewed without modifying them.
+
+Coverage limits: live QA uses the supplied BoD session. Staff/OAA gates are unit-covered; no roles were changed. Live forced Model 0 outages and FCM transport delivery were not exercised; availability/SSE handling and notification targets have unit coverage, and the actual READY Inbox route was verified. Export download routing is implemented; this pass did not generate and open a fresh export. Speaker-map provenance/clearing/autosave has unit coverage, and DEV accepted, persisted and cleared a name on this run's own fixture. Speakers/transcript/Listen were verified on device using an existing QA recording without editing it. The new 35-second synthetic recording remained queued during this follow-up, so an editable speaker panel was not exercised live; that queued fixture was removed.
+
+Cleanup complete: own meetings (including the queued speaker fixture), task/doc project, folder tree, GIDEON chats, reminder, Inbox rows and local QA audio removed. Deleted resources re-read as 404 or absent from lists; unrelated QA work retained. Local settings and server language restored to English/light and en. Pixel_7 shut down after QA; no other emulator was controlled. VersionCode remains 13. No confirmed implementation defects remain in this round.
+
+
+
+## Owner parity follow-up (18 Oct 2026)
+
+All three items in `CODEX-INPUT/round-parity-18oct.md` are complete. Checked the deployed DEV web directly because the local web source still had the older layout. Green implementation commits: `6837c92c` (GIDEON) and `96c8b547` (Auto assign), authored as Berlin without attribution trailers.
+
+| Item | Result | Screenshots in `C:/Users/Berlin/Documents/Dev/nexus-shots/` |
+|---|---|---|
+| GIDEON composer | Credits above the box; only the shortened, centred disclaimer below. Meter still opens credits/history. | `parity18-gideon-en.png`, `parity18-gideon-id.png`, `parity18-gideon-dark.png` |
+| Review notice | Exact new EN/ID wording; existing per-account acknowledgement behavior retained. | `parity18-gideon-notice-en.png`, `parity18-gideon-notice-id.png` |
+| Auto assign | Picker has avatars/names without access labels. Empty selection starts open; a pick folds to the one-line summary. Change/Ganti reopens; Done/Selesai folds. Matches web selection/enabled-state saving, including disabling on last removal. | `parity18-auto-empty-en.png`, `parity18-auto-summary-en.png`, `parity18-auto-open-en.png`, `parity18-auto-done-en.png`; corresponding `-id.png`; `parity18-auto-multiple-id.png`, `parity18-auto-open-dark.png` |
+
+Validation: **773 JVM tests, zero failures/errors/skips; `testDebugUnitTest assembleDebug` PASS**. Visually checked English, Indonesian and dark mode on **Pixel_7**, visible window and host GPU, against DEV only. Native picker actions and persisted empty/single/multiple selections checked against live API reads; saved selection starts folded on reopening settings. The isolated QA project was removed and re-read as 404. Original notice acknowledgement and server language restored; local app left English/light. Pixel_7 shut down; the other worker's emulator was left alone. No outstanding items in this list, publication, version change or push.
+
+## R21 UI audit follow-up (18 Oct 2026, `feat/android-r21`)
+
+Completed review and parity corrections for all 59 supplied findings; [AUDIT-R21.md](AUDIT-R21.md) records each disposition and evidence. Finding 53 retains the approved web room-booking wording; duplicate/mixed findings are explained in the matrix. Eleven small implementation commits after audit baseline `b5f00ac7`, each green, authored as Berlin.
+
+Validation: **773 JVM tests + assembleDebug PASS**. All affected surfaces checked on visible **Pixel_7 with host GPU against DEV**; final 25-route regression tour plus manual changed-flow captures, English/Indonesian and affected dark surfaces. Actual Gallery cover render, inline description conflict and notification Undo checked. [Local comparison index](../../../../nexus-shots/audit-r21-index.html). Temporary audit fixtures removed, QA profile language restored and emulator shut down. No attendance submission, push, publication or version change.
+
+Left for these 59 findings: no confirmed code defects outstanding. Physical-device GPS/camera validation remains outside this emulator pass; the earlier role-session/absent-feature estimates below are separate and remain explicit.
+
+## Fix 21 (18 Oct 2026, `feat/android-r21`, DEV only)
+
+Implementation and the available Pixel_7 QA pass are complete. 768 JVM tests and `assembleDebug` pass with portable JDK 21, a 3 GB Gradle heap and two workers. Each green implementation step was committed. No push, APK publication, version change or production access; versionCode remains 13.
+
+Done:
+- Preserved the established Home numeric gradient cards (including 0/0), Messages / Pesan, and Artemis / Phaëthon (default) / Aphrodite / Model 0. Android's tablet rail already contains only the main tabs, with no project/folder list.
+- Owner decisions: three distinct-score podium steps with all ties, overlapping faces/+N, tie counts, wrapping names and competition ranks underneath; reset copy says the 28th. Removed room-capacity model/UI. Legal versions, templates and compare pickers use REV. Control Room Details stays visible on phones. Copy to another project is gated below Can edit.
+- Concurrency: assignee/tag/multi-select deltas, guarded task descriptions, retained conflict drafts; form baseUpdatedAt and confirmed Load latest; sheet structureVersion/current/refetch; Pipeline retry-stable term IDs and costsBase/linksBase; Outlet retry-stable IDs; localized Vault/conflict errors; stale task events/reads rejected and polling retained. Relative reorder helper sends movedIds/beforeId; local task ties sort by position, createdAt, id. Android Docs are read-only, so no doc-save mutation exists.
+- Approved page parity: onyx split New, top-of-group inline creation plus the full-details composer; task property rows/status tick, Follow/Favourite/Like/quest, gated Copy/Open as page, tags/custom properties, oldest-first comments and bottom composer, description without heading; repeated grouped-table headers; calendar weekend/first-of-month labels; timeline weekend/violet-today marker.
+- Legal Review & edit consumes layout/page metadata and draws a white reflowed page with typography/runs, markers/indents/spacing, blank lines, gutter selection/locks and tables. Inline edits retain uniform bold/italic/underline. Existing DEV Legal content was opened without saving a revision.
+- GIDEON streams partial answers/proposals, animates Thinking, folds steps, cancels the socket with Stop, opens history from the title, and renders neutral approval cards. The latest owner file's grey user bubble is applied. Composer credits, period pool, paginated usage history, enforced fallback/blocked notices and refresh after answers are EN/ID. Summary pool limits already include bonuses. DEV policy confirms Staff 250/day + 2,500/period, Manager 750 + 7,500; Android reads server policy rather than embedding defaults.
+- Permanent AI disclaimer and per-account one-time BoD-review notice use the owner's exact EN/ID wording. Control Room › GIDEON › People opens Overview/Credits; Chats requires both ONE_ABOVE_ALL and server canReadChats. Uses deployed /api/gideon/people/{id}, /chats and /chats/{chatId}, with search/date/deleted filters, cursors, deleted markers and a read-only transcript sharing the normal renderer. No composer, Apply/Discard, room picker, mutation calls, notice to the person or reason prompt.
+- Chat files advertise X-Nexus-Caps: chat-files (including the LAN probe), use multipart /api/upload/chat, accept supported images up to 8 MB and documents up to 25 MB, retain names/sizes in messages/replies/Docs, show pending attachment/removal/progress and native file cards, authenticated open/download/share, and 📎 name previews. Clear EN/ID size/type errors.
+- Fixed device findings: circular podium +N, Outlet Calendar/Board/Form route selection and dates, stale month response handling, and robust tour taps/scrolling. Explicit English Sep formatting now survives ICU/CLDR differences; strict September output tests restored, with quoted literals, full months, Indonesian and machine dates checked.
+- Local DEV DNS override is optional/debug-only, matches only the configured DEV hostname, preserves TLS/SNI/certificate verification, and is ignored in release. Committed defaults contain no private host/address. Tour tooling targets Pixel_7 explicitly and consumes one reused session through the app's debug-private storage without logging credentials.
+
+QA evidence: `C:/Users/Berlin/Documents/Dev/nexus-shots/index-fix21.html` and `tour-report.json`; 42 manifest IDs: 33 reviewed entry/navigation passes, 2 partial native surfaces, 1 absent action, 6 skips. Changed-flow screenshots are indexed separately. Screens were visually inspected; this does not claim every destructive action or every role was exercised.
+
+| QA area | Result |
+|---|---|
+| JVM/build | PASS — 768 tests, debug APK build; no publication |
+| Pixel_7 | Visible window, host GPU, explicit serial; shut down at completion |
+| Main screen tour | 35 usable native/login captures reviewed; gaps listed below |
+| Task UI | PASS — inline create, title edit, comment, guarded description save; API values verified |
+| Concurrency on DEV QA fixtures | PASS — additive tags preserve concurrent tag; stale assignees/description/sheet return 409; form UI keeps draft, Cancel keeps it, confirmed Load latest loads remote version |
+| Chat documents | PASS — picker/upload/send, name/size card, reply quote, Docs tab, authenticated open chooser/share; supported formats/limits unit-tested |
+| GIDEON | PASS — answer, streaming Stop, credits/history, English/Indonesian composer; socket release on cancellation unit-tested |
+| Control Room GIDEON | PASS — BoD Overview/Credits and hidden Chats on device; DEV list request refused with 403 OAA_ONLY; OAA role gate, deleted transcript/approvals/attachments and GET/cursor contract unit-tested |
+| Legal / Vault | PASS — DEV layout/list APIs, Legal page/inline editor and Vault listing on device |
+| Cleanup | PASS — two new tasks, extra sheet, form and QA-only group deleted and re-read as 404; this run's GIDEON chats removed from user history; unrelated QA work retained |
+| Attendance | Read-only visit; no check-in/out |
+
+Left / estimates:
+- Live positive OAA transcript/deleted/search pagination and Staff/Manager × project access checks: 2–3 hours with the corresponding QA sessions. The supplied session is BoD; no account was promoted or permissions bypassed. Unit/contract coverage is present; live success is not claimed.
+- Social Media Report has no Android native screens or template card on this branch (four tour IDs skipped; gallery partial). Separate native feature work: approximately 12–20 hours.
+- Outlet's newer Guest overview and Report settings sheet are absent from the existing Android implementation (overview partial/settings action absent). Calendar/day/report navigation works. Separate parity work: approximately 4–8 hours.
+- legal-hidden and sidebar-collapsed are web-only manifest variants; skipped on Pixel_7. Android's existing rail needs no collapsed project-list fix.
+
 **Active again since 28 Sep 2026** (hold lifted by the owner). Parity with iOS per
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
@@ -1300,3 +1423,5 @@ on mobile (0.1.7 on iOS too).
 2. Release per the owner's rule (above): not before parity + a clean audit; new versionCode, publish via
    web /download/android, Android minimum 3 days later.
 3. On-device run of the acceptance lists on the first staff phone (docs/INSTALL-APK.md checklist).
+
+FIX21-ANDROID DONE

@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 current == null -> LoginScreen()
                 else -> NexusTheme(theme) {
-                    SignedInShell(session = current, gateState = gateState, onSignOut = container.auth::signOut)
+                    androidx.compose.runtime.key(current.userId) { SignedInShell(session = current, gateState = gateState, onSignOut = container.auth::signOut) }
                     val grace = gateState.grace
                     if (gateState.graceNoticeDue && grace != null) {
                         GraceNoticeDialog(grace, gateState.storeUrl, onDismiss = gate::graceNoticeSeen)
@@ -100,6 +100,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
         when (tour.step) {
+            "session" -> container.appScope.launch {
+                // Reuse the QA runner's single login. This file is written through run-as into the
+                // debug app's private directory, consumed once, and never put into intent extras/logs.
+                val file = java.io.File(filesDir, "tour-login.json")
+                if (!BuildConfig.DEBUG || !tour.wantsDev || id.znetworks.nexus.core.net.NexusConfig.env != id.znetworks.nexus.core.net.ServerEnv.DEV) return@launch
+                try {
+                    val login = id.znetworks.nexus.core.net.NexusJson.decodeFromString(id.znetworks.nexus.feature.auth.LoginResponse.serializer(), file.readText())
+                    container.auth.signedInWith(login)
+                    tour.status("signed-in")
+                } catch (_: Exception) { tour.status("session-import-failed") }
+                finally { file.delete() }
+            }
             "signout" -> {
                 if (container.sessionStore.current != null) container.auth.signOut()
                 container.appScope.launch { kotlinx.coroutines.delay(2500); tour.status("signed-out") }
@@ -126,10 +138,16 @@ class MainActivity : AppCompatActivity() {
         val router = (application as NexusApplication).container.router
         val data = intent.data
         val target = when {
+            intent.action == Intent.ACTION_SEND && (intent.type?.startsWith("audio/") == true || intent.type == "video/mp4") -> {
+                @Suppress("DEPRECATION") val shared = if (android.os.Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java) else intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+                (application as NexusApplication).container.meetingSharedAudio.value = shared?.toString()
+                id.znetworks.nexus.core.nav.Target.NewMeeting()
+            }
             data != null -> Links.parse(data.toString())
-            intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) -> Links.forNotification(
+            intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) || intent.hasExtra(EXTRA_MEETING_ID) -> Links.forNotification(
                 intent.getStringExtra(EXTRA_TYPE), intent.getStringExtra(EXTRA_LINK),
                 intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_PROJECT_ID),
+                intent.getStringExtra(EXTRA_MEETING_ID),
             )
             else -> null
         }
@@ -144,6 +162,8 @@ class MainActivity : AppCompatActivity() {
         intent.data = null
         intent.removeExtra(EXTRA_TYPE)
         intent.removeExtra(EXTRA_LINK)
+        intent.removeExtra(EXTRA_MEETING_ID)
+        if (intent.action == Intent.ACTION_SEND) intent.action = null
     }
 
     companion object {
@@ -151,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_LINK = "link"
         const val EXTRA_TASK_ID = "taskId"
         const val EXTRA_PROJECT_ID = "projectId"
+        const val EXTRA_MEETING_ID = "meetingId"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
     }
 }

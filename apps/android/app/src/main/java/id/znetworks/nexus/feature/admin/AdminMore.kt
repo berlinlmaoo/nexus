@@ -1,10 +1,13 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.PhoneIphone
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -324,6 +327,7 @@ fun GideonUsageTab() {
     val res = LocalContext.current.resources
     var u by remember { mutableStateOf<GideonUsage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var person by remember { mutableStateOf<UsageUser?>(null) }
     LaunchedEffect(Unit) { try { u = api.gideonUsage() } catch (e: ApiError) { error = e.describe(res) } }
     val x = u
     when {
@@ -335,9 +339,10 @@ fun GideonUsageTab() {
                     Stat(stringResource(R.string.gu_people), x.totals.people, Modifier.weight(1f)); Stat(stringResource(R.string.gu_asked), x.totals.asked, Modifier.weight(1f)); Stat(stringResource(R.string.gu_tools), x.totals.toolCalls, Modifier.weight(1f))
                 }
             }
+            item { Text(stringResource(R.string.gu_people), fontSize = 16.sp, color = c.foreground, fontWeight = FontWeight.SemiBold) }
             items(x.users.sortedByDescending { it.asked }, key = { it.id }) { p ->
-                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(p.name, p.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).clickable { person = p }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(p.name, p.avatar, 28.dp, userId = p.id); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p.name ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(stringResource(R.string.gu_line, p.asked, p.answered, p.toolCalls) + (p.lastUsed?.let { " · " + chatTime(it) } ?: ""), fontSize = 11.sp, color = c.mutedFg)
@@ -346,6 +351,7 @@ fun GideonUsageTab() {
             }
         }
     }
+    person?.let { p -> GideonPersonSheet(p.id, p.name) { person = null } }
 }
 
 @Composable
@@ -388,7 +394,7 @@ fun AppInstallsTab() {
             if (x.installs.isEmpty()) item { TabEmpty(Icons.Filled.PhoneAndroid, stringResource(R.string.ai_nobody)) }
             items(x.installs, key = { it.id }) { i ->
                 Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.Top) {
-                    Avatar(i.user?.name, i.user?.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                    Avatar(i.user?.name, i.user?.avatar, 28.dp, userId = i.user?.id); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(i.user?.name ?: i.user?.email ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         // One line per device (iOS 7920142): someone on an iPhone and an Android phone shows both.
@@ -410,7 +416,7 @@ fun AppInstallsTab() {
                 item { Text(stringResource(R.string.ai_not_using_n, x.notInstalled.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.warning, modifier = Modifier.padding(top = 10.dp)) }
                 items(x.notInstalled, key = { "n" + it.id }) { p ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(p.name, p.avatar, 24.dp); Spacer(Modifier.width(8.dp))
+                        Avatar(p.name, p.avatar, 24.dp, userId = p.id); Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name ?: p.email ?: "—", fontSize = 13.sp, color = c.foreground)
                             // Signs in on the web, or never signed in at all (iOS 74c6750).
@@ -436,6 +442,6 @@ object AppInstallsLogic {
     fun versionLabel(d: InstallDevice) = d.appVersion?.let { v -> v + (d.buildNumber?.let { " ($it)" } ?: "") }
     /** "24 Sep" of the last activity (web only), or null when the person never signed in. */
     fun activity(lastActiveAt: String?): String? = lastActiveAt?.let {
-        runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
+        runCatching { AppDateFormats.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
     }
 }

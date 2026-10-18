@@ -6,11 +6,12 @@ package id.znetworks.nexus.feature.inbox
  */
 object InboxRules {
     /** The kind's mark: an icon and a tone (drawn in InboxUi). */
-    enum class Mark { MENTION, ASSIGNED, COMPLETED, CONVERSATION, DUE, ATTENDANCE, OUTSIDE, ANNOUNCEMENT, TICKET, DOCUMENT, QUEST, MEMBERSHIP, STATUS, BELL }
+    enum class Mark { MENTION, ASSIGNED, COMPLETED, CONVERSATION, DUE, ATTENDANCE, OUTSIDE, ANNOUNCEMENT, TICKET, DOCUMENT, QUEST, MEMBERSHIP, STATUS, BELL, MEETING }
 
     fun mark(type: String?): Mark {
         val t = type.orEmpty().lowercase()
         return when {
+            t == "meeting_notes_ready" || t == "meeting_notes_failed" -> Mark.MEETING
             // Someone outside the office (attendance_outside_approver) is an attendance signal like the web and iOS
             // (teal calendar check, run 5, 14 Oct 2026); it had its own walking-person mark.
             "mention" in t -> Mark.MENTION

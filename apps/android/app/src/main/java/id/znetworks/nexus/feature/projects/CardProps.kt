@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -84,7 +86,7 @@ object CardProps {
         data class Section(override val key: String, val name: String, val colorKey: String?) : Item
         data class Status(override val key: String, val status: String) : Item
         data class Priority(override val key: String, val priority: String) : Item
-        data class People(override val key: String, val people: List<Pair<String?, String?>>) : Item
+        data class People(override val key: String, val people: List<Pair<String?, String?>>, val userIds: List<String?> = emptyList()) : Item
         /** [date] null = a value that isn't a date (a "Request by" name in a CREATED field): shown as written. */
         data class When(override val key: String, val date: LocalDate?, val raw: String, val overdue: Boolean) : Item
         data class Number(override val key: String, val text: String) : Item
@@ -111,7 +113,7 @@ object CardProps {
             else Item.Status(key, (t.status ?: "TODO").uppercase())
         }
         "priority" -> t.priority?.uppercase()?.takeIf { it.isNotBlank() && it != "NONE" }?.let { Item.Priority(key, it) }
-        "assignee" -> t.assignees.filter { it.user != null }.map { it.user?.name to it.user?.avatar }.takeIf { it.isNotEmpty() }?.let { Item.People(key, it) }
+        "assignee" -> t.assignees.filter { it.user != null }.map { it.user?.name to it.user?.avatar }.takeIf { it.isNotEmpty() }?.let { Item.People(key, it, t.assignees.filter { it.user != null }.map { it.userId ?: it.user?.id }) }
         "due" -> dateItem(key, t.dueDate, overdueCheck = !t.isDone, today = today)
         "start" -> dateItem(key, t.startDate, false, today)
         "created" -> dateItem(key, t.createdAt, false, today)
@@ -225,8 +227,8 @@ fun PropValue(item: CardProps.Item) {
             val tone = priorityColor(item.priority)
             PillText(priorityLabel(item.priority), tone, Modifier.clip(CircleShape).background(tone.copy(alpha = 0.14f)).padding(horizontal = 7.dp, vertical = 2.dp))
         }
-        is CardProps.Item.People -> AvatarStack(item.people, size = 20.dp)
-        is CardProps.Item.When -> IconText(Icons.Outlined.Schedule, item.date?.let { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: item.raw,
+        is CardProps.Item.People -> AvatarStack(item.people, size = 20.dp, userIds = item.userIds)
+        is CardProps.Item.When -> IconText(Icons.Outlined.Schedule, item.date?.let { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(it) } ?: item.raw,
             if (item.overdue) c.danger else c.mutedFg, if (item.overdue) FontWeight.Medium else FontWeight.Normal)
         is CardProps.Item.Number -> Text(item.text, fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         is CardProps.Item.Options -> {

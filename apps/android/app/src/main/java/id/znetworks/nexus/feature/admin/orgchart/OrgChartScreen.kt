@@ -201,7 +201,7 @@ fun OrgChartScreen(onBack: () -> Unit) {
             if (trail.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp).padding(bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 trail.forEachIndexed { i, u ->
-                    if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
+                    if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(14.dp))
                     if (i == trail.lastIndex) Text(u.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                     else Text(u.name, fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp))
                         .clickable { setView(if (i == 0) "ringkas" else "u:${u.id}") }.padding(horizontal = 4.dp, vertical = 2.dp))
@@ -230,7 +230,7 @@ fun OrgChartScreen(onBack: () -> Unit) {
                 unplaced.forEach { p ->
                     Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(10.dp))
                         .clickable(enabled = canEdit) { placing = p.userId }.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(p.name, p.avatar, 22.dp); Spacer(Modifier.width(6.dp))
+                        Avatar(p.name, p.avatar, 22.dp, userId = p.userId); Spacer(Modifier.width(6.dp))
                         Text(p.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
                     }
                 }
@@ -455,7 +455,7 @@ private fun UnitCard(u: OrgUnit, info: OrgTree.CardInfo, onClick: (() -> Unit)?)
             Text(cardMeta(info), fontSize = 10.5.sp, color = t.meta, lineHeight = 13.sp)
             if (info.faces.isNotEmpty()) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 info.faces.take(4).forEachIndexed { i, p ->
-                    Box(Modifier.offset(x = (-6 * i).dp).clip(CircleShape).background(t.bg).padding(2.dp)) { Avatar(p.name, p.avatar, 20.dp) }
+                    Box(Modifier.offset(x = (-6 * i).dp).clip(CircleShape).background(t.bg).padding(2.dp)) { Avatar(p.name, p.avatar, 20.dp, userId = p.userId) }
                 }
                 if (info.faces.size > 4) Text("+${info.faces.size - 4}", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = t.meta, modifier = Modifier.offset(x = (-6 * 3).dp))
             }
@@ -524,7 +524,7 @@ private fun PersonRow(p: OrgPerson, unitId: String, onPerson: ((OrgPerson) -> Un
     val title = p.titles[unitId]
     Row(Modifier.clip(RoundedCornerShape(8.dp)).then(if (onPerson != null) Modifier.clickable { onPerson(p) } else Modifier)
         .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(p.name, p.avatar, 26.dp)
+        Avatar(p.name, p.avatar, 26.dp, userId = p.userId)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f, fill = false)) {
             Text(p.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp)

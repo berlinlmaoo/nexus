@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Lock
@@ -220,8 +222,9 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
             UpdateRow()
             when (tab) {
                 SettingsTab.PROFILE -> {
-                    ProfileCard()
-                    EmailBlock(s, vm)
+                    id.znetworks.nexus.feature.presence.SetStatusEntry()
+                    id.znetworks.nexus.feature.gideon.GideonMemoryEntry()
+                    ProfileCard { EmailBlock(s, vm, inline = true) }
                     // The web and iOS show the Password card under Profile too (Security keeps it, with passkeys and sessions).
                     PasswordBlock(s, vm)
                     // Logout, then Delete set apart below it, so the permanent action is never where a thumb lands by habit (iOS).
@@ -236,7 +239,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
                         Icon(Icons.Filled.Delete, null, tint = c.dangerText, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.delete_account), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg, modifier = Modifier.size(18.dp))
                     }
                 }
                 SettingsTab.SECURITY -> {
@@ -271,12 +274,17 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
 
 /** Sign-in email: a code to the new address (current password first), then the code. */
 @Composable
-private fun EmailBlock(s: AccountState, vm: AccountViewModel) {
+private fun EmailBlock(s: AccountState, vm: AccountViewModel, inline: Boolean = false) {
     val c = Nx.colors
-    SettingsBlock(stringResource(R.string.acct_email)) {
+    SettingsBlock(stringResource(R.string.acct_email), framed = !inline) {
         var newEmail by rememberSaveable { mutableStateOf("") }
         var code by rememberSaveable { mutableStateOf("") }
-        Text(s.email, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
+        var changing by rememberSaveable { mutableStateOf(false) }
+        Row(Modifier.fillMaxWidth().background(c.muted, RoundedCornerShape(12.dp)).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.email, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
+            TextButton(onClick = { changing = !changing }) { Text(stringResource(if (changing) R.string.cancel else R.string.audit_change)) }
+        }
+        if (changing || s.pendingEmail != null) {
         val pending = s.pendingEmail
         if (pending == null) {
             OutlinedTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
@@ -297,6 +305,7 @@ private fun EmailBlock(s: AccountState, vm: AccountViewModel) {
                 Spacer(Modifier.weight(1f))
                 NxButton(stringResource(R.string.acct_confirm), { vm.verifyEmail(code) }, kind = NxButtonKind.PRIMARY, enabled = code.length == 6 && !s.busy)
             }
+        }
         }
     }
 }
@@ -451,7 +460,7 @@ private fun sessionMeta(r: UserSession): String {
 }
 
 private fun dateOf(iso: String?): String? = iso?.let {
-    runCatching { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
+    runCatching { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta"))) }.getOrNull()
 }
 
 @Composable
@@ -472,7 +481,7 @@ private fun UpdateRow() {
     val gate by (context.applicationContext as NexusApplication).container.versionGate.state.collectAsStateWithLifecycle()
     val grace = gate.grace
     val text = when {
-        grace != null -> stringResource(R.string.update_grace_body, DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault())
+        grace != null -> stringResource(R.string.update_grace_body, AppDateFormats.ofPattern("d MMM, HH:mm", Locale.getDefault())
             .format(grace.deadline.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)))
         gate.available != null -> stringResource(R.string.update_available, gate.available!!)
         else -> return
@@ -558,4 +567,4 @@ private fun ServerCard() {
 
 /** A settings card in the web's look: plain title, optional muted line (was iOS's violet caps label). */
 @Composable
-private fun SettingsCard(label: String, hint: String? = null, content: @Composable () -> Unit) = SettingsBlock(label, hint, content)
+private fun SettingsCard(label: String, hint: String? = null, content: @Composable () -> Unit) = SettingsBlock(label, hint, content = content)

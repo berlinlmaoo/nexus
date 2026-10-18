@@ -104,7 +104,6 @@
     <string name="gx_rooms_checking">Mengecek ruangan…</string>
     <string name="gx_rooms_failed">Gagal mengecek ruangan.</string>
     <string name="gx_room_named_busy">%1$s sudah dibooking di jam itu. Pilih ruangan yang kosong di bawah.</string>
-    <string name="gx_room_seats">%1$d kursi</string>
     <string name="gx_room_booked_by">Dibooking %1$s sampai %2$s</string>
     <string name="gx_someone">seseorang</string>
     <string name="gx_room_none_free">Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:</string>

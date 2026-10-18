@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -323,8 +325,8 @@ fun CrewBoardCard(vm: BoardViewModel) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(if (vm.wide) R.string.board_title else R.string.board_title_me), fontFamily = DisplayFont,
                     fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
-                Text("${DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(days.first())} – " +
-                    DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(days.last()), fontSize = 11.sp, color = c.mutedFg)
+                Text("${AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(days.first())} – " +
+                    AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(days.last()), fontSize = 11.sp, color = c.mutedFg)
                 if (s.rowsPeriod == period) s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 11.sp, color = c.warning) }
             }
             IconButton(onClick = { vm.shift(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
@@ -603,7 +605,7 @@ private fun ChangeStatusPanel(vm: BoardViewModel, r: HistoryRow) {
     val c = Nx.colors
     var pending by remember { mutableStateOf<String?>(null) }
     val person = r.user?.name ?: stringResource(R.string.override_this_person)
-    val date = runCatching { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(LocalDate.parse(r.dayKey)) }.getOrDefault(r.dayKey)
+    val date = runCatching { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(LocalDate.parse(r.dayKey)) }.getOrDefault(r.dayKey)
     Column(
         Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(16.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

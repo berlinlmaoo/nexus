@@ -59,8 +59,10 @@ class SheetApi(private val api: ApiClient) {
         send(req("/api/sheets/$sheetId/rows").delete(buildJsonObject { put("rowIds", JsonArray(rowIds.map { JsonPrimitive(it) })) }.body()))
 
     /** The whole column list (a new column is an entry without id); the server keeps the ids it knows. */
-    suspend fun setColumns(sheetId: String, columns: List<JsonObject>) =
-        send(req("/api/sheets/$sheetId").patch(buildJsonObject { put("columns", JsonArray(columns)) }.body()))
+    suspend fun setColumns(sheetId: String, columns: List<JsonObject>, structureVersion: Int?) =
+        send(req("/api/sheets/$sheetId").patch(buildJsonObject {
+            put("columns", JsonArray(columns)); structureVersion?.let { put("structureVersion", it) }
+        }.body()))
 
     suspend fun deleteColumn(sheetId: String, colId: String) = send(req("/api/sheets/$sheetId/columns/$colId").delete())
 }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -109,7 +111,7 @@ enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
     /** The task grid (key "table"); [SHEET] is the project Spreadsheet (key "sheet", 13 Oct). */
-    TABLE(R.string.ptab_table, true), SHEET(R.string.ptab_spreadsheet), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
+    GALLERY(R.string.gallery, true), TABLE(R.string.ptab_table, true), SHEET(R.string.ptab_spreadsheet), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
     AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
     CHAT(R.string.ptab_chat),
 }
@@ -150,6 +152,7 @@ data class ProjectDetailState(
     val undo: UndoEntry? = null,
     /** 404: the project is gone or the link is wrong. */
     val notFound: Boolean = false,
+    val inlineGroup: String? = null,
 ) {
     val access: ProjectAccess get() = ProjectAccess.of(detail)
     /** A plain task project (not a Pipeline / Outlet board): the one with views. */
@@ -433,6 +436,8 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         load()
     }
     fun dismissError() = _state.update { it.copy(actionError = null) }
+    fun requestInline(group: String) = _state.update { it.copy(inlineGroup = group) }
+    fun inlineConsumed() = _state.update { it.copy(inlineGroup = null) }
 
     fun move(taskId: String, laneId: String) {
         _state.update { it.copy(lanes = BoardLogic.move(it.lanes, taskId, laneId)) }
@@ -474,6 +479,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                         /** Projects (a project that is gone). */ onOpenProjects: () -> Unit = onBack,
                         /** A link's `?view=`: a layout (board, list, table, calendar, timeline), overview or a module tab (forms, sheet…). */
                         initialView: String? = null,
+                        initialDate: String? = null,
                         vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
@@ -482,7 +488,11 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     LaunchedEffect(Unit) { if (entered) vm.load() else entered = true }
     // Its tasks change on another device: the project room while this board is open (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
-    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { event ->
+        val held = s.lanes.asSequence().flatMap { it.tasks.asSequence() }.firstOrNull { it.id == event.taskId }
+        id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(event, vm.projectId) &&
+            !id.znetworks.nexus.core.net.ConcurrentEdits.older(event.updatedAt, held?.updatedAt)
+    }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     // The open view (a saved view's id); the tab follows its layout.
     var viewId by rememberSaveable { mutableStateOf(vm.savedViewId()) }
@@ -492,6 +502,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val meetingContainer = (context.applicationContext as NexusApplication).container
+    val meetingConfig by meetingContainer.remoteConfig.body.collectAsStateWithLifecycle()
     // Duplicate + date…: the ids waiting for the optional due-date popup.
     var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
     var dueFor by remember { mutableStateOf<List<String>?>(null) }
@@ -508,10 +520,10 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     LaunchedEffect(vm.projectId) {
         (context.applicationContext as NexusApplication).container.realtime.events.collect { e ->
             if (id.znetworks.nexus.core.realtime.RealtimeEvents.revoked(e, vm.projectId))
-                android.widget.Toast.makeText(context, context.getString(R.string.acc_changed), android.widget.Toast.LENGTH_LONG).show()
+                id.znetworks.nexus.ui.components.UiNotice.show(context.getString(R.string.acc_changed))
         }
     }
-    LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
+    LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
     val meId = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
     val access = s.access
@@ -544,10 +556,14 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     }
     // A link's ?view= (the UI tour, nexus://projects/<id>?view=…): applied once, when the views are known.
     var linkApplied by rememberSaveable { mutableStateOf(initialView == null) }
-    LaunchedEffect(views, tabs, s.detail?.id) {
-        if (linkApplied || s.detail == null || s.views == null) return@LaunchedEffect
+    LaunchedEffect(views, tabs, s.detail?.id, s.views != null, initialView) {
+        if (linkApplied || s.detail == null || (s.taskProject && s.views == null)) return@LaunchedEffect
         linkApplied = true; templateOpenedGuard = true
         val want = initialView!!.lowercase()
+        if (s.detail?.type == "OUTLET_SALES") {
+            ProjectTabsLogic.outletLink(want)?.takeIf { it in tabs }?.let { tab = it }
+            return@LaunchedEffect
+        }
         when (want) {
             "overview" -> tab = ProjectTab.OVERVIEW
             "forms" -> tab = ProjectTab.FORMS
@@ -593,13 +609,18 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            val onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
+            val details = { createDue = null; creating = true }
+            val onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({
+                if (tab in setOf(ProjectTab.BOARD, ProjectTab.LIST) && groups.isNotEmpty()) vm.requestInline(groups.first().key)
+                else details()
+            }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
                 onAdd = onAdd, addInTabs = tabsShown)
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
-                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd)
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null,
+                    onMeetings = if (meetingConfig.meetingNotesEnabled) ({ meetingContainer.router.open(id.znetworks.nexus.core.nav.Target.Meetings(vm.projectId)) }) else null)
             }
             androidx.compose.material3.HorizontalDivider(color = c.border)
             // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.
@@ -615,7 +636,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                     id.znetworks.nexus.ui.components.CompactSearchField(s.query, vm::setQuery, stringResource(R.string.board_search), Modifier.weight(1f)) {
                         // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
                         Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
-                        IconButton(onClick = { vm.setQuery("") }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search), modifier = Modifier.size(18.dp)) }
+                        IconButton(onClick = { vm.setQuery("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search), modifier = Modifier.size(18.dp)) }
                     }
                     if (view != null && s.taskProject) {
                         Spacer(Modifier.width(8.dp))
@@ -651,13 +672,14 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                 }, Modifier.fillMaxSize())
                             s.lanes.isEmpty() && tab.searches && tab != ProjectTab.CALENDAR -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.board_no_lanes),
                                 stringResource(R.string.board_no_lanes_sub), stringResource(R.string.open_on_web), web, Modifier.fillMaxSize())
-                            total == 0 && (tab == ProjectTab.LIST || tab == ProjectTab.TABLE) && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
+                            total == 0 && tab == ProjectTab.TABLE && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
                                 stringResource(R.string.pp_no_tasks_sub), stringResource(R.string.pp_add_task), { createDue = null; creating = true }, Modifier.fillMaxSize())
                             else -> when (tab) {
                                 ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,
                                     onDrill = { d -> vm.setDrill(d); views.firstOrNull { it.layout == "board" || it.layout == "list" }?.let { select(PageTabItem.View(it)) } },
                                     onEditBrief = onOpenSettings,
                                     onAddTask = { if (s.lanes.isNotEmpty() && access.canEdit) { createDue = null; creating = true } })
+                                ProjectTab.GALLERY -> GalleryView(visibleTasks, propCtx, vm.projectId, view?.config, onOpenTask)
                                 ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, propCtx, linkedLanes, onOpenTask) { dupDateFor = it }
                                 ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, propCtx, onOpenTask) { dupDateFor = it }
                                 ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, propCtx, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }
@@ -672,7 +694,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                         ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
                                         ProjectTab.OUTLET_BOARD to id.znetworks.nexus.feature.outlet.OutletView.BOARD,
                                         ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
-                                    id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key })
+                                    id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key }, initialDay = initialDate)
                                 }
                                 ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
                                 ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
@@ -796,7 +818,7 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
                     TaskEnums.PRIORITIES.reversed().forEach { p -> FilterChip(prio == p, { prio = p }, { Text(priorityLabel(p), fontSize = 12.sp) }) }
                 }
                 OutlinedButton(onClick = { picking = true }) {
-                    Text(due?.let { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
+                    Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
                 NewTaskFields(fields, values) { id, v -> values = values + (id to v) }
             }

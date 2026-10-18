@@ -15,6 +15,7 @@ import java.net.URLEncoder
 // API.md §2.6 Z Vault. Server sentences (Indonesian) are shown verbatim.
 
 @Serializable data class VaultPerson(val id: String? = null, val name: String? = null)
+@Serializable data class VaultItemResponse(val item: VaultItem)
 
 @Serializable
 data class VaultItem(
@@ -125,6 +126,7 @@ object VaultRules {
 }
 
 class VaultApi(private val api: ApiClient, private val uploads: Uploads) {
+    suspend fun item(id: String) = api.get("/api/vault/items/" + URLEncoder.encode(id, "UTF-8"), VaultItemResponse.serializer()).item
     suspend fun list(parentId: String?, trash: Boolean = false, q: String? = null): VaultList {
         val params = buildList {
             parentId?.let { add("parentId=${URLEncoder.encode(it, "UTF-8")}") }

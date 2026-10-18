@@ -17,6 +17,11 @@ ANDROID_HOME=~/Library/Android/sdk \
 The DEV server's host is not in the repository. The build reads it from the Gradle property
 `nexusDevHost` and puts it into `BuildConfig.DEV_HOST`; `NexusConfig.DEV_HOST` / `DEV_BASE` use it.
 
+Pass a hostname alone (the app adds port 8443). If an emulator cannot resolve the private DNS name,
+`-PnexusDevAddress=<DEV IP literal>` optionally overrides DNS for that exact host in debug builds only.
+HTTPS still verifies the hostname and certificate. The committed default is empty; release builds ignore
+this address override. Keep real hostnames and addresses outside the repository.
+
 Set it once per machine, outside the repo, in `~/.gradle/gradle.properties`:
 
 ```properties

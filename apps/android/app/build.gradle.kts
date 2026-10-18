@@ -18,6 +18,7 @@ android {
         // number (owner, 24 Sep 2026); versionCode counts Android builds on its own.
         versionCode = 13
         versionName = "0.1.6"
+        buildConfigField("String", "DEV_ADDRESS", "\"\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -78,6 +79,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            val address = (findProperty("nexusDevAddress") as String?)?.trim().orEmpty()
+            require(address.isEmpty() || address.matches(Regex("[0-9a-fA-F:.]+"))) { "nexusDevAddress must be an IP literal" }
+            buildConfigField("String", "DEV_ADDRESS", "\"$address\"")
+        }
         release {
             signingConfig = releaseSigning
             // Staff phones are ARM; the bundled ML Kit model ships native code per ABI, so leaving

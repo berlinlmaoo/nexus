@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.offset
@@ -124,17 +128,15 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                     // "Current period · 1 Oct – 31 Oct" (web header; end is exclusive).
                     PeopleLogic.periodDays(b.period)?.let { (from, to) ->
                         item {
-                            val f = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+                            val f = AppDateFormats.ofPattern("d MMM", Locale.getDefault())
                             Text(stringResource(R.string.lb_current_period) + " · " + f.format(from) + " – " + f.format(to), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(bottom = 8.dp))
                         }
                     }
                     item {
-                        androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            placeholder = { Text(stringResource(R.string.lb_search_people)) }, shape = RoundedCornerShape(10.dp),
-                            leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, null) })
+                        id.znetworks.nexus.ui.components.CompactSearchField(query, { query = it }, stringResource(R.string.lb_search_people), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
                     }
                     // The web card: "XP ranking for everyone", the podium (2 · 1 · 3), then one list of everyone.
-                    if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(ranked.take(3)) } }
+                    if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(PeopleLogic.podium(b.rows)) } }
                     if (shown.isEmpty()) item { Text(stringResource(R.string.lb_no_match), fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(8.dp)) }
                     // A tied rank shares its crown / step: ranks come from the whole board (1, 1, 1, 4).
                     itemsIndexed(shown, key = { _, it -> it.second.userId }) { i, (rank, r) ->
@@ -150,7 +152,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                                 Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
                                     if (rank == 1) Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
                                 }
-                                Avatar(r.name, r.avatar, 40.dp); Spacer(Modifier.width(12.dp))
+                                Avatar(r.name, r.avatar, 40.dp, userId = r.userId); Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(stringResource(R.string.home_level_n, r.level) + (r.levelName?.let { " – $it" } ?: ""), fontSize = 13.sp, color = c.mutedFg, maxLines = 1)
@@ -165,9 +167,9 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
     }
 }
 
-/** Web leaderboard-podium.tsx: places 2 · 1 · 3; a tie shares its step (1 / 1 / 1 are three gold steps of one height). */
+/** One step per score; list ranks below remain competition ranks. */
 @Composable
-private fun Podium(top: List<Pair<Int, BoardRow>>) {
+private fun Podium(top: List<List<BoardRow>>) {
     val c = Nx.colors
     val dark = isSystemInDarkTheme()
     data class Step(val bar: Color, val text: Color, val ring: Color, val crown: Color, val height: androidx.compose.ui.unit.Dp, val avatar: androidx.compose.ui.unit.Dp)
@@ -176,24 +178,34 @@ private fun Podium(top: List<Pair<Int, BoardRow>>) {
         2 -> Step(if (dark) Color(0x3394A3B8) else Color(0xFFE2E8F0), if (dark) Color(0xFFE2E8F0) else Color(0xFF475569), Color(0xFFCBD5E1), Color(0xFF94A3B8), 96.dp, 56.dp)
         else -> Step(if (dark) Color(0x40FB923C) else Color(0xFFFDBA74), if (dark) Color(0xFFFED7AA) else Color(0xFF7C2D12), Color(0xFFFDBA74), Color(0xFFF97316), 80.dp, 56.dp)
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(10.dp)) {
         Text(stringResource(R.string.lb_ranking_everyone), fontSize = 14.sp, color = c.mutedFg)
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             listOf(1, 0, 2).forEach { place ->
-                val entry = top.getOrNull(place)
-                if (entry == null) { Spacer(Modifier.weight(1f)); return@forEach }
-                val (rank, r) = entry
+                val entry = top.getOrNull(place).orEmpty()
+                val r = entry.firstOrNull()
+                val rank = place + 1
                 val st = style(rank)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box {
-                        Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r.name, r.avatar, st.avatar) }
-                        Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
+                    Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                        if (entry.size == 1) Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r?.name, r?.avatar, st.avatar, userId = r?.userId) }
+                        else Box(Modifier.width((32 + (entry.take(3).size - 1).coerceAtLeast(0) * 18 + if (entry.size > 3) 18 else 0).dp).height(36.dp)) {
+                            entry.take(3).forEachIndexed { i, person ->
+                                Box(Modifier.offset(x = (18 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, 28.dp, userId = person.userId) }
+                            }
+                            if (entry.size > 3) Box(Modifier.offset(x = 54.dp).size(32.dp).background(c.card, CircleShape).border(2.dp, st.ring, CircleShape), contentAlignment = Alignment.Center) {
+                                Text("+${entry.size - 3}", fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
+                            }
+                        }
+                        if (entry.size == 1) Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
                             contentAlignment = Alignment.Center) { Icon(Icons.Outlined.WorkspacePremium, null, tint = st.crown, modifier = Modifier.size(14.dp)) }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("%,d".format(Locale.getDefault(), r.totalXp), fontSize = 14.sp, color = c.mutedFg)
+                    Text(if (entry.size > 1) stringResource(R.string.lb_tied, entry.size) else "", fontSize = 12.sp, color = c.mutedFg, minLines = 1)
+                    Text(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, minLines = 2, textAlign = TextAlign.Center)
+                    Text(if (entry.size > 2) stringResource(R.string.lb_more, entry.size - 2) else "", fontSize = 11.sp, color = c.mutedFg, minLines = 1)
+                    Text(r?.let { "%,d".format(Locale.getDefault(), it.totalXp) + " XP" } ?: "—", fontSize = 13.sp, color = c.mutedFg)
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.fillMaxWidth().height(st.height).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(st.bar),
                         contentAlignment = Alignment.TopCenter) {
@@ -270,9 +282,11 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
             // and a compact tonal Message that hugs its label.
             Card {
                 Row(verticalAlignment = Alignment.Top) {
-                    id.znetworks.nexus.ui.components.ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp); Spacer(Modifier.width(14.dp))
+                    id.znetworks.nexus.ui.components.ZoomableAvatar(r?.person?.avatar ?: boardRow?.avatar, name, 72.dp, userId = userId); Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        PresenceLine(userId, chip = true)
+                        if (isMe) id.znetworks.nexus.feature.presence.SetStatusEntry()
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             r?.person?.role?.let { role -> Pill(roleLabel(role), when (role) { "ONE_ABOVE_ALL", "BOD" -> c.violetText; "MANAGER" -> c.blue; else -> c.mutedFg }) }
                             if (isMe) Pill(stringResource(R.string.pf_you), c.violetText)
@@ -281,7 +295,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     }
                 }
                 r?.person?.email?.let { FactRow(Icons.Filled.Email, it, middleEllipsis = true) }
-                r?.person?.joinedAt?.let { dueDate(it) }?.let { FactRow(Icons.Filled.CalendarMonth, stringResource(R.string.pf_joined, DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it))) }
+                r?.person?.joinedAt?.let { dueDate(it) }?.let { FactRow(Icons.Filled.CalendarMonth, stringResource(R.string.pf_joined, AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it))) }
                 if (!isMe && r?.person?.leftAt == null) {
                     var opening by remember { mutableStateOf(false) }
                     var dmError by remember { mutableStateOf<String?>(null) }
@@ -333,13 +347,13 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val prev = r.period.previousKey != null; val next = r.period.nextKey != null
                 IconButton(onClick = { period = r.period.previousKey }, enabled = prev, modifier = Modifier.size(48.dp).alpha(if (prev) 1f else 0.35f)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(r.period.label ?: r.period.key, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
                     Text(stringResource(R.string.pf_period_note), fontSize = 11.sp, color = c.mutedFg)
                 }
                 IconButton(onClick = { period = r.period.nextKey }, enabled = next, modifier = Modifier.size(48.dp).alpha(if (next) 1f else 0.35f)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             }
             r.summary?.let { sm ->
                 Card {

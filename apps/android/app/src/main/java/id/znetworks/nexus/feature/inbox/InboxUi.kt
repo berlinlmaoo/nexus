@@ -1,6 +1,9 @@
 package id.znetworks.nexus.feature.inbox
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Timeline
@@ -45,6 +48,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MarkEmailRead
@@ -116,6 +120,7 @@ data class InboxState(
 class InboxViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as NexusApplication).container
     private val api = InboxApi(c.api)
+    private val pendingDeletes = linkedMapOf<String, InboxItem>()
     private val _state = MutableStateFlow(InboxState())
     val state = _state.asStateFlow()
 
@@ -124,7 +129,7 @@ class InboxViewModel(app: Application) : AndroidViewModel(app) {
     fun load() = viewModelScope.launch {
         try {
             val r = api.list()
-            _state.update { it.copy(items = r.notifications, unread = r.unreadCount, loading = false, error = null) }
+            _state.update { it.copy(items = r.notifications.filterNot { row -> row.id in pendingDeletes }, unread = (r.unreadCount - pendingDeletes.values.count { row -> !row.read }).coerceAtLeast(0), loading = false, error = null) }
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = e.describe(getApplication<Application>().resources)) }
         }
@@ -137,13 +142,23 @@ class InboxViewModel(app: Application) : AndroidViewModel(app) {
         load()
     }
 
-    /** Off the list at once; back with a message when the server refuses (web: "Couldn't delete it."). */
+    fun hide(item: InboxItem) {
+        pendingDeletes[item.id] = item
+        _state.update { s -> if (s.items.none { it.id == item.id }) s else s.copy(items = s.items.filterNot { it.id == item.id }, unread = if (item.read) s.unread else (s.unread - 1).coerceAtLeast(0)) }
+    }
+
+    fun restore(item: InboxItem) {
+        pendingDeletes.remove(item.id)
+        _state.update { s -> if (s.items.any { it.id == item.id }) s else s.copy(items = (s.items + item).sortedByDescending { it.createdAt }, unread = s.unread + if (item.read) 0 else 1) }
+    }
+
+    /** Committed only after the Undo snackbar expires. A failed delete restores this row only. */
     fun delete(item: InboxItem, onResult: (Boolean) -> Unit) {
-        val before = _state.value
-        _state.update { s -> s.copy(items = s.items.filterNot { it.id == item.id }, unread = if (item.read) s.unread else (s.unread - 1).coerceAtLeast(0)) }
+        hide(item)
         viewModelScope.launch {
             val ok = runCatching { api.delete(item.id) }.isSuccess
-            if (!ok) _state.update { before }
+            if (ok) pendingDeletes.remove(item.id)
+            if (!ok) restore(item)
             c.badges.setInbox(_state.value.unread)
             onResult(ok)
         }
@@ -172,11 +187,14 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
     id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = null, fallbackMs = 60_000, matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION }) { vm.load().join() }
     val c = Nx.colors
     val context = LocalContext.current
+    val snackbars = remember { androidx.compose.material3.SnackbarHostState() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     // Unread ones and what was read this week (web activeNotifications).
     val active = remember(s.items) { InboxRules.active(s.items) }
     val shown = remember(active, s.group) { InboxRules.filter(active, s.group) }
     // All + only the kinds that have something, each with its count; a single kind has nothing to choose (web).
     val tabs = remember(active) { InboxRules.tabs(active.map { it.type }) }
+    Box(Modifier.fillMaxSize()) {
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
             id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_notifications), subtitle = stringResource(R.string.sub_inbox),
@@ -184,6 +202,9 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
                     id.znetworks.nexus.ui.components.PageTabs(tabs.map { (g, n) -> id.znetworks.nexus.ui.components.PageTab(g, stringResource(g.label), n) }, s.group, vm::setGroup)
                 }) else null) {
                 // Always there, like the web's "Mark all as read".
+                id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Alarm, stringResource(R.string.rem_title), {
+                    (context.applicationContext as id.znetworks.nexus.NexusApplication).container.router.open(id.znetworks.nexus.core.nav.Target.Reminders)
+                })
                 if (active.isNotEmpty()) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
             }
             when {
@@ -197,8 +218,18 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
                 else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
                     items(shown, key = { it.id }) { item ->
                         InboxRow(item, onClick = { vm.open(item) }, onMarkRead = { vm.markRead(item) }, onDelete = {
-                            vm.delete(item) { ok ->
-                                android.widget.Toast.makeText(context, context.getString(if (ok) R.string.inbox_deleted else R.string.inbox_delete_failed), android.widget.Toast.LENGTH_SHORT).show()
+                            vm.hide(item)
+                            scope.launch {
+                                var committed = false
+                                try {
+                                    val result = snackbars.showSnackbar(context.getString(R.string.inbox_deleted), context.getString(R.string.audit_undo), withDismissAction = true, duration = androidx.compose.material3.SnackbarDuration.Long)
+                                    if (result != androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        committed = true
+                                        vm.delete(item) { ok -> if (!ok) id.znetworks.nexus.ui.components.UiNotice.show(context.getString(R.string.inbox_delete_failed)) }
+                                    }
+                                } finally {
+                                    if (!committed) vm.restore(item)
+                                }
                             }
                         })
                         androidx.compose.material3.HorizontalDivider(color = c.border.copy(alpha = 0.7f))
@@ -207,10 +238,13 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
             }
         }
     }
+    androidx.compose.material3.SnackbarHost(snackbars, modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp))
+    }
 }
 
 /** The kind's icon (web notificationMark, lucide → Material). */
 internal fun inboxIcon(type: String?): ImageVector = when (InboxRules.mark(type)) {
+    InboxRules.Mark.MEETING -> androidx.compose.material.icons.Icons.Filled.Mic
     InboxRules.Mark.OUTSIDE -> Icons.AutoMirrored.Filled.DirectionsWalk
     InboxRules.Mark.MENTION -> Icons.Filled.AlternateEmail
     InboxRules.Mark.ASSIGNED -> Icons.Filled.PersonAdd
@@ -232,6 +266,7 @@ internal fun inboxIcon(type: String?): ImageVector = when (InboxRules.mark(type)
 private fun inboxTone(type: String?): Pair<Color, Color> {
     val c = Nx.colors
     val ink = when (InboxRules.mark(type)) {
+        InboxRules.Mark.MEETING -> if (type == "meeting_notes_failed") c.dangerText else c.violetText
         InboxRules.Mark.MENTION -> Color(0xFF0284C7)
         InboxRules.Mark.ASSIGNED, InboxRules.Mark.STATUS -> c.foreground
         InboxRules.Mark.COMPLETED -> c.success
@@ -257,7 +292,7 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
         .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
         val actor = item.actor
         if (actor?.id != null) Box {
-            id.znetworks.nexus.ui.components.Avatar(actor.name, actor.avatar, size = 36.dp)
+            id.znetworks.nexus.ui.components.Avatar(actor.name, actor.avatar, size = 36.dp, userId = actor.id)
             Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(c.card, CircleShape).padding(2.dp)) {
                 Box(Modifier.fillMaxSize().background(fill, CircleShape), contentAlignment = Alignment.Center) { Icon(inboxIcon(item.type), null, tint = ink, modifier = Modifier.size(10.dp)) }
             }
@@ -270,18 +305,20 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
             Text(item.message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.inbox_new), fontSize = 14.sp, color = c.mutedFg, maxLines = 3)
             // The day only (web fmtDay).
             item.createdAt?.let {
-                Text(runCatching { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
+                Text(runCatching { AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
                     fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!item.read && onMarkRead != null) androidx.compose.material3.IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.Check, stringResource(R.string.inbox_mark_read), tint = c.mutedFg, modifier = Modifier.size(18.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                androidx.compose.material3.IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = c.mutedFg) }
+                androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
+                    if (!item.read && onMarkRead != null) androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.inbox_mark_read)) }, onClick = { menu = false; onMarkRead() })
+                    if (onDelete != null) androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.inbox_delete), color = c.dangerText) }, onClick = { menu = false; onDelete() })
+                }
             }
-            if (onDelete != null) androidx.compose.material3.IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Delete, stringResource(R.string.inbox_delete), tint = c.mutedFg, modifier = Modifier.size(18.dp))
-            }
-            if (!item.read) Box(Modifier.padding(start = 2.dp).size(8.dp).background(c.onyx, CircleShape))
+            if (!item.read) Box(Modifier.size(6.dp).background(c.onyx, CircleShape))
         }
     }
 }

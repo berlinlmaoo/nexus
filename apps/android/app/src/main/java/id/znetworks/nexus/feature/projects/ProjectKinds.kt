@@ -9,6 +9,14 @@ import kotlinx.serialization.json.booleanOrNull
 // Project types, per-project tabs, named icons (owner, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
 
 object ProjectTabsLogic {
+    fun outletLink(key: String): ProjectTab? = when (key.lowercase()) {
+        "overview" -> ProjectTab.OUTLET_OVERVIEW
+        "calendar" -> ProjectTab.OUTLET_CALENDAR
+        "board" -> ProjectTab.OUTLET_BOARD
+        "form", "forms" -> ProjectTab.OUTLET_FORM
+        "chat" -> ProjectTab.CHAT
+        else -> null
+    }
     /**
      * The server's tab keys, in tab-bar order ("table" = the task grid, "sheet" = the Spreadsheet, 13 Oct). "sprints" is
      * retired (SPRINTS-OVERVIEW, 11 Oct): an old project's hidden "sprints" is kept as an unknown key and ignored.
@@ -16,6 +24,7 @@ object ProjectTabsLogic {
     val KEYS = listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat")
 
     fun key(t: ProjectTab): String? = when (t) {
+        ProjectTab.GALLERY -> null // a saved view, not a legacy project tab
         ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.TABLE -> "table"; ProjectTab.SHEET -> "sheet"
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
@@ -34,6 +43,7 @@ object ProjectTabsLogic {
      */
     fun visible(hidden: Set<String>, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
         when (it) {
+            ProjectTab.GALLERY -> false // available through saved views, not legacy module tabs
             ProjectTab.PIPELINE -> isPipeline
             // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat.
             ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> isOutlet

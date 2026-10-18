@@ -40,6 +40,7 @@ fun EmptyState(
     actionLabel: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
+    actionEnabled: Boolean = true,
 ) {
     val c = Nx.colors
     // Calm, as the dev web's EmptyState (12 Oct 2026): one muted glyph in a soft circle, a plain title, the
@@ -57,6 +58,6 @@ fun EmptyState(
         Spacer(Modifier.height(4.dp))
         Text(message, fontFamily = TextFont, fontSize = 14.sp, color = c.mutedFg, textAlign = TextAlign.Center, lineHeight = 20.sp)
         Spacer(Modifier.height(16.dp))
-        NxButton(actionLabel, onAction, kind = NxButtonKind.PRIMARY)
+        NxButton(actionLabel, onAction, kind = NxButtonKind.PRIMARY, enabled = actionEnabled)
     }
 }

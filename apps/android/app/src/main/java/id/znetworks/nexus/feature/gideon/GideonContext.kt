@@ -101,8 +101,13 @@ object GideonReview {
      * POST /api/gideon/proposals/:id body; `booking` = the room and slot picked on a book_room card, plus the booking
      * id on a move card, or the booking id alone on a cancel card.
      */
-    fun body(apply: Boolean, booking: GBookingChoice? = null): JsonObject = buildJsonObject {
+    fun body(apply: Boolean, booking: GBookingChoice? = null, proposal: GProposal? = null, task: GTaskChoice? = null): JsonObject = buildJsonObject {
         put("decision", if (apply) "apply" else "discard")
+        if (apply && proposal?.action == "delete_task" && proposal.taskDelete != null)
+            put("confirm", buildJsonObject { put("taskId", proposal.taskDelete.taskId) })
+        else if (apply && proposal?.extra != null)
+            put("confirm", buildJsonObject { put("proposalId", proposal.id) })
+        if (apply && task != null) put("task", id.znetworks.nexus.core.net.NexusJson.encodeToJsonElement(GTaskChoice.serializer(), task))
         if (booking != null) put("booking", buildJsonObject {
             if (booking.room.isNotEmpty()) { put("room", booking.room); put("startsAt", booking.startsAt); put("endsAt", booking.endsAt) }
             booking.bookingId?.let { put("bookingId", it) }

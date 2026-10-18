@@ -98,7 +98,11 @@ class AppContainer(private val context: Context) {
 
     val router = Router()
     val viewer = Viewer(api)
-    val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope)
+    val gideonMemories = id.znetworks.nexus.feature.gideon.GideonMemories(id.znetworks.nexus.feature.gideon.MemoryApi(api)) { sessionStore.current?.userId }
+    val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope, gideonMemories::receive) { sessionStore.current?.userId }
+    val gideonTiers = id.znetworks.nexus.feature.gideon.GideonTiers(api)
+    val presenceStatuses = id.znetworks.nexus.feature.presence.PresenceStatuses(id.znetworks.nexus.feature.presence.PresenceApi(api)) { sessionStore.current?.userId }
+    val meetingSharedAudio = MutableStateFlow<String?>(null)
     val offline: id.znetworks.nexus.core.offline.OfflineSync by lazy {
         id.znetworks.nexus.core.offline.DiskFiles.init(context.cacheDir)
         id.znetworks.nexus.core.offline.OfflineSync(context, this)
@@ -137,10 +141,12 @@ class AppContainer(private val context: Context) {
                 if (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.TYPING || e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED)
                     typing.apply(e, sessionStore.current?.userId)
                 when (e.name) {
+                    "presence-changed" -> presenceStatuses.receive(e.raw)
+                    "gideon-tiers" -> gideonTiers.receive(e.raw)
                     id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED,
                     id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> { chatEvents.tryEmit(e.conversationId); badges.refresh() }
                     id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION -> badges.refresh()
-                    id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh(); gideonTiers.refresh(); presenceStatuses.refresh() }
                 }
             }
         }
@@ -209,6 +215,9 @@ class AppContainer(private val context: Context) {
         }
         auth.addListener(object : AuthRepository.SessionListener {
             override fun onSignedIn(session: Session) {
+                gideonMemories.reset()
+                presenceStatuses.reset()
+                appScope.launch { presenceStatuses.refresh() }
                 // Somebody else's taps are deleted; this person's own are sent now.
                 attendanceQueue.keepOnly(session.userId)
                 flushQueueSoon()
@@ -228,6 +237,11 @@ class AppContainer(private val context: Context) {
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
+                gideonMemories.reset()
+                presenceStatuses.reset()
+                gideonTiers.clear()
+                meetingSharedAudio.value = null
+                id.znetworks.nexus.feature.meetings.MeetingFiles.clear(context)
                 calendar.clear()
                 badges.clear()
                 realtime.reset()
@@ -281,6 +295,7 @@ class AppContainer(private val context: Context) {
     })
 
     init {
+        appScope.launch { remoteConfig.body.map { it.presenceStatus }.distinctUntilChanged().collect { enabled -> presenceStatuses.configure(enabled); if (enabled) presenceStatuses.refresh() } }
         // flags.calendarWidgets off → snapshots deleted, widgets say "Open NEXUS"; back on → fetched again.
         appScope.launch {
             remoteConfig.body.map { it.calendarWidgets }.distinctUntilChanged().drop(1).collect { on ->

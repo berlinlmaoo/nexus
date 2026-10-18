@@ -22,14 +22,14 @@ class CalendarApi(private val api: ApiClient) {
     suspend fun structure(): Fetched<CalStructure> = fetch("/api/calendar/structure", CalStructure.serializer())
 
     /** Tasks due on the WIB days [from]..[to] inclusive (at most [MAX_DAYS] days; the server says BAD_RANGE / RANGE_TOO_LONG otherwise). */
-    suspend fun items(from: String, to: String): Fetched<CalItems> {
+    suspend fun items(from: String, to: String, folder: String? = null): Fetched<CalItems> {
         require(CalDays.isDayKey(from) && CalDays.isDayKey(to) && to >= from) { "from/to must be YYYY-MM-DD, to not before from" }
         require(CalDays.dayDiff(from, to) + 1 <= MAX_DAYS) { "at most $MAX_DAYS days" }
-        return fetch("/api/calendar/items?from=${enc(from)}&to=${enc(to)}", CalItems.serializer())
+        return fetch("/api/calendar/items?from=${enc(from)}&to=${enc(to)}" + (folder?.let { "&folder=${enc(it)}" } ?: ""), CalItems.serializer())
     }
 
     /** Every open task with a day before today, newest day first (≤ 1000 + truncated). */
-    suspend fun overdue(): Fetched<CalItems> = fetch("/api/calendar/overdue", CalItems.serializer())
+    suspend fun overdue(folder: String? = null): Fetched<CalItems> = fetch("/api/calendar/overdue" + (folder?.let { "?folder=${enc(it)}" } ?: ""), CalItems.serializer())
 
     /** The widgets' / Watch's compact snapshot. */
     suspend fun glance(scope: GlanceScope): Fetched<CalGlance> = fetch("/api/calendar/glance?scope=${scope.wire}", CalGlance.serializer())

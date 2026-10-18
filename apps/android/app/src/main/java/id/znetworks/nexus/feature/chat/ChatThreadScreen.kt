@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.feature.presence.PresenceLine
+
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.graphicsLayer
@@ -39,11 +41,18 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material.icons.filled.Download
+import id.znetworks.nexus.core.files.FileOpener
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -260,6 +269,29 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun dismissNotice() = _state.update { it.copy(notice = null) }
     fun clearAttachment() = _state.update { it.copy(attachment = null) }
 
+    fun attachDocument(uri: Uri) {
+        val f = c.uploads.describe(uri)
+        if (f == null || !ChatDocuments.accepts(f.name, f.size)) { _state.update { it.copy(notice = res.getString(R.string.chat_file_rules)) }; return }
+        if (_state.value.uploading) return
+        _state.update { it.copy(uploading = true, notice = null) }
+        viewModelScope.launch {
+            try {
+                val up = c.uploads.send(f, "/api/upload/chat", listOf("conversationId" to id), emptyList(), ChatUpload.serializer()) { _, _ -> }
+                _state.update { it.copy(attachment = up) }
+            } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
+            _state.update { it.copy(uploading = false) }
+        }
+    }
+
+    fun openDocument(m: Message, share: Boolean) = viewModelScope.launch {
+        val url = m.attachmentUrl ?: return@launch
+        try {
+            if (!FileOpener.open(getApplication(), c.api, url,
+                    m.attachmentName ?: url.substringAfterLast('/').substringBefore('?'), m.attachmentType, share))
+                _state.update { it.copy(notice = res.getString(R.string.td_no_viewer)) }
+        } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
+    }
+
     /** The composer clears only after the server says yes: a failed send leaves the text in place. */
     fun send(text: String, onSent: () -> Unit) {
         val s = _state.value
@@ -405,6 +437,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     var viewing by remember { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::attach) }
+    val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::attachDocument) }
     val camera = rememberCameraCapture("chat") { vm.attach(it) }
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.sendLocation() }
     val lastId = s.messages.lastOrNull()?.id
@@ -472,7 +505,8 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
                 // "typing…" in place of the member count while anyone types here (TYPING.md).
                 if (typers.isNotEmpty()) Text(stringResource(R.string.ty_typing), fontSize = 11.sp, color = c.violetText)
-                else if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
+                else if (conv?.type == "DM") PresenceLine(conv.other(vm.meId)?.id, showUntil = false)
+                else if (conv != null && conv.type != "DM") Text(context.resources.getQuantityString(R.plurals.ci_members, conv.members.size, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
             }
             // Add people: project rooms through the project, a GROUP for Manager and above (ChatRules).
             if (ChatRules.showsAddPeople(conv) && !s.deleted) IconButton(onClick = { vm.loadRoster(); addingPeople = true }, enabled = !s.adding) {
@@ -504,33 +538,49 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
             }
             if (s.loading && s.messages.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-            if (!s.loading && s.messages.isEmpty()) item { Text(stringResource(R.string.chat_say_hi), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth().padding(24.dp)) }
-            items(s.messages, key = { it.id }) { m ->
+            if (!s.loading && s.messages.isEmpty()) item { Text(stringResource(R.string.chat_say_hi), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp)) }
+            itemsIndexed(s.messages, key = { _, message -> message.id }) { index, m ->
+                if (!s.hasMore && m == s.messages.firstOrNull()) Text(stringResource(R.string.chat_conversation_start), fontSize = 12.sp, color = c.mutedFg,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
+                val date = chatDay(m.createdAt)
+                if (date != null && (index == 0 || date != chatDay(s.messages.getOrNull(index - 1)?.createdAt))) {
+                    Text(if (date == java.time.LocalDate.now()) stringResource(R.string.cal_today) else id.znetworks.nexus.core.i18n.AppDateFormats.ofPattern("d MMM yyyy").format(date),
+                        color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+                }
                 // A group's log line ("Budi added Mira"): a centred muted pill, no avatar, no bubble, no actions;
                 // a tap shows its time (SYSTEM-MESSAGES).
-                if (m.isSystem) { SystemPill(m, vm.meId); return@items }
+                if (m.isSystem) { SystemPill(m, vm.meId); return@itemsIndexed }
                 val mine = m.userId == vm.meId || m.user?.id == vm.meId
                 var msgMenu by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
-                    if (!mine && conv?.type != "DM") { Avatar(m.user?.name, m.user?.avatar, 26.dp); Spacer(Modifier.width(6.dp)) }
+                    if (!mine && conv?.type != "DM") { Avatar(m.user?.name, m.user?.avatar, 26.dp, userId = m.user?.id); Spacer(Modifier.width(6.dp)) }
                     Box {
                         Column(
-                            Modifier.widthIn(max = 290.dp).clip18().background(if (mine) c.violet else c.card)
+                            Modifier.widthIn(max = 290.dp).clip18().background(if (mine) c.onyx else c.card)
                                 .let { if (m.id == s.anchorId) it.border(2.dp, c.warning, RoundedCornerShape(18.dp)) else it }
                                 .let { if (!mine) it.border(1.dp, c.border, RoundedCornerShape(18.dp)) else it }
                                 .combinedClickable(onClick = {}, onLongClick = { msgMenu = true }).padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
-                            val fg = if (mine) Color.White else c.foreground
+                            val fg = if (mine) c.background else c.foreground
                             if (!mine && conv?.type != "DM") Text(m.user?.name ?: "", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.violetText)
                             m.replyTo?.let { r ->
                                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(fg.copy(alpha = 0.12f), RoundedCornerShape(8.dp)).padding(6.dp)) {
                                     Text(r.user?.name ?: "", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = fg.copy(alpha = 0.9f))
-                                    Text(r.content.ifBlank { "📷 " + stringResource(R.string.chat_photo) }, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(ChatDocuments.preview(r.attachmentType, r.attachmentName, stringResource(R.string.files)) ?: r.content.ifBlank { "📷 " + stringResource(R.string.chat_photo) }, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             if (m.isImage) {
                                 ChatPhoto(m.attachmentUrl, Modifier.padding(vertical = 4.dp).size(220.dp).clip18(), ContentScale.Crop, maxPx = 900,
-                                    ink = if (mine) Color.White else c.mutedFg) { viewing = m.attachmentUrl }
+                                    ink = if (mine) fg else c.mutedFg) { viewing = m.attachmentUrl }
+                            }
+                            if (m.attachmentUrl != null && !m.isImage) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(fg.copy(alpha = 0.10f)).clickable { vm.openDocument(m, false) }.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Description, null, tint = fg, modifier = Modifier.size(28.dp))
+                                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                                    Text(m.attachmentName ?: stringResource(R.string.files), color = fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(listOfNotNull(m.attachmentName?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() }?.uppercase(), id.znetworks.nexus.feature.tasks.sizeText(m.attachmentSize)).joinToString(" · "), color = fg.copy(alpha = 0.75f), fontSize = 11.sp)
+                                }
+                                IconButton(onClick = { vm.openDocument(m, true) }) { Icon(Icons.Filled.Download, stringResource(R.string.chat_file_download), tint = fg) }
                             }
                             when (val p = ChatPayload.parse(m.content)) {
                                 is ChatPayload.Location -> Row(Modifier.clickable {
@@ -543,7 +593,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                                     Icon(Icons.Filled.Checklist, null, tint = fg); Spacer(Modifier.width(6.dp))
                                     Text(p.title.ifBlank { stringResource(R.string.chat_open_task) }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
                                 }
-                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) Color.White else c.violetText, fg), fontSize = 15.sp, color = fg)
+                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) fg else c.violetText, fg), fontSize = 15.sp, color = fg)
                             }
                             Text(chatTime(m.createdAt), fontSize = 10.sp, color = fg.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.End))
                         }
@@ -554,6 +604,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                                 onClick = { msgMenu = false; clipboard.setText(AnnotatedString(m.content)) })
                         }
                     }
+                    IconButton(onClick = { vm.reply(m) }) { Icon(Icons.AutoMirrored.Filled.Reply, stringResource(R.string.chat_reply), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
                 }
             }
             if (typers.isNotEmpty()) item(key = "typing") { TypingIndicator(typers, conv?.type == "DM") }
@@ -561,7 +612,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
         s.notice?.let {
             Row(Modifier.fillMaxWidth().background(c.danger.copy(alpha = 0.08f)).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(it, fontSize = 12.sp, color = c.danger, modifier = Modifier.weight(1f))
-                IconButton(onClick = vm::dismissNotice, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Close, null, tint = c.danger) }
+                IconButton(onClick = vm::dismissNotice) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.danger) }
             }
         }
         // Composer
@@ -571,16 +622,17 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     Icon(Icons.AutoMirrored.Filled.Reply, null, tint = c.violetText, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.chat_replying_to, r.user?.name ?: ""), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.violetText)
-                        Text(r.content.ifBlank { "📷" }, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(ChatDocuments.preview(r.attachmentType, r.attachmentName, stringResource(R.string.files)) ?: r.content.ifBlank { "📷" }, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(onClick = { vm.reply(null) }, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
+                    IconButton(onClick = { vm.reply(null) }) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
                 }
             }
             if (s.uploading || s.attachment != null) Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (s.uploading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else if (s.attachment?.kind == "file") Icon(Icons.Filled.Description, null, modifier = Modifier.size(40.dp))
                 else RemoteImage(s.attachment?.url, Modifier.size(56.dp).clip18(), ContentScale.Crop, maxPx = 200)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(if (s.uploading) R.string.chat_uploading else R.string.chat_photo_ready), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                Text(if (s.attachment?.kind == "file" && !s.uploading) s.attachment?.name.orEmpty() + " · " + id.znetworks.nexus.feature.tasks.sizeText(s.attachment?.size) else stringResource(if (s.uploading) R.string.chat_uploading else R.string.chat_photo_ready), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
                 if (!s.uploading) IconButton(onClick = vm::clearAttachment) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
             }
             if (matches.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -588,7 +640,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     Row(Modifier.clip18().background(c.muted).clickable {
                         input = Mentions.insert(input, m.displayName); vm.picked[m.uid] = Mentions.tag(m.displayName)
                     }.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(m.displayName, m.user?.avatar, 20.dp); Spacer(Modifier.width(6.dp)); Text(m.displayName, fontSize = 12.sp, color = c.foreground)
+                        Avatar(m.displayName, m.user?.avatar, 20.dp, userId = m.uid); Spacer(Modifier.width(6.dp)); Text(m.displayName, fontSize = 12.sp, color = c.foreground)
                     }
                 }
             }
@@ -597,8 +649,11 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp))
             else Row(verticalAlignment = Alignment.Bottom) {
                 Box {
-                    IconButton(onClick = { attachMenu = true }, enabled = !s.uploading) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.violetText) }
+                    IconButton(onClick = { attachMenu = true }, enabled = !s.uploading, modifier = Modifier.border(1.dp, c.border, CircleShape)) { Icon(Icons.Filled.AttachFile, stringResource(R.string.chat_attach), tint = c.mutedFg) }
                     DropdownMenu(attachMenu, { attachMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, leadingIcon = { Icon(Icons.Filled.Description, null) }, onClick = {
+                            attachMenu = false; documents.launch(arrayOf("*/*"))
+                        })
                         DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, leadingIcon = { Icon(Icons.Filled.Image, null) }, onClick = {
                             attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         })
@@ -612,14 +667,12 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                         })
                     }
                 }
-                if (members.isNotEmpty()) IconButton(onClick = { input = if (input.isEmpty() || input.endsWith(" ")) "$input@" else "$input @" }) {
-                    Icon(Icons.Filled.AlternateEmail, stringResource(R.string.chat_mention), tint = c.mutedFg)
-                }
-                OutlinedTextField(input, { input = it }, placeholder = { Text(stringResource(R.string.chat_placeholder)) }, maxLines = 5,
-                    shape = RoundedCornerShape(22.dp), modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused) typingSender.stop() })
-                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, enabled = !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
+                TextField(input, { input = it }, placeholder = { Text(stringResource(R.string.chat_placeholder), fontSize = 14.sp) }, maxLines = 5,
+                    colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                    shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).padding(horizontal = 6.dp).onFocusChanged { if (!it.isFocused) typingSender.stop() })
+                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, modifier = Modifier.background(if (input.isNotBlank() || s.attachment != null) c.onyx else c.mutedFg, CircleShape), enabled = !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
                     if (s.sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.violetText)
+                    else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.background)
                 }
             }
         }
@@ -642,6 +695,8 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
 }
 
 private fun Modifier.clip18() = this.clip(RoundedCornerShape(18.dp))
+
+private fun chatDay(raw: String?) = runCatching { java.time.Instant.parse(raw).atZone(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
 
 /** @mention tokens in the accent colour; web links underlined and tappable (CHAT-REPORT P0). */
 internal fun highlight(text: String, accent: Color, linkColor: Color = accent): AnnotatedString = buildAnnotatedString {
@@ -706,7 +761,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
                                 val uid = m.userId ?: m.id ?: ""
                                 val on = uid in picked
                                 Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                                    Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                                     Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
                                     androidx.compose.material3.Checkbox(on, { picked = if (on) picked - uid else picked + uid })
                                 }
@@ -769,7 +824,7 @@ private fun TypingIndicator(typers: List<Typer>, isDm: Boolean) {
         Row(verticalAlignment = Alignment.Bottom) {
             Box {
                 typers.take(3).forEachIndexed { i, t ->
-                    Box(Modifier.padding(start = (i * 16).dp).border(1.5.dp, c.background, CircleShape)) { Avatar(t.name, t.avatar, 26.dp) }
+                    Box(Modifier.padding(start = (i * 16).dp).border(1.5.dp, c.background, CircleShape)) { Avatar(t.name, t.avatar, 26.dp, userId = t.userId) }
                 }
                 if (typers.size > 3) Box(Modifier.padding(start = (3 * 16).dp).size(26.dp).background(c.muted, CircleShape).border(1.5.dp, c.background, CircleShape),
                     contentAlignment = Alignment.Center) { Text("+${typers.size - 3}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg) }

@@ -213,7 +213,7 @@ class NexusMessagingService : FirebaseMessagingService() {
         // A post with a photo (feed_post / feed_like, 9 Oct): `image` is an absolute https URL, no cookie needed.
         // Fetched here (FCM's worker thread) with a short timeout; any failure falls back to text.
         val picture = d["image"]?.takeIf { it.startsWith("https://") }?.let { PushPicture.fetch(it) }
-        show(this, title, body, type, d["link"], d["taskId"], d["projectId"], d["category"], d["notificationId"],
+        show(this, title, body, type, d["meetingId"]?.let { "/meetings/$it" } ?: d["link"], d["taskId"], d["projectId"], d["category"], d["notificationId"],
             PushManager.channelFor(type, d["channel"] ?: message.notification?.channelId), picture)
     }
 

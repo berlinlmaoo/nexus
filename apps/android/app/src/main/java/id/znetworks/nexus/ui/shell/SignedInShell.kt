@@ -62,7 +62,6 @@ import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
 import id.znetworks.nexus.feature.admin.orgchart.OrgChartScreen
-import id.znetworks.nexus.feature.projects.FolderCalendarScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
 import id.znetworks.nexus.feature.admin.AuditEntryScreen
@@ -70,6 +69,12 @@ import id.znetworks.nexus.feature.admin.MemberAttendanceAdminScreen
 import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
+import id.znetworks.nexus.feature.gideon.RemindersScreen
+import id.znetworks.nexus.feature.gideon.GideonMemoryScreen
+import id.znetworks.nexus.feature.meetings.MeetingsScreen
+import id.znetworks.nexus.feature.meetings.MeetingScreen
+import id.znetworks.nexus.feature.meetings.NewMeetingScreen
+import androidx.navigation.navArgument
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.calendar.CalendarScreen
 import id.znetworks.nexus.feature.calendar.TaskPreviewScreen
@@ -230,7 +235,7 @@ internal object ShellTabs {
     fun ownerOf(route: String?): String? {
         val r = route ?: return null
         return when {
-            r.startsWith("project/") || r.startsWith("folder/") || r.startsWith("task/") || r.startsWith("task-preview/") ||
+            r.startsWith("project/") || r.startsWith("task/") || r.startsWith("task-preview/") ||
                 r.startsWith("form-builder/") || r.startsWith("form-responses/") -> "projects"
             r.startsWith("chat") -> "messages"
             r.startsWith("team-calendar") || r.startsWith("calendar-list") -> "calendar"
@@ -270,6 +275,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         container.announcements.refresh()
     }
+    // The stored user id can predate a server id change (UUIDv7 switch, 18 Oct 2026): the token still works,
+    // but "mine" checks compare against the old id. Take the server's id; MainActivity keys the shell on it.
+    LaunchedEffect(session.userId) {
+        val fresh = runCatching { id.znetworks.nexus.feature.auth.ProfileApi(container.api).profile().id }.getOrNull()
+        if (!fresh.isNullOrBlank() && fresh != session.userId) {
+            container.sessionStore.current?.takeIf { it.token == session.token }?.let { container.sessionStore.save(it.copy(userId = fresh)) }
+        }
+    }
 
     // Links: switch to the owning screen; attendance focus is claimed by that screen itself.
     LaunchedEffect(pending) {
@@ -279,7 +292,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Inbox -> { openInbox(); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
-            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}" + (t.view?.let { "?view=${enc(it)}" } ?: "")) }
+            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}?view=${enc(t.view.orEmpty())}&date=${enc(t.date.orEmpty())}") }
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${enc(t.id)}") }
             is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=${enc(it)}" } ?: "threads") }
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/${enc(it)}" } ?: "tickets") }
@@ -296,7 +309,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             is Target.LegalRequestForm -> { container.router.consumed(t); nav.navigate("legal-request-form/${enc(t.linkId)}") }
             is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/${enc(it)}" } ?: "docs") }
-            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=") }
+            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=&item=${enc(t.itemId.orEmpty())}") }
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
@@ -306,12 +319,18 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 if (t.view == "quadrant") nav.navigate("calendar-list?q=${enc(t.q.orEmpty())}&scope=${enc(t.scope.orEmpty())}") { launchSingleTop = true }
                 // A fresh nonce: the same link tapped again (a widget, a notification) is applied again,
                 // while the entry never re-applies one it already used (CalendarLinkGate).
-                else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
+                else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString(), folder = t.folder, unit = t.unit, person = t.person, project = t.project, prio = t.prio, done = t.done, overdue = t.overdue)) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
+            Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
+            Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
+            Target.GideonMemory -> { container.router.consumed(t); nav.navigate("gideon-memory") }
+            Target.Gideon -> { container.router.consumed(t); nav.navigate("gideon") }
+            is Target.Meetings -> { container.router.consumed(t); nav.navigate("meetings?project=${enc(t.projectId.orEmpty())}") }
+            is Target.Meeting -> { container.router.consumed(t); nav.navigate("meeting/${enc(t.id)}") }
+            is Target.NewMeeting -> { container.router.consumed(t); nav.navigate("meeting-new?project=${enc(t.projectId.orEmpty())}") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
-            is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${enc(t.id)}") }
             is Target.Chat -> {
                 container.router.consumed(t)
                 // Already in that thread (a push tapped while reading it): stay, no second copy (CHAT-REPORT P0).
@@ -393,7 +412,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             id.znetworks.nexus.core.tour.TourMode.status("settled ${g.id}")
         }
     }
+    val notices = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(Unit) { id.znetworks.nexus.ui.components.UiNotice.messages.collect { notices.showSnackbar(it) } }
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(notices) },
         containerColor = Nx.colors.background,
         bottomBar = {
             if (!rail && !sidebar) ShellBar(tabs, current, badgeOn, rail = false) { goTab(it) }
@@ -451,10 +473,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenFile = { url -> scope.launch { runCatching { FileOpener.open(context, container.api, url, url.substringAfterLast('/')) } } })
             }
             composable("docs") { DocsScreen(onBack = { nav.popBackStack() }, onOpenDoc = { nav.navigate("doc/$it") }) }
-            composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
-            composable("vault?folder={folder}&trash={trash}", arguments = listOf(
+            composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onGideon = { nav.navigate("gideon") }) }
+            composable("vault?folder={folder}&trash={trash}&item={item}", arguments = listOf(
                 androidx.navigation.navArgument("folder") { nullable = true; defaultValue = null },
                 androidx.navigation.navArgument("trash") { nullable = true; defaultValue = null },
+                androidx.navigation.navArgument("item") { nullable = true; defaultValue = null },
             )) {
                 CompanyOnly(onBack = { nav.popBackStack() }) {
                     VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
@@ -474,12 +497,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
             // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
-            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}",
-                arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}&folder={folder}&unit={unit}&person={person}&project={project}&prio={prio}&done={done}&overdue={overdue}",
+                arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n", "folder", "unit", "person", "project", "prio", "done", "overdue").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
                 val a = e.arguments
                 CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
                     date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"),
-                    nonce = a?.getString("n"),
+                    nonce = a?.getString("n"), folder = a?.getString("folder"), unit = a?.getString("unit"), person = a?.getString("person"), project = a?.getString("project"), prio = a?.getString("prio"), done = a?.getString("done"), overdue = a?.getString("overdue"),
                     onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } })
             }
             composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
@@ -498,15 +521,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 val pid = e.arguments?.getString("project")
                 GideonScreen(onBack = { nav.popBackStack() }, project = pid?.let { it to (e.arguments?.getString("name") ?: "") })
             }
-            composable("admin") {
-                ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
+            listOf("admin", "admin-performance").forEach { adminRoute -> composable(adminRoute) {
+                ControlRoomScreen(onBack = { nav.popBackStack() }, initialTab = if (adminRoute == "admin-performance") "gideon" else "users", initialGideon = if (adminRoute == "admin-performance") "performance" else "people", nav = AdminNav(
                     openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") }, openOrgChart = { nav.navigate("org-chart") },
                     openProfile = { nav.navigate("profile/$it") }, openWeb = { openWeb(context, it) }, openAudit = { nav.navigate("audit/$it") },
                     openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
-            }
+            } }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }, onOpenChart = { nav.navigate("admin-chart") }) }
-            composable("folder/{id}") { e -> FolderCalendarScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             // Teams are gone (deleted on the server 30 Sep 2026): a team link opens the Bagan IP & Divisi that replaced them.
             composable("admin-team/{id}") { OrgChartScreen(onBack = { nav.popBackStack() }) }
             composable("org-chart") { OrgChartScreen(onBack = { nav.popBackStack() }) }
@@ -518,10 +540,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 // A restored thing of any kind, on the screen this app has for it (RESTORE-ALL-TYPES).
                 onOpenTarget = { t -> nav.navigate(when (t.kind) {
                     RestoreTarget.Kind.PROJECT -> "project/${t.id}"; RestoreTarget.Kind.TASK -> "task/${t.id}"
-                    RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> "folder/${t.id}"
+                    RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> calendarRoute(folder = t.id)
                     RestoreTarget.Kind.ATTENDANCE -> "attendance"; RestoreTarget.Kind.ROOMS -> "rooms"
                     RestoreTarget.Kind.CALENDAR -> t.date?.let { "calendar?date=$it" } ?: "calendar"
                     RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"; RestoreTarget.Kind.CHAT -> "chat/${t.id}"
+                    RestoreTarget.Kind.MEETING -> "meeting/${t.id}"
                 }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable(Tab.CHAT.route) { MessagesScreen(onBack = null, onOpenChat = { nav.navigate("chat/$it") }) }
@@ -562,23 +585,29 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             // Tasks lives in More now (NAV-HOME-GROUP): a pushed screen with a back arrow.
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
+            composable("reminders") { RemindersScreen { nav.popBackStack() } }
+            composable("gideon-memory") { GideonMemoryScreen { nav.popBackStack() } }
+            composable("meetings?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> MeetingsScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
+            composable("meeting-new?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> NewMeetingScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
+            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
             composable(Tab.PROJECTS.route) {
-                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })
             }
             composable(Tab.MORE.route) {
                 MoreScreen(session, shellLogout, onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } },
                     tabs = if (sidebar) emptySet() else tabs.map { it.route }.toSet())
             }
-            composable("project/{id}?view={view}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null })) { entry ->
+            composable("project/{id}?view={view}&date={date}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null }, androidx.navigation.navArgument("date") { nullable = true; defaultValue = null })) { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
                     onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
                     onOpenDoc = { nav.navigate("doc/$it") },
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
-                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     initialView = entry.arguments?.getString("view"),
+                    initialDate = entry.arguments?.getString("date"),
                     onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
@@ -863,7 +892,7 @@ private fun TabLabel(text: String) = androidx.compose.foundation.text.BasicText(
 )
 
 /** `calendar?date=…`, with only the arguments that are set (each one encoded). */
-internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null, nonce: String? = null): String {
-    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task, "n" to nonce).filter { it.second != null }
+internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null, nonce: String? = null, folder: String? = null, unit: String? = null, person: String? = null, project: String? = null, prio: String? = null, done: String? = null, overdue: String? = null): String {
+    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task, "n" to nonce, "folder" to folder, "unit" to unit, "person" to person, "project" to project, "prio" to prio, "done" to done, "overdue" to overdue).filter { it.second != null }
     return if (args.isEmpty()) "calendar" else "calendar?" + args.joinToString("&") { (k, v) -> "$k=${android.net.Uri.encode(v)}" }
 }

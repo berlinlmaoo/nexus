@@ -42,8 +42,12 @@ class AttendanceGuardTest {
         // notification action anywhere is the permit composer (the outside-office push, and the
         // Work session notification once 90 min outside, UPDATES §9). One permit link per action.
         val actions = filesMatching(Regex("""addAction\("""))
-        assertEquals(sortedSetOf("Push.kt", "WorkTrailService.kt"), actions)
-        for (name in actions) {
+        assertEquals(sortedSetOf("Push.kt", "WorkTrailService.kt", "MeetingRecordingService.kt"), actions)
+        val recording = sources.entries.first { it.key.name == "MeetingRecordingService.kt" }.value
+        assertFalse(recording.contains("nexus://attendance"))
+        assertFalse(recording.contains(".checkIn("))
+        assertFalse(recording.contains(".checkOut("))
+        for (name in actions - "MeetingRecordingService.kt") {
             val src = sources.entries.first { it.key.name == name }.value
             assertEquals(name, Regex("""addAction\(""").findAll(src).count(), Regex("""nexus://attendance\?permit=today""").findAll(src).count())
         }

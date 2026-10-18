@@ -235,7 +235,7 @@ fun ApprovalChartScreen(onBack: () -> Unit, @Suppress("UNUSED_PARAMETER") onOpen
                             alone.forEach { p ->
                                 Row(Modifier.clip(CircleShape).background(c.card).dashed(c.warning.copy(alpha = 0.5f), 50.dp).clickable(enabled = canEdit) { if (!busy) picking = p }
                                     .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Avatar(p.name, p.avatar, 20.dp); Spacer(Modifier.width(6.dp))
+                                    Avatar(p.name, p.avatar, 20.dp, userId = p.userId); Spacer(Modifier.width(6.dp))
                                     Text(p.displayName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
                                     Spacer(Modifier.width(6.dp)); Text(Roles.label(p.role), fontSize = 10.sp, color = c.mutedFg)
                                 }
@@ -350,7 +350,7 @@ private fun PersonCard(p: WsMember, reports: Int, rootless: Boolean, onTap: (WsM
         Row(Modifier.width(150.dp).clip(RoundedCornerShape(10.dp)).background(if (senior) SENIOR else if (manager) MANAGER else c.card)
             .then(if (filled) Modifier else Modifier.border(1.dp, c.border, RoundedCornerShape(10.dp)))
             .clickable { onTap(p) }.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(p.name, p.avatar, 28.dp); Spacer(Modifier.width(8.dp))
+            Avatar(p.name, p.avatar, 28.dp, userId = p.userId); Spacer(Modifier.width(8.dp))
             Column {
                 Text(p.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(Roles.label(p.role) + if (reports > 0) " · $reports" else "", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = sub)

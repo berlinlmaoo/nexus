@@ -5,6 +5,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class PeopleTest {
+    @Test fun podiumUsesThreeDistinctScoresAndKeepsEveryTiedPerson() {
+        val rows = (1..8).map { BoardRow("u$it", "Person $it", totalXp = 100) } +
+            BoardRow("second", totalXp = 50) + BoardRow("third", totalXp = 20) + BoardRow("fourth", totalXp = 10)
+        val steps = PeopleLogic.podium(rows)
+        assertEquals(listOf(8, 1, 1), steps.map { it.size })
+        assertEquals(listOf(100, 50, 20), steps.map { it.first().totalXp })
+        assertEquals(9, PeopleLogic.ranks(rows).first { it.second.userId == "second" }.first)
+        assertEquals(emptyList<List<BoardRow>>(), PeopleLogic.podium(emptyList()))
+    }
     @Test fun equalScoresShareAPlace() {
         val r = PeopleLogic.ranks(listOf(BoardRow("a", totalXp = 900), BoardRow("b", totalXp = 1100), BoardRow("c", totalXp = 1100), BoardRow("d", totalXp = 1000)))
         assertEquals(listOf(1 to "b", 1 to "c", 3 to "d", 4 to "a"), r.map { it.first to it.second.userId })

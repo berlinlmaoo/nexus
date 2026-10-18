@@ -117,7 +117,9 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     /** A reload keeps what is on screen; only a first load says it failed. */
     fun load() = viewModelScope.launch {
         try {
-            val d = api.month(projectId, _state.value.month)
+            val requested = _state.value.month
+            val d = api.month(projectId, requested)
+            if (_state.value.month != requested && _state.value.month != d.month) return@launch
             _state.update { s -> s.copy(data = d, month = d.month, loading = false, error = null, forbidden = false, day = s.day?.takeIf { it.startsWith(d.month) } ?: defaultDay(d)) }
         } catch (e: ApiError) {
             val h = e as? ApiError.Http
@@ -158,11 +160,16 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     }
 
     /** A new event (all filled boxes) or only what changed on an existing one; [onSaved] gets the event back. */
+    private val createRequests = mutableMapOf<String, String>()
     fun save(eventId: String?, fields: kotlinx.serialization.json.JsonObject, onSaved: (OutletEvent) -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
         try {
             // A no-op PATCH returns the event and writes no audit row, so an unchanged save is harmless.
-            val e = if (eventId == null) api.create(projectId, fields) else api.update(projectId, eventId, fields)
+            val e = if (eventId == null) {
+                val key = fields.toString()
+                val id = createRequests.getOrPut(key) { java.util.UUID.randomUUID().toString() }
+                api.create(projectId, kotlinx.serialization.json.JsonObject(fields + ("clientRequestId" to kotlinx.serialization.json.JsonPrimitive(id)))).also { createRequests.remove(key) }
+            } else api.update(projectId, eventId, fields)
             _state.update { it.copy(notice = when {
                 e.isReported -> res.getString(R.string.os_saved_reported, e.name)
                 eventId == null -> res.getString(R.string.os_saved_new, e.name)
@@ -189,14 +196,15 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
 
 /** One Outlet Sales tab of the project screen; all four share the month and the chosen day. */
 @Composable
-fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, vm: OutletViewModel = viewModel()) {
+fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? = null, vm: OutletViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
+    LaunchedEffect(initialDay) { initialDay?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }?.let { vm.pickDay(it.toString()) } }
     // A ping on the project room: refetch whatever month is shown (an event may have moved between months).
     LiveRefresh(vm.projectId, liveMs = null, fallbackMs = 60_000,
         matches = { it.name == RealtimeEvents.OUTLET_SALES_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }
-    LaunchedEffect(s.notice) { s.notice?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.noticeShown() } }
+    LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     var detail by remember { mutableStateOf<OutletEvent?>(null) }
     val d = s.data
     val addEvent = { date: String? -> vm.openForm(null, date ?: d?.today?.takeIf { it.startsWith(s.month.orEmpty()) } ?: s.day); goTo(OutletView.FORM) }
@@ -242,7 +250,7 @@ internal fun copyFormLink(context: android.content.Context, projectId: String, e
     val url = id.znetworks.nexus.core.net.NexusConfig.base + "/projects/$projectId?view=form" + (eventId?.let { "&event=$it" } ?: "")
     val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("NEXUS", url))
-    Toast.makeText(context, context.getString(R.string.os_link_copied), Toast.LENGTH_LONG).show()
+    id.znetworks.nexus.ui.components.UiNotice.show(context.getString(R.string.os_link_copied))
 }
 
 @Composable

@@ -65,6 +65,7 @@ data class SheetData(
     val canManage: Boolean,
     /** rowId → colId → computed; empty when the server sent none (client formatting then). */
     val computed: Map<String, Map<String, Computed>>,
+    val structureVersion: Int? = null,
 ) {
     val en: Boolean get() = settings["locale"].str() == "en-US"
     val shape: SheetFormula.Shape get() = SheetFormula.Shape(columns.map { it.id }, rows.map { it.id })
@@ -113,7 +114,7 @@ object SheetParse {
             row(r, rid, i)
         }.sortedBy { it.position }
         return SheetData(id, o["projectId"].str(), o["name"].str().orEmpty(), columns, rows, o["settings"].obj() ?: JsonObject(emptyMap()),
-            o["canEdit"].bool() ?: false, o["canManage"].bool() ?: false, top)
+            o["canEdit"].bool() ?: false, o["canManage"].bool() ?: false, top, o["structureVersion"].int())
     }
 
     fun row(r: JsonObject, rid: String = r["id"].str().orEmpty(), index: Int = 0): SheetRow = SheetRow(

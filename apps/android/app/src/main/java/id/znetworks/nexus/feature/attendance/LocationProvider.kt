@@ -69,12 +69,18 @@ class LocationProvider(private val context: Context) {
         if (!hasFine() && !hasCoarse()) return null
         val client = LocationServices.getFusedLocationProviderClient(context)
         val request = CurrentLocationRequest.Builder()
-            .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+            .setPriority(if (hasFine()) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY)
             .setMaxUpdateAgeMillis(60_000)
             .setDurationMillis(10_000)
             .build()
-        return runCatching { withTimeoutOrNull(12_000) { client.getCurrentLocation(request, null).await() } }
-            .getOrNull()?.toFix()
+        val current = runCatching { withTimeoutOrNull(12_000) { client.getCurrentLocation(request, null).await() } }.getOrNull()
+        // Map display only. A provider without network positioning can still have a GPS fix.
+        // currentFix() above remains the sole fresh, high-accuracy source for attendance submission.
+        val last = if (current == null) runCatching {
+            val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+            manager.getProviders(true).mapNotNull { manager.getLastKnownLocation(it) }.maxByOrNull { it.elapsedRealtimeNanos }
+        }.getOrNull() else null
+        return (current ?: last)?.toFix()
     }
 
     private fun granted(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED

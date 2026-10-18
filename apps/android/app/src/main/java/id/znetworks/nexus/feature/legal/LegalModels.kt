@@ -273,9 +273,32 @@ data class LgParagraph(
     val lockReason: String? = null,
     val style: String? = null,
     val inTable: Boolean = false,
+    val layout: LgParagraphLayout? = null,
 ) { val isBlank: Boolean get() = lockReason == "empty" || (editable && text.isBlank()) }
 
-@Serializable data class LgParagraphs(val version: Int = 0, val current: Int = 0, val paragraphs: List<LgParagraph> = emptyList())
+@Serializable data class LgRun(val text: String = "", val b: Boolean = false, val i: Boolean = false, val u: Boolean = false)
+@Serializable data class LgCell(val table: Int = 0, val row: Int = 0, val col: Int = 0)
+@Serializable data class LgParagraphLayout(
+    val align: String? = null, val indentLeft: Double = 0.0, val hanging: Double = 0.0, val firstLine: Double = 0.0,
+    val spaceBefore: Double = 0.0, val spaceAfter: Double = 0.0, val lineHeight: Double = 1.0, val size: Double? = null,
+    val marker: String? = null, val runs: List<LgRun>? = null, val cell: LgCell? = null,
+)
+@Serializable data class LgPage(val width: Double = 595.3, val marginLeft: Double = 72.0, val marginRight: Double = 72.0,
+    val marginTop: Double = 72.0, val font: String? = null, val size: Double = 11.0)
+@Serializable data class LgParagraphs(val version: Int = 0, val current: Int = 0, val paragraphs: List<LgParagraph> = emptyList(), val page: LgPage? = null)
+
+/** Consecutive paragraphs in a table stay together; multiple paragraphs in a cell retain order. */
+object LegalPageBlocks {
+    fun of(paragraphs: List<LgParagraph>): List<List<LgParagraph>> {
+        val blocks = mutableListOf<MutableList<LgParagraph>>()
+        for (p in paragraphs) {
+            val table = p.layout?.cell?.table
+            if (table != null && blocks.lastOrNull()?.lastOrNull()?.layout?.cell?.table == table) blocks.last().add(p)
+            else blocks.add(mutableListOf(p))
+        }
+        return blocks
+    }
+}
 
 /** A run of words: kept ("same"), removed ("del", struck red) or added ("ins", green). */
 @Serializable data class LgSegment(val type: String = "same", val text: String = "")

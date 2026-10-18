@@ -288,7 +288,7 @@ fun MyLegalRequestsStrip(requests: List<LgMyRequest>, onOpen: (String) -> Unit) 
                     if (r.canDownload) NxButton(stringResource(if (r.stage == "SIGNED") R.string.lg_download_signed else R.string.lg_download_final), {
                         downloading = r.id
                         scope.launch {
-                            try { LegalFiles.share(ctx, api.myRequestFile(r.id)) } catch (e: ApiError) { android.widget.Toast.makeText(ctx, legalMessage(ctx, e), android.widget.Toast.LENGTH_LONG).show() }
+                            try { LegalFiles.share(ctx, api.myRequestFile(r.id)) } catch (e: ApiError) { id.znetworks.nexus.ui.components.UiNotice.show(legalMessage(ctx, e)) }
                             downloading = null
                         }
                     }, icon = Icons.Filled.FileDownload, compact = true, enabled = downloading == null)

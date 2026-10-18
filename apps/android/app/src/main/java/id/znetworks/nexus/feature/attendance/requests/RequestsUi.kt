@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance.requests
 
+import id.znetworks.nexus.core.i18n.AppDateFormats
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -128,10 +130,10 @@ private fun statusTone(s: String?): Color = when (s.orEmpty().uppercase()) {
     else -> Nx.colors.warning
 }
 
-private val DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
+private val DAY = AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault())
 /** "29 Sep" in the app's language at the moment it is drawn. */
-private fun shortDay(d: LocalDate): String = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(d)
-private val STAMP = DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.getDefault())
+private fun shortDay(d: LocalDate): String = AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(d)
+private val STAMP = AppDateFormats.ofPattern("d MMM · HH:mm", Locale.getDefault())
 
 /** Date-only columns are stored at 00:00 UTC: read the date part, not a zoned instant. */
 fun dayLabel(iso: String?): String =
