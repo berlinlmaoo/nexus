@@ -56,7 +56,7 @@ const FIELD: Record<string, string> = {
 /** Values the server writes in English that read as a whole word or phrase. */
 const VALUE_WORDS = new Set([
   "Direct message", "New direct message", "Group", "Project room", "Approve", "Reject", "Annual leave", "Day off", "Sick", "Permission (izin)",
-  "Public holiday", "Anyone with the link", "No expiry", "Replace section", "Append to the end", "Append under section", "Everyone",
+  "Public holiday", "Add a section", "Anyone with the link", "No expiry", "Replace section", "Append to the end", "Append under section", "Everyone",
   "Attached — open the request to see it",
   "Draft", "NEXUS members (login required)", "3 days", "7 days", "14 days", "30 days", "Allowed", "View only", "Info", "Good news", "Important",
 ]);

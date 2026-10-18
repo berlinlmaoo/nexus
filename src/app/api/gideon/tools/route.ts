@@ -41,7 +41,7 @@ import { listDocuments } from '@/lib/legal/archive'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
-import { extraTool, runExtraTool } from '@/lib/gideon-tools'
+import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 
 type GideonAction =
@@ -1714,6 +1714,7 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   // the card) travels in the stored input.
   const extra = extraTool(action)
   if (extra?.describe) {
+    if (!(await extraToolEnabled(action))) throw new Error(EXTRA_DISABLED_TEXT)
     const d = await extra.describe(actor, input)
     return {
       summary: d.summary,

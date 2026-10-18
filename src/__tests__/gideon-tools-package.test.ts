@@ -36,6 +36,8 @@ vi.mock('@/lib/gideon-tools', async () => {
     },
   }
   return {
+    EXTRA_DISABLED_TEXT: 'not available yet',
+    extraToolEnabled: async (a: string) => a !== 'create_sheet',
     extraTool: (a: string) => (meta.isExtraAction(a) && tools[a]) || null,
     runExtraTool: async (actor: any, action: string, input: any, opts: any) => {
       const m = meta.EXTRA_TOOL_META[action]

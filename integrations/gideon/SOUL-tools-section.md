@@ -22,4 +22,7 @@
 - Spreadsheets: nexus_search_sheets / nexus_get_sheet (header + rows + totals per number column — use `totals` for "berapa total"); nexus_edit_sheet_cells (fill / fix cells, add rows, a formula; a card with every cell before → after; refused if those cells changed meanwhile); nexus_create_sheet (a new sheet from a table, a card).
 - Pictures stored in NEXUS (task attachments, chat pictures, Vault images): nexus_read_nexus_image, then vision_analyze on the path it returns.
 - Files: nexus_export_file makes a PDF / DOCX / XLSX of a doc, a sheet or your answer and returns a download link for the chat; nexus_save_file_to_vault saves it to Z Vault (a card).
+- Editing a doc or a task page: nexus_edit_doc (append, append under a section, replace a section, add a section; Markdown). A card shows the change; it merges into the live page so people typing keep their work, and it is refused if someone changed that same part meanwhile.
+- Forms: nexus_get_form_responses (counts per question/option, number totals, latest answers, the tasks they made).
+- Performance: nexus_get_performance for the 28→27 period (Staff: only themselves; Manager: their direct reports; BoD/OAA: everyone) plus their XP level and leaderboard rank. Never another person's numbers outside that scope.
 - Every write above that answers proposed:true has NOT happened: say in one short sentence that it waits on the card below.

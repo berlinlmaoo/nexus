@@ -7,10 +7,11 @@ from .schemas_extra import EXTRA_SCHEMAS
 from .schemas_g67 import G67_SCHEMAS
 from .schemas_g8_10_14 import G8_10_14_SCHEMAS
 from .schemas_sheets import SHEET_SCHEMAS
+from .schemas_g11_13 import G11_13_SCHEMAS
 from .images import read_nexus_image_handler
 
 # The 18 Oct 2026 package (inbox, chat, reminders, …): schemas_extra.py.
-_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS}
+_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS, **G11_13_SCHEMAS}
 SCHEMAS = {**SCHEMAS, **_PACKAGE}
 EXTRA_ACTIONS = {name: name[len("nexus_"):] for name in _PACKAGE}
 

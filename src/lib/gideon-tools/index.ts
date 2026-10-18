@@ -1,5 +1,6 @@
 import type { User } from "@/generated/prisma/client"
-import { EXTRA_TOOL_META } from "./meta"
+import { EXTRA_TOOL_GROUP, EXTRA_TOOL_META } from "./meta"
+import { getAppConfig } from "@/lib/app-config"
 import type { ExtraTool, Input } from "./types"
 import { inboxTools } from "./inbox"
 import { chatTools } from "./chat"
@@ -14,6 +15,9 @@ import { announcementTools } from "./announcement"
 import { sheetTools } from "./sheets"
 import { imageTools } from "./images"
 import { fileTools } from "./files"
+import { docEditTools } from "./doc-edit"
+import { formTools } from "./forms"
+import { performanceTools } from "./performance"
 
 /**
  * The GIDEON tools of the 18 Oct 2026 package, by action (see meta.ts for approval rules and why). The tools route
@@ -33,6 +37,9 @@ export const EXTRA_TOOLS: Record<string, ExtraTool> = {
   ...sheetTools,
   ...imageTools,
   ...fileTools,
+  ...docEditTools,
+  ...formTools,
+  ...performanceTools,
 }
 
 export function extraTool(action: string): ExtraTool | null {
@@ -47,6 +54,7 @@ export function extraTool(action: string): ExtraTool | null {
 export async function runExtraTool(actor: User, action: string, input: Input, opts: { approved: boolean; direct: boolean }): Promise<unknown> {
   const tool = extraTool(action)
   if (!tool) throw new Error(`Unknown GIDEON tool action: ${action}`)
+  if (!(await extraToolEnabled(action))) throw new Error(EXTRA_DISABLED_TEXT)
   const meta = EXTRA_TOOL_META[action]
   if (!meta.write) {
     if (!tool.read) throw new Error(`${action} cannot be read`)
@@ -61,3 +69,13 @@ export async function runExtraTool(actor: User, action: string, input: Input, op
 }
 
 export { EXTRA_TOOL_META }
+
+/** Is this tool's group switched on (remote config, EXTRA_TOOL_GROUP)? A config read error keeps it on. */
+export async function extraToolEnabled(action: string): Promise<boolean> {
+  const flag = EXTRA_TOOL_GROUP[action]
+  if (!flag) return true
+  const cfg = await getAppConfig(null).catch(() => null)
+  return (cfg?.flags as Record<string, unknown> | undefined)?.[flag] !== false
+}
+
+export const EXTRA_DISABLED_TEXT = "This GIDEON ability is not available yet. Tell the person to use the NEXUS page for it · Kemampuan GIDEON ini belum tersedia; pakai halamannya di NEXUS."

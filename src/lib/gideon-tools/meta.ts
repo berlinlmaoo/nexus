@@ -93,3 +93,27 @@ export function extraStepLabel(action: string, arg?: string | null): string | nu
   const m = EXTRA_TOOL_META[action]
   return m ? m.label(arg ? arg.slice(0, 80) : "") : null
 }
+
+/**
+ * Remote-config flag per group (app-config `flags.<name>`, lib/app-config.ts): off = the group's tools answer
+ * "not available yet" and their cards cannot be applied. Lets a group ship dark and open without a release.
+ */
+export const EXTRA_TOOL_GROUP: Record<string, string> = {
+  get_my_inbox: "gideonToolsInbox",
+  list_conversations: "gideonToolsChat", read_conversation: "gideonToolsChat", send_message: "gideonToolsChat",
+  list_reminders: "gideonToolsReminders", create_reminder: "gideonToolsReminders", cancel_reminder: "gideonToolsReminders",
+  get_leave_balance: "gideonToolsLeave", submit_leave_request: "gideonToolsLeave", decide_attendance_request: "gideonToolsLeave",
+  bulk_update_tasks: "gideonToolsBulkTasks", add_subtasks: "gideonToolsBulkTasks",
+  move_deal_stage: "gideonToolsPipeline", add_payment_term: "gideonToolsPipeline",
+  log_outlet_sales: "gideonToolsOutletSocial", log_social_media_day: "gideonToolsOutletSocial",
+  create_legal_draft: "gideonToolsLegal",
+  search_vault: "gideonToolsVault", create_vault_share_link: "gideonToolsVault",
+  edit_doc: "gideonToolsDocEdit",
+  get_form_responses: "gideonToolsForms",
+  get_performance: "gideonToolsPerformance",
+  draft_announcement: "gideonToolsAnnouncement",
+  search_sheets: "gideonToolsSheets", get_sheet: "gideonToolsSheets", edit_sheet_cells: "gideonToolsSheets", create_sheet: "gideonToolsSheets",
+  read_nexus_image: "gideonToolsImages",
+  export_file: "gideonToolsFiles", save_file_to_vault: "gideonToolsFiles",
+}
+export const EXTRA_TOOL_FLAGS: string[] = [...new Set(Object.values(EXTRA_TOOL_GROUP))]

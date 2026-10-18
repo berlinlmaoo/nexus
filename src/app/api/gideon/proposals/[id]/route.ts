@@ -12,7 +12,7 @@ import { formatBookingSlot } from "@/lib/room-booking-format"
 import { taskTargetOptions } from "@/lib/gideon-task-target"
 import type { Prisma } from "@/generated/prisma"
 import { isExtraAction } from "@/lib/gideon-tools/meta"
-import { extraTool } from "@/lib/gideon-tools"
+import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled } from "@/lib/gideon-tools"
 import type { WebCall, WebCaller, WebReply } from "@/lib/gideon-tools/types"
 
 const CREATE_TASK_LATEST_APP = "Open on the latest app or the web to choose the project for this task · Buka di app terbaru atau web untuk memilih project task ini"
@@ -150,6 +150,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (confirm?.proposalId !== id) {
       const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_LATEST_APP }
       return NextResponse.json({ error: EXTRA_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
+    }
+    if (!(await extraToolEnabled(proposal.action))) {
+      const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_DISABLED_TEXT }
+      return NextResponse.json({ error: EXTRA_DISABLED_TEXT, code: "TOOL_DISABLED", proposal: view }, { status: 409 })
     }
   }
 

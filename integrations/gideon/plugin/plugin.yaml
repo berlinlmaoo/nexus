@@ -73,6 +73,10 @@ provides_tools:
   - nexus_read_nexus_image
   - nexus_export_file
   - nexus_save_file_to_vault
+  # Edit a doc / task page (merged into the live editor, a card with the change), form responses, performance
+  - nexus_edit_doc
+  - nexus_get_form_responses
+  - nexus_get_performance
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

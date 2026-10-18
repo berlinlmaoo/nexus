@@ -91,6 +91,7 @@ export const ID_GIDEON_TOOLS: Record<string, string> = {
   "Annual leave": "Cuti tahunan",
   "Permission (izin)": "Izin",
   "Replace section": "Ganti bagian",
+  "Add a section": "Tambah bagian",
   "Append to the end": "Tambahkan di akhir",
   "Append under section": "Tambahkan di bawah bagian",
   "{a} calendar days": "{a} hari kalender",
