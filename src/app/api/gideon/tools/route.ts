@@ -32,6 +32,10 @@ import {
   gideonCancelRoomBooking, gideonMoveRoomBooking } from '@/lib/gideon-book-room'
 import { humanDay, parseDueInput, todayWib } from '@/lib/gideon-dates'
 import { wibDay, wibTime } from '@/lib/calendar/core'
+import { TASK_PAGE, TASK_PAGE_MAX, compactProject, compactTask, page, urgencyOrder, wibDayKey } from '@/lib/gideon-compact'
+import { legalActor } from '@/lib/legal/access'
+import { ORG_WORKSPACE_ID } from '@/lib/org'
+import { listDocuments } from '@/lib/legal/archive'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
@@ -60,6 +64,8 @@ type GideonAction =
   | 'book_room'
   | 'move_room_booking'
   | 'cancel_room_booking'
+  | 'search_deals'
+  | 'search_legal_documents'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -140,12 +146,24 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   const projectId = asString(input.projectId)
   const status = asString(input.status) as TaskStatus | undefined
   const priority = asString(input.priority) as TaskPriority | undefined
-  const assigneeId = asString(input.assigneeId)
+  const rawAssignee = asString(input.assigneeId)
+  const assigneeId = rawAssignee === 'me' ? actor.id : rawAssignee
 
   if (projectId) taskListWhere.projectId = projectId
   if (status) where.status = status
   if (priority) where.priority = priority
   if (assigneeId) where.assignees = { some: { userId: assigneeId } }
+  // Filters added 18 Oct 2026 so "my overdue tasks" is one small call instead of every task the person can see.
+  const open = input.open === true || input.open === 'true' || input.overdue === true || input.overdue === 'true'
+  if (open && !status) where.status = { notIn: ['DONE', 'CANCELLED'] }
+  const today = todayWib()
+  const dueFrom = typeof input.dueFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.dueFrom) ? input.dueFrom : null
+  const dueTo = typeof input.dueTo === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.dueTo) ? input.dueTo : null
+  const due: Prisma.DateTimeNullableFilter = {}
+  if (input.overdue === true || input.overdue === 'true') due.lt = new Date(`${today}T00:00:00+07:00`)
+  if (dueFrom) due.gte = new Date(`${dueFrom}T00:00:00+07:00`)
+  if (dueTo) due.lt = new Date(new Date(`${dueTo}T00:00:00+07:00`).getTime() + 86400e3)
+  if (Object.keys(due).length) where.dueDate = due
 
   taskListWhere.project = {
     OR: [
@@ -157,21 +175,6 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   if (Object.keys(taskListWhere).length > 0) where.taskList = taskListWhere
 
   return where
-}
-
-const projectInclude = {
-  workspace: { select: { id: true, name: true, slug: true } },
-  members: {
-    select: {
-      role: true,
-      user: { select: { id: true, name: true, email: true, avatar: true } },
-    },
-    orderBy: { joinedAt: 'asc' as const },
-  },
-  taskLists: {
-    select: { id: true, name: true, position: true, _count: { select: { tasks: true } } },
-    orderBy: { position: 'asc' as const },
-  },
 }
 
 const taskInclude = {
@@ -196,28 +199,6 @@ const taskInclude = {
     },
     orderBy: { customField: { position: 'asc' as const } },
   },
-}
-
-function serializeProject(project: any) {
-  const taskLists = project.taskLists.map((list: any) => ({
-    id: list.id,
-    name: list.name,
-    position: list.position,
-    taskCount: list._count.tasks,
-  }))
-
-  return {
-    id: project.id,
-    name: project.name,
-    description: project.description,
-    status: project.status,
-    color: project.color,
-    icon: project.icon,
-    workspace: project.workspace,
-    members: project.members,
-    taskLists,
-    taskCount: taskLists.reduce((sum: number, list: { taskCount: number }) => sum + list.taskCount, 0),
-  }
 }
 
 function serializeTask(task: any) {
@@ -245,14 +226,30 @@ function serializeTask(task: any) {
 }
 
 async function listProjects(actor: User, input: Record<string, unknown>) {
-  const projects = await prisma.project.findMany({
-    where: actorScopedProjectWhere(actor, input),
-    include: projectInclude,
-    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-    take: MAX_LIMIT,
-  })
-
-  return projects.map(serializeProject)
+  // Compact rows (18 Oct 2026): a name, status and task counts per project. The member roster with emails and
+  // avatars made this 140 KB for a BoD; get_project_summary / list_members give a project's people.
+  const where = actorScopedProjectWhere(actor, input)
+  const query = asString(input.query) || asString(input.name)
+  if (query) where.name = { contains: query, mode: 'insensitive' }
+  const limit = Math.max(1, Math.min(MAX_LIMIT, typeof input.limit === 'number' ? Math.floor(input.limit) : MAX_LIMIT))
+  const offset = typeof input.offset === 'number' && input.offset > 0 ? Math.floor(input.offset) : 0
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      select: { id: true, name: true, status: true, type: true, _count: { select: { members: true } }, taskLists: { select: { id: true, _count: { select: { tasks: true } } } } },
+      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      take: limit,
+      skip: offset,
+    }),
+    prisma.project.count({ where }),
+  ])
+  const listIds = projects.flatMap((p) => p.taskLists.map((l) => l.id))
+  const openRows = listIds.length
+    ? await prisma.task.groupBy({ by: ['taskListId'], where: { taskListId: { in: listIds }, status: { notIn: ['DONE', 'CANCELLED'] } }, _count: { _all: true } })
+    : []
+  const openByList = new Map(openRows.map((r) => [r.taskListId, r._count._all]))
+  const items = projects.map((p) => compactProject(p, p.taskLists.reduce((s, l) => s + (openByList.get(l.id) ?? 0), 0)))
+  return page(items, total, offset, limit, 'pass query (part of the project name)')
 }
 
 async function listMembers(actor: User, input: Record<string, unknown>) {
@@ -272,11 +269,11 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
               },
             }),
       },
-      select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
+      select: { role: true, user: { select: { id: true, name: true } } },
       orderBy: { joinedAt: 'asc' },
       take: MAX_LIMIT,
     })
-    return members
+    return members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role }))
   }
 
   const members = await prisma.workspaceMember.findMany({
@@ -284,22 +281,42 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
       ...(workspaceId ? { workspaceId } : {}),
       workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } },
     },
-    select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } }, workspace: { select: { id: true, name: true, slug: true } } },
+    select: { role: true, user: { select: { id: true, name: true } }, workspace: { select: { name: true } } },
     orderBy: { joinedAt: 'asc' },
     take: MAX_LIMIT,
   })
-  return members
+  return members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role, workspace: m.workspace.name }))
 }
 
-async function listTasks(actor: User, input: Record<string, unknown>) {
-  const tasks = await prisma.task.findMany({
-    where: actorScopedTaskWhere(actor, input),
-    include: taskInclude,
-    orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
-    take: asLimit(input.limit),
-  })
+function taskPaging(input: Record<string, unknown>) {
+  const limit = typeof input.limit === 'number' && Number.isFinite(input.limit) ? Math.max(1, Math.min(TASK_PAGE_MAX, Math.floor(input.limit))) : TASK_PAGE
+  const offset = typeof input.offset === 'number' && input.offset > 0 ? Math.floor(input.offset) : 0
+  return { limit, offset }
+}
 
-  return tasks.map(serializeTask)
+/** The rows a task list needs for compactTask (no emails, avatars, option lists or creator). */
+const compactTaskSelect = {
+  id: true, title: true, description: true, status: true, priority: true, dueDate: true,
+  taskList: { select: { name: true, projectId: true, project: { select: { id: true, name: true } } } },
+  assignees: { select: { user: { select: { name: true } } } },
+  customFieldValues: { select: { value: true, customField: { select: { name: true, type: true } } }, orderBy: { customField: { position: 'asc' as const } } },
+} satisfies Prisma.TaskSelect
+
+async function listTasks(actor: User, input: Record<string, unknown>) {
+  // Compact and paged (18 Oct 2026): 25 rows by default with the total and how to get the rest.
+  const where = actorScopedTaskWhere(actor, input)
+  const { limit, offset } = taskPaging(input)
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({ where, select: compactTaskSelect, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { updatedAt: 'desc' }], take: limit, skip: offset }),
+    prisma.task.count({ where }),
+  ])
+  const today = todayWib()
+  const oneProject = Boolean(asString(input.projectId))
+  const items = tasks.map((t) => compactTask(t, today, !oneProject))
+  return {
+    ...(oneProject && tasks[0]?.taskList?.project ? { project: tasks[0].taskList.project.name, projectId: tasks[0].taskList.project.id } : {}),
+    ...page(items, total, offset, limit, 'narrow with status / open / overdue / assigneeId / dueFrom-dueTo / projectId'),
+  }
 }
 
 async function searchTasks(actor: User, input: Record<string, unknown>) {
@@ -307,20 +324,20 @@ async function searchTasks(actor: User, input: Record<string, unknown>) {
   if (!query) throw new Error('query is required')
 
   const baseWhere = actorScopedTaskWhere(actor, input)
-  const tasks = await prisma.task.findMany({
-    where: {
-      ...baseWhere,
-      OR: [
-        { title: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } },
-      ],
-    },
-    include: taskInclude,
-    orderBy: [{ updatedAt: 'desc' }],
-    take: asLimit(input.limit),
-  })
-
-  return tasks.map(serializeTask)
+  const where: Prisma.TaskWhereInput = {
+    ...baseWhere,
+    OR: [
+      { title: { contains: query, mode: 'insensitive' } },
+      { description: { contains: query, mode: 'insensitive' } },
+    ],
+  }
+  const { limit, offset } = taskPaging(input)
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({ where, select: compactTaskSelect, orderBy: [{ updatedAt: 'desc' }], take: limit, skip: offset }),
+    prisma.task.count({ where }),
+  ])
+  const today = todayWib()
+  return page(tasks.map((t) => compactTask(t, today, true)), total, offset, limit, 'add projectId / status / open')
 }
 
 async function getProjectSummary(actor: User, input: Record<string, unknown>) {
@@ -341,31 +358,54 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
       id: true,
       name: true,
       status: true,
-      workspace: { select: { id: true, name: true, slug: true } },
-      members: { select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } } },
+      type: true,
+      workspace: { select: { name: true } },
+      members: { select: { role: true, user: { select: { id: true, name: true } } }, orderBy: { joinedAt: 'asc' }, take: 40 },
+      _count: { select: { members: true } },
     },
   })
 
   if (!project) throw new Error('Project not found or not accessible')
 
   const taskWhere = { taskList: { projectId } }
-  const [totalTasks, completedTasks, byStatusRows, byPriorityRows] = await Promise.all([
+  const openWhere: Prisma.TaskWhereInput = { ...taskWhere, status: { notIn: ['DONE', 'CANCELLED'] } }
+  const today = todayWib()
+  const [totalTasks, completedTasks, byStatusRows, byPriorityRows, lists, byListRows, openByListRows, overdueOpen, openRows] = await Promise.all([
     prisma.task.count({ where: taskWhere }),
     prisma.task.count({ where: { ...taskWhere, status: 'DONE' } }),
     prisma.task.groupBy({ by: ['status'], where: taskWhere, _count: { _all: true } }),
-    prisma.task.groupBy({ by: ['priority'], where: taskWhere, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ['priority'], where: openWhere, _count: { _all: true } }),
+    prisma.taskList.findMany({ where: { projectId }, select: { id: true, name: true }, orderBy: { position: 'asc' } }),
+    prisma.task.groupBy({ by: ['taskListId'], where: taskWhere, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ['taskListId'], where: openWhere, _count: { _all: true } }),
+    prisma.task.count({ where: { ...openWhere, dueDate: { lt: new Date(`${today}T00:00:00+07:00`) } } }),
+    // The open tasks that matter most (urgent / high first, then the earliest due): enough to say what is going on
+    // without a second call. The full list stays one nexus_list_tasks away.
+    prisma.task.findMany({ where: openWhere, select: compactTaskSelect, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }], take: 200 }),
   ])
 
   const byStatus = Object.fromEntries(byStatusRows.map((row) => [row.status, row._count._all]))
   const byPriority = Object.fromEntries(byPriorityRows.map((row) => [row.priority, row._count._all]))
+  const totalByList = new Map(byListRows.map((r) => [r.taskListId, r._count._all]))
+  const openByList = new Map(openByListRows.map((r) => [r.taskListId, r._count._all]))
+  const openTasks = totalTasks - completedTasks - (byStatus.CANCELLED ?? 0)
+  const top = [...openRows].sort(urgencyOrder).slice(0, 8).map((t) => compactTask(t, today, false))
 
   return {
-    project,
+    project: { id: project.id, name: project.name, status: project.status, ...(project.type !== 'TASK' ? { type: project.type } : {}), workspace: project.workspace.name },
     totalTasks,
     completedTasks,
+    openTasks,
+    overdueOpenTasks: overdueOpen,
     progressPercent: totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0,
     byStatus,
-    byPriority,
+    openByPriority: byPriority,
+    // Columns (sections) as the board shows them: total and still open per column.
+    byColumn: lists.map((l) => ({ column: l.name, total: totalByList.get(l.id) ?? 0, open: openByList.get(l.id) ?? 0 })).filter((c) => c.total > 0),
+    members: project.members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role })),
+    ...(project._count.members > project.members.length ? { moreMembers: project._count.members - project.members.length } : {}),
+    topOpenTasks: top,
+    ...(openTasks > top.length ? { moreOpen: `${openTasks - top.length} more open tasks — nexus_list_tasks with projectId and open=true (paged).` } : {}),
   }
 }
 
@@ -1263,7 +1303,7 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
     const q = asString(input.q) || asString(input.text) || asString(input.search) || asString(input.question) || asString(input.keyword) || asString(input.keywords)
     if (q) input.query = q
   }
-  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks' || action === 'get_calendar'
+  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks' || action === 'search_tasks' || action === 'get_calendar' || action === 'list_members'
   if (wantsProject && !asString(input.projectId)) {
     const name = asString(input.project) || asString(input.projectName) || (action === 'get_project_summary' ? asString(input.name) || asString(input.query) : '')
     if (name) {
@@ -1276,6 +1316,25 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
         orderBy: { updatedAt: 'desc' },
       })
       if (match) input.projectId = match.id
+      // A project name that matches nothing this person can see is an answer, not a reason to list everything.
+      else if (action === 'list_tasks' || action === 'search_tasks' || action === 'get_project_summary') throw new Error(`No project this person can see is named like "${name}".`)
+    }
+  }
+  // assignee (18 Oct 2026): "me" or a person's name → assigneeId, for list_tasks / search_tasks.
+  if ((action === 'list_tasks' || action === 'search_tasks') && !asString(input.assigneeId)) {
+    const who = asString(input.assignee) || asString(input.assigneeName) || asString(input.person)
+    if (who && /^(me|saya|aku|gw|gue)$/i.test(who)) input.assigneeId = actor.id
+    else if (who) {
+      const people = await prisma.user.findMany({
+        where: { name: { contains: who, mode: 'insensitive' }, deactivatedAt: null, workspaceMembers: { some: { workspaceId: ORG_WORKSPACE_ID } } },
+        select: { id: true, name: true },
+        take: 6,
+      })
+      const exact = people.filter((p) => p.name?.toLowerCase() === who.toLowerCase())
+      const pick = exact.length === 1 ? exact : people
+      if (pick.length === 1) input.assigneeId = pick[0].id
+      else if (!pick.length) throw new Error(`Nobody in the company is named like "${who}".`)
+      else throw new Error(`Several people match "${who}": ${pick.map((p) => p.name).join(', ')}. Ask which one, or pass assignee with the full name.`)
     }
   }
   return input
@@ -1317,6 +1376,11 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return gideonMoveRoomBooking(actor.id, input)
     case 'cancel_room_booking':
       return gideonCancelRoomBooking(actor.id, input)
+    // Pipeline deals and Legal documents (18 Oct 2026): read only, loaded on demand by the model.
+    case 'search_deals':
+      return searchDeals(actor, input)
+    case 'search_legal_documents':
+      return searchLegalDocuments(actor, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':
@@ -1789,4 +1853,112 @@ async function resolveTicketByGideon(actor: { id: string }, input: Record<string
   })
   await notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId, status: 'RESOLVED', detail: note.slice(0, 160) }).catch(() => {})
   return { resolved: true, complaintId, date: dateKey, verified: { xpRemaining: remaining, autoDayOffs: pen.autoDayOffs, pendingProposals: 0 } }
+}
+
+// ── Pipeline deals and Legal documents (18 Oct 2026) ──────────────────────────────────────────────────────
+// Read only. Deferred tools: the model loads them when a question is about a deal or a legal document.
+
+const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`
+
+/**
+ * Deals on the Pipeline boards this person can open (a board is an ordinary project for access: member, or BoD /
+ * One Above All). Matches the deal name, brand, code, BD or PM; filters by stage. Compact rows.
+ */
+async function searchDeals(actor: User, input: Record<string, unknown>) {
+  const query = asString(input.query)
+  const stage = asString(input.stage)
+  const boardWhere: Prisma.ProjectWhereInput = { ...actorScopedProjectWhere(actor, {}), type: 'PIPELINE' }
+  const projectId = asString(input.projectId)
+  if (projectId) boardWhere.id = projectId
+  const where: Prisma.PipelineDealWhereInput = { project: boardWhere }
+  const and: Prisma.PipelineDealWhereInput[] = []
+  if (query) {
+    and.push({
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { brand: { contains: query, mode: 'insensitive' } },
+        { code: { contains: query, mode: 'insensitive' } },
+        { bdName: { contains: query, mode: 'insensitive' } },
+        { pmName: { contains: query, mode: 'insensitive' } },
+        { bd: { name: { contains: query, mode: 'insensitive' } } },
+        { pm: { name: { contains: query, mode: 'insensitive' } } },
+      ],
+    })
+  }
+  if (stage) and.push({ stage: { contains: stage, mode: 'insensitive' } })
+  if (and.length) where.AND = and
+  const { limit, offset } = taskPaging(input)
+  const [deals, total] = await Promise.all([
+    prisma.pipelineDeal.findMany({
+      where,
+      select: {
+        id: true, code: true, name: true, brand: true, stage: true, probability: true, contractValue: true, netValue: true,
+        services: true, service: true, contractStatus: true, paymentStatus: true, outstandingReceivable: true, deliverableStatus: true,
+        deliverableRisk: true, closingStatus: true, mainDate: true, nextAction: true, nextActionDate: true, blocker: true,
+        bdName: true, pmName: true, bd: { select: { name: true } }, pm: { select: { name: true } }, project: { select: { name: true } },
+      },
+      orderBy: [{ contractValue: 'desc' }, { updatedAt: 'desc' }],
+      take: limit,
+      skip: offset,
+    }),
+    prisma.pipelineDeal.count({ where }),
+  ])
+  const items = deals.map((d) => {
+    const row: Record<string, unknown> = {
+      code: d.code, name: d.name, board: d.project.name, stage: d.stage,
+      bd: d.bd?.name ?? d.bdName ?? null, pm: d.pm?.name ?? d.pmName ?? null,
+      contractValue: rupiah(d.contractValue),
+    }
+    if (d.brand) row.brand = d.brand
+    if (d.netValue) row.netValue = rupiah(d.netValue)
+    row.probability = `${Math.round(d.probability * 100)}%`
+    const services = d.services.length ? d.services : d.service ? [d.service] : []
+    if (services.length) row.services = services.join(', ')
+    for (const [k, v, skip] of [
+      ['contract', d.contractStatus, 'Not Started'], ['payment', d.paymentStatus, 'Not Yet'], ['deliverable', d.deliverableStatus, 'Not Started'],
+      ['risk', d.deliverableRisk, 'Aman'], ['closing', d.closingStatus, 'Not Ready'],
+    ] as const) if (v && v !== skip) row[k] = v
+    if (d.outstandingReceivable) row.outstanding = rupiah(d.outstandingReceivable)
+    if (d.mainDate) row.mainDate = wibDayKey(d.mainDate)
+    if (d.nextAction) row.nextAction = `${d.nextAction}${d.nextActionDate ? ` (${wibDayKey(d.nextActionDate)})` : ''}`
+    if (d.blocker) row.blocker = d.blocker.slice(0, 160)
+    return row
+  })
+  return {
+    ...page(items, total, offset, limit, 'pass query (deal, brand, code, BD or PM) or stage'),
+    ...(total ? {} : { note: 'No deal on a Pipeline board this person can open matches. Say so; do not guess.' }),
+  }
+}
+
+/**
+ * Legal documents: invitation only (the Legal page's own rule, lib/legal/access.ts). Someone without Legal access gets
+ * a plain refusal the model can relay — never a list.
+ */
+async function searchLegalDocuments(actor: User, input: Record<string, unknown>) {
+  const legal = await legalActor(actor.id)
+  if (!legal) return { access: false, note: 'This person has no access to Legal (it is by invitation only). Tell them so; do not guess any document.' }
+  const sp = new URLSearchParams()
+  const query = asString(input.query)
+  if (query) sp.set('q', query)
+  const docType = asString(input.docType)
+  if (docType) sp.set('docType', docType.toUpperCase())
+  const status = asString(input.status)
+  if (status) sp.set('status', status.toUpperCase())
+  const { limit, offset } = taskPaging(input)
+  sp.set('limit', String(limit))
+  sp.set('page', String(Math.floor(offset / limit) + 1))
+  const { documents, total } = await listDocuments(legal, sp)
+  const items = documents.map((d) => ({
+    number: d.number || null,
+    title: d.title,
+    type: d.docType,
+    status: d.status,
+    ...(d.counterparty ? { counterparty: d.counterparty } : {}),
+    ...(d.docDate ? { date: d.docDate } : {}),
+    company: (d.company as { name?: string } | null)?.name ?? null,
+    ...((d.project as { name?: string } | null)?.name ? { project: (d.project as { name: string }).name } : {}),
+    ...((d.deal as { name?: string } | null)?.name ? { deal: (d.deal as { name: string }).name } : {}),
+    ...(d.signedAt ? { signedAt: wibDayKey(d.signedAt) } : {}),
+  }))
+  return page(items, total, offset, limit, 'pass query (number, title or counterparty), docType or status')
 }
