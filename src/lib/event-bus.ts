@@ -95,6 +95,8 @@ export const BUS_EVENTS = {
   GIDEON_CREDITS: "gideon-credits",
   /** A GIDEON tier became unavailable or came back (Model 0 lends the GPU to the meeting transcriber) → every socket. */
   GIDEON_TIERS: "gideon-tiers",
+  /** GIDEON performance panel (18 Oct 2026): a GPU sample { kind: "gpu", live }, or a ping { kind: "runs" | "alerts" } → room `gideon:perf` (BoD+). */
+  GIDEON_PERF: "gideon-perf",
   /** A meeting recording moved (status/progress/edit/apply/delete) → its uploader's `user:<id>` + its `project:<id>`. Ids only. */
   MEETING_CHANGED: "meeting-changed",
 } as const

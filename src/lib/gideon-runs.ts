@@ -1,6 +1,7 @@
 import { EventEmitter } from "events"
 import { parseShimUsage, recordRunUsage } from "@/lib/gideon-credits"
 import prisma from "@/lib/prisma"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { createLogger } from "@/lib/logger"
 import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
 import { resolveRoomName } from "@/lib/room-booking-rooms"
@@ -139,6 +140,17 @@ export function subscribeRun(runId: string, fn: (event: RunEvent) => void): () =
   return () => bus().off(key, fn)
 }
 
+/** Control Room › GIDEON › Performance refetches when an answer starts or ends (pages/api/socket.ts folds bursts). */
+function perfPing() {
+  try { eventBus.emit(BUS_EVENTS.GIDEON_PERF, { kind: "runs" }) } catch { /* never fail an answer over the panel */ }
+}
+
+/** The shim runner retried this question with every tool (a router miss): counted on the performance panel. */
+export async function markRouterRetry(runId: string | null | undefined) {
+  if (!runId) return
+  await prisma.gideonRun.update({ where: { id: runId }, data: { routerRetry: true } }).catch(() => {})
+}
+
 // ── Run lifecycle ─────────────────────────────────────────────────────────────────────────────────────
 
 export async function startRun(input: {
@@ -165,6 +177,7 @@ export async function startRun(input: {
       },
       select: { id: true },
     })
+    perfPing()
     return run.id
   } catch (error) {
     // The log is a convenience: never fail the answer because it could not be written.
@@ -193,6 +206,7 @@ export async function finishRun(runId: string | null | undefined, outcome: { ok:
         durationMs: run ? now.getTime() - run.startedAt.getTime() : null,
       },
     })
+    perfPing()
   } catch (error) {
     log.error("finishRun failed", { runId, error: String(error) })
   }

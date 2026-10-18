@@ -3484,6 +3484,8 @@ model GideonRun {
   startedAt    DateTime  @default(now())
   finishedAt   DateTime?
   durationMs   Int?
+  /// The shim runner retried this question with every tool loaded (a router miss, 18 Oct 2026).
+  routerRetry  Boolean   @default(false)
   steps        GideonRunStep[]
   proposals    GideonProposal[]
 
@@ -4425,4 +4427,49 @@ model MeetingNote {
   @@index([projectId, createdAt])
   @@index([status, updatedAt])
   @@index([audioDeleteAfter])
+}
+
+/// GIDEON performance (Control Room › GIDEON › Performance, 18 Oct 2026): one reading of the office GPU that runs
+/// GIDEON Model 0, pushed by the host exporter (deploy/gideon-perf/). `res` "raw" rows are kept 48 h, then folded
+/// into "10m" averages kept 30 days (lib/gideon-perf.ts pruneGpuSamples).
+model GideonGpuSample {
+  id            BigInt   @id @default(autoincrement())
+  at            DateTime @default(now())
+  /// raw | 10m
+  res           String   @default("raw")
+  gpuName       String?
+  gpuUtil       Float?
+  memUsedMiB    Int?
+  memTotalMiB   Int?
+  tempC         Float?
+  powerW        Float?
+  powerLimitW   Float?
+  /// The local engine (Ollama) answered.
+  engineUp      Boolean?
+  /// The model the engine holds in memory now (null = none loaded), with its total size and the part on the GPU.
+  modelName     String?
+  sizeBytes     BigInt?
+  sizeVramBytes BigInt?
+  whisperBusy   Boolean?
+  whisperQueued Int?
+
+  @@index([res, at])
+}
+
+/// One Model 0 generation or model load, read from the engine's log by the host exporter. `ref` is the exporter's
+/// id for the log line, so a re-sent batch is stored once. Kept 30 days.
+model GideonModel0Event {
+  id           BigInt   @id @default(autoincrement())
+  ref          String   @unique
+  at           DateTime
+  /// gen | load
+  kind         String
+  evalTps      Float?
+  promptTps    Float?
+  outTokens    Int?
+  promptTokens Int?
+  totalMs      Int?
+  loadSec      Float?
+
+  @@index([at])
 }

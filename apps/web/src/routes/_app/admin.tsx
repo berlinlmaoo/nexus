@@ -1,6 +1,7 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
 import { GideonCreditsAdmin } from "@/components/gideon/GideonCreditsAdmin";
 import { GideonPersonReview } from "@/components/gideon/GideonPersonReview";
+import { GideonPerformance } from "@/components/gideon/GideonPerformance";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -43,8 +44,10 @@ import { monthTitle } from "@/lib/month-title";
 const ADMIN_TABS = ["users", "approval", "org", "extra-dayoff", "suspects", "audit", "quests", "announcements", "gideon", "app", "calendar"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 export const Route = createFileRoute("/_app/admin")({
-  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab } => ({
+  // ?gideon=performance opens Control Room › GIDEON › Performance (the link in a GIDEON alert, 18 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab; gideon?: "performance" } => ({
     tab: typeof s.tab === "string" && (ADMIN_TABS as readonly string[]).includes(s.tab) && s.tab !== "users" ? (s.tab as AdminTab) : undefined,
+    gideon: s.gideon === "performance" ? "performance" : undefined,
   }),
   component: Admin,
 });
@@ -2343,10 +2346,11 @@ function AnnouncementsAdmin() {
  * (GideonPersonReview); only the One Above All can read the chats themselves (owner, 18 Oct 2026, enforced
  * server-side), and every user was told once in the GIDEON panel that chats can be reviewed.
  */
-/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only) and Credits (18 Oct 2026). */
+/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only), Credits and Performance (18 Oct 2026). */
 function GideonAdmin() {
   const { t } = useLang();
-  const [tab, setTab] = useState<"insights" | "people" | "credits">("insights");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<"insights" | "people" | "credits" | "performance">(search.gideon === "performance" ? "performance" : "insights");
   const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
   return (
     <div className="space-y-4">
@@ -2354,8 +2358,9 @@ function GideonAdmin() {
         <button type="button" className={btn(tab === "insights")} onClick={() => setTab("insights")}>{t("Insights")}</button>
         <button type="button" className={btn(tab === "people")} onClick={() => setTab("people")}>{t("People")}</button>
         <button type="button" className={btn(tab === "credits")} onClick={() => setTab("credits")}>{t("Credits")}</button>
+        <button type="button" className={btn(tab === "performance")} onClick={() => setTab("performance")}>{t("Performance")}</button>
       </div>
-      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : <GideonCreditsAdmin />}
+      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : tab === "credits" ? <GideonCreditsAdmin /> : <GideonPerformance />}
     </div>
   );
 }

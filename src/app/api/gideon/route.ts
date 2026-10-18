@@ -9,7 +9,7 @@ import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
 import { checkProjectAccess } from '@/lib/rbac'
 import {
-  approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
+  approvalPromptLine, finishRun, markRouterRetry, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
 import { datePromptLine } from '@/lib/gideon-dates'
 import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
@@ -588,6 +588,9 @@ export async function POST(req: NextRequest) {
             } else if (ev.t === 'final' && typeof ev.c === 'string') {
               reply = ev.c.trim()
               tokens = typeof ev.usage?.total_tokens === 'number' ? ev.usage.total_tokens : null
+            } else if (ev.t === 'router_miss') {
+              // The runner retried with every tool (18 Oct 2026): counted on Control Room › GIDEON › Performance.
+              void markRouterRetry(runId)
             } else if (ev.t === 'usage') {
               usage = parseShimUsage((ev as { usage?: unknown }).usage)
             } else if (ev.t === 'error') {
