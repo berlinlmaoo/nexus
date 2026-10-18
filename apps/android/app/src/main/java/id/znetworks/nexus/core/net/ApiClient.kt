@@ -354,6 +354,8 @@ class ApiClient(
             onUpgradeRequired: (ApiError.UpgradeRequired) -> Unit,
             routeInterceptor: Interceptor? = null,
         ) = ApiClient(NexusConfig.base.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired,
+            baseClient = OkHttpClient.Builder().dns(DevHostDns(NexusConfig.DEV_HOST, id.znetworks.nexus.BuildConfig.DEV_ADDRESS,
+                { id.znetworks.nexus.BuildConfig.DEBUG && NexusConfig.env == ServerEnv.DEV })).build(),
             routeInterceptor = routeInterceptor)
     }
 }

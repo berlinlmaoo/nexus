@@ -15,6 +15,8 @@ In progress. No APK publication, version change, push or production access.
 - Third green step: 750 JVM tests and assembleDebug pass. Corrected local build invocation to pass hostname only to nexusDevHost (the app adds port 8443). No real host is committed.
 - Remaining: Pixel_7 DEV logic flows and screenshot tour, and any device defects found (estimate 2–3 hours including re-shoots).
 - Local tour companion `scripts/ui-tour-local.mjs` targets Pixel_7 explicitly, shares the API runner's one login through a consumed debug-private file, follows the iOS screen manifest, and records missing fixtures/native screens as skips. Generic debug routes cover Legal/detail screens. 750 JVM tests + debug build remain green.
+- Pixel_7's DNS cannot resolve the private hostname despite successful host access; explicit emulator DNS also failed. Added optional debug-only `nexusDevAddress` IP mapping for the exact dev host, retaining URL/TLS/SNI/certificate checks; empty committed default, release ignores it. 752 JVM tests and assembleDebug pass. Initial network-error screenshots are being replaced.
+- DEV API checks on a newly created QA task: title edits, additive/removal tags preserving a concurrent tag, assignee delta + stale-base 409, guarded description + stale 409, comment, new QA sheet + stale structure 409, Vault listing and Legal layout all passed. Fixtures will be removed after the UI flows.
 
 | QA area | Result |
 |---|---|
