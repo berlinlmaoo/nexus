@@ -166,7 +166,7 @@ struct ProjectFormsBuilderTab: View {
         busyId = f.id
         defer { busyId = nil }
         do {
-            try await APIClient.shared.updateForm(f.id, ["isPublic": on])
+            try await APIClient.shared.updateForm(f.id, ["isPublic": on, "baseUpdatedAt": jsonOrNull(f.updatedAt)])
             NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
             flash(on ? T("Published — anyone with the link can open it.") : T("Unpublished — the public link stops working."))
         } catch APIError.unauthorized {
@@ -841,6 +841,7 @@ struct FormBuilderView: View {
         do {
             let out: BuilderForm
             if let id = currentId {
+                if let updatedAt = saved?.updatedAt { requestBody["baseUpdatedAt"] = updatedAt }
                 out = try await APIClient.shared.updateForm(id, requestBody)
             } else {
                 requestBody["projectId"] = projectId

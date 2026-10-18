@@ -110,6 +110,14 @@ extension APIClient {
         _ = try await redesignRaw(req)
     }
 
+    /// Relative moves preserve other people's concurrent drags. A vanished anchor is a 409; the
+    /// board shows the server's reason and reloads rather than replaying a stale whole-column order.
+    func reorderTasks(taskListId: String, movedIds: [String], beforeId: String?) async throws {
+        let body: [String: Any] = ["taskListId": taskListId, "movedIds": movedIds,
+                                   "beforeId": jsonOrNull(beforeId)]
+        _ = try await redesignRaw(try redesignJSON("/api/tasks/reorder", method: "POST", body: body))
+    }
+
     // MARK: delete with undo, assignees
 
     /// DELETE /api/tasks/:id, answering the audit row that can put it back (dev server; nil from older

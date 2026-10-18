@@ -2278,6 +2278,16 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    @discardableResult
+    func changeCustomFieldValues(fieldId: String, taskId: String, add: [String], remove: [String]) async throws -> Bool {
+        var req = makeRequest("/api/custom-fields", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject:
+            ["id": fieldId, "taskId": taskId, "addValues": add, "removeValues": remove])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     func taskCustomFields(projectId: String, taskId: String) async throws -> [CustomField] {
         (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))&taskId=\(enc(taskId))"), decode: CustomFieldsResponse.self)).fields ?? []
     }
@@ -3171,6 +3181,7 @@ extension APIClient {
         // (REPORT_NOT_OPEN, a night after today): the app's language picks one.
         let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
         let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
+        if let code = obj["code"] as? String, let message = NativeRefusal.message(code) { return message }
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
         // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).
         if let readable = AccessRefusal.readable(code: obj["code"] as? String, message: text) { return readable }

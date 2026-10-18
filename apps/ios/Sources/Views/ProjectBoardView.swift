@@ -12,6 +12,7 @@ struct ProjectDetailView: View {
     @State private var error: String?
     /// Set when the board was rebuilt from disk because the server could not be reached.
     @State private var cachedFrom: Date?
+    @State private var reloadEpoch = 0
     @State private var openTaskId: String?
     @State private var openProfile: ProfileTarget?
     @State private var tab: ProjectTab = .board
@@ -1868,8 +1869,10 @@ struct ProjectDetailView: View {
     /// live a moment ago. A board that never loaded is left to its own retry button.
     private func reloadQuietly() async {
         guard detail != nil, !loading else { return }
+        reloadEpoch += 1
+        let epoch = reloadEpoch
         guard let d = try? await APIClient.shared.project(projectId),
-              let all = try? await APIClient.shared.projectTasks(projectId) else { return }
+              let all = try? await APIClient.shared.projectTasks(projectId), epoch == reloadEpoch else { return }
         detail = d
         lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
         if !visibleTabs.contains(tab) { tab = fallbackTab }
@@ -1956,7 +1959,7 @@ struct ProjectDetailView: View {
         do {
             let id = try await APIClient.shared.createTask(projectId: projectId, taskListId: section, title: t,
                                                            priority: priority, placement: "top")
-            if assignMe, let meId { try? await APIClient.shared.updateTask(id, ["assigneeIds": [meId]]) }
+            if assignMe, let meId { try? await APIClient.shared.updateTask(id, ["addAssigneeIds": [meId]]) }
             for (fid, v) in fieldValues { try? await APIClient.shared.setCustomFieldValue(fieldId: fid, taskId: id, value: v) }
             await reloadQuietly()
             return id
@@ -2038,7 +2041,7 @@ struct ProjectDetailView: View {
         arranged.append(contentsOf: subs.filter { s in !next.contains(s.parentId ?? "") })
         lanes = lanes.map { l -> ProjectDetail.Lane in l.id == laneId ? l.with(tasks: arranged) : l }
         do {
-            try await APIClient.shared.reorderTasks(taskListId: laneId, orderedIds: next, movedId: moved.first)
+            try await APIClient.shared.reorderTasks(taskListId: laneId, movedIds: moved, beforeId: beforeId)
             reorderUndo = ReorderUndo(laneId: laneId, order: order, count: moved.count)
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")

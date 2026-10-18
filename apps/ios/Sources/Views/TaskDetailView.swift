@@ -351,7 +351,11 @@ struct TaskDetailView: View {
             AssigneePicker(
                 projectId: t.projectId,
                 current: Set((t.assignees ?? []).compactMap { $0.user?.id }),
-                onSave: { ids in await update(t, ["assigneeIds": Array(ids)]) }
+                onSave: { ids in
+                    let base = Set((t.assignees ?? []).compactMap { $0.user?.id })
+                    await update(t, ["addAssigneeIds": Array(ids.subtracting(base)),
+                                     "removeAssigneeIds": Array(base.subtracting(ids))])
+                }
             )
         }
     }

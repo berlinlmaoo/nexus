@@ -98,7 +98,7 @@ struct TaskCustomFieldsCard: View {
                     HStack(spacing: 8) {
                         ForEach(choices, id: \.self) { c in
                             let on = multiHas(f.id, c)
-                            Button { toggleMulti(f.id, c); Task { await commit(f) } } label: {
+                            Button { Task { await changeMulti(f.id, c) } } label: {
                                 Text(c).font(NXFont.text(12, .semibold)).padding(.horizontal, 12).padding(.vertical, 7)
                                     .foregroundStyle(on ? NX.violetText : NX.mutedFg)
                                     .background(on ? NX.violet.opacity(0.12) : NX.muted.opacity(0.5), in: Capsule())
@@ -203,10 +203,16 @@ struct TaskCustomFieldsCard: View {
         Binding(get: { Self.ymdParse(cfText(f.id)) ?? Date() }, set: { values[f.id] = .text(Self.ymd($0)); Task { await commit(f) } })
     }
     private func multiHas(_ id: String, _ c: String) -> Bool { if case let .multi(a) = values[id] { return a.contains(c) }; return false }
-    private func toggleMulti(_ id: String, _ c: String) {
-        var arr: [String] = { if case let .multi(a) = values[id] { return a }; return [] }()
-        if let i = arr.firstIndex(of: c) { arr.remove(at: i) } else { arr.append(c) }
-        values[id] = .multi(arr)
+    private func changeMulti(_ id: String, _ choice: String) async {
+        let removing = multiHas(id, choice)
+        do {
+            try await APIClient.shared.changeCustomFieldValues(fieldId: id, taskId: taskId,
+                add: removing ? [] : [choice], remove: removing ? [choice] : [])
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+        await reload()
     }
     private static func ymd(_ d: Date) -> String { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.string(from: d) }
     private static func ymdParse(_ s: String) -> Date? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.date(from: s) }

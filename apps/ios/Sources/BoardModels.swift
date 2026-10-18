@@ -107,6 +107,9 @@ struct TaskQuestRef: Decodable, Identifiable, Sendable {
 struct BoardParent: Sendable { let id: String; let title: String? }
 
 struct BoardTask: Decodable, Identifiable, Sendable {
+    var position: Int? = nil
+    var createdAt: String? = nil
+    var updatedAt: String? = nil
     let id: String
     let title: String
     let status: String?
@@ -144,7 +147,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
-        case parentId, taskListId, quests, completedAt, completedById
+        case parentId, taskListId, quests, completedAt, completedById, position, createdAt, updatedAt
         case count = "_count"
     }
 

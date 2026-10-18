@@ -584,6 +584,7 @@ struct AdminUsersSection: View {
                 }
                 Spacer(minLength: 6)
                 RoleChip(role: m.role ?? "STAFF")
+                Text(T("Details")).font(NXFont.text(12, .medium)).foregroundStyle(NX.violetText).fixedSize()
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)

@@ -249,7 +249,7 @@ extension SheetStore {
             if sid == sheetId { await reload() }
             return true
         } catch {
-            notice = SheetPanelAPI.message(error, T("Couldn't save."))
+            fail(error, T("Couldn't save."))
             if sid == sheetId { await reload() }
             return false
         }
@@ -276,11 +276,11 @@ extension SheetStore {
         var next = columns
         next[i] = column
         do {
-            try await APIClient.shared.patchSheet(sid, body: ["columns": next])
+            try await APIClient.shared.patchSheet(sid, body: ["columns": next], structureVersion: structureVersion)
             await reload()
             return true
         } catch {
-            notice = SheetPanelAPI.message(error, T("Couldn't save."))
+            fail(error, T("Couldn't save."))
             return false
         }
     }

@@ -348,7 +348,15 @@ enum ViewEngine {
     // MARK: sort
 
     static func sorted(_ tasks: [BoardTask], laneId: String, by sort: [ViewSort]) -> [BoardTask] {
-        guard !sort.isEmpty else { return tasks }
+        guard !sort.isEmpty else {
+            return tasks.enumerated().sorted { a, b in
+                guard let ap = a.element.position, let bp = b.element.position else { return a.offset < b.offset }
+                if ap != bp { return ap < bp }
+                let ac = a.element.createdAt ?? "", bc = b.element.createdAt ?? ""
+                if ac != bc { return ac < bc }
+                return a.element.id < b.element.id
+            }.map(\.element)
+        }
         return tasks.enumerated().sorted { a, b in
             for s in sort {
                 let c = compare(a.element, b.element, prop: s.prop, laneId: laneId)

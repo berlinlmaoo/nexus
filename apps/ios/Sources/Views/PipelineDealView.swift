@@ -231,7 +231,7 @@ struct PipelineDealView: View {
             // Links and attached files (owner, 9 Oct 2026). Its own view: it presents pickers and a confirm,
             // and this view already has its one .sheet and one .alert.
             PipelineDocumentsEditor(store: store, deal: deal, linkTypes: v.linkTypes) { links in
-                patch(["links": links.map(\.json)])
+                patch(["links": links.map(\.json), "linksBase": deal.links.map(\.json)])
             }
         }
     }
@@ -325,7 +325,7 @@ struct PipelineDealView: View {
         // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms.
         PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
             PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
-                patch(["costs": costs.map(\.json)])
+                patch(["costs": costs.map(\.json), "costsBase": deal.costs.map(\.json)])
             }
         }
 
@@ -1305,6 +1305,7 @@ struct PipelineTermSheet: View {
     @State private var note = ""
     @State private var busy = false
     @State private var err: String?
+    @State private var clientRequestId = UUID().uuidString
     @State private var started = false
 
     private var term: PipelineTerm? {
@@ -1457,7 +1458,7 @@ struct PipelineTermSheet: View {
         busy = true; err = nil
         defer { busy = false }
         let ok: Bool
-        if let t = term { ok = await store.updateTerm(dealId, t.id, fields) } else { ok = await store.addTerm(dealId, fields) }
+        if let t = term { ok = await store.updateTerm(dealId, t.id, fields) } else { ok = await store.addTerm(dealId, fields.merging(["clientRequestId": clientRequestId]) { _, new in new }) }
         if ok {
             dismiss()
         } else {
