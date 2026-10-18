@@ -43,6 +43,7 @@ import {
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
 import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
+import { MEMORY_ACTIONS, MemoryRefusal, runMemoryTool } from '@/lib/gideon-memory'
 
 type GideonAction =
   | 'list_projects'
@@ -1500,6 +1501,32 @@ export async function POST(req: Request) {
   // Which conversation this call belongs to (steps, sources, cards, approval). No run = exactly the
   // behaviour every caller had before 12 Oct 2026.
   const run = await resolveRunForToolCall(req.headers.get('x-gideon-run'), auth.actor.id).catch(() => null)
+  // GIDEON Memory (19 Oct 2026): the asking person's OWN memories only (actor-scoped); writes only inside their own
+  // CHAT run, where the chat route parked what they actually wrote. Never a proposal card: the chip is the consent.
+  if (MEMORY_ACTIONS.has(action)) {
+    const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+    const label = stepLabel(action, null)
+    if (run) publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: 'running' } })
+    const started = Date.now()
+    try {
+      const out = await runMemoryTool(auth.actor.id, action, input, run ? { id: run.id, trigger: run.trigger } : null)
+      if (run) {
+        publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: 'done' } })
+        for (const m of out.memories) publishRunEvent(run.id, { type: 'memory', memory: m })
+        await recordStep(run.id, { tool: action, arg: null, ok: true, durationMs: Date.now() - started })
+      }
+      return ok(out.data)
+    } catch (err) {
+      // A refusal is an answer for the model (say it, do not retry), not a failed step the person sees in red.
+      const message = err instanceof Error ? err.message : 'GIDEON Memory failed'
+      const refusal = err instanceof MemoryRefusal
+      if (run) {
+        publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: refusal ? 'done' : 'error', ...(refusal ? {} : { error: message.slice(0, 200) }) } })
+        await recordStep(run.id, { tool: action, arg: null, ok: refusal, error: refusal ? null : message, durationMs: Date.now() - started })
+      }
+      return refusal ? ok({ saved: false, refused: err.code, note: message }) : error(message, 400)
+    }
+  }
   if (!run) {
     try {
       return ok(await dispatch(auth.actor, action, input))

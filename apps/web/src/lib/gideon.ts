@@ -150,7 +150,9 @@ export type RoomAvailability = {
   freeSlots: { startsAt: string; endsAt: string; rooms: string[] }[];
 };
 export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };
-export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[] };
+/** GIDEON Memory (19 Oct 2026): one thing GIDEON remembers about the signed-in person (only ever their own). */
+export type GideonMemory = { id: string; kind: "PREFERENCE" | "FACT" | "PERSON" | "DATE"; text: string; monthDay: string | null; status: "ACTIVE" | "PENDING" | "DELETED"; source: string; createdAt: string; updatedAt: string };
+export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[]; memories?: GideonMemory[] };
 
 /** History sends `attachments` on every message, always an array, empty where nothing was attached. */
 export type GideonTurn = GideonMessage & { tools?: string[]; attachments?: GideonAttachment[]; runId?: string | null; meta?: GideonRunMeta | null };
@@ -169,6 +171,8 @@ export type GideonEvent =
   | { type: "cited"; sources: GideonRef[] }
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposal }
+  /** GIDEON Memory (19 Oct 2026): saved, or suggested with Save / Don't save. */
+  | { type: "memory"; memory: GideonMemory }
   | { type: "done" }
   /** GIDEON credits (18 Oct 2026): the person's balance after this answer; `notice` when phase 2 changed the tier or refused. */
   | { type: "credits"; summary?: import("@/lib/gideon-credits").CreditSummary | null; credits?: number; notice?: import("@/lib/gideon-credits").CreditNotice }

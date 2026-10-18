@@ -8,7 +8,7 @@ import { useRouter } from "@tanstack/react-router";
 import {
   AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
   ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, Info, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
-  MoreHorizontal, Mic, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
+  MoreHorizontal, Mic, Brain, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -22,13 +22,14 @@ import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
 import { GideonDeleteTaskCard } from "./GideonDeleteTaskCard";
 import { GideonCreateTaskCard } from "./GideonCreateTaskCard";
 import { GideonActionCard, extraStepLabel } from "./GideonActionCard";
+import { GideonMemoryChip } from "./GideonMemoryChip";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
   isAcceptedGideonFile,
   type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonContextRef, type GideonFile, type GideonMessage,
-  type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn,
+  type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
 } from "@/lib/gideon";
 import {
   deleteGideonChat, getGideonPrefs, listGideonChats, markdownToDoc, renameGideonChat, saveGideonAnswerAsDoc, saveGideonPrefs, setCachedGideonPrefs,
@@ -65,11 +66,11 @@ import {
 /** What was typed in the composer and not sent, kept while the panel is closed and reopened (bughunt G-BUG-2). */
 let composerDraft = "";
 
-type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean; creditNotice?: string | null };
+type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; memories?: GideonMemory[]; failed?: boolean; creditNotice?: string | null };
 
 export function fromHistory(row: GideonTurn): ChatTurn {
   const m = row.meta;
-  return { ...row, steps: m?.steps ?? [], sources: m?.sources ?? [], cards: m?.cards ?? [], proposals: m?.proposals ?? [] };
+  return { ...row, steps: m?.steps ?? [], sources: m?.sources ?? [], cards: m?.cards ?? [], proposals: m?.proposals ?? [], memories: m?.memories ?? [] };
 }
 
 /** The step line, translated. The server sends the tool and its human handle (a query, a name). */
@@ -97,6 +98,9 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "move_room_booking": return a ? t("Moving booking {name}", { name: a }) : t("Moving a booking");
     case "cancel_room_booking": return a ? t("Cancelling booking {name}", { name: a }) : t("Cancelling a booking");
     case "delete_task": return a ? t("Deleting task {name}", { name: a }) : t("Deleting a task");
+    case "remember": return t("Remembering");
+    case "forget": return t("Forgetting");
+    case "list_my_memories": return t("Checking GIDEON Memory");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return extraStepLabel(s.tool, a, t) ?? (s.label || s.tool);
   }
@@ -419,6 +423,15 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             return { ...x, proposals };
           });
           break;
+        case "memory":
+          patchLast((x) => {
+            const memories = [...(x.memories ?? [])];
+            const i = memories.findIndex((m) => m.id === ev.memory.id);
+            if (i >= 0) memories[i] = ev.memory; else memories.push(ev.memory);
+            return { ...x, memories };
+          });
+          if (ev.memory.status === "ACTIVE") void qc.invalidateQueries({ queryKey: ["gideon-memory"] });
+          break;
         case "credits":
           // GIDEON credits (18 Oct 2026): the new balance after this answer moves the meter at once; a
           // notice (phase 2: answered by Aphrodite, or out of credits) is shown on the answer itself.
@@ -615,6 +628,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => { onClose?.(); void router.navigate({ to: "/settings", search: { section: "gideon-memory" } }); }}><Brain className="mr-2 h-4 w-4" />{t("GIDEON Memory")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-xs">{t("Open as")}</DropdownMenuLabel>
           {!isPage && (
@@ -1367,6 +1381,13 @@ export function AssistantTurn({ turn, onDecided, question, projectId, editorTarg
   const sources = useMemo(() => citedSources(turn.content, turn.sources ?? []), [turn.content, turn.sources]);
   const cards = turn.cards ?? [];
   const proposals = turn.proposals ?? [];
+  // Local: Save / Don't save changes the chip at once (history refreshes the real status on the next open).
+  const [memoryOverrides, setMemoryOverrides] = useState<Record<string, GideonMemory>>({});
+  const memories = (turn.memories ?? []).map((m) => memoryOverrides[m.id] ?? m);
+  const setMemories = (f: (cur: GideonMemory[]) => GideonMemory[]) => {
+    const next = f(memories);
+    setMemoryOverrides(Object.fromEntries(next.map((m) => [m.id, m])));
+  };
   const showSteps = open;
   const thinking = turn.streaming && !turn.content;
   const actionBtn = "grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -1434,6 +1455,13 @@ export function AssistantTurn({ turn, onDecided, question, projectId, editorTarg
       {cards.length > 0 && (
         <div className="space-y-1.5">
           {cards.map((c, j) => <ResultCard key={`${c.id}-${j}`} card={c} />)}
+        </div>
+      )}
+
+      {/* GIDEON Memory (19 Oct 2026): the person's own; never drawn in the OAA review (the server strips it too). */}
+      {!readOnly && memories.length > 0 && (
+        <div className="space-y-1.5">
+          {memories.map((m) => <GideonMemoryChip key={m.id} memory={m} onChange={(next) => setMemories((cur) => cur.map((x) => (x.id === next.id ? next : x)))} />)}
         </div>
       )}
 

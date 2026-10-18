@@ -17,6 +17,7 @@ import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
 import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
+import { dropRunQuestion, MEMORY_RULES, memoryPromptLines, parkRunQuestion } from '@/lib/gideon-memory'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -413,6 +414,8 @@ export async function POST(req: NextRequest) {
       projectId: ctx?.projectId ?? null,
       taskId: ctx?.taskId ?? null,
     })
+    // GIDEON Memory (19 Oct 2026): the tools route decides "did the PERSON ask to remember this?" from what they wrote.
+    parkRunQuestion(runId, asked, chat?.id ?? null)
     // Steps, sources, cards and proposals raised by /api/gideon/tools while this run is going.
     // Old clients get none of them (they would not know what to draw).
     const unsubscribe = runId && streamClient ? subscribeRun(runId, (ev: RunEvent) => { void sendEvent(ev as unknown as Record<string, unknown>).catch(() => {}) }) : () => {}
@@ -497,6 +500,8 @@ export async function POST(req: NextRequest) {
         }
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
+      // GIDEON Memory (owner, 19 Oct 2026): THIS person's own memories only, after who-is-asking (cached prefix).
+      const memoryLines = await memoryPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
       // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
       const rules = [
         // Only for a client that renders Markdown; the released apps show the text as is.
@@ -507,6 +512,7 @@ export async function POST(req: NextRequest) {
             ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
             : '',
         approvalPromptLine(approvalMode),
+        MEMORY_RULES,
       ].filter(Boolean)
       const dynamic = [
         // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
@@ -522,7 +528,7 @@ export async function POST(req: NextRequest) {
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
       ].filter(Boolean)
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: prefsLines, dynamic, historyMode: await historyMode() })
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memoryLines], dynamic, historyMode: await historyMode() })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({
@@ -733,6 +739,7 @@ export async function POST(req: NextRequest) {
         : { type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
       unsubscribe()
+      dropRunQuestion(runId)
       await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens, usage })
       await sendEvent({ type: 'done' })
       await writer.close().catch(() => {})

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { PageTabs, Segmented } from "@/components/PageLayout";
 import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, AtSign, Sun, Moon, Languages } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, AtSign, Sun, Moon, Languages, Brain } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
@@ -17,10 +17,11 @@ import { useLang, type Lang } from "@/lib/lang";
 import { thumbUrl } from "@/lib/thumb";
 import { ActiveSessions } from "@/components/settings/ActiveSessions";
 import { formatPhone } from "@/lib/phone-format";
+import { GideonMemorySection } from "@/components/settings/GideonMemorySection";
 
 // The section is in the URL (?section=security), so a reload, Back or a shared link opens the same one
 // (QA 13 Oct 2026: it always fell back to Profile).
-const SECTION_IDS = ["profile", "members", "notifications", "security", "appearance", "mcp"] as const;
+const SECTION_IDS = ["profile", "members", "notifications", "security", "appearance", "gideon-memory", "mcp"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 export const Route = createFileRoute("/_app/settings")({
   validateSearch: (s: Record<string, unknown>): { section?: SectionId } => ({
@@ -44,6 +45,8 @@ const sections = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Lock },
   { id: "appearance", label: "Appearance", icon: Palette },
+  // GIDEON Memory (owner, 19 Oct 2026): only ever the signed-in person's own.
+  { id: "gideon-memory", label: "GIDEON Memory", icon: Brain },
   { id: "mcp", label: "Claude (MCP)", icon: Plug },
 ];
 
@@ -80,8 +83,9 @@ function Settings() {
           {active === "notifications" && <NotificationsSection />}
           {active === "security" && <SecuritySection />}
           {active === "appearance" && <AppearanceSection />}
+          {active === "gideon-memory" && <GideonMemorySection />}
           {active === "mcp" && <McpTokensSection />}
-          {!["profile","members","notifications","security","appearance","mcp"].includes(active) && (
+          {!["profile","members","notifications","security","appearance","gideon-memory","mcp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
               {t("Coming soon.")}
             </div>
