@@ -126,6 +126,7 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
             guard self.recorder === recorder else { return }
             if elapsed >= limit - 1 { notice = T("Maximum recording length reached.") }
             saveDraft(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
+            deactivate()
             if !flag { failure = T("Recording stopped unexpectedly. The audio file is kept on this device.") }
         }
     }

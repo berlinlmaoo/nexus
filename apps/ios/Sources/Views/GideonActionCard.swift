@@ -32,6 +32,7 @@ struct GideonActionCard: View {
                     .frame(maxHeight: 256).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
             }
             if let edit = proposal.extra?.sheetEdit { sheetDiff(edit) }
+            if let error = proposal.error, !error.isEmpty { Text(error).font(NXFont.text(12)).foregroundStyle(NX.danger).textSelection(.enabled) }
             if pending {
                 Text(String(format: T("Nothing happens until you tap %@. Times are WIB."), T(action.apply))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 HStack {
@@ -48,7 +49,6 @@ struct GideonActionCard: View {
                     }
                     if let note = proposal.extra?.note { Text(note).font(NXFont.text(12)).textSelection(.enabled) }
                 }
-                if proposal.status == "FAILED", let error = proposal.error { Text(error).font(NXFont.text(12)).foregroundStyle(NX.danger).textSelection(.enabled) }
             }
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)

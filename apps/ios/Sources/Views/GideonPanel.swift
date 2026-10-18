@@ -239,7 +239,7 @@ struct GideonPanel: View {
                     GideonChatsSheet { id in Task { await chat.openChat(id) } }
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : GideonToolAction.get(d.proposal.action)?.apply ?? "Apply") : T("Discard"), role: d.proposal.action == "delete_task" && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
+                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : GideonToolAction.get(d.proposal.action)?.apply ?? "Apply") : T("Discard"), role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
                         Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
@@ -470,11 +470,12 @@ struct GideonPanel: View {
     private var tierChip: some View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
-                Text(tier.label).font(NXFont.text(13, .semibold))
+                Text(tier.label).font(NXFont.text(13, .semibold)).lineLimit(1)
                 if tier == .luna { tierBadge("Default", experimental: false) }
                 if tier == .experimental { tierBadge("Experimental", experimental: true) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(NX.mutedFg)
             .padding(.horizontal, 10)
             .frame(height: 30)
@@ -1605,6 +1606,7 @@ struct AskGideonButton: View {
 /// needs the room, and the iPhone showed no title at all (UI tour runs 9–10); the system title is kept.
 /// Earlier systems keep the principal item, which they do not drop.
 struct GideonSystemTitle: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var hSize
     let title: String
     let subtitle: String
 
@@ -1615,7 +1617,9 @@ struct GideonSystemTitle: ViewModifier {
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.navigationTitle(title).navigationSubtitle(subtitle)
+            // Compact already draws title/subtitle above the conversation. Duplicating them in
+            // the system bar squeezes the selected tier name down to a chevron.
+            content.navigationTitle(hSize == .compact ? "" : title).navigationSubtitle(hSize == .compact ? "" : subtitle)
         } else {
             content
         }

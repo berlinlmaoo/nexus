@@ -196,7 +196,7 @@ struct GideonMarkdownView: View {
                 }
                 return .handled
             }
-            if url.host == nil, url.path == "/reminders" { AppRouter.shared.open(.reminders); return .handled }
+            if (url.host == nil || Config.isNexusHost(url)), url.path == "/reminders" { AppRouter.shared.open(.reminders); return .handled }
             if let ref = GideonLinkTarget.ref(for: url), let onOpen {
                 onOpen(ref)
                 return .handled

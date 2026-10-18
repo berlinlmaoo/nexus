@@ -128,7 +128,7 @@ struct GideonCreateTaskCard: View {
                     if hasDue { DatePicker(T("Due"), selection: $due, displayedComponents: .date).labelsHidden().environment(\.timeZone, TimeZone(secondsFromGMT: 0)!) }
                 }
             }
-            if target.calendar == true { property("Calendar") { Text(T("Shows on the calendar (it has a PIC and a date)")) } }
+            if target.calendar == true || proposal.diff?.contains(where: { $0.field == "Calendar" }) == true { property("Calendar") { Text(T("Shows on the calendar (it has a PIC and a date)")) } }
             if let error = failure ?? proposal.error { Text(T(error)).font(NXFont.text(12)).foregroundStyle(NX.danger) }
             HStack {
                 Spacer()
