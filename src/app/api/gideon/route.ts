@@ -563,7 +563,11 @@ export async function POST(req: NextRequest) {
     }
   })()
 
+  // No `Connection` header here: it is hop-by-hop and Node decides it. Forcing `keep-alive` overrode the
+  // `Connection: close` nginx sends upstream, Node kept the socket, nginx (1.31 pools upstream connections
+  // by default) reused it for the next request, and Node answered that one `400 Bad Request` ("data after
+  // Connection: close"). Seen 18 Oct 2026 as a 400 on the request right after every GIDEON answer.
   return new Response(stream.readable, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive' },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform' },
   })
 }
