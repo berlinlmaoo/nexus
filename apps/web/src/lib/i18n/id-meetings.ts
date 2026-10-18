@@ -58,6 +58,7 @@ export const ID_MEETINGS: Record<string, string> = {
   "One decision per line": "Satu keputusan per baris",
   "One point per line": "Satu poin per baris",
   "One question per line": "Satu pertanyaan per baris",
+  "Open meeting notes": "Buka catatan meeting",
   "Open minutes": "Buka notulen",
   "Open questions": "Pertanyaan terbuka",
   "Or type a name": "Atau ketik nama",

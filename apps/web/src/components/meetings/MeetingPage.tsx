@@ -219,13 +219,14 @@ export function MeetingPage({ id }: { id: string }) {
           )}
         </div>
 
-        <input
+        <AutoText
           value={draft.title}
-          onChange={(e) => update((d) => ({ ...d, title: e.target.value }))}
+          onChange={(v) => update((d) => ({ ...d, title: v.replace(/\s*\n+\s*/g, " ") }))}
           readOnly={!titleEditable}
           placeholder={t("Untitled meeting")}
-          aria-label={t("Title")}
-          className="mt-4 w-full bg-transparent text-[28px] font-bold leading-tight tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-[34px]"
+          ariaLabel={t("Title")}
+          keepFont
+          className="-mx-1 mt-4 text-[28px] font-bold leading-tight tracking-tight placeholder:text-muted-foreground/50 md:text-[34px]"
         />
 
         <dl className="mt-4 grid grid-cols-[minmax(7rem,9rem)_1fr] gap-x-3 gap-y-1.5 text-sm">
@@ -437,10 +438,11 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
 }
 
 /** A textarea that grows with its text (Notion-style block). */
-function AutoText({ value, onChange, readOnly, placeholder, className }: { value: string; onChange: (v: string) => void; readOnly?: boolean; placeholder?: string; className?: string }) {
+function AutoText({ value, onChange, readOnly, placeholder, className, ariaLabel, keepFont }: { value: string; onChange: (v: string) => void; readOnly?: boolean; placeholder?: string; className?: string; ariaLabel?: string; keepFont?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = ref.current; if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }, [value]);
-  return <textarea ref={ref} rows={1} value={value} readOnly={readOnly} placeholder={readOnly ? undefined : placeholder} onChange={(e) => onChange(e.target.value)}
+  // keepFont: a field bigger than 16px (the title) keeps its size on phones (styles.css data-keep-font).
+  return <textarea ref={ref} rows={1} value={value} readOnly={readOnly} aria-label={ariaLabel} data-keep-font={keepFont ? "" : undefined} placeholder={readOnly ? undefined : placeholder} onChange={(e) => onChange(e.target.value)}
     className={cn("block w-full resize-none overflow-hidden rounded-md bg-transparent px-1 py-0.5 outline-none placeholder:text-muted-foreground/60", !readOnly && "hover:bg-muted/40 focus:bg-muted/40", className)} />;
 }
 
@@ -477,7 +479,7 @@ function Attendees({ value, onChange, members, readOnly }: { value: string[]; on
         <>
           <PeoplePicker members={members} value={[]} onChange={(ids) => { const u = members.find((mm) => mm.id === ids[0]); if (u?.name) add(u.name); }}
             trigger={<button type="button" className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border px-2 text-xs text-muted-foreground hover:border-sidebar-primary/50 hover:text-foreground"><UserPlus className="h-3.5 w-3.5" />{t("Add from project")}</button>} />
-          <input value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(adding); } }} onBlur={() => adding && add(adding)} placeholder={t("Or type a name")} aria-label={t("Add attendee")} className="h-7 w-32 rounded-full bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:bg-muted/40" />
+          <input value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(adding); } }} onBlur={() => adding && add(adding)} placeholder={t("Or type a name")} aria-label={t("Add attendee")} className="h-7 min-w-[9rem] flex-1 rounded-full bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:bg-muted/40" />
         </>
       )}
       {readOnly && !value.filter(Boolean).length && <Empty />}
