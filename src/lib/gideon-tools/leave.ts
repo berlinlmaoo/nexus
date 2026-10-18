@@ -123,7 +123,7 @@ async function describeSubmit(actor: User, input: Input) {
   }
   const approver = await resolveAttendanceApprovers(actor.id, ctx.workspace.id)
   const names = approver.userIds.length ? (await prisma.user.findMany({ where: { id: { in: approver.userIds } }, select: { name: true } })).map((u) => u.name).filter(Boolean) : []
-  if (names.length) diff.push({ field: "To", to: names.slice(0, 3).join(", ") })
+  if (names.length) diff.push({ field: "Approver", to: names.slice(0, 3).join(", ") })
   return {
     summary: `${TYPE_LABEL[type]} request for ${days === 1 ? dayLabel(start) : `${dayLabel(start)} – ${dayLabel(end)}`}`,
     diff,

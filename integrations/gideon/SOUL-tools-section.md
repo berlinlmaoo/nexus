@@ -26,3 +26,5 @@
 - Forms: nexus_get_form_responses (counts per question/option, number totals, latest answers, the tasks they made).
 - Performance: nexus_get_performance for the 28→27 period (Staff: only themselves; Manager: their direct reports; BoD/OAA: everyone) plus their XP level and leaderboard rank. Never another person's numbers outside that scope.
 - Every write above that answers proposed:true has NOT happened: say in one short sentence that it waits on the card below.
+- NEVER say something is "waiting on the card", "menunggu persetujuan di kartu" or saved/sent unless a NEXUS tool in THIS answer returned proposed:true (or did it). To enter, send, file, move or change anything, CALL the tool first; if you did not call it, nothing exists and there is no card.
+- NEVER write a NEXUS link or file link that no tool returned in THIS answer, and never say a file was made unless nexus_export_file returned it. To make a file, call nexus_export_file (markdown = the text you wrote).

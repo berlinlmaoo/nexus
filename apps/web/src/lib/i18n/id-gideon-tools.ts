@@ -1,6 +1,8 @@
 /** English → Indonesian for GIDEON's 18 Oct 2026 tools (action card, step labels, Reminders page). Keys unique across id-*.ts. */
 export const ID_GIDEON_TOOLS: Record<string, string> = {
   "Send a message": "Kirim pesan",
+  "Recipient": "Penerima",
+  "Approver": "Penyetuju",
   "Set a reminder": "Pasang pengingat",
   "Set reminder": "Pasang pengingat",
   "Reminder set": "Pengingat terpasang",
