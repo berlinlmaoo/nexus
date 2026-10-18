@@ -729,7 +729,9 @@ final class NEXUSUITour: XCTestCase {
                     default: break
                     }
                 }
-                app.typeKey(action.label == "return" ? XCUIKeyboardKey.return.rawValue : action.label, modifierFlags: modifiers)
+                let key = action.label == "return" ? XCUIKeyboardKey.return.rawValue
+                    : (action.label == "escape" || action.label == "\u{001B}") ? XCUIKeyboardKey.escape.rawValue : action.label
+                app.typeKey(key, modifierFlags: modifiers)
                 pause(1)
             case "typeFocused":
                 dismissKeyboardIntroduction()
