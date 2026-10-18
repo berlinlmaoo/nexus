@@ -396,7 +396,7 @@ private fun AutoAssignMembers(projectId: String, members: List<ProjectMemberRef>
                     .background(if (checked) c.onyx.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color.Transparent)
                     .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Checkbox) { picked ->
                         val next = if (picked) ids + member.uid else ids - member.uid
-                        open = next.isEmpty()
+                        if (picked) open = false // web: a pick folds the list; an un-pick keeps it open
                         onSelect(next)
                     }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(16.dp), tint = if (checked) c.foreground else c.mutedFg)

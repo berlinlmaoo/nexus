@@ -486,6 +486,9 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                     Row(Modifier.clip(CircleShape).background(c.muted).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(u?.name, u?.avatar, 22.dp)
                         Text(u?.name.orEmpty(), fontSize = 13.sp, color = c.foreground, modifier = Modifier.widthIn(max = 100.dp).padding(start = 4.dp), maxLines = 2)
+                        // Someone who left keeps their tasks (owner, 8 Oct; web PersonLeftTag).
+                        if (u?.deactivatedAt != null) Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
+                            modifier = Modifier.padding(start = 4.dp).border(1.dp, c.border, CircleShape).padding(horizontal = 6.dp))
                         IconButton(onClick = { if (uid != null) vm.setAssignees(base - uid, base) }) { Icon(Icons.Filled.Close, stringResource(R.string.delete), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
                     }
                 }

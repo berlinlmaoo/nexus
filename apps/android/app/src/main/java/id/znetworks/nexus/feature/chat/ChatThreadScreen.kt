@@ -535,6 +535,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
             }
             if (s.loading && s.messages.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+            if (!s.loading && s.messages.isEmpty()) item { Text(stringResource(R.string.chat_say_hi), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp)) }
             itemsIndexed(s.messages, key = { _, message -> message.id }) { index, m ->
                 if (!s.hasMore && m == s.messages.firstOrNull()) Text(stringResource(R.string.chat_conversation_start), fontSize = 12.sp, color = c.mutedFg,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
