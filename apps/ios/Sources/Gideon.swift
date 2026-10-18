@@ -336,6 +336,7 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     var sources: [GideonRef] = []
     var cards: [GideonCard] = []
     var proposals: [GideonProposal] = []
+    var creditNotice: GideonCreditNotice? = nil
 
     init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
          attachments: [GideonAttachment] = []) {
@@ -388,6 +389,8 @@ private struct GideonEvent: Decodable {
     let sources: [GideonRef]?
     let card: GideonCard?
     let proposal: GideonProposal?
+    let summary: GideonCreditSummary?
+    let notice: GideonCreditNotice?
 }
 
 /// What the stream hands the chat, in order.
@@ -402,6 +405,7 @@ enum GideonStreamEvent: Sendable {
     case sources([GideonRef])
     case card(GideonCard)
     case proposal(GideonProposal)
+    case credits(GideonCreditSummary?, GideonCreditNotice?)
     case chat(id: String, title: String?)
 }
 
@@ -660,6 +664,8 @@ enum GideonClient {
                             if let p = event.proposal { continuation.yield(.proposal(p)) }
                         case "chat":
                             if let id = event.id { continuation.yield(.chat(id: id, title: event.title)) }
+                        case "credits":
+                            continuation.yield(.credits(event.summary, event.notice))
                         case "error":
                             throw GideonProblem.stream(event.content ?? "")
                         case "done":
@@ -939,6 +945,12 @@ final class GideonChat {
 
     /// Lets the running question go (web newChat → abortRef.abort()). A new generation, so the drain that
     /// was cancelled can neither clear `sending` for the next one nor write into the new transcript.
+    /// Stop keeps the partial answer on screen and cancels the streaming request, as on the web.
+    func stop() {
+        abandonInFlight()
+        answeringId = nil
+    }
+
     private func abandonInFlight() {
         generation += 1
         drainTask?.cancel()
@@ -1101,6 +1113,7 @@ final class GideonChat {
         answeringId = answer.id
         defer { if answeringId == answer.id { answeringId = nil } }
 
+        defer { Task { await GideonCredits.shared.refresh() } }
         let wantNew = startNew
         startNew = false
         do {
@@ -1133,6 +1146,9 @@ final class GideonChat {
                 case .proposal(let p):
                     if let j = turns[index].proposals.firstIndex(where: { $0.id == p.id }) { turns[index].proposals[j] = p }
                     else { turns[index].proposals.append(p) }
+                case .credits(let summary, let notice):
+                    if let summary { GideonCredits.shared.summary = summary }
+                    if let notice { turns[index].creditNotice = notice }
                 case .chat(let id, let title):
                     chatId = id
                     if let title { chatTitle = title }
@@ -1193,6 +1209,7 @@ final class GideonChat {
     /// that reason. Cancelling the drain is part of it: an answer still arriving would otherwise
     /// write itself into the transcript the next person sees.
     func reset() {
+        GideonCredits.shared.reset()
         generation += 1
         pickEpoch += 1
         drainTask?.cancel()

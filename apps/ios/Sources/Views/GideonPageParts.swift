@@ -71,7 +71,7 @@ struct GideonStepsLine: View {
                         if streaming && !running.isEmpty {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                            Image(systemName: open ? "chevron.down" : "checkmark").font(.system(size: 9, weight: .semibold))
                         }
                         Text(title(shown, running: running)).lineLimit(1)
                         if !streaming && failed > 0 {

@@ -408,7 +408,12 @@ struct GideonPanel: View {
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(displayName).font(NXFont.text(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Button { showChats = true } label: {
+                        HStack(spacing: 5) {
+                            Text(displayName).font(NXFont.text(16, .bold)).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.system(size: 10))
+                        }.foregroundStyle(NX.foreground)
+                    }.buttonStyle(.plain).accessibilityLabel(T("Chat history"))
                     Text(chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you"))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
@@ -593,13 +598,13 @@ struct GideonPanel: View {
                 Text(turn.content)
                     .font(NXFont.text(15))
                     .lineSpacing(2)
-                    .foregroundStyle(NX.card)
+                    .foregroundStyle(NX.foreground)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(NX.violet.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -611,18 +616,13 @@ struct GideonPanel: View {
             GideonStepsLine(steps: turn.steps, streaming: live)
             if !turn.content.isEmpty {
                 GideonMarkdownView(text: turn.content, size: 15) { ref in openRef = ref }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .transition(.opacity)
             } else if live && turn.steps.isEmpty {
-                // The dots claim only that the request is still open, and they are replaced the instant
-                // the first words land. A typewriter here would be inventing progress.
-                GideonTypingDots()
-                    .accessibilityLabel(T("GIDEON is typing…"))
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .transition(.opacity)
+                Text(T("Thinking…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .modifier(GideonThinkingShimmer())
+            }
+            if let notice = turn.creditNotice {
+                Text(notice.text).font(NXFont.text(12)).foregroundStyle(NX.warning)
             }
             ForEach(turn.proposals) { p in proposalCard(p) }
             ForEach(turn.cards) { card in cardRow(card) }
@@ -773,16 +773,17 @@ struct GideonPanel: View {
             ForEach(Array((p.diff ?? []).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(row.field ?? "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.danger) }
                     Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(NX.mutedFg)
-                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
                 }
             }
             if p.isPending {
+                Text(T("Waiting for your approval")).font(NXFont.text(12, .medium)).foregroundStyle(NX.warning)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
                     Button(T("Discard")) { decision = GideonDecision(proposal: p, apply: false) }
-                        .buttonStyle(.nxBordered)
+                        .buttonStyle(.plain).foregroundStyle(NX.mutedFg)
                     Button { decision = GideonDecision(proposal: p, apply: true) } label: {
                         Label(T("Apply"), systemImage: "checkmark")
                     }
@@ -973,6 +974,7 @@ struct GideonPanel: View {
             mentionPicker
             contextChips
             composer
+            GideonCreditMeter()
         }
     }
 
@@ -1001,6 +1003,13 @@ struct GideonPanel: View {
                 plusMenu
                 approvalMenu
                 Spacer(minLength: 8)
+                if chat.sending {
+                    Button { chat.stop() } label: {
+                        Image(systemName: "stop.fill").font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(NX.card).frame(width: 34, height: 34)
+                            .background(NX.onyx, in: Circle()).frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel(T("Stop"))
+                } else {
                 Button {
                     submit()
                 } label: {
@@ -1015,6 +1024,7 @@ struct GideonPanel: View {
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel(T("Send"))
+                }
             }
             .padding(.horizontal, 4)
         }
@@ -1492,5 +1502,15 @@ struct GideonSystemTitle: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+private struct GideonThinkingShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bright = false
+    func body(content: Content) -> some View {
+        content.opacity(reduceMotion ? 1 : (bright ? 1 : 0.4))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: bright)
+            .onAppear { bright = true }
     }
 }
