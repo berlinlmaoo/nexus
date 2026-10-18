@@ -9,8 +9,11 @@ import {
   BOOK_ROOM_LATEST_APP, CANCEL_BOOKING_LATEST_APP, MOVE_BOOKING_LATEST_APP, parseBookRoomChoice, parseCancelChoice,
   parseMoveChoice } from "@/lib/gideon-book-room-plan"
 import { formatBookingSlot } from "@/lib/room-booking-format"
+import { taskTargetOptions } from "@/lib/gideon-task-target"
 import type { Prisma } from "@/generated/prisma"
 
+const CREATE_TASK_LATEST_APP = "Open on the latest app or the web to choose the project for this task · Buka di app terbaru atau web untuk memilih project task ini"
+const NOT_EDITABLE = "You can't add tasks to that project (it needs Can edit, and an open task project). Pick another · Kamu tidak bisa menambah task di project itu (butuh akses Can edit di project task yang aktif). Pilih project lain"
 const DELETE_TASK_LATEST_APP = "Open on the latest app or the web to delete this task · Buka di app terbaru atau web untuk menghapus task ini"
 
 /** A proposal older than this is not applied: the task it describes has likely moved on. */
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await params
-  const body = (await req.json().catch(() => ({}))) as { decision?: string; booking?: unknown; confirm?: unknown }
+  const body = (await req.json().catch(() => ({}))) as { decision?: string; booking?: unknown; confirm?: unknown; task?: unknown }
   const decision = body.decision === "apply" ? "apply" : body.decision === "discard" ? "discard" : null
   if (!decision) return NextResponse.json({ error: "decision must be apply or discard" }, { status: 400 })
 
@@ -90,6 +93,49 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const view = { ...proposalView(proposal), status: "FAILED", error: DELETE_TASK_LATEST_APP }
       return NextResponse.json({ error: DELETE_TASK_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
+  }
+
+  // create_task with the project picker (owner, 18 Oct 2026): Apply carries what the card chose —
+  // `task: { projectId, taskListId?, assigneeIds?, dueDate? }`. Without it (a released app drawing plain rows) the
+  // answer is "open on the latest app or the web" and the proposal keeps waiting: a task never lands in a project
+  // nobody picked. The project is checked again now (Can edit, open, a task project → else 403, card stays open),
+  // the section must be that project's, the PIC its members.
+  if (proposal.action === "create_task" && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true) {
+    const stored = (proposal.input as Record<string, unknown>) ?? {}
+    const t = body.task && typeof body.task === "object" ? (body.task as Record<string, unknown>) : null
+    const projectId = typeof t?.projectId === "string" && t.projectId ? t.projectId : null
+    if (!projectId) {
+      const view = { ...proposalView(proposal), status: "FAILED", error: CREATE_TASK_LATEST_APP }
+      return NextResponse.json({ error: CREATE_TASK_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
+    }
+    const options = await taskTargetOptions(session.user.id, projectId)
+    if (!options) {
+      const view = { ...proposalView(proposal), error: NOT_EDITABLE }
+      return NextResponse.json({ error: NOT_EDITABLE, code: "NEEDS_EDIT_ACCESS", proposal: view }, { status: 403 })
+    }
+    const taskListId = typeof t?.taskListId === "string" && t.taskListId ? t.taskListId : null
+    const section = taskListId ? options.sections.find((x) => x.id === taskListId) : null
+    if (taskListId && !section) return NextResponse.json({ error: "That column is not in this project · Kolom itu bukan milik project ini", code: "BAD_SECTION", proposal: proposalView(proposal) }, { status: 400 })
+    const assigneeIds = Array.isArray(t?.assigneeIds) ? Array.from(new Set((t.assigneeIds as unknown[]).filter((x): x is string => typeof x === "string"))) : []
+    const memberIds = new Set(options.members.map((m) => m.id))
+    if (assigneeIds.some((a) => !memberIds.has(a))) return NextResponse.json({ error: "A PIC is not a member of this project · Ada PIC yang bukan anggota project ini", code: "BAD_ASSIGNEE", proposal: proposalView(proposal) }, { status: 400 })
+    const dueRaw = t?.dueDate
+    const dueDate = dueRaw === null || dueRaw === "" ? null : typeof dueRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dueRaw) ? dueRaw : undefined
+    const target = (stored.taskTarget as Record<string, unknown> | undefined) ?? {}
+    const project = ((target.projects as Array<{ id: string; name: string }> | undefined) ?? []).find((p) => p.id === projectId)
+    const input: Record<string, unknown> = {
+      ...stored,
+      projectId,
+      ...(section ? { taskListId: section.id, ...(section.taskStatus ? { status: section.taskStatus } : {}) } : {}),
+      assigneeIds,
+      ...(dueDate !== undefined ? { dueDate, taskTarget: { ...target, dueDay: dueDate } } : {}),
+    }
+    if (!section) delete input.taskListId
+    const title = typeof stored.title === "string" ? stored.title : ""
+    await prisma.gideonProposal.updateMany({
+      where: { id, status: "PENDING" },
+      data: { input: input as Prisma.InputJsonValue, projectId, summary: `Create task “${title}”${project ? ` in ${project.name}` : ""}`.slice(0, 300) },
+    })
   }
 
   if (proposal.action === "book_room") {

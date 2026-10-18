@@ -349,6 +349,8 @@ SCHEMAS = {
     ),
     "nexus_create_task": object_schema(
         "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification. "
+        "When the person did not name a project, call it WITHOUT projectId (optionally project='<name>' if one was said): the "
+        "card then shows a project picker with only the projects they can edit — never ask which project in the chat. "
         "ONE call per task, complete: put the people it is for in assigneeIds and the deadline in dueDate here — never create "
         "first and assign or date it with nexus_update_task afterwards. When the answer is proposed:true, the returned "
         "proposalId is the task's only id until it is approved; nexus_update_task with taskId = that proposalId joins the same card.",

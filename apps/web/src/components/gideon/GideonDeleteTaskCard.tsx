@@ -23,7 +23,7 @@ export function GideonDeleteTaskCard({ proposal, onDecided }: { proposal: Gideon
     setPending(decision);
     setError(null);
     try {
-      onDecided(await decideGideonProposal(proposal.id, decision, undefined, decision === "apply" ? { taskId: d.taskId } : undefined));
+      onDecided(await decideGideonProposal(proposal.id, decision, undefined, decision === "apply" ? { confirm: { taskId: d.taskId } } : undefined));
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Couldn't do that."));
     } finally {

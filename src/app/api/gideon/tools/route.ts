@@ -26,6 +26,7 @@ import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import { deleteTaskAs, TaskDeleteRefusal } from '@/lib/task-delete'
+import { createTaskNeedsProject, editableTaskProjects } from '@/lib/gideon-task-target'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
 import {
@@ -1502,7 +1503,9 @@ export async function POST(req: Request) {
     }
 
     if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
-      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input)
+      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input, { contextProjectId: run.projectId ?? null })
+      const picker = action === 'create_task' && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true
+      const pre = picker ? ((proposal.input as { taskTarget?: { preselectedProjectName?: string | null } }).taskTarget?.preselectedProjectName ?? null) : null
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
       publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
@@ -1521,6 +1524,8 @@ export async function POST(req: Request) {
           ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
           : action === 'delete_task'
           ? 'NOT deleted yet. It is waiting for the person to confirm it on the card below, which shows the task and a Delete button; tell them so in one short sentence, never say it is deleted. Do not offer to set it to Cancelled or Done instead. After they confirm it can still be restored from the Audit.'
+          : picker
+          ? `NOT created yet. The card below has a project picker${pre ? `, preselected to ${pre}` : ''} (only projects this person can edit), plus section, PIC and due date; they ${pre ? 'confirm or change it' : 'pick the project'} there and tap Apply. Tell them so in one short sentence; do NOT ask which project in the chat.${due ? ` Say the due date as "${due}".` : ''}`
           : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
           : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
@@ -1669,7 +1674,7 @@ type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: str
  * names) and describe it as a diff. Applying it later re-runs the real action as the same person, so a
  * permission lost in between still refuses.
  */
-async function describeWrite(actor: User, action: string, input: Record<string, unknown>): Promise<WriteDescription> {
+async function describeWrite(actor: User, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}): Promise<WriteDescription> {
   let summary = ''
   const diff: GideonDiffRow[] = []
   let projectId: string | null = null
@@ -1677,7 +1682,32 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   let dueText: string | null | undefined
   let store: Record<string, unknown> | undefined
 
-  if (action === 'create_task') {
+  if (action === 'create_task' && createTaskNeedsProject(input)) {
+    // No project named (owner, 18 Oct 2026): the card gets a project picker — only projects this person can edit —
+    // instead of a "which project?" in the chat. Preselected when it is obvious: a project name the model passed,
+    // the project the chat is about (open page / @-mention), or the only one there is. Checked again on Apply.
+    const title = asString(input.title)
+    if (!title) throw new Error('title is required')
+    const status = asTaskStatus(input.status) || 'TODO'
+    const projects = await editableTaskProjects(actor.id)
+    if (!projects.length) throw new Error('This person cannot add tasks to any project (it needs Can edit access in one). Tell them so.')
+    const hint = (asString(input.project) ?? asString(input.projectName) ?? asString(input.project_name) ?? '').toLowerCase()
+    const byName = hint ? (projects.find((p) => p.name.toLowerCase() === hint) ?? (projects.filter((p) => p.name.toLowerCase().includes(hint)).length === 1 ? projects.find((p) => p.name.toLowerCase().includes(hint)) : undefined)) : undefined
+    const pre = byName ?? projects.find((p) => p.id === ctx.contextProjectId) ?? (projects.length === 1 ? projects[0] : undefined)
+    projectId = pre?.id ?? null
+    summary = pre ? `Create task “${title}” in ${pre.name}` : `Create task “${title}”`
+    const due = parseDueInput(input.dueDate)
+    dueText = dueLabel(due)
+    const assignees = asStringArray(input.assigneeIds) ?? []
+    diff.push(
+      { field: 'Title', to: title },
+      { field: 'Project', to: pre?.name ?? '—' },
+      { field: 'Status', to: STATUS_WORD[status] ?? status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(due) },
+      { field: 'Assignees', to: await userNames(assignees) },
+    )
+    store = { pickProject: true, taskTarget: { projects, preselectedProjectId: pre?.id ?? null, preselectedProjectName: pre?.name ?? null, dueDay: dueDay(due) } }
+  } else if (action === 'create_task') {
     const title = asString(input.title)
     if (!title) throw new Error('title is required')
     const status = asTaskStatus(input.status) || 'TODO'
@@ -1828,8 +1858,8 @@ async function applyDeleteTask(actor: User, input: Record<string, unknown>) {
 }
 
 /** Describe the write and store it as a proposal for the person to approve. */
-async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
-  const d = await describeWrite(actor, action, input)
+async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}) {
+  const d = await describeWrite(actor, action, input, ctx)
   const proposal = await prisma.gideonProposal.create({
     data: {
       runId,
@@ -1861,11 +1891,13 @@ async function mergeIntoCreateProposal(actor: User, runId: string, input: Record
   if (!target) return null
   const merged: Record<string, unknown> = { ...((target.input as Record<string, unknown>) ?? {}) }
   for (const key of MERGEABLE_FIELDS) if (input[key] !== undefined) merged[key] = input[key]
-  const d = await describeWrite(actor, 'create_task', merged)
+  const d = await describeWrite(actor, 'create_task', merged, { contextProjectId: asString((target.input as Record<string, unknown> | null)?.taskTarget && ((target.input as { taskTarget?: { preselectedProjectId?: unknown } }).taskTarget?.preselectedProjectId)) ?? null })
+  // A picker card that now names its project becomes an ordinary create card (and the other way round).
+  const nextInput = { ...merged, ...(d.store ?? { pickProject: false, taskTarget: null }) }
   // Conditional, like the Apply claim: a proposal decided in the meantime is not changed under the person.
   const changed = await prisma.gideonProposal.updateMany({
     where: { id: target.id, status: 'PENDING' },
-    data: { input: merged as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
+    data: { input: nextInput as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
   })
   if (changed.count === 0) throw new Error('That task proposal was already decided; ask again.')
   const proposal = await prisma.gideonProposal.findUnique({ where: { id: target.id } })

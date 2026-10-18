@@ -78,7 +78,28 @@ export type GideonProposal = {
   bookingChange?: GideonBookingChangeView | null;
   /** delete_task only (18 Oct 2026): the task as the card shows it; `deleted` once applied (restorable from the Audit). */
   taskDelete?: GideonTaskDeleteView | null;
+  /** create_task without a project (18 Oct 2026): the project picker (projects the person can edit). */
+  taskTarget?: GideonTaskTargetView | null;
 };
+export type GideonTaskTargetProject = { id: string; name: string; icon: string | null; color: string | null };
+/** Server gideon-runs.ts GideonTaskTargetView. */
+export type GideonTaskTargetView = {
+  title: string;
+  projects: GideonTaskTargetProject[];
+  projectId: string | null;
+  taskListId: string | null;
+  status: string | null;
+  assigneeIds: string[];
+  dueDay: string | null;
+  chosenProjectId: string | null;
+};
+export type GideonTaskTargetOptions = {
+  sections: { id: string; name: string; taskStatus: string | null; color: string | null }[];
+  members: { id: string; name: string; avatar: string | null }[];
+};
+/** The picked project's columns and members (PIC = project members only). 403 = can't add tasks there. */
+export const gideonTaskTargetOptions = (projectId: string) => gjson<GideonTaskTargetOptions>(`/api/gideon/task-targets?projectId=${encodeURIComponent(projectId)}`);
+export type GideonTaskChoice = { projectId: string; taskListId?: string | null; assigneeIds: string[]; dueDate: string | null };
 /** Server gideon-runs.ts GideonTaskDeleteView. */
 export type GideonTaskDeleteView = {
   taskId: string;
@@ -366,10 +387,11 @@ export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] 
  * and slot picked on a book_room card (required to apply one); on a move card the same plus `bookingId`, on a
  * cancel card `{ bookingId }` alone (required to apply those).
  */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, confirm?: { taskId: string }): Promise<GideonProposal> {
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, extra?: { confirm?: { taskId: string }; task?: GideonTaskChoice }): Promise<GideonProposal> {
   try {
-    // `confirm`: a delete_task card sends the task id back (required to apply one).
-    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}), ...(confirm ? { confirm } : {}) }) });
+    // `confirm`: a delete_task card sends the task id back; `task`: a create card's picked project, column, PIC, due
+    // (each required to apply that kind).
+    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}), ...(extra?.confirm ? { confirm: extra.confirm } : {}), ...(extra?.task ? { task: extra.task } : {}) }) });
     return r.proposal;
   } catch (e) {
     const p = (e as { body?: { proposal?: GideonProposal } }).body?.proposal;

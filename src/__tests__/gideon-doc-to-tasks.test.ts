@@ -102,12 +102,12 @@ describe('the weekday rule', () => {
 
 describe('approval: what "Review before writing" holds', () => {
   it('create_task: for nobody or for others → held; only for the asker → made directly', () => {
-    expect(needsApproval('review', 'create_task', {}, 'actor-1')).toBe(true)
-    expect(needsApproval('review', 'create_task', { assigneeIds: [] }, 'actor-1')).toBe(true)
-    expect(needsApproval('review', 'create_task', { assigneeIds: ['u-ana'] }, 'actor-1')).toBe(true)
-    expect(needsApproval('review', 'create_task', { assigneeIds: ['actor-1'] }, 'actor-1')).toBe(false)
-    expect(needsApproval('dont_ask', 'create_task', { assigneeIds: ['u-ana'] }, 'actor-1')).toBe(false)
-    expect(needsApproval('always_ask', 'create_task', { assigneeIds: ['actor-1'] }, 'actor-1')).toBe(true)
+    expect(needsApproval('review', 'create_task', { projectId: 'p1' }, 'actor-1')).toBe(true)
+    expect(needsApproval('review', 'create_task', { projectId: 'p1', assigneeIds: [] }, 'actor-1')).toBe(true)
+    expect(needsApproval('review', 'create_task', { projectId: 'p1', assigneeIds: ['u-ana'] }, 'actor-1')).toBe(true)
+    expect(needsApproval('review', 'create_task', { projectId: 'p1', assigneeIds: ['actor-1'] }, 'actor-1')).toBe(false)
+    expect(needsApproval('dont_ask', 'create_task', { projectId: 'p1', assigneeIds: ['u-ana'] }, 'actor-1')).toBe(false)
+    expect(needsApproval('always_ask', 'create_task', { projectId: 'p1', assigneeIds: ['actor-1'] }, 'actor-1')).toBe(true)
   })
 })
 
