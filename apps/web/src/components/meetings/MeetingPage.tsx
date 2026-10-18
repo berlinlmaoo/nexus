@@ -53,11 +53,13 @@ export const STATUS_LABEL: Record<string, string> = {
   FAILED: "Failed",
 };
 
-export function MeetingStatusChip({ status, className }: { status: string; className?: string }) {
+export function MeetingStatusChip({ status, waiting, className }: { status: string; waiting?: boolean; className?: string }) {
   const { t } = useLang();
-  return <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", STATUS_STYLE[status] ?? STATUS_STYLE.QUEUED, className)}>
-    {["TRANSCRIBING", "SUMMARIZING", "APPLYING", "QUEUED"].includes(status) ? <Loader2 className="h-3 w-3 animate-spin" /> : <CircleDot className="h-3 w-3" />}
-    {t(STATUS_LABEL[status] ?? status)}
+  // Waiting for the transcriber (in line, or the GPU is busy) reads as waiting, not as a transcript in progress.
+  const s = waiting && (status === "TRANSCRIBING" || status === "QUEUED") ? "QUEUED" : status;
+  return <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", STATUS_STYLE[s] ?? STATUS_STYLE.QUEUED, className)}>
+    {s === "QUEUED" ? <Clock className="h-3 w-3" /> : ["TRANSCRIBING", "SUMMARIZING", "APPLYING"].includes(s) ? <Loader2 className="h-3 w-3 animate-spin" /> : <CircleDot className="h-3 w-3" />}
+    {t(STATUS_LABEL[s] ?? s)}
   </span>;
 }
 
@@ -230,7 +232,7 @@ export function MeetingPage({ id }: { id: string }) {
         />
 
         <dl className="mt-4 grid grid-cols-[minmax(7rem,9rem)_1fr] gap-x-3 gap-y-1.5 text-sm">
-          <Prop icon={CircleDot} label={t("Status")}><MeetingStatusChip status={m.status} /></Prop>
+          <Prop icon={CircleDot} label={t("Status")}><MeetingStatusChip status={m.status} waiting={m.queue?.waiting} /></Prop>
           <Prop icon={FolderKanban} label={t("Project")}>
             {m.can.edit && m.status !== "APPLIED" && m.status !== "APPLYING" ? (
               <SelectPicker size="sm" value={m.projectId ?? ""} onChange={(v) => void setProject(v)} options={projectOptions} placeholder={t("Choose a project")} ariaLabel={t("Project")} className="-ml-1.5 max-w-full" />
@@ -558,7 +560,7 @@ function Pipeline({ m }: { m: MeetingFull }) {
         ))}
       </ol>
       <p className="mt-3 text-sm text-muted-foreground">{line}</p>
-      {(m.status === "TRANSCRIBING" || m.status === "SUMMARIZING" || m.status === "UPLOADING") && (
+      {(m.status === "TRANSCRIBING" || m.status === "SUMMARIZING" || m.status === "UPLOADING") && !q?.waiting && (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-sidebar-primary transition-[width] duration-500" style={{ width: `${Math.max(3, Math.round((m.progress || 0) * 100))}%` }} /></div>
       )}
       {q && <p className="mt-2 text-sm font-medium tabular-nums">{t("Ready in {eta}", { eta: etaText(q.etaSec, t) })}<span className="font-normal text-muted-foreground"> · {t("a rough estimate")}</span></p>}

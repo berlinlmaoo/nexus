@@ -449,8 +449,10 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
   if (job.state === "queued" || job.state === "running") {
     const progress = job.state === "running" ? Math.max(0, Math.min(1, Number(job.progress) || 0)) : 0
     const stats = { position: job.position ?? null, state: job.state }
-    if (Math.abs(progress - row.progress) >= 0.02 || JSON.stringify(row.transcribeStats ?? {}) !== JSON.stringify(stats)) {
-      await patchMeeting(row.id, { progress, transcribeStats: stats as Prisma.InputJsonValue }, { status: "TRANSCRIBING" })
+    // The transcriber knows the real length once it opened the file: the ETA uses it from then on.
+    const learnedDuration = !row.durationSec && typeof job.durationSec === "number" && job.durationSec > 0 ? job.durationSec : undefined
+    if (learnedDuration || Math.abs(progress - row.progress) >= 0.02 || JSON.stringify(row.transcribeStats ?? {}) !== JSON.stringify(stats)) {
+      await patchMeeting(row.id, { progress, transcribeStats: stats as Prisma.InputJsonValue, ...(learnedDuration ? { durationSec: learnedDuration } : {}) }, { status: "TRANSCRIBING" })
     }
     return
   }
