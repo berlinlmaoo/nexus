@@ -2,6 +2,24 @@ package id.znetworks.nexus.feature.auth
 
 /** Settings › Profile: the phone number as the web takes it (`phoneNumber: phone.trim() || null`). */
 object PhoneRules {
+    /** Same display grouping as web phone-format.ts; other country codes stay as entered. */
+    fun display(raw: String?): String {
+        val text = raw.orEmpty().trim()
+        val digits = text.filter(Char::isDigit)
+        val national = when {
+            text.startsWith("+") -> if (digits.startsWith("62")) digits.drop(2) else null
+            digits.startsWith("62") -> digits.drop(2)
+            digits.startsWith("0") -> digits.drop(1)
+            else -> null
+        } ?: return text
+        if (national.length !in 6..13 || text.any { !it.isDigit() && !it.isWhitespace() && it !in "+().-" }) return text
+        val rest = national.drop(3)
+        val count = rest.length
+        val sizes = when { count <= 4 -> listOf(count); count <= 8 -> listOf((count + 1) / 2, count / 2); count == 9 -> listOf(3, 3, 3); else -> listOf(4, 4, count - 8) }
+        var offset = 0
+        val parts = listOf(national.take(3)) + sizes.map { size -> rest.substring(offset, offset + size).also { offset += size } }
+        return "+62 " + parts.filter { it.isNotEmpty() }.joinToString("-")
+    }
     sealed interface Result {
         /** Saved as typed (trimmed); null clears it. */
         data class Ok(val value: String?) : Result

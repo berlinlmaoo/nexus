@@ -70,7 +70,7 @@ object ControlRoomTabs {
 
 @Composable
 private fun tabLabel(id: String) = when (id) {
-    "users" -> "Users"; "attendance" -> stringResource(R.string.home_attendance); "audit" -> "Audit"; "quests" -> "Quests"; "announcements" -> stringResource(R.string.an_tab)
+    "users" -> stringResource(R.string.audit_admin_users); "attendance" -> stringResource(R.string.home_attendance); "audit" -> stringResource(R.string.audit_admin_audit); "quests" -> stringResource(R.string.audit_admin_quests); "announcements" -> stringResource(R.string.an_tab)
     "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "suspects" -> stringResource(R.string.fg_tab); "gideon" -> "GIDEON"; else -> "App"
 }
 

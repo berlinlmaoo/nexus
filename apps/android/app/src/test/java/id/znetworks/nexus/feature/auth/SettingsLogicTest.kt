@@ -7,6 +7,13 @@ import java.io.File
 
 /** Settings (HANDOFF scope 6): phone number rules, session device labels (web lib/device-label.ts), EN/ID strings. */
 class SettingsLogicTest {
+    @Test fun phoneDisplayMatchesWebGroupingAndPreservesOtherCountries() {
+        assertEquals("+62 812-0000-0000", PhoneRules.display("+6281200000000"))
+        assertEquals("+62 812-3456-7890", PhoneRules.display("081234567890"))
+        assertEquals("+65 9123 4567", PhoneRules.display("+65 9123 4567"))
+        assertEquals("call office", PhoneRules.display("call office"))
+        assertEquals("", PhoneRules.display(null))
+    }
     private fun ok(raw: String) = (PhoneRules.check(raw) as PhoneRules.Result.Ok).value
 
     @Test fun phoneNumbers() {

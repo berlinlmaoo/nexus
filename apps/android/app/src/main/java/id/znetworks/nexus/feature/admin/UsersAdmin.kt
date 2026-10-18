@@ -126,10 +126,12 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
     var inviting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
+    var totalUsers by remember { mutableStateOf<Int?>(null) }
     var memberships by remember { mutableStateOf<Map<String, UserMemberships>>(emptyMap()) }
     // Offboarded people (owner, 8 Oct): no membership left, so they'd read as "not in the workspace yet".
     var left by remember { mutableStateOf<List<AdminUserRow>>(emptyList()) }
     var reinstating by remember { mutableStateOf<AdminUserRow?>(null) }
+    LaunchedEffect(tick) { totalUsers = runCatching { api.adminUsers(1, "all").pagination.total }.getOrNull() }
     LaunchedEffect(tick) { try { roster = api.roster(); error = null } catch (e: ApiError) { error = e.describe(res) } }
     LaunchedEffect(tick, isBoD) { left = if (isBoD) api.leftUsers() else emptyList() }
     // One call for everyone (BoD; others get an empty map and no summary line), never one per row.
@@ -140,10 +142,17 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
         r == null -> TabEmpty(Icons.Filled.PersonAdd, error!!)
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(role == "ALL", { role = "ALL" }, { Text("Total · ${r.members.size}") })
-                    Roles.ALL.forEach { k -> FilterChip(role == k, { role = if (role == k) "ALL" else k }, { Text("${Roles.label(k)} · ${r.members.count { it.role == k }}") }) }
-                }
+                val stats = listOf(Triple("ALL", stringResource(R.string.audit_admin_total), totalUsers)) + Roles.ALL.map { Triple(it, if (it == "BOD") "Board" else Roles.label(it), r.members.count { m -> m.role == it }) }
+                stats.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { (key, label, count) ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(c.card).border(if (role == key) 2.dp else 1.dp, if (role == key) c.onyx else c.border, RoundedCornerShape(20.dp)).clickable { role = key }.padding(16.dp)) {
+                            Text(count?.toString() ?: "—", fontSize = 26.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, color = c.foreground)
+                            Text(label, fontSize = 13.sp, color = c.mutedFg)
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                } }
+                Text(stringResource(R.string.audit_admin_hierarchy), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().background(c.muted, RoundedCornerShape(12.dp)).padding(12.dp))
             }
             // BoD and One Above All only, as iOS and the server (a Manager's every save would be 403).
             if (isBoD) item {
@@ -181,7 +190,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             val shown = Roles.filter(r.members, role, q)
             if (shown.isEmpty()) item { Text(stringResource(R.string.ad_no_match), fontSize = 12.sp, color = c.mutedFg) }
             items(shown, key = { it.id }) { m ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).clickable { onOpenUser(m.userId) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).clickable { onOpenUser(m.userId) }.padding(10.dp), verticalAlignment = Alignment.Top) {
                     Avatar(m.name, m.avatar, 34.dp); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -190,7 +199,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         if (m.flexiTimeEnabled || m.noGeofenceMode || !m.googleWorkspaceEmail.isNullOrEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (m.flexiTimeEnabled) Text("⚡ Flexi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
                             if (m.noGeofenceMode) Text("📱 Mobile", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
-                            if (!m.googleWorkspaceEmail.isNullOrEmpty()) Text("@", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.violetText)
+                            if (!m.googleWorkspaceEmail.isNullOrEmpty()) Text("Google Workspace", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                         }
                         // BoD without an approver is the top of the chain, not a gap.
                         val approver = m.approver?.name?.takeIf { it.isNotEmpty() }
@@ -199,8 +208,8 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         memberships[m.userId]?.let { Text(UsersLogic.membershipSummary(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg) }
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Pill(Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
-                        TextButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
+                        Pill(if (m.role == "BOD") "Board" else Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
+                        androidx.compose.material3.OutlinedButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
                     }
                 }
             }

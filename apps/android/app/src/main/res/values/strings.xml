@@ -2,6 +2,12 @@
 <!-- English is the source language. Indonesian overlay lives in values-in (Android's code for "id").
      Keep keys and English text aligned with iOS Localization.swift. -->
 <resources>
+    <string name="audit_admin_users">Users</string>
+    <string name="audit_admin_audit">Audit</string>
+    <string name="audit_admin_quests">Quests</string>
+    <string name="audit_admin_total">Total users</string>
+    <string name="audit_admin_hierarchy">Role hierarchy: One Above All › Board › Manager › Staff. You can only give roles below your own level.</string>
+    <string name="audit_change">Change</string>
     <plurals name="rb_show_earlier"><item quantity="one">Show %1$d earlier booking this month</item><item quantity="other">Show %1$d earlier bookings this month</item></plurals>
     <plurals name="rb_hide_earlier"><item quantity="one">Hide %1$d earlier booking</item><item quantity="other">Hide %1$d earlier bookings</item></plurals>
     <string name="task_share_link">Share link</string>

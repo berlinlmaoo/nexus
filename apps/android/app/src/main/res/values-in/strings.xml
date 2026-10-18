@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="audit_admin_users">Pengguna</string>
+    <string name="audit_admin_audit">Audit</string>
+    <string name="audit_admin_quests">Quest</string>
+    <string name="audit_admin_total">Total pengguna</string>
+    <string name="audit_admin_hierarchy">Urutan peran: One Above All › Board › Manager › Staff. Kamu hanya bisa memberi peran di bawah level kamu.</string>
+    <string name="audit_change">Ubah</string>
     <plurals name="rb_show_earlier"><item quantity="other">Tampilkan %1$d booking sebelumnya bulan ini</item></plurals>
     <plurals name="rb_hide_earlier"><item quantity="other">Sembunyikan %1$d booking sebelumnya</item></plurals>
     <string name="task_share_link">Bagikan tautan</string>
