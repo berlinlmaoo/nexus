@@ -130,7 +130,9 @@ export type GideonEvent =
   | { type: "done" }
   /** GIDEON credits (18 Oct 2026): the person's balance after this answer; `notice` when phase 2 changed the tier or refused. */
   | { type: "credits"; summary?: import("@/lib/gideon-credits").CreditSummary | null; credits?: number; notice?: import("@/lib/gideon-credits").CreditNotice }
-  | { type: "error"; content?: string; code?: string };
+  | { type: "error"; content?: string; code?: string }
+  /** The chosen tier can't answer now (Model 0 lends the GPU to a meeting transcript, 18 Oct 2026). An `error` follows. */
+  | { type: "tier_unavailable"; tier: string; reason: string | null; fallback: string };
 
 /** Which writes wait for the person. Same names as the server (gideon-runs.ts needsApproval). */
 export const GIDEON_APPROVAL_MODES = [

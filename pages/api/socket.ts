@@ -610,6 +610,18 @@ export function initializeSocketServer(
     if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("gideon-credits", { summary: data.summary ?? null })
   })
 
+  // GIDEON tier availability (18 Oct 2026): the same public fact for everyone, so it goes to every socket.
+  eventBus.on(BUS_EVENTS.GIDEON_TIERS, (data: { tiers: unknown }) => {
+    io.emit("gideon-tiers", { tiers: data?.tiers ?? null })
+  })
+
+  // A meeting recording moved (lib/meeting-notes.ts): ids + status only, to its uploader and its project's room
+  // (VIEWER access to join, the same bar as reading the meeting). Clients refetch through the API.
+  eventBus.on(BUS_EVENTS.MEETING_CHANGED, (data: { userId: string; projectId: string | null; payload: unknown }) => {
+    if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("meeting-changed", data.payload)
+    if (typeof data?.projectId === "string" && data.projectId) emitGuarded(`project:${data.projectId}`, "meeting-changed", data.payload)
+  })
+
   eventBus.on(BUS_EVENTS.SPRINT_UPDATED, (data: { projectId: string; sprint: unknown }) => {
     emitGuarded(`project:${data.projectId}`, "sprint-updated", stripPrivatePeople(data.sprint))
   })

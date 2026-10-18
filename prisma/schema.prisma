@@ -4366,3 +4366,63 @@ model BlockReminder {
   @@unique([sourceKind, sourceId, userId, key])
   @@index([remindAt, firedAt])
 }
+
+/// Meeting notes, Beta (owner, 18 Oct 2026): a recording → transcript (Whisper on our own GPU) → GIDEON overview,
+/// minutes and proposed tasks → Apply saves the minutes as a Doc and creates the ticked tasks. lib/meeting-notes.ts.
+/// No FKs (prisma/sql/2026-10-18-meeting-notes.sql): a meeting never blocks removing a project, doc or account.
+model MeetingNote {
+  id               String    @id @default(cuid())
+  createdById      String
+  /// The project the minutes and tasks go to. Null until picked (needed for Apply).
+  projectId        String?
+  title            String    @default("")
+  /// UPLOADING | QUEUED | TRANSCRIBING | SUMMARIZING | READY | APPLYING | APPLIED | FAILED
+  status           String    @default("UPLOADING")
+  /// 0..1 within the current stage.
+  progress         Float     @default(0)
+  /// Whisper language: auto | id | en
+  language         String    @default("auto")
+  /// upload | record
+  source           String    @default("upload")
+  audioName        String?
+  audioMime        String?
+  audioExt         String?
+  audioBytes       BigInt    @default(0)
+  audioReceived    BigInt    @default(0)
+  /// The audio file is removed after this (remote config values.meetingAudioRetentionDays).
+  audioDeleteAfter DateTime?
+  audioDeletedAt   DateTime?
+  durationSec      Float?
+  recordedAt       DateTime?
+  /// [{ start, end, text, speaker? }]
+  transcript       Json?
+  /// { "<speaker label>": { userId?, name } } — mapped by hand on the meeting page.
+  speakers         Json?
+  overview         String?
+  /// { attendees, topics, decisions, openQuestions, actionItems }
+  mom              Json?
+  /// [{ key, title, description, assigneeIds, dueDate, include, actionIndex }]
+  proposals        Json?
+  detectedLanguage String?
+  transcribeStats  Json?
+  runIds           String[]  @default([])
+  tier             String?
+  docId            String?
+  taskIds          String[]  @default([])
+  appliedAt        DateTime?
+  appliedById      String?
+  error            String?
+  errorCode        String?
+  attempts         Int       @default(0)
+  lockedUntil      DateTime?
+  stageStartedAt   DateTime?
+  /// Bumped by every edit, for optimistic concurrency (PATCH sends the version it edited).
+  version          Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  @@index([createdById, createdAt])
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt])
+  @@index([audioDeleteAfter])
+}

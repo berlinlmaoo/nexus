@@ -15,6 +15,7 @@ import { datePromptLine } from '@/lib/gideon-dates'
 import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
+import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -378,6 +379,24 @@ export async function POST(req: NextRequest) {
       await sendEvent({ type: 'done' })
       await writer.close().catch(() => {})
       return
+    }
+    // GIDEON Model 0 away (18 Oct 2026): the office GPU is transcribing a meeting, or Model 0 is loading again. Refused
+    // at once with a reason (never a silent hang until the shim's 7-minute timeout); stream clients also get
+    // `tier_unavailable` so they can offer GIDEON Phaëthon. Nothing is sent to the model, nothing is billed.
+    if (tier === 'experimental') {
+      const exp = (await getTierStatus().catch(() => null))?.experimental
+      if (exp && !exp.available) {
+        const txt = tierUnavailableText(exp.reason)
+        if (streamClient) {
+          await sendEvent({ type: 'tier_unavailable', tier: 'experimental', reason: exp.reason, since: exp.since, fallback: 'luna', label: txt.label, message: txt.send })
+          await sendEvent({ type: 'error', content: txt.send[uiLang], code: 'model0_unavailable' })
+        } else {
+          await sendEvent({ type: 'text', content: txt.send[uiLang] })
+        }
+        await sendEvent({ type: 'done' })
+        await writer.close().catch(() => {})
+        return
+      }
     }
     const fallbackNotice = decision.fallback ? creditNotice('fallback', decision.summary) : null
     if (fallbackNotice && streamClient) await sendEvent({ type: 'credits', summary: decision.summary, notice: { kind: 'fallback', ...fallbackNotice } })

@@ -36,12 +36,21 @@ export type AppConfig = {
      *  refused. On = a person out of credits is answered by GIDEON Aphrodite (max 30 a day), then refused;
      *  GIDEON Model 0 stays free. BoD / One Above All are unlimited by default. */
     gideonCreditsEnforced: boolean
+    /** Meeting notes, Beta (owner, 18 Oct 2026): GIDEON turns a meeting recording into minutes and tasks. Off = the
+     *  entry points are hidden and new uploads are refused; meetings already made stay readable. */
+    meetingNotesEnabled: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
     outsideHourAlertMinutes: number
     /** How often an open Calendar screen asks again (ETag makes an unchanged answer a 304). */
     calendarPollSeconds: number
+    /** Meeting notes: days the audio is kept after the minutes are saved (or after they were ready, if never saved). */
+    meetingAudioRetentionDays: number
+    /** Meeting notes: longest recording, in minutes. */
+    meetingMaxMinutes: number
+    /** Meeting notes: largest file, in MB. */
+    meetingMaxMB: number
   }
   texts: Record<"en" | "id", Record<string, string>>
   /** One app-wide notice at the top of Home, or null. `id` changes → shown again to people who closed it. */
@@ -49,8 +58,8 @@ export type AppConfig = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false },
-  values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true },
+  values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {
       "location.always.title": "Turn on location “Always”",

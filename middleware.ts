@@ -76,7 +76,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/((?!vault/|attachments/chunk|legal/|legal-requests/).*)",
+      source: "/api/((?!vault/|attachments/chunk|legal/|legal-requests/|meetings/).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[iI][oO][sS]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },
@@ -90,7 +90,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/((?!vault/|attachments/chunk|legal/|legal-requests/).*)",
+      source: "/api/((?!vault/|attachments/chunk|legal/|legal-requests/|meetings/).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[aA][nN][dD][rR][oO][iI][dD]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },

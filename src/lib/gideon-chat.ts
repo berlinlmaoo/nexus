@@ -14,7 +14,7 @@ export async function askGideon(input: {
   user?: string
   /** GIDEON acts with this person's visibility, never more. */
   actorEmail?: string
-  model?: "luna" | "experimental"
+  model?: "luna" | "terra" | "experimental"
   timeoutMs?: number
   /** Appears in the log line when the shim refuses or answers empty. */
   tag?: string
