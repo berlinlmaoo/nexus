@@ -98,13 +98,13 @@ const PING_MAX_WAIT_MS = 2_000;
 
 /**
  * Task lists OTHER than a project's own payload that a task event can change: My Tasks, the dashboard, the
- * Master Calendar, folder task lists. Refetched only if on screen (an invalidation refetches active queries
+ * Master Calendar (a Folder filter included). Refetched only if on screen (an invalidation refetches active queries
  * only; the rest just goes stale). The project list, folders, pins, views and custom fields are never
  * touched by a task event any more.
  */
 function isOtherTaskList(key: readonly unknown[]): boolean {
   if (key[0] === "dashboard") return true;
-  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks" || key[1] === "folder-tasks");
+  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks");
 }
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {

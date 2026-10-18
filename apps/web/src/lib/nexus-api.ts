@@ -3311,8 +3311,9 @@ export const nexusApi = {
   calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string, rooms: string[] = []) => apiFetch<{ tasks: CalendarTaskItem[]; bookings?: CalendarBookingItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rooms=${encodeURIComponent(rooms.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
   // --- Calendar (master calendar, /api/calendar/**; rules in lib/calendar/core.ts) ---
   calendarStructure: () => apiFetch<CalStructure>("/api/calendar/structure"),
-  calendarItems: (from: string, to: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
-  calendarOverdue: () => apiFetch<CalOverdueResponse>("/api/calendar/overdue"),
+  /** `folder`: the Folder filter (comma list of folder ids), applied by the server. */
+  calendarItems: (from: string, to: string, folder?: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${folder ? `&folder=${encodeURIComponent(folder)}` : ""}`),
+  calendarOverdue: (folder?: string) => apiFetch<CalOverdueResponse>(`/api/calendar/overdue${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
   /** How the Calendar may open one task it has not loaded (shared link, another month). */
   calendarTask: (id: string) => apiFetch<{ v: number; access: string; found: boolean; masked: boolean; canEdit: boolean; editProjectId: string | null; projectId: string | null }>(`/api/calendar/task?id=${encodeURIComponent(id)}`),
   /** The task read-only, for a calendar viewer outside its project (owner 13 Oct 2026). No file URLs. */
