@@ -9,7 +9,8 @@ internal object InboxLegacyText {
             "New legal request from " to "Permintaan Legal baru dari ",
             " assigned you: " to " menugaskan kamu: ",
             " assigned you \"" to " menugaskan kamu \"",
-            " commented on " to " mengomentari ",
+            " commented on: " to " berkomentar di: ",
+            " commented on " to " berkomentar di ",
         )
         for ((english, indonesian) in templates) {
             if (english.startsWith("New ")) {
@@ -20,5 +21,11 @@ internal object InboxLegacyText {
             }
         }
         return raw
+    }
+
+    /** Comment/legal bodies contain user content; only assignment bodies have a known template. */
+    fun message(raw: String?, lang: String, type: String?): String? {
+        if (raw == null || lang != "id" || type != "task_assigned") return raw
+        return if (raw.startsWith("In ")) "Di " + raw.removePrefix("In ") else translate(raw, lang)
     }
 }

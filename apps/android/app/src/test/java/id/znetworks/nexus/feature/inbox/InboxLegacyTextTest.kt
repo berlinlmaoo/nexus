@@ -16,4 +16,18 @@ class InboxLegacyTextTest {
         val row = InboxItem("id", rawTitle = "New legal request from Example", texts = mapOf("id" to InboxText("Server wording")))
         assertEquals("Server wording", row.title("id"))
     }
+
+    @Test fun legacyAssignmentBodyPreservesProjectName() {
+        val row = InboxItem("id", type = "task_assigned", rawMessage = "In English Project")
+        assertEquals("Di English Project", row.message("id"))
+        assertEquals("In English Project", row.message("en"))
+        assertEquals("QA berkomentar di: English task", InboxLegacyText.translate("QA commented on: English task", "id"))
+    }
+
+    @Test fun userContentIsNeverTranslatedAsANotificationTemplate() {
+        val row = InboxItem("id", type = "comment", rawMessage = "QA assigned you: leave this quote intact")
+        assertEquals(row.rawMessage, row.message("id"))
+        val translated = row.copy(texts = mapOf("id" to InboxText(message = "Server body")))
+        assertEquals("Server body", translated.message("id"))
+    }
 }
