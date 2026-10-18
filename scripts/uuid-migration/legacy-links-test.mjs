@@ -16,6 +16,7 @@ const EMAIL = process.env.QA_EMAIL || ""
 const PW = process.env.QA_PW_FILE ? readFileSync(process.env.QA_PW_FILE, "utf8").trim() : ""
 const STATE = process.env.STATE || "/tmp/legacy-links.json"
 const PHASE = process.argv[2]
+const NO_WRITES = process.env.NO_WRITES === "1"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const H = { "X-Nexus-Client": "web/1" }
 let failed = 0
@@ -85,9 +86,12 @@ if (PHASE === "before") {
     const r = await req(`/api/tasks/${s.taskId}`, { cookie: old })
     const id = r.json?.id ?? r.json?.task?.id
     rec("GET /api/tasks/<OLD id>", r.status === 200 && id === ids[s.taskId], `HTTP ${r.status}`)
-    const c = await req(`/api/tasks/${s.taskId}/comments`, { cookie: old, method: "POST", body: { content: "uuid migration test comment" } })
-    const cid = c.json?.id ?? c.json?.comment?.id
-    rec("POST a comment on an OLD task id -> new row id is UUIDv7", (c.status === 200 || c.status === 201) && UUID.test(cid ?? ""), `HTTP ${c.status} ${String(cid).slice(0, 15)}`)
+    if (NO_WRITES) console.log("   skip POST comment (NO_WRITES=1: a live database)")
+    else {
+      const c = await req(`/api/tasks/${s.taskId}/comments`, { cookie: old, method: "POST", body: { content: "uuid migration test comment" } })
+      const cid = c.json?.id ?? c.json?.comment?.id
+      rec("POST a comment on an OLD task id -> new row id is UUIDv7", (c.status === 200 || c.status === 201) && UUID.test(cid ?? ""), `HTTP ${c.status} ${String(cid).slice(0, 15)}`)
+    }
   }
   if (s.conversationId) {
     const q = s.messageId ? `?after=${s.messageId}` : ""
@@ -138,7 +142,8 @@ if (PHASE === "before") {
         if (joined && s.taskId) {
           packets.length = 0
           const cur = (await req(`/api/tasks/${ids[s.taskId]}`, { cookie: old })).json
-          const title = (cur?.title ?? cur?.task?.title ?? "task") + " ·"
+          // On a live database the title is written back unchanged (still a PATCH, still an event).
+          const title = (cur?.title ?? cur?.task?.title ?? "task") + (NO_WRITES ? "" : " ·")
           const u = await req(`/api/tasks/${s.taskId}`, { cookie: old, method: "PATCH", body: { title } })
           const until = Date.now() + 10000
           while (Date.now() < until && !packets.some((p) => p.includes(ids[s.taskId]))) await poll()
