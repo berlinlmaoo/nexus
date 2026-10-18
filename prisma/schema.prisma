@@ -2805,6 +2805,12 @@ model Message {
   /// text only, which is what all 500k+ of them are today.
   attachmentUrl  String?
   attachmentType String?
+  /// A document's name as it was sent ("Laporan Q3.pdf") and its size in bytes (18 Oct 2026,
+  /// src/lib/chat-files.ts). The file itself is stored under a random name. Null on pictures sent by
+  /// the apps and on every message before documents. Partial index Message_attachmentUrl_idx
+  /// (prisma/sql/2026-10-18-chat-file-attachments.sql) finds a message by its file.
+  attachmentName String?
+  attachmentSize Int?
 
   /// The message this one replies to. Self-relation, nullable because every existing row predates
   /// replies. SetNull rather than Cascade on purpose: deleting a quoted message must not delete the
