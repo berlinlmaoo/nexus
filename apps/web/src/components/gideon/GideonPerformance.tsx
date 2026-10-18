@@ -204,7 +204,7 @@ function Metric({ label, value, hint, warn }: { label: string; value: string; hi
     <div className="min-w-0">
       <dt className="truncate text-[11px] font-medium text-muted-foreground">{label}</dt>
       <dd className={cn("truncate font-semibold tabular-nums", warn && "text-destructive")}>{value}</dd>
-      {hint && <dd className="truncate text-[11px] text-muted-foreground">{hint}</dd>}
+      {hint && <dd className="text-[11px] leading-tight text-muted-foreground">{hint}</dd>}
     </div>
   );
 }
@@ -384,7 +384,7 @@ function Charts({ d }: { d: PerfSummary }) {
             <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} contentStyle={tooltipStyle} formatter={(v: number | string, n: string) => [formatCount(Number(v)), n]} />
             {legend}
             {PERF_TIERS.map((id, i) => (
-              <Bar key={id} dataKey={`q_${id}`} name={tierName(id)} stackId="q" fill={TIER_VAR[id]} stroke="var(--card)" strokeWidth={1} maxBarSize={22} radius={i === PERF_TIERS.length - 1 ? [4, 4, 0, 0] : undefined} />
+              <Bar key={id} dataKey={`q_${id}`} name={tierName(id)} stackId="q" fill={TIER_VAR[id]} stroke="var(--card)" strokeWidth={1} maxBarSize={22} radius={i === PERF_TIERS.length - 1 ? [4, 4, 0, 0] : undefined} isAnimationActive={false} />
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -408,7 +408,7 @@ function Charts({ d }: { d: PerfSummary }) {
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => formatCount(v)} />
             <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} contentStyle={tooltipStyle} formatter={(v: number | string) => [formatCount(Number(v)), t("Credits")]} />
-            <Bar dataKey="credits" name={t("Credits")} fill="var(--sidebar-primary)" maxBarSize={22} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="credits" name={t("Credits")} fill="var(--sidebar-primary)" maxBarSize={22} radius={[4, 4, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
