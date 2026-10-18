@@ -384,7 +384,8 @@ export function cleanMom(raw: unknown): Mom {
       }).filter((a) => a.text).slice(0, 60)
     : []
   return {
-    attendees: strList(x.attendees ?? x.people, 60, 120),
+    // "Speaker 4" is a voice nobody named, not a person: never an attendee.
+    attendees: strList(x.attendees ?? x.people, 60, 120).filter((a) => !/^(speaker|pembicara)\s*\d+$/i.test(a.trim())),
     topics,
     decisions: strList(x.decisions, 40, 600),
     openQuestions: strList(x.openQuestions, 40, 600),
