@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id             String            @id @default(cuid())
+  id             String            @id @default(uuid(7))
   name           String
   email          String            @unique
   password       String?
@@ -177,7 +177,7 @@ model User {
 // OAuth-issued access tokens ("nxo_...") are also stored here with clientId set + a refresh token,
 // so the same hash lookup verifies both PATs and OAuth tokens.
 model ApiToken {
-  id               String    @id @default(cuid())
+  id               String    @id @default(uuid(7))
   name             String
   tokenHash        String    @unique
   scopes           String[]  @default([])
@@ -203,7 +203,7 @@ model ApiToken {
 // A client app registered via OAuth 2.1 Dynamic Client Registration (RFC 7591) — e.g. the Claude
 // app connecting as a custom connector. Public clients (PKCE), no client secret.
 model OAuthClient {
-  id                      String   @id @default(cuid())
+  id                      String   @id @default(uuid(7))
   clientName              String
   redirectUris            String[] @default([])
   grantTypes              String[] @default([])
@@ -219,7 +219,7 @@ model OAuthClient {
 // Short-lived OAuth 2.1 authorization code (auth-code + PKCE flow). Single-use, ~5 min TTL.
 // Only the SHA-256 hash of the code is stored.
 model OAuthAuthCode {
-  id                  String    @id @default(cuid())
+  id                  String    @id @default(uuid(7))
   codeHash            String    @unique
   redirectUri         String
   codeChallenge       String
@@ -241,7 +241,7 @@ model OAuthAuthCode {
 
 /// Monthly XP-tier outcome per user (Excellent / Good / Review) + perk earned.
 model PeriodReward {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   periodKey   String   // attendance month, e.g. "2026-06"
   tier        String   // EXCELLENT | GOOD | REVIEW | NONE
   perk        String?  // human-readable reward label
@@ -258,7 +258,7 @@ model PeriodReward {
 }
 
 model Workspace {
-  id          String            @id @default(cuid())
+  id          String            @id @default(uuid(7))
 
   /// The code someone types when signing up to join this workspace instead of starting their own.
   /// Deliberately not derived from the name or the slug: a guessable code is an open door, and
@@ -304,7 +304,7 @@ model Workspace {
 // Monthly "tanggal merah" quota (jatah), set by BoD per month, same for every staff. Staff
 // request RED_DATE leave up to this quota for the month. One row per (workspace, month).
 model RedDateQuota {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   month       String // "YYYY-MM"
   quota       Int      @default(0)
   workspaceId String
@@ -327,7 +327,7 @@ model RedDateQuota {
 /// record (the day becomes TK), and this row — with the record and its trail in `snapshot` — is what
 /// remains as evidence.
 model AttendanceSuspectReview {
-  id             String   @id @default(cuid())
+  id             String   @id @default(uuid(7))
   workspaceId    String
   userId         String
   recordId       String   @unique
@@ -347,7 +347,7 @@ model AttendanceSuspectReview {
 /// Announcement (kind "warning"); this row is the history shown on the card. recordId is a bare
 /// column, not a relation: a record judged INVALID is deleted, and its warnings must outlive it.
 model AttendanceWarning {
-  id             String   @id @default(cuid())
+  id             String   @id @default(uuid(7))
   workspaceId    String
   recordId       String
   userId         String
@@ -375,7 +375,7 @@ model RevokedSession {
 }
 
 model DayOffBonus {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
@@ -399,7 +399,7 @@ model DayOffBonus {
 // Company-wide public holidays ("tanggal merah"). On these dates nobody is penalized for not
 // checking in, and they do NOT consume day-off quota. Input monthly by BoD. One row per date.
 model Holiday {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   date        DateTime // UTC-midnight of the holiday date (same convention as attendance dates)
   name        String
   workspaceId String
@@ -412,7 +412,7 @@ model Holiday {
 }
 
 model WorkspaceMember {
-  id             String           @id @default(cuid())
+  id             String           @id @default(uuid(7))
   role           WorkspaceRole    @default(STAFF)
   attendanceRole AttendanceRole   @default(NONE)
   joinedAt       DateTime         @default(now())
@@ -477,7 +477,7 @@ model WorkspaceMember {
 /// keeps what that row said plus the last working day, for the recaps of periods they were part of.
 /// One per person per workspace; reinstating turns it back into a WorkspaceMember. See lib/former-members.ts.
 model FormerMember {
-  id                  String        @id @default(cuid())
+  id                  String        @id @default(uuid(7))
   userId              String
   workspaceId         String
   role                WorkspaceRole
@@ -503,7 +503,7 @@ model FormerMember {
 }
 
 model Project {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   description String?
   color       String   @default("#7B2FBE")
@@ -612,7 +612,7 @@ model Project {
 /// each per project (partial unique index in prisma/sql/2026-10-12-views-project-view.sql), and are shown
 /// or hidden by Project.hiddenTabs exactly as before, so released iOS / Android apps keep working.
 model ProjectView {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String?
   layout      String
   builtin     String?
@@ -634,7 +634,7 @@ model ProjectView {
 
 /// Per-user pinned project (sidebar quick-access). One row = one user pinning one project.
 model ProjectPin {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   position  Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -650,7 +650,7 @@ model ProjectPin {
 
 /// Per-user pinned FOLDER (sidebar quick-access). Mirrors ProjectPin exactly.
 model FolderPin {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   position  Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -665,7 +665,7 @@ model FolderPin {
 }
 
 model ProjectMember {
-  id        String      @id @default(cuid())
+  id        String      @id @default(uuid(7))
   role      ProjectRole @default(MEMBER)
   /// Notion-style access level (13 Oct 2026): FULL | EDIT | COMMENT | VIEW. role LEAD (the Project Owner) is
   /// always FULL whatever this says. lib/rbac.ts projectAccessLevel is the only reader.
@@ -684,7 +684,7 @@ model ProjectMember {
 }
 
 model ProjectFolder {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   name      String
   icon      String   @default("📁")
   color     String   @default("#111827")
@@ -716,7 +716,7 @@ model ProjectFolder {
 }
 
 model TaskList {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   name      String
   position  Int      @default(0)
   // The task status this section stands for (owner, 12 Oct 2026, project templates): moving a task into
@@ -740,7 +740,7 @@ model TaskList {
 }
 
 model Task {
-  id             String       @id @default(cuid())
+  id             String       @id @default(uuid(7))
   title          String
   description    String?
   status         TaskStatus   @default(TODO)
@@ -806,7 +806,7 @@ model Task {
 }
 
 model TaskAssignee {
-  id         String   @id @default(cuid())
+  id         String   @id @default(uuid(7))
   assignedAt DateTime @default(now())
 
   taskId String
@@ -820,7 +820,7 @@ model TaskAssignee {
 }
 
 model Comment {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -842,7 +842,7 @@ model Comment {
 }
 
 model CommentReaction {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   emoji     String
   createdAt DateTime @default(now())
 
@@ -856,7 +856,7 @@ model CommentReaction {
 }
 
 model TaskFollower {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   createdAt DateTime @default(now())
 
   taskId    String
@@ -870,7 +870,7 @@ model TaskFollower {
 }
 
 model ActivityLog {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   action    String
   details   String?
   createdAt DateTime @default(now())
@@ -889,7 +889,7 @@ model ActivityLog {
 // ─── NEW MODELS ────────────────────────────────────────────────
 
 model Goal {
-  id          String     @id @default(cuid())
+  id          String     @id @default(uuid(7))
   title       String
   description String?
   status      GoalStatus @default(ON_TRACK)
@@ -914,7 +914,7 @@ model Goal {
 }
 
 model GoalMilestone {
-  id        String    @id @default(cuid())
+  id        String    @id @default(uuid(7))
   title     String
   completed Boolean   @default(false)
   dueDate   DateTime?
@@ -924,7 +924,7 @@ model GoalMilestone {
 }
 
 model GoalProject {
-  id        String  @id @default(cuid())
+  id        String  @id @default(uuid(7))
   goalId    String
   projectId String
   goal      Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
@@ -933,7 +933,7 @@ model GoalProject {
 }
 
 model GoalTask {
-  id     String @id @default(cuid())
+  id     String @id @default(uuid(7))
   goalId String
   taskId String
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
@@ -942,7 +942,7 @@ model GoalTask {
 }
 
 model Doc {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   title       String
   content     Json?
   contentText String?
@@ -972,7 +972,7 @@ model Doc {
 }
 
 model TimeEntry {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   startTime   DateTime
   endTime     DateTime?
   duration    Int?
@@ -986,7 +986,7 @@ model TimeEntry {
 }
 
 model Sprint {
-  id        String       @id @default(cuid())
+  id        String       @id @default(uuid(7))
   name      String
   startDate DateTime
   endDate   DateTime
@@ -1001,7 +1001,7 @@ model Sprint {
 }
 
 model SprintTask {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
 
   sprintId String
   sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
@@ -1016,7 +1016,7 @@ model SprintTask {
 /// defined in src/lib/automation-rules.ts. `action` stays the FIRST action so released iOS/Android, which decode
 /// {type, field?, value?} as strings, keep showing the rule; `actions` holds all of them.
 model Automation {
-  id         String    @id @default(cuid())
+  id         String    @id @default(uuid(7))
   name       String
   trigger    Json
   action     Json
@@ -1047,7 +1047,7 @@ model Automation {
 
 /// One firing of an automation: the run log. Kept 90 days (automation-engine.ts pruneAutomationRuns).
 model AutomationRun {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid(7))
   automationId String
   automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
   projectId    String
@@ -1073,7 +1073,7 @@ model AutomationRun {
 }
 
 model CustomField {
-  id      String          @id @default(cuid())
+  id      String          @id @default(uuid(7))
   name    String
   type    CustomFieldType @default(TEXT)
   options Json?
@@ -1092,7 +1092,7 @@ model CustomField {
 }
 
 model CustomFieldLibrary {
-  id        String          @id @default(cuid())
+  id        String          @id @default(uuid(7))
   name      String
   type      CustomFieldType @default(TEXT)
   options   Json?
@@ -1112,7 +1112,7 @@ model CustomFieldLibrary {
 }
 
 model CustomFieldValue {
-  id    String @id @default(cuid())
+  id    String @id @default(uuid(7))
   value String
 
   customFieldId String
@@ -1126,7 +1126,7 @@ model CustomFieldValue {
 }
 
 model TaskDependency {
-  id   String         @id @default(cuid())
+  id   String         @id @default(uuid(7))
   type DependencyType @default(BLOCKING)
 
   taskId        String
@@ -1139,7 +1139,7 @@ model TaskDependency {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   type      String
   title     String
   message   String
@@ -1172,7 +1172,7 @@ model Notification {
 }
 
 model DeviceInstallation {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   // "ios" (APNs token, lower-case hex) or "android" (FCM registration token, case-sensitive). Every row
   // written before Android existed is an iPhone, which is what the default says. See android0_server.sql.
   platform    String   @default("ios")
@@ -1200,7 +1200,7 @@ model DeviceInstallation {
 }
 
 model Team {
-  id                             String  @id @default(cuid())
+  id                             String  @id @default(uuid(7))
   name                           String
   color                          String  @default("#7B2FBE")
   position                       Int     @default(0) // manual order of team cards within a division
@@ -1222,7 +1222,7 @@ model Team {
 
 /// Grouping layer above teams (divisi / perusahaan). Teams optionally belong to one.
 model Division {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   color       String   @default("#64748B")
   position    Int      @default(0)
@@ -1237,7 +1237,7 @@ model Division {
 }
 
 model TeamCalendarEvent {
-  id          String                  @id @default(cuid())
+  id          String                  @id @default(uuid(7))
   title       String
   description String?
   location    String?
@@ -1265,7 +1265,7 @@ model TeamCalendarEvent {
 }
 
 model RoomBooking {
-  id          String            @id @default(cuid())
+  id          String            @id @default(uuid(7))
   room        String
   title       String
   description String?
@@ -1287,7 +1287,7 @@ model RoomBooking {
 }
 
 model TeamCalendarEventAttendee {
-  id        String            @id @default(cuid())
+  id        String            @id @default(uuid(7))
   createdAt DateTime          @default(now())
 
   eventId   String
@@ -1305,7 +1305,7 @@ model TeamCalendarEventAttendee {
 /// projectIds = the curated set of source projects whose tasks (by dueDate/startDate) populate it.
 /// Stale ids (deleted projects) are harmless — the task feed re-checks viewer access per project.
 model Calendar {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   color       String?
   projectIds  String[] @default([])
@@ -1327,7 +1327,7 @@ model Calendar {
 }
 
 model TeamProject {
-  id        String  @id @default(cuid())
+  id        String  @id @default(uuid(7))
   teamId    String
   projectId String
   team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -1336,7 +1336,7 @@ model TeamProject {
 }
 
 model OfficeLocation {
-  id                     String   @id @default(cuid())
+  id                     String   @id @default(uuid(7))
   name                   String
   address                String?
   latitude               Float
@@ -1364,7 +1364,7 @@ model OfficeLocation {
 }
 
 model AttendanceRecord {
-  id                    String           @id @default(cuid())
+  id                    String           @id @default(uuid(7))
   attendanceDate        DateTime
   checkInAt             DateTime?
   checkOutAt            DateTime?
@@ -1485,7 +1485,7 @@ model AttendanceRecord {
 }
 
 model AttendanceRequest {
-  id                    String                    @id @default(cuid())
+  id                    String                    @id @default(uuid(7))
   startDate             DateTime
   endDate               DateTime
   type                  AttendanceRequestType
@@ -1532,7 +1532,7 @@ model AttendanceRequest {
 }
 
 model TeamMember {
-  id                           String   @id @default(cuid())
+  id                           String   @id @default(uuid(7))
   role                         TeamRole @default(MEMBER)
   isAttendancePrimary          Boolean  @default(false)
   attendancePrimaryWorkspaceId String?
@@ -1563,7 +1563,7 @@ enum TeamCalendarEventStatus {
 }
 
 model ProjectPage {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   icon        String   @default("📄")
   pageType    String   @default("custom")
@@ -1748,7 +1748,7 @@ enum OtpPurpose {
 // ─── PHASE 1A MODELS ─────────────────────────────────────────
 
 model Attachment {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   filename  String
   url       String
   mimeType  String
@@ -1770,7 +1770,7 @@ model Attachment {
 }
 
 model ProofAnnotation {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid(7))
   x            Float
   y            Float
   width        Float    @default(0)
@@ -1787,7 +1787,7 @@ model ProofAnnotation {
 }
 
 model Form {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   slug        String?  @unique
   description String?
@@ -1813,7 +1813,7 @@ model Form {
 }
 
 model FormSubmission {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   data      Json
   createdAt DateTime @default(now())
 
@@ -1838,7 +1838,7 @@ model FormSubmission {
 // the bookkeeping sequence. `seq` restarts at 1 every month (per series), which is how PATS/Jagain
 // have always numbered by hand.
 model DocumentNumber {
-  id       String @id @default(cuid())
+  id       String @id @default(uuid(7))
   series   String // key from DOCUMENT_SERIES, e.g. "PATS_INVOICE" — NOT the printed prefix
   year     Int
   month    Int    // 1-12
@@ -1875,7 +1875,7 @@ model DocumentNumber {
 /// Who may open Legal. The root (LEGAL_ROOT_EMAILS, owner) needs no row. Never deleted: a revoke stamps
 /// revokedAt so who-invited-whom survives; inviting the same person again clears it.
 model LegalMember {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   userId      String    @unique
   user        User      @relation("LegalMemberUser", fields: [userId], references: [id], onDelete: Cascade)
   invitedById String?
@@ -1893,7 +1893,7 @@ model LegalMember {
 /// An issuing company (Intoo, PATS, Suwara Lokal, Z Networks). Its kop is a .docx whose first-page header
 /// is copied into every document it issues.
 model LegalCompany {
-  id            String    @id @default(cuid())
+  id            String    @id @default(uuid(7))
   /// The {CO} segment of a document number. Editable until the company has issued a number.
   code          String    @unique
   name          String
@@ -1918,7 +1918,7 @@ model LegalCompany {
 /// One numbering series: a company × document type and how its printed number looks. DocumentNumber.series
 /// holds `key`, which therefore never changes once a number has been issued.
 model LegalSeries {
-  id          String       @id @default(cuid())
+  id          String       @id @default(uuid(7))
   key         String       @unique
   companyId   String
   company     LegalCompany @relation(fields: [companyId], references: [id], onDelete: Restrict)
@@ -1942,7 +1942,7 @@ model LegalSeries {
 /// A fillable .docx with {{PLACEHOLDERS}}, uploaded from the app. Versioned: a document keeps the version
 /// it was made from, and a new upload never changes documents already made.
 model LegalTemplate {
-  id             String        @id @default(cuid())
+  id             String        @id @default(uuid(7))
   name           String
   description    String        @default("")
   docType        String
@@ -1965,7 +1965,7 @@ model LegalTemplate {
 }
 
 model LegalTemplateVersion {
-  id          String        @id @default(cuid())
+  id          String        @id @default(uuid(7))
   templateId  String
   template    LegalTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   version     Int
@@ -1987,7 +1987,7 @@ model LegalTemplateVersion {
 /// Every legal document: generated here, or uploaded (a signed contract, an outside invoice). Never hard
 /// deleted while it carries an issued number — VOID keeps the number accounted for.
 model LegalDocument {
-  id                String                @id @default(cuid())
+  id                String                @id @default(uuid(7))
   companyId         String
   company           LegalCompany          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   seriesId          String?
@@ -2057,7 +2057,7 @@ model LegalDocument {
 
 /// One state of a document's file. Every change (generate, manual edit, GIDEON, upload, restore) adds one.
 model LegalDocumentVersion {
-  id         String        @id @default(cuid())
+  id         String        @id @default(uuid(7))
   documentId String
   document   LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   version    Int
@@ -2082,7 +2082,7 @@ model LegalDocumentVersion {
 
 /// A change GIDEON proposes to a document: shown as before→after, applied only on Approve.
 model LegalEditProposal {
-  id             String        @id @default(cuid())
+  id             String        @id @default(uuid(7))
   documentId     String
   document       LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   baseVersion    Int
@@ -2113,7 +2113,7 @@ model LegalEditProposal {
 /// requester picks the company) and one per company (scope = the company id: preset and locked).
 /// Regenerating gives a new token, so the old link stops working.
 model LegalRequestLink {
-  id          String        @id @default(cuid())
+  id          String        @id @default(uuid(7))
   /// "general" or the LegalCompany id.
   scope       String        @unique
   token       String        @unique
@@ -2131,7 +2131,7 @@ model LegalRequestLink {
 /// One request for a legal document. The requester sees only their own (My Submissions); Legal members work
 /// them on the board (To Do / In Progress / Done).
 model LegalRequest {
-  id               String         @id @default(cuid())
+  id               String         @id @default(uuid(7))
   requesterId      String?
   requester        User?          @relation("LegalRequestRequester", fields: [requesterId], references: [id], onDelete: SetNull)
   /// The link it came through (plain id: a link row is never deleted, only rotated).
@@ -2182,7 +2182,7 @@ model LegalRequest {
 // Structure (categories + line items) is shared/fixed (seeded from the OPEX sheet); only
 // the monthly amounts (FinanceValue) are per-project and entered by finance staff.
 model FinanceCategory {
-  id        String            @id @default(cuid())
+  id        String            @id @default(uuid(7))
   kind      String            // "OPEX" | "REVENUE"
   name      String
   order     Int               @default(0)
@@ -2193,7 +2193,7 @@ model FinanceCategory {
 }
 
 model FinanceLineItem {
-  id         String          @id @default(cuid())
+  id         String          @id @default(uuid(7))
   categoryId String
   category   FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   name       String
@@ -2204,7 +2204,7 @@ model FinanceLineItem {
 }
 
 model FinanceValue {
-  id         String          @id @default(cuid())
+  id         String          @id @default(uuid(7))
   projectId  String
   project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lineItemId String
@@ -2221,7 +2221,7 @@ model FinanceValue {
 
 // --- Announcements (BoD-posted pop-ups shown once per user) ---
 model Announcement {
-  id          String              @id @default(cuid())
+  id          String              @id @default(uuid(7))
   title       String
   body        String
   tone        String              @default("info") // info | success | warning
@@ -2258,7 +2258,7 @@ model Announcement {
 }
 
 model AnnouncementSeen {
-  id             String       @id @default(cuid())
+  id             String       @id @default(uuid(7))
   announcementId String
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   userId         String
@@ -2269,7 +2269,7 @@ model AnnouncementSeen {
 }
 
 model StatusUpdate {
-  id        String        @id @default(cuid())
+  id        String        @id @default(uuid(7))
   status    ProjectHealth @default(ON_TRACK)
   text      String
   createdAt DateTime      @default(now())
@@ -2282,7 +2282,7 @@ model StatusUpdate {
 }
 
 model Favorite {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   type      String
   targetId  String
   createdAt DateTime @default(now())
@@ -2296,7 +2296,7 @@ model Favorite {
 // ─── WAVE 2 MODELS ──────────────────────────────────────────
 
 model TaskRelation {
-  id           String @id @default(cuid())
+  id           String @id @default(uuid(7))
   type         String // RELATED_TO, BLOCKS, BLOCKED_BY, DUPLICATES, PARENT_OF
   createdAt    DateTime @default(now())
 
@@ -2310,14 +2310,14 @@ model TaskRelation {
 }
 
 model SyncedBlock {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   content   Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model NotificationPreference {
-  id                String   @id @default(cuid())
+  id                String   @id @default(uuid(7))
   emailEnabled      Boolean  @default(true)
   // waEnabled / waPhone: retired 12 Oct 2026 (WhatsApp channel); dropped by 2026-10-12-retire-wa-webhooks-DROP.sql.
   slackEnabled      Boolean  @default(false)
@@ -2339,7 +2339,7 @@ model NotificationPreference {
 // ─── BATCH C MODELS ──────────────────────────────────────────
 
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String   @id @default(uuid(7))
   action     String   // "create" | "update" | "delete" | "login" | "export" | "invite"
   entityType String   // "task" | "project" | "doc" | "user" | "comment" | "webhook"
   entityId   String?
@@ -2361,7 +2361,7 @@ model AuditLog {
 /// back (owner, 8 Oct 2026). Written by src/lib/deletion-snapshot.ts in the delete's own transaction;
 /// `source` "backup" = taken afterwards from a nightly backup. Kept 90 days (cron/purge-sheet-revisions).
 model DeletionSnapshot {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   auditLogId   String?   @unique // the "delete" row in AuditLog it restores
   entityType   String // the audit row's entityType: lib/deletion-entities.ts RESTORABLE
   entityId     String
@@ -2382,7 +2382,7 @@ model DeletionSnapshot {
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String  @id @default(uuid(7))
   userId            String
   type              String
   provider          String
@@ -2406,7 +2406,7 @@ model Account {
 // tables stay in the database, unused, until prisma/sql/2026-10-12-retire-wa-webhooks-DROP.sql runs.
 
 model InviteToken {
-  id        String      @id @default(cuid())
+  id        String      @id @default(uuid(7))
   email     String
   token     String      @unique
   role      ProjectRole @default(MEMBER)
@@ -2423,7 +2423,7 @@ model InviteToken {
 }
 
 model EmailOtpVerification {
-  id                String     @id @default(cuid())
+  id                String     @id @default(uuid(7))
   email             String
   purpose           OtpPurpose
   codeHash          String
@@ -2447,7 +2447,7 @@ model EmailOtpVerification {
 // ─── PORTFOLIO MODELS ────────────────────────────────────────
 
 model Portfolio {
-  id          String          @id @default(cuid())
+  id          String          @id @default(uuid(7))
   name        String
   description String?
   status      PortfolioStatus @default(ON_TRACK)
@@ -2462,7 +2462,7 @@ model Portfolio {
 }
 
 model PortfolioProject {
-  id          String @id @default(cuid())
+  id          String @id @default(uuid(7))
   portfolioId String
   projectId   String
 
@@ -2473,7 +2473,7 @@ model PortfolioProject {
 }
 
 model ImportJob {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   source    String   // "asana" | "notion"
   status    String   @default("pending") // "pending" | "running" | "completed" | "failed"
   progress  Int      @default(0)
@@ -2488,7 +2488,7 @@ model ImportJob {
 // ─── PHASE 3 MODELS ─────────────────────────────────────────
 
 model DocTemplate {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   title       String
   content     Json?
   category    String   @default("general")
@@ -2502,7 +2502,7 @@ model DocTemplate {
 // ─── HIGH PRIORITY MODELS ───────────────────────────────────
 
 model TaskProject {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   position  Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -2520,7 +2520,7 @@ model TaskProject {
 }
 
 model TaskLike {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   createdAt DateTime @default(now())
 
   taskId String
@@ -2534,7 +2534,7 @@ model TaskLike {
 }
 
 model SavedSearch {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   name      String
   query     Json
   createdAt DateTime @default(now())
@@ -2548,7 +2548,7 @@ model SavedSearch {
 // ─── ENTERPRISE MODELS ─────────────────────────────────────
 
 model SsoConfig {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   provider    SsoProvider @default(SAML)
   entityId    String?
   ssoUrl      String?
@@ -2564,7 +2564,7 @@ model SsoConfig {
 }
 
 model UserSession {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid(7))
   /// The JWT `sid` claim (or legacy:<userId>:<iat>), never the JWT itself: src/lib/user-sessions.ts.
   token        String   @unique
   ipAddress    String?
@@ -2584,7 +2584,7 @@ model UserSession {
 }
 
 model WorkflowBundle {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   name        String
   description String?
   config      Json     // { sections, customFields, automations, taskTemplates }
@@ -2605,7 +2605,7 @@ enum SsoProvider {
 
 // ===== Gamification (XP / levels / quests) =====
 model UserXp {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid(7))
   userId       String   @unique
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalXp      Int      @default(0)
@@ -2614,7 +2614,7 @@ model UserXp {
 }
 
 model XpTransaction {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount    Int
@@ -2630,7 +2630,7 @@ model XpTransaction {
 /// transactionId is what makes removing idempotent. Not a relation to XpTransaction on purpose: a
 /// later whole-day clear deletes that row, and the removal must still show on the record.
 model XpRefund {
-  id                String    @id @default(cuid())
+  id                String    @id @default(uuid(7))
   transactionId     String    @unique
   userId            String
   user              User      @relation("XpRefundUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -2649,7 +2649,7 @@ model XpRefund {
 }
 
 model UserStreak {
-  id              String    @id @default(cuid())
+  id              String    @id @default(uuid(7))
   userId          String    @unique
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   currentStreak   Int       @default(0)
@@ -2659,7 +2659,7 @@ model UserStreak {
 }
 
 model Quest {
-  id              String   @id @default(cuid())
+  id              String   @id @default(uuid(7))
   workspaceId     String
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   title           String
@@ -2687,7 +2687,7 @@ model Quest {
 }
 
 model QuestClaim {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   questKey  String   // admin quest id OR auto template key (e.g. "auto:weekly-10")
@@ -2709,7 +2709,7 @@ enum ConversationType {
 }
 
 model Conversation {
-  id        String           @id @default(cuid())
+  id        String           @id @default(uuid(7))
   type      ConversationType
   name      String?
   projectId String?          @unique
@@ -2736,7 +2736,7 @@ model Conversation {
 }
 
 model ConversationMember {
-  id             String   @id @default(cuid())
+  id             String   @id @default(uuid(7))
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
@@ -2757,7 +2757,7 @@ model ConversationMember {
 /// One person may hold several — phone, laptop, a hardware key — and losing one must never lock
 /// them out, which is exactly why password sign-in stays alongside this rather than being replaced.
 model Passkey {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   userId       String
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Base64URL credential id as the authenticator reported it.
@@ -2781,7 +2781,7 @@ model Passkey {
 /// Kept server-side and single-use on purpose: a challenge the client is trusted to hand back
 /// unchanged is not a challenge. Rows are short-lived and swept on use.
 model PasskeyChallenge {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   challenge String   @unique
   /// Null for sign-in, where the person has not said who they are yet.
   userId    String?
@@ -2793,7 +2793,7 @@ model PasskeyChallenge {
 }
 
 model Message {
-  id             String   @id @default(cuid())
+  id             String   @id @default(uuid(7))
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
@@ -2837,7 +2837,7 @@ model Message {
 
 /// Per-project expense category (custom, with color) — breakdowns in the dashboard follow it.
 model PnlCategory {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
@@ -2854,7 +2854,7 @@ model PnlCategory {
 
 /// One expense transaction (per-day granularity; dashboard rolls up to week/month).
 model PnlExpense {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date        DateTime
@@ -2878,7 +2878,7 @@ model PnlExpense {
 /// Receipt/photo attached to an expense. Files live in public/uploads/attachments (same mounted
 /// dir as task attachments) and are served via the login-gated /api/files route.
 model PnlExpenseAttachment {
-  id         String     @id @default(cuid())
+  id         String     @id @default(uuid(7))
   expenseId  String
   expense    PnlExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   filename   String
@@ -2893,7 +2893,7 @@ model PnlExpenseAttachment {
 
 /// Custom income-pipeline stage per project (e.g. Penawaran → Invoice → DP/Termin → Lunas).
 model PnlIncomeStage {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
@@ -2911,7 +2911,7 @@ model PnlIncomeStage {
 /// PnlIncomePayment rows (clients pay in parts: DP, termin, pelunasan) — realized revenue comes
 /// from payments, NOT from totalAmount.
 model PnlIncome {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   projectId    String
   project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title        String
@@ -2931,7 +2931,7 @@ model PnlIncome {
 
 /// A real money-in event against a deal (DP/termin/pelunasan).
 model PnlIncomePayment {
-  id        String    @id @default(cuid())
+  id        String    @id @default(uuid(7))
   incomeId  String
   income    PnlIncome @relation(fields: [incomeId], references: [id], onDelete: Cascade)
   date      DateTime
@@ -2944,7 +2944,7 @@ model PnlIncomePayment {
 
 /// Monthly expense budget target — dashboard shows on/over-budget against actual spend.
 model PnlBudget {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   year      Int
@@ -2960,7 +2960,7 @@ model PnlBudget {
 /// Per-project spreadsheet — free-form rows, NOT tasks (that's ProjectTableView / tableColumns).
 /// Auto-created the first time the tab is opened; see ensureProjectSheet in src/lib/project-sheets.ts.
 model ProjectSheet {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name        String   @default("Sheet 1")
@@ -2993,7 +2993,7 @@ model ProjectSheet {
 /// One spreadsheet row. `cells` is { [columnId]: string | number | boolean }; an absent key means an
 /// empty cell, which keeps the jsonb small and makes "clear" a key delete rather than a null.
 model SheetRow {
-  id          String       @id @default(cuid())
+  id          String       @id @default(uuid(7))
   sheetId     String
   sheet       ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
   /// Float so inserting between two rows is ONE update (the midpoint), not a renumber of the sheet.
@@ -3021,7 +3021,7 @@ model SheetRow {
 /// comments with it (cascade); deleting a column leaves them orphaned by columnId, which the API
 /// filters out rather than showing against a column that no longer exists.
 model SheetComment {
-  id         String       @id @default(cuid())
+  id         String       @id @default(uuid(7))
   sheetId    String
   sheet      ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
   rowId      String
@@ -3047,7 +3047,7 @@ model SheetComment {
 /// read-modify-write is the exact race the sheet was designed to avoid. Prisma does not manage the
 /// trigger, so it must be reapplied by hand if this table is ever rebuilt.
 model SheetCellRevision {
-  id        String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id        String       @id @default(dbgenerated("(gen_random_uuid())::text")) // real DBs: nexus_uuid7() (prisma/sql/2026-10-18-uuid-legacy-id-map.sql); a fresh `db push` DB keeps v4
   sheetId   String
   sheet     ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
   rowId     String
@@ -3065,7 +3065,7 @@ model SheetCellRevision {
 }
 
 model PnlRecurringExpense {
-  id            String   @id @default(cuid())
+  id            String   @id @default(uuid(7))
   projectId     String
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   description   String
@@ -3090,7 +3090,7 @@ model PnlRecurringExpense {
 // Soft-delete (deletedAt) + denormalized likeCount/commentCount synced inside the like/comment tx.
 
 model Post {
-  id           String        @id @default(cuid())
+  id           String        @id @default(uuid(7))
   text         String        @db.Text          // ≤280 enforced in the API
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -3110,7 +3110,7 @@ model Post {
 }
 
 model PostImage {
-  id        String  @id @default(cuid())
+  id        String  @id @default(uuid(7))
   postId    String
   post      Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
   url       String                              // gated /api/files/feed/<name>
@@ -3124,7 +3124,7 @@ model PostImage {
 }
 
 model PostMention {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId    String
@@ -3136,7 +3136,7 @@ model PostMention {
 }
 
 model PostLike {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId    String
@@ -3148,7 +3148,7 @@ model PostLike {
 }
 
 model PostComment {
-  id        String    @id @default(cuid())
+  id        String    @id @default(uuid(7))
   text      String    @db.Text
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -3189,7 +3189,7 @@ enum PeerReportCategory {
 }
 
 model PeerReport {
-  id                String             @id @default(cuid())
+  id                String             @id @default(uuid(7))
   reporterId        String
   reporter          User               @relation("PeerReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   reportedUserId    String
@@ -3220,7 +3220,7 @@ model PeerReport {
 }
 
 model PeerReportEvent {
-  id         String     @id @default(cuid())
+  id         String     @id @default(uuid(7))
   reportId   String
   report     PeerReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   action     String     // created | verified | rejected | withdrawn | reversed
@@ -3261,7 +3261,7 @@ enum ComplaintStatus {
 }
 
 model Complaint {
-  id            String             @id @default(cuid())
+  id            String             @id @default(uuid(7))
   workspaceId   String
   workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   reporterId    String
@@ -3303,7 +3303,7 @@ model Complaint {
 }
 
 model ComplaintAttachment {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   complaintId String
   complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   url         String    // gated /api/files/complaints/<name>
@@ -3316,7 +3316,7 @@ model ComplaintAttachment {
 }
 
 model ComplaintMessage {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   complaintId  String
   complaint    Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   authorId     String
@@ -3329,7 +3329,7 @@ model ComplaintMessage {
 }
 
 model ComplaintEvent {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid(7))
   complaintId String
   complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   action      String    // filed | status
@@ -3370,7 +3370,7 @@ enum AttendanceCorrectionKind {
 // inert until POST /api/complaints/[id]/correction approves it; that endpoint is the single place a
 // ticket can turn into an attendance write.
 model AttendanceCorrection {
-  id                 String                     @id @default(cuid())
+  id                 String                     @id @default(uuid(7))
   complaintId        String
   complaint          Complaint                  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   workspaceId        String
@@ -3431,7 +3431,7 @@ model AttendanceCorrection {
 // reply. Loaded when the panel opens, so the conversation survives closing the panel, a refresh,
 // and switching devices. Retention is capped per-user at read time (see /api/gideon/history).
 model GideonMessage {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      String   // "user" | "assistant"
@@ -3461,7 +3461,7 @@ model GideonMessage {
 /// broken chain is visible instead of only in console.error. userId/projectId are plain ids on purpose
 /// (no FK): the log must outlive the person or project.
 model GideonRun {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   /// The person GIDEON acted for (its permissions are theirs). Null = no actor.
   userId       String?
   /// CHAT | MENTION | SCHEDULE | TICKET | REFLECTION
@@ -3498,7 +3498,7 @@ model GideonRun {
 /// One tool call inside a run: what the chat shows as "Searching tasks…", plus the sources it read
 /// (refs) and the card for what it created or changed.
 model GideonRunStep {
-  id         String    @id @default(cuid())
+  id         String    @id @default(uuid(7))
   runId      String
   run        GideonRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   /// The /api/gideon/tools action, e.g. search_tasks.
@@ -3522,7 +3522,7 @@ model GideonRunStep {
 /// (phase 1 never blocks). Written under a per-user advisory lock (lib/gideon-credits.ts). No FK on
 /// userId, like GideonRun: a ledger row must never stop an account from being removed.
 model GideonCreditUsage {
-  id               String   @id @default(cuid())
+  id               String   @id @default(uuid(7))
   userId           String
   /// The company workspace when the person is a member of it, else null.
   workspaceId      String?
@@ -3584,7 +3584,7 @@ model GideonCreditOverride {
 
 /// One-off bonus credits, added to the person's monthly pool for one period.
 model GideonCreditBonus {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   userId      String
   periodKey   String
   credits     Int
@@ -3599,7 +3599,7 @@ model GideonCreditBonus {
 /// A write GIDEON wanted to make and the person has to approve first (approval mode). Applying runs the
 /// exact same /api/gideon/tools action, as the same person, so every permission check runs again.
 model GideonProposal {
-  id        String     @id @default(cuid())
+  id        String     @id @default(uuid(7))
   runId     String?
   run       GideonRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
   /// Who must approve: the person GIDEON acted for.
@@ -3627,7 +3627,7 @@ model GideonProposal {
 /// (⌘/Ctrl+O). Private to its owner. userId is a DB foreign key (cascade) without a Prisma relation, so the
 /// User model stays untouched.
 model GideonChat {
-  id        String          @id @default(cuid())
+  id        String          @id @default(uuid(7))
   userId    String
   /// The first question, trimmed; the person may rename it.
   title     String?
@@ -3680,7 +3680,7 @@ model CustomFieldAutofill {
 /// A value GIDEON wrote into a custom field. The ✨ marker shows while the task still holds this value;
 /// a person editing the field makes it theirs again (the values differ).
 model CustomFieldAiFill {
-  id            String   @id @default(cuid())
+  id            String   @id @default(uuid(7))
   customFieldId String
   taskId        String
   value         String   @db.Text
@@ -3695,7 +3695,7 @@ model CustomFieldAiFill {
 /// as a project status update signed by GIDEON. weekdays: 0 = Sunday … 6 = Saturday; time "HH:MM" in
 /// `timezone`. Runs as createdById (GIDEON never sees more than that person).
 model GideonSchedule {
-  id           String    @id @default(cuid())
+  id           String    @id @default(uuid(7))
   projectId    String
   kind         String    @default("WEEKLY_DIGEST")
   enabled      Boolean   @default(true)
@@ -3762,7 +3762,7 @@ model AttendanceOutage {
 // ProjectFolder + Attachment digabung, dengan alasan tiap penyimpangan ditulis di bawah.
 // ─────────────────────────────────────────────────────────────────────────────
 model VaultItem {
-  id       String @id @default(cuid())
+  id       String @id @default(uuid(7))
   // "FOLDER" | "FILE" — gaya string yang sama dengan Attachment.kind, bukan enum: menambah
   // jenis (misal "LINK") nanti tidak perlu migrasi di repo yang tidak punya prisma/migrations.
   kind     String @default("FILE")
@@ -3837,7 +3837,7 @@ model VaultItem {
 /// once expired. The quota check (lib/vault.ts vaultQuotaProblemTx) counts live files + live reservations of
 /// other uploads, under the per-workspace advisory lock. prisma/sql/2026-10-16-vault-upload-reservation.sql.
 model VaultUploadReservation {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   userId      String
   uploadId    String
   workspaceId String
@@ -3858,7 +3858,7 @@ model VaultUploadReservation {
 // Tautan menunjuk ke ITEM, bukan ke byte. Mengganti logo memperbarui berkas pada item yang sama,
 // jadi tautan yang sudah terkirim tidak putus — itu momen yang paling sering merusak berbagi aset.
 model VaultShare {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
   // KAPABILITAS, bukan nama. crypto.randomBytes(16).toString("base64url").
   //
   // JANGAN pernah memakai slugify() di sini. Slug formulir dipilih manusia dan boleh ditebak
@@ -3899,7 +3899,7 @@ model VaultShare {
 // sourceDays is how many reflections the month summary was built from; when it still matches the
 // count in AttendanceRecord the cached text is served instead of asking GIDEON again.
 model ReflectionSummary {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   workspaceId String
   userId      String
   kind        String
@@ -3942,7 +3942,7 @@ model AppSetting {
 // outside), as classified when stored. Purged after 90 days (cron/purge-sheet-revisions). Table:
 // loc_server.sql.
 model AttendanceLocationPoint {
-  id        String           @id @default(cuid())
+  id        String           @id @default(uuid(7))
   userId    String
   recordId  String
   record    AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
@@ -3963,7 +3963,7 @@ model AttendanceLocationPoint {
 /// Team/Division. Grants NOTHING:
 /// no project access, no attendance rule — project access stays with direct project invites.
 model OrgUnit {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
@@ -3995,7 +3995,7 @@ model OrgUnit {
 
 /// One person in one IP/Team of the Bagan IP & Divisi. A person may be in several units.
 model OrgUnitMember {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   unitId      String
   unit        OrgUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
   userId      String
@@ -4018,7 +4018,7 @@ model OrgUnitMember {
 /// are the GM's English keys (vocabulary + rules in src/lib/pipeline.ts). Money in rupiah, Float like P&L.
 /// SQL: prisma/sql/2026-10-09-pipeline.sql (applied by hand before the image that reads it).
 model PipelineDeal {
-  id        String  @id @default(cuid())
+  id        String  @id @default(uuid(7))
   projectId String
   project   Project @relation("PipelineDealProject", fields: [projectId], references: [id], onDelete: Cascade)
   /// "TZN-26001": prefix + 2-digit year + sequence. Read-only, unique across ALL boards and never handed out
@@ -4124,7 +4124,7 @@ model PipelineDealCode {
 }
 
 model PipelineDealChange {
-  id        String       @id @default(cuid())
+  id        String       @id @default(uuid(7))
   dealId    String
   deal      PipelineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
   userId    String?
@@ -4145,7 +4145,7 @@ model PipelineDealChange {
 /// Its status (Not Invoiced / Invoiced / Partial / Paid / Overdue) is derived, never stored — see
 /// termStatusOf in lib/pipeline.ts. SQL: prisma/sql/2026-10-09-pipeline-terms.sql.
 model PipelinePaymentTerm {
-  id          String       @id @default(cuid())
+  id          String       @id @default(uuid(7))
   dealId      String
   deal        PipelineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
   /// Order inside the deal (1024, 2048, …).
@@ -4174,7 +4174,7 @@ model PipelinePaymentTerm {
 /// is never deleted: clearing it stores nulls, and the audit row keeps the values before.
 /// Rules: src/lib/outlet-sales.ts. SQL: prisma/sql/2026-10-10-outlet-sales.sql.
 model OutletSalesTarget {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   month       String
@@ -4192,7 +4192,7 @@ model OutletSalesTarget {
 /// null = that part falls back to the month's target split evenly over its days. A row whose two parts are
 /// both cleared is deleted (the audit row keeps what it was). SQL: prisma/sql/2026-10-14-outlet-custom-report.sql.
 model OutletSalesDayTarget {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date        DateTime @db.Date
@@ -4210,7 +4210,7 @@ model OutletSalesDayTarget {
 /// nullable: null = not filled (0 is a real zero). Engagement (likes + comments + shares) is never stored.
 /// `platformId` is a stable id of Project.socialReportConfig. SQL: prisma/sql/2026-10-14-social-media-report.sql.
 model SocialMediaDay {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// The day, WIB, no time.
@@ -4232,7 +4232,7 @@ model SocialMediaDay {
 
 /// A day's two notes of a Social Media Report project: "What worked" and "What didn't work" (owner, 14 Oct 2026).
 model SocialMediaNote {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date        DateTime @db.Date
@@ -4249,7 +4249,7 @@ model SocialMediaNote {
 /// A platform's monthly targets ("YYYY-MM"): engagement and posts. Null = no target for that part. A target
 /// is never deleted: clearing stores nulls, and the audit row keeps the values before.
 model SocialMediaTarget {
-  id               String   @id @default(cuid())
+  id               String   @id @default(uuid(7))
   projectId        String
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   month            String
@@ -4267,7 +4267,7 @@ model SocialMediaTarget {
 /// A date's own target for one platform: engagement, posts, or both; null = that part falls back to the
 /// month's target split evenly over its days. A row whose two parts are both cleared is deleted.
 model SocialMediaDayTarget {
-  id               String   @id @default(cuid())
+  id               String   @id @default(uuid(7))
   projectId        String
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date             DateTime @db.Date
@@ -4287,7 +4287,7 @@ model SocialMediaDayTarget {
 /// hosting) are never stored; the server adds them up (src/lib/outlet-sales.ts), and the status
 /// (UPCOMING / WAITING_REPORT / REPORTED) is derived from the date and what has been filled.
 model OutletSalesEvent {
-  id            String    @id @default(cuid())
+  id            String    @id @default(uuid(7))
   projectId     String
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// The day of the event, WIB, no time.
@@ -4354,7 +4354,7 @@ model CollabState {
 
 /// A "Remind me" date chip inside a doc or a task body: notify `userId` at `remindAt` (cron/block-reminders).
 model BlockReminder {
-  id         String    @id @default(cuid())
+  id         String    @id @default(uuid(7))
   sourceKind String
   sourceId   String
   key        String
@@ -4373,7 +4373,7 @@ model BlockReminder {
 /// minutes and proposed tasks → Apply saves the minutes as a Doc and creates the ticked tasks. lib/meeting-notes.ts.
 /// No FKs (prisma/sql/2026-10-18-meeting-notes.sql): a meeting never blocks removing a project, doc or account.
 model MeetingNote {
-  id               String    @id @default(cuid())
+  id               String    @id @default(uuid(7))
   createdById      String
   /// The project the minutes and tasks go to. Null until picked (needed for Apply).
   projectId        String?
@@ -4472,4 +4472,19 @@ model GideonModel0Event {
   loadSec      Float?
 
   @@index([at])
+}
+
+/// Every id that existed before the UUIDv7 conversion (docs/internal/UUID-MIGRATION.md), kept forever so
+/// old links, released apps' caches and old JWTs keep resolving (lib/legacy-ids.ts). Written only by
+/// scripts/uuid-migration/convert.sql; the app only reads it. `model` is the table, or "(deleted)" for an
+/// id only seen in history rows (audit, deletion snapshots, notifications).
+model LegacyIdMap {
+  oldId       String   @id @map("old_id")
+  newId       String   @unique @map("new_id")
+  model       String
+  tsSource    String   @map("ts_source")
+  convertedAt DateTime @default(now()) @map("converted_at") @db.Timestamptz(6)
+
+  @@index([model], map: "legacy_id_map_model_idx")
+  @@map("legacy_id_map")
 }

@@ -66,7 +66,8 @@ const SHIM_NAME = process.env.GIDEON_SHIM_NAME || "hermes-chat"
 // approval) to the conversation that caused it. Anything that does not look like an id is dropped.
 function cleanRunId(v) {
   const s = String(v || "")
-  return /^[a-z0-9]{10,40}$/i.test(s) ? s : ""
+  // cuid (before 18 Oct 2026) or UUIDv7 (36 chars with '-'): docs/internal/UUID-MIGRATION.md.
+  return /^[a-z0-9-]{10,40}$/i.test(s) ? s : ""
 }
 function childEnv(actorEmail, runId) {
   const env = { ...process.env }

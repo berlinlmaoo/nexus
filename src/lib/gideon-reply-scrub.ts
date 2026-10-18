@@ -8,8 +8,9 @@
 //
 // Pure function, no imports: tested by gideon-reply-scrub.test.mjs.
 
-/** A Prisma cuid (25 chars, starts with "c"). Requires a digit so ordinary words are never touched. */
-const CUID = String.raw`c(?=[a-z0-9]*\d)[a-z0-9]{20,30}`
+/** A database id: a pre-conversion cuid (25 chars, starts with "c"; a digit is required so ordinary words are
+ *  never touched) or a UUID (every id since the UUIDv7 conversion, docs/internal/UUID-MIGRATION.md). */
+const CUID = String.raw`(?:c(?=[a-z0-9]*\d)[a-z0-9]{20,30}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`
 /** One identifier segment: lowerCamelCase or lower (xpPenalties, outage). */
 const SEG = String.raw`[a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)*`
 /** camelCase with a lowercase start of 2+ letters and at least one hump: alreadyWaived, xpPenalties.

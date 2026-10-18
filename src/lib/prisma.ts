@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import { RETIRED_PROJECT_FLAGS } from '@/lib/project-retired-flags'
 import { dbIdleTimeoutMs, dbPoolMax, registerDbPool } from '@/lib/db-pool'
+import { rewriteLegacyIdsInArgs, setLegacyIdLookup } from '@/lib/legacy-ids'
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; __nexusPgPool?: pg.Pool }
 
@@ -44,7 +45,24 @@ function createPrismaClient() {
   // as their fixed values wherever a project is returned, whatever the row still holds, so released apps
   // that decode them behave the same before and after the backfill SQL runs.
   const fixed = <V extends boolean>(value: V) => ({ needs: {}, compute: () => value })
+  // Old ids (before the UUIDv7 conversion) keep working: lib/legacy-ids.ts, docs/internal/UUID-MIGRATION.md.
+  const pool = sharedPool()
+  setLegacyIdLookup(
+    async (oldIds) =>
+      (await pool.query('select old_id, new_id from legacy_id_map where old_id = any($1::text[])', [oldIds])).rows,
+    async () => (await pool.query('select exists (select 1 from legacy_id_map) as ok')).rows[0]?.ok === true,
+    async (newId) =>
+      (await pool.query('select old_id from legacy_id_map where new_id = $1', [newId])).rows[0]?.old_id ?? null,
+  )
   return base.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ args, query }) {
+          await rewriteLegacyIdsInArgs(args)
+          return query(args)
+        },
+      },
+    },
     result: {
       project: {
         enableTaskBatchDuplicate: fixed(RETIRED_PROJECT_FLAGS.enableTaskBatchDuplicate),

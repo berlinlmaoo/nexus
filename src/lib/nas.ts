@@ -346,6 +346,34 @@ export async function nasDelete(sid: string, path: string): Promise<void> {
   }
 }
 
+// ── Rename file/folder ───────────────────────────────
+
+/** Renames `path` to `name` in the same folder (SYNO.FileStation.Rename). */
+export async function nasRename(sid: string, path: string, name: string): Promise<void> {
+  if (!validateNasPath(path) || name.includes("/")) {
+    throw new NasError(0, "Access denied: path not allowed")
+  }
+
+  const params = new URLSearchParams({
+    api: "SYNO.FileStation.Rename",
+    version: "2",
+    method: "rename",
+    path,
+    name,
+    _sid: sid,
+  })
+
+  const res = await fetch(`${NAS_API}?${params}`, {
+    method: "GET",
+    signal: AbortSignal.timeout(30000),
+  })
+
+  const data = await res.json()
+  if (!data.success) {
+    throw new NasError(data.error?.code || 0, "Failed to rename")
+  }
+}
+
 // ── Thumbnail / preview ──────────────────────────────
 
 export function nasThumbnailUrl(sid: string, filePath: string, size: "small" | "medium" | "large" = "small"): string {

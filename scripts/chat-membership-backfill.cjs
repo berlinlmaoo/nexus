@@ -34,16 +34,21 @@ const pg = appRequire("pg")
 
 const APPLY = process.argv.includes("--apply")
 const VERBOSE = process.argv.includes("--verbose") || !APPLY
-const ORG_WORKSPACE_ID = (process.env.NEXUS_ORG_WORKSPACE_ID || "").trim() || "cmmroq7dk0001vewe92nk1g0w"
+const ORG_WORKSPACE_ID = (process.env.NEXUS_ORG_WORKSPACE_ID || "").trim() || "019cf14d-ebd8-7000-b947-67d4138beaf3"
 const DELETED_DOMAIN = "@deleted.invalid"
 const CHAT_TYPES = ["MESSAGE", "MESSAGE_MENTION"]
 
-// Prisma-style cuid: "c" + time + random, 25 chars. Ids are opaque strings; only uniqueness matters.
-function cuid() {
-  const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
-  const rnd = Array.from(crypto.randomBytes(16), (b) => alphabet[b % 36]).join("")
-  return ("c" + Date.now().toString(36).padStart(8, "0") + rnd).slice(0, 25)
+function uuidv7() {
+  // RFC 9562 UUIDv7, the format of every NEXUS id since 18 Oct 2026 (docs/internal/UUID-MIGRATION.md).
+  const b = crypto.randomBytes(16)
+  const ms = BigInt(Date.now())
+  for (let i = 0; i < 6; i++) b[i] = Number((ms >> BigInt(8 * (5 - i))) & 0xffn)
+  b[6] = (b[6] & 0x0f) | 0x70
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = b.toString("hex")
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
+const cuid = uuidv7 // name kept: the inserts below call cuid()
 
 const isDeleted = (email) => typeof email === "string" && email.toLowerCase().endsWith(DELETED_DOMAIN)
 

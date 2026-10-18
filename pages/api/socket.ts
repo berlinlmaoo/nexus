@@ -19,6 +19,7 @@ import { attachCollabSocket } from "@/lib/collab-rooms"
 import { onSlotDemoted } from "@/lib/bluegreen"
 import { cleanCursorMove, stripPrivatePeople } from "@/lib/realtime-payload"
 import type { Socket } from "socket.io"
+import { canonicalRoom, normalizeTokenUserId, roomMayBeLegacy } from "@/lib/legacy-ids"
 
 const log = createLogger("socket")
 
@@ -400,6 +401,8 @@ export function initializeSocketServer(
       })
 
       if (!token?.id) return next(new Error("Invalid session"))
+      // Old (pre-UUIDv7) user id in a JWT minted before the conversion (lib/legacy-ids.ts).
+      await normalizeTokenUserId(token as Record<string, unknown>)
       // A deleted account keeps its conversation memberships (chat history stays), so its
       // leftover JWT must not be allowed back into those rooms.
       const owner = await prisma.user.findUnique({
@@ -447,6 +450,11 @@ export function initializeSocketServer(
 
     socket.on("join-room", async (data: { room: string; userId: string; name: string; avatar?: string | null }) => {
       const me = socket.data.userId as string
+      // A client holding a pre-UUIDv7 id joins the room the server actually broadcasts to (lib/legacy-ids.ts).
+      // Awaited only for such a room: an extra await on every join would reorder a client's joins.
+      if (data && typeof data.room === "string" && data.room.length <= 200 && roomMayBeLegacy(data.room)) {
+        data.room = await canonicalRoom(data.room)
+      }
       const verdict = typeof data?.room === "string" && data.room.length <= 200 ? await canJoinRoom(me, data.room) : { ok: false }
       if (!data?.room || !verdict.ok) {
         // Told, not ignored: a silent no-op looks identical to a working join from the client side,
@@ -484,8 +492,9 @@ export function initializeSocketServer(
       if (!already && !otherTab) socket.to(data.room).emit("presence-join", { userId: me, name, avatar, color })
     })
 
-    socket.on("leave-room", (room: string) => {
-      if (typeof room !== "string") return
+    socket.on("leave-room", async (rawRoom: string) => {
+      if (typeof rawRoom !== "string") return
+      const room = rawRoom.length <= 200 && roomMayBeLegacy(rawRoom) ? await canonicalRoom(rawRoom) : rawRoom
       socket.leave(room)
       roomProjectsOf(socket).delete(room)
       // Left the thread while typing in it: the others' dots go now, not when they time out.
