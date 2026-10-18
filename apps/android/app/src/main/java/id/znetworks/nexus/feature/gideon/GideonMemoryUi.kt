@@ -3,7 +3,6 @@ package id.znetworks.nexus.feature.gideon
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -121,6 +120,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
         dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun MemoryRow(memory: GMemory, busy: Boolean, paused: Boolean, limit: Int, act: (suspend () -> Unit) -> Unit) {
     val context = LocalContext.current
     val store = (context.applicationContext as NexusApplication).container.gideonMemories
@@ -137,9 +137,9 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
         } else {
             Text(memory.text, color = c.foreground)
             if (memory.kind == "DATE") MemoryRules.date(memory.monthDay, LocalConfiguration.current.locales[0])?.let { Text(it, color = c.mutedFg, fontSize = 12.sp) }
-            if (memory.status == "PENDING") Column {
-                Text(stringResource(R.string.gm_suggested), color = c.warningFg, fontSize = 12.sp)
-                TextButton(onClick = { act { store.save(memory) } }, enabled = !busy && !paused) { Text(stringResource(R.string.gm_save)) }
+            if (memory.status == "PENDING") FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.gm_suggested), color = c.accentFg, fontSize = 12.sp, modifier = Modifier.background(c.accentBg, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                NxButton(stringResource(R.string.gm_save), { act { store.save(memory) } }, enabled = !busy && !paused, compact = true)
             }
             Row {
                 TextButton(onClick = { editing = true }, enabled = !busy) { Text(stringResource(R.string.gm_edit)) }
