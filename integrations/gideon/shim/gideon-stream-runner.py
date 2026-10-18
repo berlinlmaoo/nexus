@@ -107,7 +107,98 @@ _ANNOUNCE_TOOL = re.compile(r"\bnexus_[a-z_]{3,}|<tool_(code|call)>|\btool_call\
 # "If you want, I can check…" is an offer, not an unkept promise.
 _OFFER = re.compile(r"\b(kalau|kalo|klo|jika|bila|apabila|if|mau\s+gw|mau\s+saya|mau\s+aku|perlu\s+gw|perlu\s+saya|bisa)\b", re.I)
 _PAST = re.compile(r"\b(yang|udah|sudah|telah|tadi|barusan|habis|setelah|sempat)\s+(\w+\s+)?$", re.I)
-_MUTATING = re.compile(r"^nexus_(create|update|delete|book|move|cancel|add|propose|resolve)_")
+# Any NEXUS tool that is not a read: create/update/send/book/remind/remember/… (a write tool or an approval card).
+_READ_ONLY = re.compile(r"^nexus_(search|list|get|read)_")
+
+
+def _is_write(name: str) -> bool:
+    name = name or ""
+    return (name.startswith("nexus_") and not _READ_ONLY.match(name)) or name == "tool_call"
+
+
+# "Done / waiting for your approval" — a write claimed in the answer (privacy suite 19 Oct 2026: Model 0 said "task sudah
+# dibuat", "reminder sudah dipasang buat QA Dev 6" with no tool call at all). Facts about existing data ("dibuat tanggal
+# 14 Okt") need a first-person subject or an approval-card phrase to count.
+_CLAIM = re.compile(
+    # first person: "gw udah bikin task…", "I've sent…" ("catat / simpan" left out: "catat ya" in a chat asks GIDEON
+    # to remember, and "udah gw catat" is the right answer to it, not a NEXUS write)
+    r"\b(gw|gue|gua|aku|saya|kami)\s+(udah|sudah|telah|barusan|berhasil)\s+(\w+\s+)?"
+    r"(bikin|bikinin|buat|buatin|buatkan|membuat|pasang|pasangin|memasang|kirim|kirimin|mengirim|ajukan|ajuin|mengajukan"
+    r"|booking|bookingin|book|tambah|tambahin|tambahkan|menambahkan|update|ubah|hapus|jadwalin|jadwalkan|setel|assign)\b"
+    r"|\bI(?:'ve| have)\s+(just\s+)?(created|made|set up|sent|booked|added|scheduled|submitted|posted|updated)\b"
+    # passive, about a thing GIDEON makes: "task sudah dibuat", "reminder udah dipasang", "message has been sent"
+    r"|\b(task|tugas|reminder|pengingat|pesan|message|booking|bookingan|pengumuman|announcement|draft|kartu|card|ruang\w*|room)\b"
+    r"[^.!?\n]{0,40}?\b(udah|sudah|telah|berhasil)\s+(gw\s+|gue\s+|saya\s+|aku\s+)?(dibuat|dibikin|dipasang|dikirim|diajukan"
+    r"|di-?booking|dibook|ditambahkan|ditambahin|dijadwalkan|diset|disubmit|di-submit)\b"
+    r"|\b(task|reminder|message|booking|announcement|draft)\b[^.!?\n]{0,40}?\bhas been (created|sent|booked|scheduled|added|set up|submitted)\b"
+    # the approval card itself
+    r"|(menunggu|nunggu) persetujuan\w*\s+(\w+\s+){0,2}(di|lewat|pada)\s+(kartu|card)|\bkartu (di )?bawah\b"
+    r"|\btap\s+[\"'“]?apply\b|\bcard below\b",
+    re.I,
+)
+# A sentence that only supposes, asks or reports someone else's record ("mungkin udah disubmit tapi…", "sudah diajukan
+# oleh Mey", "apakah sudah dibuat?") is not a claim of GIDEON's own write.
+_NOT_A_CLAIM = re.compile(r"\b(kalau|kalo|jika|bila|apakah|mungkin|kemungkinan|bisa jadi|belum|tidak|nggak|ngga|gak|atau|if|whether|maybe|or|oleh|by)\b"
+                          r"|\byang\s+(udah|sudah|telah)\b", re.I)
+_SUPPOSE = re.compile(r"\b(bisa jadi|kemungkinan|mungkin|possibly|maybe|could be)\b[^\n]{0,40}:\s*$", re.I)
+
+
+# The delivery promised as if it were set up (privacy M20 after the first fix: "Siap, gw bikin reminder buat QA Dev 6 …
+# Reminder itu akan muncul di notifikasi NEXUS"). "Gw bikin X" alone is an announcement (the announce net's job), and
+# offers ("kalau mau, reminder-nya bakal muncul…") are not claims.
+_CLAIM_NOW = re.compile(
+    r"\b(reminder|pengingat|pesan|message|pengumuman|announcement|notif\w*)\b[^.!?\n]{0,40}"
+    r"\b(akan|bakal|nanti|udah|sudah)\s+(muncul|dikirim|terkirim|nongol|masuk)\b"
+    r"|\b(reminder|message|announcement)\b[^.!?\n]{0,40}\bwill (show up|appear|be sent|go out)\b",
+    re.I,
+)
+_OFFER_NOW = re.compile(r"\b(mau|bisa|boleh|perlu|kalau|kalo|jika|bila|can|could|shall)\b", re.I)
+
+
+def _claims_unmade_write(response: str, tools_seen: list) -> bool:
+    """The answer says something was written / is waiting for approval, but the run called no write tool."""
+    text = response or ""
+    if any(_is_write(t) for t in tools_seen):
+        return False
+    for m in _CLAIM_NOW.finditer(text):
+        start = max(text.rfind(c, 0, m.start()) for c in ".!?\n") + 1
+        ends = [i for i in (text.find(c, m.end()) for c in ".!?\n") if i >= 0]
+        end = min(ends) if ends else len(text)
+        if text[end:end + 1] == "?" or _OFFER_NOW.search(text[start:m.start()]) or _NOT_A_CLAIM.search(text[start:end]):
+            continue
+        return True
+    for m in _CLAIM.finditer(text):
+        start = max(text.rfind(c, 0, m.start()) for c in ".!?\n") + 1
+        ends = [i for i in (text.find(c, m.end()) for c in ".!?\n") if i >= 0]
+        end = min(ends) if ends else len(text)
+        if text[end:end + 1] == "?" or _NOT_A_CLAIM.search(text[start:end]):
+            continue
+        # A bullet under "Bisa jadi:" / "Kemungkinan:" is a guess, not a report.
+        if _SUPPOSE.search(text[max(0, start - 200):start].rstrip("\n -*•")):
+            continue
+        return True
+    return False
+
+
+_ECHO = re.compile(r"\[(You are answering as|Today is|Language:|Model 0 rules|GIDEON runtime note)[^\]]*\]\s*", re.I)
+
+_ID_WORDS = re.compile(r"\b(gw|gue|lo|lu|aku|saya|kamu|yang|dan|ini|itu|buat|untuk|dong|ya|tolong|bikin|tambahin|pasang|kirim|besok|jam)\b", re.I)
+
+
+def _honest_no_write(question: str) -> str:
+    if len(_ID_WORDS.findall(question or "")) >= 1:
+        return ("Gw belum bikin atau ngirim apa-apa — belum ada kartu yang dibuat, jadi belum ada yang berubah di NEXUS. "
+                "Mau gw buatin kartunya sekarang? Lo tetap yang setujuin sebelum jalan.")
+    return ("I haven't created or sent anything yet — no card was made, so nothing changed in NEXUS. "
+            "Want me to prepare it now? You still approve it before it runs.")
+
+
+_CLAIM_NUDGE = (
+    "\n\n[GIDEON runtime note: your previous attempt said the action was done or waiting for approval "
+    "(\"{first}\"), but NO tool was called, so nothing happened and no card exists. Either call the right nexus_* "
+    "write tool now (it makes the approval card; it refuses what this person may not do), or say plainly that "
+    "nothing was created. Never claim a write you did not make.]"
+)
 
 
 def _announced_not_made(response: str, tools_seen: list) -> bool:
@@ -115,7 +206,7 @@ def _announced_not_made(response: str, tools_seen: list) -> bool:
     text = (response or "").strip()
     if not text:
         return False
-    if any(_MUTATING.match(t or "") for t in tools_seen):
+    if any(_is_write(t) for t in tools_seen):
         return False  # an action was already proposed; a retry could propose it twice
     if _ANNOUNCE_TOOL.search(text):
         return True
@@ -332,6 +423,12 @@ def main() -> int:
         # Added to the shared list, so a tool someone makes eager for every tier reaches this one too.
         eager |= {t.strip() for t in tier_eager.split(",") if t.strip()}
     announce_tiers = {t.strip() for t in os.getenv("GIDEON_ANNOUNCE_RETRY_TIERS", "experimental").split(",") if t.strip()}
+    # A retry runs the whole question again. After a slow first attempt (privacy suite, 19 Oct 2026: 5 min) it would
+    # hit the shim's kill timer and the person gets nothing, so past this budget there is no retry; a false write claim
+    # is then replaced by the honest line straight away.
+    retry_budget = float(os.getenv("GIDEON_RETRY_BUDGET_SEC", "150"))
+    import time
+    started = time.monotonic()
     sampling = {}
     if tier:
         try:
@@ -368,14 +465,18 @@ def main() -> int:
                 sessions.append(result.get("session_id"))
                 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
                     result[k] = (result.get(k) or 0) + (first_result.get(k) or 0)
-            elif tier in announce_tiers and (
-                    (skipped := _domain_tool_skipped(_question(prompt), response, tools_seen)) or _announced_not_made(response, tools_seen)):
+            elif tier in announce_tiers and time.monotonic() - started < retry_budget and (
+                    (claimed := _claims_unmade_write(response, tools_seen))
+                    or (skipped := _domain_tool_skipped(_question(prompt), response, tools_seen))
+                    or _announced_not_made(response, tools_seen)):
                 first = response.strip()
-                emit({"t": "router_miss", "kind": "domain" if skipped else "announce", "first": first[:300], "tools": [t for t in tools_seen if t][:20]})
+                kind = "claim" if claimed else "domain" if skipped else "announce"
+                emit({"t": "router_miss", "kind": kind, "first": first[:300], "tools": [t for t in tools_seen if t][:20]})
                 emit({"t": "reset"})
                 first_result = result
                 snippet = re.sub(r"\s+", " ", first)[-160:].replace('"', "'")
-                nudge = _DOMAIN_NUDGE.format(tool=skipped) if skipped else _ANNOUNCE_NUDGE.format(first=snippet)
+                nudge = (_CLAIM_NUDGE.format(first=snippet) if claimed else _DOMAIN_NUDGE.format(tool=skipped) if skipped
+                         else _ANNOUNCE_NUDGE.format(first=snippet))
                 response, result = _run(prompt + nudge, args.model, args.provider, toolsets, tools_seen)
                 sessions.append(result.get("session_id"))
                 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
@@ -389,6 +490,17 @@ def main() -> int:
     if not response:
         emit({"t": "error", "c": "no final response was produced"})
         return 1
+    # The shim's own bracketed lines echoed back (Model 0, privacy B18: the answer opened with "[You are answering as
+    # GIDEON Model 0 …] [Today is …]"). They are instructions, never part of an answer.
+    scrubbed = _ECHO.sub("", response).strip()
+    if scrubbed != response and scrubbed:
+        emit({"t": "reset"})
+        response = scrubbed
+    # Last guard (Model 0): still claiming a write that no tool made, after the retry → say so honestly instead.
+    if tier in announce_tiers and _claims_unmade_write(response, tools_seen):
+        emit({"t": "router_miss", "kind": "claim-replaced", "first": response[:300], "tools": [t for t in tools_seen if t][:20]})
+        emit({"t": "reset"})
+        response = _honest_no_write(_question(prompt))
     # Additive (18 Oct 2026, GIDEON credits): the cache / reasoning buckets and the Hermes session id(s) — two when
     # the router-miss retry ran; the shim bills both. Older NEXUS servers read only total_tokens from here.
     usage = {k: result.get(k) for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "model", "provider",
