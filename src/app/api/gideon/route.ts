@@ -508,7 +508,7 @@ export async function POST(req: NextRequest) {
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
       // GIDEON Memory (owner, 19 Oct 2026): THIS person's own memories only, after who-is-asking (cached prefix).
-      const memory = await memoryPromptLines(userId, session.user?.name || '').catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
+      const memory = await memoryPromptLines(userId, session.user?.name || '', { tier }).catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
       // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
       const rules = [
         // Only for a client that renders Markdown; the released apps show the text as is.
