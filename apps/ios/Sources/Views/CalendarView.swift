@@ -1432,13 +1432,13 @@ struct CalendarView: View {
             } else {
                 VStack(spacing: 10) {
                     if let root = tree.root {
-                    if !root.items.isEmpty || !root.people.isEmpty {
-                        let key = "own:\(root.unit.id)"
-                        CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
-                    }
-                    ForEach(root.children) { node in
-                        CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
-                    }
+                        if !root.items.isEmpty || !root.people.isEmpty {
+                            let key = "own:\(root.unit.id)"
+                            CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
+                        }
+                        ForEach(root.children) { node in
+                            CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
+                        }
                     }
                     if lensByPerson && !tree.unplaced.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {

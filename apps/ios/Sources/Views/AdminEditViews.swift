@@ -1224,6 +1224,8 @@ struct AdminGideonUsageSection: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func shortDate(_ iso: String?) -> String? {
