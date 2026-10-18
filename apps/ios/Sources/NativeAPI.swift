@@ -3,7 +3,12 @@ import Foundation
 /// JSON calls for the newer native surfaces. Keeps refusal codes and conflict bodies intact.
 enum NativeAPI {
     static func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil) async throws -> T {
-        var request = APIClient.shared.makeRequest(path, method: method)
+        // makeRequest takes a decoded path and an already encoded query. Decode the path
+        // component once here, so escaped IDs cannot become literal %2D / %20 in the route.
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let decodedPath = String(parts[0]).removingPercentEncoding ?? String(parts[0])
+        let requestPath = decodedPath + (parts.count == 2 ? "?" + parts[1] : "")
+        var request = APIClient.shared.makeRequest(requestPath, method: method)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -16,7 +21,7 @@ enum NativeAPI {
         return try JSONDecoder().decode(T.self, from: data)
     }
     static func object<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) }
-    static func escape(_ text: String) -> String { text.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "" }
+    static func escape(_ text: String) -> String { text.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? "" }
     struct Empty: Decodable {}
 }
 struct NativeAPIError: LocalizedError {
@@ -26,7 +31,7 @@ struct NativeAPIError: LocalizedError {
     var fields: [String: Any] { (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:] }
     var code: String { fields["code"] as? String ?? "" }
     var errorDescription: String? {
-        if path.hasPrefix("/api/meetings"), let message = MeetingIssue.message(code.isEmpty ? fields["error"] as? String ?? "" : code, metadata: fields) { return message }
+        if path.hasPrefix("/api/meetings") { return MeetingIssue.message(code.isEmpty ? fields["error"] as? String ?? "" : code, metadata: fields) ?? T("Couldn't update meeting notes. Try again.") }
         switch code.uppercased() {
         case "NEEDS_EDIT_ACCESS": return T("You can't add tasks to that project. Pick another.")
         case "BAD_SECTION": return T("That column is no longer available. Choose another column.")

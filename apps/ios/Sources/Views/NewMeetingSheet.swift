@@ -111,7 +111,7 @@ struct NewMeetingSheet: View {
                 .alert(T("Stop recording?"), isPresented: $confirmClose) { Button(T("Stop")) { recorder.stop(); file = recorder.file; source = "record" }; Button(T("Cancel"), role: .cancel) {} } message: { Text(T("The recording stays on this device until you upload it.")) }
                 .sheet(isPresented: $filePicker) { DocumentPicker(types: [.item], multiple: false) { urls in if let url = urls.first { chooseFile(url) } } }
                 .background { Color.clear.sheet(isPresented: $projectPicker) { MeetingProjectPicker(selected: chosenProject?.id) { chosenProject = $0 } } }
-                .onAppear { if let initialFile, file == nil { chooseFile(initialFile) }; if !recorder.recording && !recorder.paused && source == "record" { file = recorder.file } }
+                .onAppear { recorder.restoreForCurrentUser(); if let initialFile, file == nil { chooseFile(initialFile) }; if file == nil, let saved = recorder.file { file = saved; source = "record"; if title.isEmpty { title = T("Meeting recording") } } }
                 .task { if let projectId, chosenProject == nil, let project = try? await APIClient.shared.project(projectId) { chosenProject = ProjectRef(id: project.id, name: project.name, icon: project.icon) } }
                 .onChange(of: recorder.recording) { _, recording in if !recording && !recorder.paused && source == "record" { file = recorder.file } }
         }.keyboardDoneBar().accessibilityIdentifier("meetings.new")
@@ -126,7 +126,8 @@ struct NewMeetingSheet: View {
         let scoped = file.startAccessingSecurityScopedResource(); defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         do {
             let asset = AVURLAsset(url: file)
-            let duration = try await asset.load(.duration).seconds
+            let measured = try? await asset.load(.duration).seconds
+            let duration = measured.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             created = try await uploads.begin(file: file, title: title.isEmpty ? file.deletingPathExtension().lastPathComponent : title, projectId: chosenProject?.id, language: language, source: source, duration: duration)
         } catch { failure = error.localizedDescription }
     }

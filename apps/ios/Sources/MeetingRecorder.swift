@@ -16,8 +16,28 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     @ObservationIgnored private var interruption: NSObjectProtocol?
     private var limit: Double = 180 * 60
     private var owner: String?
+    private struct Draft: Codable { let path: String; let owner: String; let elapsed: Double }
+    private let draftURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("meeting-recording.json")
+    func restoreForCurrentUser() {
+        guard !recording, !paused, let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == Keychain.load()?.userId,
+              FileManager.default.fileExists(atPath: draft.path) else { return }
+        file = URL(fileURLWithPath: draft.path); owner = draft.owner; elapsed = draft.elapsed
+    }
+    private func saveDraft() {
+        guard let file, let owner else { return }
+        let draft = Draft(path: file.path, owner: owner, elapsed: elapsed)
+        if let data = try? JSONEncoder().encode(draft) { try? data.write(to: draftURL, options: .atomic) }
+    }
+    func uploaded(_ path: String) {
+        let recordings = draftURL.deletingLastPathComponent().appendingPathComponent("MeetingRecordings").path + "/"
+        guard path.hasPrefix(recordings) else { return }
+        try? FileManager.default.removeItem(atPath: path)
+        if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.path == path { try? FileManager.default.removeItem(at: draftURL) }
+        if file?.path == path { file = nil; owner = nil; elapsed = 0 }
+    }
     private override init() {
         super.init()
+        restoreForCurrentUser()
         interruption = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
             guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, raw == AVAudioSession.InterruptionType.began.rawValue else { return }
             Task { @MainActor in self?.pause() }
@@ -42,16 +62,23 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
             guard recorder.prepareToRecord(), recorder.record(forDuration: Double(RemoteConfig.shared.meetingMaxMinutes * 60)) else { throw APIError.transport(T("Couldn't start recording. Try again.")) }
             self.recorder = recorder; self.file = file; elapsed = 0; owner = Keychain.load()?.userId
             limit = Double(RemoteConfig.shared.meetingMaxMinutes * 60); recording = true; paused = false
-            tick()
+            saveDraft(); tick()
         } catch { failure = error.localizedDescription }
     }
-    func rebindIdentity(from old: String, to new: String) { if owner == old { owner = new } }
+    func rebindIdentity(from old: String, to new: String) {
+        if owner == old { owner = new; saveDraft() }
+        else if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == old {
+            let migrated = Draft(path: draft.path, owner: new, elapsed: draft.elapsed)
+            if let bytes = try? JSONEncoder().encode(migrated) { try? bytes.write(to: draftURL, options: .atomic) }
+            restoreForCurrentUser()
+        }
+    }
     func stopForLogout() { stop(); file = nil; owner = nil }
 
     func pause() {
         guard recording else { return }
         elapsed = recorder?.currentTime ?? elapsed; recorder?.pause(); recording = false; paused = true; ticker?.invalidate(); ticker = nil
-        notice = T("Paused")
+        notice = T("Paused"); saveDraft()
     }
     func resume() {
         guard paused, owner == Keychain.load()?.userId else { return }
@@ -63,7 +90,7 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     }
     func stop() {
         if let time = recorder?.currentTime, time > 0 { elapsed = time }
-        recorder?.stop(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
+        recorder?.stop(); saveDraft(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
     private func tick() {
@@ -79,7 +106,7 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         Task { @MainActor in
             if elapsed >= limit - 1 { notice = T("Maximum recording length reached.") }
-            recording = false; paused = false; ticker?.invalidate(); ticker = nil
+            saveDraft(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
             if !flag { failure = T("Recording stopped unexpectedly. The audio file is kept on this device.") }
         }
     }

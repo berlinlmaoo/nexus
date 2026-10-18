@@ -672,6 +672,15 @@ final class NEXUSUITour: XCTestCase {
                 dismissKeyboardIntroduction()
                 app.typeText(action.text ?? "")
                 pause(1)
+            case "background":
+                #if targetEnvironment(macCatalyst)
+                app.typeKey("h", modifierFlags: .command)
+                #else
+                XCUIDevice.shared.press(.home)
+                #endif
+                pause(Double(action.text ?? "3") ?? 3)
+                app.activate()
+                pause(2)
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)

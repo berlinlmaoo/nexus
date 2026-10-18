@@ -200,5 +200,7 @@ extension AppLanguage {
         "Search folders…": "Cari folder…",
         "No folder matches.": "Tidak ada folder yang cocok.",
         "Remove the folder filter %@": "Hapus filter folder %@",
+        "You need Can edit or Full access to this project.": "Kamu perlu akses Bisa edit atau Akses penuh ke project ini.",
+        "Couldn't update meeting notes. Try again.": "Catatan meeting tidak bisa diperbarui. Coba lagi.",
     ]
 }

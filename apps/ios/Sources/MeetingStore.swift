@@ -92,9 +92,9 @@ final class MeetingStore {
         busy = true; defer { busy = false }
         do {
             let response: MeetingEnvelope = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id) + "/apply", method: "POST", body: ["projectId": current.projectId!, "title": current.title, "overview": current.overview ?? "", "mom": try NativeAPI.object(current.mom ?? MeetingMinutes()), "proposals": try NativeAPI.object(current.proposals ?? []), "lang": AppLanguage.shared.lang.rawValue])
-            meeting = response.meeting; failure = nil
+            meeting = response.meeting; failure = nil; await load()
         } catch let error as NativeAPIError where error.code == "ALREADY_APPLIED" {
-            if let response = try? JSONDecoder().decode(MeetingEnvelope.self, from: error.data) { meeting = response.meeting }; failure = nil
+            if let response = try? JSONDecoder().decode(MeetingEnvelope.self, from: error.data) { meeting = response.meeting }; failure = nil; await load()
         } catch { failure = error.localizedDescription }
     }
     func retry(minutes: Bool = false) async {

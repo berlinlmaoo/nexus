@@ -98,6 +98,7 @@ enum MeetingIssue {
         case "not_ready": return T("The meeting notes aren't ready to apply yet.")
         case "needs_project": return T("Choose a project before applying the minutes.")
         case "no_section": return T("Add a task column to this project first.")
+        case "needs_edit_access": return T("You need Can edit or Full access to this project.")
         case "owner_only": return T("Only the uploader can change the meeting's project.")
         default: return nil
         }

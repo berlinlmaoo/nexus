@@ -16,6 +16,7 @@ final class MeetingUploads {
         let chunkBytes: Int
         var received: Int
         var chunkFile: String?
+        var recordingSource: String?
     }
     private(set) var jobs: [String: Job] = [:]
     private(set) var failures: [String: String] = [:]
@@ -38,24 +39,24 @@ final class MeetingUploads {
     private init() {
         if let data = try? Data(contentsOf: manifest), let saved = try? JSONDecoder().decode([String: Job].self, from: data) { jobs = saved }
     }
-    func begin(file: URL, title: String, projectId: String?, language: String, source: String, duration: Double) async throws -> MeetingNote {
+    func begin(file: URL, title: String, projectId: String?, language: String, source: String, duration: Double?) async throws -> MeetingNote {
         guard let user = Keychain.load() else { throw APIError.unauthorized }
         let bytes = APIClient.fileSize(of: file)
         guard bytes > 0 else { throw APIError.transport(T("This file is empty. Choose another file.")) }
         guard bytes <= RemoteConfig.shared.meetingMaxBytes else { throw APIError.transport(MeetingIssue.message("too_large", metadata: ["maxBytes":RemoteConfig.shared.meetingMaxBytes])!) }
-        guard duration.isFinite && duration > 0 else { throw APIError.transport(T("This recording couldn't be read. Try another audio file.")) }
-        guard duration <= Double(RemoteConfig.shared.meetingMaxMinutes * 60) else { throw APIError.transport(MeetingIssue.message("too_long", metadata: ["maxMinutes":RemoteConfig.shared.meetingMaxMinutes])!) }
+        if let duration, duration > Double(RemoteConfig.shared.meetingMaxMinutes * 60) { throw APIError.transport(MeetingIssue.message("too_long", metadata: ["maxMinutes":RemoteConfig.shared.meetingMaxMinutes])!) }
         let privateFolder = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let privateFile = privateFolder.appendingPathComponent(file.lastPathComponent)
         let scoped = file.startAccessingSecurityScopedResource(); defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         try await Task.detached(priority: .utility) {
             try FileManager.default.createDirectory(at: privateFolder, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: file, to: privateFile)
+            try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: privateFile.path)
         }.value
         do {
-            let body: [String: Any] = ["fileName":file.lastPathComponent, "mime":Self.mime(file.pathExtension), "size":bytes, "title":title, "projectId":jsonOrNull(projectId), "language":language, "source":source, "durationSec":duration, "recordedAt":ISO8601DateFormatter().string(from: Date())]
+            let body: [String: Any] = ["fileName":file.lastPathComponent, "mime":Self.mime(file.pathExtension), "size":bytes, "title":title, "projectId":jsonOrNull(projectId), "language":language, "source":source, "durationSec":duration.map { $0 as Any } ?? NSNull(), "recordedAt":ISO8601DateFormatter().string(from: Date())]
             let response: MeetingCreated = try await NativeAPI.request("/api/meetings", method: "POST", body: body)
-            let job = Job(id: response.meeting.id, ownerId: user.userId, server: ServerEnvironment.current.rawValue, source: privateFile.path, bytes: bytes, chunkBytes: min(response.upload.maxChunkBytes, max(1, response.upload.chunkBytes)), received: response.meeting.audio.received)
+            let job = Job(id: response.meeting.id, ownerId: user.userId, server: ServerEnvironment.current.rawValue, source: privateFile.path, bytes: bytes, chunkBytes: min(response.upload.maxChunkBytes, max(1, response.upload.chunkBytes)), received: response.meeting.audio.received, recordingSource: source == "record" ? file.path : nil)
             jobs[job.id] = job; save()
             Task { await schedule(job.id, reconcile: true) }
             return response.meeting
@@ -109,6 +110,7 @@ final class MeetingUploads {
                     try data.write(to: chunk, options: .atomic)
                 }.value
             }
+            try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: chunk.path)
             guard isCurrent(job) else { active.remove(id); return }
             job.chunkFile = chunk.path; jobs[id] = job; save()
             var request = APIClient.shared.makeRequest("/api/meetings/" + NativeAPI.escape(id) + (completing ? "/audio/complete" : "/audio?offset=\(job.received)"), method: completing ? "POST" : "PUT")
@@ -145,7 +147,10 @@ final class MeetingUploads {
         else { failures[id] = status == 401 ? T("Session expired — please log in again.") : refusal.localizedDescription; save() }
     }
     private func finish(_ id: String) {
-        if let job = jobs.removeValue(forKey: id) { try? FileManager.default.removeItem(at: URL(fileURLWithPath: job.source).deletingLastPathComponent()) }
+        if let job = jobs.removeValue(forKey: id) {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: job.source).deletingLastPathComponent())
+            if let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
+        }
         active.remove(id); fractions[id] = 1; failures[id] = nil; save()
     }
     private func save() { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true); if let data = try? JSONEncoder().encode(jobs) { try? data.write(to: manifest, options: .atomic) } }
