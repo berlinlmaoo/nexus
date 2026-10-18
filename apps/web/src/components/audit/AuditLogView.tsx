@@ -505,7 +505,7 @@ function whatComesBack(r: NonNullable<NexusAuditEntryDetail["restore"]>, entityT
 }
 
 type OpenTarget =
-  | { kind: "project" | "task" | "doc" | "folder" | "chat"; id: string }
+  | { kind: "project" | "task" | "doc" | "folder" | "chat" | "meeting"; id: string }
   | { kind: "attendance"; request?: string }
   | { kind: "room"; booking: string }
   | { kind: "calendar"; date?: string }
@@ -535,13 +535,15 @@ function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: str
     case "calendar": case "calendar_event": return { kind: "calendar", date: open.date };
     case "post": return { kind: "wire" };
     case "chat": return { kind: "chat", id: open.id };
+    // Meeting notes, Beta (18 Oct 2026).
+    case "meeting": return { kind: "meeting", id: open.id };
     default: return open.projectId ? { kind: "project", id: open.projectId } : null; // a sheet, page, form, P&L…: its project
   }
 }
 
 const OPEN_LABEL: Record<OpenTarget["kind"], string> = {
   project: "Open project", task: "Open task", doc: "Open doc", folder: "Open folder", attendance: "Open attendance",
-  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open Threads", chat: "Open chat",
+  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open Threads", chat: "Open chat", meeting: "Open meeting notes",
 };
 
 function OpenLink({ target, children }: { target: OpenTarget; children: ReactNode }) {
@@ -558,6 +560,7 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
     case "vault": return <Link to="/vault" search={target.item ? { item: target.item } : {}} className={cls}>{children}{arrow}</Link>;
     case "wire": return <Link to="/threads" className={cls}>{children}{arrow}</Link>;
     case "chat": return <Link to="/messages" search={{ c: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "meeting": return <Link to="/meetings/$meetingId" params={{ meetingId: target.id }} className={cls}>{children}{arrow}</Link>;
   }
 }
 
