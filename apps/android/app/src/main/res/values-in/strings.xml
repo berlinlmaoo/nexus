@@ -823,6 +823,7 @@
     <string name="chat_group_name">Nama grup (opsional)</string>
     <string name="chat_create_group">Buat grup</string>
     <string name="chat_start">Mulai chat</string>
+    <string name="chat_conversation_start">Ini awal percakapan.</string>
     <string name="chat_members_n">%1$d anggota</string>
     <string name="chat_rename">Ganti nama grup</string>
     <string name="chat_load_earlier">Muat pesan sebelumnya</string>
@@ -837,7 +838,7 @@
     <string name="chat_attach">Lampirkan</string>
     <string name="chat_send_location">Kirim lokasi</string>
     <string name="chat_mention">Sebut</string>
-    <string name="chat_placeholder">Tulis pesan…</string>
+    <string name="chat_placeholder">Tulis pesan… (@ untuk menandai orang)</string>
     <string name="chat_send_failed">Couldn\'t send. Your message is still here — try again.</string>
     <string name="chat_photo_unreadable">Foto itu tidak bisa dibaca.</string>
     <string name="chat_my_location">Lokasi saya</string>

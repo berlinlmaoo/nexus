@@ -829,6 +829,7 @@
     <string name="chat_group_name">Group name (optional)</string>
     <string name="chat_create_group">Create group</string>
     <string name="chat_start">Start chat</string>
+    <string name="chat_conversation_start">This is the start of the conversation.</string>
     <string name="chat_members_n">%1$d members</string>
     <string name="chat_rename">Rename group</string>
     <string name="chat_load_earlier">Load earlier messages</string>
@@ -843,7 +844,7 @@
     <string name="chat_attach">Attach</string>
     <string name="chat_send_location">Send location</string>
     <string name="chat_mention">Mention</string>
-    <string name="chat_placeholder">Write a message…</string>
+    <string name="chat_placeholder">Write a message… (@ to mention)</string>
     <string name="chat_send_failed">Couldn\'t send. Your message is still here — try again.</string>
     <string name="chat_photo_unreadable">That photo can\'t be read.</string>
     <string name="chat_my_location">My location</string>
