@@ -4,6 +4,7 @@ import Foundation
 /// (scripts/check-localization.sh). Wording as on the web.
 extension AppLanguage {
     static let indonesianRun21: [String: String] = [
+        "Add attachment": "Tambah lampiran",
         "This file is too large. Maximum size: %@.": "File ini terlalu besar. Ukuran maksimum: %@.",
         "This file is too large. Choose a smaller file.": "File ini terlalu besar. Pilih file yang lebih kecil.",
         "This file type isn't supported. Choose a picture, PDF, Office document, CSV, TXT or ZIP.": "Jenis file ini tidak didukung. Pilih gambar, PDF, dokumen Office, CSV, TXT, atau ZIP.",

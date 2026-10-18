@@ -1094,8 +1094,7 @@ struct TimelineTab: View {
     static func barColor(_ p: String?) -> Color {
         switch (p ?? "NONE").uppercased() {
         case "URGENT": return Color(hex: "#f43f5e")
-        // Orange, so High is not a second red beside Urgent (UI tour run 15, Q-IA29 / Q-M17).
-        case "HIGH":   return Color(hex: "#f97316")
+        case "HIGH":   return Color(hex: "#ef4444")
         case "MEDIUM": return Color(hex: "#0ea5e9")
         case "LOW":    return Color(hex: "#8b5cf6")
         default:       return Color(hex: "#14b8a6")

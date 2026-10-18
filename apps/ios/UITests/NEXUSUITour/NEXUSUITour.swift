@@ -64,7 +64,7 @@ final class NEXUSUITour: XCTestCase {
         }
         /// The same for the web in Safari.
         let webTaps: [String]?
-        /// The app tour's page cap for this screen, over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
+        /// One captures a still frame; larger values extend this screen's cap over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
         /// leaderboard's ranks 8-43 and the Mac Legal settings' last company never got a page).
         let pages: Int?
         /// How many sideways shots (half a view each) a board or table gets; 1 by default (run 17, T-2: the
@@ -223,6 +223,7 @@ final class NEXUSUITour: XCTestCase {
                 #endif
                 outcomes.append(outcome)
             }
+            if let data = try? JSONEncoder().encode(outcomes) { persist(data, "tour-results.json") }
         }
 
         // 4. Sign the tour account out again, so nothing of it is left in the app.
@@ -579,12 +580,45 @@ final class NEXUSUITour: XCTestCase {
                 let target = field.exists ? field : app.textViews.matching(match).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
                 press(target)
+                dismissKeyboardIntroduction()
                 target.typeText(action.text ?? "")
                 pause(0.5)
+            case "scroll":
+                let window = app.windows.firstMatch
+                let amount = min(0.55, max(0.1, Double(action.text ?? "0.33") ?? 0.33))
+                let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78 - amount))
+                start.press(forDuration: 0.05, thenDragTo: end)
+                pause(1)
+            case "hover":
+                let target = app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing hover target \(action.label)" }
+                target.hover()
+                pause(1.5)
+            case "key":
+                var modifiers: XCUIElement.KeyModifierFlags = []
+                for modifier in (action.text ?? "").split(separator: ",") {
+                    switch modifier {
+                    case "command": modifiers.insert(.command)
+                    case "shift": modifiers.insert(.shift)
+                    case "option": modifiers.insert(.option)
+                    case "control": modifiers.insert(.control)
+                    default: break
+                    }
+                }
+                app.typeKey(action.label == "return" ? XCUIKeyboardKey.return.rawValue : action.label, modifierFlags: modifiers)
+                pause(1)
+            case "typeFocused":
+                dismissKeyboardIntroduction()
+                app.typeText(action.text ?? "")
+                pause(1)
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
             case "wait": pause(Double(action.text ?? "2") ?? 2)
+            case "absent":
+                let target = app.descendants(matching: .any).matching(match).firstMatch
+                guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
             case "check":
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard target.waitForExistence(timeout: 20) else { return "wrong-screen: missing expected content \(action.label)" }
@@ -754,7 +788,13 @@ final class NEXUSUITour: XCTestCase {
         var quietSince: Date?
         while Date() < deadline {
             // Retained/offscreen tabs can own indicators that never become visible on this page.
-            if app.activityIndicators.allElementsBoundByIndex.contains(where: { $0.isHittable }) {
+            if app.activityIndicators.allElementsBoundByIndex.contains(where: { indicator in
+                guard indicator.isHittable else { return false }
+                // SwiftUI also exposes determinate usage bars as activity indicators.
+                if let value = indicator.value as? String, value.contains("%") || Double(value) != nil { return false }
+                if indicator.value is NSNumber { return false }
+                return true
+            }) {
                 quietSince = nil
             } else if let since = quietSince {
                 if Date().timeIntervalSince(since) >= 1.0 { return true }
@@ -769,7 +809,21 @@ final class NEXUSUITour: XCTestCase {
     /// Location, camera, photos, notifications: the first time a screen asks, iOS puts an alert over
     /// it. Allowed, so the screen is photographed the way somebody who said yes sees it.
     @MainActor
+    private func dismissKeyboardIntroduction() {
+        #if !targetEnvironment(macCatalyst)
+        for context in [app!, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
+            let intro = context.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Speed up your typing")).firstMatch
+            if intro.exists {
+                let button = context.buttons["Continue"]
+                if button.exists && button.isHittable { press(button); pause(0.5) }
+            }
+        }
+        #endif
+    }
+
+    @MainActor
     private func dismissSystemAlerts() {
+        dismissKeyboardIntroduction()
         #if !targetEnvironment(macCatalyst)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for _ in 0..<3 {
@@ -857,6 +911,8 @@ final class NEXUSUITour: XCTestCase {
     private func snapMorePages(_ id: String, prefix: String, first: XCUIScreenshot,
                                in root: XCUIApplication, web: Bool, pages: Int? = nil, sideways: Int? = nil,
                                target chosen: ScrollTarget? = nil, pageOffset: Int = 0) -> Int {
+        // Menus and previews are transient: a drag can dismiss them and invalidate their hierarchy.
+        if pages == 1 { return 0 }
         let globalMax = Int(env["TOUR_MAX_PAGES"] ?? "") ?? 6
         // `pageOffset`: pages already taken of this screen (a second pane continues their numbering).
         let maxPages = max(globalMax, pages ?? 0) + pageOffset

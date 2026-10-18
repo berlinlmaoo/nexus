@@ -1292,6 +1292,7 @@ struct ChatThreadView: View {
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
                 }
                 .disabled(sending || uploadingPhoto)
+                .accessibilityLabel(T("Add attachment"))
 
                 if !mentionable.isEmpty {
                     // Kept for discoverability only: it types the "@" for you, then the inline
@@ -1345,6 +1346,7 @@ struct ChatThreadView: View {
                         .foregroundStyle(empty ? NX.mutedFg : ChatInk.onMine)
                         .frame(width: 40, height: 40).background(empty ? NX.muted : NX.onyx, in: Circle())
                 }.disabled(empty || sending)
+                .accessibilityLabel(T("Send"))
             }
             .padding(12)
         }
@@ -2040,11 +2042,13 @@ struct ChatThreadView: View {
         notice = nil
         defer { uploadingPhoto = false }
         do {
-            let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size > 0, size <= 25 * 1024 * 1024 else {
-                notice = T("Choose a document up to 25 MB."); return
+            let maxBytes = 25 * 1024 * 1024
+            if let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > maxBytes {
+                notice = NativeRefusal.message("TOO_LARGE", maxBytes: maxBytes); return
             }
             let data = try Data(contentsOf: file, options: .mappedIfSafe)
+            guard !data.isEmpty else { notice = NativeRefusal.message("EMPTY_FILE"); return }
+            guard data.count <= maxBytes else { notice = NativeRefusal.message("TOO_LARGE", maxBytes: maxBytes); return }
             pendingAttachment = try await APIClient.shared.uploadChatImage(conversationId: conversationId,
                 fileName: file.lastPathComponent, mime: UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream",
                 data: data, progress: uploadProgress)
