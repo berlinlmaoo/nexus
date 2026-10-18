@@ -78,13 +78,15 @@ export async function askGideon(input: {
       await finishRun(runId, { ok: false, error: `shim ${res.status}` })
       return null
     }
-    const reply = ((await res.json()) as { reply?: string }).reply?.trim()
+    const data = (await res.json()) as { reply?: string; usage?: unknown }
+    const reply = data.reply?.trim()
     if (!reply) {
       console.error(`gideon-chat: balasan kosong dari shim (${input.tag ?? "untagged"}) — agen Hermes kemungkinan gagal (cek journal gideon-shim di host agen)`)
-      await finishRun(runId, { ok: false, error: "empty reply" })
+      await finishRun(runId, { ok: false, error: "empty reply", usage: data.usage })
       return null
     }
-    await finishRun(runId, { ok: true, replyChars: reply.length })
+    // `usage` (GIDEON credits) is billed to the run's person by finishRun.
+    await finishRun(runId, { ok: true, replyChars: reply.length, usage: data.usage })
     return reply
   } catch (error) {
     await finishRun(runId, { ok: false, error: error instanceof Error ? error.message : "error" })

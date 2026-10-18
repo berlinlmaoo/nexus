@@ -3514,6 +3514,86 @@ model GideonRunStep {
   @@index([runId, createdAt])
 }
 
+/// GIDEON credits (owner, 18 Oct 2026): one row per GIDEON answer, priced from what the model was actually
+/// paid for (fresh input, cached input, output incl. reasoning) — 1 credit = USD 0.001, rounded up. The
+/// split says which bucket paid: the daily allowance first, then the period's monthly pool, then "over"
+/// (phase 1 never blocks). Written under a per-user advisory lock (lib/gideon-credits.ts). No FK on
+/// userId, like GideonRun: a ledger row must never stop an account from being removed.
+model GideonCreditUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  /// The company workspace when the person is a member of it, else null.
+  workspaceId      String?
+  /// Workspace role at the time (ONE_ABOVE_ALL | BOD | MANAGER | STAFF), null = not a company member.
+  role             String?
+  /// The GideonRun this answer belongs to. Unique: an answer is billed once, however often it is reported.
+  runId            String?  @unique
+  /// CHAT | WRITE | MENTION | SCHEDULE | AUTOFILL | TICKET | REFLECTION
+  trigger          String
+  /// The tier that answered (astra | luna | terra | experimental).
+  tier             String
+  /// The tier the person picked, when it differs (served by terra because they were out of credits).
+  requestedTier    String?
+  model            String
+  inputTokens      Int      @default(0)
+  cachedTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  outputTokens     Int      @default(0)
+  reasoningTokens  Int      @default(0)
+  apiCalls         Int      @default(0)
+  /// Real model cost in millionths of a USD.
+  costMicroUsd     Int      @default(0)
+  credits          Int      @default(0)
+  dailyCredits     Int      @default(0)
+  poolCredits      Int      @default(0)
+  overCredits      Int      @default(0)
+  /// False for system jobs done for the person (reflection summaries, support tickets): recorded, not charged.
+  billable         Boolean  @default(true)
+  unlimited        Boolean  @default(false)
+  /// Answered by terra because the person had no credits left (phase 2).
+  fallback         Boolean  @default(false)
+  /// Hermes session id (state.db) the numbers were read from.
+  sessionId        String?
+  /// state.db | runner
+  source           String?
+  /// Asia/Jakarta date "YYYY-MM-DD" of the answer: the daily allowance's day.
+  dayKey           String
+  /// Attendance period "YYYY-MM" (28th → 27th): the monthly pool's period.
+  periodKey        String
+  createdAt        DateTime @default(now())
+
+  @@index([userId, dayKey])
+  @@index([userId, periodKey])
+  @@index([periodKey])
+  @@index([createdAt])
+}
+
+/// A BoD / One Above All override of one person's GIDEON credits. Null fields follow the role default.
+model GideonCreditOverride {
+  userId       String   @id
+  dailyLimit   Int?
+  monthlyLimit Int?
+  unlimited    Boolean?
+  note         String?
+  updatedById  String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+/// One-off bonus credits, added to the person's monthly pool for one period.
+model GideonCreditBonus {
+  id          String   @id @default(cuid())
+  userId      String
+  periodKey   String
+  credits     Int
+  reason      String?
+  grantedById String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, periodKey])
+  @@index([periodKey])
+}
+
 /// A write GIDEON wanted to make and the person has to approve first (approval mode). Applying runs the
 /// exact same /api/gideon/tools action, as the same person, so every permission check runs again.
 model GideonProposal {

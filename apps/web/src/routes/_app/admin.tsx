@@ -1,4 +1,5 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
+import { GideonCreditsAdmin } from "@/components/gideon/GideonCreditsAdmin";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -2343,18 +2344,19 @@ function AnnouncementsAdmin() {
  * showed the questions would change how people use it, and the ones who most need the help would
  * stop asking.
  */
-/** Control Room › GIDEON: Insights (every run, 12 Oct 2026) and People (who uses it, counts only). */
+/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only) and Credits (18 Oct 2026). */
 function GideonAdmin() {
   const { t } = useLang();
-  const [tab, setTab] = useState<"insights" | "people">("insights");
+  const [tab, setTab] = useState<"insights" | "people" | "credits">("insights");
   const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
   return (
     <div className="space-y-4">
       <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-background p-0.5">
         <button type="button" className={btn(tab === "insights")} onClick={() => setTab("insights")}>{t("Insights")}</button>
         <button type="button" className={btn(tab === "people")} onClick={() => setTab("people")}>{t("People")}</button>
+        <button type="button" className={btn(tab === "credits")} onClick={() => setTab("credits")}>{t("Credits")}</button>
       </div>
-      {tab === "insights" ? <GideonInsights /> : <GideonUsage />}
+      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : <GideonCreditsAdmin />}
     </div>
   );
 }

@@ -91,6 +91,8 @@ export const BUS_EVENTS = {
   ACCESS_CHANGED: "access-changed",
   /** A form got a response (or lost one) → `project:<id>` ("form-responses-changed", ids only). */
   FORM_RESPONSES_CHANGED: "form-responses-changed",
+  /** A GIDEON answer was billed (or the person's credits changed) → `user:<id>` ("gideon-credits", their own summary). */
+  GIDEON_CREDITS: "gideon-credits",
 } as const
 
 // Every named event crosses processes (lib/realtime-bridge.ts).

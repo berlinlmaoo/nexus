@@ -128,7 +128,9 @@ export type GideonEvent =
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposal }
   | { type: "done" }
-  | { type: "error"; content?: string };
+  /** GIDEON credits (18 Oct 2026): the person's balance after this answer; `notice` when phase 2 changed the tier or refused. */
+  | { type: "credits"; summary?: import("@/lib/gideon-credits").CreditSummary | null; credits?: number; notice?: import("@/lib/gideon-credits").CreditNotice }
+  | { type: "error"; content?: string; code?: string };
 
 /** Which writes wait for the person. Same names as the server (gideon-runs.ts needsApproval). */
 export const GIDEON_APPROVAL_MODES = [

@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
     const runId = await startRun({ userId, trigger: "WRITE", approvalMode: "always_ask", tier: "luna", title: `AI: ${action}${prompt ? ` · ${prompt}` : ""}`, projectId, taskId })
     let failure: string | null = null
     let reply = ""
+    // What the run cost (GIDEON credits); billed by finishRun.
+    let usage: unknown = undefined
     try {
       if (runId) await send({ type: "run", id: runId })
       const full = writePrompt({
@@ -88,6 +90,7 @@ export async function POST(req: NextRequest) {
       )
       reply = (result.reply || acc).trim()
       failure = result.error
+      usage = result.usage
       if (!reply) {
         await send({ type: "error", content: failure === "not configured" ? "GIDEON isn't connected on this server." : "GIDEON couldn't write that. Try again." })
         return
@@ -102,7 +105,7 @@ export async function POST(req: NextRequest) {
       failure = error instanceof Error ? error.message : "error"
       await send({ type: "error", content: "GIDEON can't be reached right now. Try again in a moment." })
     } finally {
-      await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null })
+      await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, usage })
       await send({ type: "done" })
       await writer.close().catch(() => {})
     }
