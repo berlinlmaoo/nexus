@@ -128,7 +128,10 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         try {
             api.saveDescription(taskId, text, baseText)
         } catch (e: ApiError.Http) {
-            if (e.code == "DESCRIPTION_CHANGED") (e.body?.get("text") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(onConflict)
+            if (e.code == "DESCRIPTION_CHANGED") (e.body?.get("text") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let {
+                onConflict(it)
+                return@act
+            }
             throw e
         }
         onDone()

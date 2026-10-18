@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="task_use_latest">Muat terbaru</string>
+    <string name="task_latest_description">Deskripsi tersimpan terbaru</string>
     <string name="expand">Bentangkan</string>
     <string name="collapse">Ciutkan</string>
     <string name="table_scroll_hint">Geser untuk melihat kolom lainnya →</string>

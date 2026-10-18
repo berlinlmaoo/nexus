@@ -2,6 +2,8 @@
 <!-- English is the source language. Indonesian overlay lives in values-in (Android's code for "id").
      Keep keys and English text aligned with iOS Localization.swift. -->
 <resources>
+    <string name="task_use_latest">Load latest</string>
+    <string name="task_latest_description">Latest saved description</string>
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
     <string name="table_scroll_hint">Swipe to see more columns →</string>
