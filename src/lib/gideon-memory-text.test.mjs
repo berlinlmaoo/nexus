@@ -24,7 +24,7 @@ async function load() {
   }
 }
 
-const { memoryKey, memoryRisk, asksToRemember, isAffirmation, parseMonthDay, monthDayInText, parseKind, cleanMemoryText } = await load()
+const { memoryKey, memoryRisk, asksToRemember, isAffirmation, parseMonthDay, monthDayInText, parseKind, cleanMemoryText, statesPreference, memoryTextFromQuestion } = await load()
 
 let n = 0
 const t = (name, fn) => { fn(); n++; console.log("ok", name) }
@@ -78,6 +78,15 @@ t("kind aliases and text cleanup", () => {
   assert.equal(cleanMemoryText("  a \n b  "), "a b")
   assert.equal(cleanMemoryText("x".repeat(500)).length, 200)
   assert.equal(cleanMemoryText(42), "")
+})
+
+t("a stated preference, and the memory text from a question", () => {
+  for (const q of ["panggil aku pakai aku-kamu ya", "pakai bahasa inggris aja", "jawab singkat aja ya", "call me Ryan", "lebih suka jawaban detail"]) assert.equal(statesPreference(q), true, q)
+  for (const q of ["ada task apa aja?", "progress project Intoo", "siapa PIC deal DIAGEO"]) assert.equal(statesPreference(q), false, q)
+  assert.equal(memoryTextFromQuestion("inget ya: aku kerja jam 10-19"), "Aku kerja jam 10-19")
+  assert.equal(memoryTextFromQuestion("Tolong ingat ya, aku pegang Intoo"), "Aku pegang Intoo")
+  assert.equal(memoryTextFromQuestion("panggil aku pakai aku-kamu ya"), "Panggil aku pakai aku-kamu ya")
+  assert.equal(memoryTextFromQuestion("x".repeat(300)), null)
 })
 
 console.log(`gideon-memory-text: ${n} groups passed`)

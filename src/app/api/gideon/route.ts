@@ -17,7 +17,7 @@ import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
 import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
-import { dropRunQuestion, MEMORY_RULES, memoryPromptLines, parkRunQuestion } from '@/lib/gideon-memory'
+import { dropRunQuestion, MEMORY_RULES, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -508,7 +508,7 @@ export async function POST(req: NextRequest) {
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
       // GIDEON Memory (owner, 19 Oct 2026): THIS person's own memories only, after who-is-asking (cached prefix).
-      const memoryLines = await memoryPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
+      const memory = await memoryPromptLines(userId, session.user?.name || '').catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
       // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
       const rules = [
         // Only for a client that renders Markdown; the released apps show the text as is.
@@ -535,7 +535,7 @@ export async function POST(req: NextRequest) {
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
       ].filter(Boolean)
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memoryLines], dynamic, historyMode: await historyMode() })
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], historyMode: await historyMode() })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({
@@ -656,6 +656,12 @@ export async function POST(req: NextRequest) {
           await sendEvent({ type: 'sources', sources: used })
           if (preSearch.stepId) await prisma.gideonRunStep.update({ where: { id: preSearch.stepId }, data: { refs: used as unknown as InputJsonValue } }).catch(() => {})
         }
+      }
+      // GIDEON Memory safety net (Model 0 rarely calls tools): a stated preference / "inget ya" with no memory tool call
+      // becomes a Save / Don't save suggestion from the person's own words. Before runMeta, so the turn stores it.
+      if (reply && runId && asked && tier === 'experimental') {
+        const suggested = await suggestMemoryFromQuestion(userId, asked, runId, chat?.id ?? null).catch(() => null)
+        if (suggested && streamClient) await sendEvent({ type: 'memory', memory: suggested })
       }
       // What the run showed, with Sources cut down to what the reply cites (stored on the turn below too).
       const meta = reply && runId ? await runMeta(runId, { citedBy: reply }).catch(() => null) : null
