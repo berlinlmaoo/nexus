@@ -3631,9 +3631,14 @@ model GideonChat {
   title     String?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @default(now()) @updatedAt
+  /// Soft delete (18 Oct 2026): the person removed it. Hidden from them everywhere (list, search, history,
+  /// GIDEON context); still readable by the company One Above All in Control Room for 90 days, then purged
+  /// with its messages and attached files by cron/purge-sheet-revisions (lib/gideon-chat-retention.ts).
+  deletedAt DateTime?
   messages  GideonMessage[]
 
   @@index([userId, updatedAt])
+  @@index([deletedAt])
 }
 
 /// Personalize GIDEON (Notion AI "Personalize"): what this person calls it and their own standing
@@ -3642,6 +3647,9 @@ model GideonPreference {
   userId        String   @id
   assistantName String?
   instructions  String?  @db.Text
+  /// When the person dismissed the one-time notice "GIDEON chats can be reviewed by members of the Board of
+  /// Directors for work purposes." (18 Oct 2026, UU PDP transparency). Null = still to be shown.
+  reviewNoticeSeenAt DateTime?
   updatedAt     DateTime @default(now()) @updatedAt
 }
 

@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
   AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
-  ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
+  ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, Info, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
   MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
   PanelLeftClose,
   PanelLeftOpen,
@@ -61,7 +61,7 @@ let composerDraft = "";
 
 type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean; creditNotice?: string | null };
 
-function fromHistory(row: GideonTurn): ChatTurn {
+export function fromHistory(row: GideonTurn): ChatTurn {
   const m = row.meta;
   return { ...row, steps: m?.steps ?? [], sources: m?.sources ?? [], cards: m?.cards ?? [], proposals: m?.proposals ?? [] };
 }
@@ -645,6 +645,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
+        {prefs?.reviewNotice && <ReviewNotice />}
         {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
@@ -797,9 +798,14 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             )}
           </div>
         </div>
-        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. */}
-        <div className="flex min-h-6 items-center px-1 pt-1">
-          <GideonCreditMeter />
+        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. Beside it
+            the standing "can make mistakes" line (owner, 18 Oct 2026, like ChatGPT): meter left, disclaimer right where
+            the box is wide enough, stacked and centred in the narrow panel and on phones. */}
+        <div className="@container">
+          <div className="flex min-h-6 flex-col items-center gap-0.5 px-1 pt-1 @lg:flex-row @lg:justify-between @lg:gap-3">
+            <GideonCreditMeter />
+            <p className="text-balance text-center text-xs text-muted-foreground @lg:text-right">{t("GIDEON is AI and can make mistakes. Check important information.")}</p>
+          </div>
         </div>
       </div>
   );
@@ -910,7 +916,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Delete this chat?")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+            <AlertDialogDescription>{t("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
@@ -926,7 +932,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Clear every GIDEON chat?")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("Every conversation, message and attached file is deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+            <AlertDialogDescription>{t("Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
@@ -951,7 +957,7 @@ function ContextChip({ icon: Icon, mark, label, hint, onRemove }: { icon: typeof
 }
 
 /** The person's message: a soft grey bubble on the right, copy under it on hover (Notion AI). */
-function UserTurn({ turn }: { turn: ChatTurn }) {
+export function UserTurn({ turn, readOnly = false }: { turn: ChatTurn; readOnly?: boolean }) {
   const { t } = useLang();
   const [copied, setCopied] = useState(false);
   return (
@@ -959,7 +965,10 @@ function UserTurn({ turn }: { turn: ChatTurn }) {
       <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent/70 px-3.5 py-2 text-sm leading-relaxed text-foreground">
         {turn.attachments && turn.attachments.length > 0 && (
           <div className="mb-1.5 flex flex-col gap-2">
-            {turn.attachments.map((a, j) => <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble />)}
+            {turn.attachments.map((a, j) => readOnly
+              // Control Room review (owner, 18 Oct 2026): attachments by name only, never opened from here.
+              ? <GideonAttachmentChip key={j} kind={a.kind} name={a.name} onBubble />
+              : <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble />)}
           </div>
         )}
         <span className="whitespace-pre-wrap break-words">{turn.content}</span>
@@ -1152,7 +1161,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Delete this chat?")}</AlertDialogTitle>
-            <AlertDialogDescription>{deleting?.title ? `“${deleting.title}”. ` : ""}{t("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+            <AlertDialogDescription>{deleting?.title ? `“${deleting.title}”. ` : ""}{t("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
@@ -1288,7 +1297,9 @@ function SaveAsDocButton({ markdown, question, projectId, className }: { markdow
     </DropdownMenu>
   );
 }
-function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isLast = false, large = false }: {
+export type ReviewTurn = ChatTurn;
+
+export function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isLast = false, large = false, readOnly = false }: {
   turn: ChatTurn;
   onDecided: (p: GideonProposal) => void;
   question: string;
@@ -1298,10 +1309,15 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
   isLast?: boolean;
   /** The full page reads at 15px. */
   large?: boolean;
+  /**
+   * Control Room review by the One Above All (18 Oct 2026): steps open, approval cards show only what happened
+   * (Applied / Discarded / still waiting), and nothing can be applied, inserted or saved.
+   */
+  readOnly?: boolean;
 }) {
   const L = useLang();
   const { t } = L;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(readOnly);
   const [copied, setCopied] = useState(false);
   // A step that failed on its arguments and was retried (the same tool succeeded later) is GIDEON's own
   // detour, not something the person must know about: hidden here, still in the run log (Insights).
@@ -1373,7 +1389,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
 
       {proposals.length > 0 && (
         <div className="space-y-2">
-          {proposals.map((p) => <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
+          {proposals.map((p) => readOnly ? <ReviewProposalCard key={p.id} proposal={p} /> : <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
         </div>
       )}
 
@@ -1402,7 +1418,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
           >
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </button>
-          {editorTarget && (
+          {editorTarget && !readOnly && (
             <button
               type="button"
               onClick={() => { editorTarget.insert(markdownToDoc(turn.content)); toast.success(t("Inserted into the page")); }}
@@ -1413,7 +1429,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
               <ArrowDownToLine className="h-4 w-4" />
             </button>
           )}
-          <SaveAsDocButton markdown={turn.content} question={question} projectId={projectId} className={actionBtn} />
+          {!readOnly && <SaveAsDocButton markdown={turn.content} question={question} projectId={projectId} className={actionBtn} />}
         </div>
       )}
     </div>
@@ -1507,7 +1523,7 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
       setPending(null);
     }
   };
-  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action === "book_room" ? t("Book a room") : proposal.action === "move_room_booking" ? t("Move a booking") : proposal.action === "cancel_room_booking" ? t("Cancel a booking") : proposal.action;
+  const title = proposalTitle(proposal.action, t);
   const open = proposal.status === "PENDING";
   const statusLine =
     proposal.status === "APPLIED" ? t("Applied") :
@@ -1543,6 +1559,81 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function proposalTitle(action: string, t: LangApi["t"]): string {
+  switch (action) {
+    case "create_task": return t("Create a task");
+    case "update_task": return t("Change a task");
+    case "add_task_comment": return t("Post a comment");
+    case "create_document": return t("Write a doc");
+    case "book_room": return t("Book a room");
+    case "move_room_booking": return t("Move a booking");
+    case "cancel_room_booking": return t("Cancel a booking");
+    default: return action;
+  }
+}
+
+/**
+ * An approval card as the One Above All sees it in Control Room (read-only): what GIDEON proposed, the
+ * change, and what the person did with it. No Apply / Discard.
+ */
+function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
+  const { t, locale } = useLang();
+  const status =
+    proposal.status === "APPLIED" ? { text: t("Applied by them"), tone: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300" } :
+    proposal.status === "DISCARDED" ? { text: t("Discarded by them"), tone: "bg-muted text-muted-foreground" } :
+    proposal.status === "FAILED" ? { text: t("Couldn't apply: {reason}", { reason: proposal.error ?? "" }), tone: "bg-destructive/10 text-destructive" } :
+    proposal.status === "APPLYING" ? { text: t("Applying…"), tone: "bg-muted text-muted-foreground" } :
+    { text: t("Not decided yet"), tone: "bg-amber-500/12 text-amber-800 dark:text-amber-300" };
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-start gap-2.5 px-3 pb-2 pt-2.5">
+        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background"><GideonMark className="h-3.5 w-3.5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">{proposalTitle(proposal.action, t)}</span>
+          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposal.summary}</span>
+        </span>
+        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", status.tone)}>{status.text}</span>
+      </div>
+      {proposal.diff.length > 0 && (
+        <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
+          {proposal.diff.map((row, i) => (
+            <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2 rounded-md bg-muted/40 px-2 py-1">
+              <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
+              <dd className="min-w-0 break-words">
+                {row.from != null && row.from !== "" && <><span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden className="text-muted-foreground">→</span> </>}
+                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {proposal.status === "APPLIED" && proposal.card && <div className="px-3 pb-3"><ResultCard card={proposal.card} /></div>}
+    </div>
+  );
+}
+
+/**
+ * The one-time transparency notice (owner, 18 Oct 2026; UU PDP): every person is told once, plainly, that their
+ * GIDEON chats can be reviewed. Dismissed for good on every device (GideonPreference.reviewNoticeSeenAt).
+ */
+function ReviewNotice() {
+  const { t } = useLang();
+  const prefs = useGideonPrefs();
+  const [saving, setSaving] = useState(false);
+  const dismiss = () => {
+    if (prefs) setCachedGideonPrefs({ ...prefs, reviewNotice: false });
+    setSaving(true);
+    saveGideonPrefs({ reviewNoticeSeen: true }).then(setCachedGideonPrefs).catch(() => undefined).finally(() => setSaving(false));
+  };
+  return (
+    <div role="note" className="mb-2 flex items-start gap-2.5 rounded-xl border border-border bg-accent/50 px-3 py-2.5 text-xs leading-relaxed text-foreground/85">
+      <Info className="mt-px h-3.5 w-3.5 shrink-0 text-sidebar-primary" aria-hidden />
+      <span className="min-w-0 flex-1">{t("GIDEON chats can be reviewed by members of the Board of Directors for work purposes.")}</span>
+      <button type="button" onClick={dismiss} disabled={saving} className="-my-0.5 shrink-0 rounded-md px-2 py-0.5 font-semibold text-sidebar-primary transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("Got it")}</button>
     </div>
   );
 }

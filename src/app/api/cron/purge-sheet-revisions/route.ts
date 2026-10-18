@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { isCronRequest } from "@/lib/cron-auth"
 import { ensureRevisionTrigger } from "@/lib/project-sheets"
 import { SNAPSHOT_RETENTION_DAYS, purgeDeletionSnapshots } from "@/lib/deletion-snapshot"
+import { GIDEON_CHAT_RETENTION_DAYS, purgeDeletedGideonChats } from "@/lib/gideon-chat-retention"
 import { runCronJob } from "@/lib/cron-lock"
 
 /**
@@ -78,6 +79,18 @@ export async function POST(req: NextRequest) {
         console.error("Error purging deletion snapshots:", error)
       }
 
+      // GIDEON chats the person deleted (lib/gideon-chat-retention.ts): kept 90 days for the One Above All's
+      // review, then the chat, its messages and its attached files go. Its own try, like the rest.
+      let gideonChatsPurged: number | null = null
+      let gideonFilesRemoved: number | null = null
+      try {
+        const purged = await purgeDeletedGideonChats(new Date(Date.now() - GIDEON_CHAT_RETENTION_DAYS * 24 * 60 * 60 * 1000))
+        gideonChatsPurged = purged.chats
+        gideonFilesRemoved = purged.files
+      } catch (error) {
+        console.error("Error purging deleted GIDEON chats:", error)
+      }
+
       const remaining = await prisma.sheetCellRevision.count()
       return NextResponse.json({
         ok: true,
@@ -89,6 +102,8 @@ export async function POST(req: NextRequest) {
         locationPointsDeleted,
         deletionSnapshotsDeleted,
         deletedFilesRemoved,
+        gideonChatsPurged,
+        gideonFilesRemoved,
       })
     })
   } catch (error) {

@@ -6,7 +6,8 @@ import prisma from "@/lib/prisma"
 
 /**
  * GIDEON chat history (12 Oct 2026, Notion AI parity): the person's conversations, newest first, with
- * search over titles and what was said. Private: always the session user's own.
+ * search over titles and what was said. Private: always the session user's own. Chats the person deleted
+ * (deletedAt, kept 90 days for the One Above All's review) never appear here.
  *   GET ?q=&limit=&before=  → { chats: [{ id, title, createdAt, updatedAt, messages, match? }] }
  */
 export async function GET(req: NextRequest) {
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.gideonChat.findMany({
     where: {
       userId,
+      deletedAt: null,
       ...(beforeDate ? { updatedAt: { lt: beforeDate } } : {}),
       ...(q
         ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { messages: { some: { content: { contains: q, mode: "insensitive" } } } }] }

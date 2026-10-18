@@ -1,5 +1,6 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
 import { GideonCreditsAdmin } from "@/components/gideon/GideonCreditsAdmin";
+import { GideonPersonReview } from "@/components/gideon/GideonPersonReview";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -7,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
+import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, ChevronRight, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
 import { OrgChart } from "@/components/OrgChart";
@@ -2338,11 +2339,9 @@ function AnnouncementsAdmin() {
 }
 
 /**
- * Who uses GIDEON, and how much.
- *
- * Counts and dates only. What somebody asked an assistant is between them and it — a screen that
- * showed the questions would change how people use it, and the ones who most need the help would
- * stop asking.
+ * Who uses GIDEON, and how much: counts and dates for BoD and the One Above All. A row opens the person
+ * (GideonPersonReview); only the One Above All can read the chats themselves (owner, 18 Oct 2026, enforced
+ * server-side), and every user was told once in the GIDEON panel that chats can be reviewed.
  */
 /** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only) and Credits (18 Oct 2026). */
 function GideonAdmin() {
@@ -2364,6 +2363,8 @@ function GideonAdmin() {
 function GideonUsage() {
   const { t, locale } = useLang();
   const q = useQuery({ queryKey: ["nexus", "gideon-usage"], queryFn: nexusApi.gideonUsage, retry: false });
+  // A row opens the person (Overview · Chats · Credits, 18 Oct 2026). Chats are the One Above All's only.
+  const [person, setPerson] = useState<string | null>(null);
   const users = q.data?.users ?? [];
   const totals = q.data?.totals;
 
@@ -2395,25 +2396,33 @@ function GideonUsage() {
                 <th className="px-4 py-3 text-right font-semibold">{t("Tool calls")}</th>
                 <th className="px-4 py-3 font-semibold">{t("First")}</th>
                 <th className="px-4 py-3 font-semibold">{t("Last")}</th>
+                <th className="w-10 px-2 py-3" aria-label={t("Open")} />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-border/60 last:border-0">
+                <tr key={u.id} onClick={() => setPerson(u.id)} className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50">
                   <td className="px-4 py-3">
-                    <div className="font-semibold">{u.name}</div>
-                    {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setPerson(u.id); }} className="flex min-w-0 items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={28} />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{u.name}</span>
+                        {u.email && <span className="block text-xs text-muted-foreground">{u.email}</span>}
+                      </span>
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{u.asked}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{u.toolCalls}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.firstUsed)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.lastUsed)}</td>
+                  <td className="px-2 py-3 text-muted-foreground"><ChevronRight className="h-4 w-4" aria-hidden /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </HScroll>
       )}
+      {person && <GideonPersonReview userId={person} onClose={() => setPerson(null)} />}
     </div>
   );
 }

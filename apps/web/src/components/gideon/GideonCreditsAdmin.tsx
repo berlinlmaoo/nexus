@@ -240,6 +240,30 @@ function PersonDialog({ person, policy, onClose, onSaved }: { person: CreditAdmi
   const L = useLang();
   const { t } = L;
   const base = policy.roles[person.role ?? "STAFF"];
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent lang={L.lang} className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto">
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-display">{person.name || person.email}</DialogTitle>
+          <DialogDescription>
+            {t("Role default: {d}", { d: base.unlimited ? t("Unlimited") : `${formatCount(base.daily)}/${t("day")} · ${formatCount(base.monthly)}/${t("period")}` })}
+          </DialogDescription>
+        </DialogHeader>
+        <PersonCreditsForm person={person} policy={policy} onSaved={() => { onSaved(); }} onClose={onClose} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * One person's limits and bonus credits: the body of the Credits dialog, also the Credits tab of Control Room ›
+ * GIDEON › People › person (18 Oct 2026). onClose = the dialog's Cancel / close after saving limits; absent, the
+ * form stays put.
+ */
+export function PersonCreditsForm({ person, policy, onClose, onSaved }: { person: CreditAdminPerson; policy: CreditPolicy; onClose?: () => void; onSaved: () => void }) {
+  const L = useLang();
+  const { t } = L;
+  const base = policy.roles[person.role ?? "STAFF"];
   const o = person.override;
   const [mode, setMode] = useState<"default" | "custom" | "unlimited">(o?.unlimited ? "unlimited" : o && (o.dailyLimit !== null || o.monthlyLimit !== null || o.unlimited === false) ? "custom" : "default");
   const [daily, setDaily] = useState(String(o?.dailyLimit ?? base.daily));
@@ -258,7 +282,7 @@ function PersonDialog({ person, policy, onClose, onSaved }: { person: CreditAdmi
       monthlyLimit: mode === "custom" ? toInt(monthly) : null,
       note: mode === "default" ? null : note || null,
     }),
-    onSuccess: () => { toast.success(t("Limits saved")); onSaved(); onClose(); },
+    onSuccess: () => { toast.success(t("Limits saved")); onSaved(); onClose?.(); },
     onError: (e: Error) => toast.error(e.message || t("Couldn't save.")),
   });
   const grant = useMutation({
@@ -269,15 +293,7 @@ function PersonDialog({ person, policy, onClose, onSaved }: { person: CreditAdmi
   const opt = (on: boolean) => cn("flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
 
   return (
-    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent lang={L.lang} className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto">
-        <DialogHeader className="text-left">
-          <DialogTitle className="font-display">{person.name || person.email}</DialogTitle>
-          <DialogDescription>
-            {t("Role default: {d}", { d: base.unlimited ? t("Unlimited") : `${formatCount(base.daily)}/${t("day")} · ${formatCount(base.monthly)}/${t("period")}` })}
-          </DialogDescription>
-        </DialogHeader>
-
+      <div>
         <div className="space-y-3">
           <div className="text-sm font-semibold">{t("GIDEON credit limits")}</div>
           <div className="flex gap-1 rounded-lg border border-border bg-background p-0.5" role="radiogroup" aria-label={t("GIDEON credit limits")}>
@@ -297,7 +313,7 @@ function PersonDialog({ person, policy, onClose, onSaved }: { person: CreditAdmi
             </label>
           )}
           <DialogFooter className="gap-2 sm:gap-2">
-            <button type="button" className={ghostBtn} onClick={onClose}>{t("Cancel")}</button>
+            {onClose && <button type="button" className={ghostBtn} onClick={onClose}>{t("Cancel")}</button>}
             <button type="button" className={primaryBtn} disabled={saveLimits.isPending || (mode === "custom" && (daily === "" || monthly === ""))} onClick={() => saveLimits.mutate()}>
               {saveLimits.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("Save limits")}
             </button>
@@ -330,7 +346,6 @@ function PersonDialog({ person, policy, onClose, onSaved }: { person: CreditAdmi
             </ul>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
   );
 }

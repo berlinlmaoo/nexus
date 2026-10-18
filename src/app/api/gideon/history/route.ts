@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic"
 
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { deleteGideonAttachmentFiles, parseGideonAttachments } from '@/lib/gideon-attachments'
+import { parseGideonAttachments } from '@/lib/gideon-attachments'
+import { softDeleteGideonChats } from '@/lib/gideon-chat-retention'
 import { proposalView, type GideonRunMeta } from '@/lib/gideon-runs'
 
 // Newest N turns are enough to resume a conversation; older ones stay in the table but are not
@@ -26,11 +27,13 @@ export async function GET(req: Request) {
   try {
     const wanted = new URL(req.url).searchParams.get('chatId')
     const chat = wanted
-      ? await prisma.gideonChat.findFirst({ where: { id: wanted, userId: session.user.id }, select: { id: true, title: true, updatedAt: true } })
-      : await prisma.gideonChat.findFirst({ where: { userId: session.user.id }, orderBy: { updatedAt: 'desc' }, select: { id: true, title: true, updatedAt: true } })
+      ? await prisma.gideonChat.findFirst({ where: { id: wanted, userId: session.user.id, deletedAt: null }, select: { id: true, title: true, updatedAt: true } })
+      : await prisma.gideonChat.findFirst({ where: { userId: session.user.id, deletedAt: null }, orderBy: { updatedAt: 'desc' }, select: { id: true, title: true, updatedAt: true } })
     if (wanted && !chat) return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 })
     const rows = await prisma.gideonMessage.findMany({
-      where: chat ? { userId: session.user.id, chatId: chat.id } : { userId: session.user.id },
+      // No live chat: only turns that never belonged to one (rows older than chats). Never "all of this
+      // person's rows", which would bring back conversations they deleted (kept for the OAA review).
+      where: chat ? { userId: session.user.id, chatId: chat.id } : { userId: session.user.id, chatId: null },
       orderBy: { createdAt: 'desc' },
       take: HISTORY_LIMIT,
       select: { role: true, content: true, tools: true, attachments: true, runId: true, meta: true },
@@ -72,7 +75,7 @@ export async function GET(req: Request) {
   }
 }
 
-/** No chatId: every conversation (what "Clear history" has always meant). ?chatId=: just that one. */
+/** No chatId: every conversation (what "Clear history" has always meant). ?chatId=: just that one. Soft: see below. */
 export async function DELETE(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -80,30 +83,25 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    // Clearing the chat is what deletes a kept attachment; nothing else does, and nothing deletes
-    // one on a timer. The owner asked that a file stay openable at any time, which rules out an age
-    // rule — so the file's life is the turn's life, and this is where a turn ends.
-    //
-    // Read before the delete, because after it there is nothing left that names the files. Every
-    // row of this user's is read rather than only the ones with a column set: it is one narrow
-    // column on an index this query already uses, and a Prisma JSON-null filter is a subtlety not
-    // worth buying for the handful of rows involved.
+    // A soft delete since 18 Oct 2026 (owner): the conversations vanish for the person everywhere and are kept
+    // 90 days for the company One Above All's review, then purged with their files (lib/gideon-chat-retention.ts).
+    // The confirm dialogs say so. Turns older than chats (no chatId) are first gathered into one chat, so they
+    // are hidden and retained the same way instead of lingering or vanishing outright.
     const only = new URL(req.url).searchParams.get('chatId')
-    const scope = only ? { userId: session.user.id, chatId: only } : { userId: session.user.id }
-    const owned = await prisma.gideonMessage.findMany({
-      where: scope,
-      select: { attachments: true },
-    })
-    const { count } = await prisma.gideonMessage.deleteMany({ where: scope })
-    await prisma.gideonChat.deleteMany({ where: only ? { id: only, userId: session.user.id } : { userId: session.user.id } })
-    // After the rows, deliberately. A file left behind by a failed unlink is disk nobody can reach;
-    // a row left behind by a failed delete is a chip pointing at a file that is already gone. Only
-    // one of those two is visible to the person who pressed Clear.
-    const removed = await deleteGideonAttachmentFiles(owned.map((row) => row.attachments)).catch((error) => {
-      console.error('GIDEON attachment cleanup error:', error)
-      return 0
-    })
-    return Response.json({ ok: true, deleted: count, files: removed })
+    const userId = session.user.id
+    const count = await prisma.gideonMessage.count({ where: only ? { userId, chatId: only, chat: { deletedAt: null } } : { userId, OR: [{ chatId: null }, { chat: { deletedAt: null } }] } })
+    if (!only) {
+      await prisma.$transaction(async (tx) => {
+        const loose = await tx.gideonMessage.count({ where: { userId, chatId: null } })
+        if (loose === 0) return
+        // Born deleted, so a turn racing this Clear can never pick it as "the latest chat".
+        const holder = await tx.gideonChat.create({ data: { userId, title: null, deletedAt: new Date() }, select: { id: true } })
+        await tx.gideonMessage.updateMany({ where: { userId, chatId: null }, data: { chatId: holder.id } })
+      })
+    }
+    await softDeleteGideonChats(userId, only)
+    // `files` stays in the response for released apps; nothing is unlinked now (the purge does that).
+    return Response.json({ ok: true, deleted: count, files: 0 })
   } catch (error) {
     console.error('GIDEON history DELETE error:', error)
     return new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })
