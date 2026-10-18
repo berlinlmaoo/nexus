@@ -1,4 +1,6 @@
 <resources>
+    <string name="ps_auto_defaults">Default assignees · %1$d</string>
+    <string name="ps_auto_no_members">No members in this project yet — add some below first.</string>
     <string name="r21_reorder_changed">The task beside your drop moved or was removed. Reload the column and try again.</string>
     <plurals name="gc_step_count"><item quantity="one">✓ %1$d step</item><item quantity="other">✓ %1$d steps</item></plurals>
     <string name="gc_ai_disclaimer">GIDEON is AI and can make mistakes.</string>

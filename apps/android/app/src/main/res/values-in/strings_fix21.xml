@@ -1,4 +1,6 @@
 <resources>
+    <string name="ps_auto_defaults">Assignee default · %1$d</string>
+    <string name="ps_auto_no_members">Belum ada member di project ini — tambahkan di bawah dulu.</string>
     <string name="r21_reorder_changed">Task di sebelah tempat tujuan sudah dipindah atau dihapus. Muat ulang kolom, lalu coba lagi.</string>
     <plurals name="gc_step_count"><item quantity="other">✓ %1$d langkah</item></plurals>
     <string name="gc_ai_disclaimer">GIDEON adalah AI dan bisa keliru.</string>
