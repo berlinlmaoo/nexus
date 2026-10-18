@@ -2,6 +2,10 @@
 <!-- English is the source language. Indonesian overlay lives in values-in (Android's code for "id").
      Keep keys and English text aligned with iOS Localization.swift. -->
 <resources>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="table_scroll_hint">Swipe to see more columns →</string>
+    <string name="gallery_no_image">No image</string>
     <string name="app_name">NEXUS</string>
 
     <string name="login_email_label">ACCESS ID (EMAIL)</string>

@@ -93,8 +93,8 @@ class ProjectRedesignLogicTest {
         assertEquals("section", list.groupBy); assertEquals("done", list.calc); assertTrue(list.hideEmptyGroups)
         val mine = ViewsLogic.config(r.views[1])
         assertEquals("cf:f1", mine.groupBy); assertTrue(mine.filtered); assertEquals("count", mine.calc)
-        assertEquals("board", ViewsLogic.layoutOf(r.views[2])) // unknown layout → board
-        assertEquals(listOf("fallback:board", "fallback:table"), ViewsLogic.fallbacks(setOf("list", "calendar", "timeline")).map { it.id })
+        assertEquals("gallery", ViewsLogic.layoutOf(r.views[2])) // unknown layout → board
+        assertEquals(listOf("fallback:board", "fallback:table", "fallback:gallery"), ViewsLogic.fallbacks(setOf("list", "calendar", "timeline")).map { it.id })
     }
 
     @Test fun filterSortGroup() {

@@ -75,8 +75,8 @@ fun priorityLabel(p: String?): String = stringResource(
 
 @Composable
 fun priorityColor(p: String?): Color = when (p.orEmpty().uppercase()) {
-    // HIGH is red like URGENT again (owner, 10 Oct: "balikin merah"; iOS bf64885).
-    "URGENT", "HIGH" -> Nx.colors.danger
+    "URGENT" -> Nx.colors.danger
+    "HIGH" -> Nx.colors.coral
     "MEDIUM" -> Nx.colors.blue
     else -> Nx.colors.mutedFg   // LOW is neutral (AVATARS-PRIORITY)
 }

@@ -24,6 +24,7 @@ object ProjectTabsLogic {
     val KEYS = listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat")
 
     fun key(t: ProjectTab): String? = when (t) {
+        ProjectTab.GALLERY -> null // a saved view, not a legacy project tab
         ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.TABLE -> "table"; ProjectTab.SHEET -> "sheet"
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
@@ -42,6 +43,7 @@ object ProjectTabsLogic {
      */
     fun visible(hidden: Set<String>, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
         when (it) {
+            ProjectTab.GALLERY -> false // available through saved views, not legacy module tabs
             ProjectTab.PIPELINE -> isPipeline
             // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat.
             ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> isOutlet

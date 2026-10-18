@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="expand">Bentangkan</string>
+    <string name="collapse">Ciutkan</string>
+    <string name="table_scroll_hint">Geser untuk melihat kolom lainnya →</string>
+    <string name="gallery_no_image">Tidak ada gambar</string>
     <string name="login_email_label">ACCESS ID (EMAIL)</string>
     <string name="login_password_label">KUNCI ENKRIPSI</string>
     <string name="login_cta">Masuk</string>
@@ -487,7 +491,7 @@
     <string name="ptab_board">Board</string>
     <string name="ptab_list">Daftar</string>
     <string name="back">Kembali</string>
-    <string name="board_search">Search tasks in this project…</string>
+    <string name="board_search">Cari tugas di project ini…</string>
     <string name="project_locked">Proyek terkunci</string>
     <string name="project_locked_sub">Kamu bukan anggota proyek ini. Minta lead-nya untuk menambahkanmu.</string>
     <string name="project_load_failed">Gagal memuat project.</string>

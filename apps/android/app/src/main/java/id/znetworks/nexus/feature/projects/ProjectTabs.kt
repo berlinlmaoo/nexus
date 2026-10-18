@@ -257,11 +257,11 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                             Column(
                                 Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
                                     .background(if (on) c.violet else if (has) c.violet.copy(alpha = 0.08f) else Color.Transparent)
-                                    .then(if (isToday && !on) Modifier.border(1.5.dp, c.foreground, RoundedCornerShape(10.dp)) else Modifier)
+                                    .then(if (isToday && !on) Modifier.background(c.navy, CircleShape) else Modifier)
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
-                                Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
+                                Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else if (isToday) c.onNavy else c.foreground)
                                 Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
                             }
                         }
@@ -316,7 +316,7 @@ private fun UndatedChips(undated: List<BoardTask>, onOpen: (String) -> Unit) {
 /** Bar colour by priority (web timeline). */
 private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
     "URGENT" -> Color(0xFFF43F5E)
-    "HIGH" -> Color(0xFFEF4444)
+    "HIGH" -> Color(0xFFF97316)
     "MEDIUM" -> Color(0xFF0EA5E9)
     "LOW" -> Color(0xFF8B5CF6)
     else -> Color(0xFF14B8A6)
@@ -413,15 +413,16 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
                         rows.forEach { (t, win) ->
                             Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                                // An undated row stays empty (web phone); "No date" was drawn across the today line.
+                                if (win == null) Text(stringResource(R.string.ov_filter_nodue), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
                                 if (win != null) Row(
                                     Modifier.offset(x = x(win.start) + 2.dp).width(maxOf(w(win) - 4.dp, dayW * 0.8f)).height(32.dp).clip(RoundedCornerShape(8.dp))
                                         .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     if (t.isDone) Text("✓ ", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color.White)
-                                    Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (w(win) >= 100.dp) Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
+                                if (win != null && w(win) < 100.dp) Text(t.title, color = c.foreground, fontSize = 12.sp, maxLines = 1, modifier = Modifier.offset(x = x(win.start) + maxOf(w(win), dayW) + 8.dp))
                             }
                         }
                     }

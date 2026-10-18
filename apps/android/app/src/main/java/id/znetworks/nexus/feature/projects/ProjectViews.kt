@@ -80,7 +80,7 @@ data class TaskGroup(
 object ViewsLogic {
     const val ME = "__me__"
     const val NONE = "__none__"
-    val LAYOUTS = listOf("board", "list", "table", "calendar", "timeline")
+    val LAYOUTS = listOf("board", "list", "table", "calendar", "timeline", "gallery")
 
     fun layoutOf(v: ProjectView): String = v.layout.lowercase().takeIf { it in LAYOUTS } ?: "board"
 

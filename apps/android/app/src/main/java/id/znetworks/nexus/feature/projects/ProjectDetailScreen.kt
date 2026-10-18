@@ -111,7 +111,7 @@ enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
     /** The task grid (key "table"); [SHEET] is the project Spreadsheet (key "sheet", 13 Oct). */
-    TABLE(R.string.ptab_table, true), SHEET(R.string.ptab_spreadsheet), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
+    GALLERY(R.string.gallery, true), TABLE(R.string.ptab_table, true), SHEET(R.string.ptab_spreadsheet), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
     AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
     CHAT(R.string.ptab_chat),
 }
@@ -676,6 +676,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     onDrill = { d -> vm.setDrill(d); views.firstOrNull { it.layout == "board" || it.layout == "list" }?.let { select(PageTabItem.View(it)) } },
                                     onEditBrief = onOpenSettings,
                                     onAddTask = { if (s.lanes.isNotEmpty() && access.canEdit) { createDue = null; creating = true } })
+                                ProjectTab.GALLERY -> GalleryView(visibleTasks, propCtx, vm.projectId, view?.config, onOpenTask)
                                 ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, propCtx, linkedLanes, onOpenTask) { dupDateFor = it }
                                 ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, propCtx, onOpenTask) { dupDateFor = it }
                                 ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, propCtx, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }

@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -109,6 +110,7 @@ import id.znetworks.nexus.ui.components.NxButtonKind
 import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.theme.TextFont
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -221,11 +223,11 @@ sealed class PageTabItem {
 }
 
 fun layoutTab(layout: String): ProjectTab = when (layout) {
-    "list" -> ProjectTab.LIST; "table" -> ProjectTab.TABLE; "calendar" -> ProjectTab.CALENDAR; "timeline" -> ProjectTab.TIMELINE; else -> ProjectTab.BOARD
+    "gallery" -> ProjectTab.GALLERY; "list" -> ProjectTab.LIST; "table" -> ProjectTab.TABLE; "calendar" -> ProjectTab.CALENDAR; "timeline" -> ProjectTab.TIMELINE; else -> ProjectTab.BOARD
 }
 
 private fun layoutIcon(layout: String): ImageVector = when (layout) {
-    "list" -> Icons.AutoMirrored.Outlined.ViewList; "table" -> Icons.Outlined.TableChart; "calendar" -> Icons.Outlined.CalendarMonth
+    "gallery" -> Icons.Outlined.Dashboard; "list" -> Icons.AutoMirrored.Outlined.ViewList; "table" -> Icons.Outlined.TableChart; "calendar" -> Icons.Outlined.CalendarMonth
     "timeline" -> Icons.Outlined.Timeline; else -> Icons.Outlined.ViewKanban
 }
 
@@ -250,9 +252,63 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
  * Pages, Forms, Chat, Automations. A long-press on a view opens its menu; a personal view carries a lock.
  */
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
                   onAdd: (() -> Unit)? = null, onDetails: (() -> Unit)? = null) {
     val c = Nx.colors
+    if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) {
+        var menu by remember { mutableStateOf(false) }
+        val index = items.indexOf(selected).coerceAtLeast(0)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().clip(CircleShape).background(c.accentBg).clickable { menu = true }.heightIn(min = 48.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val title = when (val item = selected) {
+                        is PageTabItem.View -> viewLabel(item.view)
+                        is PageTabItem.Module -> stringResource(item.tab.label)
+                        else -> stringResource(R.string.ptab_overview)
+                    }
+                    Text(title, fontSize = 14.sp, color = c.violetText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.violetText, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(menu, { menu = false }) {
+                    items.forEach { item -> DropdownMenuItem(text = { Text(when(item) {
+                        is PageTabItem.View -> viewLabel(item.view)
+                        is PageTabItem.Module -> stringResource(item.tab.label)
+                        else -> stringResource(R.string.ptab_overview)
+                    }) }, onClick = { menu = false; onSelect(item) }) }
+                    if (canAddView) DropdownMenuItem(text = { Text(stringResource(R.string.view_add)) }, onClick = { menu = false; onAddView() })
+                }
+            }
+            androidx.compose.material3.IconButton(onClick = { onSelect(items[index - 1]) }, enabled = index > 0) {
+                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous))
+            }
+            androidx.compose.material3.IconButton(onClick = { onSelect(items[index + 1]) }, enabled = index < items.lastIndex) {
+                Icon(Icons.Filled.KeyboardArrowRight, stringResource(R.string.next))
+            }
+            Box {
+                var actions by remember { mutableStateOf(false) }
+                androidx.compose.material3.IconButton(onClick = { actions = true }) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more)) }
+                DropdownMenu(actions, { actions = false }) {
+                    (selected as? PageTabItem.View)?.let { v -> DropdownMenuItem(text = { Text(stringResource(R.string.col_options)) }, onClick = { actions = false; onViewMenu(v.view) }) }
+                    if (canAddView) DropdownMenuItem(text = { Text(stringResource(R.string.view_add)) }, onClick = { actions = false; onAddView() })
+                }
+            }
+            if (onAdd != null) {
+                var create by remember { mutableStateOf(false) }
+                Box {
+                    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.onyx).heightIn(min = 48.dp).combinedClickable(onClick = onAdd, onLongClick = { create = true }).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Add, null, tint = c.background, modifier = Modifier.size(16.dp))
+                        Text(stringResource(R.string.r21_new), color = c.background, fontSize = 13.sp)
+                    }
+                    DropdownMenu(create, { create = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.pp_new_task)) }, onClick = { create = false; onAdd() })
+                        if (onDetails != null) DropdownMenuItem(text = { Text(stringResource(R.string.r21_new_details)) }, onClick = { create = false; onDetails() })
+                    }
+                }
+            }
+        }
+        return
+    }
     // The open tab is scrolled into view (it sat clipped under "Add task" on List / Table / Calendar / Timeline).
     val scroll = rememberScrollState()
     var selectedX by remember { mutableStateOf<Int?>(null) }
@@ -380,9 +436,15 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
               props: PropCtx, linked: List<BoardLogic.LinkedLane>, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val dark = c.background.luminance() < 0.3f
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val state = rememberLazyListState()
     val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
     LaunchedEffect(inline) { if (inline != null) groups.indexOfFirst { it.key == inline }.takeIf { it >= 0 }?.let { state.scrollToItem(it + linked.size) } }
+    Column(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        groups.forEachIndexed { i, g -> Text(groupLabel(g, cfg.groupBy) + "  " + g.tasks.size,
+            fontSize = 13.sp, color = c.foreground, modifier = Modifier.clip(CircleShape).background(c.muted).clickable { scope.launch { state.animateScrollToItem(i + linked.size) } }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 14.dp)) }
+    }
     LazyRow(state = state, contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         items(linked.size, key = { "linked-" + linked[it].sourceId }) { i -> LinkedColumn(linked[i], props, access, vm, onOpenTask) }
         items(groups.size, key = { groups[it].key }) { i ->
@@ -391,6 +453,7 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
             BoardColumn(g, cfg, lanes, access, vm, selected, props, onOpenTask, onDuplicateDate, dark, firstOfGroup = i == 0 || groups[i - 1].statusGroup != g.statusGroup)
         }
         if (access.canManage && cfg.groupBy == "section" && StatusOptions.inUse(lanes)) item(key = "+status") { AddStatusColumn(vm) }
+    }
     }
 }
 
@@ -427,21 +490,28 @@ private fun LinkedColumn(l: BoardLogic.LinkedLane, props: PropCtx, access: Proje
 private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>, props: PropCtx,
                         onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit, dark: Boolean, firstOfGroup: Boolean) {
     val c = Nx.colors
+    var collapsed by rememberSaveable(g.key) { mutableStateOf(false) }
     val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
     run {
             val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
-            Column(Modifier.width(284.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(tone?.lane ?: c.muted.copy(alpha = 0.5f)).padding(8.dp)) {
+            Column(Modifier.width(if (collapsed) 64.dp else (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 48).dp.coerceIn(284.dp, 348.dp)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(8.dp)) {
                 // The status group's name above the first column of each group (iOS).
-                if (g.statusGroup != null) Text(if (firstOfGroup) statusGroupLabel(g.statusGroup) else " ", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+
                 Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
+                    if (!collapsed) Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
+                    androidx.compose.material3.IconButton(onClick = { collapsed = !collapsed }) { Icon(if (collapsed) Icons.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (collapsed) R.string.expand else R.string.collapse), tint = c.mutedFg) }
+                    if (!collapsed) {
                     if (g.laneId != null && access.canManage) SectionStatusButton(g.laneId, lanes, vm)
+                    if (access.canEdit && groupCreate(g, cfg.groupBy, vm) != null) androidx.compose.material3.IconButton(onClick = { vm.requestInline(g.key) }) { Icon(Icons.Filled.Add, stringResource(R.string.pp_new_task), tint = c.mutedFg) }
+                    }
                 }
+                if (!collapsed) {
                 Spacer(Modifier.height(6.dp))
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
                 if (create != null) { InlineNewTask(create, request = inline == g.key, consumed = vm::inlineConsumed); Spacer(Modifier.height(6.dp)) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
                     items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate, props) }
+                }
                 }
             }
     }
@@ -663,7 +733,7 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
             }
             Spacer(Modifier.width(8.dp))
             Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
-                textDecoration = if (t.isDone) TextDecoration.LineThrough else null, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                textDecoration = if (t.isDone) TextDecoration.LineThrough else null, modifier = Modifier.weight(1f))
             if (t.questXp > 0) { Spacer(Modifier.width(6.dp)); Pill("+${t.questXp} XP", c.violetText) }
         }
         PropLine(props.items(t), Modifier.padding(start = 28.dp))
@@ -728,7 +798,9 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
         Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     val stick = Modifier.offset { androidx.compose.ui.unit.IntOffset(h.value, 0) }
-    Column(Modifier.fillMaxSize().horizontalScroll(h)) {
+    Column(Modifier.fillMaxSize().padding(end = 12.dp)) {
+    if (h.maxValue > 0) Text(stringResource(R.string.table_scroll_hint), color = c.mutedFg, fontSize = 11.sp, modifier = Modifier.align(Alignment.End).padding(4.dp))
+    Column(Modifier.weight(1f).horizontalScroll(h)) {
         LazyColumn(Modifier.weight(1f).width(totalW), contentPadding = PaddingValues(bottom = 96.dp)) {
             groups.forEach { g ->
                 item(key = "h-" + g.key) {
@@ -752,6 +824,7 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
                 if (create != null) item(key = "n-" + g.key) { Box(stick.width(nameW + colW).padding(start = 6.dp)) { InlineNewTask(create, flat = true) } }
             }
         }
+    }
     }
 }
 
