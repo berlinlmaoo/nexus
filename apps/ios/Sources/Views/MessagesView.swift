@@ -1245,7 +1245,7 @@ struct ChatThreadView: View {
                             .font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
                         Text(Self.quotePreview(.init(id: target.id, content: target.content,
                                                      attachmentType: target.attachmentType,
-                                                     attachmentUrl: target.attachmentUrl, user: target.user)))
+                                                     attachmentUrl: target.attachmentUrl, attachmentName: target.attachmentName, attachmentSize: target.attachmentSize, user: target.user)))
                             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                     Spacer()
@@ -1463,7 +1463,9 @@ struct ChatThreadView: View {
     /// does not carry the picture's path today, so it is taken from the quoted message when that one
     /// is loaded, and the quote says "📷 Photo" when it is not. Tapping the quote jumps to it.
     @ViewBuilder private func quoteBlock(_ q: ChatMessage.Quoted, mine: Bool) -> some View {
-        let picture = ChatAttachment.isDocument(q.attachmentType, path: q.attachmentUrl) ? nil : ChatMessage.fileURL(q.attachmentUrl ?? messages.first(where: { $0.id == q.id })?.attachmentUrl)
+        let original = messages.first { $0.id == q.id }
+        let path = q.attachmentUrl ?? original?.attachmentUrl
+        let picture = ChatAttachment.isDocument(q.attachmentType ?? original?.attachmentType, path: path) ? nil : ChatMessage.fileURL(path)
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(mine ? ChatInk.onMine.opacity(0.55) : NX.violet)
@@ -1498,6 +1500,7 @@ struct ChatThreadView: View {
     static func quotePreview(_ q: ChatMessage.Quoted, hasPicture: Bool = false) -> String {
         let body = (q.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if body.isEmpty {
+            if ChatAttachment.isDocument(q.attachmentType, path: q.attachmentUrl) { return q.attachmentName ?? T("Document") }
             let isPicture = hasPicture || (q.attachmentUrl?.isEmpty == false)
                 || (q.attachmentType ?? "").lowercased().hasPrefix("image")
             if isPicture { return T("Photo") }

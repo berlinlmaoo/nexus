@@ -1,4 +1,4 @@
-// swiftc Sources/ChatSystemText.swift Sources/MessagesModels.swift Tests/ChatSystemText/main.swift -o /tmp/chatsys && /tmp/chatsys
+// Run scripts/check-native-contracts.sh from apps/ios (includes document and legacy-message contracts).
 //
 // The SYSTEM message sentences (contract SYSTEM-MESSAGES.md, owner 8 Oct 2026) in English and
 // Indonesian, the "You"/"Kamu" variants, the names list, the fallback to `content`, and the lenient
@@ -187,6 +187,20 @@ let search = json("""
 {"results":[{"messageId":"m9","createdAt":"2026-10-08T10:00:00.000Z","sender":{"id":"u-mira","name":"Mira"},"snippet":"…rapat jam 3…"}],"nextCursor":null}
 """, as: ChatSearchPage.self)
 expectTrue(search?.results.first?.snippet == "…rapat jam 3…" && search?.nextCursor == nil, "search page")
+
+// Document attachments preserve metadata and remain compatible with pre-document messages.
+let document = json(#"{"id":"doc","content":"","attachmentUrl":"/api/files/chat/example.docx","attachmentType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","attachmentName":"Meeting notes.docx","attachmentSize":4096}"#, as: ChatMessage.self)
+expectTrue(document?.attachmentName == "Meeting notes.docx" && document?.attachmentSize == 4096, "document message metadata")
+let oldImage = json(#"{"id":"image","content":"","attachmentUrl":"/api/files/chat/image.jpg","attachmentType":"image/jpeg"}"#, as: ChatMessage.self)
+expectTrue(oldImage?.attachmentName == nil && oldImage?.attachmentSize == nil, "old images decode without file metadata")
+let upload = json(#"{"url":"/api/files/chat/a.pdf","type":"application/pdf","kind":"file","name":"Agenda.pdf","size":128}"#, as: ChatUpload.self)
+expectTrue(upload?.name == "Agenda.pdf" && upload?.kind == "file", "document upload contract")
+let oldUpload = json(#"{"url":"/api/files/chat/a.jpg","type":"image/jpeg"}"#, as: ChatUpload.self)
+expectTrue(oldUpload?.name == nil && oldUpload?.kind == nil, "old upload contract")
+expectTrue(ChatAttachment.isDocument("application/pdf", path: nil), "PDF is a document")
+expectTrue(ChatAttachment.isDocument(nil, path: "/api/files/chat/a.xlsx"), "legacy Office URL is a document")
+expectTrue(!ChatAttachment.isDocument("image/jpeg", path: "/api/files/chat/a.jpg"), "images keep their photo viewer")
+expectTrue(!ChatAttachment.isDocument(nil, path: nil), "text-only messages don't become files")
 
 print(failures == 0 ? "OK — \(checks) checks passed" : "\(failures) of \(checks) checks failed")
 exit(failures == 0 ? 0 : 1)

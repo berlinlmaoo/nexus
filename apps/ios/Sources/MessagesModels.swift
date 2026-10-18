@@ -98,12 +98,14 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
         let id: String
         let content: String?
         let attachmentType: String?
+        let attachmentName: String?
+        let attachmentSize: Int?
         /// The quoted picture, when the server sends it. Today's server leaves it out; the thread
         /// then takes it from the quoted message itself if that one is loaded.
         let attachmentUrl: String?
         let user: UserRef?
 
-        private enum CodingKeys: String, CodingKey { case id, content, attachmentType, attachmentUrl, user }
+        private enum CodingKeys: String, CodingKey { case id, content, attachmentType, attachmentUrl, attachmentName, attachmentSize, user }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -111,14 +113,18 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
             content = try? c.decodeIfPresent(String.self, forKey: .content)
             attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
             attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+            attachmentName = try? c.decodeIfPresent(String.self, forKey: .attachmentName)
+            attachmentSize = try? c.decodeIfPresent(Int.self, forKey: .attachmentSize)
             user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
         }
 
-        init(id: String, content: String?, attachmentType: String?, attachmentUrl: String? = nil, user: UserRef?) {
+        init(id: String, content: String?, attachmentType: String?, attachmentUrl: String? = nil, attachmentName: String? = nil, attachmentSize: Int? = nil, user: UserRef?) {
             self.id = id
             self.content = content
             self.attachmentType = attachmentType
             self.attachmentUrl = attachmentUrl
+            self.attachmentName = attachmentName
+            self.attachmentSize = attachmentSize
             self.user = user
         }
     }

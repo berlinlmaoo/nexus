@@ -2584,7 +2584,7 @@ struct BoardCard: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(NX.card)
                 .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NX.border.opacity(0.55), lineWidth: 1))
         }
     }
 

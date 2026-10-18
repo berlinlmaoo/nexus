@@ -299,6 +299,7 @@ struct GideonWriteSheet: View {
                 failure = (error as? LocalizedError)?.errorDescription ?? T("GIDEON couldn't write that. Try again.")
             }
             running = false
+            await GideonCredits.shared.refresh()
         }
     }
 

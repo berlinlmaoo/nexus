@@ -388,7 +388,13 @@ struct TaskDetailView: View {
                 }
             }
             if let creator = t.creator, let name = creator.name {
-                propertyRow("Created by", icon: "person.crop.circle") { creatorLine(SystemUsers.name(name, avatar: creator.avatar), creator) }
+                propertyRow("Created by", icon: "person.crop.circle") {
+                    HStack(spacing: 6) {
+                        AvatarView(url: creator.avatar, initial: String(name.prefix(1)), size: 20)
+                        Text(SystemUsers.name(name, avatar: creator.avatar)).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                        if creator.deactivatedAt != nil { LeftTag() }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showAssignee) {

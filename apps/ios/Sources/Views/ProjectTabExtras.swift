@@ -308,9 +308,9 @@ struct ProjectTableTab: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                Image(systemName: "play.fill")
+                    .font(.system(size: 9)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                     .frame(width: 18)
                 if statusOptions && !lane.id.hasPrefix("grp:") {
                     StatusPill(name: lane.name, colorKey: lane.colorKey, size: 14)

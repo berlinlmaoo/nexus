@@ -2,48 +2,6 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// The server owns limits, resets, enforcement and the Aphrodite fallback. Native only draws its answer.
-struct GideonCreditSummary: Decodable, Sendable, Equatable {
-    struct Period: Decodable, Sendable, Equatable { let startKey: String; let endKey: String; let resetsAt: String }
-    struct Today: Decodable, Sendable, Equatable { let used: Int; let limit: Int; let remaining: Int; let answers: Int }
-    struct Pool: Decodable, Sendable, Equatable { let used: Int; let limit: Int; let bonus: Int; let remaining: Int }
-    let unlimited: Bool
-    let dayKey: String
-    let periodKey: String
-    let period: Period
-    let dayResetsAt: String
-    let today: Today
-    let pool: Pool
-    let period_used: Int
-    let over: Int
-    let fallbackToday: Int
-    let fallbackPerDay: Int
-    let enforced: Bool
-    let next: String
-}
-
-struct GideonCreditNotice: Decodable, Sendable, Equatable {
-    let kind: String
-    let en: String
-    let id: String
-    var text: String { AppLanguage.shared.lang == .id ? id : en }
-}
-
-struct GideonCreditHistory: Decodable, Sendable {
-    struct Item: Decodable, Sendable, Identifiable {
-        let id: String
-        let tier: String
-        let credits: Int
-        let createdAt: String
-        let title: String?
-        let billable: Bool
-        let fallback: Bool
-    }
-    let summary: GideonCreditSummary
-    let items: [Item]
-    let nextBefore: String?
-}
-
 extension GideonClient {
     static func creditData(history: Bool = false, before: String? = nil) async throws -> Data {
         var path = "/api/gideon/credits"
@@ -61,7 +19,7 @@ extension GideonClient {
 @MainActor @Observable
 final class GideonCredits {
     static let shared = GideonCredits()
-    var summary: GideonCreditSummary?
+    private(set) var summary: GideonCreditSummary?
     private var epoch = 0
     func refresh() async {
         let current = epoch
@@ -70,6 +28,7 @@ final class GideonCredits {
               let envelope = try? JSONDecoder().decode(Envelope.self, from: data), current == epoch else { return }
         summary = envelope.summary
     }
+    func accept(_ next: GideonCreditSummary) { epoch += 1; summary = next }
     func reset() { epoch += 1; summary = nil }
 }
 
@@ -185,7 +144,7 @@ struct GideonCreditUsageView: View {
         do {
             let data = try await GideonClient.creditData(history: true, before: more ? nextBefore : nil)
             let page = try JSONDecoder().decode(GideonCreditHistory.self, from: data)
-            credits.summary = page.summary
+            credits.accept(page.summary)
             let known = more ? Set(items.map(\.id)) : []
             items = (more ? items : []) + page.items.filter { !known.contains($0.id) }
             nextBefore = page.nextBefore

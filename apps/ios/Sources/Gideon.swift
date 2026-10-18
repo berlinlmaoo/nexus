@@ -705,6 +705,7 @@ enum GideonClient {
         // Who is asking, like every other request in the app (it was missing here).
         request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
         request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
         return request
     }
 
@@ -1147,7 +1148,7 @@ final class GideonChat {
                     if let j = turns[index].proposals.firstIndex(where: { $0.id == p.id }) { turns[index].proposals[j] = p }
                     else { turns[index].proposals.append(p) }
                 case .credits(let summary, let notice):
-                    if let summary { GideonCredits.shared.summary = summary }
+                    if let summary { GideonCredits.shared.accept(summary) }
                     if let notice { turns[index].creditNotice = notice }
                 case .chat(let id, let title):
                     chatId = id

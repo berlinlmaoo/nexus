@@ -34,7 +34,7 @@ struct ListGroupHeader: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
+                Image(systemName: "play.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(NX.mutedFg)
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
@@ -346,9 +346,9 @@ struct ListTaskRow: View {
             if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             content
-                .padding(.horizontal, 8).padding(.vertical, wide ? 10 : 8)
+                .padding(.horizontal, 8).padding(.vertical, wide ? 6 : 8)
                 .padding(.leading, task.isSubtask ? 20 : 0)
-                .frame(maxWidth: .infinity, minHeight: wide ? 46 : 38, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: wide ? 32 : 38, alignment: .leading)
                 .background(selecting && selected ? NX.violet.opacity(0.10) : Color.clear)
                 .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
                 .contentShape(Rectangle())
