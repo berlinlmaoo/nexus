@@ -554,7 +554,7 @@ function Pipeline({ m }: { m: MeetingFull }) {
         {steps.map((s, i) => (
           <li key={s.key} className="flex min-w-0 items-center gap-2">
             <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]", i < at ? "bg-sidebar-primary text-sidebar-primary-foreground" : i === at ? "bg-accent text-sidebar-primary ring-1 ring-sidebar-primary/40" : "bg-muted text-muted-foreground")}>{i < at ? <Check className="h-3 w-3" /> : i + 1}</span>
-            <span className={cn("truncate", i === at ? "text-foreground" : "text-muted-foreground")}>{s.label}</span>
+            <span className={cn("truncate", i === at ? "text-foreground" : "text-muted-foreground max-sm:hidden")}>{s.label}</span>
             {i < steps.length - 1 && <span className="h-px w-4 shrink-0 bg-border sm:w-8" />}
           </li>
         ))}
