@@ -1,8 +1,8 @@
 import Foundation
 var checks = 0
 func check(_ value: Bool, _ label: String) { if !value { fatalError(label) }; checks += 1 }
-check(GideonToolAction.all.count == 18, "all tool write actions covered")
-check(Set(GideonToolAction.all.map(\.id)).count == 18, "unique actions")
+check(GideonToolAction.all.count == 19, "all tool write actions covered")
+check(Set(GideonToolAction.all.map(\.id)).count == 19, "unique actions")
 check(GideonToolAction.get("unknown_future_tool") == nil, "unknown tool keeps fallback")
 check(GideonToolAction.get("delete_task") == nil, "task confirmation remains distinct")
 check(GideonToolAction.all.filter(\.destructive).map(\.id) == ["cancel_reminder"], "destructive reminder cancel")

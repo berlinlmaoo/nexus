@@ -267,7 +267,7 @@ struct ListPropLine: View {
         if !avatars.isEmpty {
             HStack(spacing: -6) {
                 ForEach(avatars, id: \.id) { a in
-                    AvatarView(url: a.url, initial: a.initial, size: 20)
+                    AvatarView(url: a.url, initial: a.initial, size: 20, userId: a.userId, name: a.name)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                 }
             }

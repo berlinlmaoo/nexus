@@ -330,7 +330,7 @@ struct NotificationRow: View {
     /// signals and rows from before the server kept the sender show the kind's mark instead.
     @ViewBuilder private var mark: some View {
         if let actor = Self.actor(of: notification, roster: roster), !NotificationMark.isLegal(notification.type) {
-            AvatarView(url: actor.avatar, initial: actor.initial, size: 38)
+            AvatarView(url: actor.avatar, initial: actor.initial, size: 38, userId: actor.id, name: actor.name)
                 .overlay(alignment: .bottomTrailing) {
                     kindMark(size: 18)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))

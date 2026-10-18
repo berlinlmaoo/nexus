@@ -87,7 +87,7 @@ struct SidebarAccountFooter: View {
                 let name = s.userName.isEmpty ? s.userEmail : s.userName
                 Button(action: onOpenProfile) {
                     HStack(spacing: 8) {
-                        AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 30)
+                        AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 30, userId: Keychain.load()?.userId, name: name)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
                             Text(s.userEmail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

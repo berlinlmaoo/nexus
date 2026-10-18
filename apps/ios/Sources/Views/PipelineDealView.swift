@@ -538,7 +538,7 @@ struct PipelineDealView: View {
 
     private func historyRow(_ h: PipelineChange) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: h.user?.avatar, initial: h.user?.initial ?? "?", size: 26)
+            AvatarView(url: h.user?.avatar, initial: h.user?.initial ?? "?", size: 26, userId: h.user?.id, name: h.user?.name)
             VStack(alignment: .leading, spacing: 3) {
                 Text(historyTitle(h))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
@@ -1135,7 +1135,7 @@ struct PipelinePersonInput: View {
             } label: {
                 HStack(spacing: 8) {
                     if let shownName {
-                        AvatarView(url: person?.avatar, initial: String(shownName.first ?? "?").uppercased(), size: 22)
+                        AvatarView(url: person?.avatar, initial: String(shownName.first ?? "?").uppercased(), size: 22, userId: userId, name: shownName)
                         Text(shownName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                     } else {
                         Text(T("Not assigned")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)

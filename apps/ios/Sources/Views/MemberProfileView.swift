@@ -165,10 +165,11 @@ struct MemberProfileView: View {
             HStack(spacing: 14) {
                 // The full-screen viewer belongs to the avatar itself, so this screen keeps its one
                 // sheet (the streak day). Initials open nothing.
-                ZoomableAvatar(url: avatarURL, initial: initial, size: 72, name: displayName)
+                ZoomableAvatar(url: avatarURL, initial: initial, size: 72, name: displayName, userId: target.userId)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(displayName).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    PresenceChip(userId: target.userId)
                     HStack(spacing: 6) {
                         if let role = roleText { RoleChip(role: role) }
                         if isMe { NexusChip(text: T("You"), tone: .accent) }
@@ -177,6 +178,7 @@ struct MemberProfileView: View {
                 }
                 Spacer(minLength: 0)
             }
+            if isMe { SetPresenceRow(showCurrent: false) }
             let email = (emailText ?? "").isEmpty ? nil : emailText
             let joined = (joinedText ?? "").isEmpty ? nil : joinedText
             if email != nil || joined != nil {

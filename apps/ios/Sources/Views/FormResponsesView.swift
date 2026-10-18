@@ -170,7 +170,7 @@ private struct FormResponseRowView: View {
         Button(action: onOpen) {
             HStack(spacing: 10) {
                 if let p = row.submitter {
-                    AvatarView(url: p.avatar, initial: String((p.name ?? p.email ?? "?").prefix(1)).uppercased(), size: 28)
+                    AvatarView(url: p.avatar, initial: String((p.name ?? p.email ?? "?").prefix(1)).uppercased(), size: 28, userId: p.id, name: p.name ?? p.email)
                 } else {
                     Circle().fill(NX.muted).frame(width: 28, height: 28)
                 }

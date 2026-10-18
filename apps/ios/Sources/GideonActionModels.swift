@@ -25,6 +25,7 @@ struct GideonToolAction: Equatable, Sendable {
     let done: String
     var destructive: Bool { id == "cancel_reminder" }
     static let all: [Self] = [
+        .init(id: "set_my_status", icon: "circle.inset.filled", title: "Set your status", apply: "Set status", done: "Status set"),
         .init(id: "send_message", icon: "message", title: "Send a message", apply: "Send", done: "Message sent"),
         .init(id: "create_reminder", icon: "alarm", title: "Set a reminder", apply: "Set reminder", done: "Reminder set"),
         .init(id: "cancel_reminder", icon: "alarm", title: "Cancel a reminder", apply: "Cancel reminder", done: "Reminder cancelled"),

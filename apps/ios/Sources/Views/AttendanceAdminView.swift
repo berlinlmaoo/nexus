@@ -134,7 +134,7 @@ struct AttendanceAdminSection: View {
 
     private func memberRow(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: m.avatarURL, initial: m.initial, size: 38)
+            AvatarView(url: m.avatarURL, initial: m.initial, size: 38, userId: m.userId, name: m.displayName)
             VStack(alignment: .leading, spacing: 2) {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 HStack(spacing: 6) {

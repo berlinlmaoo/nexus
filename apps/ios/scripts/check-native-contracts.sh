@@ -68,3 +68,5 @@ Path(sys.argv[1],'loose.swift').write_text('import Foundation\n'+s[a:b])
 PY
 swiftc "$NATIVE_CHECK_TMP/loose.swift" Sources/GideonActionModels.swift Tests/GideonTools/main.swift -o "$NATIVE_CHECK_TMP/tools"
 "$NATIVE_CHECK_TMP/tools"
+swiftc Sources/PresenceModels.swift Sources/PresenceStore.swift Tests/Presence/Stub.swift Tests/Presence/main.swift -o "$NATIVE_CHECK_TMP/presence"
+"$NATIVE_CHECK_TMP/presence"

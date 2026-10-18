@@ -328,7 +328,7 @@ struct AdminExtraDayOffSection: View {
             HStack(spacing: 10) {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18)).foregroundStyle(on ? NX.violet : NX.mutedFg)
-                AvatarView(url: m.avatarURL, initial: m.initial, size: 28)
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 28, userId: m.userId, name: m.displayName)
                 Text(m.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer(minLength: 6)
                 if let r = m.role { RoleChip(role: r) }
@@ -430,7 +430,7 @@ struct AdminExtraDayOffSection: View {
 
     private func grantRow(_ g: DayOffBonusGrant) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: g.user?.avatar, initial: g.initial, size: 32)
+            AvatarView(url: g.user?.avatar, initial: g.initial, size: 32, userId: g.userId, name: g.displayName)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(g.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)

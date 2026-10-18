@@ -630,7 +630,7 @@ private struct OverviewTaskRow: View {
         if !list.isEmpty {
             HStack(spacing: -6) {
                 ForEach(list, id: \.id) { a in
-                    AvatarView(url: a.url, initial: a.initial, size: 22)
+                    AvatarView(url: a.url, initial: a.initial, size: 22, userId: a.userId, name: a.name)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                 }
             }
@@ -830,7 +830,7 @@ private struct OverviewTeamCard: View {
         } label: {
             HStack(spacing: 8) {
                 HStack(spacing: 10) {
-                    AvatarView(url: p.avatar, initial: OverviewStyle.initial(p.name), size: 28)
+                    AvatarView(url: p.avatar, initial: OverviewStyle.initial(p.name), size: 28, userId: p.id, name: p.name)
                     VStack(alignment: .leading, spacing: 4) {
                         // Name and Owner chip side by side when both fit whole; on a phone the chip goes under
                         // the name instead of cutting it to "Budi P…" (UI tour run 7).
@@ -953,7 +953,7 @@ private struct OverviewBriefCard: View {
                                 Button {
                                     onOpenMember(ProfileTarget(userId: m.uid, name: m.user?.name, avatar: m.user?.avatar))
                                 } label: {
-                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 28)
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 28, userId: m.uid, name: m.displayName)
                                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                                 }
                                 .buttonStyle(.plain)
@@ -1124,7 +1124,7 @@ private struct OverviewRecentCard: View {
                                 }
                                 Spacer(minLength: 6)
                                 if let by {
-                                    AvatarView(url: by.avatar, initial: OverviewStyle.initial(by.name), size: 22)
+                                    AvatarView(url: by.avatar, initial: OverviewStyle.initial(by.name), size: 22, userId: t.completedById, name: by.name)
                                         .accessibilityHidden(true)
                                 }
                             }
@@ -1236,7 +1236,7 @@ private struct OverviewStatusUpdatesCard: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 8) {
                                     let name = u.author?.name ?? T("Someone")
-                                    AvatarView(url: u.author?.avatar, initial: OverviewStyle.initial(name), size: 22)
+                                    AvatarView(url: u.author?.avatar, initial: OverviewStyle.initial(name), size: 22, userId: u.author?.id, name: name)
                                         .accessibilityHidden(true)
                                     Text(name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                     if let s = u.status, !s.isEmpty {

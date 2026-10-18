@@ -631,7 +631,7 @@ struct ProjectTableRow: View {
     private var avatars: some View {
         HStack(spacing: -6) {
             ForEach(task.assigneeAvatars, id: \.id) { a in
-                AvatarView(url: a.url, initial: a.initial, size: 26)
+                AvatarView(url: a.url, initial: a.initial, size: 26, userId: a.userId, name: a.name)
                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
             }
             if task.assigneeAvatars.isEmpty { TableEmptyMark() }

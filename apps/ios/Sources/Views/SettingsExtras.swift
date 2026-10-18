@@ -105,7 +105,7 @@ struct WorkspaceMembersCard: View {
                 }
             } label: {
                 HStack(spacing: 10) {
-                    AvatarView(url: m.avatarURL, initial: m.initial, size: 36)
+                    AvatarView(url: m.avatarURL, initial: m.initial, size: 36, userId: m.userId, name: m.displayName)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
@@ -596,6 +596,14 @@ struct AvatarView: View {
     let url: String?
     let initial: String
     var size: CGFloat = 36
+    var userId: String? = nil
+    var name: String? = nil
+    @State private var showPresence = false
+    private var presence: PresenceStatus? { size >= 16 ? PresenceStore.shared.status(userId) : nil }
+    private var presenceLabel: String {
+        guard let presence else { return name ?? initial }
+        return (name ?? initial) + " · " + presence.localizedLabel(AppLanguage.shared.lang.rawValue)
+    }
     private var resolved: URL? {
         guard let url, !url.isEmpty else { return nil }
         return URL(string: url.hasPrefix("http") ? url : Config.baseURL.absoluteString + url)
@@ -611,6 +619,16 @@ struct AvatarView: View {
         }
         .frame(width: size, height: size)
         .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
+        .overlay(alignment: .bottomTrailing) {
+            if let presence {
+                PresenceDot(tone: presence.tone, size: min(16, max(7, size * 0.3)))
+                    .padding(2).background(NX.background, in: Circle()).offset(x: 2, y: 2)
+            }
+        }
+        .accessibilityElement(children: .ignore).accessibilityLabel(presenceLabel)
+        .help(presenceLabel)
+        .simultaneousGesture(LongPressGesture().onEnded { _ in if presence != nil { showPresence = true } })
+        .popover(isPresented: $showPresence) { Text(presenceLabel).font(NXFont.text(13)).padding(14).presentationCompactAdaptation(.popover) }
     }
     private var initialText: some View {
         Text(initial).font(NXFont.text(size * 0.36, .bold)).foregroundStyle(NX.violetText)

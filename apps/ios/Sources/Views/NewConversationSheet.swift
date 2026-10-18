@@ -132,7 +132,7 @@ struct NewConversationSheet: View {
             if on { picked.remove(uid) } else { picked.insert(uid) }
         } label: {
             HStack(spacing: 10) {
-                AvatarView(url: m.avatar, initial: String(display.first ?? "?").uppercased(), size: 34)
+                AvatarView(url: m.avatar, initial: String(display.first ?? "?").uppercased(), size: 34, userId: m.userId, name: m.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(display).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let email = m.email, !email.isEmpty, email != display {

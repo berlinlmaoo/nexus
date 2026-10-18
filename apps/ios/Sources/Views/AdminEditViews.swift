@@ -415,7 +415,7 @@ struct AdminUsersSection: View {
                                     ForEach(Array(registered.enumerated()), id: \.element.id) { idx, r in
                                         if idx > 0 { Divider().overlay(NX.border) }
                                         HStack(spacing: 12) {
-                                            AvatarView(url: r.avatar, initial: r.initial, size: 34)
+                                            AvatarView(url: r.avatar, initial: r.initial, size: 34, userId: r.id, name: r.displayName)
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(r.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                                 Text(r.email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -503,7 +503,7 @@ struct AdminUsersSection: View {
                 ForEach(Array(leftRows.enumerated()), id: \.element.id) { idx, u in
                     if idx > 0 { Divider().overlay(NX.border) }
                     HStack(spacing: 12) {
-                        AvatarView(url: u.avatar, initial: u.initial, size: 34)
+                        AvatarView(url: u.avatar, initial: u.initial, size: 34, userId: u.id, name: u.displayName)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(u.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             if let e = u.email, !e.isEmpty {
@@ -554,10 +554,11 @@ struct AdminUsersSection: View {
             if let uid = m.userId { openUser = uid }
         } label: {
             HStack(spacing: 12) {
-                AvatarView(url: m.avatarURL, initial: m.initial, size: 40)
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 40, userId: m.userId, name: m.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    PresenceLine(userId: m.userId)
                     // Hanya digambar saat MENYALA: 46 dari 49 orang tidak memakai keduanya, dan
                     // lencana "mati" di tiap baris membuat yang menyala berhenti terlihat.
                     if (m.flexiTimeEnabled ?? false) || (m.noGeofenceMode ?? false) || (m.googleWorkspaceEmail?.isEmpty == false) {
@@ -1849,7 +1850,7 @@ struct ApproverPickSheet: View {
                         ForEach(list, id: \.idv) { m in
                             Button { onPick(m.userId) } label: {
                                 HStack(spacing: 10) {
-                                    AvatarView(url: m.avatarURL, initial: m.initial, size: 30)
+                                    AvatarView(url: m.avatarURL, initial: m.initial, size: 30, userId: m.userId, name: m.displayName)
                                     Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer(minLength: 4)
                                     if m.userId == target.current { Image(systemName: "checkmark").foregroundStyle(NX.success) }
@@ -1921,7 +1922,7 @@ struct AccountEditSheet: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56)
+                    AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56, userId: target.id, name: name)
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
                         Label(T("Change photo"), systemImage: "photo").font(NXFont.text(13, .semibold))
                     }

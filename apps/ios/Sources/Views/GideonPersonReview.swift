@@ -11,7 +11,7 @@ struct GideonPersonReview: View {
             VStack(spacing: 0) {
                 if let data {
                     HStack(spacing: 10) {
-                        AvatarView(url: data.person.avatar, initial: String((data.person.name ?? "?").prefix(1)), size: 38)
+                        AvatarView(url: data.person.avatar, initial: String((data.person.name ?? "?").prefix(1)), size: 38, userId: data.person.id, name: data.person.name)
                         VStack(alignment: .leading) {
                             Text(data.person.name ?? data.person.email ?? "—").font(NXFont.display(20, .bold))
                             Text(data.person.email ?? "").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

@@ -412,7 +412,7 @@ struct ConvoRow: View {
             if convo.isGroupish {
                 ChatRoomGlyph(projectId: convo.projectId, projectIcon: projectIcon)
             } else {
-                AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
+                AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40, userId: convo.type == "DM" ? convo.members?.first { ($0.userId ?? $0.user?.id) != meId }.flatMap { $0.userId ?? $0.user?.id } : nil, name: convo.title(meId: meId))
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
@@ -668,10 +668,13 @@ struct ChatThreadView: View {
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
                     // "typing…" in place of the hint while someone types here, as WhatsApp does.
-                    Text(typingHere ? T("typing…") : headerSubtitle)
-                        .font(NXFont.text(11, typingHere ? .semibold : .regular))
-                        .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
-                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        if !typingHere, let dmPresence { PresenceDot(tone: dmPresence.tone, size: 7) }
+                        Text(typingHere ? T("typing…") : headerSubtitle)
+                            .font(NXFont.text(11, typingHere ? .semibold : .regular))
+                            .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
+                            .lineLimit(1)
+                    }
                 }
                 }
                 .contentShape(Rectangle())
@@ -715,7 +718,9 @@ struct ChatThreadView: View {
 
     /// Under the title, as on the web: "3 members · project room" (UI tour run 15, Q-IA11 / Q-M20: the app
     /// said "Tap for info" / "Click for info").
+    private var dmPresence: PresenceStatus? { !isRoom ? PresenceStore.shared.status(members.first { $0.uid != meId }?.uid) : nil }
     private var headerSubtitle: String {
+        if let dmPresence { return dmPresence.localizedLabel(AppLanguage.shared.lang.rawValue) }
         let n = members.filter { !$0.uid.isEmpty }.count
         let count = n == 1 ? T("1 member") : String(format: T("%d members"), n)
         return (type ?? "").uppercased() == "PROJECT" ? "\(count) · \(T("project room"))" : count
@@ -731,10 +736,13 @@ struct ChatThreadView: View {
                         .font(NXFont.text(15, .semibold))
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
-                    Text(typingHere ? T("typing…") : headerSubtitle)
-                        .font(NXFont.text(10, typingHere ? .semibold : .regular))
-                        .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
-                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        if !typingHere, let dmPresence { PresenceDot(tone: dmPresence.tone, size: 7) }
+                        Text(typingHere ? T("typing…") : headerSubtitle)
+                            .font(NXFont.text(10, typingHere ? .semibold : .regular))
+                            .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
+                            .lineLimit(1)
+                    }
                 }
             }
             .frame(maxWidth: 260)
@@ -1223,7 +1231,7 @@ struct ChatThreadView: View {
                         ForEach(mentionMatches, id: \.uid) { m in
                             Button { mention(m) } label: {
                                 HStack(spacing: 6) {
-                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22)
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22, userId: m.uid, name: m.displayName)
                                     Text(m.displayName).font(NXFont.text(12, .semibold))
                                         .foregroundStyle(NX.foreground).lineLimit(1)
                                 }
@@ -1366,7 +1374,7 @@ struct ChatThreadView: View {
         return HStack(alignment: .bottom, spacing: 8) {
             HStack(spacing: -10) {
                 ForEach(shown) { p in
-                    AvatarView(url: p.avatar, initial: p.initial, size: 28)
+                    AvatarView(url: p.avatar, initial: p.initial, size: 28, userId: p.userId, name: p.name)
                         .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
                 }
                 if more > 0 {
@@ -1402,7 +1410,7 @@ struct ChatThreadView: View {
                 if mine {
                     Spacer(minLength: 50)
                 } else {
-                    AvatarView(url: m.user?.avatar, initial: String((m.user?.name ?? "?").first ?? "?").uppercased(), size: 28)
+                    AvatarView(url: m.user?.avatar, initial: String((m.user?.name ?? "?").first ?? "?").uppercased(), size: 28, userId: m.userId ?? m.user?.id, name: m.user?.name)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }

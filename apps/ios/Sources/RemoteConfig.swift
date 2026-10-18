@@ -25,6 +25,7 @@ final class RemoteConfig {
         /// Live Activity and the phone's own alerts say since when, without a check-out time.
         var outsideAutoCheckout: Bool?
         var meetingNotesEnabled: Bool?
+        var presenceStatus: Bool?
     }
     struct Values: Codable, Equatable, Sendable {
         var outsideHourAlertMinutes: Int?
@@ -72,6 +73,7 @@ final class RemoteConfig {
     /// Floored at 15 s: a 0 (or a typo) from the server must not turn the Calendar's poll into a busy loop.
     var calendarPollSeconds: Int { max(15, body.values?.calendarPollSeconds ?? 60) }
     var banner: Banner? { body.banner }
+    var presenceStatus: Bool { body.flags?.presenceStatus ?? true }
     var meetingNotesEnabled: Bool { body.flags?.meetingNotesEnabled ?? true }
     var meetingMaxMinutes: Int { max(1, body.values?.meetingMaxMinutes ?? 180) }
     var meetingMaxBytes: Int { max(1, body.values?.meetingMaxMB ?? 500) * 1_048_576 }

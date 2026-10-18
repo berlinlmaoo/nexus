@@ -93,7 +93,7 @@ private struct SheetCellThreadView: View {
 
     private func row(_ c: SPComment) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: c.authorAvatar, initial: String((c.authorName ?? "?").prefix(1)).uppercased(), size: 28)
+            AvatarView(url: c.authorAvatar, initial: String((c.authorName ?? "?").prefix(1)).uppercased(), size: 28, userId: c.authorId, name: c.authorName)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(c.authorName ?? "—").font(NXFont.text(13, .semibold)).lineLimit(1)
@@ -183,7 +183,7 @@ private struct SheetCellThreadView: View {
 
     private func revisionRow(_ r: SPRevision) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: r.authorAvatar, initial: String((r.authorName ?? "?").prefix(1)).uppercased(), size: 28)
+            AvatarView(url: r.authorAvatar, initial: String((r.authorName ?? "?").prefix(1)).uppercased(), size: 28, userId: r.authorId, name: r.authorName)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(r.authorName ?? T("deleted account")).font(NXFont.text(13, .semibold)).lineLimit(1)

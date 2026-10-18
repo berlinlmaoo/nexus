@@ -11,7 +11,10 @@ enum GideonStepText {
     static func text(_ s: GideonStep) -> String {
         let a = String((s.arg ?? "").prefix(60))
         let has = !a.isEmpty
-        switch s.tool ?? "" {
+        let tool = s.tool ?? ""
+        switch tool.hasPrefix("nexus_") ? String(tool.dropFirst(6)) : tool {
+        case "get_person_status": return String(format: T("Checking where %@ is"), a)
+        case "set_my_status": return String(format: T("Preparing your status: %@"), a)
         case "list_projects": return T("Listing projects")
         case "list_members": return T("Looking up people")
         case "list_tasks": return has ? String(format: T("Listing tasks in %@"), a) : T("Listing tasks")

@@ -108,7 +108,7 @@ struct XpAuditLogCard: View {
     private func row(_ r: XpLogEntry) -> some View {
         let name = r.userName ?? "—"
         return HStack(spacing: 12) {
-            AvatarView(url: r.userAvatar, initial: String(name.prefix(1)).uppercased(), size: 32)
+            AvatarView(url: r.userAvatar, initial: String(name.prefix(1)).uppercased(), size: 32, userId: r.userId, name: name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text([r.label, when(r)].filter { !$0.isEmpty }.joined(separator: " · "))

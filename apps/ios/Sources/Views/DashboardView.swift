@@ -1003,7 +1003,7 @@ struct DashboardView: View {
                                 Button { openNotification(n) } label: {
                                     HStack(alignment: .top, spacing: 10) {
                                         if let a = n.actor {
-                                            AvatarView(url: a.avatar, initial: a.initial, size: 28)
+                                            AvatarView(url: a.avatar, initial: a.initial, size: 28, userId: a.id, name: a.name)
                                         } else {
                                             Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
                                         }
@@ -1410,7 +1410,7 @@ struct DashboardView: View {
     private var profileCard: some View {
         VStack(spacing: 14) {
             HStack(spacing: 14) {
-                AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
+                AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64, userId: Keychain.load()?.userId, name: name)
                 VStack(alignment: .leading, spacing: 8) {
                     // iPad / Mac: the level is the header's pill, said once (decision 11); the phone keeps it here.
                     if let game, hSize != .regular { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }

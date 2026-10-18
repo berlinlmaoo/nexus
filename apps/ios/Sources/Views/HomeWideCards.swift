@@ -164,7 +164,7 @@ struct HomeLeaderboardCard: View {
                                 }
                             }
                             .accessibilityLabel(String(format: T("Rank %d"), item.rank))
-                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30)
+                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30, userId: item.row.userId, name: item.row.name)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                 // With the tier badge, as the web widget's rows (R20-B-05).

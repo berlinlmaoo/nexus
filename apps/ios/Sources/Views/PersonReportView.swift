@@ -302,7 +302,7 @@ struct PersonReportSections: View {
 
     private func identity(_ p: PersonReport.Person) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: p.avatar, initial: String(p.displayName.first ?? "?").uppercased(), size: 48)
+            AvatarView(url: p.avatar, initial: String(p.displayName.first ?? "?").uppercased(), size: 48, userId: p.id, name: p.displayName)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(p.displayName).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground).lineLimit(1)

@@ -351,7 +351,7 @@ struct NewProjectMembersPicker: View {
                 ForEach(pickedMembers, id: \.idv) { m in
                     Button { picked.remove(m.userId ?? "") } label: {
                         HStack(spacing: 6) {
-                            AvatarView(url: m.avatarURL, initial: m.initial, size: 20)
+                            AvatarView(url: m.avatarURL, initial: m.initial, size: 20, userId: m.userId, name: m.displayName)
                             Text(m.displayName).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                             Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
                         }
@@ -373,7 +373,7 @@ struct NewProjectMembersPicker: View {
             if on { picked.remove(uid) } else { picked.insert(uid) }
         } label: {
             HStack(spacing: 10) {
-                AvatarView(url: m.avatarURL, initial: m.initial, size: 30)
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 30, userId: m.userId, name: m.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let email = m.emailText, !email.isEmpty, email != m.displayName {

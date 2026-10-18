@@ -42,6 +42,7 @@ final class AuthStore {
                 ResponseCache.clearAll()
                 OfflineSync.shared.reset()
                 Viewer.shared.reset()
+                PresenceStore.shared.reset()
                 RealtimeClient.shared.reset()
                 GideonChat.shared.refreshIdentity()
                 CalendarWidgetPresence.stop()
@@ -100,6 +101,7 @@ final class AuthStore {
             userName: res.user.name ?? "",
             userEmail: res.user.email ?? fallbackEmail
         )
+        PresenceStore.shared.reset()
         Keychain.save(s)
         // A check-in queued before the session expired belongs to this person only if it is theirs.
         AttendanceQueue.shared.keepOnly(owner: s.userId)
@@ -171,6 +173,7 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()
+        PresenceStore.shared.reset()
         // Nor the realtime connection: it is authenticated as this person, and the next one to sign in
         // must not hear a single event meant for them. NexusApp would close it on the next render too;
         // this closes it now.

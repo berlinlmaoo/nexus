@@ -239,6 +239,8 @@ final class RealtimeClient {
             center.post(name: .nexusInboxChanged, object: nil)
         case "gideon-credits":
             Task { await GideonCredits.shared.refresh() }
+        case "presence-changed":
+            PresenceStore.shared.event(payload?.serialized ?? "{}")
         case "gideon-tiers":
             if let json = payload?["tiers"]?.serialized.data(using: .utf8),
                let tiers = try? JSONDecoder().decode([String: GideonTierAvailability].self, from: json) {

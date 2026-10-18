@@ -394,7 +394,7 @@ struct TaskDetailView: View {
                     if let people = t.assignees?.compactMap({ $0.user }), !people.isEmpty {
                         HStack(spacing: 6) {
                             ForEach(Array(people.prefix(3).enumerated()), id: \.offset) { _, person in
-                                AvatarView(url: person.avatar, initial: String((person.name ?? "?").prefix(1)), size: 20)
+                                AvatarView(url: person.avatar, initial: String((person.name ?? "?").prefix(1)), size: 20, userId: person.id, name: person.name)
                             }
                             assigneeLine(people).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2)
                         }
@@ -435,7 +435,7 @@ struct TaskDetailView: View {
             if let creator = t.creator, let name = creator.name {
                 propertyRow("Created by", icon: "person.crop.circle") {
                     HStack(spacing: 6) {
-                        AvatarView(url: creator.avatar, initial: String(name.prefix(1)), size: 20)
+                        AvatarView(url: creator.avatar, initial: String(name.prefix(1)), size: 20, userId: creator.id, name: name)
                         Text(SystemUsers.name(name, avatar: creator.avatar)).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                         if creator.deactivatedAt != nil { LeftTag() }
                     }
@@ -470,7 +470,7 @@ struct TaskDetailView: View {
             if SystemUsers.isAutomation(avatar: creator.avatar) {
                 AutomationAvatar(size: 22)
             } else {
-                AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22)
+                AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22, userId: creator.id, name: name)
             }
             (Text(before).foregroundColor(NX.mutedFg)
                 + Text(name).font(NXFont.text(13, .semibold)).foregroundColor(NX.foreground)
@@ -567,7 +567,7 @@ struct TaskDetailView: View {
                             if SystemUsers.isAutomation(avatar: c.user?.avatar) {
                                 AutomationAvatar(size: 20)
                             } else {
-                                AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20)
+                                AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20, userId: c.user?.id, name: c.user?.name)
                             }
                             Text(SystemUsers.name(c.user?.name, avatar: c.user?.avatar, fallback: "Someone")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                             Spacer()
@@ -869,7 +869,7 @@ struct AssigneePicker: View {
                         ForEach(members) { m in
                             Button { toggle(m.uid) } label: {
                                 HStack(spacing: 12) {
-                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 34)
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 34, userId: m.uid, name: m.displayName)
                                     Text(m.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer()
                                     if selected.contains(m.uid) {

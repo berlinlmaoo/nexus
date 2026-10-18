@@ -205,6 +205,7 @@ struct SettingsView: View {
     @ViewBuilder private var webTabContent: some View {
         if tab == .profile {
             webProfileCard
+            if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
             JoinWorkspaceCard()
             // The danger zone last (decision 26 of run 20, Mac R20-M-08): Sign out, then Delete account.
             webLogoutCard
@@ -220,6 +221,7 @@ struct SettingsView: View {
         switch tab {
         case .profile:
             profileSection
+            if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
             JoinWorkspaceCard()
             // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
             accountSection
@@ -443,7 +445,7 @@ struct SettingsView: View {
 
     private var webPhotoRow: some View {
         HStack(alignment: .center, spacing: 16) {
-            AvatarView(url: avatarURL, initial: initial, size: 80)
+            AvatarView(url: avatarURL, initial: initial, size: 80, userId: Keychain.load()?.userId, name: name)
                 .overlay(Circle().strokeBorder(NX.border, lineWidth: 2))
                 .overlay {
                     if uploadingPhoto {

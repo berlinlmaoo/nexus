@@ -1410,7 +1410,7 @@ struct ProjectCard: View {
                 if project.memberCount > 0 {
                     HStack(spacing: -8) {
                         ForEach(project.memberAvatars, id: \.id) { m in
-                            AvatarView(url: m.url, initial: m.initial, size: 24)
+                            AvatarView(url: m.url, initial: m.initial, size: 24, userId: m.userId, name: m.name)
                                 .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
                         }
                         if project.memberCount > 4 {

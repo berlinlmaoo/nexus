@@ -31,6 +31,7 @@ struct NativeAPIError: LocalizedError {
     var fields: [String: Any] { (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:] }
     var code: String { fields["code"] as? String ?? "" }
     var errorDescription: String? {
+        if path.hasPrefix("/api/presence") { return fields["error"] as? String ?? T("Couldn't save your status. Try again.") }
         if path.hasPrefix("/api/meetings") { return MeetingIssue.message(code.isEmpty ? fields["error"] as? String ?? "" : code, metadata: fields) ?? T("Couldn't update meeting notes. Try again.") }
         switch code.uppercased() {
         case "NEEDS_EDIT_ACCESS": return T("You can't add tasks to that project. Pick another.")

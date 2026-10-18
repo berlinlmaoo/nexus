@@ -355,3 +355,9 @@ Native clients refresh `GET /user/profile` before restoring a saved session's sh
 | POST | `/meetings/:id/apply`, `/meetings/:id/retry` | Flush draft before Apply; saved page/tasks are retained independently of meeting deletion. |
 
 Realtime: `meeting-changed`, `reminders-changed`, `gideon-tiers`, and `gideon-perf` (join `gideon:perf` only while foreground/visible). Notifications route meeting IDs to `/meetings/:id`, reminders to `/reminders`, and GIDEON alerts to `/admin?tab=gideon&gideon=performance`.
+
+### Native presence (DEV, 19 Oct 2026)
+
+`GET /api/presence` supplies workspace-visible statuses; `?userId=me` supplies the current person. Native draws `label.en/id`, `tone`, and `until` as returned, including unknown state/reason values. No presence coordinates, address or map are decoded or displayed. `flags.presenceStatus` defaults true; either the config flag or API `enabled:false` hides the feature.
+
+`PUT /api/presence/manual` sends `text`, nullable `startsAt`, and `endsAt` (ISO instants). `DELETE /api/presence/manual?id=<displayed manual id>` protects a replacement set from another device; adopt the returned status even when `cleared:0`. Refusals display the server's `error`. Presence changes neither attendance nor notifications. The `presence-changed` socket event patches one shared session cache; reconnect and a fixed 60-second foreground fallback refetch the workspace list. GIDEON `set_my_status` uses the generic approval card with `confirm.proposalId`.

@@ -240,7 +240,7 @@ struct Podium: View {
                 Button { onOpen(row) } label: {
                     VStack(spacing: 6) {
                         ZStack {
-                            AvatarView(url: row.avatar, initial: row.initial, size: avatar)
+                            AvatarView(url: row.avatar, initial: row.initial, size: avatar, userId: row.userId, name: row.name)
                                 .overlay(Circle().strokeBorder(ring, lineWidth: 3))
                             if place == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
@@ -257,7 +257,7 @@ struct Podium: View {
                 VStack(spacing: 6) {
                     HStack(spacing: -face * 0.3) {
                         ForEach(group.prefix(Self.stackMax)) { row in
-                            AvatarView(url: row.avatar, initial: row.initial, size: face)
+                            AvatarView(url: row.avatar, initial: row.initial, size: face, userId: row.userId, name: row.name)
                                 .overlay(Circle().strokeBorder(ring, lineWidth: 2))
                         }
                         if group.count > Self.stackMax {
@@ -307,7 +307,7 @@ struct RankRow: View {
                     .frame(width: 18)
                     .opacity(rank == 1 ? 1 : 0)
                     .accessibilityHidden(true)
-                AvatarView(url: row.avatar, initial: row.initial, size: 36)
+                AvatarView(url: row.avatar, initial: row.initial, size: 36, userId: row.userId, name: row.name)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)

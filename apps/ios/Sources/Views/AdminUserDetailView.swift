@@ -217,7 +217,7 @@ struct AdminUserDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
-                AvatarView(url: member.avatarURL, initial: member.initial, size: 64)
+                AvatarView(url: member.avatarURL, initial: member.initial, size: 64, userId: member.userId, name: member.displayName)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(member.displayName).font(NXFont.display(19, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
                     if let e = member.emailText, !e.isEmpty {
@@ -318,7 +318,7 @@ struct AdminUserDetailView: View {
         card(T("Attendance approval"), T("This person's permits, leave and sick days go to their approver. Without one, requests go to every board member.")) {
             HStack(spacing: 10) {
                 if let a = member.approver {
-                    AvatarView(url: a.avatar, initial: String((a.name ?? "?").first ?? "?").uppercased(), size: 28)
+                    AvatarView(url: a.avatar, initial: String((a.name ?? "?").first ?? "?").uppercased(), size: 28, userId: a.id, name: a.name)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(T("Approver")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                         Text(a.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
@@ -343,7 +343,7 @@ struct AdminUserDetailView: View {
                 FlowLayout(spacing: 6) {
                     ForEach(reports, id: \.idv) { r in
                         HStack(spacing: 5) {
-                            AvatarView(url: r.avatarURL, initial: r.initial, size: 16)
+                            AvatarView(url: r.avatarURL, initial: r.initial, size: 16, userId: r.userId, name: r.displayName)
                             Text(r.displayName).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         }
                         .padding(.horizontal, 8).padding(.vertical, 4)

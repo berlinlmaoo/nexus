@@ -191,7 +191,7 @@ struct ProjectSettingsView: View {
                         HStack(spacing: 10) {
                             HStack(spacing: -6) {
                                 ForEach(Array(projectMembers.filter { autoIds.contains($0.uid) }.prefix(3))) { m in
-                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22)
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22, userId: m.uid, name: m.displayName)
                                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
                                 }
                             }
@@ -219,7 +219,7 @@ struct ProjectSettingsView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: autoIds.contains(m.uid) ? "checkmark.circle.fill" : "circle").foregroundStyle(autoIds.contains(m.uid) ? NX.violetText : NX.mutedFg)
-                                AvatarView(url: m.user?.avatar, initial: m.initial, size: 26)
+                                AvatarView(url: m.user?.avatar, initial: m.initial, size: 26, userId: m.uid, name: m.displayName)
                                 Text(m.displayName).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                                 Spacer()
                             }
@@ -323,7 +323,7 @@ struct ProjectSettingsView: View {
     /// Full access, plain text for everyone else (web settings drawer + header members popover).
     private func memberRow(_ m: ProjectDetail.ProjectMember) -> some View {
         HStack(spacing: 10) {
-            AvatarView(url: m.user?.avatar, initial: m.initial, size: 32)
+            AvatarView(url: m.user?.avatar, initial: m.initial, size: 32, userId: m.uid, name: m.displayName)
             VStack(alignment: .leading, spacing: 1) {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if m.isProjectOwner {

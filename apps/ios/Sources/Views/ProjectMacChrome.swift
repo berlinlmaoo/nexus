@@ -43,7 +43,7 @@ struct ProjectMemberStack: View {
             Button(action: action) {
                 HStack(spacing: -8) {
                     ForEach(Array(people.prefix(maxShown)), id: \.uid) { m in
-                        AvatarView(url: m.user?.avatar, initial: m.initial, size: 28)
+                        AvatarView(url: m.user?.avatar, initial: m.initial, size: 28, userId: m.uid, name: m.displayName)
                             .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
                     }
                     if people.count > maxShown {
