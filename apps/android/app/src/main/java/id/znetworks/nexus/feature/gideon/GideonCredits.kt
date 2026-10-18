@@ -56,10 +56,10 @@ fun GideonCreditMeter(api: ApiClient, refreshKey: Any?) {
         catch (e: ApiError) { error = e.describe(res) }
     }
     val s = summary
-    val label = when { s == null -> stringResource(R.string.gc_title); s.unlimited -> stringResource(R.string.gc_unlimited)
+    val label = when { s == null -> stringResource(R.string.gc_title); s.unlimited -> stringResource(R.string.audit_credits_unlimited, s.today.used)
         else -> stringResource(R.string.gc_today, s.today.used, s.today.limit) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)) {
-        Text(label, fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 6.dp))
+        Text(label, fontSize = 12.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 6.dp))
         if (s != null && !s.unlimited) LinearProgressIndicator(progress = { if (s.today.limit > 0) (s.today.used.toFloat() / s.today.limit).coerceIn(0f, 1f) else 0f },
             modifier = Modifier.fillMaxWidth().height(2.dp), color = c.violet, trackColor = c.muted)
         if (s?.enforced == true && s.next != "ok") Text(stringResource(if (s.next == "blocked") R.string.gc_blocked else R.string.gc_fallback,

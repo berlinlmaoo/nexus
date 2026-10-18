@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="audit_undo">Urungkan</string>
+    <string name="audit_credits_unlimited">∞  Kredit hari ini %1$d · Tanpa batas</string>
     <string name="audit_admin_users">Pengguna</string>
     <string name="audit_admin_audit">Audit</string>
     <string name="audit_admin_quests">Quest</string>

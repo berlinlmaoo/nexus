@@ -64,6 +64,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -134,15 +135,6 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
         PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
-            if (!showChats) Box {
-                TextButton(onClick = { tierMenu = true }) { Text(s.tier.label, color = c.foreground) }
-                DropdownMenu(tierMenu, { tierMenu = false }) {
-                    GideonTier.entries.forEach { t ->
-                        DropdownMenuItem(text = { Column { Text(t.label, fontWeight = FontWeight.SemiBold); Text(stringResource(tierNote(t)), fontSize = 12.sp, color = c.mutedFg) } },
-                            leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) }, onClick = { tierMenu = false; chat.setTier(t) })
-                    }
-                }
-            }
             HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
             HeaderIconButton(Icons.Outlined.EditNote, stringResource(R.string.gx_new_chat), { showChats = false; chat.startNew(); draft = ""; upload = null }, primary = true)
         }
@@ -182,7 +174,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
         Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
             Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
+                androidx.compose.material3.TextField(draft, { draft = it }, colors = androidx.compose.material3.TextFieldDefaults.colors(focusedContainerColor = c.card, unfocusedContainerColor = c.card, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent), placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
                     shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().focusRequester(focus))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box {
@@ -195,11 +187,20 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                                 onClick = { attachMenu = false; draft = GideonMention.start(draft); scope.launch { delay(50); runCatching { focus.requestFocus() } } })
                         }
                     }
-                    ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() }
-                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.weight(1f)) { ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() } }
+                    Box {
+                TextButton(onClick = { tierMenu = true }) { Text(s.tier.label + " ⌄", fontSize = 12.sp, color = c.foreground) }
+                DropdownMenu(tierMenu, { tierMenu = false }, shape = RoundedCornerShape(16.dp), containerColor = c.card, border = androidx.compose.foundation.BorderStroke(1.dp, c.border)) {
+                    GideonTier.entries.forEach { t ->
+                        DropdownMenuItem(modifier = Modifier.height(88.dp), text = { Column { Text(t.label, fontWeight = FontWeight.SemiBold); Text(stringResource(tierNote(t)), fontSize = 12.sp, color = c.mutedFg) } },
+                            leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) }, onClick = { tierMenu = false; chat.setTier(t) })
+                    }
+                }
+            }
+
                     if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
-                    else IconButton(onClick = { send(draft) }, enabled = draft.isNotBlank() || upload != null) {
-                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.foreground else c.mutedFg)
+                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (draft.isNotBlank() || upload != null) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = draft.isNotBlank() || upload != null) {
+                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.background else c.mutedFg)
                     }
                 }
             }

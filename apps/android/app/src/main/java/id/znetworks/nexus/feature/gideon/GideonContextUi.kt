@@ -176,7 +176,7 @@ internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode)
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text(approvalName(mode), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1)
+            Text(approvalName(mode), modifier = Modifier.weight(1f, fill = false), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Icon(Icons.Filled.ArrowDropDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(open, { open = false }) {
