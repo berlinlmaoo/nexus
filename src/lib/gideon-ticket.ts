@@ -428,6 +428,8 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
   let runId: string | null = null
   let runOk = false
   let runError: string | null = null
+  // What the review cost (GIDEON credits): recorded on the reporter, not charged (TICKET is a system job).
+  let runUsage: unknown = undefined
   try {
     const complaint = await prisma.complaint.findUnique({
       where: { id: complaintId },
@@ -507,7 +509,9 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       runError = `shim ${res.status}`
       return
     }
-    const reply = ((await res.json()) as { reply?: string }).reply?.trim()
+    const shimData = (await res.json()) as { reply?: string; usage?: unknown }
+    runUsage = shimData.usage
+    const reply = shimData.reply?.trim()
     if (!reply) {
       // Balasan kosong dari shim hampir selalu berarti agen di baliknya gagal (login provider
       // kedaluwarsa, OOM, dsb.) — bukan "tidak ada yang perlu dijawab". Diam di sini pernah berarti
@@ -560,7 +564,7 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     console.error("gideon-ticket: review failed", { complaintId, error })
     runError = error instanceof Error ? error.message : "review failed"
   } finally {
-    if (runId) await finishRun(runId, { ok: runOk, error: runError })
+    if (runId) await finishRun(runId, { ok: runOk, error: runError, usage: runUsage })
     // Let go of the claim — only our own (a stale one taken over by another process is theirs now).
     await prisma.$executeRaw`
       UPDATE "Complaint" SET "gideonReviewingAt" = NULL

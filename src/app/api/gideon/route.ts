@@ -13,6 +13,7 @@ import {
 import { datePromptLine } from '@/lib/gideon-dates'
 import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
+import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -157,8 +158,13 @@ export async function POST(req: NextRequest) {
   // The three GIDEON tiers. Which model each one is stays in the shim — this only has to refuse a
   // name it does not recognise, so a client cannot smuggle an arbitrary model id through.
   const TIERS = ['astra', 'luna', 'terra', 'experimental']
-  const tier = TIERS.includes((model || '').toLowerCase()) ? (model as string).toLowerCase() : 'luna'
+  const requestedTier = TIERS.includes((model || '').toLowerCase()) ? (model as string).toLowerCase() : 'luna'
   const userId = session.user.id
+  // GIDEON credits phase 2 (remote config gideonCreditsEnforced, default off): out of credits → GIDEON
+  // Aphrodite answers instead (max 30 a day), then a refusal. Off = always the tier the person picked.
+  const decision = await decideTier(userId, requestedTier).catch(() => ({ tier: requestedTier, fallback: false, blocked: false, summary: null }))
+  const tier = decision.tier
+  const uiLang = rawUiLang === 'en' ? 'en' : 'id'
   const streamClient = wantsStream === true
   const approvalMode: ApprovalMode = parseApprovalMode(rawMode) ?? 'dont_ask'
 
@@ -270,6 +276,21 @@ export async function POST(req: NextRequest) {
     const chat = await resolveGideonChat(userId, { chatId: typeof rawChatId === 'string' ? rawChatId : null, newChat: newChat === true, title: asked }).catch(() => null)
     // Only clients that asked for the new contract: released apps keep exactly run → text → done.
     if (chat && streamClient) await sendEvent({ type: 'chat', id: chat.id, title: chat.title })
+    // Out of credits including the backup answers (phase 2 only): nothing is sent to the model.
+    if (decision.blocked) {
+      const notice = creditNotice('blocked', decision.summary)
+      if (streamClient) {
+        await sendEvent({ type: 'credits', summary: decision.summary, notice: { kind: 'blocked', ...notice } })
+        await sendEvent({ type: 'error', content: notice[uiLang], code: 'credits_exhausted' })
+      } else {
+        await sendEvent({ type: 'text', content: notice[uiLang] })
+      }
+      await sendEvent({ type: 'done' })
+      await writer.close().catch(() => {})
+      return
+    }
+    const fallbackNotice = decision.fallback ? creditNotice('fallback', decision.summary) : null
+    if (fallbackNotice && streamClient) await sendEvent({ type: 'credits', summary: decision.summary, notice: { kind: 'fallback', ...fallbackNotice } })
     const runId = await startRun({
       userId,
       trigger: 'CHAT',
@@ -285,6 +306,8 @@ export async function POST(req: NextRequest) {
     let reply = ''
     let failure: string | null = null
     let tokens: number | null = null
+    // What the run cost, as the shim read it back from Hermes' state.db (GIDEON credits, 18 Oct 2026).
+    let usage: ShimUsage | null = null
     try {
       if (runId) await sendEvent({ type: 'run', id: runId })
       const url = process.env.GIDEON_CHAT_URL
@@ -421,6 +444,8 @@ export async function POST(req: NextRequest) {
             } else if (ev.t === 'final' && typeof ev.c === 'string') {
               reply = ev.c.trim()
               tokens = typeof ev.usage?.total_tokens === 'number' ? ev.usage.total_tokens : null
+            } else if (ev.t === 'usage') {
+              usage = parseShimUsage((ev as { usage?: unknown }).usage)
             } else if (ev.t === 'error') {
               upstreamError = String(ev.c || 'failed').slice(0, 300)
             }
@@ -434,8 +459,9 @@ export async function POST(req: NextRequest) {
           await sendEvent({ type: 'error', content: res.status === 415 ? 'Dokumen belum bisa dibaca GIDEON di server ini.' : `Gideon error (${res.status}).` })
           return
         }
-        const data = (await res.json()) as { reply?: string }
+        const data = (await res.json()) as { reply?: string; usage?: unknown }
         reply = (data.reply || '').trim()
+        usage = parseShimUsage(data.usage)
       }
       if (!reply) failure = failure || 'empty reply'
       if (reply && preSearch && runId) {
@@ -450,8 +476,17 @@ export async function POST(req: NextRequest) {
       // Additive event (12 Oct 2026): the final Sources list, replacing the `sources` streamed while tools ran.
       // Clients that do not know it ignore it (released apps never get any of these).
       if (meta && streamClient) await sendEvent({ type: 'cited', sources: meta.sources })
+      // Billed before the answer is closed, so the meter under the composer moves with the answer (the
+      // socket `gideon-credits` carries the same summary to the person's other tabs and devices).
+      // A run that failed after using the model still cost what it cost, so it is billed too.
+      if (usage && runId) {
+        const billed = await recordGideonUsage({ userId, runId, trigger: 'CHAT', tier, requestedTier, fallback: decision.fallback, usage })
+        if (billed?.summary && streamClient) await sendEvent({ type: 'credits', summary: billed.summary, credits: billed.credits })
+      }
       const finalText = reply || '(Gideon balas kosong — coba ulang.)'
-      await sendEvent(streamClient ? { type: 'final', content: finalText } : { type: 'text', content: finalText })
+      // Released apps draw no notice: the backup answer says so in its first line instead.
+      const legacyText = fallbackNotice && reply ? `${fallbackNotice[uiLang]}\n\n${finalText}` : finalText
+      await sendEvent(streamClient ? { type: 'final', content: finalText } : { type: 'text', content: legacyText })
 
       // Persist the turn so the panel can restore it later (survives close/refresh/device switch).
       // Only completed turns are stored — a failed one would leave a question with no answer in the
@@ -522,7 +557,7 @@ export async function POST(req: NextRequest) {
       await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
       unsubscribe()
-      await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens })
+      await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens, usage })
       await sendEvent({ type: 'done' })
       await writer.close().catch(() => {})
     }

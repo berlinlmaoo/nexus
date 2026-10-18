@@ -15,6 +15,8 @@ import {
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
+import { GideonCreditMeter } from "./GideonCreditMeter";
+import { CREDITS_KEY } from "@/lib/gideon-credits";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
@@ -57,7 +59,7 @@ import {
 /** What was typed in the composer and not sent, kept while the panel is closed and reopened (bughunt G-BUG-2). */
 let composerDraft = "";
 
-type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean };
+type ChatTurn = GideonTurn & { stopped?: boolean; streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean; creditNotice?: string | null };
 
 function fromHistory(row: GideonTurn): ChatTurn {
   const m = row.meta;
@@ -399,6 +401,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             if (i >= 0) proposals[i] = ev.proposal; else proposals.push(ev.proposal);
             return { ...x, proposals };
           });
+          break;
+        case "credits":
+          // GIDEON credits (18 Oct 2026): the new balance after this answer moves the meter at once; a
+          // notice (phase 2: answered by Aphrodite, or out of credits) is shown on the answer itself.
+          if (ev.summary) qc.setQueryData(CREDITS_KEY, ev.summary);
+          if (ev.notice) { const n = ev.notice; patchLast((x) => ({ ...x, creditNotice: L.lang === "id" ? n.id : n.en })); }
           break;
         case "error":
           patchLast((x) => ({ ...x, failed: true, content: acc ? `${acc}\n\n${ev.content ?? ""}` : ev.content ?? t("Something went wrong.") }));
@@ -776,6 +784,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </button>
             )}
           </div>
+        </div>
+        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. */}
+        <div className="flex min-h-6 items-center px-1 pt-1">
+          <GideonCreditMeter />
         </div>
       </div>
   );
@@ -1295,6 +1307,12 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget, isL
 
   return (
     <div className="group flex flex-col gap-2.5">
+      {turn.creditNotice && (
+        <div role="note" className="flex items-start gap-2 rounded-lg border border-border bg-accent/60 px-3 py-2 text-xs text-accent-foreground">
+          <GideonMark className="mt-px h-3.5 w-3.5 shrink-0 text-sidebar-primary" />
+          <span>{turn.creditNotice}</span>
+        </div>
+      )}
       {/* What GIDEON is doing, as one quiet line (Notion AI's "Thinking…" / "Searching…"). Done, it folds
           into "N steps" that opens the list. */}
       {(steps.length > 0 || thinking) && (
