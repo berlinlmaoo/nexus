@@ -249,7 +249,12 @@ async function listProjects(actor: User, input: Record<string, unknown>) {
     : []
   const openByList = new Map(openRows.map((r) => [r.taskListId, r._count._all]))
   const items = projects.map((p) => compactProject(p, p.taskLists.reduce((s, l) => s + (openByList.get(l.id) ?? 0), 0)))
-  return page(items, total, offset, limit, 'pass query (part of the project name)')
+  // Say whose list this is: for a Manager / Staff it IS "the projects I am in"; a BoD sees every project.
+  const bodPlus = await prisma.workspaceMember.count({ where: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } })
+  return {
+    scope: bodPlus ? 'Every project of the company (BoD / One Above All see all of them), not only the ones this person is a member of.' : 'Exactly the projects this person is a member of.',
+    ...page(items, total, offset, limit, 'pass query (part of the project name)'),
+  }
 }
 
 async function listMembers(actor: User, input: Record<string, unknown>) {
