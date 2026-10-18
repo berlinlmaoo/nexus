@@ -20,6 +20,7 @@ import { CREDITS_KEY } from "@/lib/gideon-credits";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
 import { GideonDeleteTaskCard } from "./GideonDeleteTaskCard";
+import { GideonCreateTaskCard } from "./GideonCreateTaskCard";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
@@ -1544,6 +1545,8 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
   if ((proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") && proposal.bookingChange) return <GideonBookingChangeCard proposal={proposal} onDecided={onDecided} />;
   // Deleting a task: the destructive card (always asked, every approval mode).
   if (proposal.action === "delete_task" && proposal.taskDelete) return <GideonDeleteTaskCard proposal={proposal} onDecided={onDecided} />;
+  // A new task with no project named: the project picker (+ column, PIC, due), Apply once a project is picked.
+  if (proposal.action === "create_task" && proposal.taskTarget && proposal.status === "PENDING") return <GideonCreateTaskCard proposal={proposal} onDecided={onDecided} />;
   return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
 }
 

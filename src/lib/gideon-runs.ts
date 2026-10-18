@@ -5,6 +5,7 @@ import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { createLogger } from "@/lib/logger"
 import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
 import { resolveRoomName } from "@/lib/room-booking-rooms"
+import { createTaskNeedsProject, type TaskTargetProject } from "@/lib/gideon-task-target"
 
 /**
  * GIDEON runs (owner, 12 Oct 2026 — "GIDEON replies like Notion's agent").
@@ -52,12 +53,16 @@ export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_co
  * was named, because GIDEON never guesses a room: the person picks it on the card.
  * move_room_booking / cancel_room_booking (16 Oct 2026) likewise: a card in always_ask and review, direct only in
  * dont_ask — and a move whose named room could be more than one room is a card in every mode.
+ * create_task naming no project (owner, 18 Oct 2026): a card with a project picker in EVERY mode.
  * delete_task (owner, 18 Oct 2026): a card in EVERY mode, "don't ask" included. A delete never runs without the
  * person tapping the destructive button on the card (the apply route also wants the task id echoed back from it).
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
   if (!WRITE_ACTIONS.has(action)) return false
   if (action === "delete_task") return true
+  // A new task with no project named (18 Oct 2026): a card with the project picker in every mode — GIDEON never
+  // guesses a project, the person picks it (preselected when the context makes it obvious).
+  if (action === "create_task" && createTaskNeedsProject(input)) return true
   if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
   if (action === "move_room_booking") return mode !== "dont_ask" || moveNeedsPick(input)
   if (action === "cancel_room_booking") return mode !== "dont_ask"
@@ -118,6 +123,24 @@ export type GideonProposalView = {
    * without that card draws the diff rows; the apply route refuses its Apply without `confirm: { taskId }`.
    */
   taskDelete?: GideonTaskDeleteView | null
+  /**
+   * create_task without a project (18 Oct 2026): the project picker. `projects` = only those the person can edit;
+   * sections and members of the picked one come from GET /api/gideon/task-targets?projectId=. A client without the
+   * picker never sees this field and cannot apply the proposal (the apply route wants `task: { projectId, … }`).
+   */
+  taskTarget?: GideonTaskTargetView | null
+}
+export type GideonTaskTargetView = {
+  title: string
+  projects: TaskTargetProject[]
+  /** Preselected (the project open / @-mentioned, a name the person said, or the only one); null = pick one. */
+  projectId: string | null
+  taskListId: string | null
+  status: string | null
+  assigneeIds: string[]
+  dueDay: string | null
+  /** Once applied: where it went. */
+  chosenProjectId: string | null
 }
 /** What a delete card shows. `deleted`: applied; it can be restored from Control Room → Audit (`auditLogId`). */
 export type GideonTaskDeleteView = {
@@ -486,6 +509,26 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     ...(p.action === "book_room" ? { booking: bookingView(p.input, (result?.booking as AnyObj | undefined)?.id ?? null) } : {}),
     ...(p.action === "move_room_booking" || p.action === "cancel_room_booking" ? { bookingChange: bookingChangeView(p.action, p.input, result) } : {}),
     ...(p.action === "delete_task" ? { taskDelete: taskDeleteView(p.input, result, p.status) } : {}),
+    ...(p.action === "create_task" && (p.input as AnyObj | null)?.pickProject === true ? { taskTarget: taskTargetView(p.input) } : {}),
+  }
+}
+
+/** The create card's project picker, from what the proposal stored when it was made (tools route describeWrite). */
+export function taskTargetView(input: unknown): GideonTaskTargetView | null {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  const t = (i.taskTarget && typeof i.taskTarget === "object" ? i.taskTarget : null) as AnyObj | null
+  if (!t) return null
+  const s = (v: unknown) => (typeof v === "string" && v ? v : null)
+  const due = s(i.dueDate)
+  return {
+    title: s(i.title) ?? "",
+    projects: Array.isArray(t.projects) ? (t.projects as TaskTargetProject[]) : [],
+    projectId: s(t.preselectedProjectId),
+    taskListId: s(i.taskListId),
+    status: s(i.status),
+    assigneeIds: Array.isArray(i.assigneeIds) ? i.assigneeIds.filter((x: unknown): x is string => typeof x === "string") : [],
+    dueDay: s(t.dueDay) ?? (due && /^\d{4}-\d{2}-\d{2}/.test(due) ? due.slice(0, 10) : null),
+    chosenProjectId: s(i.projectId),
   }
 }
 
