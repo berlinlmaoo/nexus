@@ -17,4 +17,10 @@ class ChatDocumentsTest {
         assertFalse(m.isImage); assertEquals("Report.pdf", m.attachmentName); assertEquals(1234L, m.attachmentSize)
         assertNull(NexusJson.decodeFromString(Message.serializer(), """{"id":"old"}""").attachmentName)
     }
+    @Test fun replyAndDocsTabKeepDocumentMetadata() {
+        val reply = NexusJson.decodeFromString(ReplyRef.serializer(), """{"id":"r","attachmentType":"application/pdf","attachmentName":"Contract.pdf","attachmentSize":321}""")
+        assertEquals("Contract.pdf", reply.attachmentName); assertEquals(321L, reply.attachmentSize)
+        val doc = NexusJson.decodeFromString(ChatMediaItem.serializer(), """{"name":"Budget.xlsx","size":123}""")
+        assertEquals("Budget.xlsx", doc.name); assertEquals(123L, doc.size)
+    }
 }

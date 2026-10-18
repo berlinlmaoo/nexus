@@ -38,6 +38,8 @@ private fun ApiError.conflictOrVault(res: Resources): String? {
         "FOLDER_GONE" -> R.string.r21_folder_gone
         "CYCLE" -> R.string.r21_folder_cycle
         "GONE" -> R.string.r21_file_gone
+        "TOO_LARGE" -> R.string.chat_file_too_large
+        "UNSUPPORTED_TYPE" -> R.string.chat_file_unsupported
         else -> return null
     }
     return res.getString(key)

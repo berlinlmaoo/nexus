@@ -1,4 +1,8 @@
 <resources>
+    <string name="gc_ai_disclaimer">GIDEON is AI and can make mistakes. Check important information.</string>
+    <string name="gc_review_notice">GIDEON chats can be reviewed by members of the Board of Directors for work purposes.</string>
+    <string name="chat_file_too_large">This file exceeds the upload size limit. Choose a smaller file.</string>
+    <string name="chat_file_unsupported">This file type is not supported. Choose a supported image or document.</string>
     <string name="r21_load_latest">Load latest</string>
     <string name="r21_discard_draft">Replace your unsaved draft with the latest saved version?</string>
     <string name="r21_copy_project">Copy to another project</string>

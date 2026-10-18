@@ -14,7 +14,8 @@ data class ChatMember(val id: String? = null, val userId: String? = null, val la
 }
 
 @Serializable
-data class ReplyRef(val id: String, val content: String = "", val attachmentType: String? = null, val user: ChatUser? = null)
+data class ReplyRef(val id: String, val content: String = "", val attachmentType: String? = null, val user: ChatUser? = null,
+                    val attachmentName: String? = null, val attachmentSize: Long? = null)
 
 @Serializable
 data class Message(
@@ -103,7 +104,8 @@ data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMo
 @Serializable data class ChatMediaCounts(val photos: Int = 0, val links: Int = 0, val docs: Int = 0) { val total get() = photos + links + docs }
 @Serializable data class ChatInfo(val conversation: ChatInfoConversation, val members: List<ChatInfoMember> = emptyList(), val counts: ChatMediaCounts = ChatMediaCounts())
 @Serializable data class ChatMediaItem(val messageId: String? = null, val createdAt: String? = null, val sender: ChatRef? = null, val url: String? = null,
-                                       val attachmentType: String? = null, val title: String? = null)
+                                       val attachmentType: String? = null, val title: String? = null,
+                                       val name: String? = null, val size: Long? = null)
 @Serializable data class ChatMediaPage(val items: List<ChatMediaItem> = emptyList(), val nextCursor: String? = null)
 @Serializable data class ChatSearchHit(val messageId: String, val createdAt: String? = null, val sender: ChatRef? = null, val snippet: String? = null)
 @Serializable data class ChatSearchPage(val results: List<ChatSearchHit> = emptyList(), val nextCursor: String? = null)

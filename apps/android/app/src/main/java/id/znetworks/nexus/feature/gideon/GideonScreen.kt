@@ -114,6 +114,8 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew(project) } }
     // "Review before writing" is remembered on the device (iOS @AppStorage "gideon.approval", web localStorage).
     val prefs = remember { context.getSharedPreferences(GIDEON_PREFS, android.content.Context.MODE_PRIVATE) }
+    val reviewNoticeKey = "review-notice-bod-v1:" + container.sessionStore.current?.userId.orEmpty()
+    var showReviewNotice by remember(reviewNoticeKey) { mutableStateOf(!prefs.getBoolean(reviewNoticeKey, false)) }
     LaunchedEffect(Unit) { chat.setApproval(GideonApprovalMode.of(prefs.getString(KEY_APPROVAL, null))) }
     var decision by remember { mutableStateOf<GDecision?>(null) }
     val focus = remember { FocusRequester() }
@@ -203,7 +205,14 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             }
         }
         GideonCreditMeter(container.api, s.thinking)
+        Text(stringResource(R.string.gc_ai_disclaimer), fontSize = 11.sp, color = c.mutedFg,
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 8.dp))
     }
+    if (showReviewNotice) AlertDialog(onDismissRequest = {
+        prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false
+    }, text = { Text(stringResource(R.string.gc_review_notice)) }, confirmButton = {
+        TextButton(onClick = { prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false }) { Text("OK") }
+    })
     decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
 }

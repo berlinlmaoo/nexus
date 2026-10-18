@@ -43,6 +43,7 @@ class ApiClientTest {
         assertTrue(res.ok) // unknown fields tolerated
         val req = server.takeRequest()
         assertEquals("android/0.1.0/1", req.headers["X-Nexus-Client"])
+        assertEquals("chat-files", req.headers["X-Nexus-Caps"])
         assertEquals("application/json", req.headers["Accept"])
         assertEquals("__Secure-authjs.session-token=tok123", req.headers["Cookie"])
         assertTrue(req.headers["User-Agent"]!!.startsWith("NEXUS-Android/0.1.0"))

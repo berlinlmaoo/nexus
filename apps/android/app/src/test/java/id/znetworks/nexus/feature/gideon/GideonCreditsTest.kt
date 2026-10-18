@@ -23,6 +23,12 @@ class GideonCreditsTest {
     @Test fun unlimitedAndOlderBalancePayloadsDecode() {
         assertTrue(NexusJson.decodeFromString(GCreditResponse.serializer(), """{"summary":{"unlimited":true}}""").summary.unlimited)
     }
+    @Test fun currentRoleLimitsRemainServerControlled() {
+        for ((daily, pool) in listOf(250 to 2500, 750 to 7500)) {
+            val s = NexusJson.decodeFromString(GCreditResponse.serializer(), """{"summary":{"today":{"limit":$daily},"pool":{"limit":$pool}}}""").summary
+            assertEquals(daily, s.today.limit); assertEquals(pool, s.pool.limit)
+        }
+    }
     @Test fun partialStreamsKeepStepsRunningAndProposalsVisible() {
         val frame = """data: {"type":"step","step":{"id":"one","status":"running"}}
 data: {"type":"delta","content":"Hello"}

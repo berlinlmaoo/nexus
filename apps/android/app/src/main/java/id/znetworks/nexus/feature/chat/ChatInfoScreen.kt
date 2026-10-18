@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.tasks.sizeText
 import id.znetworks.nexus.core.files.FileOpener
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.realtime.LiveRefresh
@@ -398,11 +399,12 @@ fun ChatMediaScreen(id: String, onBack: () -> Unit) {
                     Row(Modifier.fillMaxWidth().clickable {
                         val url = m.url ?: return@clickable
                         if (type == "links") runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                        else scope.launch { runCatching { FileOpener.open(context, container.api, url, m.title ?: url.substringAfterLast('/'), m.attachmentType) } }
+                        else scope.launch { runCatching { FileOpener.open(context, container.api, url, m.name ?: m.title ?: url.substringAfterLast('/'), m.attachmentType) } }
                     }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (type == "links") Icons.Filled.Link else Icons.Filled.Description, null, tint = c.violetText); Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(m.title ?: m.url?.substringAfterLast('/') ?: "—", fontSize = 14.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(m.name ?: m.title ?: m.url?.substringAfterLast('/') ?: "—", fontSize = 14.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (m.size != null) Text(sizeText(m.size), fontSize = 11.sp, color = c.mutedFg)
                             Text(listOfNotNull(m.sender?.name, chatTime(m.createdAt).takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
                         }
                     }
