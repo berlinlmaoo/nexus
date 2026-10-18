@@ -842,7 +842,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         <div className="@container">
           <div className="flex min-h-6 flex-col items-center gap-0.5 px-1 pt-1 @lg:flex-row @lg:justify-between @lg:gap-3">
             <GideonCreditMeter />
-            <p className="text-balance text-center text-xs text-muted-foreground @lg:text-right">{t("GIDEON is AI and can make mistakes. Check important information.")}</p>
+            <p className="text-balance text-center text-xs text-muted-foreground @lg:text-right">{t("GIDEON is AI and can make mistakes.")}</p>
           </div>
         </div>
       </div>
