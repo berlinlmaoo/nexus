@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { CHAT_MESSAGE_INCLUDE, conversationAccess, canPostInConversation } from "@/lib/chat-access"
+import { CHAT_MESSAGE_INCLUDE, chatFileCarrierFor, conversationAccess, canPostInConversation, uploadedChatFile } from "@/lib/chat-access"
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
@@ -178,6 +178,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       : null
     // A picture on its own is a message; text is only required when there is nothing else.
     if (!text && !attachment) return NextResponse.json({ error: "content required" }, { status: 400 })
+
+    // The file must be one the sender may load: they uploaded it, or it is already in a room they can
+    // read (sent again). Otherwise posting someone else's picture URL into your own DM would make it a
+    // message of yours and open the file to you (/api/files follows the messages that carry it).
+    if (attachment && !(await uploadedChatFile(userId, attachment)) && !(await chatFileCarrierFor(userId, attachment))) {
+      return NextResponse.json({ error: "That file is not on the server. Upload it again.", code: "UNKNOWN_ATTACHMENT" }, { status: 400 })
+    }
 
     // A document (18 Oct 2026): its type comes from the stored file's extension, never from the client;
     // its size from the disk, and it must be a file the upload route really wrote. Its name is the one

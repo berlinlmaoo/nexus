@@ -6,8 +6,15 @@ import { auth } from '@/lib/auth'
 import { serveFile } from '@/lib/file-response'
 import { avatarThumbnail, avatarThumbWidth } from '@/lib/avatar-thumb'
 import prisma from '@/lib/prisma'
-import { conversationAccess } from '@/lib/chat-access'
-import { CHAT_FILE_PREFIX, docSpecOfPath } from '@/lib/chat-files'
+import { stat } from 'fs/promises'
+import { chatFileCarrierFor, uploadedChatFile } from '@/lib/chat-access'
+import {
+  CHAT_FILE_PREFIX,
+  CHAT_UPLOADER_GRACE_MS,
+  chatFileEtag,
+  chatNotModified,
+  docSpecOfPath,
+} from '@/lib/chat-files'
 
 // This route is now only two things: an authorization gate and a path-traversal guard. Turning a path
 // into bytes (MIME types, inline-vs-attachment, Range/206) lives in src/lib/file-response.ts so the
@@ -20,7 +27,8 @@ export async function GET(
   // Require a logged-in session. This is a JWT-only check (cookie decode, NO database hit) so streaming
   // throughput / Range latency is unaffected — but a leaked file URL no longer works for anyone who
   // isn't authenticated. (Per-file project authz was intentionally NOT added here to keep downloads
-  // fast; the random on-disk filename remains the in-tenant obscurity layer.) All file URLs are loaded
+  // fast; the random on-disk filename remains the in-tenant obscurity layer — except chat, below,
+  // and legal / vault, which have their own routes.) All file URLs are loaded
   // same-origin by the app, so the session cookie rides along automatically.
   const session = await auth()
   if (!session?.user?.id) {
@@ -49,29 +57,27 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Documents sent in chat (18 Oct 2026) are stricter than pictures: only someone who can read the
-  // conversation of a message that carries the file gets it (the same rule as reading the messages),
-  // under the name it was sent as, as a download (`?inline=1` lets a PDF open in the browser's viewer).
-  // A file no message carries yet (uploaded, not sent) or any more (its group deleted) is a 404 —
-  // a restore from Audit brings the message back and with it the download.
+  // Everything sent in chat — pictures (18 Oct 2026, security fix) as well as documents — loads only
+  // for someone who can read the conversation of a message that carries it: the rule for reading the
+  // messages themselves (chat-access chatFileCarrierFor, one indexed query). Until now a picture
+  // opened for ANY signed-in person who had its URL. A file no message carries (its message or group
+  // deleted) is a 404 like any unknown path; a restore from Audit brings the message back and with it
+  // the file. Unsent: only the person who uploaded it, for a day — the composer (web, every released
+  // iOS build) draws the picture from this URL before Send.
   const chatDir = join(base, 'chat')
   if (filePath.startsWith(chatDir + sep)) {
     const url = CHAT_FILE_PREFIX + filePath.slice(chatDir.length + 1)
+    const userId = session.user.id
+    const carrier = await chatFileCarrierFor(userId, url)
+    const uploaderOnly = !carrier && (await uploadedChatFile(userId, url, CHAT_UPLOADER_GRACE_MS))
+    if (!carrier && !uploaderOnly) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // A document: under the name it was sent as, as a download (`?inline=1` lets a PDF open in the
+    // browser's viewer), never from a cache.
     const doc = docSpecOfPath(url)
     if (doc) {
-      const rows = await prisma.message.findMany({
-        where: { attachmentUrl: url },
-        select: { conversationId: true, attachmentName: true },
-        orderBy: { createdAt: 'asc' },
-        take: 5,
-      })
-      let carrier: (typeof rows)[number] | null = null
-      for (const r of rows) {
-        if ((await conversationAccess(session.user.id, r.conversationId)).ok) { carrier = r; break }
-      }
-      if (!carrier) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       return serveFile(req, filePath, {
-        filename: carrier.attachmentName || `file.${doc.ext}`,
+        filename: carrier?.attachmentName || `file.${doc.ext}`,
         forceDownload: req.nextUrl.searchParams.get('inline') !== '1',
         mimeType: doc.mime,
         ...(doc.ext === 'zip' ? { contentType: 'application/zip' } : {}),
@@ -79,6 +85,24 @@ export async function GET(
         cacheControl: 'private, no-store',
       })
     }
+
+    // A picture is drawn again and again (thread, list, quotes, the media grid): the browser keeps it
+    // for a day (`private`: never a shared or CDN cache, the answer depends on who asks) and after
+    // that revalidates with ETag / Last-Modified, which costs the check above and a 304, no bytes.
+    // Being removed from a group therefore leaves pictures already seen in that person's own
+    // browser cache for at most a day; nothing new loads. An unsent upload is not cached at all.
+    let st
+    try { st = await stat(filePath) } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }) }
+    if (!st.isFile()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const etag = chatFileEtag(st.size, st.mtimeMs)
+    const cacheControl = uploaderOnly ? 'private, no-cache' : 'private, max-age=86400'
+    if (chatNotModified(req.headers.get('if-none-match'), req.headers.get('if-modified-since'), etag, st.mtime)) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { ETag: etag, 'Last-Modified': st.mtime.toUTCString(), 'Cache-Control': cacheControl },
+      })
+    }
+    return serveFile(req, filePath, { cacheControl, etag, lastModified: st.mtime })
   }
 
   // Avatar thumbnails (perf pass, 12 Oct 2026): `?w=` on an avatar answers a small WebP instead of the
