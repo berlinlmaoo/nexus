@@ -52,6 +52,14 @@ internal fun meetingMerge(meeting: Meeting, fields: Map<String, JsonElement>): M
     return if (merged.projectId != meeting.projectId) merged.copy(project = null, members = emptyList()) else merged
 }
 
+/** The server omits unfinished blank task rows; keep the person's draft until they finish editing it. */
+internal fun meetingAcknowledge(server: Meeting, submitted: Map<String, JsonElement>, pending: Map<String, JsonElement>, previous: Meeting? = null): Meeting {
+    val base = if (server.members == null && server.projectId == previous?.projectId) server.copy(members = previous?.members) else server
+    val merged = meetingMerge(base, submitted + pending)
+    val members = base.members?.map { it.id }?.toSet() ?: return merged
+    return merged.copy(proposals = merged.proposals.map { p -> p.copy(assigneeIds = p.assigneeIds.filter { it in members }) })
+}
+
 class MeetingEditor(application: Application) : AndroidViewModel(application) {
     private val container = (application as NexusApplication).container
     private val owner = container.sessionStore.current?.userId
@@ -71,7 +79,9 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
         val key = id ?: return
         try {
             val fresh = api.get(key)
-            if (!mutable.value.saving && pending.isEmpty() && (mutable.value.meeting?.version ?: -1) <= fresh.version) { version = fresh.version; mutable.update { it.copy(meeting = fresh, loading = false, error = null) } }
+            if (!mutable.value.saving && pending.isEmpty() && (mutable.value.meeting?.version ?: -1) < fresh.version) { version = fresh.version; mutable.update { it.copy(meeting = fresh, loading = false, error = null) } }
+            else if (!mutable.value.saving && fresh.version == mutable.value.meeting?.version && mutable.value.meeting?.members == null && fresh.members != null)
+                mutable.update { it.copy(meeting = it.meeting?.copy(members = fresh.members)) }
         } catch (e: ApiError.Http) {
             if (e.status == 404) mutable.update { it.copy(deleted = true, notice = R.string.meet_deleted, loading = false) }
             else mutable.update { it.copy(error = R.string.meet_load_failed, loading = false) }
@@ -93,15 +103,17 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
             while (pending.isNotEmpty()) {
                 val fields = pending.toMap(); pending.clear()
                 try {
-                    val fresh = api.patch(key, version, JsonObject(fields))
+                    val response = api.patch(key, version, JsonObject(fields))
+                    val fresh = if ("projectId" in fields) api.get(key) else response
                     version = fresh.version
-                    mutable.update { it.copy(meeting = meetingMerge(fresh, pending), dirty = pending.isNotEmpty(), error = null) }
+                    mutable.update { it.copy(meeting = meetingAcknowledge(fresh, fields, pending, it.meeting), dirty = pending.isNotEmpty(), error = null) }
                 } catch (e: CancellationException) { requeue(fields); throw e
                 } catch (e: ApiError.Http) {
                     val remote = e.body?.get("meeting")?.let { runCatching { NexusJson.decodeFromJsonElement(Meeting.serializer(), it) }.getOrNull() }
                     if (e.code == "VERSION_CONFLICT" && remote != null) {
-                        pending.clear(); version = remote.version
-                        mutable.update { it.copy(meeting = remote, notice = R.string.meet_conflict, dirty = false, error = null) }
+                        val complete = runCatching { api.get(key) }.getOrElse { if (remote.projectId == mutable.value.meeting?.projectId) remote.copy(members = mutable.value.meeting?.members) else remote }
+                        pending.clear(); version = complete.version
+                        mutable.update { it.copy(meeting = complete, notice = R.string.meet_conflict, dirty = false, error = null) }
                     } else { requeue(fields); mutable.update { it.copy(error = meetingProblem(e.code), dirty = true) } }
                     return@withLock false
                 } catch (_: ApiError) { requeue(fields); mutable.update { it.copy(error = R.string.meet_save_failed, dirty = true) }; return@withLock false }

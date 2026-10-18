@@ -23,11 +23,12 @@ import java.net.URLEncoder
     val beta: Boolean = true, val can: MeetingCan = MeetingCan(), val queue: MeetingQueue? = null,
     val overview: String? = null, val mom: MeetingMom? = null, val proposals: List<MeetingProposal> = emptyList(),
     val speakers: Map<String, MeetingSpeaker>? = null, val speakersMap: Map<String, MeetingSpeaker>? = null,
-    val transcript: List<MeetingSegment> = emptyList(), val members: List<GTaskMember> = emptyList(),
+    val transcript: List<MeetingSegment> = emptyList(), val members: List<GTaskMember>? = null,
     val tasks: List<MeetingTask> = emptyList(),
 ) {
     val working get() = status in setOf("UPLOADING", "QUEUED", "TRANSCRIBING", "SUMMARIZING", "APPLYING")
     val editable get() = can.edit && status == "READY"
+    val projectMembers get() = members.orEmpty()
 }
 @Serializable data class MeetingAudio(val name: String = "", val mime: String = "", val bytes: Long = 0, val received: Long = 0, val available: Boolean = false, val deletedAt: String? = null, val deleteAfter: String? = null)
 @Serializable data class MeetingCan(val edit: Boolean = false, val apply: Boolean = false, val delete: Boolean = false, val retry: Boolean = false)

@@ -93,8 +93,30 @@ class MeetingsTest {
         val server = Meeting("m", version = 9, projectId = "new-project", members = listOf(id.znetworks.nexus.feature.gideon.GTaskMember("new-member", "New")))
         val edited = meetingMerge(server, mapOf("overview" to JsonPrimitive("Local\ntext"), "projectId" to JsonPrimitive("new-project")))
         assertEquals(9, edited.version)
-        assertEquals("new-member", edited.members.single().id)
+        assertEquals("new-member", edited.projectMembers.single().id)
         assertEquals("Local\ntext", edited.overview)
-        assertTrue(meetingMerge(server, mapOf("projectId" to JsonPrimitive("other-project"))).members.isEmpty())
+        assertTrue(meetingMerge(server, mapOf("projectId" to JsonPrimitive("other-project"))).projectMembers.isEmpty())
+    }
+    @Test fun unfinishedTaskRowsSurviveAnAutosaveAndStillDisableApply() {
+        val server = Meeting("m", status = "READY", version = 12, projectId = "project", can = MeetingCan(apply = true), members = emptyList())
+        val local = listOf(MeetingProposal("draft", title = " ", assigneeIds = listOf("removed-member")))
+        val submitted = mapOf("proposals" to NexusJson.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(MeetingProposal.serializer()), local))
+        val acknowledged = meetingAcknowledge(server, submitted, mapOf("title" to JsonPrimitive("Newer title")))
+        assertEquals("draft", acknowledged.proposals.single().key)
+        assertEquals(" ", acknowledged.proposals.single().title)
+        assertTrue(acknowledged.proposals.single().assigneeIds.isEmpty())
+        assertFalse(MeetingRules.canApply(acknowledged))
+        assertEquals(12, acknowledged.version)
+        assertEquals("Newer title", acknowledged.title)
+    }
+    @Test fun patchResponsesWithoutMembersDoNotEraseExistingPics() {
+        val member = id.znetworks.nexus.feature.gideon.GTaskMember("member", "Person")
+        val before = Meeting("m", projectId = "p", members = listOf(member))
+        val response = before.copy(version = 3, members = null)
+        val task = MeetingProposal("task", title = "Task", assigneeIds = listOf(member.id))
+        val submitted = mapOf("proposals" to NexusJson.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(MeetingProposal.serializer()), listOf(task)))
+        val saved = meetingAcknowledge(response, submitted, emptyMap(), before)
+        assertEquals(listOf(member), saved.projectMembers)
+        assertEquals(listOf(member.id), saved.proposals.single().assigneeIds)
     }
 }

@@ -173,15 +173,15 @@ import java.io.File
         MeetingRecording.state.value = RecordingState()
     }
     val c = Nx.colors
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         PageHeader(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_new), onBack = onBack, leading = { MeetingBeta() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!config.meetingNotesEnabled) { Text(stringResource(R.string.meet_not_available)); return@Column }
             if (uploadedId == null) {
                 OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.meet_title_field)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
-                id.znetworks.nexus.feature.gideon.GProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
+                MeetingProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
-                id.znetworks.nexus.feature.gideon.GProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
+                MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
                 if (!recording.recording) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NxButton(stringResource(R.string.meet_upload), { if (localName != null) discard = "upload" else picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, enabled = !busy)
                     NxButton(stringResource(R.string.meet_record), { if (localName != null) discard = "record" else permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy, icon = Icons.Outlined.Mic)

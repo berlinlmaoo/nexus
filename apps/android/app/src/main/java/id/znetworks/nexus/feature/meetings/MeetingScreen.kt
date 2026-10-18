@@ -55,7 +55,7 @@ import java.time.LocalDate
     var find by rememberSaveable(id) { mutableStateOf("") }
     var seek by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(id) { vm.open(id); runCatching { vm.api.projects() }.getOrNull()?.let { projects = it } }
-    LaunchedEffect(state.notice) { state.notice?.let { UiNotice.show(context.getString(it)); vm.noticeSeen() } }
+    LaunchedEffect(state.notice) { state.notice?.let { android.widget.Toast.makeText(context, context.getString(it), android.widget.Toast.LENGTH_LONG).show(); vm.noticeSeen() } }
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
     RealtimeRoom(m?.projectId?.let { "project:$it" })
     LiveRefresh(id, 20_000, 15_000, { event ->
@@ -67,7 +67,7 @@ import java.time.LocalDate
     fun change(field: String, value: JsonElement) = vm.change(buildJsonObject { put(field, value) })
     fun mom(value: MeetingMom) = change("mom", NexusJson.encodeToJsonElement(MeetingMom.serializer(), value))
     fun proposals(value: List<MeetingProposal>) = change("proposals", NexusJson.encodeToJsonElement(ListSerializer(MeetingProposal.serializer()), value))
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         PageHeader(stringResource(R.string.meet_title), onBack = onBack, onTitleClick = { container.router.open(Target.Meetings(m?.projectId)) }, leading = { MeetingBeta() }) {
             Box {
                 HeaderIconButton(Icons.Outlined.MoreHoriz, stringResource(R.string.more), { menu = true })
@@ -89,8 +89,8 @@ import java.time.LocalDate
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GProperty(stringResource(R.string.meet_status)) { Text(meetingStatus(m.status), color = when (m.status) { "FAILED" -> c.dangerText; "READY", "APPLIED" -> c.success; else -> c.mutedFg }) }
-                    GProperty(stringResource(R.string.meet_project)) {
+                    MeetingProperty(stringResource(R.string.meet_status)) { Text(meetingStatus(m.status), color = when (m.status) { "FAILED" -> c.dangerText; "READY", "APPLIED" -> c.success; else -> c.mutedFg }) }
+                    MeetingProperty(stringResource(R.string.meet_project)) {
                         if (m.can.edit && m.createdBy?.id == container.sessionStore.current?.userId && m.status != "APPLIED") GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == m.projectId }?.name ?: m.project?.name,
                             listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !state.busy && !state.saving) { p ->
                             vm.change(buildJsonObject {
@@ -99,13 +99,13 @@ import java.time.LocalDate
                             })
                         } else Text(m.project?.name ?: "—", color = c.foreground)
                     }
-                    GProperty(stringResource(R.string.meet_date)) { Text(meetingDateTime(m.recordedAt ?: m.createdAt), fontSize = 12.sp, color = c.foreground) }
-                    GProperty(stringResource(R.string.meet_duration)) { Text(m.durationSec?.let(MeetingRules::timestamp) ?: "—", color = c.foreground) }
-                    GProperty(stringResource(R.string.meet_language)) {
+                    MeetingProperty(stringResource(R.string.meet_date)) { Text(meetingDateTime(m.recordedAt ?: m.createdAt), fontSize = 12.sp, color = c.foreground) }
+                    MeetingProperty(stringResource(R.string.meet_duration)) { Text(m.durationSec?.let(MeetingRules::timestamp) ?: "—", color = c.foreground) }
+                    MeetingProperty(stringResource(R.string.meet_language)) {
                         if (m.can.edit && m.status in setOf("UPLOADING", "QUEUED")) GPicker(stringResource(R.string.meet_language), m.language, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english))) { change("language", JsonPrimitive(it)) }
                         else Text(when (m.detectedLanguage ?: m.language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); "auto" -> stringResource(R.string.meet_auto); else -> m.detectedLanguage ?: m.language }, color = c.foreground)
                     }
-                    GProperty(stringResource(R.string.meet_recorded_by)) { Text(m.createdBy?.name ?: "—", color = c.foreground) }
+                    MeetingProperty(stringResource(R.string.meet_recorded_by)) { Text(m.createdBy?.name ?: "—", color = c.foreground) }
                     MeetingPlayer(m, seek) { seek = null }
                 }
             }
@@ -139,7 +139,7 @@ import java.time.LocalDate
                         if (editable) NxButton("$attendee ×", { mom(minutes.copy(attendees = minutes.attendees.filterIndexed { j, _ -> i != j })) }, compact = true)
                         else Text(attendee, modifier = Modifier.padding(6.dp), color = c.foreground)
                     } }
-                    if (editable) AttendeeAdder(m.members.map { it.id to it.name }) { name -> if (name.isNotBlank() && name !in minutes.attendees) mom(minutes.copy(attendees = minutes.attendees + name)) }
+                    if (editable) AttendeeAdder(m.projectMembers.map { it.id to it.name }) { name -> if (name.isNotBlank() && name !in minutes.attendees) mom(minutes.copy(attendees = minutes.attendees + name)) }
                     Text(stringResource(R.string.meet_topics), fontWeight = FontWeight.SemiBold)
                     minutes.topics.forEachIndexed { i, topic ->
                         MeetingText(topic.title, editable, stringResource(R.string.meet_topic_title)) { v -> mom(minutes.copy(topics = minutes.topics.mapIndexed { j, t -> if (i == j) t.copy(title = v) else t })) }
@@ -165,8 +165,8 @@ import java.time.LocalDate
                     m.transcript.mapNotNull { it.speaker }.distinct().forEach { speaker ->
                         Text(speaker, color = c.mutedFg)
                         if (editable) {
-                            GPicker(stringResource(R.string.meet_name), speakers[speaker]?.name, m.members.map { it.id to it.name }) { user ->
-                                val next = speakers + (speaker to MeetingSpeaker(m.members.firstOrNull { it.id == user }?.name.orEmpty(), user))
+                            GPicker(stringResource(R.string.meet_name), speakers[speaker]?.name, m.projectMembers.map { it.id to it.name }) { user ->
+                                val next = speakers + (speaker to MeetingSpeaker(m.projectMembers.firstOrNull { it.id == user }?.name.orEmpty(), user))
                                 change("speakers", JsonObject(next.mapValues { (_, v) -> NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), v) }))
                             }
                             MeetingText(speakers[speaker]?.name.orEmpty(), true, stringResource(R.string.meet_name)) { name -> change("speakers", JsonObject(speakers.mapValues { (_, v) -> NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), v) } + (speaker to NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), MeetingSpeaker(name))))) }
@@ -183,10 +183,10 @@ import java.time.LocalDate
                         fun update(value: MeetingProposal) = proposals(m.proposals.map { if (it.key == task.key) value else it })
                         MeetingText(task.title, editable) { update(task.copy(title = it)) }
                         if (editable) {
-                            Row(Modifier.horizontalScroll(rememberScrollState())) { task.assigneeIds.forEach { uid -> TextButton(onClick = { update(task.copy(assigneeIds = task.assigneeIds - uid)) }) { Text((m.members.firstOrNull { it.id == uid }?.name ?: "—") + " ×") } } }
-                            GPicker(stringResource(R.string.meet_pic), null, m.members.filter { it.id !in task.assigneeIds }.map { it.id to it.name }) { update(task.copy(assigneeIds = task.assigneeIds + it)) }
+                            Row(Modifier.horizontalScroll(rememberScrollState())) { task.assigneeIds.forEach { uid -> TextButton(onClick = { update(task.copy(assigneeIds = task.assigneeIds - uid)) }) { Text((m.projectMembers.firstOrNull { it.id == uid }?.name ?: "—") + " ×") } } }
+                            GPicker(stringResource(R.string.meet_pic), null, m.projectMembers.filter { it.id !in task.assigneeIds }.map { it.id to it.name }) { update(task.copy(assigneeIds = task.assigneeIds + it)) }
                             MeetingDate(task.dueDate) { update(task.copy(dueDate = it)) }
-                        } else Text(task.assigneeIds.mapNotNull { id -> m.members.firstOrNull { it.id == id }?.name }.joinToString(", "), color = c.mutedFg)
+                        } else Text(task.assigneeIds.mapNotNull { id -> m.projectMembers.firstOrNull { it.id == id }?.name }.joinToString(", "), color = c.mutedFg)
                         MeetingText(task.description, editable, stringResource(R.string.meet_description)) { update(task.copy(description = it)) }
                     } }
                     if (editable) item { TextButton(onClick = { proposals(m.proposals + MeetingProposal(java.util.UUID.randomUUID().toString())) }) { Text(stringResource(R.string.meet_add_task)) } }
@@ -209,8 +209,10 @@ import java.time.LocalDate
         if (m.status == "READY" && m.can.apply) Column(Modifier.fillMaxWidth().background(c.card).padding(12.dp)) {
             if (m.projectId == null) Text(stringResource(R.string.meet_need_project), color = c.warningFg, fontSize = 12.sp)
             if (m.proposals.any { it.include && it.title.isBlank() }) Text(stringResource(R.string.meet_empty_title), color = c.warningFg, fontSize = 12.sp)
-            Text(stringResource(R.string.meet_apply_summary, m.proposals.count { it.include }.toString()), color = c.mutedFg, fontSize = 12.sp)
-            NxButton(stringResource(R.string.meet_apply), { confirmation = "apply" }, kind = NxButtonKind.PRIMARY, enabled = MeetingRules.canApply(m) && !state.busy && !state.saving)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.meet_apply_summary, m.proposals.count { it.include }.toString()), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                NxButton(stringResource(R.string.meet_apply), { confirmation = "apply" }, kind = NxButtonKind.PRIMARY, enabled = MeetingRules.canApply(m) && !state.busy && !state.saving)
+            }
         }
     }
     confirmation?.let { action -> AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(stringResource(when (action) { "delete" -> R.string.meet_delete; "rewrite" -> R.string.meet_rewrite; else -> R.string.meet_apply })) }, text = {
@@ -222,6 +224,12 @@ import java.time.LocalDate
     Column(Modifier.fillMaxWidth().then(if (card) Modifier.background(Nx.colors.card, RoundedCornerShape(12.dp)).border(1.dp, Nx.colors.border, RoundedCornerShape(12.dp)).padding(12.dp) else Modifier.padding(vertical = 8.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title.isNotEmpty()) Text(title, color = Nx.colors.foreground, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         content()
+    }
+}
+@Composable internal fun MeetingProperty(label: String, content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.width(90.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = content)
     }
 }
 @Composable internal fun MeetingText(value: String, editable: Boolean, label: String? = null, change: (String) -> Unit) {
