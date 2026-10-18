@@ -2,6 +2,7 @@
 export const ID_GIDEON_TOOLS: Record<string, string> = {
   "Send a message": "Kirim pesan",
   "Recipient": "Penerima",
+  "Terms": "Termin tercatat",
   "Approver": "Penyetuju",
   "Set a reminder": "Pasang pengingat",
   "Set reminder": "Pasang pengingat",

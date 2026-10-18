@@ -4,7 +4,7 @@ from .schemas import object_schema, LIMIT, OFFSET
 
 G11_13_SCHEMAS = {
     "nexus_edit_doc": object_schema(
-        "Edit an EXISTING page as the person: a project doc (docId or its title) or a task's page (taskId). Modes: "
+        "Edit a doc / task page (card). Edit an EXISTING page as the person: a project doc (docId or its title) or a task's page (taskId). Modes: "
         "append (to the end), append_section (under a heading), replace_section (replace what is under a heading; the "
         "heading stays), add_section (a new heading + text at the end). It ALWAYS shows a card with the before → after "
         "and changes the page only when they tap Apply edit; people editing the page live keep their changes. Needs Can "
@@ -21,7 +21,7 @@ G11_13_SCHEMAS = {
         required=["mode", "content"],
     ),
     "nexus_get_form_responses": object_schema(
-        "Summarise the responses of a form the person can see (Can view in its project): total, per question the "
+        "Summarise form responses. Summarise the responses of a form the person can see (Can view in its project): total, per question the "
         "count of each option / sum-average-min-max of numbers / date range / latest text answers, the status of the "
         "tasks the responses made, and a page of the latest responses (who, when). Name it by `form` (its name) or "
         "formId; narrow with from/to (YYYY-MM-DD).",
@@ -35,7 +35,7 @@ G11_13_SCHEMAS = {
         },
     ),
     "nexus_get_performance": object_schema(
-        "Performance for the attendance period (28th → 27th; period=YYYY-MM for another): tasks assigned / completed / "
+        "Performance + leaderboard. Performance for the attendance period (28th → 27th; period=YYYY-MM for another): tasks assigned / completed / "
         "on time / overdue (split between assignees), attendance (present, late, absent, leave, sick, izin, day off), "
         "XP score, level, streak, and for the person themselves their leaderboard rank. Who can be seen follows Reports: "
         "staff only themselves, a manager their direct reports, BoD / One Above All everyone. team=true lists the "

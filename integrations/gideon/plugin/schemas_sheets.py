@@ -10,19 +10,19 @@ _SHEET_ID = {
 
 SHEET_SCHEMAS = {
     "nexus_search_sheets": object_schema(
-        "Find project spreadsheets (the Spreadsheet tab of projects) this person can open: by tab name, project name, "
+        "Find spreadsheets. Find project spreadsheets (the Spreadsheet tab of projects) this person can open: by tab name, project name, "
         "or words inside the cells. Returns sheetId, columns, and where the words were found.",
         {"query": {"type": "string"}, "project": {"type": "string"}, "limit": LIMIT},
     ),
     "nexus_get_sheet": object_schema(
-        "Read one project spreadsheet as the grid shows it: column letters + headers, rows with their sheet row "
+        "Read a spreadsheet. Read one project spreadsheet as the grid shows it: column letters + headers, rows with their sheet row "
         "number (A1 style), formulas computed, and totals (sum / count / avg) of numeric columns over ALL rows — use "
         "those for 'berapa totalnya'. Paged (30 rows; offset / limit up to 200); query = only rows containing it; "
         "columns = 'A,C' or header names; formulas=true shows each formula next to its value.",
         {**_SHEET_ID, "query": {"type": "string"}, "columns": {"type": "string"}, "formulas": {"type": "boolean"}, "limit": {"type": "integer", "minimum": 1, "maximum": 200}, "offset": OFFSET},
     ),
     "nexus_edit_sheet_cells": object_schema(
-        "Change a project spreadsheet AS the person (Can edit needed): set cells, fill a column, add rows. It ALWAYS "
+        "Edit spreadsheet cells (card). Change a project spreadsheet AS the person (Can edit needed): set cells, fill a column, add rows. It ALWAYS "
         "shows a card with every cell before → after and changes nothing until they tap Apply; if someone edits one "
         "of those cells meanwhile, Apply refuses. Values are typed like in the grid: '1.5' / 'Rp 1.500.000' / '15%' "
         "become numbers, '=SUM(B2:B9)' is a formula (A1 references). Read the sheet first (nexus_get_sheet) for the "
@@ -37,7 +37,7 @@ SHEET_SCHEMAS = {
         },
     ),
     "nexus_create_sheet": object_schema(
-        "Make a NEW spreadsheet tab in a project (Can edit needed) from a table you produced: header names + rows. "
+        "New spreadsheet (card). Make a NEW spreadsheet tab in a project (Can edit needed) from a table you produced: header names + rows. "
         "ALWAYS a card showing the table; created only when the person taps Create. Numbers / Rupiah / dates in the "
         "cells are typed like in the grid; '=…' cells are formulas.",
         {
@@ -49,7 +49,7 @@ SHEET_SCHEMAS = {
         required=["project", "name", "columns", "rows"],
     ),
     "nexus_read_nexus_image": object_schema(
-        "Look at a picture that lives in NEXUS: a task's attached picture (taskId, + attachment name when there are "
+        "Look at a NEXUS picture. Look at a picture that lives in NEXUS: a task's attached picture (taskId, + attachment name when there are "
         "several), a picture sent in one of the person's chats (messageId from nexus_read_conversation), a Z Vault "
         "image (vaultItemId or vaultName), or a NEXUS picture link (url). Only what the person can open. It answers "
         "with imagePath: then call vision_analyze on that path. Not for pictures attached in this GIDEON chat (those "
@@ -60,7 +60,7 @@ SHEET_SCHEMAS = {
         },
     ),
     "nexus_export_file": object_schema(
-        "Make a downloadable file for the person: a NEXUS doc (docId) or text you wrote (markdown: headings, lists, "
+        "Make a PDF/DOCX/XLSX. Make a downloadable file for the person: a NEXUS doc (docId) or text you wrote (markdown: headings, lists, "
         "**bold**, | tables |) as docx or pdf; a table (columns + rows, or the first | table | of markdown) as xlsx; a "
         "project spreadsheet (sheetId) as xlsx. Answers with a link only they can open (30 days): give it as a "
         "Markdown link. Changes nothing in NEXUS. To keep it in Z Vault: nexus_save_file_to_vault.",
@@ -75,7 +75,7 @@ SHEET_SCHEMAS = {
         required=["format"],
     ),
     "nexus_save_file_to_vault": object_schema(
-        "Save a file you made with nexus_export_file into Z Vault (a folder the person can add files to; none = the top "
+        "Save a file to Z Vault (card). Save a file you made with nexus_export_file into Z Vault (a folder the person can add files to; none = the top "
         "of Z Vault). ALWAYS a card; uploaded only when they tap Save.",
         {"fileId": {"type": "string"}, "folder": {"type": "string", "description": "Z Vault folder name."}},
         required=["fileId"],

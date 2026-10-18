@@ -4,7 +4,7 @@ from .schemas import object_schema, LIMIT
 
 G8_10_14_SCHEMAS = {
     "nexus_create_legal_draft": object_schema(
-        "Prepare a Legal document from a template up to DRAFT, as the person (Legal is invitation only: no access = "
+        "Legal draft from a template (card). Prepare a Legal document from a template up to DRAFT, as the person (Legal is invitation only: no access = "
         "a refusal to relay). Fill the template's form fields from what the person said, by field NAME in `values` "
         "(dates YYYY-MM-DD, amounts as numbers, lists as arrays of row objects). If fields are missing the tool lists "
         "the whole form: ask the person for the missing values — never invent names, amounts or dates. It ALWAYS "
@@ -22,7 +22,7 @@ G8_10_14_SCHEMAS = {
         required=["template"],
     ),
     "nexus_search_vault": object_schema(
-        "Search Z Vault (the company drive) for files and folders by name — only what this person can open (folder "
+        "Search Z Vault files. Search Z Vault (the company drive) for files and folders by name — only what this person can open (folder "
         "role locks apply). Returns name, kind, size, folder path, uploader, last change and a link.",
         {
             "query": {"type": "string", "description": "Part of the file or folder name."},
@@ -32,7 +32,7 @@ G8_10_14_SCHEMAS = {
         required=["query"],
     ),
     "nexus_create_vault_share_link": object_schema(
-        "Make a share link to a Z Vault file or folder AS the person. ALWAYS a card they confirm; the link exists "
+        "Vault share link (card). Make a share link to a Z Vault file or folder AS the person. ALWAYS a card they confirm; the link exists "
         "only after they tap Create link. Default = internal (NEXUS login required), download allowed, no expiry. An "
         "external link (anyone with the link, no login) only for its uploader / owner / BoD — only when they ask for "
         "one. Find the item with nexus_search_vault first.",
@@ -45,7 +45,7 @@ G8_10_14_SCHEMAS = {
         },
     ),
     "nexus_draft_announcement": object_schema(
-        "Draft a company announcement (pop-up + push) and put it on a card for the person to POST — only BoD may "
+        "Post an announcement (card). Draft a company announcement (pop-up + push) and put it on a card for the person to POST — only BoD may "
         "post (for anyone else the tool says so: then give the draft as text in your reply). Write the full title and "
         "body yourself from what they asked; never invent facts (dates, places, amounts) they did not give. Audience "
         "= everyone unless names are given. Optional daily repeat (repeatDays 1–30 + repeatAtTime HH:mm WIB).",

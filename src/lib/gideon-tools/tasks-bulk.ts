@@ -238,8 +238,8 @@ export const bulkTaskTools: Record<string, ExtraTool> = {
         if (r.ok) done.push(p.taskId)
         else skipped.push(`${p.title} (${webError(r, "refused")})`)
       }
-      if (!done.length) return { ok: false, message: `Nothing was changed · Tidak ada yang diubah: ${skipped.join("; ")}`.slice(0, 480) }
-      return { ok: true, message: skipped.length ? `Skipped · Dilewati: ${skipped.join("; ")}` : null, result: { changed: done.length, skipped } }
+      if (!done.length) return { ok: false, message: `Nothing was changed: ${skipped.join("; ")} · Tidak ada yang diubah: ${skipped.join("; ")}`.slice(0, 480) }
+      return { ok: true, message: skipped.length ? `Skipped: ${skipped.join("; ")} · Dilewati: ${skipped.join("; ")}` : null, result: { changed: done.length, skipped } }
     },
   },
   add_subtasks: {
@@ -258,8 +258,8 @@ export const bulkTaskTools: Record<string, ExtraTool> = {
         if (r.ok) made++
         else failed.push(`${title} (${webError(r, "refused")})`)
       }
-      if (!made) return { ok: false, message: `No subtask was added · Tidak ada subtask yang ditambahkan: ${failed.join("; ")}`.slice(0, 480) }
-      return { ok: true, link: `/tasks/${String(input.parentId)}`, message: failed.length ? `Not added · Tidak ditambahkan: ${failed.join("; ")}` : null, result: { added: made } }
+      if (!made) return { ok: false, message: `No subtask was added: ${failed.join("; ")} · Tidak ada subtask yang ditambahkan: ${failed.join("; ")}`.slice(0, 480) }
+      return { ok: true, link: `/tasks/${String(input.parentId)}`, message: failed.length ? `Not added: ${failed.join("; ")} · Tidak ditambahkan: ${failed.join("; ")}` : null, result: { added: made } }
     },
   },
 }

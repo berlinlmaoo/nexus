@@ -7,7 +7,7 @@ STAGES = ["Incoming", "Proposal / Quotation", "Negotiation", "Won – Contract P
 
 G67_SCHEMAS = {
     "nexus_move_deal_stage": object_schema(
-        "Move a Pipeline deal to another stage, as the person (needs Can edit in that Pipeline board, like the board "
+        "Move a deal's stage (card). Move a Pipeline deal to another stage, as the person (needs Can edit in that Pipeline board, like the board "
         "itself). ALWAYS a card showing the deal and stage before → after; saved only when they confirm. Find the "
         "deal with nexus_search_deals or pass its name / code.",
         {
@@ -18,7 +18,7 @@ G67_SCHEMAS = {
         required=["stage"],
     ),
     "nexus_add_payment_term": object_schema(
-        "Record a payment term (termin) on a Pipeline deal, as the person (Can edit in that board). ALWAYS a card with "
+        "Add a deal payment term (card). Record a payment term (termin) on a Pipeline deal, as the person (Can edit in that board). ALWAYS a card with "
         "the amount in rupiah and the deal's terms before → after. amount = plain rupiah number (15 juta = 15000000). "
         "A blank label becomes 'Termin <n>'. A paid amount without paidAt is dated today.",
         {
@@ -36,7 +36,7 @@ G67_SCHEMAS = {
         required=["amount"],
     ),
     "nexus_log_outlet_sales": object_schema(
-        "Enter a night's numbers in an Outlet Sales project, as the person (Can edit): sales = TOTAL revenue after tax, "
+        "Enter outlet sales (card). Enter a night's numbers in an Outlet Sales project, as the person (Can edit): sales = TOTAL revenue after tax, "
         "service and discount as ONE rupiah number; pax = people who actually came. Fills the night (event) on that "
         "date; pass event (its name) when there are several, or to add a night not on the board yet. A night's report "
         "opens on the night itself (no future dates). ALWAYS a card with before → after.",
@@ -50,7 +50,7 @@ G67_SCHEMAS = {
         },
     ),
     "nexus_log_social_media_day": object_schema(
-        "Enter one day of a Social Media Report project, as the person (Can edit): views, likes, comments, shares, "
+        "Enter social media numbers (card). Enter one day of a Social Media Report project, as the person (Can edit): views, likes, comments, shares, "
         "posts for ONE platform (e.g. Instagram, TikTok — the project's own list), plus optional what worked / didn't. "
         "Whole numbers, never Rp; never a future day. Only the figures sent change. ALWAYS a card with before → after.",
         {
