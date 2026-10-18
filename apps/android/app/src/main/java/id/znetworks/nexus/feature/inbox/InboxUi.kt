@@ -201,6 +201,9 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
                     id.znetworks.nexus.ui.components.PageTabs(tabs.map { (g, n) -> id.znetworks.nexus.ui.components.PageTab(g, stringResource(g.label), n) }, s.group, vm::setGroup)
                 }) else null) {
                 // Always there, like the web's "Mark all as read".
+                id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Alarm, stringResource(R.string.rem_title), {
+                    (context.applicationContext as id.znetworks.nexus.NexusApplication).container.router.open(id.znetworks.nexus.core.nav.Target.Reminders)
+                })
                 if (active.isNotEmpty()) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
             }
             when {

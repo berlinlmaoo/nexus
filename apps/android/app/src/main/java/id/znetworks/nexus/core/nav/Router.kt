@@ -13,6 +13,7 @@ sealed interface Target {
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
     data object Inbox : Target
+    data object Reminders : Target
     /** A top-level tab by route ("tasks", "projects"). */
     data class Tab(val route: String) : Target
     /** [view]: a link's `?view=` (board, list, table, calendar, timeline, overview, forms…). */
@@ -143,6 +144,7 @@ object Links {
             // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
             p == "/admin" -> Target.Admin
+            p == "/reminders" -> Target.Reminders
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))

@@ -69,6 +69,7 @@ import id.znetworks.nexus.feature.admin.MemberAttendanceAdminScreen
 import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
+import id.znetworks.nexus.feature.gideon.RemindersScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.calendar.CalendarScreen
 import id.znetworks.nexus.feature.calendar.TaskPreviewScreen
@@ -316,6 +317,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString(), folder = t.folder, unit = t.unit, person = t.person, project = t.project, prio = t.prio, done = t.done, overdue = t.overdue)) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
+            Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
             is Target.Chat -> {
@@ -570,6 +572,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             // Tasks lives in More now (NAV-HOME-GROUP): a pushed screen with a back arrow.
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
+            composable("reminders") { RemindersScreen { nav.popBackStack() } }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })
