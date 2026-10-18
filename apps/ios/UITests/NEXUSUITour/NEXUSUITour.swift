@@ -149,7 +149,9 @@ final class NEXUSUITour: XCTestCase {
         }
 
         // 3. Every screen, each on a fresh launch.
+        var sessionLost = false
         for screen in config.screens {
+            if sessionLost { break }
             guard screen.account == nil, let route = screen.app, wanted(screen.id) else { continue }
             var resolved = route
                 .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
@@ -189,7 +191,8 @@ final class NEXUSUITour: XCTestCase {
                 }
                 // A route that did not land (TourDriver checks the project / tab / form actually on screen)
                 // is a failure of that screen, not a picture of whatever happened to be there.
-                if status.hasPrefix("wrong-screen") || status.hasPrefix("timeout") {
+                if status.hasPrefix("no-session") { sessionLost = true }
+                if sessionLost || status.hasPrefix("wrong-screen") || status.hasPrefix("timeout") {
                     XCTFail("\(screen.id): \(status)")
                 }
                 if status.hasPrefix("skipped") {
@@ -750,7 +753,8 @@ final class NEXUSUITour: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         var quietSince: Date?
         while Date() < deadline {
-            if app.activityIndicators.count > 0 {
+            // Retained/offscreen tabs can own indicators that never become visible on this page.
+            if app.activityIndicators.allElementsBoundByIndex.contains(where: { $0.isHittable }) {
                 quietSince = nil
             } else if let since = quietSince {
                 if Date().timeIntervalSince(since) >= 1.0 { return true }

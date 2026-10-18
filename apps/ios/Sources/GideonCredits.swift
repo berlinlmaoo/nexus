@@ -36,7 +36,7 @@ struct GideonCreditMeter: View {
     @State private var credits = GideonCredits.shared
     @State private var showUsage = false
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 4) {
             if let s = credits.summary {
                 Button { showUsage = true } label: {
                     HStack(spacing: 6) {

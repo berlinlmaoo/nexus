@@ -1427,8 +1427,9 @@ struct DashboardView: View {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-            // No name under Edit profile on any width, as on the web: on the phone it sat alone under the button,
-            // away from the avatar (UI tour run 19, iPhone R19-I-07).
+            if hSize != .regular {
+                Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
         }
         .nexusCard()
     }
