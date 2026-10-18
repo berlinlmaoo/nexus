@@ -341,6 +341,7 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     var sources: [GideonRef] = []
     var cards: [GideonCard] = []
     var proposals: [GideonProposal] = []
+    var memories: [GideonMemory] = []
     var creditNotice: GideonCreditNotice? = nil
     var stopped = false
 
@@ -365,6 +366,7 @@ struct GideonHistoryResponse: Decodable {
         let sources: [GideonRef]?
         let cards: [GideonCard]?
         let proposals: [GideonProposal]?
+        let memories: [GideonMemory]?
     }
     struct Row: Decodable {
         let id: String?
@@ -396,6 +398,7 @@ private struct GideonEvent: Decodable {
     let sources: [GideonRef]?
     let card: GideonCard?
     let proposal: GideonProposal?
+    let memory: GideonMemory?
     let summary: GideonCreditSummary?
     let notice: GideonCreditNotice?
     let tier: String?
@@ -415,6 +418,7 @@ enum GideonStreamEvent: Sendable {
     case sources([GideonRef])
     case card(GideonCard)
     case proposal(GideonProposal)
+    case memory(GideonMemory)
     case credits(GideonCreditSummary?, GideonCreditNotice?)
     case chat(id: String, title: String?)
     case unavailable(tier: String, reason: String?)
@@ -508,9 +512,12 @@ enum GideonClient {
         return (turns, decoded.chat?.id, decoded.chat?.title)
     }
 
-    static func historyTurns(_ rows: [GideonHistoryResponse.Row]) -> [GideonTurn] {
+    static func historyTurns(_ rows: [GideonHistoryResponse.Row], includeMemories: Bool = true) -> [GideonTurn] {
         rows.compactMap { row in
-            guard let role = GideonTurn.Role(rawValue: row.role ?? ""), let content = row.content else { return nil }
+            guard let role = GideonTurn.Role(rawValue: row.role ?? "") else { return nil }
+            let ownMemories = includeMemories && role == .assistant ? row.meta?.memories ?? [] : []
+            guard row.content != nil || !ownMemories.isEmpty else { return nil }
+            let content = row.content ?? ""
             // A kept file with no url is dropped rather than drawn. A chip that opens nothing is
             // precisely what this feature exists to stop showing, so an attachment the server can
             // no longer name is better represented by the plain text it was always shown as.
@@ -527,6 +534,7 @@ enum GideonClient {
             turn.sources = row.meta?.sources ?? []
             turn.cards = row.meta?.cards ?? []
             turn.proposals = row.meta?.proposals ?? []
+            turn.memories = ownMemories
             return turn
         }
     }
@@ -679,6 +687,8 @@ enum GideonClient {
                             continuation.yield(.sources(event.sources ?? []))
                         case "card":
                             if let card = event.card { continuation.yield(.card(card)) }
+                        case "memory":
+                            if let memory = event.memory { continuation.yield(.memory(memory)) }
                         case "proposal":
                             if let p = event.proposal { continuation.yield(.proposal(p)) }
                         case "chat":
@@ -1051,6 +1061,23 @@ final class GideonChat {
         }
     }
 
+    func updateMemory(_ memory: GideonMemory) {
+        for i in turns.indices {
+            if let j = turns[i].memories.firstIndex(where: { $0.id == memory.id }) { turns[i].memories[j] = memory }
+        }
+    }
+    func reconcileMemories(_ memories: [GideonMemory]) {
+        let current = Dictionary(memories.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        for i in turns.indices {
+            for j in turns[i].memories.indices {
+                if let value = current[turns[i].memories[j].id] { turns[i].memories[j] = value }
+                else { turns[i].memories[j].status = "DELETED" }
+            }
+        }
+    }
+    func forgetAllMemories() {
+        for i in turns.indices { for j in turns[i].memories.indices { turns[i].memories[j].status = "DELETED" } }
+    }
     private func replace(_ p: GideonProposal) {
         for i in turns.indices {
             if let j = turns[i].proposals.firstIndex(where: { $0.id == p.id }) { turns[i].proposals[j] = p }
@@ -1179,6 +1206,10 @@ final class GideonChat {
                     turns[index].sources = refs
                 case .card(let card):
                     turns[index].cards.append(card)
+                case .memory(let memory):
+                    if let j = turns[index].memories.firstIndex(where: { $0.id == memory.id }) { turns[index].memories[j] = memory }
+                    else { turns[index].memories.append(memory) }
+                    GideonMemoryStore.shared.acceptOwn(memory)
                 case .proposal(let p):
                     if let j = turns[index].proposals.firstIndex(where: { $0.id == p.id }) { turns[index].proposals[j] = p }
                     else { turns[index].proposals.append(p) }
@@ -1193,7 +1224,7 @@ final class GideonChat {
             if generation != gen { return }
             // A stream that ends without a word is a failure the user can see but not explain.
             if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty,
-               turns[index].proposals.isEmpty, turns[index].cards.isEmpty {
+               turns[index].proposals.isEmpty, turns[index].cards.isEmpty, turns[index].memories.isEmpty {
                 turns.remove(at: index)
                 error = T("GIDEON didn't answer. Try again.")
                 retryAction = .resend(item)
@@ -1210,7 +1241,9 @@ final class GideonChat {
             // A cancelled drain is `reset()` taking the session away, not something that went
             // wrong. The transcript this would write into belongs to somebody who has signed out.
             guard !Task.isCancelled, generation == gen else { return }
-            turns.removeAll { $0.id == answer.id }
+            // A memory tool can finish before the connection drops. Keep its decision chip;
+            // the private server record already exists even if no answer text arrived.
+            turns.removeAll { $0.id == answer.id && $0.memories.isEmpty }
             // Worded by GideonProblem (status / code / the route's fixed sentences, EN + ID). A failure a
             // retry can fix keeps the question for "Try again"; nothing was stored server-side for a
             // failed turn, so asking again cannot duplicate it.

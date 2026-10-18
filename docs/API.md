@@ -361,3 +361,9 @@ Realtime: `meeting-changed`, `reminders-changed`, `gideon-tiers`, and `gideon-pe
 `GET /api/presence` supplies workspace-visible statuses; `?userId=me` supplies the current person. Native draws `label.en/id`, `tone`, and `until` as returned, including unknown state/reason values. No presence coordinates, address or map are decoded or displayed. `flags.presenceStatus` defaults true; either the config flag or API `enabled:false` hides the feature.
 
 `PUT /api/presence/manual` sends `text`, nullable `startsAt`, and `endsAt` (ISO instants). `DELETE /api/presence/manual?id=<displayed manual id>` protects a replacement set from another device; adopt the returned status even when `cleared:0`. Refusals display the server's `error`. Presence changes neither attendance nor notifications. The `presence-changed` socket event patches one shared session cache; reconnect and a fixed 60-second foreground fallback refetch the workspace list. GIDEON `set_my_status` uses the generic approval card with `confirm.proposalId`.
+
+### Native GIDEON Memory (DEV, 19 Oct 2026)
+
+`/api/gideon/memory` is always scoped to the current session, with no user selector. GET returns `{paused,max,textMax,memories}`; POST adds `{text,kind,date?}`, PATCH changes `{paused}`, DELETE forgets everything. PATCH `/:id` edits fields or saves a pending suggestion with `{status:"ACTIVE"}`; DELETE `/:id` forgets it (404 is already gone). Native uses an ephemeral session with no URL cache. Memory data is never sent to notifications, widgets, Live Activities, Spotlight or logs; logout and identity changes clear its in-memory store.
+
+The GIDEON SSE `memory` event and own history `meta.memories` render inline suggestion/saved/forgotten rows. OAA review explicitly excludes memory metadata and never mounts memory chips. ID refusal mapping covers `secret`, `paused`, and `full`; other errors retain the server sentence.

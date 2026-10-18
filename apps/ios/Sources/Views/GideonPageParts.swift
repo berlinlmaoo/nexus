@@ -13,6 +13,9 @@ enum GideonStepText {
         let has = !a.isEmpty
         let tool = s.tool ?? ""
         switch tool.hasPrefix("nexus_") ? String(tool.dropFirst(6)) : tool {
+        case "remember": return T("Remembering")
+        case "forget": return T("Forgetting")
+        case "list_my_memories": return T("Checking GIDEON Memory")
         case "get_person_status": return String(format: T("Checking where %@ is"), a)
         case "set_my_status": return String(format: T("Preparing your status: %@"), a)
         case "list_projects": return T("Listing projects")

@@ -683,6 +683,7 @@ struct ChatThreadView: View {
             .hoverEffect(.highlight)
             .accessibilityLabel(shownTitle ?? title)
             .accessibilityHint(T("Opens the chat's info"))
+            .accessibilityIdentifier("chat.info")
             Spacer(minLength: 8)
             // Same conditions as the toolbar below: a DM can neither grow nor be renamed.
             // The web's order: mute, rename, add people (UI tour run 15, Q-IA11).
@@ -751,6 +752,7 @@ struct ChatThreadView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(shownTitle ?? title)
         .accessibilityHint(T("Opens the chat's info"))
+            .accessibilityIdentifier("chat.info")
     }
 
     /// Who else is typing in this chat now, and whether anyone is.

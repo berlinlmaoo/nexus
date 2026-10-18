@@ -138,6 +138,7 @@ struct GideonPanel: View {
     /// Apply / Discard asks first, in a centred alert (house rule).
     @State private var decision: GideonDecision?
     @State private var showPersonalize = false
+    @State private var showMemory = false
     @State private var saveRequest: GideonSaveRequest?
     @State private var savedDocId: String?
     @State private var confirmDeleteChat = false
@@ -227,6 +228,7 @@ struct GideonPanel: View {
                 .background { Color.clear.sheet(isPresented: $showPersonalize) {
                     GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
                 } }
+                .background { Color.clear.sheet(isPresented: $showMemory) { GideonMemorySheet().environment(auth) } }
                 .sheet(item: $saveRequest) { r in
                     GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: saveProjectId,
                                        contextProjectName: chat.context.projectName) { id in savedDocId = id }
@@ -380,6 +382,7 @@ struct GideonPanel: View {
                         .accessibilityLabel(T("New chat"))
                     Menu {
                         Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
+                        if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
                         Divider()
                         moreDestructiveItems
                     } label: {
@@ -447,6 +450,7 @@ struct GideonPanel: View {
                 tierChip
                 Menu {
                     Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle") }
+                    if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
                     Divider()
                     moreDestructiveItems
                 } label: {
@@ -681,6 +685,7 @@ struct GideonPanel: View {
             if let notice = turn.creditNotice {
                 Text(notice.text).font(NXFont.text(12)).foregroundStyle(NX.warning)
             }
+            if reviewTurns == nil { ForEach(turn.memories) { memory in GideonMemoryChip(memory: memory) } }
             ForEach(turn.proposals) { p in proposalCard(p) }
             ForEach(turn.cards) { card in cardRow(card) }
             if !turn.sources.isEmpty && !live { sourcesBlock(turn.sources) }

@@ -70,3 +70,22 @@ swiftc "$NATIVE_CHECK_TMP/loose.swift" Sources/GideonActionModels.swift Tests/Gi
 "$NATIVE_CHECK_TMP/tools"
 swiftc Sources/PresenceModels.swift Sources/PresenceStore.swift Tests/Presence/Stub.swift Tests/Presence/main.swift -o "$NATIVE_CHECK_TMP/presence"
 "$NATIVE_CHECK_TMP/presence"
+# Use the real history converter and SSE DTO; review must discard even unexpected memory metadata.
+python3 - "$NATIVE_CHECK_TMP" <<'PY'
+from pathlib import Path
+import sys
+s=Path('Sources/Gideon.swift').read_text()
+def block(start):
+ a=s.index(start);b=s.index('{',a);depth=1;i=b+1
+ while depth:
+  if s[i]=='{':depth+=1
+  elif s[i]=='}':depth-=1
+  i+=1
+ return s[a:i]
+history=block('struct GideonHistoryResponse:')
+event=block('private struct GideonEvent:').replace('private struct','struct',1)
+convert=block('static func historyTurns(')
+Path(sys.argv[1],'memory-history.swift').write_text('import Foundation\n'+history+'\n'+event+'\nenum GideonHistoryProbe {\n'+convert+'\n}\n')
+PY
+swiftc Sources/GideonMemoryModels.swift Sources/GideonMemoryStore.swift "$NATIVE_CHECK_TMP/memory-history.swift" Tests/GideonMemory/Stub.swift Tests/GideonMemory/main.swift -o "$NATIVE_CHECK_TMP/memory"
+"$NATIVE_CHECK_TMP/memory"

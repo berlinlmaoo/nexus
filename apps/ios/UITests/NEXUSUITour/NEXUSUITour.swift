@@ -638,7 +638,7 @@ final class NEXUSUITour: XCTestCase {
                 let field = app.textFields.matching(textMatch).firstMatch
                 let search = app.searchFields.matching(textMatch).firstMatch
                 let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
-                guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
+                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else { return "wrong-screen: missing or disabled input \(action.label)" }
                 press(target)
                 dismissKeyboardIntroduction()
                 if action.kind == "replace" {
@@ -680,11 +680,16 @@ final class NEXUSUITour: XCTestCase {
                     let clear = frame.midY - half >= visible.minY && frame.midY + half <= visible.maxY
                     if target.exists && target.isHittable && !frame.isEmpty && clear { break }
                     let upward = target.exists && !frame.isEmpty && frame.midY < visible.midY
-                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: upward ? 0.35 : 0.75))
+                    // Scroll inside the target's pane (Messages list, centred sheet or page).
+                    // The window centre can belong to a different scroll view on iPad/Mac.
+                    let targetX = target.exists && !frame.isEmpty && !frame.isInfinite
+                        ? (frame.midX - window.frame.minX) / window.frame.width : 0.5
+                    let x = min(0.85, max(0.15, targetX))
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upward ? 0.35 : 0.75))
                     #if targetEnvironment(macCatalyst)
                     start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * window.frame.height * 0.4)
                     #else
-                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: upward ? 0.75 : 0.35))
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upward ? 0.75 : 0.35))
                     start.press(forDuration: 0.05, thenDragTo: end)
                     #endif
                     pause(0.5)

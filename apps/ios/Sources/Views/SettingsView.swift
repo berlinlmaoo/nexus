@@ -78,7 +78,7 @@ struct SettingsView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     NXPhoneSubtitle(text: T("Your profile, security, notifications and workspace preferences."))
-                    NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
+                    NXUnderlineTabs(items: SettingsTab.allCases.filter { webChrome || $0 != .memory }.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
                                     selection: $tab, accessibilityName: T("Settings"))
                 }
                 .background(NX.background)
@@ -127,7 +127,7 @@ struct SettingsView: View {
                 .padding(.leading, 20)
                 .frame(minWidth: 680, idealWidth: 680, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 VStack(spacing: 0) {
-                    NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
+                    NXUnderlineTabs(items: SettingsTab.allCases.filter { webChrome || $0 != .memory }.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
                                     selection: $tab, accessibilityName: T("Settings"))
                         .padding(.horizontal, 16)
                     webScroll.padding(.leading, 32)
@@ -157,6 +157,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
+                .accessibilityIdentifier("settings.section." + t.rawValue)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -221,6 +222,9 @@ struct SettingsView: View {
         switch tab {
         case .profile:
             profileSection
+            NavigationLink { GideonMemoryView() } label: {
+                HStack { Label(T("GIDEON Memory"), systemImage: "brain"); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg) }.font(NXFont.text(14)).foregroundStyle(NX.foreground).frame(minHeight: 44)
+            }.accessibilityIdentifier("memory.entry").nexusCard()
             if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
             JoinWorkspaceCard()
             // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
@@ -246,6 +250,8 @@ struct SettingsView: View {
             OfflineCard()
         case .mcp:
             ClaudeMCPCard()
+        case .memory:
+            GideonMemoryView(embedded: true)
         }
     }
 
@@ -618,7 +624,7 @@ struct SettingsView: View {
 
 /// The Settings tabs, in the web's order.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case profile, members, notifications, security, appearance, mcp
+    case profile, members, notifications, security, appearance, mcp, memory
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -628,6 +634,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .security: return T("Security")
         case .appearance: return T("Appearance")
         case .mcp: return T("Claude (MCP)")
+        case .memory: return T("GIDEON Memory")
         }
     }
     var icon: String {
@@ -638,6 +645,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .security: return "lock"
         case .appearance: return "paintpalette"
         case .mcp: return "powerplug"
+        case .memory: return "brain"
         }
     }
 }

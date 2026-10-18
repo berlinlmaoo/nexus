@@ -186,7 +186,7 @@ private struct GideonReadOnlyChat: View {
         if more, let older { path += "&before=" + NativeAPI.escape(older) }
         do {
             let page: GideonReviewedTranscript = try await NativeAPI.request(path)
-            let next = GideonClient.historyTurns(page.messages)
+            let next = GideonClient.historyTurns(page.messages, includeMemories: false)
             let ids = Set(turns.map(\.id)); turns = more ? next.filter { !ids.contains($0.id) } + turns : next
             older = page.olderBefore; loaded = true; failure = nil
         } catch { failure = error }
