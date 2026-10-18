@@ -391,8 +391,23 @@ export async function POST(req: NextRequest) {
         try {
           const { hits } = await searchWorkspace(userId, asked, { limit: 8, ...(scopeProjectId ? { projectId: scopeProjectId } : {}) })
           if (hits.length) {
-            searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
-            hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''} — ${h.excerpt || '—'} (id ${h.id})`))
+            searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Excerpt hanya potongan pendek isi/deskripsi: untuk merangkum dokumen atau menjelaskan isi task, baca dulu lengkapnya (nexus_get_doc / nexus_get_task); jangan menyimpulkan PIC, status atau isi dari excerpt. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
+            // Task hits carry their status, PIC and due date (18 Oct 2026): a cheap tier answered "who has task X" from
+            // the description excerpt and named the description as the person.
+            const taskIds = hits.filter((h) => h.kind === 'task').map((h) => h.id)
+            const taskFacts = new Map<string, string>()
+            if (taskIds.length) {
+              const rows = await prisma.task.findMany({
+                where: { id: { in: taskIds } },
+                select: { id: true, status: true, dueDate: true, taskList: { select: { name: true } }, assignees: { select: { user: { select: { name: true } } } } },
+              }).catch(() => [])
+              for (const t of rows) {
+                const who = t.assignees.map((a) => a.user.name).filter(Boolean).join(', ')
+                const due = t.dueDate ? new Date(t.dueDate.getTime() + 7 * 3600e3).toISOString().slice(0, 10) : null
+                taskFacts.set(t.id, `status: ${t.taskList?.name || t.status}; PIC: ${who || 'belum ada'}${due ? `; tenggat ${due}` : ''}`)
+              }
+            }
+            hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''}${taskFacts.has(h.id) ? ` [${taskFacts.get(h.id)}]` : ''} — excerpt: ${h.excerpt || '—'} (id ${h.id})`))
             const refs: GideonRef[] = hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt || null }))
             if (runId && !scopeProjectId) {
               const stepId = `ws${Date.now().toString(36)}`
