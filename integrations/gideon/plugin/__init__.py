@@ -31,6 +31,9 @@ _ACTION_BY_TOOL = {
     "nexus_move_room_booking": "move_room_booking",
     "nexus_cancel_room_booking": "cancel_room_booking",
     "nexus_create_document": "create_document",
+    # Deleting a task (18 Oct 2026): ALWAYS a card the person confirms, in every approval mode; the web Delete
+    # button's own rule (Can edit) and path (restorable from the Audit). The model can never delete directly.
+    "nexus_delete_task": "delete_task",
     # Pipeline deals and Legal documents (18 Oct 2026): read only.
     "nexus_search_deals": "search_deals",
     "nexus_search_legal_documents": "search_legal_documents",

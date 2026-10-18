@@ -11,6 +11,8 @@ import {
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import type { Prisma } from "@/generated/prisma"
 
+const DELETE_TASK_LATEST_APP = "Open on the latest app or the web to delete this task · Buka di app terbaru atau web untuk menghapus task ini"
+
 /** A proposal older than this is not applied: the task it describes has likely moved on. */
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await params
-  const body = (await req.json().catch(() => ({}))) as { decision?: string; booking?: unknown }
+  const body = (await req.json().catch(() => ({}))) as { decision?: string; booking?: unknown; confirm?: unknown }
   const decision = body.decision === "apply" ? "apply" : body.decision === "discard" ? "discard" : null
   if (!decision) return NextResponse.json({ error: "decision must be apply or discard" }, { status: 400 })
 
@@ -75,6 +77,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         where: { id, status: "PENDING" },
         data: { input: input as Prisma.InputJsonValue, summary: `Move “${before?.title ?? ""}” · ${from} → ${to}`.slice(0, 300) },
       })
+    }
+  }
+
+  // delete_task (owner, 18 Oct 2026): only the destructive card applies it, and it sends the task id back
+  // (`confirm: { taskId }`). A client without that card — a released app drawing plain rows — is told to open the
+  // latest app or the web, and the proposal stays waiting: a delete is never applied from a card that did not say so.
+  if (proposal.action === "delete_task") {
+    const stored = (proposal.input as Record<string, unknown>) ?? {}
+    const confirm = body.confirm && typeof body.confirm === "object" ? (body.confirm as Record<string, unknown>) : null
+    if (!stored.taskId || confirm?.taskId !== stored.taskId) {
+      const view = { ...proposalView(proposal), status: "FAILED", error: DELETE_TASK_LATEST_APP }
+      return NextResponse.json({ error: DELETE_TASK_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
   }
 
@@ -139,7 +153,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const updated = await prisma.gideonProposal.update({
     where: { id },
     data: ok
-      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(["book_room", "move_room_booking", "cancel_room_booking"].includes(proposal.action) ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}) } as object, error: null }
+      ? { status: "APPLIED", decidedAt: new Date(), result: { card, ...(["book_room", "move_room_booking", "cancel_room_booking"].includes(proposal.action) ? { booking: (data as { booking?: unknown } | null)?.booking ?? null } : {}), ...(proposal.action === "delete_task" ? { auditLogId: (data as { auditLogId?: unknown } | null)?.auditLogId ?? null } : {}) } as object, error: null }
       : { status: "FAILED", decidedAt: new Date(), error: (message || "Failed").slice(0, 500) },
   })
   // An approved AI Autofill value keeps its ✨ marker (CustomFieldAiFill) like one written directly.

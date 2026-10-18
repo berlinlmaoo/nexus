@@ -36,7 +36,7 @@ export function parseApprovalMode(value: unknown): ApprovalMode | null {
 }
 
 /** Tools that change something. Everything else is a read. */
-export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking"])
+export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking", "delete_task"])
 
 /**
  * Which writes wait for the person (Notion's "Always ask / Review for me / Skip approvals").
@@ -52,9 +52,12 @@ export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_co
  * was named, because GIDEON never guesses a room: the person picks it on the card.
  * move_room_booking / cancel_room_booking (16 Oct 2026) likewise: a card in always_ask and review, direct only in
  * dont_ask — and a move whose named room could be more than one room is a card in every mode.
+ * delete_task (owner, 18 Oct 2026): a card in EVERY mode, "don't ask" included. A delete never runs without the
+ * person tapping the destructive button on the card (the apply route also wants the task id echoed back from it).
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
   if (!WRITE_ACTIONS.has(action)) return false
+  if (action === "delete_task") return true
   if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
   if (action === "move_room_booking") return mode !== "dont_ask" || moveNeedsPick(input)
   if (action === "cancel_room_booking") return mode !== "dont_ask"
@@ -110,6 +113,26 @@ export type GideonProposalView = {
    * card never sees this field and cannot apply the proposal (the apply route wants the booking id back).
    */
   bookingChange?: GideonBookingChangeView | null
+  /**
+   * delete_task only (18 Oct 2026): the task as it was when the card was made, for the destructive card. A client
+   * without that card draws the diff rows; the apply route refuses its Apply without `confirm: { taskId }`.
+   */
+  taskDelete?: GideonTaskDeleteView | null
+}
+/** What a delete card shows. `deleted`: applied; it can be restored from Control Room → Audit (`auditLogId`). */
+export type GideonTaskDeleteView = {
+  taskId: string
+  title: string
+  projectId: string | null
+  projectName: string | null
+  /** The task's column (its status as the project names it) and the progress word behind it ("To do", "Done"…). */
+  status: string | null
+  progress: string | null
+  due: string | null
+  dueDay: string | null
+  assignees: string[]
+  deleted: boolean
+  auditLogId: string | null
 }
 export type GideonStepView = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null }
 export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[] }
@@ -257,6 +280,7 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "book_room": return a ? `Booking ${a}` : "Booking a room"
     case "move_room_booking": return a ? `Moving booking ${a}` : "Moving a booking"
     case "cancel_room_booking": return a ? `Cancelling booking ${a}` : "Cancelling a booking"
+    case "delete_task": return a ? `Deleting task ${a}` : "Deleting a task"
     default: return tool.replace(/_/g, " ")
   }
 }
@@ -281,6 +305,7 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
       }
       case "get_task":
       case "update_task":
+      case "delete_task":
       case "add_task_comment": {
         const id = str(input.taskId)
         if (!id) return null
@@ -460,6 +485,29 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     error: p.error ?? null,
     ...(p.action === "book_room" ? { booking: bookingView(p.input, (result?.booking as AnyObj | undefined)?.id ?? null) } : {}),
     ...(p.action === "move_room_booking" || p.action === "cancel_room_booking" ? { bookingChange: bookingChangeView(p.action, p.input, result) } : {}),
+    ...(p.action === "delete_task" ? { taskDelete: taskDeleteView(p.input, result, p.status) } : {}),
+  }
+}
+
+/** The delete card's task, from the snapshot the proposal stored when it was made (tools route describeWrite). */
+export function taskDeleteView(input: unknown, result: AnyObj | null | undefined, status: string): GideonTaskDeleteView | null {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  const b = (i.before && typeof i.before === "object" ? i.before : null) as AnyObj | null
+  const taskId = typeof i.taskId === "string" ? i.taskId : null
+  if (!b || !taskId) return null
+  const s = (v: unknown) => (typeof v === "string" && v ? v : null)
+  return {
+    taskId,
+    title: s(b.title) ?? "",
+    projectId: s(b.projectId),
+    projectName: s(b.projectName),
+    status: s(b.status),
+    progress: s(b.progress),
+    due: s(b.due),
+    dueDay: s(b.dueDay),
+    assignees: Array.isArray(b.assignees) ? b.assignees.filter((x: unknown): x is string => typeof x === "string") : [],
+    deleted: status === "APPLIED",
+    auditLogId: s(result?.auditLogId),
   }
 }
 

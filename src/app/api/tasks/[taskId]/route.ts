@@ -5,10 +5,7 @@ import prisma from "@/lib/prisma"
 import { TASK_ORDER } from "@/lib/task-order"
 import { auth } from "@/lib/auth"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
-import { logAudit } from "@/lib/audit"
-import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
-import { checkProjectAccess } from "@/lib/rbac"
-import { emitTaskDeleted } from "@/lib/socket-emitter"
+import { deleteTaskAs, TaskDeleteRefusal } from "@/lib/task-delete"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { applyTaskUpdate } from "@/lib/task-update"
 import { needsLegacyCalendarTaskRead } from "@/lib/client-version"
@@ -153,65 +150,16 @@ export async function DELETE(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const existing = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        taskList: { include: { project: { select: { name: true, workspaceId: true } } } },
-        taskProjects: {
-          select: { projectId: true },
-        },
-      },
-    })
-
-    if (!existing) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 })
-    }
-
-    // Can edit deletes tasks (Notion levels, owner 13 Oct 2026); the delete is restorable from the Audit.
-    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["MEMBER"])
-    if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: you need Can edit access in this project to delete tasks", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
-    }
-
-    await prisma.activityLog.create({
-      data: {
-        action: "deleted task",
-        details: `Deleted task "${existing.title}"`,
-        userId: session.user.id!,
-        projectId: existing.taskList.projectId,
-      },
-    })
-
-    const auditLogId = await logAudit({
-      action: "delete", entityType: "task", entityId: taskId, entityName: existing.title,
-      userId: session.user.id!, request,
-      // The task is gone after this; keep enough to say what it was and where it lived.
-      metadata: {
-        title: existing.title,
-        projectId: existing.taskList.projectId,
-        projectName: existing.taskList.project?.name ?? null,
-      },
-    })
-
-    // Everything the delete takes with it (subtasks, files, comments…) is kept first, so Control Room →
-    // Audit can restore it.
-    await deleteKeepingSnapshot({
-      entityType: "task", entityId: taskId, entityName: existing.title,
-      workspaceId: existing.taskList.project?.workspaceId ?? null,
-      deletedById: session.user.id!, auditLogId,
-      meta: {
-        open: { type: "task", id: taskId, projectId: existing.taskList.projectId },
-        projectId: existing.taskList.projectId, taskId,
-      },
-      remove: (tx) => tx.task.delete({ where: { id: taskId } }),
-    })
-
-    const relatedProjectIds = [
-      existing.taskList.projectId,
-      ...existing.taskProjects.map((taskProject) => taskProject.projectId),
-    ]
-    for (const projectId of Array.from(new Set(relatedProjectIds))) {
-      emitTaskDeleted(projectId, taskId)
+    // One path with GIDEON's delete_task (lib/task-delete.ts): Can edit deletes (Notion levels, owner 13 Oct 2026),
+    // the delete is restorable from the Audit, and every project showing the task hears about it.
+    let auditLogId: string | null
+    try {
+      ({ auditLogId } = await deleteTaskAs(session.user.id!, taskId, { request }))
+    } catch (error) {
+      if (error instanceof TaskDeleteRefusal) {
+        return NextResponse.json({ error: error.message, ...(error.code === "NOT_FOUND" ? {} : { code: error.code }) }, { status: error.status })
+      }
+      throw error
     }
 
     // auditLogId (additive, 12 Oct 2026): the web's Undo puts the task back through /api/tasks/undo-delete.

@@ -76,6 +76,22 @@ export type GideonProposal = {
   booking?: GideonBookingView | null;
   /** move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. */
   bookingChange?: GideonBookingChangeView | null;
+  /** delete_task only (18 Oct 2026): the task as the card shows it; `deleted` once applied (restorable from the Audit). */
+  taskDelete?: GideonTaskDeleteView | null;
+};
+/** Server gideon-runs.ts GideonTaskDeleteView. */
+export type GideonTaskDeleteView = {
+  taskId: string;
+  title: string;
+  projectId: string | null;
+  projectName: string | null;
+  status: string | null;
+  progress: string | null;
+  due: string | null;
+  dueDay: string | null;
+  assignees: string[];
+  deleted: boolean;
+  auditLogId: string | null;
 };
 type GideonBookingSlot = { room: string; day: string; dayLabel: string; start: string; end: string; startsAt: string; endsAt: string };
 /** Server gideon-book-room-plan.ts GideonBookingChangeView. A move's `after.room` is null when it is picked on the card. */
@@ -350,9 +366,10 @@ export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] 
  * and slot picked on a book_room card (required to apply one); on a move card the same plus `bookingId`, on a
  * cancel card `{ bookingId }` alone (required to apply those).
  */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }): Promise<GideonProposal> {
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, confirm?: { taskId: string }): Promise<GideonProposal> {
   try {
-    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}) }) });
+    // `confirm`: a delete_task card sends the task id back (required to apply one).
+    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}), ...(confirm ? { confirm } : {}) }) });
     return r.proposal;
   } catch (e) {
     const p = (e as { body?: { proposal?: GideonProposal } }).body?.proposal;
