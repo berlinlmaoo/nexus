@@ -566,18 +566,19 @@ final class NEXUSUITour: XCTestCase {
             pause(2.0)
         }
         for action in screen.appActions ?? [] {
-            let match = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", action.label, action.label)
+            let match = NSPredicate(format: "label CONTAINS %@", action.label)
+            let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", action.label, action.label)
             switch action.kind {
             case "tap":
                 let button = app.buttons.matching(match).firstMatch
-                let field = app.textViews.matching(match).firstMatch
+                let field = app.textViews.matching(textMatch).firstMatch
                 let target = button.exists ? button : field.exists ? field : app.staticTexts.matching(match).firstMatch
                 guard target.waitForExistence(timeout: 15), target.isHittable else { return "wrong-screen: missing interaction target \(action.label)" }
                 press(target)
                 pause(1)
             case "type":
-                let field = app.textFields.matching(match).firstMatch
-                let target = field.exists ? field : app.textViews.matching(match).firstMatch
+                let field = app.textFields.matching(textMatch).firstMatch
+                let target = field.exists ? field : app.textViews.matching(textMatch).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
                 press(target)
                 dismissKeyboardIntroduction()
