@@ -168,13 +168,16 @@ async function describeSend(actor: User, input: Input) {
   return {
     summary: `Send a message to ${target.name}`,
     diff: [
+      // Who it goes out as (19 Oct 2026 privacy gate): always the asker. Asked to write "as QA Dev 5", a model once
+      // said "a message from QA Dev 5 is ready"; the card now shows plainly that it is not.
+      { field: "From", to: actor.name ?? actor.email ?? "?" },
       { field: "Recipient", to: target.name },
       { field: "Chat", to: target.kind },
       { field: "Message", to: text },
     ],
     store: { text, target, replyToId },
     preview: text,
-    note: "NOT sent yet. It waits on the card below, which shows the exact text and the recipient; the person taps Send. Tell them so in one short sentence and never say it was sent.",
+    note: "It is sent under this person's own name — never as anyone else: if they asked to send it as someone else, say it will go out as them. NOT sent yet. It waits on the card below, which shows the exact text and the recipient; the person taps Send. Tell them so in one short sentence and never say it was sent.",
   }
 }
 
