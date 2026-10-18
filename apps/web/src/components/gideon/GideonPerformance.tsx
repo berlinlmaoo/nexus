@@ -169,10 +169,11 @@ function TierCard({ tier }: { tier: PerfTier }) {
   const errorHigh = tier.errorRate != null && tier.errorRate > 0.05;
   return (
     <div className={cn(card, "flex min-w-0 flex-col gap-3")}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* Wraps instead of cutting the name: "Unavailable" / "Tidak tersedia" next to "GIDEON Model 0" is too wide for a quarter row. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+        <div className="flex items-center gap-2">
           <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: TIER_VAR[tier.id] }} />
-          <div className="min-w-0 truncate font-display text-[15px] font-semibold">GIDEON {PERF_TIER_NAME[tier.id]}</div>
+          <div className="whitespace-nowrap font-display text-[15px] font-semibold">GIDEON {PERF_TIER_NAME[tier.id]}</div>
         </div>
         <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", st.cls)}>
           <Icon className={cn("h-3.5 w-3.5", tier.status === "loading" && "animate-spin motion-reduce:animate-none")} />
