@@ -18,6 +18,7 @@ import { fileTools } from "./files"
 import { docEditTools } from "./doc-edit"
 import { formTools } from "./forms"
 import { performanceTools } from "./performance"
+import { presenceTools } from "./presence"
 
 /**
  * The GIDEON tools of the 18 Oct 2026 package, by action (see meta.ts for approval rules and why). The tools route
@@ -40,6 +41,8 @@ export const EXTRA_TOOLS: Record<string, ExtraTool> = {
   ...docEditTools,
   ...formTools,
   ...performanceTools,
+  // Presence status (owner, 19 Oct 2026): "Berlin ke mana?" + a card to set one's own status.
+  ...presenceTools,
 }
 
 export function extraTool(action: string): ExtraTool | null {

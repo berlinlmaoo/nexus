@@ -77,6 +77,10 @@ provides_tools:
   - nexus_edit_doc
   - nexus_get_form_responses
   - nexus_get_performance
+  # Presence status (19 Oct 2026, schemas_presence.py): anyone's status as the avatars show it (in / out of the office
+  # only, never where); one's own manual status is always a card. Read-only on attendance.
+  - nexus_get_person_status
+  - nexus_set_my_status
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

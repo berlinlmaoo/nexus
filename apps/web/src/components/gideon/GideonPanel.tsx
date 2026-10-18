@@ -1664,6 +1664,7 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
     case "edit_sheet_cells": return t("Edit spreadsheet");
     case "create_sheet": return t("Create a spreadsheet");
     case "save_file_to_vault": return t("Save to Z Vault");
+    case "set_my_status": return t("Set your status");
     default: return action;
   }
 }

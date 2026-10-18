@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { thumbUrl } from "@/lib/thumb";
+import { PresenceDot, presenceText, usePresence, type PresenceStatus } from "@/lib/presence";
+import { getLang } from "@/lib/lang";
 
 /** "Budi Santoso" → "BS"; "?" when there is no name. */
 export function initialsOf(name?: string | null): string {
@@ -48,6 +50,7 @@ export function AvatarFace({
   size = 28,
   decorative = false,
   className,
+  presence,
 }: {
   name?: string | null;
   avatar?: string | null;
@@ -56,11 +59,15 @@ export function AvatarFace({
   size?: number;
   decorative?: boolean;
   className?: string;
+  /** Presence status (19 Oct 2026): a small dot at the bottom right, and the status in the tooltip. */
+  presence?: PresenceStatus | null;
 }) {
   const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
   const label = name?.trim() || undefined;
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const photo = avatar && avatar !== brokenSrc ? avatar : null;
+  const dot = presence && size >= 16 ? Math.max(7, Math.min(16, Math.round(size * 0.3))) : 0;
+  const tip = presence && label ? `${label} · ${presenceText(presence, getLang())}` : label;
   // The initials are always drawn; a photo lies on top of them. Until a lazy photo has loaded (a long list
   // below the fold, a slow connection) the person still has a face instead of an empty circle (UI tour
   // run 7, 14 Oct 2026: leaderboard ranks 27-43 showed no avatar at all).
@@ -69,9 +76,11 @@ export function AvatarFace({
       aria-hidden={decorative || !label || undefined}
       role={!decorative && label ? "img" : undefined}
       aria-label={!decorative && label ? label : undefined}
-      className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white ring-2 ring-background", className)}
+      // With a presence dot the face cannot clip its children (the dot sits on the edge); the photo carries the
+      // circle itself (rounded-[inherit]), so nothing else shows outside it.
+      className={cn("relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-background", !dot && "overflow-hidden", className)}
       style={{ background: avatarColor(seed || label || "?"), width: size, height: size, minWidth: size, fontSize: Math.round(size * 0.4) }}
-      title={label}
+      title={tip}
     >
       {/* Hidden once the photo is in, so a photo with transparent parts never shows letters through. */}
       <span className={photo && loadedSrc === photo ? "invisible" : undefined}>{initialsOf(name)}</span>
@@ -88,6 +97,7 @@ export function AvatarFace({
           className="absolute inset-0 h-full w-full rounded-[inherit] object-cover"
         />
       )}
+      {presence && dot > 0 && <PresenceDot status={presence} size={dot} className="absolute -bottom-px -right-px" />}
     </span>
   );
 }
@@ -98,18 +108,22 @@ export function Avatar({
   avatar,
   size = 28,
   className,
+  presence = true,
 }: {
   userId: string;
   name?: string | null;
   avatar?: string | null;
   size?: number;
   className?: string;
+  /** false = no presence dot (a picture that stands for something else). */
+  presence?: boolean;
 }) {
   const lookup = useUserLookup();
   const resolved = lookup.get(userId);
   const dispName = name ?? resolved?.name ?? null;
   const img = avatar ?? resolved?.avatar ?? null;
-  return <AvatarFace name={dispName} avatar={img} seed={dispName || userId} size={size} className={className} />;
+  const status = usePresence(presence ? userId : null);
+  return <AvatarFace name={dispName} avatar={img} seed={dispName || userId} size={size} className={className} presence={status} />;
 }
 
 export function AvatarStack({

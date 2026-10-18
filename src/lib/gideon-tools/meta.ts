@@ -74,6 +74,9 @@ export const EXTRA_TOOL_META: Record<string, Meta> = {
   read_nexus_image: { write: false, label: L("Looking at {a}", "Looking at an image") },
   export_file: { write: false, label: L("Making the file {a}", "Making a file") },
   save_file_to_vault: { write: true, approval: "always", label: L("Preparing to save {a} to Z Vault", "Preparing a Z Vault save") },
+  // Presence status (owner, 19 Oct 2026): anyone's status as everyone sees it; one's own manual status is always a card.
+  get_person_status: { write: false, label: L("Checking where {a} is", "Checking statuses") },
+  set_my_status: { write: true, approval: "always", label: L("Preparing your status: {a}", "Preparing your status") },
 }
 
 export function isExtraAction(action: string): boolean {
@@ -115,5 +118,7 @@ export const EXTRA_TOOL_GROUP: Record<string, string> = {
   search_sheets: "gideonToolsSheets", get_sheet: "gideonToolsSheets", edit_sheet_cells: "gideonToolsSheets", create_sheet: "gideonToolsSheets",
   read_nexus_image: "gideonToolsImages",
   export_file: "gideonToolsFiles", save_file_to_vault: "gideonToolsFiles",
+  // The feature's own kill switch (lib/app-config.ts flags.presenceStatus) also closes its two tools.
+  get_person_status: "presenceStatus", set_my_status: "presenceStatus",
 }
 export const EXTRA_TOOL_FLAGS: string[] = [...new Set(Object.values(EXTRA_TOOL_GROUP))]

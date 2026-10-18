@@ -101,6 +101,8 @@ export const BUS_EVENTS = {
   GIDEON_PERF: "gideon-perf",
   /** A meeting recording moved (status/progress/edit/apply/delete) → its uploader's `user:<id>` + its `project:<id>`. Ids only. */
   MEETING_CHANGED: "meeting-changed",
+  /** Someone's presence status changed (lib/presence.ts, 19 Oct 2026) → every `workspace:<id>` room they are in + their `user:<id>`. */
+  PRESENCE_CHANGED: "presence-changed",
 } as const
 
 // Every named event crosses processes (lib/realtime-bridge.ts).

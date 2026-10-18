@@ -8,6 +8,7 @@ import {
   Pencil, Search, Trash2, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { PresenceChip } from "@/lib/presence";
 import { ProjectTile } from "@/components/projects/ProjectIcon";
 import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
 import {
@@ -318,6 +319,7 @@ function InfoBody({
           )}
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+        {peer && !peer.deactivatedAt && <PresenceChip userId={peer.userId} className="mt-2" />}
         {peer?.deactivatedAt && <span className="mt-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{t("Left")}</span>}
       </div>
 

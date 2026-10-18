@@ -4,6 +4,7 @@ import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews, patchProjectIcon } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
+import { bindPresenceSocket } from "@/lib/presence";
 import { applyRemoteTask, applyRemoteTaskDeleted, taskWriteInFlight, type RemoteApplyResult } from "./task-cache";
 
 // SOCKET event names → query invalidation.
@@ -469,6 +470,8 @@ export function RealtimeProvider({
 
         // "… is typing" (chat-typing.ts): its own store, read by the thread, its header and the list.
         cleanups.push(bindTypingSocket(socket, userId));
+        // Presence status (lib/presence.tsx, 19 Oct 2026): `presence-changed` patches the shared status list.
+        cleanups.push(bindPresenceSocket(socket, queryClient));
 
         cleanups.push(() => {
           socket.off("connect", onConnect);

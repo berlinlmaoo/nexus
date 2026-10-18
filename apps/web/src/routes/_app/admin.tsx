@@ -33,6 +33,7 @@ import { AuditLogView } from "@/components/audit/AuditLogView";
 import { SuspectAttendanceAdmin } from "@/components/attendance/SuspectAttendanceAdmin";
 import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdmin";
 import { useLang } from "@/lib/lang";
+import { PresenceLine } from "@/lib/presence";
 import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
@@ -737,6 +738,8 @@ function UserRow(props: UserRowProps) {
             <div className="min-w-0">
               <div className="truncate font-semibold">{user.name || t("Unnamed")}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+              {/* Presence status (19 Oct 2026), live. */}
+              <PresenceLine userId={user.id} className="mt-0.5 flex max-w-full text-[11px]" />
               {/* Approver absensi — hanya untuk STAFF. "Belum ditaruh" berwarna peringatan karena
                   request orang ini masih jatuh ke BoD; bukan galat, tapi pekerjaan yang belum selesai. */}
               {orgInfo && !orgInfo.hidden && (

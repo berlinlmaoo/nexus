@@ -57,6 +57,10 @@ export type AppConfig = {
     gideonToolsSheets: boolean
     gideonToolsImages: boolean
     gideonToolsFiles: boolean
+    /** Presence status (owner, 19 Oct 2026): Online / Away / Sick / Leave / Not checked in / Offline on avatars, profiles,
+     *  DM headers, Control Room and GIDEON (get_person_status, set_my_status). Off = GET /api/presence answers
+     *  enabled:false with no statuses, setting is refused, no realtime events; the apps hide every status. */
+    presenceStatus: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -84,7 +88,7 @@ const GIDEON_TOOL_FLAG_DEFAULTS = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, presenceStatus: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {

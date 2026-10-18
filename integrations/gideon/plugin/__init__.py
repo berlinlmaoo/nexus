@@ -8,12 +8,13 @@ from .schemas_g67 import G67_SCHEMAS
 from .schemas_g8_10_14 import G8_10_14_SCHEMAS
 from .schemas_sheets import SHEET_SCHEMAS
 from .schemas_g11_13 import G11_13_SCHEMAS
+from .schemas_presence import PRESENCE_SCHEMAS
 from .images import read_nexus_image_handler
 from .schemas_memory import MEMORY_SCHEMAS
 
 # The 18 Oct 2026 package (inbox, chat, reminders, …): schemas_extra.py.
 # GIDEON Memory (19 Oct 2026): nexus_remember / nexus_forget / nexus_list_my_memories -> remember / forget / list_my_memories.
-_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS, **G11_13_SCHEMAS, **MEMORY_SCHEMAS}
+_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS, **G11_13_SCHEMAS, **MEMORY_SCHEMAS, **PRESENCE_SCHEMAS}
 SCHEMAS = {**SCHEMAS, **_PACKAGE}
 EXTRA_ACTIONS = {name: name[len("nexus_"):] for name in _PACKAGE}
 

@@ -1,0 +1,36 @@
+/**
+ * English → Indonesian for the presence status (owner, 19 Oct 2026): the set-status dialog (components/SetStatusDialog.tsx),
+ * the status line/chip (lib/presence.tsx) and the GIDEON "Set your status" card. The status labels themselves come from
+ * the server in both languages. Keys must be unique across all id-*.ts files (i18n.test.mjs).
+ */
+export const ID_PRESENCE: Record<string, string> = {
+  "until {when}": "sampai {when}",
+  "Set a status": "Atur status",
+  "Everyone in your workspace sees it next to your name until it ends. Nobody is notified.": "Semua orang di workspace-mu melihatnya di samping namamu sampai selesai. Tidak ada yang diberi notifikasi.",
+  "Now:": "Sekarang:",
+  "What are you up to?": "Lagi ngapain?",
+  "Away ·": "Away ·",
+  "e.g. Potong rambut": "mis. Potong rambut",
+  "Meeting": "Meeting",
+  "Lunch": "Makan siang",
+  "Out for a shoot": "Lagi shooting",
+  "At the dentist": "Ke dokter gigi",
+  "Potong rambut": "Potong rambut",
+  "Start time": "Jam mulai",
+  "End date": "Tanggal selesai",
+  "End time": "Jam selesai",
+  "Clear after": "Hapus setelah",
+  "30 minutes": "30 menit",
+  "1 hour": "1 jam",
+  "2 hours": "2 jam",
+  "{from} – {to} WIB": "{from} – {to} WIB",
+  "Clear status": "Hapus status",
+  "Save status": "Simpan status",
+  "Could not save. Try again.": "Gagal menyimpan. Coba lagi.",
+  "Set your status": "Atur statusmu",
+  "Status set": "Status diatur",
+  "Checking where {name} is": "Mengecek {name} di mana",
+  "Checking statuses": "Mengecek status",
+  "Preparing your status: {name}": "Menyiapkan statusmu: {name}",
+  "Preparing your status": "Menyiapkan statusmu",
+};

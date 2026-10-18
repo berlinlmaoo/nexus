@@ -12,6 +12,8 @@ import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
 import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
+import { PresenceDot, presenceText, usePresence } from "@/lib/presence";
+import { SetStatusDialog } from "@/components/SetStatusDialog";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import { navGroups } from "@/components/nav-groups";
@@ -186,6 +188,8 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
   const { isDark, toggle: toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
+  const myStatus = usePresence(me?.id);
+  const [statusOpen, setStatusOpen] = useState(false);
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
   const membersInfo = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data;
   const orgRole = membersInfo?.role;
@@ -291,6 +295,18 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                 </div>
                 <Settings className="h-4 w-4 text-muted-foreground" />
               </Link>
+              {/* Presence status (19 Oct 2026): what everyone sees next to your name; tap to set one. */}
+              {myStatus && (
+                <button
+                  onClick={() => setStatusOpen(true)}
+                  className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-background/40 px-3 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+                >
+                  <span className="grid h-[18px] w-[18px] place-items-center"><PresenceDot status={myStatus} size={10} ring={false} /></span>
+                  <span className="flex-1 text-left">{t("Set a status")}</span>
+                  <span className="max-w-[45%] truncate text-xs font-medium text-muted-foreground">{presenceText(myStatus, lang)}</span>
+                </button>
+              )}
+              <SetStatusDialog open={statusOpen} onOpenChange={setStatusOpen} meId={me?.id} />
               <button
                 onClick={toggleTheme}
                 className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-background/40 px-3 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"

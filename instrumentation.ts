@@ -26,6 +26,12 @@ export async function register() {
     const { startMeetingTicker } = await import("@/lib/meeting-notes")
     startMeetingTicker()
   }
+  // Presence status (lib/presence.ts, 19 Oct 2026): the clock of manual statuses and shift edges. Leader only, read-only
+  // on attendance, never notifies. Off with NEXUS_PRESENCE_TICKER=0 (statuses are then fresh only on writes and reads).
+  if (process.env.NEXUS_PRESENCE_TICKER !== "0") {
+    const { startPresenceTicker } = await import("@/lib/presence")
+    startPresenceTicker()
+  }
   if (process.env.NEXUS_AUTOMATION_TICKER === "0") return
   const { startAutomationTicker } = await import("@/lib/automation-ticker")
   startAutomationTicker()

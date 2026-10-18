@@ -34,6 +34,7 @@ import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 import { classifyPermitReason } from "@/lib/permit-reason-guard"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffBalances, dayOffPeriodOf, dayOffUsageKey, dayOffUsedByPeriod, effectiveDayOffQuotas } from "@/lib/day-off-usage"
+import { touchPresenceSoon } from "@/lib/presence"
 
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
@@ -943,6 +944,8 @@ export async function POST(request: NextRequest) {
       }).catch((e) => console.error("grant notify failed", e))
     }
 
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(attendanceRequest.userId)
     return NextResponse.json({ request: serializeAttendanceRequest(attendanceRequest) }, { status: 201 })
   } catch (error) {
     console.error("Error creating attendance request:", error)

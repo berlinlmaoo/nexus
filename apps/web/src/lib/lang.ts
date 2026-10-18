@@ -77,6 +77,7 @@ import { ID_NOTION_VIEWS } from "@/lib/i18n/id-notion-views";
 import { ID_MEETINGS } from "@/lib/i18n/id-meetings";
 import { ID_MEETING_SPEAKERS } from "@/lib/i18n/id-meeting-speakers";
 import { ID_GIDEON_PERF } from "@/lib/i18n/id-gideon-perf";
+import { ID_PRESENCE } from "@/lib/i18n/id-presence";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -99,6 +100,8 @@ Object.assign(ID, ID_RACE_COLLAB);
 Object.assign(ID, ID_MEETINGS);
 Object.assign(ID, ID_MEETING_SPEAKERS);
 Object.assign(ID, ID_GIDEON_PERF);
+// Presence status (19 Oct 2026).
+Object.assign(ID, ID_PRESENCE);
 
 function read(): Lang {
   try {
