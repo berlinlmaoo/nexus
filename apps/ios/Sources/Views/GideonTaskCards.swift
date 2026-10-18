@@ -48,8 +48,9 @@ struct GideonDeleteTaskCard: View {
         }.font(NXFont.text(12)).padding(9)
     }
     private var due: String {
-        guard let raw = task.due ?? task.dueDay, let date = TaskDates.parse(raw) else { return T("No due date") }
+        guard let raw = task.due ?? task.dueDay else { return T("No due date") }
         let timed = raw.contains("T")
+        guard let date = timed ? TaskDates.parse(raw) : Optional(CalDays.date(raw)) else { return T("No due date") }
         return AppDateLocale.formatter(timed ? "EEE d MMM HH:mm" : "EEE d MMM", timeZone: TimeZone(secondsFromGMT: 0)).string(from: date)
     }
 }
@@ -127,6 +128,7 @@ struct GideonCreateTaskCard: View {
                     if hasDue { DatePicker(T("Due"), selection: $due, displayedComponents: .date).labelsHidden().environment(\.timeZone, TimeZone(secondsFromGMT: 0)!) }
                 }
             }
+            if target.calendar == true { property("Calendar") { Text(T("Shows on the calendar (it has a PIC and a date)")) } }
             if let error = failure ?? proposal.error { Text(T(error)).font(NXFont.text(12)).foregroundStyle(NX.danger) }
             HStack {
                 Spacer()

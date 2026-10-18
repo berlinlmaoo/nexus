@@ -164,6 +164,10 @@ struct GideonMarkdownView: View {
     var size: CGFloat = 15
     var onOpen: ((GideonRef) -> Void)? = nil
 
+    @State private var exportedFile: ShareItem?
+    @State private var downloadError: String?
+    @State private var downloading = false
+
     var body: some View {
         let blocks = GideonMarkdownParser.blocks(text)
         VStack(alignment: .leading, spacing: 8) {
@@ -174,7 +178,25 @@ struct GideonMarkdownView: View {
         .foregroundStyle(NX.foreground)
         .tint(NX.violetText)
         .textSelection(.enabled)
+        .overlay(alignment: .bottomTrailing) { if downloading { ProgressView() } }
+        .sheet(item: $exportedFile) { ActivityView(items: [$0.url]) }
+        .alert(T("Couldn't download file"), isPresented: Binding(get: { downloadError != nil }, set: { if !$0 { downloadError = nil } })) {
+            Button(T("OK"), role: .cancel) {}
+        } message: { Text(downloadError ?? "") }
         .environment(\.openURL, OpenURLAction { url in
+            if (url.host == nil || Config.isNexusHost(url)), url.path.hasPrefix("/api/gideon/files/") {
+                guard !downloading else { return .handled }
+                downloading = true
+                Task {
+                    defer { downloading = false }
+                    do {
+                        let file = try await APIClient.shared.gideonExport(url)
+                        exportedFile = ShareItem(url: file)
+                    } catch { downloadError = error.localizedDescription }
+                }
+                return .handled
+            }
+            if url.host == nil, url.path == "/reminders" { AppRouter.shared.open(.reminders); return .handled }
             if let ref = GideonLinkTarget.ref(for: url), let onOpen {
                 onOpen(ref)
                 return .handled

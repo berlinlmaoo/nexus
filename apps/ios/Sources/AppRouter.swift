@@ -59,6 +59,7 @@ struct NXDetailRequest: Identifiable, Hashable {
     let target: NotificationTarget
     var id: String {
         switch target {
+        case .reminders: return "reminders"
         case .meeting(let id):    return "meeting-" + id
         case .task(let id):       return "task-" + id
         case .project(let id):    return "project-" + id
@@ -267,7 +268,7 @@ final class AppRouter {
             go(.admin)
         case .screen(let screen):
             go(screen)
-        case .meeting, .task, .project, .submission, .legalRequest:
+        case .reminders, .meeting, .task, .project, .submission, .legalRequest:
             detail = NXDetailRequest(target: target)
         case .legalBoard:
             focus = target
@@ -406,6 +407,7 @@ final class AppRouter {
     private func openScheme(_ url: URL) {
         let name = url.host ?? url.pathComponents.first { $0 != "/" } ?? ""
         // Not a screen: there is nothing behind the login screen to navigate to while signed out.
+        if name.lowercased() == "reminders" { open(.reminders); return }
         if name.lowercased() == "meetings", let id = url.pathComponents.first(where: { $0 != "/" }) { open(.meeting(id)); return }
         if name.lowercased() == "admin", URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "gideon" && $0.value == "performance" }) == true { open(.gideonPerformance); return }
         if name.lowercased() == "register" { requestSignup(from: url); return }

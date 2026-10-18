@@ -151,6 +151,7 @@ struct RootView: View {
                     NavigationStack {
                         Group {
                             switch request.target {
+                            case .reminders: RemindersView()
                             case .meeting(let id): MeetingDetailView(id: id)
                             case .task(let id):       TaskDetailView(taskId: id)
                             case .project(let id):    ProjectDetailView(projectId: id, projectName: "")

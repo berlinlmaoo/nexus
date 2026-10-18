@@ -52,6 +52,7 @@ struct InboxView: View {
         .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Mentions, assignments, approvals and replies that need you.")) { pageHeader }
         .navigationDestination(item: $openTarget) { target in
             switch target {
+            case .reminders: RemindersView()
             case .meeting(let id): MeetingDetailView(id: id)
                 case .task(let id):    TaskDetailView(taskId: id)
             // A notification carries the project's id and no name; the board fills its own
@@ -69,6 +70,9 @@ struct InboxView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button { openTarget = .reminders } label: { Label(T("Reminders"), systemImage: "alarm") }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
                     .disabled(unread == 0)
             }
@@ -84,6 +88,7 @@ struct InboxView: View {
     private var pageHeader: some View {
         VStack(spacing: 0) {
             NXPageHeader(title: T("Notifications"), subtitle: T("Mentions, assignments, approvals and replies that need you.")) {
+                Button { openTarget = .reminders } label: { Label(T("Reminders"), systemImage: "alarm") }.buttonStyle(.nxBordered)
                 Button { Task { await markAll() } } label: { Label(T("Mark all as read"), systemImage: "checkmark") }
                     .buttonStyle(.nxBordered)
                     .disabled(unread == 0)

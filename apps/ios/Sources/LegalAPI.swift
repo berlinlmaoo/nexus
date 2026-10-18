@@ -391,6 +391,12 @@ extension APIClient {
                              fieldErrors: body?.fieldErrors ?? [:], problems: body?.problems ?? [])
     }
 
+    /// GIDEON exports are authenticated, owner-only files. Preserve Content-Disposition for sharing.
+    func gideonExport(_ url: URL) async throws -> URL {
+        guard (url.host == nil || Config.isNexusHost(url)), url.path.hasPrefix("/api/gideon/files/") else { throw APIError.transport(T("Couldn't open this file.")) }
+        return try await legalDownload(url.path, fallbackName: "GIDEON-export")
+    }
+
     /// GET a file to a temporary folder, named as the server names it.
     private func legalDownload(_ path: String, fallbackName: String, preferredName: String? = nil) async throws -> URL {
         var req = makeRequest(path)

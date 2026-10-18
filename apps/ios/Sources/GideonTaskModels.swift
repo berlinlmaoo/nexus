@@ -27,6 +27,7 @@ struct GideonTaskTarget: Decodable, Sendable, Equatable {
     let status: String?
     let assigneeIds: [String]?
     let dueDay: String?
+    let calendar: Bool?
     let chosenProjectId: String?
 }
 struct GideonTaskOptions: Decodable, Sendable, Equatable {

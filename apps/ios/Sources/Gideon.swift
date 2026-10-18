@@ -108,10 +108,13 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     let bookingChange: GideonBookingChange?
     let taskDelete: GideonTaskDelete?
     let taskTarget: GideonTaskTarget?
+    let extra: GideonActionExtra?
     struct Row: Decodable, Sendable, Equatable {
         let field: String?
         let from: GideonLoose?
         let to: GideonLoose?
+        let fromDay: String?
+        let toDay: String?
     }
     var isPending: Bool { status == "PENDING" }
 }
@@ -559,12 +562,13 @@ enum GideonClient {
     /// double tap applies once (409 "Already decided" still carries the proposal).
     /// `booking`: the room and slot picked on a book_room card (required to apply one).
     static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil,
-                       confirmTaskId: String? = nil, task: GideonTaskChoice? = nil) async throws -> GideonProposal? {
+                       confirmTaskId: String? = nil, confirmProposal: Bool = false, task: GideonTaskChoice? = nil) async throws -> GideonProposal? {
         var request = authed("/api/gideon/proposals/\(enc(proposalId))")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["decision": apply ? "apply" : "discard"]
         if let booking { body["booking"] = booking.body }
+        if apply && confirmProposal { body["confirm"] = ["proposalId": proposalId] }
         if apply, let confirmTaskId { body["confirm"] = ["taskId": confirmTaskId] }
         if apply, let task { body["task"] = task.body }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -1036,7 +1040,7 @@ final class GideonChat {
     func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil, task: GideonTaskChoice? = nil) async {
         do {
             if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking,
-                                                          confirmTaskId: proposal.action == "delete_task" ? proposal.taskDelete?.taskId : nil, task: task) {
+                                                          confirmTaskId: proposal.action == "delete_task" ? proposal.taskDelete?.taskId : nil, confirmProposal: GideonToolAction.get(proposal.action) != nil, task: task) {
                 replace(updated)
                 if apply, let e = updated.error, !e.isEmpty { error = e }
             }

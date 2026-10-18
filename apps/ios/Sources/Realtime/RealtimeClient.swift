@@ -246,6 +246,8 @@ final class RealtimeClient {
             }
         case "gideon-perf":
             center.post(name: .nexusGideonPerf, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
+        case "reminders-changed":
+            center.post(name: .nexusRemindersChanged, object: nil)
         case "meeting-changed":
             center.post(name: .nexusMeetingChanged, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
         case "task-created", "task-updated":

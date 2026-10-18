@@ -353,6 +353,7 @@ func notificationFilterTabs(_ list: [NexusNotification]) -> [NotificationFilterT
 /// screens in both shapes of the app; the others carry the id of a single record, which no
 /// eighteen-case screen enum has room for.
 enum NotificationTarget: Hashable {
+    case reminders
     case meeting(String)
     case gideonPerformance
     case task(String)
@@ -401,7 +402,7 @@ enum NotificationTarget: Hashable {
         case .submission, .legalRequest:         return .submissions
         case .legalBoard:                        return .legal
         case .calendarLink, .calendarDay:                       return .teamCalendar
-        case .meeting, .task, .project:          return nil
+        case .reminders, .meeting, .task, .project: return nil
         }
     }
 
@@ -415,6 +416,7 @@ enum NotificationTarget: Hashable {
         guard let head = parts.first?.lowercased() else { self = .screen(.dashboard); return }
         let rest: String? = parts.count > 1 ? parts[1] : nil
         switch head {
+        case "reminders": self = .reminders
         case "meetings":
             if let rest { self = .meeting(rest) } else { self = .screen(.meetingNotes) }
         case "tasks":

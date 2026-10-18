@@ -52,3 +52,12 @@ Path(sys.argv[1], 'request-stub.swift').write_text(stub)
 PY
 swiftc Sources/NativeAPI.swift "$NATIVE_CHECK_TMP/request-stub.swift" Tests/NativeRequests/main.swift -o "$NATIVE_CHECK_TMP/requests"
 "$NATIVE_CHECK_TMP/requests"
+# Decode the real loose-value model with tool extras (long text, numeric/null cell changes).
+python3 - "$NATIVE_CHECK_TMP" <<'PY'
+from pathlib import Path
+import sys
+s=Path('Sources/Gideon.swift').read_text();a=s.index('struct GideonLoose:');b=s.index('/// One thing GIDEON did',a)
+Path(sys.argv[1],'loose.swift').write_text('import Foundation\n'+s[a:b])
+PY
+swiftc "$NATIVE_CHECK_TMP/loose.swift" Sources/GideonActionModels.swift Tests/GideonTools/main.swift -o "$NATIVE_CHECK_TMP/tools"
+"$NATIVE_CHECK_TMP/tools"

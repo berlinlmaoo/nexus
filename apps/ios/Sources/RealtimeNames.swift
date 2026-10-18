@@ -11,6 +11,7 @@ import Foundation
 // Post from any thread: LiveRefresh hops to the main queue before it acts.
 
 extension Notification.Name {
+    static let nexusRemindersChanged = Notification.Name("nexus.reminders-changed")
     static let nexusGideonPerf = Notification.Name("nexus.gideon-perf")
     static let nexusGideonPerfDenied = Notification.Name("nexus.gideon-perf-denied")
     static let nexusRealtimeConnected = Notification.Name("nexus.realtime-connected")

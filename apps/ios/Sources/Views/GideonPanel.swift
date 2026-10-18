@@ -239,7 +239,7 @@ struct GideonPanel: View {
                     GideonChatsSheet { id in Task { await chat.openChat(id) } }
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : "Apply") : T("Discard"), role: d.proposal.action == "delete_task" && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
+                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : GideonToolAction.get(d.proposal.action)?.apply ?? "Apply") : T("Discard"), role: d.proposal.action == "delete_task" && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
                         Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
@@ -822,6 +822,10 @@ struct GideonPanel: View {
             GideonBookingChangeCard(proposal: p, change: c, readOnly: reviewTurns != nil,
                                     onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                     onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if let action = GideonToolAction.get(p.action) {
+            GideonActionCard(proposal: p, action: action, readOnly: reviewTurns != nil,
+                             onApply: { decision = GideonDecision(proposal: p, apply: true) },
+                             onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else {
             changeProposalCard(p)
         }
