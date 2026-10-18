@@ -641,9 +641,23 @@ final class NEXUSUITour: XCTestCase {
                 guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
                 press(target)
                 dismissKeyboardIntroduction()
-                if action.kind == "replace" { app.typeKey("a", modifierFlags: .command) }
-                target.typeText(action.text ?? "")
+                if action.kind == "replace" {
+                    #if targetEnvironment(macCatalyst)
+                    app.typeKey("a", modifierFlags: .command)
+                    target.typeText(action.text ?? "")
+                    #else
+                    // iOS multiline fields can ignore the synthetic Command-A. Put the cursor
+                    // at the last line's end and replace in one uninterrupted key sequence.
+                    let value = target.value as? String ?? ""
+                    let existing = value == target.placeholderValue ? "" : value
+                    press(target.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)))
+                    target.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count) + (action.text ?? ""))
+                    #endif
+                } else { target.typeText(action.text ?? "") }
                 pause(0.5)
+                if action.kind == "replace", (target.value as? String ?? "") != (action.text ?? "") {
+                    return "wrong-screen: replacement did not match in \(action.label)"
+                }
             case "dismissKeyboard":
                 let done = app.buttons["keyboard.dismiss"]
                 if done.exists && done.isHittable { press(done); pause(1) }
