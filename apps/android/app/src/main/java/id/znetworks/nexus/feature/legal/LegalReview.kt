@@ -359,9 +359,9 @@ fun LegalCompare(doc: LgDocument) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LgMenuPicker(word.map { "$it" to "v$it" }, a?.toString(), { v -> v?.toIntOrNull()?.let { a = it } }, compact = true)
+            LgMenuPicker(word.map { "$it" to "REV $it" }, a?.toString(), { v -> v?.toIntOrNull()?.let { a = it } }, compact = true)
             Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
-            LgMenuPicker(word.map { "$it" to "v$it" }, b?.toString(), { v -> v?.toIntOrNull()?.let { b = it } }, compact = true)
+            LgMenuPicker(word.map { "$it" to "REV $it" }, b?.toString(), { v -> v?.toIntOrNull()?.let { b = it } }, compact = true)
         }
         val d = diff
         when {

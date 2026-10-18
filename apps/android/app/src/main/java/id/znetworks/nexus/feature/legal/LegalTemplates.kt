@@ -117,7 +117,7 @@ fun LegalTemplatesPane(nav: LegalNav) {
                                         modifier = Modifier.weight(1f, fill = false))
                                     if (tpl.archived) LgChip(stringResource(R.string.lg_archived), lgTone("neutral"))
                                 }
-                                Text(listOf(lgDocType(tpl.docType), tpl.company?.name ?: stringResource(R.string.lg_any_company), "v${tpl.currentVersion}",
+                                Text(listOf(lgDocType(tpl.docType), tpl.company?.name ?: stringResource(R.string.lg_any_company), "REV ${tpl.currentVersion}",
                                     pluralStringResource(R.plurals.lg_fields_n, tpl.fields.size, tpl.fields.size)).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
                             }
@@ -253,7 +253,7 @@ fun LegalTemplateScreen(templateId: String, onBack: () -> Unit) {
                 t == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 t == null || d == null -> LgLoadError(error!!, stringResource(R.string.lg_template_open_failed), { tick++ }, onBack, Modifier.fillMaxSize())
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Text("${lgDocType(t.docType)} · v${t.currentVersion}" + if (t.archived) " · ${stringResource(R.string.lg_archived)}" else "", fontSize = 13.sp, color = c.mutedFg)
+                    Text("${lgDocType(t.docType)} · REV ${t.currentVersion}" + if (t.archived) " · ${stringResource(R.string.lg_archived)}" else "", fontSize = 13.sp, color = c.mutedFg)
                     LgCard {
                         LgFormRow(stringResource(R.string.lg_name)) { LgTextField(d.name, { draft = d.copy(name = it) }) }
                         LgFormRow(stringResource(R.string.lg_document_type)) { LgMenuPicker(lgDocTypeOptions(), d.docType, { draft = d.copy(docType = it, seriesId = null) }) }
@@ -289,7 +289,7 @@ fun LegalTemplateScreen(templateId: String, onBack: () -> Unit) {
                     LgSectionHeader(stringResource(R.string.lg_versions))
                     LgListCard(t.versions) { v ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("v${v.version}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.width(34.dp))
+                            Text("REV ${v.version}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.width(64.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(v.fileName, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text((listOf(lgBytes(v.size), pluralStringResource(R.plurals.lg_fields_n, v.fieldCount, v.fieldCount), v.createdBy?.name ?: "—", lgDate(v.createdAt))

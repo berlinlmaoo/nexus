@@ -55,7 +55,8 @@ export function nodes() {
 }
 export async function tap(label) {
   const options=label.replace(/^[?~]/,'').split('|');
-  const n=nodes().find(n=>options.some(v=>label.startsWith('~')?(n.text+' '+n['content-desc']).includes(v):n.text===v||n['content-desc']===v));
+  const all=nodes();
+  const n=all.find(n=>options.some(v=>n.text===v)) || all.find(n=>options.some(v=>label.startsWith('~')?(n.text+' '+n['content-desc']).includes(v):n['content-desc']===v));
   if(!n) return false;
   adb('shell','input','tap',String(Math.round(n.x)),String(Math.round(n.y)));await pause(1200);return true;
 }
@@ -96,8 +97,9 @@ for(const screen of config.screens) {
     await launch('screen',screen.id,route);
     let actionResult;
     if(screen.id==='project-templates') {
-      await tap('Add|Tambah'); actionResult=await tap('New project|Proyek baru');
+      await tap('New project|Proyek baru'); actionResult=await tap('New project|Proyek baru');
       if(!actionResult) { await pause(1200);actionResult=await tap('New project|Proyek baru'); }
+      if(actionResult) await tap('Dashboards|Dashboard');
     } else if(screen.id==='settings-security') actionResult=await tap('Security|Keamanan');
     else if(screen.id==='outlet-settings') actionResult=await tap('Report settings|Pengaturan laporan');
     else if(screen.id==='outlet-day') {

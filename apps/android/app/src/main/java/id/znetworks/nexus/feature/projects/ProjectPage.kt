@@ -230,6 +230,9 @@ private fun layoutIcon(layout: String): ImageVector = when (layout) {
 }
 
 private fun moduleIcon(t: ProjectTab): ImageVector = when (t) {
+    ProjectTab.OUTLET_CALENDAR -> Icons.Outlined.CalendarMonth
+    ProjectTab.OUTLET_BOARD -> Icons.Outlined.ViewKanban
+    ProjectTab.OUTLET_FORM -> Icons.Outlined.Assignment
     ProjectTab.SHEET -> Icons.Outlined.GridOn; ProjectTab.PAGES -> Icons.Outlined.Description; ProjectTab.FORMS -> Icons.Outlined.Assignment
     ProjectTab.CHAT -> Icons.Outlined.ChatBubbleOutline; ProjectTab.AUTOMATIONS -> Icons.Outlined.Bolt; else -> Icons.Outlined.Dashboard
 }

@@ -151,7 +151,7 @@
     <string name="lg_signed_uploaded_locked">Signed copy uploaded. The document is now signed and locked.</string>
     <string name="lg_uploaded_as_version">Uploaded as version %1$d</string>
     <string name="lg_saved_as_version">Saved as version %1$d</string>
-    <string name="lg_from_template">from %1$s v%2$d</string>
+    <string name="lg_from_template">from %1$s REV %2$d</string>
     <string name="lg_void_title">Void %1$s?</string>
     <string name="lg_void_released">Void can\'t be undone. The number %1$s will be reused by the next document of this series.</string>
     <string name="lg_void_retired">Void can\'t be undone. This document was signed, so its number stays retired and is never reused.</string>

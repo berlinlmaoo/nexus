@@ -552,8 +552,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     }
     // A link's ?view= (the UI tour, nexus://projects/<id>?view=…): applied once, when the views are known.
     var linkApplied by rememberSaveable { mutableStateOf(initialView == null) }
-    LaunchedEffect(views, tabs, s.detail?.id) {
-        if (linkApplied || s.detail == null || s.views == null) return@LaunchedEffect
+    LaunchedEffect(views, tabs, s.detail?.id, s.views != null, initialView) {
+        if (linkApplied || s.detail == null || (s.taskProject && s.views == null)) return@LaunchedEffect
         linkApplied = true; templateOpenedGuard = true
         val want = initialView!!.lowercase()
         if (s.detail?.type == "OUTLET_SALES") {
