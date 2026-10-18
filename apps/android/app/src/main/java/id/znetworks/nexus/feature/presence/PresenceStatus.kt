@@ -64,10 +64,10 @@ class PresenceStatuses(private val api: PresenceApi, private val owner: () -> St
         mutable.value = mutable.value.copy(statuses = mutable.value.statuses + (status.userId to status))
     }
     suspend fun set(text: String, start: Instant?, end: Instant) { val user = owner(); val epoch = synchronized(lock) { generation }; val r = api.set(text, start, end)
-        if (user != null && owner() == user && synchronized(lock) { generation } == epoch) r.status?.let(::patch)
+        synchronized(lock) { if (user != null && owner() == user && generation == epoch) r.status?.let(::patch) }
     }
     suspend fun clear(id: String) { val user = owner(); val epoch = synchronized(lock) { generation }; val r = api.clear(id)
-        if (user != null && owner() == user && synchronized(lock) { generation } == epoch) r.status?.let(::patch)
+        synchronized(lock) { if (user != null && owner() == user && generation == epoch) r.status?.let(::patch) }
     }
 }
 

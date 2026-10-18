@@ -10,6 +10,7 @@ import java.net.URLDecoder
 
 /** Where a link, a push or an inbox row wants to go (API.md §3.3, PRD §4.6). */
 sealed interface Target {
+    data object GideonMemory : Target
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
     data object Inbox : Target
@@ -133,7 +134,7 @@ object Links {
             p == "/dashboard" -> Target.Tab("home")
             Regex("^/people/([^/]+)$").matches(p) -> Target.Profile(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/folders/([^/]+)$").matches(p) -> Target.Calendar(date = q["date"], folder = path.trimEnd('/').substringAfterLast('/'))
-            p == "/settings" -> Target.Settings
+            p == "/settings" -> if (q["section"] == "gideon-memory") Target.GideonMemory else Target.Settings
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
             p == "/complaints" -> Target.Tickets(q["id"] ?: q["c"])

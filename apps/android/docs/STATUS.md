@@ -2,7 +2,7 @@
 
 ## Presence and GIDEON Memory — items 16/17 (in progress)
 
-Presence implemented: server labels/tones, ID-based avatar dots and tooltips, profile/DM/Control Room lines, own status dialog with WIB scheduling and guarded clear, realtime/reconnect, remote flag, and set_my_status approval card. 810 unit tests + assembleDebug green; DEV Pixel_7 verification is in progress. GIDEON Memory implementation follows this green step.
+Presence implemented: server labels/tones, ID-based avatar dots and tooltips, profile/DM/Control Room lines, own status dialog with WIB scheduling and guarded clear, realtime/reconnect, remote flag, and set_my_status approval card. 810 unit tests + assembleDebug green; DEV Pixel_7 verification is in progress. GIDEON Memory implemented: own-session RAM store, SSE/history chips, Settings entry, add/group/date/edit/save/delete/pause/forget-all, EN/ID, settings link and suppression in OAA review. Stale Save/Don't save updates and account boundaries are guarded. 820 unit tests + assembleDebug green; device flows are being verified against isolated QA memories.
 
 
 ## Android parity round — 19 Oct 2026

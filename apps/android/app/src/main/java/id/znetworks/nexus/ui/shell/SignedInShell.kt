@@ -70,6 +70,7 @@ import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.gideon.RemindersScreen
+import id.znetworks.nexus.feature.gideon.GideonMemoryScreen
 import id.znetworks.nexus.feature.meetings.MeetingsScreen
 import id.znetworks.nexus.feature.meetings.MeetingScreen
 import id.znetworks.nexus.feature.meetings.NewMeetingScreen
@@ -323,6 +324,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
             Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
+            Target.GideonMemory -> { container.router.consumed(t); nav.navigate("gideon-memory") }
             is Target.Meetings -> { container.router.consumed(t); nav.navigate("meetings?project=${enc(t.projectId.orEmpty())}") }
             is Target.Meeting -> { container.router.consumed(t); nav.navigate("meeting/${enc(t.id)}") }
             is Target.NewMeeting -> { container.router.consumed(t); nav.navigate("meeting-new?project=${enc(t.projectId.orEmpty())}") }
@@ -582,6 +584,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable("reminders") { RemindersScreen { nav.popBackStack() } }
+            composable("gideon-memory") { GideonMemoryScreen { nav.popBackStack() } }
             composable("meetings?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> MeetingsScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
             composable("meeting-new?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> NewMeetingScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
             composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }

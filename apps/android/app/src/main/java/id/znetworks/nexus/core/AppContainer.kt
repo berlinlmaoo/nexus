@@ -98,7 +98,8 @@ class AppContainer(private val context: Context) {
 
     val router = Router()
     val viewer = Viewer(api)
-    val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope)
+    val gideonMemories = id.znetworks.nexus.feature.gideon.GideonMemories(id.znetworks.nexus.feature.gideon.MemoryApi(api)) { sessionStore.current?.userId }
+    val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope, gideonMemories::receive) { sessionStore.current?.userId }
     val gideonTiers = id.znetworks.nexus.feature.gideon.GideonTiers(api)
     val presenceStatuses = id.znetworks.nexus.feature.presence.PresenceStatuses(id.znetworks.nexus.feature.presence.PresenceApi(api)) { sessionStore.current?.userId }
     val meetingSharedAudio = MutableStateFlow<String?>(null)
@@ -214,6 +215,7 @@ class AppContainer(private val context: Context) {
         }
         auth.addListener(object : AuthRepository.SessionListener {
             override fun onSignedIn(session: Session) {
+                gideonMemories.reset()
                 presenceStatuses.reset()
                 appScope.launch { presenceStatuses.refresh() }
                 // Somebody else's taps are deleted; this person's own are sent now.
@@ -235,6 +237,7 @@ class AppContainer(private val context: Context) {
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
+                gideonMemories.reset()
                 presenceStatuses.reset()
                 gideonTiers.clear()
                 meetingSharedAudio.value = null

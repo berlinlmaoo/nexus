@@ -105,7 +105,7 @@ data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: G
 @Serializable data class GRoomBusy(val title: String? = null, val by: String? = null, val endsAt: String? = null)
 @Serializable data class GFreeSlot(val startsAt: String, val endsAt: String)
 
-@Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList())
+@Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList(), val memories: List<GMemory> = emptyList())
 
 @Serializable
 data class GMessage(
@@ -144,9 +144,9 @@ sealed interface GUpload {
 
 /** What one streamed answer amounted to (all frames read). */
 data class GStream(val text: String, val steps: List<GStep>, val chatId: String?, val chatTitle: String?, val error: String?,
-                   val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList()) {
+                   val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList(), val memories: List<GMemory> = emptyList()) {
     /** Text, a change made, or a change waiting for Apply: anything else is "GIDEON didn't answer". */
-    val answered: Boolean get() = text.isNotBlank() || cards.isNotEmpty() || proposals.isNotEmpty()
+    val answered: Boolean get() = text.isNotBlank() || cards.isNotEmpty() || proposals.isNotEmpty() || memories.isNotEmpty()
 }
 
 object GideonRules {
@@ -169,12 +169,14 @@ object GideonRules {
         var chatId: String? = null; var chatTitle: String? = null
         val cards = ArrayList<GCard>()
         val proposals = LinkedHashMap<String, GProposal>()
+        val memories = LinkedHashMap<String, GMemory>()
         fun JsonObject.s(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull
         loop@ for (line in raw.lineSequence()) {
             val l = line.trim()
             if (!l.startsWith("data:")) continue
             val o = decode(l.removePrefix("data:").trim()) ?: continue
             when (o.s("type")) {
+                "memory" -> o["memory"]?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GMemory.serializer(), j) }.getOrNull() }?.let { memories[it.id] = it }
                 "text", "delta" -> o.s("content")?.let(text::append)
                 "reset" -> text.setLength(0)
                 "final" -> { text.setLength(0); o.s("content")?.let(text::append) }
@@ -195,7 +197,7 @@ object GideonRules {
         // A run that finished has no step left running.
         val done = steps.values.map { if (complete && it.status == "running") it.copy(status = "done") else it }
         val answer = text.toString().let { if (GideonProblem.isEmptyPlaceholder(it)) "" else it }
-        return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList())
+        return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList(), memories.values.toList())
     }
 }
 
@@ -358,7 +360,7 @@ object GideonChatGroups {
  * answer lands in its own chat (a generation number keeps a late answer out of a chat started since).
  * Cleared on logout (AppContainer).
  */
-class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) {
+class GideonChat(private val api: ApiClient, private val scope: CoroutineScope, private val onMemories: (List<GMemory>, String?) -> Unit = { _, _ -> }, private val memoryOwner: () -> String? = { null }) {
     private var answerJob: Job? = null
     fun stop() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.update { it.copy(thinking = false) }; loadChats() }
     data class State(
@@ -465,6 +467,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
 
     fun open(chatId: String) {
         val gen = ++generation
+        val sourceOwner = memoryOwner()
         failed = null
         _state.update { it.copy(chatId = chatId, chatTitle = it.chats?.firstOrNull { c -> c.id == chatId }?.title, messages = emptyList(),
             opening = true, thinking = false, error = null, openFailed = null, refs = emptyList(), deciding = emptySet()) }
@@ -472,6 +475,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
             try {
                 val h = api.get("/api/gideon/history?chatId=" + URLEncoder.encode(chatId, "UTF-8"), GHistory.serializer())
                 if (gen != generation) return@launch
+                onMemories(h.messages.flatMap { MemoryRules.chatMemories(it, readOnly = false) }, sourceOwner)
                 _state.update { it.copy(opening = false, chatTitle = h.chat?.title ?: it.chatTitle,
                     messages = h.messages.map { m -> m.copy(attachments = m.attachments.filter { a -> a.url != null }) }) }
             } catch (e: ApiError) {
@@ -498,6 +502,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val chatId = _state.value.chatId
         _state.update { it.copy(messages = history, thinking = true, error = null) }
         answerJob = scope.launch {
+            val sourceOwner = memoryOwner()
             var problem: GideonProblem? = null
             try {
                 val body = buildJsonObject {
@@ -520,8 +525,9 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                 val raw = StringBuilder()
                 fun paint(r: GStream) {
                     if (gen != generation) return
+                    onMemories(r.memories, sourceOwner)
                     _state.update { s -> s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
-                        messages = if (r.answered || r.steps.isNotEmpty()) history + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals)) else history) }
+                        messages = if (r.answered || r.steps.isNotEmpty()) history + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals, r.memories)) else history) }
                 }
                 api.sendEventLines(Request.Builder().url(api.url("/api/gideon")).header("Accept", "text/event-stream")
                     .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000) { line ->

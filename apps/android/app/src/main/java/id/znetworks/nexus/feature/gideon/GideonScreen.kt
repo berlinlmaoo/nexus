@@ -47,6 +47,8 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MoreVert
+import id.znetworks.nexus.core.nav.Target
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -114,6 +116,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     var upload by remember { mutableStateOf<GUpload?>(null) }
     var tierMenu by remember { mutableStateOf(false) }
     var attachMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var showChats by rememberSaveable { mutableStateOf(false) }
     // A fresh chat on every open (never the last one); a rotation keeps the one on screen.
@@ -141,6 +144,12 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
         PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
+            Box {
+                HeaderIconButton(Icons.Outlined.MoreVert, stringResource(R.string.more), { moreMenu = true })
+                DropdownMenu(moreMenu, { moreMenu = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.gm_title)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemory) })
+                }
+            }
             HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
             HeaderIconButton(Icons.Outlined.EditNote, stringResource(R.string.gx_new_chat), { showChats = false; chat.startNew(); draft = ""; upload = null }, primary = true)
         }
@@ -303,6 +312,7 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     if (expanded) m.steps.forEach { st -> StepLine(st) }
                 }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
+                MemoryRules.chatMemories(m, readOnly).forEach { memory -> GideonMemoryChip(memory) }
                 // Review before writing: the changes waiting for Apply, then what GIDEON made directly.
                 m.proposals.forEach { p ->
                     val b = p.booking
