@@ -1249,6 +1249,21 @@ final class GideonChat {
 struct GideonPrefs: Codable, Sendable, Equatable {
     var assistantName: String?
     var instructions: String?
+    var reviewNotice = false
+
+    init(assistantName: String? = nil, instructions: String? = nil, reviewNotice: Bool = false) {
+        self.assistantName = assistantName
+        self.instructions = instructions
+        self.reviewNotice = reviewNotice
+    }
+
+    private enum CodingKeys: String, CodingKey { case assistantName, instructions, reviewNotice }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        assistantName = try c.decodeIfPresent(String.self, forKey: .assistantName)
+        instructions = try c.decodeIfPresent(String.self, forKey: .instructions)
+        reviewNotice = try c.decodeIfPresent(Bool.self, forKey: .reviewNotice) ?? false
+    }
 }
 
 extension GideonClient {
@@ -1285,6 +1300,11 @@ extension GideonClient {
     static func savePrefs(_ p: GideonPrefs) async throws -> GideonPrefs {
         let body: [String: Any] = ["assistantName": p.assistantName ?? NSNull(), "instructions": p.instructions ?? NSNull()]
         return try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "PUT", body: body)))
+    }
+
+    /// Acknowledgement must not write the personalisation fields from a stale view.
+    static func acknowledgeReviewNotice() async throws -> GideonPrefs {
+        try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "PUT", body: ["reviewNoticeSeen": true])))
     }
 
     /// An answer saved as a page in a project (MEMBER). Returns the new page's id.

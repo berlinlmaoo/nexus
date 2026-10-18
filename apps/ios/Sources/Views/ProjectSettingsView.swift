@@ -31,6 +31,7 @@ struct ProjectSettingsView: View {
     @State private var savingTabs = false
     @State private var autoAssign = false
     @State private var autoIds: Set<String> = []
+    @State private var autoAssignExpanded = true
     @State private var viewerWsRole: String?
 
     // fields & members
@@ -186,10 +187,34 @@ struct ProjectSettingsView: View {
             }
             if autoAssign {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(T("Auto-assign to:")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    if !autoAssignExpanded && !autoIds.isEmpty {
+                        HStack(spacing: 10) {
+                            HStack(spacing: -6) {
+                                ForEach(Array(projectMembers.filter { autoIds.contains($0.uid) }.prefix(3))) { m in
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22)
+                                        .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
+                                }
+                            }
+                            Text(projectMembers.filter { autoIds.contains($0.uid) }.map(\.displayName).joined(separator: ", "))
+                                .font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
+                            Spacer(minLength: 0)
+                            if canManage {
+                                Button(T("Change")) { autoAssignExpanded = true }
+                                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                    .accessibilityIdentifier("project.autoAssign.change")
+                            }
+                        }.accessibilityIdentifier("project.autoAssign.summary")
+                    } else {
+                    HStack {
+                        Text(String(format: T("Default assignees · %@"), AppNumber.int(autoIds.count)))
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                        Spacer()
+                        if !autoIds.isEmpty { Button(T("Done")) { autoAssignExpanded = false }.font(NXFont.text(12, .semibold)) }
+                    }
                     ForEach(projectMembers) { m in
                         Button {
                             if autoIds.contains(m.uid) { autoIds.remove(m.uid) } else { autoIds.insert(m.uid) }
+                            autoAssignExpanded = autoIds.isEmpty
                             Task { await patch(["autoAssignEnabled": true, "autoAssignAssigneeIds": Array(autoIds)]) }
                         } label: {
                             HStack(spacing: 10) {
@@ -199,6 +224,7 @@ struct ProjectSettingsView: View {
                                 Spacer()
                             }
                         }.buttonStyle(.plain)
+                    }
                     }
                 }
             }
@@ -421,6 +447,7 @@ struct ProjectSettingsView: View {
         hiddenTabs = detail.hiddenTabs ?? []
         autoAssign = detail.autoAssignEnabled ?? false
         autoIds = Set(detail.autoAssignAssigneeIds ?? [])
+        autoAssignExpanded = autoIds.isEmpty
         projectMembers = detail.members ?? []
     }
     private func load() async {

@@ -9,8 +9,8 @@ extension AppLanguage {
         "This file is too large. Choose a smaller file.": "File ini terlalu besar. Pilih file yang lebih kecil.",
         "This file type isn't supported. Choose a picture, PDF, Office document, CSV, TXT or ZIP.": "Jenis file ini tidak didukung. Pilih gambar, PDF, dokumen Office, CSV, TXT, atau ZIP.",
         "This file is empty. Choose another file.": "File ini kosong. Pilih file lain.",
-        "GIDEON is AI and can make mistakes. Check important information.": "GIDEON adalah AI dan bisa keliru. Periksa lagi informasi penting.",
-        "GIDEON chats can be reviewed by members of the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh anggota BoD untuk keperluan kerja.",
+        "GIDEON is AI and can make mistakes.": "GIDEON adalah AI dan bisa keliru.",
+        "GIDEON chats can be reviewed by the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh BoD untuk keperluan kerja.",
         // Deleting a GIDEON chat is a soft delete kept 90 days for review (server, 18 Oct 2026); wording as on the web
         "Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
         "Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
@@ -73,5 +73,6 @@ extension AppLanguage {
         "The form changed": "Form berubah",
         "Someone saved this form while you were editing. Keep your edits over the latest version, or use their version.": "Seseorang menyimpan form ini saat kamu mengedit. Simpan editanmu di atas versi terbaru, atau pakai versi mereka.",
         "Stopped": "Dihentikan",
+        "Default assignees · %@": "Assignee default · %@",
     ]
 }

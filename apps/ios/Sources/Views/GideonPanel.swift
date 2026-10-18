@@ -124,7 +124,7 @@ struct GideonPanel: View {
     @FocusState private var composerFocused: Bool
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
-    @AppStorage("gideon.reviewNoticeAcknowledgedFor") private var reviewNoticeAcknowledgedFor = ""
+    @State private var showReviewNotice = false
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
     /// "Review before writing ▾" in the composer (web gideon-approval), remembered on the device.
     @AppStorage("gideon.approval") private var approvalRaw = GideonApprovalMode.fallback.rawValue
@@ -236,7 +236,12 @@ struct GideonPanel: View {
                     Button(T("Cancel"), role: .cancel) {}
                 } message: { Text(T("Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.")) } }
         }
-        .task { if let p = try? await GideonClient.prefs() { assistantName = p.assistantName ?? "" } }
+        .task {
+            if let p = try? await GideonClient.prefs() {
+                assistantName = p.assistantName ?? ""
+                showReviewNotice = p.reviewNotice
+            }
+        }
         .onAppear { openOnce() }
         // GIDEON answered a 401 while the panel was closed, or answers one now. The store has no
         // AuthStore and deliberately does not go looking for one — this is where the two meet, and
@@ -977,26 +982,36 @@ struct GideonPanel: View {
     /// what is attached, and + · "Review before writing ▾" · send.
     private var composerArea: some View {
         VStack(alignment: .leading, spacing: 8) {
-            mentionPicker
-            contextChips
-            composer
-            GideonCreditMeter()
-            Text(T("GIDEON is AI and can make mistakes. Check important information."))
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                .fixedSize(horizontal: false, vertical: true)
-            if !reviewNoticeAcknowledgedFor.split(separator: ",").contains(Substring(Keychain.load()?.userId ?? "")) {
+            if showReviewNotice {
                 HStack(alignment: .top, spacing: 8) {
-                    Text(T("GIDEON chats can be reviewed by members of the Board of Directors for work purposes."))
+                    Image(systemName: "info.circle").foregroundStyle(NX.violetText)
+                    Text(T("GIDEON chats can be reviewed by the Board of Directors for work purposes."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button {
-                        if let id = Keychain.load()?.userId { reviewNoticeAcknowledgedFor += "," + id }
-                    } label: {
-                        Image(systemName: "xmark").font(.system(size: 11))
-                            .frame(width: 32, height: 32).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel(T("Close"))
+                    Spacer(minLength: 0)
+                    Button(T("Got it")) {
+                        showReviewNotice = false
+                        Task {
+                            do { _ = try await GideonClient.acknowledgeReviewNotice() }
+                            catch { showReviewNotice = true; chat.error = error.localizedDescription }
+                        }
+                    }.buttonStyle(.plain).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                        .accessibilityIdentifier("gideon.reviewNotice.gotIt")
                 }
+                .padding(12)
+                .background(NX.violet.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                .accessibilityIdentifier("gideon.reviewNotice")
             }
+            mentionPicker
+            GideonCreditMeter().padding(.horizontal, 4).padding(.bottom, 4)
+            composer
+            Text(T("GIDEON is AI and can make mistakes."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .accessibilityIdentifier("gideon.disclaimer")
         }
     }
 
@@ -1006,6 +1021,7 @@ struct GideonPanel: View {
         // is the only member that writes through it.
         @Bindable var chat = chat
         return VStack(alignment: .leading, spacing: 0) {
+            contextChips.padding(.horizontal, 12)
             TextField(T("Ask anything. Type @ to add a page"), text: $chat.draft, axis: .vertical)
                 .accessibilityLabel(T("Ask anything. Type @ to add a page"))
                 .accessibilityIdentifier("gideon.composer")
