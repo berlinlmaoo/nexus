@@ -53,7 +53,9 @@
 
 	<!-- Photos chosen for a chat message or an avatar. PhotosPicker runs out of process, but the
 	     file it hands back still has to be readable. -->
-	<key>com.apple.security.files.user-selected.read-only</key>
+	<!-- UIKit's picker requests a read/write sandbox extension even for import-as-copy.
+	     Access remains limited to files the person explicitly selects in the native panel. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 </dict>
 </plist>
