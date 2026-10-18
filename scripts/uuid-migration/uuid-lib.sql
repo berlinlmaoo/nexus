@@ -164,9 +164,11 @@ begin
   -- one pass over the text: tokens are maximal [A-Za-z0-9_-] runs, everything else is copied as is.
   -- Pieces go into an array (appended in place) and are joined once: string concatenation in a loop is
   -- quadratic on the large DeletionSnapshot payloads.
-  for m in select regexp_matches(t, '([A-Za-z0-9_-]+)|([^A-Za-z0-9_-]+)', 'g') loop
-    if m[1] is null then out := out || m[2]; continue; end if;
-    tok := m[1];
+  -- A percent-escape ("%2F" in a URL-encoded key: photos%2F<memberId>%2F…) is a separator too, or the id
+  -- would be glued to the escape's hex digits ("2Fcmv…").
+  for m in select regexp_matches(t, '(%[0-9A-Fa-f]{2})|([A-Za-z0-9_-]+)|([^A-Za-z0-9_%-]+|%)', 'g') loop
+    if m[2] is null then out := out || coalesce(m[1], m[3]); continue; end if;
+    tok := m[2];
     nid := mp ->> tok;
     if nid is not null then out := out || nid; continue; end if;
     if tok ~ '[_-]' then
@@ -193,7 +195,7 @@ end $$;
 
 -- SQL fragment: the (ctid, old ids) of rows of rel whose column col mentions old ids. Candidate tokens are
 -- the maximal [A-Za-z0-9_-]{6,} runs, the maximal [A-Za-z0-9_]{6,} runs inside them (pieces between '-')
--- and the maximal alnum runs of 20+ chars (pieces between '_' or '-').
+-- the maximal alnum runs of 20+ chars (pieces between '_' or '-'), and runs right after a percent-escape.
 create or replace function uuid_mig.hits_sql(rel regclass, col text) returns text
 language sql immutable as $$
   select format($q$
@@ -203,6 +205,8 @@ language sql immutable as $$
       select t.ctid, (regexp_matches(t.%1$I::text, '[A-Za-z0-9_]{6,}', 'g'))[1] from %2$s t where t.%1$I is not null and t.%1$I::text ~ '[A-Za-z0-9_]-|-[A-Za-z0-9_]'
       union all
       select t.ctid, (regexp_matches(t.%1$I::text, '[A-Za-z0-9]{20,}', 'g'))[1] from %2$s t where t.%1$I is not null and t.%1$I::text ~ '[A-Za-z0-9]_|_[A-Za-z0-9]|[A-Za-z0-9]-|-[A-Za-z0-9]'
+      union all
+      select t.ctid, (regexp_matches(t.%1$I::text, '%%[0-9A-Fa-f]{2}([A-Za-z0-9_-]{6,})', 'g'))[1] from %2$s t where t.%1$I is not null and t.%1$I::text ~ '%%[0-9A-Fa-f]{2}[A-Za-z0-9_-]{6}'
     ) x join public.legacy_id_map m on m.old_id = x.tok group by tid $q$, col, rel)
 $$;
 
