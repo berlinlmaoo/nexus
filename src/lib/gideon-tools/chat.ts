@@ -168,7 +168,7 @@ async function describeSend(actor: User, input: Input) {
   return {
     summary: `Send a message to ${target.name}`,
     diff: [
-      { field: "To", to: target.name },
+      { field: "Recipient", to: target.name },
       { field: "Chat", to: target.kind },
       { field: "Message", to: text },
     ],

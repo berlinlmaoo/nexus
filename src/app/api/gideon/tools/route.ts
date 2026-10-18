@@ -1346,10 +1346,7 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
   // "Put it on the calendar" (owner, 18 Oct 2026): the Calendar shows TASKS, and only ones with a PIC and a date
   // (Master Calendar rule). A create_task with calendar=true must have a date; with nobody named the PIC is the
   // person themselves (changeable on the card).
-  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
-    if (!parseDueInput(input.dueDate)) throw new Error('A task on the calendar needs a date. Ask which day (and time, if any).')
-    if (!(asStringArray(input.assigneeIds) ?? []).length) input.assigneeIds = [actor.id]
-  }
+  if (action === 'create_task') applyCalendarDefaults(actor, input)
   // assignee (18 Oct 2026): "me" or a person's name → assigneeId, for list_tasks / search_tasks.
   if ((action === 'list_tasks' || action === 'search_tasks') && !asString(input.assigneeId)) {
     const who = asString(input.assignee) || asString(input.assigneeName) || asString(input.person)
@@ -1368,6 +1365,15 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
     }
   }
   return input
+}
+
+/** create_task calendar=true: a date is required and the PIC defaults to the person (both the card and a direct create). */
+function applyCalendarDefaults(actor: Pick<User, 'id'>, input: Record<string, unknown>) {
+  if (input.calendar !== true && input.calendar !== 'true') return
+  if (!parseDueInput(input.dueDate ?? input.due_date)) throw new Error('A task on the calendar needs a date. Ask which day (and time, if any).')
+  if (input.dueDate === undefined && input.due_date !== undefined) input.dueDate = input.due_date
+  const ids = asStringArray(input.assigneeIds ?? input.assignee_ids) ?? []
+  if (!ids.length) input.assigneeIds = [actor.id]
 }
 
 /**
@@ -1712,6 +1718,7 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
 
   // The 18 Oct 2026 package describes its own writes (lib/gideon-tools); `preview` (a long text shown in full on
   // the card) travels in the stored input.
+  if (action === 'create_task') applyCalendarDefaults(actor, input)
   const extra = extraTool(action)
   if (extra?.describe) {
     if (!(await extraToolEnabled(action))) throw new Error(EXTRA_DISABLED_TEXT)

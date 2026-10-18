@@ -43,7 +43,7 @@ const FALLBACK: Kind = { icon: FileText, title: (t) => t("Make a change"), apply
 
 /** Row labels the server writes in English (the released apps show them as they are). */
 const FIELD: Record<string, string> = {
-  To: "To", Chat: "Chat", Message: "Message", When: "When", Reminder: "Reminder", Type: "Type", Dates: "Dates", Days: "Days",
+  To: "To", Recipient: "Recipient", Approver: "Approver", Chat: "Chat", Message: "Message", When: "When", Reminder: "Reminder", Type: "Type", Dates: "Dates", Days: "Days",
   Reason: "Reason", Balance: "Balance", Person: "Person", Decision: "Decision", Note: "Note", Tasks: "Tasks", Change: "Change",
   Deal: "Deal", Stage: "Stage", Amount: "Amount", Due: "Due", Project: "Project", Date: "Date", Sales: "Sales", Pax: "Pax",
   Views: "Views", Likes: "Likes", Comments: "Comments", Shares: "Shares", Template: "Template", Company: "Company", Number: "Number",

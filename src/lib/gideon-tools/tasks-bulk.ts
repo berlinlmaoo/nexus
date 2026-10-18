@@ -160,6 +160,9 @@ async function planBulk(actor: User, input: Input): Promise<Planned[]> {
       if (removeIds.length) body.removeAssigneeIds = removeIds
       if (addIds.length || removeIds.length) lines.push(`PIC ${[...addIds.map((id) => `+${add.names[add.ids.indexOf(id)]}`), ...removeIds.map((id) => `−${t.assignees.find((a) => a.user.id === id)?.user.name ?? "?"}`)].join(" ")}`)
     }
+    // A status and its own column of the same name read as one change ("To do → In progress").
+    const seen = new Set<string>()
+    for (let i = lines.length - 1; i >= 0; i--) { const k = lines[i].toLowerCase(); if (seen.has(k)) lines.splice(i, 1); else seen.add(k) }
     if (!lines.length) continue
     planned.push({ taskId: t.id, title: t.title, project: t.taskList.project?.name ?? "", updatedAt: t.updatedAt.toISOString(), body: { ...body, projectContextId: projectId }, lines })
   }
