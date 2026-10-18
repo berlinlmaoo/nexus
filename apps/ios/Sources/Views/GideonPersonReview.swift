@@ -266,14 +266,16 @@ private struct GideonPersonCredits: View {
 struct GideonPersonPresentation: ViewModifier {
     @Binding var person: String?
     @Environment(\.horizontalSizeClass) private var hSize
-    func body(content: Content) -> some View {
-        content
-            .sheet(isPresented: Binding(get: { person != nil && hSize == .regular }, set: { if !$0 { person = nil } })) {
+    @ViewBuilder func body(content: Content) -> some View {
+        if hSize == .regular {
+            content.sheet(isPresented: Binding(get: { person != nil }, set: { if !$0 { person = nil } })) {
                 if let person { GideonPersonReview(userId: person).frame(idealWidth: 1024, idealHeight: 760).presentationDetents([.fraction(0.86)]) }
             }
-            .fullScreenCover(isPresented: Binding(get: { person != nil && hSize != .regular }, set: { if !$0 { person = nil } })) {
+        } else {
+            content.fullScreenCover(isPresented: Binding(get: { person != nil }, set: { if !$0 { person = nil } })) {
                 if let person { GideonPersonReview(userId: person) }
             }
+        }
     }
 }
 

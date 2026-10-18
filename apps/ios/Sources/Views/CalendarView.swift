@@ -1429,14 +1429,16 @@ struct CalendarView: View {
                 notLoaded
             } else if tree.total == 0 {
                 dayEmpty
-            } else if let root = tree.root {
+            } else {
                 VStack(spacing: 10) {
+                    if let root = tree.root {
                     if !root.items.isEmpty || !root.people.isEmpty {
                         let key = "own:\(root.unit.id)"
                         CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
                     }
                     ForEach(root.children) { node in
                         CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
+                    }
                     }
                     if lensByPerson && !tree.unplaced.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1450,7 +1452,7 @@ struct CalendarView: View {
                         .nexusCard(padding: 10, radius: 18)
                     }
                     if !lensByPerson { noDivisionSection(tree) }
-                    if placementsShown(root) > tree.total {
+                    if let root = tree.root, placementsShown(root) > tree.total {
                         Text(String(format: T("A task can show under several divisions. Total: %d unique tasks."), tree.total))
                             .font(NXFont.text(CalType.size(11.5))).foregroundStyle(NX.mutedFg)
                     }

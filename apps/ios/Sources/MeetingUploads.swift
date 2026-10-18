@@ -41,13 +41,14 @@ final class MeetingUploads {
     }
     func begin(file: URL, title: String, projectId: String?, language: String, source: String, duration: Double?) async throws -> MeetingNote {
         guard let user = Keychain.load() else { throw APIError.unauthorized }
-        let bytes = APIClient.fileSize(of: file)
+        let scoped = file.startAccessingSecurityScopedResource(); defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else { throw APIError.transport(T("This recording couldn't be read. Try another audio file.")) }
+        let bytes = (attributes[.size] as? NSNumber)?.intValue ?? 0
         guard bytes > 0 else { throw APIError.transport(T("This file is empty. Choose another file.")) }
         guard bytes <= RemoteConfig.shared.meetingMaxBytes else { throw APIError.transport(MeetingIssue.message("too_large", metadata: ["maxBytes":RemoteConfig.shared.meetingMaxBytes])!) }
         if let duration, duration > Double(RemoteConfig.shared.meetingMaxMinutes * 60) { throw APIError.transport(MeetingIssue.message("too_long", metadata: ["maxMinutes":RemoteConfig.shared.meetingMaxMinutes])!) }
         let privateFolder = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let privateFile = privateFolder.appendingPathComponent(file.lastPathComponent)
-        let scoped = file.startAccessingSecurityScopedResource(); defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         try await Task.detached(priority: .utility) {
             try FileManager.default.createDirectory(at: privateFolder, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: file, to: privateFile)

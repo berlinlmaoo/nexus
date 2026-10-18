@@ -176,7 +176,18 @@ struct TourDriver: ViewModifier {
                 state.status = "wrong-screen:\(screen) (no project id in \(route))"
                 return
             }
-            open(url)
+            if url.isFileURL {
+                // A simulator install can relocate the app's data container between seeding and launch.
+                let local = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(url.lastPathComponent)
+                let received = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber
+                let localSize = (try? FileManager.default.attributesOfItem(atPath: local.path))?[.size] as? NSNumber
+                let proof: [String: Any] = ["receivedPath": url.path, "home": NSHomeDirectory(), "receivedBytes": received?.intValue ?? -1, "localPath": local.path, "localBytes": localSize?.intValue ?? -1]
+                if let data = try? JSONSerialization.data(withJSONObject: proof), let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try? data.write(to: folder.appendingPathComponent("nexus-tour-file-proof.json"))
+                }
+                open(localSize != nil ? local : url)
+            } else { open(url) }
             if let expected = ProjectTarget(url) {
                 if let problem = await waitUntilLanded(expected) {
                     state.status = "wrong-screen:\(screen) \(problem)"
