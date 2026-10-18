@@ -141,12 +141,14 @@ export function AppSidebar() {
           section header can be drawn over it whole: "Projects" in the fade read as disabled (UI tour run 15,
           R15-WD-10). */}
       <SidebarContent ref={navRef} className={cn("[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
-        {visibleGroups.map((g) => (
-          <SidebarGroup key={g.label}>
+        {/* Collapsed to icons, the rail spreads its icons evenly over the full height (owner, 18 Oct 2026): each group
+            grows by its number of items, and the items share the group's height. */}
+        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")); return (
+          <SidebarGroup key={g.label} style={{ ["--n" as string]: items.length } as import("react").CSSProperties} className="group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:[flex:var(--n)_1_0px]">
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")).map((item) => (
+            <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-1">
+              <SidebarMenu className="group-data-[collapsible=icon]:flex-1 group-data-[collapsible=icon]:justify-around">
+                {items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={t(item.title)}>
                       <Link to={item.url} className="flex items-center gap-2">
@@ -162,7 +164,7 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ))}
+        ); })}
 
         {/* Collapsed to icons the rail ends at Control Room: the project list is hidden (owner, 18 Oct 2026). */}
         <div className="contents group-data-[collapsible=icon]:hidden"><SidebarProjectTree /></div>
