@@ -200,6 +200,9 @@ final class SheetPivotModel {
             await store.reload()
         } catch {
             self.error = SheetPanelAPI.message(error, T("Couldn't update the pivot table."))
+            if let refusal = error as? SheetAPIError, case .structureChanged = refusal {
+                store.fail(error, T("Couldn't update the pivot table."))
+            }
         }
     }
 }

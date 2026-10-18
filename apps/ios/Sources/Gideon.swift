@@ -337,6 +337,7 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     var cards: [GideonCard] = []
     var proposals: [GideonProposal] = []
     var creditNotice: GideonCreditNotice? = nil
+    var stopped = false
 
     init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
          attachments: [GideonAttachment] = []) {
@@ -948,8 +949,15 @@ final class GideonChat {
     /// was cancelled can neither clear `sending` for the next one nor write into the new transcript.
     /// Stop keeps the partial answer on screen and cancels the streaming request, as on the web.
     func stop() {
+        if let id = answeringId, let index = turns.firstIndex(where: { $0.id == id }) { turns[index].stopped = true }
+        let queued = outbox
         abandonInFlight()
         answeringId = nil
+        outbox = queued
+        if !outbox.isEmpty {
+            sending = true
+            drainTask = Task { await drain() }
+        }
     }
 
     private func abandonInFlight() {

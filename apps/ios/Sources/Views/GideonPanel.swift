@@ -477,7 +477,12 @@ struct GideonPanel: View {
 
     private var title: some View {
         VStack(spacing: 0) {
-            Text(displayName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Button { showChats = true } label: {
+                HStack(spacing: 5) {
+                    Text(displayName).font(NXFont.display(15, .bold)).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 9))
+                }.foregroundStyle(NX.foreground)
+            }.buttonStyle(.plain).accessibilityLabel(T("Chat history"))
             Text(subtitleText)
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
@@ -621,6 +626,7 @@ struct GideonPanel: View {
                 Text(T("Thinking…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .modifier(GideonThinkingShimmer())
             }
+            if turn.stopped { Text(T("Stopped")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
             if let notice = turn.creditNotice {
                 Text(notice.text).font(NXFont.text(12)).foregroundStyle(NX.warning)
             }

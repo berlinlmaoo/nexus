@@ -177,9 +177,12 @@ struct GideonEmptyPrompt: View {
                 .frame(maxWidth: 420)
                 .padding(.top, 6)
             VStack(spacing: 6) {
-                ForEach(Self.suggestions(for: page), id: \.self) { s in
+                ForEach(Array(Self.suggestions(for: page).enumerated()), id: \.offset) { index, s in
                     Button { onAsk(s) } label: {
                         // One line where a size down makes it fit ("…Cite / the sources.", Q-IA12).
+                        HStack(spacing: 10) {
+                            Image(systemName: ["calendar", "checklist", "doc.text", "bubble.left"][index % 4])
+                                .font(.system(size: 14)).foregroundStyle(NX.mutedFg).frame(width: 18)
                         ViewThatFits(in: .horizontal) {
                             Text(s).font(NXFont.text(14, .medium)).lineLimit(1).fixedSize()
                             Text(s).font(NXFont.text(12.5, .medium)).lineLimit(1).fixedSize()
@@ -188,9 +191,8 @@ struct GideonEmptyPrompt: View {
                             .foregroundStyle(NX.foreground)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        }
+                            .padding(.horizontal, 8).padding(.vertical, 10)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
