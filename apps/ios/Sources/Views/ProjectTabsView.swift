@@ -222,6 +222,8 @@ struct ListTab: View {
     /// "+ New task" under each group (group id, title → the new task's id); nil below Can edit.
     var onAddTask: ((String, String) async -> String?)? = nil
 
+    var composeLaneId: String? = nil
+    var composeRequest: UUID? = nil
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var collapsed: Set<String> = []
     /// iPad / Mac two-line rows: each value column as wide as its widest value, shared by every row.
@@ -277,7 +279,7 @@ struct ListTab: View {
                 // "+ New task" right under the group's header, as the web List; an empty group shows only that
                 // row, no "No tasks" line (UI tour run 19, R19-I-17). Without Add it still says it is empty.
                 if let onAddTask {
-                    ListNewTaskRow { title in await onAddTask(lane.id, title) }
+                    ListNewTaskRow(composeRequest: composeLaneId == lane.id ? composeRequest : nil) { title in await onAddTask(lane.id, title) }
                 }
                 if (lane.tasks ?? []).isEmpty {
                     if onAddTask == nil {
@@ -857,7 +859,7 @@ struct TimelineTab: View {
                 .frame(width: timelineW, alignment: .leading)
                 .overlay(alignment: .topLeading) {
                     if let todayX {
-                        Rectangle().fill(NX.onyx.opacity(0.55)).frame(width: 1)
+                        Rectangle().fill(NX.violet.opacity(0.65)).frame(width: 1)
                             .frame(maxHeight: .infinity)
                             .padding(.top, header ? monthH + dayH : 0)
                             .padding(.leading, todayX)
@@ -980,7 +982,7 @@ struct TimelineTab: View {
                     Text("\(cal.component(.day, from: d))").font(NXFont.text(isToday ? 11 : 12, .bold))
                         .foregroundStyle(isToday ? NX.background : NX.foreground.opacity(0.8))
                         .frame(width: 22, height: 22)
-                        .background(isToday ? NX.onyx : Color.clear, in: Circle())
+                        .background(isToday ? NX.violet : Color.clear, in: Circle())
                 }
                 .frame(width: dayW, height: dayH)
                 .background((wd == 1 || wd == 7) ? NX.muted.opacity(0.5) : Color.clear)
@@ -1469,6 +1471,7 @@ struct CalendarTab: View {
                             .padding(4)
                             .frame(maxWidth: .infinity, minHeight: 50, alignment: .topLeading)
                             .nxMonthCell(inMonth: true, selected: on)
+                            .overlay { if !on, let date = dateFor(day), cal.isDateInWeekend(date) { RoundedRectangle(cornerRadius: 8).fill(NX.muted.opacity(0.25)).allowsHitTesting(false) } }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -1491,7 +1494,10 @@ extension CalendarTab {
     /// rose here alone; UI tour run 14, N-19). On a selected (violet) cell the disc turns white.
     func dayNumber(_ day: Int, today: Int?, onFill: Bool) -> some View {
         // Today on the navy disc of every month grid (NXMonthGrid; UI tour run 16, R16-I-06 / R16-B-09).
-        NXMonthDayNumber(day: day, isToday: day == today, wide: wideGrid)
+        HStack(spacing: 2) {
+            NXMonthDayNumber(day: day, isToday: day == today, wide: wideGrid)
+            if day == 1 { Text(ProjLocaleDate.fmt("MMM").string(from: monthDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+        }
     }
 
     func wideCell(_ day: Int, items: [BoardTask], today: Int?) -> some View {
@@ -1532,6 +1538,7 @@ extension CalendarTab {
         .padding(6)
         .frame(maxWidth: .infinity, minHeight: Self.wideCellH, alignment: .topLeading)
         .nxMonthCell(inMonth: true, selected: isSelected)
+        .overlay { if !isSelected, let date = dateFor(day), cal.isDateInWeekend(date) { RoundedRectangle(cornerRadius: 8).fill(NX.muted.opacity(0.25)).allowsHitTesting(false) } }
         .contentShape(Rectangle())
         .onTapGesture { selected = day }
     }

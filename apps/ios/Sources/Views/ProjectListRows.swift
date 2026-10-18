@@ -448,6 +448,7 @@ struct ListTaskRow: View {
 /// "+ New task" at the end of a List group (web ListView): tap, type a title, Return adds it and keeps the
 /// field open for the next one (UI tour run 14, P-I10: the iPad List had no way to add in a group).
 struct ListNewTaskRow: View {
+    var composeRequest: UUID? = nil
     /// Creates the task; answers its id (nil = failed, the board says why and keeps the title).
     let onAdd: (String) async -> String?
     @State private var editing = false
@@ -489,6 +490,9 @@ struct ListNewTaskRow: View {
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
             }
+        }
+        .onChange(of: composeRequest) { _, request in
+            if request != nil { editing = true; focused = true }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
     }

@@ -45,5 +45,17 @@ extension AppLanguage {
         "Couldn't open this file": "File ini tidak bisa dibuka",
         "No paragraphs to edit": "Tidak ada paragraf untuk diedit",
         "Upload a Word version to review its paragraphs here.": "Unggah versi Word untuk meninjau paragrafnya di sini.",
+        "Add a property": "Tambah properti",
+        "Copy task": "Salin task",
+        "Copy to another project": "Salin ke proyek lain",
+        "Open as page": "Buka sebagai halaman",
+        "Task actions": "Tindakan task",
+        "No other projects to copy to": "Tidak ada proyek lain untuk menyalin task",
+        "You need Can edit access in the destination project.": "Kamu perlu akses Bisa edit di proyek tujuan.",
+        "Add a section to the destination project first.": "Tambahkan bagian di proyek tujuan terlebih dahulu.",
+        "New task with details…": "Task baru dengan detail…",
+        "Follow": "Ikuti",
+        "Favourite": "Favorit",
+        "Like": "Suka",
     ]
 }

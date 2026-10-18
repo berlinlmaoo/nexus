@@ -44,21 +44,21 @@ struct TaskCustomFieldsCard: View {
             Color.clear.frame(height: 0)   // real (zero-size) view so .task fires even with no fields yet
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                taskCardHeader(T("Fields"), "slider.horizontal.3")
                 if let problem {
                     Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                 }
                 ForEach(fields) { f in cfRow(f) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     @ViewBuilder private func cfRow(_ f: CustomField) -> some View {
         let type = f.type.uppercased()
         let choices = f.choices
-        VStack(alignment: .leading, spacing: 6) {
-            Text(f.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+        HStack(alignment: .top, spacing: 12) {
+            Text(f.name).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(width: 115, alignment: .leading).padding(.top, 10)
+            VStack(alignment: .leading, spacing: 6) {
             if type == "CREATED" {
                 // Who made the task, as on the web, tagged "Left" once they were offboarded.
                 if let who = f.createdMeta?.userName, !who.isEmpty {
@@ -72,7 +72,7 @@ struct TaskCustomFieldsCard: View {
             } else if type == "NUMBER" {
                 NumberFieldInput(text: binding(f.id), style: f.options?.numberStyle ?? .plain, focus: $focused, focusId: f.id)
                     .padding(10)
-                    .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
                     .onSubmit { Task { await commit(f) } }
             } else if type == "DATE", !cfText(f.id).isEmpty, Self.ymdParse(String(cfText(f.id).prefix(10))) == nil {
                 // A date field holding a name or a timestamp (Notion's created-by / created-time import,
@@ -91,7 +91,7 @@ struct TaskCustomFieldsCard: View {
                         Text(cfText(f.id).isEmpty ? "—" : cfText(f.id)).font(NXFont.text(15)).foregroundStyle(cfText(f.id).isEmpty ? NX.mutedFg : NX.foreground)
                         Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     }
-                    .padding(10).frame(minHeight: 44).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(10).frame(minHeight: 44)
                 }
             } else if type == "MULTI_SELECT", !choices.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -111,17 +111,18 @@ struct TaskCustomFieldsCard: View {
                 VStack(spacing: 6) {
                     TextField(T("Place / location name"), text: placeLabel(f)).font(NXFont.text(15)).padding(10)
                         .focused($focused, equals: f.id)
-                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
+                        .onSubmit { Task { await commit(f) } }
                     TextField(T("Google Maps link"), text: placeMap(f)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
                         .focused($focused, equals: f.id + "#map")
-                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
+                        .onSubmit { Task { await commit(f) } }
                 }
             } else {
                 TextField("…", text: binding(f.id)).font(NXFont.text(15)).padding(10)
                     .focused($focused, equals: f.id)
-                    .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
                     .onSubmit { Task { await commit(f) } }
             }
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -594,7 +595,7 @@ struct TaskBodyCard: View {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task { await model.load() }
         .onChange(of: refreshToken) { _, _ in
             if !model.isDirty && !model.saving { Task { await model.load() } }
@@ -610,7 +611,6 @@ struct TaskBodyCard: View {
 
     private var header: some View {
         HStack {
-            Text(T("Description")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
             Spacer()
             if model.saving { ProgressView().scaleEffect(0.7) }
             else if model.isDirty && model.canEdit {

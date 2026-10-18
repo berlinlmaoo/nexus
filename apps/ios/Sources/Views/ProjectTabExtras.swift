@@ -204,7 +204,6 @@ struct ProjectTableTab: View {
     private func grid(_ cols: TableColumns, visibleWidth: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
@@ -267,6 +266,7 @@ struct ProjectTableTab: View {
             groupHeader(lane, count: tasks.count, collapsed: isCollapsed)
                 .modifier(TableRowTop(key: "g:\(lane.id)", tops: $rowTops))
             if !isCollapsed {
+                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
                 let order: () -> [String] = { tasks.map(\.id) }
                 ForEach(Array(tasks.prefix(limit))) { t in
                     row(t, laneId: lane.id, cols: cols, order: order)

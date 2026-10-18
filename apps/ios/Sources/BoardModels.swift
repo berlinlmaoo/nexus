@@ -173,6 +173,8 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
 /// GET /api/tasks/{id} — focused task-detail fields.
 struct TaskDetail: Decodable, Sendable {
+    var tags: [String]? = nil
+    var updatedAt: String? = nil
     let id: String
     let title: String
     let description: String?

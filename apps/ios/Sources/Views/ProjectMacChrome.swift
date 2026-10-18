@@ -104,7 +104,7 @@ struct ProjectViewTab<MenuItems: View>: View {
             }
         }
         .foregroundStyle(on ? NX.foreground : NX.mutedFg)
-        .background(on ? NX.muted : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(on ? NX.muted : Color.clear, in: Capsule())
         .frame(minHeight: 44)
         .hoverEffect(.highlight)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -214,13 +214,14 @@ struct AddTaskSplitButton: View {
     let sections: [ProjectDetail.Lane]
     var enabled = true
     let onAdd: (String?) -> Void
+    var onDetails: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 0) {
             Button { onAdd(nil) } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
-                    Text(T("Add task")).font(NXFont.text(14, .medium)).lineLimit(1)
+                    Text(T("New")).font(NXFont.text(14, .medium)).lineLimit(1)
                 }
                 .padding(.leading, 12).padding(.trailing, 10)
                 .frame(height: 34)
@@ -229,6 +230,7 @@ struct AddTaskSplitButton: View {
             .buttonStyle(.plain)
             Rectangle().fill(NX.background.opacity(0.25)).frame(width: 1, height: 34)
             Menu {
+                Button { onDetails() } label: { Label(T("New task with details…"), systemImage: "square.and.pencil") }
                 Section(T("Add a task to")) {
                     ForEach(sections) { s in
                         Button { onAdd(s.id) } label: { Label(s.name, systemImage: "plus") }
