@@ -668,6 +668,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {prefs?.reviewNotice && <ReviewNotice />}
         {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
+        {/* GIDEON credits sit above the composer (owner, 18 Oct 2026); the pool on hover / tap. */}
+        <div className="flex min-h-6 items-center px-1 pb-1"><GideonCreditMeter /></div>
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
           <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
@@ -836,15 +838,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             )}
           </div>
         </div>
-        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. Beside it
-            the standing "can make mistakes" line (owner, 18 Oct 2026, like ChatGPT): meter left, disclaimer right where
-            the box is wide enough, stacked and centred in the narrow panel and on phones. */}
-        <div className="@container">
-          <div className="flex min-h-6 flex-col items-center gap-0.5 px-1 pt-1 @lg:flex-row @lg:justify-between @lg:gap-3">
-            <GideonCreditMeter />
-            <p className="text-balance text-center text-xs text-muted-foreground @lg:text-right">{t("GIDEON is AI and can make mistakes.")}</p>
-          </div>
-        </div>
+        {/* The standing "can make mistakes" line under the composer (owner, 18 Oct 2026, like ChatGPT). */}
+        <p className="text-balance px-1 pt-1 text-center text-xs text-muted-foreground">{t("GIDEON is AI and can make mistakes.")}</p>
       </div>
   );
 
