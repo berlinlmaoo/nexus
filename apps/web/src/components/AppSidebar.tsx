@@ -164,7 +164,8 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
 
-        <SidebarProjectTree />
+        {/* Collapsed to icons the rail ends at Control Room: the project list is hidden (owner, 18 Oct 2026). */}
+        <div className="contents group-data-[collapsible=icon]:hidden"><SidebarProjectTree /></div>
         {navMore && <div aria-hidden className="pointer-events-none sticky bottom-0 z-[5] -mt-14 h-14 shrink-0 bg-[linear-gradient(to_top,var(--sidebar)_0.75rem,transparent)]" />}
       </SidebarContent>
 
