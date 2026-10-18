@@ -705,10 +705,22 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               <DropdownMenuTrigger asChild>
                 <button type="button" title={t("Add photos, files or pages")} aria-label={t("Add photos, files or pages")} className={iconBtn}><Plus className="h-4 w-4" /></button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top" className="w-60">
-                <DropdownMenuItem onSelect={() => imageInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4" />{t("Add a photo")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => fileInput.current?.click()}><Paperclip className="mr-2 h-4 w-4" />{t("Add a file (PDF, Word, Excel, text…)")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.setTimeout(startMention, 0)}><AtSign className="mr-2 h-4 w-4" />{t("Add a page, task or project")}</DropdownMenuItem>
+              {/* One line per action with a quiet hint under it; opens below the composer on the centred home so it
+                  never covers the greeting (owner, 18 Oct 2026: "berantakan"). */}
+              <DropdownMenuContent align="start" side={centeredHome ? "bottom" : "top"} sideOffset={6} className="w-72 p-1">
+                {([
+                  { icon: ImagePlus, label: t("Upload a photo"), hint: t("Screenshots and pictures"), run: () => imageInput.current?.click() },
+                  { icon: Paperclip, label: t("Upload a file"), hint: t("PDF, Word, Excel or text"), run: () => fileInput.current?.click() },
+                  { icon: AtSign, label: t("Mention a page, task or project"), hint: t("Give GIDEON context from NEXUS"), run: () => window.setTimeout(startMention, 0) },
+                ]).map(({ icon: Icon, label, hint, run }) => (
+                  <DropdownMenuItem key={label} onSelect={run} className="items-start gap-3 rounded-lg px-2.5 py-2">
+                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"><Icon className="h-4 w-4" /></span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+                    </span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
             <button type="button" onClick={startMention} title={t("Add a page, task or project")} aria-label={t("Add a page, task or project")} className={iconBtn}><AtSign className="h-4 w-4" /></button>

@@ -4,6 +4,12 @@
  * Keys must be unique across all id-*.ts files (i18n.test.mjs).
  */
 export const ID_GIDEON_AI: Record<string, string> = {
+  "Upload a photo": "Unggah foto",
+  "Screenshots and pictures": "Tangkapan layar dan gambar",
+  "Upload a file": "Unggah file",
+  "PDF, Word, Excel or text": "PDF, Word, Excel, atau teks",
+  "Mention a page, task or project": "Sebut halaman, task, atau project",
+  "Give GIDEON context from NEXUS": "Beri GIDEON konteks dari NEXUS",
   "Deepest. For analysis and decisions.": "Paling dalam. Untuk analisis dan keputusan.",
   "Everyday work.": "Sehari-hari.",
   "Light. Short questions.": "Ringan. Pertanyaan pendek.",
