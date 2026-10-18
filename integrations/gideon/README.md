@@ -10,7 +10,8 @@ privately with the operations runbook, not here.
 | `plugin/` | Tool plugin for the agent runtime: every tool calls `POST /api/gideon/tools` on NEXUS as the asking user |
 | `shim/codex-oracle-shim.js` | HTTP shim NEXUS calls (`GET /health`, `POST /chat`, `POST /chat-stream`); picks the model tier |
 | `shim/gideon-stream-runner.py` | Token-by-token streaming for `/chat-stream` (NDJSON) |
-| `shim/systemd/graceful-restart.conf` | systemd drop-in for the shim unit: `KillMode=mixed`, `TimeoutStopSec=460` (graceful restart) |
+| `shim/gideon-shim-graceful.js` | Preloaded into the shim (`node --require`): graceful restart, see below |
+| `shim/systemd/graceful-restart.conf` | systemd drop-in for the shim unit: preload + `KillMode=mixed` + `TimeoutStopSec=460` |
 
 ## Environment (values are never stored here)
 
@@ -32,7 +33,8 @@ Check that the tool path works, not just the shim: calling `call_nexus('list_pro
 
 ## Restarting the shim
 
-The shim drains on SIGTERM: answers in flight finish (hosted tiers up to `GIDEON_DRAIN_MS`, default 120 s after the
+The shim drains on SIGTERM (`shim/gideon-shim-graceful.js`, preloaded with `node --require` so the shim file itself
+stays untouched): answers in flight finish (hosted tiers up to `GIDEON_DRAIN_MS`, default 120 s after the
 signal; Model 0 up to its own timeout), new requests get `503 {"error":"shim_restarting"}` with `x-gideon-shim:
 restarting` and `Retry-After`, and `GET /health` answers `x-gideon-shim: draining` plus `x-gideon-shim-started`. A
 run still going at its cap ends with the stream line `{"t":"error","c":"shim_restart"}` (or `503` with
