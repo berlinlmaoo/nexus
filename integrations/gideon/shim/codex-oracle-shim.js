@@ -156,6 +156,30 @@ function runUsage(resultUsage, tier, model) {
   return u ? { ...u, tier, model } : null
 }
 
+// Forget a run's Hermes session once its usage is read (owner, 19 Oct 2026: privacy, without losing context or speed).
+// NEXUS asks with `forgetSession: true` (meeting notes: a whole meeting transcript); it already has the usage (in this
+// response) and keeps the minutes itself, and conversation context never came from old Hermes sessions (NEXUS sends the
+// history every request). gideon-forget.py deletes through Hermes' own SessionDB, only shim sessions (cwd
+// oracle-workdir), secure_delete on; it runs after the response is sent (~0.2 s), so the answer is never slower.
+// Everything else ages out after 90 days (gideon-forget.py retention, daily timer).
+const FORGET = process.env.GIDEON_FORGET || path.join(__dirname, "gideon-forget.py")
+function forgetSessions(usage) {
+  const ids = usage ? (Array.isArray(usage.sessionIds) && usage.sessionIds.length ? usage.sessionIds : [usage.sessionId]).map(cleanSessionId).filter(Boolean) : []
+  if (!ids.length || !fs.existsSync(FORGET)) return
+  const env = { ...process.env, HERMES_HOME: PROFILE_HOME || path.join(os.homedir(), ".hermes") }
+  delete env.ORACLE_LLM_SECRET
+  let out = ""
+  try {
+    const child = spawn(PYTHON, [FORGET, "sessions", ...ids], { cwd: WORKDIR, env, stdio: ["ignore", "pipe", "pipe"] })
+    child.stdout.on("data", (d) => { out += d.toString() })
+    child.stderr.on("data", (d) => { out += d.toString() })
+    child.on("close", (code) => console.log(`[${SHIM_NAME}] forget ${ids.join(",")} -> ${code === 0 ? out.trim().slice(-160) : `FAILED (${code}) ${out.trim().slice(-160)}`}`))
+    child.on("error", (e) => console.error(`[${SHIM_NAME}] forget spawn failed:`, e.message))
+  } catch (e) {
+    console.error(`[${SHIM_NAME}] forget failed:`, e.message)
+  }
+}
+
 // Router misses (18 Oct 2026): an answer that said "can't / no tool" from a run that had deferred tools and never
 // loaded one; the runner retried it with every tool. One JSON line each, for tuning GIDEON_EAGER_TOOLS.
 const ROUTER_MISS_LOG = process.env.GIDEON_ROUTER_MISS_LOG || path.join(__dirname, "router-misses.jsonl")
@@ -417,6 +441,7 @@ const server = http.createServer((req, res) => {
     // file it never saw. Both refusals are decided BEFORE anything is written, so an early return
     // here cannot leave an orphaned attachment in the workdir.
     const runId = cleanRunId(payload.runId)
+    const forget = payload.forgetSession === true
     const hasDoc = typeof payload.documentBase64 === "string" && payload.documentBase64.length > 32
     if (hasDoc && (!DOCS_ENABLED || isStream)) {
       res.writeHead(415, { "Content-Type": "application/json" })
@@ -478,7 +503,9 @@ const server = http.createServer((req, res) => {
       }
       const tok = r.usage ? r.usage.byModel.reduce((a, m) => a + m.inputTokens + m.cacheReadTokens + m.outputTokens, 0) : 0
       console.log(`[${SHIM_NAME}] stream ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> ${r.ok ? `out=${r.outChars}c` : "FAILED"} tok=${tok} sess=${r.usage ? r.usage.sessionId : "-"} (${Date.now() - started}ms)`)
-      return res.end()
+      res.end()
+      if (forget) forgetSessions(r.usage)
+      return
     }
     let reply, usage = null
     try {
@@ -490,7 +517,8 @@ const server = http.createServer((req, res) => {
     console.log(`[${SHIM_NAME}] ${chosen}${imagePath ? " +gambar" : ""}${doc ? " +dokumen" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
     res.writeHead(200, { "Content-Type": "application/json" })
     // `usage` is additive (18 Oct 2026): older NEXUS servers read only `reply`.
-    return res.end(JSON.stringify(usage ? { reply, usage } : { reply }))
+    res.end(JSON.stringify(usage ? { reply, usage } : { reply }))
+    if (forget) forgetSessions(usage)
   })
 })
 

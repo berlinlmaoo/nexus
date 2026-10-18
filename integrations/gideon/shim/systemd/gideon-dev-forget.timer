@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily GIDEON DEV Hermes session retention (03:30 WIB)
+
+[Timer]
+OnCalendar=*-*-* 20:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

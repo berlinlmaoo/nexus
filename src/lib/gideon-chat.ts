@@ -36,6 +36,12 @@ export async function askGideon(input: {
   touchesAttendance?: boolean
   /** Receives the run id as soon as it exists (callers that link the reply to the run). */
   onRun?: (runId: string | null) => void
+  /**
+   * Ask the shim to delete this run's Hermes session once it has read the usage (owner, 19 Oct 2026: privacy).
+   * For prompts carrying content NEXUS keeps itself (a meeting transcript). Context is unaffected: GIDEON never
+   * reads old Hermes sessions, NEXUS sends what it needs. An older shim ignores the field (90-day retention).
+   */
+  forgetSession?: boolean
 }): Promise<string | null> {
   const url = process.env.GIDEON_CHAT_URL
   const secret = process.env.ORACLE_LLM_SECRET || ""
@@ -73,6 +79,7 @@ export async function askGideon(input: {
         user: input.user ?? "",
         actorEmail: input.actorEmail ?? "",
         ...(runId ? { runId } : {}),
+        ...(input.forgetSession ? { forgetSession: true } : {}),
       }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 240_000),
     }, { stream: false })

@@ -609,6 +609,8 @@ export async function summarizeMeeting(id: string): Promise<void> {
         actorEmail: creator.email ?? creator.id,
         model: tier,
         trigger: "MEETING",
+        // The transcript stays in NEXUS only: the shim deletes the Hermes copy after billing it (19 Oct 2026).
+        forgetSession: true,
         projectId: project?.id,
         title,
         timeoutMs: 240_000,
