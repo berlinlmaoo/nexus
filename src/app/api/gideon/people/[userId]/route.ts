@@ -14,7 +14,8 @@ import { notFound, requireBodPlus, reviewTarget } from "@/lib/gideon-review"
  *     credits: { periodKey, period: { startKey, endKey, resetsAt }, used, answers, todayUsed, tiers: [{ tier, credits, answers }] },
  *     topTier: { tier, answers } | null                  // most-used tier over all their chat runs
  *   }
- * deletedChats is null for BoD: that someone deleted chats is part of what only the OAA may see.
+ * deletedChats is null for BoD, and their chats count is live chats only: that someone deleted chats is part of
+ * what only the OAA may see.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   const g = await requireBodPlus()
@@ -28,7 +29,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
     const [turns, tools, chats, deletedChats, first, last, periodUse, todayUse, periodTiers, tierRuns] = await Promise.all([
       prisma.gideonMessage.groupBy({ by: ["role"], where: { userId }, _count: { _all: true } }),
       prisma.$queryRaw<{ n: bigint }[]>`SELECT COALESCE(SUM(CARDINALITY(tools)), 0) AS n FROM "GideonMessage" WHERE "userId" = ${userId}`,
-      prisma.gideonChat.count({ where: { userId, messages: { some: {} } } }),
+      // BoD: live chats only, so the count never tells them the person deleted some (only the OAA may know).
+      prisma.gideonChat.count({ where: { userId, messages: { some: {} }, ...(isOaa ? {} : { deletedAt: null }) } }),
       isOaa ? prisma.gideonChat.count({ where: { userId, deletedAt: { not: null } } }) : Promise.resolve(null),
       prisma.gideonMessage.findFirst({ where: { userId }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
       prisma.gideonMessage.findFirst({ where: { userId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
