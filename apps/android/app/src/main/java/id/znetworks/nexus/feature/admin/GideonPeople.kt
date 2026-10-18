@@ -135,7 +135,8 @@ fun GideonPersonSheet(userId: String, name: String?, onDismiss: () -> Unit) {
             }
         }
         if (creditsOnly) items(d.credits.tiers, key = { it.tier }) { tier ->
-            Text(tierName(tier.tier)); Text(stringResource(R.string.gp_tier_usage, tier.answers, tier.credits), color = c.mutedFg)
+            Text(tierName(tier.tier)); Text(androidx.compose.ui.res.pluralStringResource(R.plurals.gp_answer_count, tier.answers, tier.answers) +
+                " · " + androidx.compose.ui.res.pluralStringResource(R.plurals.gp_credit_count, tier.credits, tier.credits), color = c.mutedFg)
         }
         error?.let { item { Text(it, color = c.dangerText) } }
     }
@@ -195,7 +196,8 @@ private fun tierName(key: String?) = GideonTier.entries.firstOrNull { it.key == 
 @Composable private fun ChatMetadata(chat: GReviewChat) {
     val c = Nx.colors
     Text(chatTime(chat.updatedAt ?: chat.createdAt) + " · " + tierName(chat.tier), fontSize = 12.sp, color = c.mutedFg)
-    Text(stringResource(R.string.gp_chat_usage, chat.messages, chat.credits), fontSize = 12.sp, color = c.mutedFg)
+    Text(androidx.compose.ui.res.pluralStringResource(R.plurals.gp_message_count, chat.messages, chat.messages) + " · " +
+        androidx.compose.ui.res.pluralStringResource(R.plurals.gp_credit_count, chat.credits, chat.credits), fontSize = 12.sp, color = c.mutedFg)
     if (chat.deleted) Text(stringResource(R.string.gp_deleted) + (chat.deletedAt?.let { " · " + chatTime(it) } ?: ""), color = c.dangerText, fontSize = 12.sp)
 }
 

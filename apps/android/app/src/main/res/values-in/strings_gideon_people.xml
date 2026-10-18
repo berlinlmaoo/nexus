@@ -1,4 +1,8 @@
 <resources>
+    <string name="gp_pending_read_only">Belum diputuskan</string>
+    <plurals name="gp_answer_count"><item quantity="other">%1$d jawaban</item></plurals>
+    <plurals name="gp_message_count"><item quantity="other">%1$d pesan</item></plurals>
+    <plurals name="gp_credit_count"><item quantity="other">%1$d kredit</item></plurals>
     <string name="gp_overview">Ringkasan</string>
     <string name="gp_questions">%1$d pertanyaan · %2$d jawaban</string>
     <string name="gp_tools">%1$d pemanggilan alat</string>

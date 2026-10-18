@@ -1,4 +1,8 @@
 <resources>
+    <string name="gp_pending_read_only">Not decided yet</string>
+    <plurals name="gp_answer_count"><item quantity="one">%1$d answer</item><item quantity="other">%1$d answers</item></plurals>
+    <plurals name="gp_message_count"><item quantity="one">%1$d message</item><item quantity="other">%1$d messages</item></plurals>
+    <plurals name="gp_credit_count"><item quantity="one">%1$d credit</item><item quantity="other">%1$d credits</item></plurals>
     <string name="gp_overview">Overview</string>
     <string name="gp_questions">%1$d questions · %2$d answers</string>
     <string name="gp_tools">%1$d tool calls</string>

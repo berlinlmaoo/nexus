@@ -200,7 +200,7 @@ internal fun ProposalCard(p: GProposal, deciding: Boolean, readOnly: Boolean = f
     val shape = RoundedCornerShape(12.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (p.isPending) Text(stringResource(R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
+        if (p.isPending) Text(stringResource(if (readOnly) R.string.gp_pending_read_only else R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.warningFg, modifier = Modifier.size(14.dp).padding(top = 2.dp))
             Spacer(Modifier.width(6.dp))
