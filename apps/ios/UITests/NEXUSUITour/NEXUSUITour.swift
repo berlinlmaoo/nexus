@@ -718,6 +718,11 @@ final class NEXUSUITour: XCTestCase {
                 guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing hover target \(action.label)" }
                 target.hover()
                 pause(1.5)
+            case "editorState":
+                let field = app.textFields["memory.edit.text"]
+                let state = field.exists ? field.label : "closed"
+                guard state == "closed" || state.hasPrefix("Memory editor debug ") else { return "wrong-screen: editor diagnostic unavailable" }
+                persist(Data(state.utf8), "tour-\(screen.id)-\(action.label)-state.txt")
             case "key":
                 var modifiers: XCUIElement.KeyModifierFlags = []
                 for modifier in (action.text ?? "").split(separator: ",") {

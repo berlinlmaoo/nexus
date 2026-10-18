@@ -195,18 +195,37 @@ private struct MemoryInlineTextField: UIViewRepresentable {
         init(_ parent: MemoryInlineTextField) { self.parent = parent }
         @objc func changed(_ field: UITextField) { parent.text = field.text ?? "" }
         func textFieldShouldReturn(_ textField: UITextField) -> Bool { parent.onSubmit(); return false }
+        func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            if string == UIKeyCommand.inputEscape { parent.onCancel(); return false }
+            return true
+        }
     }
 }
 private final class MemoryInlineUIKitField: UITextField {
     var onEscape: (() -> Void)?
+    private var commandLookups = 0
+    private var escapeDeliveries = 0
+    private func diagnostic() {
+        if TourMode.isActive { accessibilityLabel = "Memory editor debug focused=\(isFirstResponder) commands=\(commandLookups) escape=\(escapeDeliveries)" }
+    }
+    override func becomeFirstResponder() -> Bool { let result = super.becomeFirstResponder(); diagnostic(); return result }
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(cancelMemoryEdit) { return onEscape != nil }
+        return super.canPerformAction(action, withSender: sender)
+    }
     override var keyCommands: [UIKeyCommand]? {
+        commandLookups += 1; diagnostic()
         let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelMemoryEdit))
         escape.wantsPriorityOverSystemBehavior = true
-        return (super.keyCommands ?? []) + [escape]
+        return [escape] + (super.keyCommands ?? [])
     }
-    @objc private func cancelMemoryEdit() { onEscape?() }
+    @objc private func cancelMemoryEdit() { escapeDeliveries += 1; diagnostic(); onEscape?() }
+    override func insertText(_ text: String) {
+        if text == UIKeyCommand.inputEscape { cancelMemoryEdit(); return }
+        super.insertText(text)
+    }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        if presses.contains(where: { $0.key?.keyCode == .keyboardEscape }) { onEscape?(); return }
+        if presses.contains(where: { $0.key?.keyCode == .keyboardEscape }) { cancelMemoryEdit(); return }
         super.pressesBegan(presses, with: event)
     }
 }
