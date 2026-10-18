@@ -1,4 +1,12 @@
 <resources>
+    <string name="r21_follow">Follow task</string>
+    <string name="r21_favorite">Favourite task</string>
+    <string name="r21_like">Like task</string>
+    <string name="r21_add_property">+ Add a property</string>
+    <string name="r21_property_name">Property name</string>
+    <string name="r21_status">Status</string>
+    <string name="r21_priority">Priority</string>
+    <string name="r21_toggle_done">Toggle complete</string>
     <string name="r21_assignees_changed">The assignees changed elsewhere. The latest list has been loaded. Check it and try again.</string>
     <string name="r21_text_changed">Someone saved changes first. Your draft is kept. Review the latest content before saving again.</string>
     <string name="r21_sheet_changed">The sheet columns changed elsewhere. The latest structure has been loaded. Try your change again.</string>

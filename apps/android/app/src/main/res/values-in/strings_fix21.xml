@@ -1,4 +1,12 @@
 <resources>
+    <string name="r21_follow">Ikuti task</string>
+    <string name="r21_favorite">Favoritkan task</string>
+    <string name="r21_like">Sukai task</string>
+    <string name="r21_add_property">+ Tambah properti</string>
+    <string name="r21_property_name">Nama properti</string>
+    <string name="r21_status">Status</string>
+    <string name="r21_priority">Prioritas</string>
+    <string name="r21_toggle_done">Tandai selesai atau belum</string>
     <string name="r21_assignees_changed">Penanggung jawab diubah di tempat lain. Daftar terbaru sudah dimuat. Periksa lalu coba lagi.</string>
     <string name="r21_text_changed">Orang lain menyimpan perubahan lebih dulu. Drafmu tetap disimpan. Tinjau isi terbaru sebelum menyimpan lagi.</string>
     <string name="r21_sheet_changed">Kolom spreadsheet diubah di tempat lain. Struktur terbaru sudah dimuat. Coba perubahanmu lagi.</string>

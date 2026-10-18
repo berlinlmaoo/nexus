@@ -8,11 +8,13 @@ In progress. No APK publication, version change, push or production access.
 - Owner decisions: podium now groups everyone by the three best distinct scores, with stacked faces, tie counts, wrapping names and fixed 2/1/3 steps; room capacity removed from GIDEON; Legal version rows use REV; explicit Details action on Control Room user rows; form-copy menu hidden below Can edit.
 - Concurrency: assignee and multi-select deltas; tag-delta write support; guarded description body saves retaining drafts on conflict; form baseUpdatedAt; sheet structureVersion with current/refetch on conflict; retry-stable Pipeline term/Outlet creation ids; cost/link bases; localized conflict/Vault errors; stale task timestamps rejected and polling retained while connected. Docs are read-only on Android, so there is no doc-save path to change.
 - Validation: 743 JVM tests green and assembleDebug green, portable JDK 21, 3 GB Gradle heap. Windows source checks normalize CRLF; the locale-provider test accepts the desktop CLDR September abbreviation while preserving Android's existing locale selection.
-- Remaining: approved native parity; credits and chat files; Pixel_7 DEV logic flows and screenshot tour. Estimates and QA results will be updated after validation.
+- Page parity: task property rows (label left/value right, Status completion tick), Follow/Favourite/Like/quest actions, oldest-first comments with bottom composer, description without heading, custom properties and Add property. Grouped tables repeat headers. Board/List already had inline New at the top. Legal now reads page/layout metadata and renders a white reflowed page, typography/runs, clause markers, indents/spacing, blank lines, gutter locks/ticks and table cells; paragraph edits use the same typography.
+- Second green step: 745 JVM tests and assembleDebug pass. Pixel_7 restarted with a visible window and `-gpu host` following the owner's updated setup.
+- Remaining: GIDEON streaming/credits and chat files; Pixel_7 DEV logic flows and screenshot tour. Estimates and QA results will be updated after validation.
 
 | QA area | Result |
 |---|---|
-| JVM + debug build | PASS — 743 tests, debug build |
+| JVM + debug build | PASS — 745 tests, debug build |
 | Pixel_7 screen tour | Pending |
 | QA-only task/comment/message/GIDEON/Legal/Vault flows | Pending |
 | Real attendance | Excluded by task instruction |

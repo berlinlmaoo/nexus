@@ -46,6 +46,11 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -122,6 +127,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var requestQuest by remember { mutableStateOf(false) }
     LaunchedEffect(s.deleted) { if (s.deleted) onBack() }
     // The task's project room while it is open: an edit or a comment elsewhere shows up here (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom(s.task?.projectId?.let { "project:$it" })
@@ -136,6 +142,12 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
             Text(stringResource(R.string.td_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp,
                 color = c.foreground, modifier = Modifier.weight(1f))
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            if (s.task != null) {
+                IconButton(onClick = vm::toggleFollow, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Notifications, stringResource(R.string.r21_follow), tint = if (s.following) c.violetText else c.mutedFg) }
+                IconButton(onClick = vm::toggleFavorite, enabled = !s.busy, modifier = Modifier.size(40.dp)) { Icon(if (s.favorite) Icons.Filled.Star else Icons.Filled.StarBorder, stringResource(R.string.r21_favorite), tint = c.mutedFg) }
+                IconButton(onClick = vm::toggleLike, enabled = !s.busy && s.access.canEdit, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.ThumbUp, stringResource(R.string.r21_like), tint = if (s.task?.liked == true) c.violetText else c.mutedFg) }
+                if (s.isBoD && s.access.canEdit) IconButton(onClick = { requestQuest = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.EmojiEvents, stringResource(R.string.td_make_quest), tint = c.mutedFg) }
+            }
             if (s.task != null && s.access.canEdit) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
@@ -158,18 +170,18 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                         if (ro) Text(stringResource(if (s.access.canComment) R.string.acc_task_comment else R.string.acc_task_view), fontSize = 13.sp,
                             color = c.warningFg, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warningBg).padding(12.dp))
                         ReadOnly(ro) { Header(t, vm, onOpenTask) }
-                        ReadOnly(ro) { QuestBanner(t, s.isBoD, vm) }
+                        ReadOnly(ro) { QuestBanner(t, s.isBoD, vm, requestQuest) { requestQuest = false } }
                         ReadOnly(ro) { MetaCard(t, s, vm, onOpenProject) }
                         // Who made it, on every task (web c1809a0, iOS c61edb6), and whether they have since left.
                         t.creator?.let { u -> CreatedBy(u) }
-                        ReadOnly(ro) { t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError) } }
+                        ReadOnly(ro) { t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError, s.access.canManage) } }
+                        ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }
                         ReadOnly(ro) { DescriptionCard(t, vm) }
                         SubtasksCard(t, vm, onOpenTask)
                         FilesCard(s, vm)
                         DependenciesCard(s, vm, onOpenTask)
                         TimeCard(s, vm)
                         // Can view: the thread is read, not written.
-                        ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }
                         ActivityCard(t)
                     }
                 }
@@ -190,6 +202,16 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
 }
 
 // region pieces
+
+@Composable
+private fun PropertyRow(label: String, icon: ImageVector, value: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = c.mutedFg, modifier = Modifier.size(16.dp))
+        Text(label, color = c.mutedFg, fontSize = 13.sp, modifier = Modifier.width(108.dp).padding(start = 8.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = value)
+    }
+}
 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
@@ -278,21 +300,33 @@ private fun Header(t: TaskDetail, vm: TaskDetailViewModel, onOpenTask: (String) 
             // Commits when focus leaves, like iOS.
             modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused && title != t.title) vm.setTitle(title) },
         )
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PropertyRow(stringResource(R.string.r21_status), Icons.Filled.CheckCircle) {
+                IconButton(onClick = { vm.setStatus(if (t.isDone) "TODO" else "DONE") }, modifier = Modifier.size(36.dp)) {
+                    Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        stringResource(R.string.r21_toggle_done), tint = if (t.isDone) c.success else c.mutedFg)
+                }
             Box {
-                ControlChip(taskStatusLabel(t.status), Icons.Filled.CheckCircle, taskStatusColor(t.status)) { statusMenu = true }
+                Text(taskStatusLabel(t.status), color = taskStatusColor(t.status), modifier = Modifier.clickable { statusMenu = true }.padding(8.dp))
                 DropdownMenu(statusMenu, { statusMenu = false }) {
                     TaskEnums.STATUSES.forEach { st -> DropdownMenuItem(text = { Text(taskStatusLabel(st)) }, onClick = { statusMenu = false; vm.setStatus(st) }) }
                 }
             }
+            }
+            PropertyRow(stringResource(R.string.r21_priority), Icons.Filled.Flag) {
             Box {
-                ControlChip(priorityLabel(t.priority), Icons.Filled.Flag, priorityColor(t.priority)) { prioMenu = true }
+                Text(priorityLabel(t.priority), color = priorityColor(t.priority), modifier = Modifier.clickable { prioMenu = true }.padding(8.dp))
                 DropdownMenu(prioMenu, { prioMenu = false }) {
                     TaskEnums.PRIORITIES.forEach { p -> DropdownMenuItem(text = { Text(priorityLabel(p)) }, onClick = { prioMenu = false; vm.setPriority(p) }) }
                 }
             }
-            ControlChip(stringResource(R.string.td_start, dayText(t.startDate) ?: "—"), Icons.Filled.CalendarMonth, c.mutedFg) { picking = "start" }
-            ControlChip(dayText(t.dueDate) ?: stringResource(R.string.td_no_due), Icons.Filled.CalendarMonth, c.mutedFg) { picking = "due" }
+            }
+            PropertyRow(stringResource(R.string.td_start_date), Icons.Filled.CalendarMonth) {
+                Text(dayText(t.startDate) ?: "—", color = c.foreground, modifier = Modifier.clickable { picking = "start" }.padding(8.dp))
+            }
+            PropertyRow(stringResource(R.string.td_due_date), Icons.Filled.CalendarMonth) {
+                Text(dayText(t.dueDate) ?: stringResource(R.string.td_no_due), color = c.foreground, modifier = Modifier.clickable { picking = "due" }.padding(8.dp))
+            }
         }
     }
     picking?.let { which ->
@@ -317,10 +351,11 @@ private fun Header(t: TaskDetail, vm: TaskDetailViewModel, onOpenTask: (String) 
 }
 
 @Composable
-private fun QuestBanner(t: TaskDetail, isBoD: Boolean, vm: TaskDetailViewModel) {
+private fun QuestBanner(t: TaskDetail, isBoD: Boolean, vm: TaskDetailViewModel, request: Boolean = false, consumed: () -> Unit = {}) {
     if (t.quests.isEmpty() && !isBoD) return
     val c = Nx.colors
     var composing by remember { mutableStateOf(false) }
+    LaunchedEffect(request) { if (request && isBoD) { composing = true; consumed() } }
     Column(
         Modifier.fillMaxWidth().background(c.violet.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
             .border(1.dp, c.violet.copy(alpha = 0.25f), RoundedCornerShape(16.dp)).padding(12.dp),
@@ -376,10 +411,9 @@ private fun QuestBanner(t: TaskDetail, isBoD: Boolean, vm: TaskDetailViewModel) 
 private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel, onOpenProject: (String) -> Unit) {
     val c = Nx.colors
     var picking by remember { mutableStateOf(false) }
-    Card {
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Column(Modifier.weight(1f).clickable { picking = true }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Caption(stringResource(R.string.td_assigned) + " ✎")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PropertyRow(stringResource(R.string.td_assigned), Icons.Filled.Person) {
+            Column(Modifier.weight(1f).clickable { picking = true }.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val people = t.assignees.mapNotNull { it.user }
                 if (people.isEmpty()) Text(stringResource(R.string.td_unassigned), fontSize = 13.sp, color = c.violetText)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
@@ -396,14 +430,15 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                 }
                 if (people.any { it.deactivatedAt != null }) Text(stringResource(R.string.off_task_left), fontSize = 11.sp, color = c.mutedFg)
             }
+            }
             t.taskList?.project?.let { p ->
-                Column(Modifier.weight(1f).clickable { p.id?.let(onOpenProject) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Caption(stringResource(R.string.td_project))
+                PropertyRow(stringResource(R.string.td_project), Icons.Filled.Description) {
+                Column(Modifier.weight(1f).clickable { p.id?.let(onOpenProject) }.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(listOfNotNull(p.name, t.taskList.name).joinToString(" · "), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
+                }
             }
-        }
     }
     if (picking) {
         val base = remember { t.assignees.mapNotNull { it.user?.id ?: it.userId }.toSet() }
@@ -439,8 +474,7 @@ private fun DescriptionCard(t: TaskDetail, vm: TaskDetailViewModel) {
     var base by rememberSaveable(t.id) { mutableStateOf(original) }
     var draft by rememberSaveable(t.id) { mutableStateOf(original) }
     LaunchedEffect(original) { if (draft == base) { draft = original; base = original } }
-    Card {
-        Caption(stringResource(R.string.td_description))
+    Column(Modifier.fillMaxWidth()) {
         TextField(
             draft, { draft = it }, placeholder = { Text(stringResource(R.string.td_add_description)) },
             textStyle = TextStyle(fontSize = 14.sp, color = c.foreground), minLines = 2, maxLines = 12,
@@ -665,7 +699,7 @@ private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel) {
             if (t.comments.isNotEmpty()) Text("${t.comments.size}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
         })
         if (t.comments.isEmpty()) Muted(stringResource(R.string.td_no_comments))
-        t.comments.forEach { cm ->
+        t.comments.sortedWith(compareBy<Comment> { it.createdAt.orEmpty() }.thenBy { it.id }).forEach { cm ->
             Row(verticalAlignment = Alignment.Top) {
                 Avatar(id.znetworks.nexus.feature.projects.authorName(cm.user), cm.user?.avatar, 28.dp)
                 Spacer(Modifier.width(10.dp))

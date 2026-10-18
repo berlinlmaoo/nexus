@@ -700,15 +700,15 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
     }
     val stick = Modifier.offset { androidx.compose.ui.unit.IntOffset(h.value, 0) }
     Column(Modifier.fillMaxSize().horizontalScroll(h)) {
-        Row(Modifier.background(c.background)) {
-            headerCell(stringResource(R.string.pp_col_name), nameW)
-            cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
-        }
-        HorizontalDivider(Modifier.width(totalW), color = c.border)
         LazyColumn(Modifier.weight(1f).width(totalW), contentPadding = PaddingValues(bottom = 96.dp)) {
             groups.forEach { g ->
                 item(key = "h-" + g.key) {
                     Box(stick.padding(start = 10.dp, top = 12.dp, bottom = 6.dp)) { GroupPill(g, groupLabel(g, cfg.groupBy), "${g.tasks.size}") }
+                    Row(Modifier.background(c.background)) {
+                        headerCell(stringResource(R.string.pp_col_name), nameW)
+                        cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
+                    }
+                    HorizontalDivider(Modifier.width(totalW), color = c.border)
                 }
                 val limit = shown.value[g.key] ?: PAGE
                 items(g.tasks.take(limit), key = { g.key + "/" + it.id }) { t ->

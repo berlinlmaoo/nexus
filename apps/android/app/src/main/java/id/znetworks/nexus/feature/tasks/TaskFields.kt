@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -93,14 +95,14 @@ fun NewTaskFields(fields: List<CustomFieldDef>, values: Map<String, JsonElement>
 
 /** View and edit the project's custom fields on one task (iOS TaskCustomFieldsCard). Hidden when there are none. */
 @Composable
-fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit) {
+fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit, canManage: Boolean = false) {
     val c = Nx.colors
     val api = ProjectsApi((LocalContext.current.applicationContext as NexusApplication).container.api)
     val res = LocalContext.current.resources
     val scope = rememberCoroutineScope()
     var fields by remember(taskId) { mutableStateOf<List<CustomFieldDef>>(emptyList()) }
     LaunchedEffect(projectId, taskId) { fields = runCatching { api.taskFields(projectId, taskId) }.getOrDefault(emptyList()) }
-    if (fields.isEmpty()) return
+    var adding by remember { mutableStateOf(false) }
     fun commit(f: CustomFieldDef, v: JsonElement) {
         fields = fields.map { if (it.id == f.id) it.copy(value = v) else it }
         scope.launch {
@@ -113,11 +115,26 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit)
         }
     }
     Column(
-        Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
+        Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.td_custom_fields), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
         fields.forEach { f -> FieldRow(f) { commit(f, it) } }
+        if (canManage) TextButton(onClick = { adding = true }) { Text(stringResource(R.string.r21_add_property), color = c.mutedFg) }
+    }
+    if (adding) {
+        var name by remember { mutableStateOf("") }
+        var kind by remember { mutableStateOf("TEXT") }
+        var saving by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { if (!saving) adding = false }, title = { Text(stringResource(R.string.r21_add_property)) },
+            text = { Column {
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.r21_property_name)) })
+                Row { listOf("TEXT", "NUMBER", "DATE").forEach { type -> TextButton(onClick = { kind = type }) { Text(if (kind == type) "✓ $type" else type, fontSize = 11.sp) } } }
+            } },
+            confirmButton = { TextButton(enabled = !saving && name.isNotBlank(), onClick = { saving = true; scope.launch {
+                try { api.createField(projectId, name, kind, emptyList()); fields = api.taskFields(projectId, taskId); adding = false }
+                catch (e: ApiError) { onError(e.describe(res)) }; saving = false
+            } }) { Text(stringResource(R.string.add)) } },
+            dismissButton = { TextButton(onClick = { adding = false }, enabled = !saving) { Text(stringResource(R.string.cancel)) } })
     }
 }
 
@@ -125,8 +142,9 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit)
 @Composable
 private fun FieldRow(f: CustomFieldDef, onCommit: (JsonElement) -> Unit) {
     val c = Nx.colors
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(f.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+    Row(Modifier.fillMaxWidth()) {
+        Text(f.name, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.width(124.dp).padding(top = 12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         when {
             f.kind == "CREATED" -> Text(valueText(f.value) ?: "—", fontSize = 14.sp, color = c.mutedFg)
             f.kind == "DATE" -> {
@@ -189,6 +207,7 @@ private fun FieldRow(f: CustomFieldDef, onCommit: (JsonElement) -> Unit) {
                     keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) save() })
             }
+        }
         }
     }
 }

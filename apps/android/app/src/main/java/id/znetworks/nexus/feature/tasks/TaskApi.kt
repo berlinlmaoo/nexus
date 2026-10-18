@@ -14,6 +14,11 @@ import okhttp3.Request
 
 /** One task and what hangs off it: comments, files, dependencies, time, quests (API.md §2.4). */
 class TaskApi(private val api: ApiClient, private val uploads: Uploads) {
+    suspend fun followers(id: String) = api.get("/api/tasks/$id/followers", JsonObject.serializer())
+    suspend fun favorites() = api.get("/api/favorites", kotlinx.serialization.json.JsonArray.serializer())
+    suspend fun follow(id: String) = post("/api/tasks/$id/followers", JsonObject(emptyMap()))
+    suspend fun like(id: String) = post("/api/tasks/$id/likes", JsonObject(emptyMap()))
+    suspend fun favorite(id: String) = post("/api/favorites", buildJsonObject { put("type", "task"); put("targetId", id) })
 
     suspend fun saveDescription(taskId: String, text: String, baseText: String) = api.send(
         Request.Builder().url(api.url("/api/tasks/$taskId/body"))

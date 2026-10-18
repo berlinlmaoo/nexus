@@ -51,6 +51,8 @@ data class TaskDetailState(
     val busy: Boolean = false,
     val actionError: String? = null,
     val deleted: Boolean = false,
+    val following: Boolean = false,
+    val favorite: Boolean = false,
     /** The viewer's level in the task's project (13 Oct); unknown = nothing locked. */
     val access: id.znetworks.nexus.feature.projects.ProjectAccess = id.znetworks.nexus.feature.projects.ProjectAccess(null, null),
 )
@@ -80,6 +82,8 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     private fun loadExtras(projectId: String?) = viewModelScope.launch {
+        runCatching { api.followers(taskId) }.getOrNull()?.let { o -> _state.update { it.copy(following = o["isFollowing"] == JsonPrimitive(true)) } }
+        runCatching { api.favorites() }.getOrNull()?.let { a -> _state.update { it.copy(favorite = a.any { e -> (e as? JsonObject)?.get("targetId") == JsonPrimitive(taskId) }) } }
         val files = async { runCatching { api.attachments(taskId).value }.getOrNull() }
         val deps = async { runCatching { api.dependencies(taskId) }.getOrNull() }
         val time = async { runCatching { api.timeEntries(taskId) }.getOrNull() }
@@ -108,6 +112,9 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
     fun setStatus(s: String) = patch("status" to JsonPrimitive(s))
     fun setPriority(p: String) = patch("priority" to JsonPrimitive(p))
+    fun toggleFollow() = act(R.string.td_update_failed) { val o = api.follow(taskId); _state.update { it.copy(following = o["following"] == JsonPrimitive(true)) } }
+    fun toggleFavorite() = act(R.string.td_update_failed) { val o = api.favorite(taskId); _state.update { it.copy(favorite = o["favorited"] == JsonPrimitive(true)) } }
+    fun toggleLike() = act(R.string.td_update_failed) { api.like(taskId) }
     fun setDue(d: LocalDate?) = patch("dueDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setStart(d: LocalDate?) = patch("startDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setDescription(text: String, baseText: String, onDone: () -> Unit) = act(R.string.td_update_failed) {

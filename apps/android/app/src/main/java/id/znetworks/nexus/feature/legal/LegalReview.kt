@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +47,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
@@ -64,6 +77,7 @@ import kotlinx.coroutines.launch
 @Stable
 class LgEditorModel {
     var paragraphs by mutableStateOf<List<LgParagraph>>(emptyList())
+    var page by mutableStateOf(LgPage())
     var loadedKey by mutableStateOf<String?>(null)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
@@ -91,7 +105,7 @@ fun LegalParagraphEditor(doc: LgDocument, editor: LgEditorModel) {
         val key = "${doc.id}-${doc.currentVersion}"
         if (editor.loadedKey == key) return@LaunchedEffect
         editor.loading = true
-        try { editor.paragraphs = api.paragraphs(doc.id).paragraphs; editor.loadedKey = key; editor.error = null; editor.reset() }
+        try { val body = api.paragraphs(doc.id); editor.paragraphs = body.paragraphs; editor.page = body.page ?: LgPage(); editor.loadedKey = key; editor.error = null; editor.reset() }
         catch (e: ApiError) { editor.error = legalMessage(ctx, e) }
         editor.loading = false
     }
@@ -100,49 +114,80 @@ fun LegalParagraphEditor(doc: LgDocument, editor: LgEditorModel) {
         when {
             editor.loading && editor.paragraphs.isEmpty() -> LgLoadingRow()
             editor.error != null && editor.paragraphs.isEmpty() -> Text(editor.error!!, fontSize = 13.sp, color = c.mutedFg)
-            else -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                editor.paragraphs.filterNot { it.isBlank }.forEach { p -> ParagraphRow(p, editor) }
+            else -> BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val wide = maxWidth >= 560.dp
+                val page = editor.page
+                val zoom = if (wide) minOf(1.0, maxWidth.value / (page.width * 4 / 3)) else 1.0
+                Column(Modifier.width(if (wide) (page.width * 4 / 3 * zoom).dp else maxWidth).background(Color.White).border(1.dp, c.border)
+                    .padding(start = if (wide) (page.marginLeft * 4 / 3 * zoom).dp else 4.dp,
+                        end = if (wide) (page.marginRight * 4 / 3 * zoom).dp else 12.dp,
+                        top = if (wide) (page.marginTop * 4 / 3 * zoom).dp else 24.dp, bottom = 32.dp)) {
+                    LegalPageBlocks.of(editor.paragraphs).forEach { block ->
+                        if (block.first().layout?.cell == null) ParagraphRow(block.first(), editor, if (wide) zoom else 0.55, zoom)
+                        else {
+                            val columns = block.maxOf { it.layout!!.cell!!.col } + 1
+                            block.groupBy { it.layout!!.cell!!.row }.toSortedMap().values.forEach { row ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    (0 until columns).forEach { col ->
+                                        Column(Modifier.weight(1f).border(0.5.dp, Color.LightGray).padding(2.dp)) {
+                                            row.filter { it.layout!!.cell!!.col == col }.forEach { ParagraphRow(it, editor, if (wide) zoom else 0.55, zoom) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ParagraphRow(p: LgParagraph, editor: LgEditorModel) {
+private fun ParagraphRow(p: LgParagraph, editor: LgEditorModel, indentScale: Double = 0.55, zoom: Double = 1.0) {
     val c = Nx.colors
     val text = editor.edits[p.index] ?: p.text
     val changed = editor.edits[p.index]?.let { it != p.text } ?: false
     val ticked = p.index in editor.selected
     val heading = Regex("^(Heading|Judul|Title)", RegexOption.IGNORE_CASE).containsMatchIn(p.style.orEmpty())
-    val size = if (p.inTable) 13.sp else 14.sp
+    val l = p.layout ?: LgParagraphLayout()
+    val size = ((l.size ?: editor.page.size) * 4 / 3 * zoom).sp
+    val lineHeight = (size.value * l.lineHeight * 1.15).sp
+    if (p.isBlank) { Spacer(Modifier.height((lineHeight.value + (l.spaceBefore + l.spaceAfter) * 4 / 3 * zoom).dp)); return }
+    val align = when (l.align) { "center" -> TextAlign.Center; "right" -> TextAlign.Right; "justify" -> TextAlign.Justify; else -> TextAlign.Left }
+    val family = if (editor.page.font?.contains("Times", true) == true) FontFamily.Serif else FontFamily.SansSerif
+    val typography = TextStyle(fontSize = size, lineHeight = lineHeight, textAlign = align, fontFamily = family,
+        color = Color(0xFF171717), textIndent = TextIndent((l.firstLine * 4 / 3 * indentScale).sp))
     val weight = if (heading) FontWeight.SemiBold else FontWeight.Normal
     val lockReason = stringResource(if (p.lockReason == "number") R.string.lg_lock_number else R.string.lg_lock_complex)
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (changed) c.warning.copy(alpha = 0.12f) else c.card)
+    Row(Modifier.fillMaxWidth().background(if (changed) c.warning.copy(alpha = 0.12f) else Color.White)
         .then(if (ticked) Modifier.border(1.dp, c.violet.copy(alpha = 0.45f), RoundedCornerShape(8.dp)) else Modifier)
-        .padding(horizontal = 2.dp, vertical = 2.dp), verticalAlignment = Alignment.Top) {
-        IconButton(onClick = { editor.toggle(p.index) }, enabled = p.editable, modifier = Modifier.size(40.dp)) {
+        .padding(top = (l.spaceBefore * 4 / 3 * zoom).dp, bottom = (l.spaceAfter * 4 / 3 * zoom).dp), verticalAlignment = Alignment.Top) {
+        if (!p.editable) Box(Modifier.width(28.dp).padding(top = 3.dp)) { Icon(Icons.Filled.Lock, lockReason, tint = Color.Gray, modifier = Modifier.size(12.dp)) }
+        else IconButton(onClick = { editor.toggle(p.index) }, modifier = Modifier.size(28.dp)) {
             Icon(if (ticked) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, stringResource(R.string.lg_select_paragraph, p.index + 1),
                 tint = (if (ticked) c.violetText else c.mutedFg).copy(alpha = if (p.editable) 1f else 0.3f), modifier = Modifier.size(20.dp))
         }
-        Box(Modifier.weight(1f).padding(top = 8.dp, end = 6.dp, bottom = 6.dp)) {
+        Box(Modifier.weight(1f).padding(start = (l.indentLeft.coerceAtLeast(0.0) * 4 / 3 * indentScale).dp)) {
             when {
                 editor.editing == p.index -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LgTextField(text, { editor.edits[p.index] = it }, singleLine = false, minLines = 3)
+                    OutlinedTextField(text, { editor.edits[p.index] = it }, textStyle = typography, modifier = Modifier.fillMaxWidth())
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         NxButton(stringResource(R.string.lg_undo), { editor.edits.remove(p.index); editor.editing = null }, kind = NxButtonKind.GHOST, compact = true)
                         Spacer(Modifier.weight(1f))
                         NxButton(stringResource(R.string.lg_done), { editor.editing = null }, compact = true)
                     }
                 }
-                p.editable -> Text(if (changed) lgSegments(LegalLogic.diffWords(p.text, text)) else androidx.compose.ui.text.AnnotatedString(text.ifEmpty { " " }),
-                    fontSize = size, fontWeight = weight, color = c.foreground, lineHeight = 21.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { editor.editing = p.index })
-                // Locked: shown, never editable or ticked; a tap says why.
-                else -> Row(Modifier.fillMaxWidth().clickable { LegalToasts.warning(lockReason) }, verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Filled.Lock, lockReason, tint = c.mutedFg, modifier = Modifier.padding(top = 3.dp).size(12.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(p.text.ifEmpty { "—" }, fontSize = size, fontWeight = weight, color = c.mutedFg, lineHeight = 21.sp)
+                else -> Row {
+                    l.marker?.let { Text(it + " ", style = typography, modifier = Modifier.width((maxOf(l.hanging, 12.0) * 4 / 3 * indentScale).dp)) }
+                    val body = if (changed) lgSegments(LegalLogic.diffWords(p.text, text)) else buildAnnotatedString {
+                        if (l.runs == null) append(text)
+                        else l.runs.forEach { r -> withStyle(SpanStyle(fontWeight = if (r.b) FontWeight.Bold else weight,
+                            fontStyle = if (r.i) FontStyle.Italic else FontStyle.Normal, textDecoration = if (r.u) TextDecoration.Underline else TextDecoration.None)) { append(r.text) } }
+                    }
+                    Text(body, style = typography, fontWeight = weight, modifier = Modifier.weight(1f).clickable {
+                        if (p.editable) editor.editing = p.index else LegalToasts.warning(lockReason)
+                    })
                 }
             }
         }
