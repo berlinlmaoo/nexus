@@ -186,6 +186,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, onItem: (ShellNa
                     }
                     Icon(Icons.Outlined.Settings, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
                 }
+                // Own status entry under the identity card, like the web More sheet on phones (presence spec).
+                id.znetworks.nexus.feature.presence.SetStatusEntry(card = true)
                 FooterCard(onClick = { container.appearance.set(if (dark) AppTheme.LIGHT else AppTheme.DARK) }) {
                     Icon(if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, null, tint = c.foreground, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))

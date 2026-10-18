@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -67,12 +68,17 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
         Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), color = c.mutedFg, fontSize = 12.sp)
     }
 }
-@Composable fun SetStatusEntry() {
+/** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
+@Composable fun SetStatusEntry(card: Boolean = false) {
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val snapshot by container.presenceStatuses.state.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
     if (!snapshot.enabled) return
-    Row(Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    val shape = RoundedCornerShape(12.dp)
+    val frame = if (card) Modifier.fillMaxWidth().clip(shape).background(Nx.colors.card).border(1.dp, Nx.colors.border, shape).clickable { open = true }
+        .defaultMinSize(minHeight = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp)
+    else Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 12.dp)
+    Row(frame, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Icon(Icons.Outlined.Circle, null, tint = Nx.colors.warning)
         Column(Modifier.weight(1f)) { Text(stringResource(R.string.prs_set), color = Nx.colors.foreground); PresenceLine(container.sessionStore.current?.userId) }
     }
