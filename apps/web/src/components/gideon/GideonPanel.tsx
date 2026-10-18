@@ -707,7 +707,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuTrigger>
               {/* One line per action with a quiet hint under it; opens below the composer on the centred home so it
                   never covers the greeting (owner, 18 Oct 2026: "berantakan"). */}
-              <DropdownMenuContent align="start" side={centeredHome ? "bottom" : "top"} sideOffset={6} className="w-72 p-1">
+              <DropdownMenuContent align="start" side={centeredHome ? "bottom" : "top"} sideOffset={6} className="w-80 p-1">
                 {([
                   { icon: ImagePlus, label: t("Upload a photo"), hint: t("Screenshots and pictures"), run: () => imageInput.current?.click() },
                   { icon: Paperclip, label: t("Upload a file"), hint: t("PDF, Word, Excel or text"), run: () => fileInput.current?.click() },
