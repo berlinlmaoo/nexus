@@ -4,6 +4,10 @@
  * Keys must be unique across all id-*.ts files (i18n.test.mjs).
  */
 export const ID_GIDEON_AI: Record<string, string> = {
+  "Deepest. For analysis and decisions.": "Paling dalam. Untuk analisis dan keputusan.",
+  "Everyday work.": "Sehari-hari.",
+  "Light. Short questions.": "Ringan. Pertanyaan pendek.",
+  "Local model in the office. Slow and can be wrong.": "Model lokal di kantor. Lambat dan bisa keliru.",
   "Hide chat list": "Sembunyikan daftar chat",
   "Show chat list": "Tampilkan daftar chat",
   // Chat panel
