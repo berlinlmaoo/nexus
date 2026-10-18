@@ -20,7 +20,7 @@ import { BetaBadge } from "./BetaBadge";
  * while it is transcribed. Opened from GIDEON's "+" menu and the project header.
  */
 export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject }: { open: boolean; onOpenChange: (v: boolean) => void; projectId?: string | null }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const router = useRouter();
   const cfg = useWebAppConfig();
   const maxMinutes = cfg.data?.values?.meetingMaxMinutes ?? 180;
@@ -142,7 +142,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
             {(["upload", "record"] as const).map((m) => (
               <button key={m} role="tab" type="button" aria-selected={mode === m} disabled={busy} onClick={() => { setMode(m); setFile(null); setDuration(null); setError(null); setIntroEnd(null); }}
                 className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 font-medium text-muted-foreground transition-colors", mode === m && "bg-card text-foreground shadow-sm")}>
-                {m === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}{m === "upload" ? t("Upload a file") : t("Record")}
+                {m === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}{m === "upload" ? t("Upload a file") : lang === "id" ? "Rekam" /* the shared key "Record" means "Rekap" (attendance) */ : "Record"}
               </button>
             ))}
           </div>

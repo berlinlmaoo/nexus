@@ -645,29 +645,31 @@ function Speakers({ voices, map, segments, members, readOnly, onChange, onSeek }
           const e = map[label];
           const st = stats[label];
           return (
-            <li key={label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
-              <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", voiceColor(label))} aria-hidden />
-              <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">{voiceLabel(label)}</span>
-              <div className="min-w-0 flex-1 basis-40">
-                {readOnly ? (
-                  <span className="text-sm font-medium">{e?.name ?? <span className="text-muted-foreground">{t("Not named")}</span>}</span>
-                ) : (
-                  <input key={`${label}:${e?.name ?? ""}`} defaultValue={e?.name ?? ""} list={listId} maxLength={120} aria-label={t("Name for {voice}", { voice: voiceLabel(label) })}
-                    placeholder={t("Who is this?")} onBlur={(ev) => commit(label, ev.currentTarget.value)} onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); ev.currentTarget.blur(); } }}
-                    className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-sm font-medium outline-none hover:border-border focus:border-sidebar-primary focus:bg-background" />
+            <li key={label} className="flex gap-3 px-3 py-2.5">
+              <span className={cn("mt-[0.6rem] h-2.5 w-2.5 shrink-0 rounded-full", voiceColor(label))} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="w-[5.5rem] shrink-0 text-xs font-medium text-muted-foreground">{voiceLabel(label)}</span>
+                  <div className="min-w-[9rem] flex-1">
+                    {readOnly ? (
+                      <span className="px-2 text-sm font-medium">{e?.name ?? <span className="text-muted-foreground">{t("Not named")}</span>}</span>
+                    ) : (
+                      <input key={`${label}:${e?.name ?? ""}`} defaultValue={e?.name ?? ""} list={listId} maxLength={120} aria-label={t("Name for {voice}", { voice: voiceLabel(label) })}
+                        placeholder={t("Who is this?")} onBlur={(ev) => commit(label, ev.currentTarget.value)} onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); ev.currentTarget.blur(); } }}
+                        className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-sm font-medium outline-none hover:border-border focus:border-sidebar-primary focus:bg-background" />
+                    )}
+                  </div>
+                  {e?.auto && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-sidebar-primary">{t("From introductions")}</span>}
+                  {e && !e.auto && <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t("Set by hand")}</span>}
+                </div>
+                {st && (
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {t("{n} lines", { n: st.lines })} · {st.sec < 60 ? t("{s} s", { s: Math.max(1, Math.round(st.sec)) }) : durationText(st.sec, t)}
+                    {st.first && onSeek ? <> · <button type="button" onClick={() => onSeek(st.first!.start)} className="text-sidebar-primary hover:underline">{t("Listen")} {clock(st.first.start)}</button></> : null}
+                    {st.first && <span className="block truncate italic">“{st.first.text}”</span>}
+                  </div>
                 )}
               </div>
-              {e?.auto && <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-sidebar-primary">{t("From introductions")}</span>}
-              {e && !e.auto && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t("Set by hand")}</span>}
-              {st && (
-                <span className="w-full pl-[6.25rem] text-xs text-muted-foreground max-sm:pl-5">
-                  {t("{n} lines", { n: st.lines })} · {st.sec < 60 ? t("{s} s", { s: Math.max(1, Math.round(st.sec)) }) : durationText(st.sec, t)}
-                  {st.first && (onSeek
-                    ? <> · <button type="button" onClick={() => onSeek(st.first!.start)} className="text-sidebar-primary hover:underline">{t("Listen")} {clock(st.first.start)}</button></>
-                    : null)}
-                  {st.first && <span className="block truncate italic">“{st.first.text}”</span>}
-                </span>
-              )}
             </li>
           );
         })}
