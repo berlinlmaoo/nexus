@@ -479,6 +479,11 @@ final class NotificationAppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == MeetingUploads.sessionID else { completionHandler(); return }
+        MeetingUploads.shared.handleBackgroundEvents(completion: completionHandler)
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { await NotificationManager.shared.receivedDeviceToken(deviceToken) }
     }

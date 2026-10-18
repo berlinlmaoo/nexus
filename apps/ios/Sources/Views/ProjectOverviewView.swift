@@ -412,15 +412,7 @@ private enum OverviewStyle {
         default: return T("No priority")
         }
     }
-    static func priorityBar(_ key: String) -> Color {
-        switch key {
-        case "URGENT": return rose
-        case "HIGH": return NX.danger
-        case "MEDIUM": return sky
-        case "LOW": return NX.mutedFg.opacity(0.4)
-        default: return NX.mutedFg.opacity(0.25)
-        }
-    }
+    static func priorityBar(_ key: String) -> Color { TaskPriorityName.color(key) }
 
     static func initial(_ name: String) -> String { String(name.first ?? "?").uppercased() }
 

@@ -146,10 +146,12 @@ struct RootView: View {
                 // A task, project or submission a notification pointed at. A sheet for the same
                 // reason the form is one: it arrives from outside, it has no list behind it, and it
                 // has to work under the tab bar and the sidebar alike.
+                .background { Color.clear.sheet(isPresented: Binding(get: { router.meetingFile != nil && RemoteConfig.shared.meetingNotesEnabled }, set: { if !$0 { router.meetingFile = nil } })) { NewMeetingSheet(initialFile: router.meetingFile).environment(auth).environment(router) } }
                 .sheet(item: $router.detail) { request in
                     NavigationStack {
                         Group {
                             switch request.target {
+                            case .meeting(let id): MeetingDetailView(id: id)
                             case .task(let id):       TaskDetailView(taskId: id)
                             case .project(let id):    ProjectDetailView(projectId: id, projectName: "")
                             case .submission(let id): SubmissionDetailSheet(submissionId: id)
@@ -211,6 +213,7 @@ struct MoreView: View {
                                         InboxView(providesOwnStack: false)
                                     }
                                 }
+                                if RemoteConfig.shared.meetingNotesEnabled { MoreTile(T("Meeting notes") + " · " + T("Beta"), "mic", NX.violetText) { MeetingListView() } }
                                 MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }

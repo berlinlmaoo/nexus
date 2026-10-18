@@ -196,7 +196,7 @@ extension View {
 }
 
 enum ChipTone {
-    case neutral, accent, success, warning, danger, info, coral
+    case neutral, accent, success, warning, danger, info, coral, orange
 
     /// Text and icon colour. Like `NX.violet` / `NX.violetText`, a tone is two colours because one
     /// cannot do both jobs: the bright fills read 1.9–3.3:1 as 11 pt type on their own 16% tint in
@@ -212,6 +212,7 @@ enum ChipTone {
         case .danger: return ChipText.danger
         case .info: return ChipText.info
         case .coral: return ChipText.coral
+        case .orange: return Color(light: 0xc2410c, dark: 0xfb923c)
         }
     }
     /// The chip's wash: the bright tone, unchanged, so every chip keeps its colour.
@@ -226,6 +227,7 @@ enum ChipTone {
         case .danger: return NX.danger
         case .info: return NX.blue
         case .coral: return NX.coral
+        case .orange: return Color(hex: "#f97316")
         }
     }
 

@@ -106,6 +106,7 @@ struct GideonPanel: View {
     var embedded = false
     /// OAA transcripts reuse the same turn renderer without touching the signed-in chat store.
     var reviewTurns: [GideonTurn]? = nil
+    @Environment(AppRouter.self) private var router
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1109,8 +1110,15 @@ struct GideonPanel: View {
 
     /// One menu rather than three icons (web "+"). A PhotosPicker nested in a Menu draws its row but never
     /// opens, so the menu only flips flags and the pickers themselves hang off the panel.
+    @State private var showNewMeeting = false
+
     private var plusMenu: some View {
         Menu {
+            if RemoteConfig.shared.meetingNotesEnabled {
+                Button { showNewMeeting = true } label: {
+                    Label { Text(T("Meeting recording") + " · " + T("Beta")); Text(T("Minutes and tasks from a recording")) } icon: { Image(systemName: "mic") }
+                }
+            }
             Button { showPhotoPicker = true } label: { Label(T("Add a photo"), systemImage: "photo") }
             Button { showCamera = true } label: { Label(T("Camera"), systemImage: "camera") }
             Button { showFilePicker = true } label: { Label(T("Add a file (PDF, Word, Excel, text…)"), systemImage: "paperclip") }
@@ -1125,6 +1133,7 @@ struct GideonPanel: View {
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .accessibilityLabel(T("Add photos, files or pages"))
+        .sheet(isPresented: $showNewMeeting) { NewMeetingSheet(projectId: openContext?.projectId ?? chat.context.projectId).environment(auth).environment(router) }
     }
 
     /// "Review before writing ▾" (web): what has to wait for Apply before GIDEON changes something.

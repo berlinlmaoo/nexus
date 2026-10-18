@@ -52,7 +52,8 @@ struct InboxView: View {
         .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Mentions, assignments, approvals and replies that need you.")) { pageHeader }
         .navigationDestination(item: $openTarget) { target in
             switch target {
-            case .task(let id):    TaskDetailView(taskId: id)
+            case .meeting(let id): MeetingDetailView(id: id)
+                case .task(let id):    TaskDetailView(taskId: id)
             // A notification carries the project's id and no name; the board fills its own
             // header in once it loads.
             case .project(let id): ProjectDetailView(projectId: id, projectName: "")
@@ -226,7 +227,7 @@ struct InboxView: View {
         // opened here instead — same destination, one step.
         if case .submission(let id) = target { openSubmission = SubmissionRef(id: id); return }
         switch target {
-        case .task, .project: openTarget = target
+        case .meeting, .task, .project: openTarget = target
         // A record on another screen: the router walks there and hands the id over, exactly as a
         // tapped push does. One path, so the Inbox row and the lock screen cannot drift apart.
         default: router.open(target)

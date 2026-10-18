@@ -12,7 +12,7 @@ enum NativeAPI {
         let (data, response) = try await APIClient.shared.perform(request)
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else { throw NativeAPIError(status: http.statusCode, data: data) }
+        guard (200..<300).contains(http.statusCode) else { throw NativeAPIError(status: http.statusCode, data: data, path: path) }
         return try JSONDecoder().decode(T.self, from: data)
     }
     static func object<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) }
@@ -22,9 +22,11 @@ enum NativeAPI {
 struct NativeAPIError: LocalizedError {
     let status: Int
     let data: Data
+    var path: String = ""
     var fields: [String: Any] { (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:] }
     var code: String { fields["code"] as? String ?? "" }
     var errorDescription: String? {
+        if path.hasPrefix("/api/meetings"), let message = MeetingIssue.message(code.isEmpty ? fields["error"] as? String ?? "" : code, metadata: fields) { return message }
         switch code.uppercased() {
         case "NEEDS_EDIT_ACCESS": return T("You can't add tasks to that project. Pick another.")
         case "BAD_SECTION": return T("That column is no longer available. Choose another column.")

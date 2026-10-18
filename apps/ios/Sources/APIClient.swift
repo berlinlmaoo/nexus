@@ -789,15 +789,6 @@ struct APIClient {
         _ = try await run(makeRequest("/api/project-folders/\(folderId)", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
-    /// Curated project subset for a folder's aggregate view (empty = all projects in the folder).
-    @discardableResult
-    func setFolderAggregate(folderId: String, projectIds: [String]) async throws -> Bool {
-        var req = makeRequest("/api/project-folders/\(folderId)", method: "PATCH")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["aggregateProjectIds": projectIds])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
-    }
     /// Tasks across a set of projects (the folder aggregate calendar). projectIds joined by comma.
     func folderTasks(projectIds: [String]) async throws -> [FolderTask] {
         guard !projectIds.isEmpty else { return [] }

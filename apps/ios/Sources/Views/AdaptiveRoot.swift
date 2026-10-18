@@ -23,7 +23,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     // what `nexus://teamCalendar` resolves against, and links written before the rename must still open.
     case messages, threads, submissions, teamCalendar, roomBooking
     // GIDEON's own page (web sidebar, 12 Oct 2026): the conversation with its chats list. iPad / Mac sidebar.
-    case gideon
+    case gideon, meetingNotes
     // Work: Legal (owner, 14 Oct 2026), invitation only — drawn when Viewer.canAccessLegal.
     case legal
     // Missions
@@ -45,6 +45,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .projects:     return T("Projects")
         case .legal:        return T("Legal")
         case .messages:     return T("Messages")
+        case .meetingNotes: return T("Meeting notes")
         case .gideon:       return "GIDEON"
         case .threads:      return T("Threads")
         case .submissions:  return T("My Submissions")
@@ -71,6 +72,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .projects:     return "rectangle.stack.fill"
         case .legal:        return NX.legalSymbol
         case .messages:     return "bubble.left.and.bubble.right.fill"
+        case .meetingNotes: return "mic"
         case .gideon:       return "sparkles"
         case .threads:      return "text.bubble.fill"
         case .submissions:  return "tray.full.fill"
@@ -99,6 +101,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .projects:     return "folder"
         case .legal:        return NX.legalSymbol
         case .messages:     return "bubble.left"
+        case .meetingNotes: return "mic"
         case .gideon:       return "sparkles"
         case .threads:      return "at"
         case .submissions:  return "doc.text"
@@ -120,7 +123,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
 
     var tint: Color {
         switch self {
-        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon: return NX.violetText
+        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon, .meetingNotes: return NX.violetText
         case .tasks, .attendance, .reports:                                    return NX.success
         case .inbox, .messages, .forms, .tickets, .legal:                      return NX.blue
         case .submissions, .leaderboard:                                       return NX.warning
@@ -152,7 +155,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         // The web-style page header screens (Mac parity, 13 Oct) hide the bar as the sidebar's root too, so
         // they get the same top band that keeps their header clear of the window controls.
         case .dashboard, .inbox, .projects, .threads, .submissions, .leaderboard, .reports, .docs,
-             .attendance, .tickets, .admin, .teamCalendar, .vault, .settings, .roomBooking, .gideon, .legal:
+             .attendance, .tickets, .admin, .teamCalendar, .vault, .settings, .roomBooking, .gideon, .meetingNotes, .legal:
             return true
         default: return false
         }
@@ -178,6 +181,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .projects:     ProjectsView()
         case .legal:        LegalView()
         case .messages:     MessagesView(providesOwnStack: true)
+        case .meetingNotes: MeetingListView()
         case .gideon:       GideonPanel(embedded: true)
         case .threads:      ThreadsView()
         case .submissions:  SubmissionsView()
@@ -214,7 +218,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// Work rather than disappear. Pages (`.docs`) and `.teams` were already off the sidebar; their
     /// routes stay alive for old shortcuts and notification links.
     static var groups: [(title: String?, screens: [NXScreen])] { [
-        (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .tasks, .submissions, .teamCalendar, .attendance]),
+        (T("Home"),   [.dashboard, .messages, .gideon, .meetingNotes, .inbox, .tasks, .submissions, .teamCalendar, .attendance]),
         // The web sidebar's Work group (AppSidebar.tsx): no Reports or Forms rows (UI tour run 14, P-I36).
         // Both screens stay reachable: Forms from My Submissions ("Open forms"), Reports from its links.
         (T("Work"),   [.projects, .legal, .leaderboard]),
@@ -451,6 +455,7 @@ struct SidebarRoot: View {
         return NXScreen.groups.map { g in
             (g.title, g.screens.filter {
                 (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
+                    && ($0 != .meetingNotes || RemoteConfig.shared.meetingNotesEnabled)
                     && ($0 != .legal || viewer.canAccessLegal) && ($0 != .admin || viewer.canAdminister)
             })
         }
@@ -881,6 +886,7 @@ struct SidebarRoot: View {
             }
         } icon: {
             // Calm, one colour (dev web); white on the selection fill.
+            if screen == .meetingNotes { MeetingBetaBadge() }
             if screen == .gideon {
                 // GIDEON's own mark, as the web sidebar (UI tour run 9, P11), not the generic sparkles.
                 Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()

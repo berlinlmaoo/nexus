@@ -37,6 +37,8 @@ final class AuthStore {
             Keychain.save(next)
             if current.userId != next.userId {
                 AttendanceQueue.shared.rebindIdentity(from: current.userId, to: next.userId)
+                MeetingUploads.shared.rebindIdentity(from: current.userId, to: next.userId)
+                MeetingRecorder.shared.rebindIdentity(from: current.userId, to: next.userId)
                 ResponseCache.clearAll()
                 OfflineSync.shared.reset()
                 Viewer.shared.reset()
@@ -156,6 +158,8 @@ final class AuthStore {
         if let session {
             Task { await NotificationManager.shared.unregister(session: session) }
         }
+        MeetingUploads.shared.suspendForLogout()
+        MeetingRecorder.shared.stopForLogout()
         Keychain.clear()
         // A cached roster or task list must not outlive the session that fetched it.
         ResponseCache.clearAll()

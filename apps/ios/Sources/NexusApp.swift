@@ -68,6 +68,7 @@ struct NexusApp: App {
                         .task(id: auth.readySession?.userId) {
                             // The tour's QA account must not register this device for pushes, start the
                             // work-hours trail or send queued check-ins: it is only here to be photographed.
+                            if auth.readySession != nil { await MeetingUploads.shared.resumeForCurrentUser() }
                             if TourMode.isActive { return }
                             if let userId = auth.readySession?.userId {
                                 await NotificationManager.shared.activate(userId: userId)
@@ -99,6 +100,7 @@ struct NexusApp: App {
                                 await auth.refreshIdentity()
                                 guard let userId = auth.readySession?.userId else { return }
                                 await ProjectShortcuts.shared.syncPins()
+                                await MeetingUploads.shared.resumeForCurrentUser()
                                 if TourMode.isActive { return }
                                 await NotificationManager.shared.reconcileReminders(userId: userId)
                                 await AttendanceQueue.shared.flush()

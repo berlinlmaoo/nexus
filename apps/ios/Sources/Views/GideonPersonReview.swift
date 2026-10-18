@@ -230,7 +230,11 @@ private struct GideonPersonCredits: View {
             }.padding(16)
         }.task { await load() }
     }
-    private func number(_ text: String) -> Int? { Int(text.filter { $0.isNumber }) }
+    private func number(_ text: String) -> Int? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.range(of: "^[0-9]+(?:\\.[0-9]{3})*$", options: .regularExpression) != nil else { return nil }
+        return Int(value.replacingOccurrences(of: ".", with: ""))
+    }
     private func load() async {
         do {
             let admin: GideonAdminCredits = try await NativeAPI.request("/api/gideon/credits/admin")

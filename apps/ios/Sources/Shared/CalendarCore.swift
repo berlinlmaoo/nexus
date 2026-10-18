@@ -60,6 +60,16 @@ struct CalStructure: Codable, Sendable {
     let me: CalMe?
     let units: [CalUnit]
     let people: [CalPerson]
+    var folders: [CalFolder]? = nil
+}
+
+struct CalFolder: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let icon: String?
+    let color: String?
+    let parentId: String?
+    let depth: Int
 }
 
 struct CalPlacement: Codable, Hashable, Sendable {
@@ -361,14 +371,32 @@ struct CalFilters: Codable, Hashable, Sendable {
     var scope: CalScope = .all
     var units: [String] = []
     var people: [String] = []
+    var folders: [String] = []
     var projects: [String] = []
     var priorities: [String] = []
     var hideDone = false
     var overdueOnly = false
 
-    /// The filters at work — divisions, people, projects, priorities and the two switches. Never the scope.
+    init(scope: CalScope = .all, units: [String] = [], people: [String] = [], projects: [String] = [], priorities: [String] = [], hideDone: Bool = false, overdueOnly: Bool = false, folders: [String] = []) {
+        self.scope = scope; self.units = units; self.people = people; self.projects = projects
+        self.priorities = priorities; self.hideDone = hideDone; self.overdueOnly = overdueOnly; self.folders = folders
+    }
+    enum CodingKeys: String, CodingKey { case scope, units, people, folders, projects, priorities, hideDone, overdueOnly }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        scope = try c.decodeIfPresent(CalScope.self, forKey: .scope) ?? .all
+        units = try c.decodeIfPresent([String].self, forKey: .units) ?? []
+        people = try c.decodeIfPresent([String].self, forKey: .people) ?? []
+        folders = try c.decodeIfPresent([String].self, forKey: .folders) ?? []
+        projects = try c.decodeIfPresent([String].self, forKey: .projects) ?? []
+        priorities = try c.decodeIfPresent([String].self, forKey: .priorities) ?? []
+        hideDone = try c.decodeIfPresent(Bool.self, forKey: .hideDone) ?? false
+        overdueOnly = try c.decodeIfPresent(Bool.self, forKey: .overdueOnly) ?? false
+    }
+
+    /// The filters at work. Folder membership is enforced by the server, never locally.
     var activeCount: Int {
-        (units.isEmpty ? 0 : 1) + (people.isEmpty ? 0 : 1) + (projects.isEmpty ? 0 : 1)
+        (units.isEmpty ? 0 : 1) + (people.isEmpty ? 0 : 1) + (folders.isEmpty ? 0 : 1) + (projects.isEmpty ? 0 : 1)
             + (priorities.isEmpty ? 0 : 1) + (hideDone ? 1 : 0) + (overdueOnly ? 1 : 0)
     }
 

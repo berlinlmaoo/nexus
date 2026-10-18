@@ -139,7 +139,7 @@ struct DashboardView: View {
             return
         }
         switch target {
-        case .task, .project: toggleBell(false) { openTarget = target }
+        case .meeting, .task, .project: toggleBell(false) { openTarget = target }
         // A record on another screen: the router walks there and hands the id over, as a push does.
         default: router.open(target); toggleBell(false)
         }
@@ -219,6 +219,7 @@ struct DashboardView: View {
             .navigationBarHidden(true)
             .navigationDestination(item: $openTarget) { target in
                 switch target {
+                case .meeting(let id): MeetingDetailView(id: id)
                 case .task(let id):    TaskDetailView(taskId: id)
                 // A notification carries the project's id and no name; the board fills its own
                 // header in once it loads.

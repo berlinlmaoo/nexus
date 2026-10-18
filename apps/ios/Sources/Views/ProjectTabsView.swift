@@ -72,7 +72,7 @@ func humanizeEnum(_ raw: String) -> String {
 }
 
 func prioTone(_ p: String) -> ChipTone {
-    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .danger; case "MEDIUM": return .info; default: return .neutral }
+    TaskPriorityName.tone(p)
 }
 
 /// A task's priority as a compact pill (owner, 10 Oct 2026: the NexusChip was too big beside the card
@@ -1091,15 +1091,7 @@ struct TimelineTab: View {
     }
 
     /// GANTT_BAR: the bar's colour by priority.
-    static func barColor(_ p: String?) -> Color {
-        switch (p ?? "NONE").uppercased() {
-        case "URGENT": return Color(hex: "#f43f5e")
-        case "HIGH":   return Color(hex: "#ef4444")
-        case "MEDIUM": return Color(hex: "#0ea5e9")
-        case "LOW":    return Color(hex: "#8b5cf6")
-        default:       return Color(hex: "#14b8a6")
-        }
-    }
+    static func barColor(_ p: String?) -> Color { TaskPriorityName.color(p) }
 
     /// "3 Sep", or "3 Sep → 5 Sep" (the year only outside the current one).
     static func spanLabel(_ w: Win) -> String {
@@ -1745,7 +1737,7 @@ struct CreateTaskSheet: View {
         }
     }
     private func prioColor(_ p: String) -> Color {
-        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.danger; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
+        TaskPriorityName.color(p)
     }
 
     // MARK: custom field rendering (port of web TaskComposer)

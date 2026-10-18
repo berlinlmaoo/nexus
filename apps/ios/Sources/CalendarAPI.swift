@@ -16,14 +16,14 @@ extension APIClient {
     }
 
     /// Every task the caller may see due on the WIB days `from`…`to` (inclusive, at most 62 days).
-    func calendarItems(from: String, to: String, userId: String) async throws -> CalItemsResponse {
-        try await calRun("/api/calendar/items?from=\(from)&to=\(to)", as: CalItemsResponse.self,
-                         cache: Self.calItemsKey(userId, from: from, to: to))
+    func calendarItems(from: String, to: String, userId: String, folder: String? = nil) async throws -> CalItemsResponse {
+        try await calRun("/api/calendar/items?from=\(from)&to=\(to)" + Self.calFolderQuery(folder, first: false), as: CalItemsResponse.self,
+                         cache: Self.calItemsKey(userId, from: from, to: to, folder: folder))
     }
 
     /// Open tasks due before today (newest first) — the overdue rail.
-    func calendarOverdue(userId: String) async throws -> CalOverdueResponse {
-        try await calRun("/api/calendar/overdue", as: CalOverdueResponse.self, cache: Self.calOverdueKey(userId))
+    func calendarOverdue(userId: String, folder: String? = nil) async throws -> CalOverdueResponse {
+        try await calRun("/api/calendar/overdue" + Self.calFolderQuery(folder, first: true), as: CalOverdueResponse.self, cache: Self.calOverdueKey(userId, folder: folder))
     }
 
     /// How a task that is not in what is loaded may be opened (masked / editable / read-only).
@@ -46,8 +46,12 @@ extension APIClient {
     }
 
     static func calStructureKey(_ userId: String) -> String { "cal-structure-\(userId)" }
-    static func calOverdueKey(_ userId: String) -> String { "cal-overdue-\(userId)" }
-    static func calItemsKey(_ userId: String, from: String, to: String) -> String { "cal-items-\(userId)-\(from)-\(to)" }
+    private static func calFolderQuery(_ folder: String?, first: Bool) -> String {
+        guard let folder, !folder.isEmpty else { return "" }
+        return (first ? "?folder=" : "&folder=") + (folder.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
+    }
+    static func calOverdueKey(_ userId: String, folder: String? = nil) -> String { "cal-overdue-\(userId)" + calFolderQuery(folder, first: true) }
+    static func calItemsKey(_ userId: String, from: String, to: String, folder: String? = nil) -> String { "cal-items-\(userId)-\(from)-\(to)" + calFolderQuery(folder, first: true) }
 
     /// `runReport` without the 403 code: nothing answered → `nothingAnswered`, 401 → `unauthorized`,
     /// other statuses → the server's sentence, and only a clean decode is cached.

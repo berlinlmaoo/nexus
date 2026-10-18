@@ -20,6 +20,7 @@ struct ProjectDetailView: View {
     /// "+" on the Forms tab (owner, 9 Oct 2026): a pushed form builder, not a third sheet here.
     @State private var newFormOpen = false
     @State private var showSettings = false
+    @State private var showMeetings = false
     /// ⌘N / ⌘, / ⌘[ / ⌘] / ⌘F do nothing while a sheet (the task popup, settings…) is up over the
     /// project: focus stays in the top-most sheet (QA BoD R2). SheetCover.swift.
     @State private var cover = SheetCover()
@@ -526,6 +527,7 @@ struct ProjectDetailView: View {
             CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue,
                             initialLaneId: createLaneId ?? StatusOptions.defaultOption(detail?.taskLists ?? [])?.id) { await load() }
         }
+        .background { Color.clear.sheet(isPresented: $showMeetings) { NavigationStack { MeetingListView(projectId: projectId).toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { showMeetings = false } } } }.environment(auth).environment(router) } }
         .sheet(isPresented: $showSettings) {
             if let detail {
                 ProjectSettingsView(projectId: projectId, detail: detail, onChange: { await load() }, onDeleted: { dismiss() })
@@ -705,6 +707,9 @@ struct ProjectDetailView: View {
         HStack(spacing: 10) {
             // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
             AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: labelled)
+            if RemoteConfig.shared.meetingNotesEnabled {
+                Menu { Button { showMeetings = true } label: { Label(T("Meeting notes") + " · " + T("Beta"), systemImage: "mic") } } label: { Image(systemName: "ellipsis").frame(width: 36, height: 36) }.accessibilityLabel(T("Project actions"))
+            }
             ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: labelled) { if !cover.isCovered { showSettings = true } }
                 .keyboardShortcut(",", modifiers: .command)
             // iPad / Mac: Add task lives on the tab row (split button), not in the header (web 267).

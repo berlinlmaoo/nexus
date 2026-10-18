@@ -353,6 +353,7 @@ func notificationFilterTabs(_ list: [NexusNotification]) -> [NotificationFilterT
 /// screens in both shapes of the app; the others carry the id of a single record, which no
 /// eighteen-case screen enum has room for.
 enum NotificationTarget: Hashable {
+    case meeting(String)
     case gideonPerformance
     case task(String)
     case project(String)
@@ -376,6 +377,7 @@ enum NotificationTarget: Hashable {
     case permitToday
     /// The Calendar opened on one WIB day — `/calendar?date=YYYY-MM-DD` (also on `/master-calendar`
     /// and `/team-calendar`). The router leaves the day in `AppRouter.calendarDate` for the screen.
+    case calendarLink(String)
     case calendarDay(String)
     /// The crew streak board on the Attendance screen, scrolled into view — where an approver sees
     /// who is outside the office right now (`attendance_outside_approver`, owner 8 Oct 2026). Also
@@ -398,8 +400,8 @@ enum NotificationTarget: Hashable {
         case .post:                              return .threads
         case .submission, .legalRequest:         return .submissions
         case .legalBoard:                        return .legal
-        case .calendarDay:                       return .teamCalendar
-        case .task, .project:                    return nil
+        case .calendarLink, .calendarDay:                       return .teamCalendar
+        case .meeting, .task, .project:          return nil
         }
     }
 
@@ -413,6 +415,8 @@ enum NotificationTarget: Hashable {
         guard let head = parts.first?.lowercased() else { self = .screen(.dashboard); return }
         let rest: String? = parts.count > 1 ? parts[1] : nil
         switch head {
+        case "meetings":
+            if let rest { self = .meeting(rest) } else { self = .screen(.meetingNotes) }
         case "tasks":
             if let rest { self = .task(rest) } else { self = .screen(.tasks) }
         case "projects":
@@ -436,7 +440,9 @@ enum NotificationTarget: Hashable {
         case "threads", "social":
             if let id = Self.queryValue("post", in: path) { self = .post(id) } else { self = .screen(.threads) }
         // There is no single-document screen on mobile; the library is as close as it gets.
-        case "docs", "folders":         self = .screen(.docs)
+        case "docs":                    self = .screen(.docs)
+        case "folders":
+            if let rest { self = .calendarLink("/calendar?folder=" + NativeAPI.escape(rest)) } else { self = .screen(.projects) }
         case "forms":                   self = .screen(.forms)
         // A /vault link opens the shelf. A /v/<slug> link does NOT come through here — that is
         // a universal link with a capability in it, and AppRouter resolves it against the server.
@@ -458,6 +464,7 @@ enum NotificationTarget: Hashable {
         // the Calendar holds tasks only, so that one opens Room Booking.
         case "calendar", "team-calendar", "master-calendar":
             if head == "master-calendar", Self.queryValue("booking", in: path) != nil { self = .screen(.roomBooking) }
+            else if Self.queryValue("folder", in: path) != nil { self = .calendarLink(path) }
             else if let day = Self.calendarDay(Self.queryValue("date", in: path)) { self = .calendarDay(day) }
             else { self = .screen(.teamCalendar) }
         case "complaints":

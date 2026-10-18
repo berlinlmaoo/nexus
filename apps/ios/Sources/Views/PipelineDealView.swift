@@ -63,7 +63,10 @@ struct PipelineDealView: View {
             }
             .keyboardDoneBar()
             .navigationDestination(item: $openProject) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
-            .navigationDestination(item: $openFolderId) { id in FolderByIdView(folderId: id) }
+            .onChange(of: openFolderId) { _, id in
+                guard let id else { return }; openFolderId = nil; dismiss()
+                Task { try? await Task.sleep(for: .milliseconds(350)); AppRouter.shared.open(.calendarLink("/calendar?folder=" + NativeAPI.escape(id))) }
+            }
         }
         // The only .sheet of this view: add, edit or mark paid a payment term.
         .sheet(item: $termRoute) { route in

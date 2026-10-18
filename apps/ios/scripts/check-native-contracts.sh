@@ -34,3 +34,9 @@ if not link: raise SystemExit('ExistingLink model not found')
 PY
 swiftc "$NATIVE_CHECK_TMP/conversion.swift" Tests/BlockEditing/Stub.swift Tests/BlockEditing/main.swift -o "$NATIVE_CHECK_TMP/blocks"
 (cd Tests/BlockEditing && "$NATIVE_CHECK_TMP/blocks")
+swiftc Sources/GideonTaskModels.swift Sources/MeetingModels.swift Sources/MeetingStore.swift Tests/Meetings/Stub.swift Tests/Meetings/main.swift -o "$NATIVE_CHECK_TMP/meetings"
+"$NATIVE_CHECK_TMP/meetings"
+swiftc Sources/Shared/CalendarCore.swift Tests/CalendarFolders/main.swift -o "$NATIVE_CHECK_TMP/calendar-folders"
+"$NATIVE_CHECK_TMP/calendar-folders"
+swiftc Sources/Shared/CalendarCore.swift Tests/CalendarGolden/main.swift -o "$NATIVE_CHECK_TMP/calendar-golden"
+"$NATIVE_CHECK_TMP/calendar-golden" Tests/CalendarGolden

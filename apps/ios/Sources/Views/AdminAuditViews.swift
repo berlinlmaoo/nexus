@@ -641,7 +641,7 @@ private struct AuditEntrySheet: View {
                 DocReaderView(docId: id, title: e.entityType == "doc" ? (e.entityName ?? "") : "")
             } label: { label }.buttonStyle(.plain)
         case .folder(let id):
-            NavigationLink { FolderByIdView(folderId: id) } label: { label }.buttonStyle(.plain)
+            Button { leave(to: .folder(id)) } label: { label }.buttonStyle(.plain)
         default:
             Button { leave(to: target) } label: { label }.buttonStyle(.plain)
         }
@@ -674,7 +674,9 @@ private struct AuditEntrySheet: View {
                 switchTab("announcements")
             case .chat(let id):
                 router.open(.conversation(id))
-            case .project, .task, .doc, .folder:
+            case .folder(let id):
+                router.open(.calendarLink("/calendar?folder=" + NativeAPI.escape(id)))
+            case .project, .task, .doc:
                 break
             }
         }

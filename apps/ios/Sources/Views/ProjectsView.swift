@@ -31,7 +31,6 @@ struct ProjectsView: View {
     /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
     @State private var tallies: [String: ProjectTally] = [:]
     /// A folder's aggregate view opened from its context menu (the calendar button is a link of its own).
-    @State private var openFolder: FolderRoute?
     /// Folder waiting on the delete confirmation.
     @State private var confirmDelete: ProjectFolder?
     /// A move, delete or drop the server refused, shown in an alert (same as the board).
@@ -89,7 +88,7 @@ struct ProjectsView: View {
             moveFolder: { f, parentId in await moveFolder(f, to: parentId) },
             drop: { payload, folderId in drop(payload, into: folderId) },
             openProject: { p in openBoard = ProjectRef(id: p.id, name: p.name, icon: p.icon, color: p.color) },
-            openFolder: { f in openFolder = FolderRoute(id: f.id) },
+            openFolder: { f in router.open(.calendarLink("/calendar?folder=" + NativeAPI.escape(f.id))) },
             newProject: { f in sheet = .newProjectIn(f) },
             newSubfolder: { f in sheet = .newSubfolder(f) },
             editFolder: { f in sheet = .editFolder(f) },
@@ -135,11 +134,6 @@ struct ProjectsView: View {
             // tapped row. onAppear covers a request made before the tab existed, onChange a later one.
             .onAppear { takeProjectRequest() }
             .onChange(of: router.projectRequest) { _, _ in takeProjectRequest() }
-            .navigationDestination(item: $openFolder) { route in
-                if let f = folders.first(where: { $0.id == route.id }) {
-                    FolderAggregateView(folder: f, allFolders: folders, allProjects: projects.filter { $0.folderId != nil })
-                }
-            }
             .navigationTitle(T("Projects"))
             // Inline, like the other tab roots (Chat, Calendar). The default large title left an empty band
             // with no "Projects" in it above the search field on the iPhone (UI tour 13 Oct 2026).
@@ -543,11 +537,6 @@ struct ProjectsView: View {
             return false
         }
     }
-}
-
-/// Pushes a folder's aggregate view from its context menu.
-struct FolderRoute: Hashable {
-    let id: String
 }
 
 /// Everything a folder row or a project card can ask the Projects screen to do: one value down the
