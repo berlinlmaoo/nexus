@@ -37,7 +37,7 @@ struct GideonMemoryView: View {
 
         }.background(NX.background)
             .navigationTitle(embedded ? "" : T("GIDEON Memory")).navigationBarTitleDisplayMode(.inline)
-            .accessibilityIdentifier("memory.settings").keyboardDoneBar()
+            .accessibilityElement(children: .contain).accessibilityIdentifier("memory.settings").keyboardDoneBar()
             .task { await store.refresh() }
             .liveRefresh(every: 60, on: [.nexusRealtimeConnected], refreshOnReturn: true) { await store.refresh() }
             .onChange(of: store.sessionExpired) { _, expired in if expired { auth.logout() } }

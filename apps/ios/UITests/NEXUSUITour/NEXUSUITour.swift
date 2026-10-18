@@ -577,7 +577,10 @@ final class NEXUSUITour: XCTestCase {
                                            docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
             // The row is a button whose label holds the document's title; [TEST] when only the id was given.
             let title = legal.docTitle ?? "[TEST]"
-            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+            // Archive titles contain invisible wrapping controls; match their visible characters.
+            let controls = "[\u{200B}\u{2060}]*"
+            let visibleTitle = title.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: controls)
+            let row = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "(?s).*" + visibleTitle + ".*")).firstMatch
             if !row.waitForExistence(timeout: 20) {
                 // Not on the first page of the archive: search for it, as a person would (typing saves nothing).
                 let search = app.textFields.firstMatch
@@ -672,7 +675,15 @@ final class NEXUSUITour: XCTestCase {
                     let window = app.windows.firstMatch
                     // isHittable can be true for a field with only its first pixels visible,
                     // including under a pinned Apply bar. Bring its centre clear of that chrome.
-                    var visible = window.frame.insetBy(dx: 12, dy: 140)
+                    let panes = app.scrollViews.allElementsBoundByIndex.filter {
+                        $0.isHittable && $0.frame.width > 100 && $0.frame.height > 160
+                    }
+                    let containing = panes.last {
+                        $0.descendants(matching: .any).matching(textMatch).firstMatch.exists
+                    }
+                    let candidate = (containing ?? panes.last)?.frame.intersection(window.frame) ?? window.frame
+                    let region = candidate.isNull || candidate.height < 160 ? window.frame : candidate
+                    var visible = region.insetBy(dx: 12, dy: min(90, region.height * 0.15))
                     let keyboard = app.keyboards.firstMatch
                     if keyboard.exists { visible.size.height = max(80, min(visible.maxY, keyboard.frame.minY - 90) - visible.minY) }
                     let frame = target.exists ? target.frame : .zero
@@ -682,14 +693,15 @@ final class NEXUSUITour: XCTestCase {
                     let upward = target.exists && !frame.isEmpty && frame.midY < visible.midY
                     // Scroll inside the target's pane (Messages list, centred sheet or page).
                     // The window centre can belong to a different scroll view on iPad/Mac.
-                    let targetX = target.exists && !frame.isEmpty && !frame.isInfinite
-                        ? (frame.midX - window.frame.minX) / window.frame.width : 0.5
-                    let x = min(0.85, max(0.15, targetX))
-                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upward ? 0.35 : 0.75))
+                    let targetX = target.exists && !frame.isEmpty && !frame.isInfinite ? frame.midX : region.midX
+                    let x = (min(region.maxX - 20, max(region.minX + 20, targetX)) - window.frame.minX) / window.frame.width
+                    let startY = (region.minY + region.height * (upward ? 0.35 : 0.75) - window.frame.minY) / window.frame.height
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: startY))
                     #if targetEnvironment(macCatalyst)
-                    start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * window.frame.height * 0.4)
+                    start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * region.height * 0.4)
                     #else
-                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upward ? 0.75 : 0.35))
+                    let endY = (region.minY + region.height * (upward ? 0.75 : 0.35) - window.frame.minY) / window.frame.height
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: endY))
                     start.press(forDuration: 0.05, thenDragTo: end)
                     #endif
                     pause(0.5)

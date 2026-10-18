@@ -880,13 +880,13 @@ struct SidebarRoot: View {
             HStack(spacing: 6) {
                 Text(screen.sidebarTitle).font(NXFont.text(15, selected ? .medium : .regular)).lineLimit(1)
                     .foregroundStyle(selected ? NX.violetText : NX.foreground)
+                if screen == .meetingNotes { MeetingBetaBadge() }
                 Spacer(minLength: 4)
                 let n = badgeCount(screen)
                 if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: onFill) }
             }
         } icon: {
             // Calm, one colour (dev web); white on the selection fill.
-            if screen == .meetingNotes { MeetingBetaBadge() }
             if screen == .gideon {
                 // GIDEON's own mark, as the web sidebar (UI tour run 9, P11), not the generic sparkles.
                 Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
