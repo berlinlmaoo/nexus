@@ -2,34 +2,41 @@
 
 ## Fix 21 (18 Oct 2026, `feat/android-r21`, DEV only)
 
-In progress. No APK publication, version change, push or production access. Latest green: 756 JVM tests + assembleDebug.
+Implementation and the available Pixel_7 QA pass are complete. 768 JVM tests and `assembleDebug` pass with portable JDK 21, a 3 GB Gradle heap and two workers. Each green implementation step was committed. No push, APK publication, version change or production access; versionCode remains 13.
 
-- Owner appendices re-read as clean UTF-8: every API request advertises `X-Nexus-Caps: chat-files`; replies, message previews and Docs retain document names/sizes; Files also accepts the server's supported image formats within 8 MB. Permanent EN/ID AI disclaimer and per-account one-time BoD review notice added with the owner's exact wording. Credit limits are server-controlled; decoding tests cover Staff 250/2,500 and Manager 750/7,500 without baking policy into Android.
-- Device flows passed: inline task creation, title edit, comment and guarded description save; chat text send, document picker/upload/send, native file card, authenticated download/open chooser/share; GIDEON answer, Stop and usage history; Legal page and inline edit opened without saving existing content; phone Control Room Details opens a person. Re-shot Outlet Calendar/day after correcting initial tab selection, and Attendance without touching check-in.
-- Pending appended OAA chat review: this checkout and the deployed web Control Room bundle currently contain usage + credits admin APIs but no person-chat/transcript contract. Re-check before completion; never substitute a person's own chat endpoint or enable BoD transcript access.
+Done:
+- Preserved the established Home numeric gradient cards (including 0/0), Messages / Pesan, and Artemis / Phaëthon (default) / Aphrodite / Model 0. Android's tablet rail already contains only the main tabs, with no project/folder list.
+- Owner decisions: three distinct-score podium steps with all ties, overlapping faces/+N, tie counts, wrapping names and competition ranks underneath; reset copy says the 28th. Removed room-capacity model/UI. Legal versions, templates and compare pickers use REV. Control Room Details stays visible on phones. Copy to another project is gated below Can edit.
+- Concurrency: assignee/tag/multi-select deltas, guarded task descriptions, retained conflict drafts; form baseUpdatedAt and confirmed Load latest; sheet structureVersion/current/refetch; Pipeline retry-stable term IDs and costsBase/linksBase; Outlet retry-stable IDs; localized Vault/conflict errors; stale task events/reads rejected and polling retained. Relative reorder helper sends movedIds/beforeId; local task ties sort by position, createdAt, id. Android Docs are read-only, so no doc-save mutation exists.
+- Approved page parity: onyx split New, top-of-group inline creation plus the full-details composer; task property rows/status tick, Follow/Favourite/Like/quest, gated Copy/Open as page, tags/custom properties, oldest-first comments and bottom composer, description without heading; repeated grouped-table headers; calendar weekend/first-of-month labels; timeline weekend/violet-today marker.
+- Legal Review & edit consumes layout/page metadata and draws a white reflowed page with typography/runs, markers/indents/spacing, blank lines, gutter selection/locks and tables. Inline edits retain uniform bold/italic/underline. Existing DEV Legal content was opened without saving a revision.
+- GIDEON streams partial answers/proposals, animates Thinking, folds steps, cancels the socket with Stop, opens history from the title, and renders neutral approval cards. The latest owner file's grey user bubble is applied. Composer credits, period pool, paginated usage history, enforced fallback/blocked notices and refresh after answers are EN/ID. Summary pool limits already include bonuses. DEV policy confirms Staff 250/day + 2,500/period, Manager 750 + 7,500; Android reads server policy rather than embedding defaults.
+- Permanent AI disclaimer and per-account one-time BoD-review notice use the owner's exact EN/ID wording. Control Room › GIDEON › People opens Overview/Credits; Chats requires both ONE_ABOVE_ALL and server canReadChats. Uses deployed /api/gideon/people/{id}, /chats and /chats/{chatId}, with search/date/deleted filters, cursors, deleted markers and a read-only transcript sharing the normal renderer. No composer, Apply/Discard, room picker, mutation calls, notice to the person or reason prompt.
+- Chat files advertise X-Nexus-Caps: chat-files (including the LAN probe), use multipart /api/upload/chat, accept supported images up to 8 MB and documents up to 25 MB, retain names/sizes in messages/replies/Docs, show pending attachment/removal/progress and native file cards, authenticated open/download/share, and 📎 name previews. Clear EN/ID size/type errors.
+- Fixed device findings: circular podium +N, Outlet Calendar/Board/Form route selection and dates, stale month response handling, and robust tour taps/scrolling. Explicit English Sep formatting now survives ICU/CLDR differences; strict September output tests restored, with quoted literals, full months, Indonesian and machine dates checked.
+- Local DEV DNS override is optional/debug-only, matches only the configured DEV hostname, preserves TLS/SNI/certificate verification, and is ignored in release. Committed defaults contain no private host/address. Tour tooling targets Pixel_7 explicitly and consumes one reused session through the app's debug-private storage without logging credentials.
 
-- Verified already present: Home gradient cards with numeric totals including 0/0; Messages / Pesan navigation; Artemis / Phaëthon (default) / Aphrodite / Model 0 tiers; configurable dev host with a placeholder committed default.
-- Owner decisions: podium now groups everyone by the three best distinct scores, with stacked faces, tie counts, wrapping names and fixed 2/1/3 steps; room capacity removed from GIDEON; Legal version rows use REV; explicit Details action on Control Room user rows; form-copy menu hidden below Can edit.
-- Concurrency: assignee and multi-select deltas; tag-delta write support; guarded description body saves retaining drafts on conflict; form baseUpdatedAt; sheet structureVersion with current/refetch on conflict; retry-stable Pipeline term/Outlet creation ids; cost/link bases; localized conflict/Vault errors; stale task timestamps rejected and polling retained while connected. Docs are read-only on Android, so there is no doc-save path to change.
-- Validation: 743 JVM tests green and assembleDebug green, portable JDK 21, 3 GB Gradle heap. Windows source checks normalize CRLF; the locale-provider test accepts the desktop CLDR September abbreviation while preserving Android's existing locale selection.
-- Page parity: task property rows (label left/value right, Status completion tick), Follow/Favourite/Like/quest actions, oldest-first comments with bottom composer, description without heading, custom properties and Add property. Grouped tables repeat headers. Board/List already had inline New at the top. Legal now reads page/layout metadata and renders a white reflowed page, typography/runs, clause markers, indents/spacing, blank lines, gutter locks/ticks and table cells; paragraph edits use the same typography.
-- Second green step: 745 JVM tests and assembleDebug pass. Pixel_7 restarted with a visible window and `-gpu host` following the owner's updated setup.
-- GIDEON: cancellable SSE reading renders partial answers/proposals, Stop cancels the socket, faint violet user bubble, plain assistant text, expandable step summary. Composer credits meter uses GET /api/gideon/credits, refreshes after answers, opens monthly pool + paginated usage history, shows Unlimited / Tanpa batas and enforced fallback/blocked notices. EN + ID.
-- Chat documents: server endpoint exists; Android file picker validates the same document extensions and 25 MB limit, sends attachment metadata, renders file cards and opens/downloads through the authenticated file client.
-- Third green step: 750 JVM tests and assembleDebug pass. Corrected local build invocation to pass hostname only to nexusDevHost (the app adds port 8443). No real host is committed.
-- Remaining: Pixel_7 DEV logic flows and screenshot tour, and any device defects found (estimate 2–3 hours including re-shoots).
-- Local tour companion `scripts/ui-tour-local.mjs` targets Pixel_7 explicitly, shares the API runner's one login through a consumed debug-private file, follows the iOS screen manifest, and records missing fixtures/native screens as skips. Generic debug routes cover Legal/detail screens. 750 JVM tests + debug build remain green.
-- Pixel_7's DNS cannot resolve the private hostname despite successful host access; explicit emulator DNS also failed. Added optional debug-only `nexusDevAddress` IP mapping for the exact dev host, retaining URL/TLS/SNI/certificate checks; empty committed default, release ignores it. 752 JVM tests and assembleDebug pass. Initial network-error screenshots are being replaced.
-- DEV API checks on a newly created QA task: title edits, additive/removal tags preserving a concurrent tag, assignee delta + stale-base 409, guarded description + stale 409, comment, new QA sheet + stale structure 409, Vault listing and Legal layout all passed. Fixtures will be removed after the UI flows.
-- Remaining approved parity completed: split onyx New / menu; Board/List New opens the first group's inline card and New task with details opens the full composer; editable tag deltas; task Copy to another project (gated below Can edit) and Open as page; clickable GIDEON history title, animated Thinking line and neutral approval cards with red/green diff. 752 JVM tests + debug build pass. UI checks/re-shoots continue.
-- Device findings fixed: podium +N is now an overlapping circular face-count bubble; leaderboard reset copy says the 28th; project Calendar weekend shading/first-day month label and Timeline violet today marker + weekend body shading; Outlet calendar/board/form links map to the correct native modules and keep requested dates; stale month reads cannot replace the chosen month. Form conflicts now expose the error and an explicit confirmed Load latest action while preserving the draft until chosen. 754 JVM tests + assembleDebug pass.
+QA evidence: `C:/Users/Berlin/Documents/Dev/nexus-shots/index-fix21.html` and `tour-report.json`; 42 manifest IDs: 33 reviewed entry/navigation passes, 2 partial native surfaces, 1 absent action, 6 skips. Changed-flow screenshots are indexed separately. Screens were visually inspected; this does not claim every destructive action or every role was exercised.
 
 | QA area | Result |
 |---|---|
-| JVM + debug build | PASS — 750 tests, debug build |
-| Pixel_7 screen tour | Pending |
-| QA-only task/comment/message/GIDEON/Legal/Vault flows | Pending |
-| Real attendance | Excluded by task instruction |
+| JVM/build | PASS — 768 tests, debug APK build; no publication |
+| Pixel_7 | Visible window, host GPU, explicit serial; shut down at completion |
+| Main screen tour | 35 usable native/login captures reviewed; gaps listed below |
+| Task UI | PASS — inline create, title edit, comment, guarded description save; API values verified |
+| Concurrency on DEV QA fixtures | PASS — additive tags preserve concurrent tag; stale assignees/description/sheet return 409; form UI keeps draft, Cancel keeps it, confirmed Load latest loads remote version |
+| Chat documents | PASS — picker/upload/send, name/size card, reply quote, Docs tab, authenticated open chooser/share; supported formats/limits unit-tested |
+| GIDEON | PASS — answer, streaming Stop, credits/history, English/Indonesian composer; socket release on cancellation unit-tested |
+| Control Room GIDEON | PASS — BoD Overview/Credits and hidden Chats on device; DEV list request refused with 403 OAA_ONLY; OAA role gate, deleted transcript/approvals/attachments and GET/cursor contract unit-tested |
+| Legal / Vault | PASS — DEV layout/list APIs, Legal page/inline editor and Vault listing on device |
+| Cleanup | PASS — two new tasks, extra sheet, form and QA-only group deleted and re-read as 404; this run's GIDEON chats removed from user history; unrelated QA work retained |
+| Attendance | Read-only visit; no check-in/out |
+
+Left / estimates:
+- Live positive OAA transcript/deleted/search pagination and Staff/Manager × project access checks: 2–3 hours with the corresponding QA sessions. The supplied session is BoD; no account was promoted or permissions bypassed. Unit/contract coverage is present; live success is not claimed.
+- Social Media Report has no Android native screens or template card on this branch (four tour IDs skipped; gallery partial). Separate native feature work: approximately 12–20 hours.
+- Outlet's newer Guest overview and Report settings sheet are absent from the existing Android implementation (overview partial/settings action absent). Calendar/day/report navigation works. Separate parity work: approximately 4–8 hours.
+- legal-hidden and sidebar-collapsed are web-only manifest variants; skipped on Pixel_7. Android's existing rail needs no collapsed project-list fix.
 
 **Active again since 28 Sep 2026** (hold lifted by the owner). Parity with iOS per
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
@@ -1331,3 +1338,5 @@ on mobile (0.1.7 on iOS too).
 2. Release per the owner's rule (above): not before parity + a clean audit; new versionCode, publish via
    web /download/android, Android minimum 3 days later.
 3. On-device run of the acceptance lists on the first staff phone (docs/INSTALL-APK.md checklist).
+
+FIX21-ANDROID DONE
