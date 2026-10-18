@@ -158,7 +158,8 @@ struct MeetingDetailView: View {
                     }.nexusCard()
                 }
                 if ["READY","APPLIED"].contains(meeting.status) { minutes(meeting) }
-                if let segments = meeting.transcript, !segments.isEmpty { transcript(segments) }
+                MeetingSpeakersSection(store: store, meeting: meeting) { seconds in Task { await seek(seconds) } }
+                if let segments = meeting.transcript, !segments.isEmpty { transcript(segments, meeting: meeting) }
             }.frame(maxWidth: 960).frame(maxWidth: .infinity).padding(20)
         }
         .accessibilityElement(children: .contain)
@@ -202,7 +203,8 @@ struct MeetingDetailView: View {
                 Label(T(title), systemImage: index < stage ? "checkmark.circle.fill" : "\(index + 1).circle").font(NXFont.text(11)).foregroundStyle(index <= stage ? NX.violetText : NX.mutedFg)
             } }
             ProgressView(value: min(1, max(0, meeting.status == "UPLOADING" ? Double(meeting.audio.received) / Double(max(1, meeting.audio.bytes)) : meeting.progress))).tint(NX.violet)
-            if meeting.status == "TRANSCRIBING" { Text(T("Transcribing on the office server. GIDEON Model 0 is paused meanwhile.")).font(NXFont.text(12)) }
+            if meeting.transcribeStats?.stage == "speakers" { Text(T("Telling the voices apart…")).font(NXFont.text(12)) }
+            else if meeting.status == "TRANSCRIBING" { Text(T("Transcribing on the office server. GIDEON Model 0 is paused meanwhile.")).font(NXFont.text(12)) }
             if meeting.status == "SUMMARIZING" { Text(T("GIDEON is reading the transcript and writing the minutes.")).font(NXFont.text(12)) }
             MeetingQueueBlock(meeting: meeting)
             if meeting.status == "UPLOADING" { MeetingUploadStatus(meetingId: meeting.id) }
@@ -252,6 +254,7 @@ struct MeetingDetailView: View {
     private func attendees(_ meeting: MeetingNote) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(T("Attendees")).font(NXFont.text(13, .semibold))
+            if !MeetingVoiceStyle.keys(meeting).isEmpty { Text(T("Names come from the introductions at the start. If a voice is wrong, fix it under Speakers below the minutes.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             FlowLayout(spacing: 6) {
                 ForEach(Array((meeting.mom?.attendees ?? []).enumerated()), id: \.offset) { index, name in
                     HStack { Text(name); if editable(meeting) { Button { store.updateMinutes { if $0.attendees.indices.contains(index) { $0.attendees.remove(at: index) } } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel(String(format: T("Remove %@"), name)) } }.font(NXFont.text(12)).padding(7).background(NX.muted, in: Capsule())
@@ -273,14 +276,7 @@ struct MeetingDetailView: View {
                     }.buttonStyle(.nxBordered)
                 }
             }
-            if let speakers = meeting.speakers, !speakers.isEmpty, editable(meeting) {
-                ForEach(speakers.keys.sorted(), id: \.self) { key in
-                    Picker(key, selection: Binding(get: { store.meeting?.speakers?[key]?.userId ?? "" }, set: { userId in
-                        var next = store.meeting?.speakers ?? [:]; next[key] = .init(name: meeting.members?.first { $0.id == userId }?.name ?? key, userId: userId.isEmpty ? nil : userId)
-                        if let object = try? NativeAPI.object(next) { store.change(["speakers":object]) { $0.speakers = next } }
-                    })) { Text(key).tag(""); ForEach(meeting.members ?? []) { Text($0.name ?? "—").tag($0.id) } }
-                }
-            }
+
         }
     }
     private func proposals(_ meeting: MeetingNote) -> some View {
@@ -305,7 +301,7 @@ struct MeetingDetailView: View {
             }
         }
     }
-    private func transcript(_ segments: [MeetingNote.Segment]) -> some View {
+    private func transcript(_ segments: [MeetingNote.Segment], meeting: MeetingNote) -> some View {
         DisclosureGroup(T("Transcript"), isExpanded: $transcriptOpen) {
             VStack(alignment: .leading, spacing: 10) {
                 TextField(T("Find in transcript"), text: $transcriptSearch).textFieldStyle(.roundedBorder)
@@ -314,12 +310,16 @@ struct MeetingDetailView: View {
                     if transcriptSearch.isEmpty || segment.text.localizedCaseInsensitiveContains(transcriptSearch) {
                         HStack(alignment: .top, spacing: 12) {
                             Button(MeetingLabels.clock(segment.start)) { Task { if player == nil, let meeting = store.meeting { await preparePlayer(meeting) }; await player?.seek(to: CMTime(seconds: segment.start, preferredTimescale: 600)); player?.play() } }.font(NXFont.text(11)).foregroundStyle(NX.violetText)
-                            Text(segment.text).font(NXFont.text(13)).textSelection(.enabled)
+                            (Text(segment.speaker.map { MeetingVoiceStyle.name($0, in: meeting) + ": " } ?? "").fontWeight(.semibold).foregroundColor(segment.speaker.map { MeetingVoiceStyle.color($0, keys: MeetingVoiceStyle.keys(meeting)) } ?? NX.foreground) + Text(segment.text)).font(NXFont.text(13)).textSelection(.enabled)
                         }
                     }
                 }
             }.padding(.top, 10)
         }
+    }
+    private func seek(_ seconds: Double) async {
+        if player == nil, let meeting = store.meeting { await preparePlayer(meeting) }
+        await player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600)); player?.play()
     }
     private func preparePlayer(_ meeting: MeetingNote) async {
         guard meeting.audio.available, let session = Keychain.load() else { audioFailure = T("The audio is no longer available."); return }

@@ -8,7 +8,8 @@ struct MeetingNote: Codable, Identifiable {
     struct Permissions: Codable { let edit: Bool; let apply: Bool; let delete: Bool; let retry: Bool }
     struct Queue: Codable { let waiting: Bool; let position: Int?; let etaSec: Double }
     struct Segment: Codable { let start: Double; let end: Double; let text: String; let speaker: String? }
-    struct Speaker: Codable { var name: String; var userId: String? }
+    struct Speaker: Codable { var name: String; var userId: String?; var auto: Bool? = nil }
+    struct TranscribeStats: Codable { let stage: String? }
     struct AppliedTask: Codable, Identifiable { let id: String; let title: String; let status: String?; let dueDate: String?; let projectId: String?; let assignees: [GideonTaskOptions.Member]? }
     let id: String
     var title: String
@@ -38,6 +39,9 @@ struct MeetingNote: Codable, Identifiable {
     var mom: MeetingMinutes?
     var proposals: [MeetingTaskProposal]?
     var speakers: [String: Speaker]?
+    let speakerLabels: Bool?
+    let introEndSec: Double?
+    let transcribeStats: TranscribeStats?
     let transcript: [Segment]?
     let tasks: [AppliedTask]?
     var members: [GideonTaskOptions.Member]?

@@ -11,6 +11,8 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     private(set) var paused = false
     private(set) var elapsed: Double = 0
     private(set) var file: URL?
+    private(set) var introEndSec: Double?
+    var speakerLabels = true
     var notice: String?
     var failure: String?
     @ObservationIgnored private var recorder: AVAudioRecorder?
@@ -18,24 +20,24 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     @ObservationIgnored private var interruption: NSObjectProtocol?
     private var limit: Double = 180 * 60
     private var owner: String?
-    private struct Draft: Codable { let path: String; let owner: String; let elapsed: Double }
+    private struct Draft: Codable { let path: String; let owner: String; let elapsed: Double; var introEndSec: Double? = nil; var speakerLabels: Bool? = nil }
     private let draftURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("meeting-recording.json")
     private var recordingsFolder: URL { draftURL.deletingLastPathComponent().appendingPathComponent("MeetingRecordings", isDirectory: true) }
     func restoreForCurrentUser() {
         guard !recording, !paused, let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == Keychain.load()?.userId,
               let source = MeetingStorage.resolve(draft.path, in: recordingsFolder), FileManager.default.fileExists(atPath: source.path) else { return }
-        file = source; owner = draft.owner; elapsed = draft.elapsed
+        file = source; owner = draft.owner; elapsed = draft.elapsed; introEndSec = draft.introEndSec; speakerLabels = draft.speakerLabels ?? true
     }
     private func saveDraft() {
         guard let file, let owner else { return }
-        let draft = Draft(path: file.lastPathComponent, owner: owner, elapsed: elapsed)
+        let draft = Draft(path: file.lastPathComponent, owner: owner, elapsed: elapsed, introEndSec: introEndSec, speakerLabels: speakerLabels)
         if let data = try? JSONEncoder().encode(draft) { try? data.write(to: draftURL, options: .atomic) }
     }
     func uploaded(_ path: String) {
         guard let source = MeetingStorage.resolve(path, in: recordingsFolder) else { return }
         try? FileManager.default.removeItem(at: source)
         if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), MeetingStorage.resolve(draft.path, in: recordingsFolder) == source { try? FileManager.default.removeItem(at: draftURL) }
-        if file == source { file = nil; owner = nil; elapsed = 0 }
+        if file == source { file = nil; owner = nil; elapsed = 0; introEndSec = nil }
     }
 
     private override init() {
@@ -76,22 +78,28 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
             }
             prepared.0.delegate = self
             guard prepared.0.record(forDuration: maxSeconds) else { throw APIError.transport(T("Couldn't start recording. Try again.")) }
-            recorder = prepared.0; file = prepared.1; elapsed = 0; owner = expectedOwner
+            recorder = prepared.0; file = prepared.1; elapsed = 0; introEndSec = nil; owner = expectedOwner
             limit = maxSeconds; recording = true; paused = false
             saveDraft(); tick()
         } catch { if epoch == preparationEpoch { failure = error.localizedDescription }; deactivate() }
     }
+    func markIntroductions() {
+        guard recording || paused else { return }
+        introEndSec = max(0, recorder?.currentTime ?? elapsed); saveDraft()
+    }
+    func undoIntroductions() { introEndSec = nil; saveDraft() }
+    func setSpeakerLabels(_ value: Bool) { speakerLabels = value; saveDraft() }
     func cancelPreparation() { preparationEpoch = UUID() }
     private func deactivate() { Task.detached { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) } }
     func rebindIdentity(from old: String, to new: String) {
         if owner == old { owner = new; saveDraft() }
         else if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == old {
-            let migrated = Draft(path: draft.path, owner: new, elapsed: draft.elapsed)
+            let migrated = Draft(path: draft.path, owner: new, elapsed: draft.elapsed, introEndSec: draft.introEndSec, speakerLabels: draft.speakerLabels)
             if let bytes = try? JSONEncoder().encode(migrated) { try? bytes.write(to: draftURL, options: .atomic) }
             restoreForCurrentUser()
         }
     }
-    func stopForLogout() { cancelPreparation(); stop(); file = nil; owner = nil }
+    func stopForLogout() { cancelPreparation(); stop(); file = nil; owner = nil; introEndSec = nil }
 
     func pause() {
         guard recording else { return }

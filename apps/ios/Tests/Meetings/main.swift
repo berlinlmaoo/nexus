@@ -14,6 +14,23 @@ func payload(_ title: String, _ version: Int) -> Data { Data(base.replacingOccur
     m.status = "APPLIED"; expect(!m.canApplyDraft, "Applied minutes cannot create tasks twice")
     expect(MeetingIssue.message("TOO_LARGE", metadata: ["maxBytes":123])?.contains("123") == true, "Use server size limit")
     expect(MeetingIssue.message("TOO_LONG", metadata: ["maxMinutes":7])?.contains("7") == true, "Use server duration limit")
+    let labelled = base.replacingOccurrences(of: "\"transcript\":[]", with: #""speakerLabels":true,"introEndSec":4.2,"transcribeStats":{"stage":"speakers"},"speakers":{"Speaker 1":{"name":"QA Dev 5","userId":"person","auto":true},"Speaker 2":{"name":"Rudi","auto":true}},"transcript":[{"start":0,"end":3,"text":"Hi","speaker":"Speaker 1"}]"#)
+    let labelledMeeting = try JSONDecoder().decode(MeetingEnvelope.self, from: Data(labelled.utf8)).meeting
+    expect(labelledMeeting.speakerLabels == true && labelledMeeting.introEndSec == 4.2, "Speaker preference and intro marker decode")
+    expect(labelledMeeting.transcribeStats?.stage == "speakers" && labelledMeeting.speakers?["Speaker 1"]?.auto == true, "Speaker pipeline and automatic name decode")
+    let names = MeetingStore(id: "names")
+    names.meeting = labelledMeeting
+    names.setSpeaker("Speaker 1", name: "Berlin")
+    NativeAPI.requests = []; NativeAPI.replies = [.init(data: Data(labelled.utf8))]
+    _ = await names.flush()
+    let sentNames = NativeAPI.requests.last?.1["speakers"] as? [String:[String:Any]]
+    expect(sentNames?["Speaker 1"]?["auto"] == nil && sentNames?["Speaker 1"]?["name"] as? String == "Berlin", "Manual rename removes auto")
+    expect(sentNames?["Speaker 2"]?["auto"] as? Bool == true, "Whole-map PATCH preserves other automatic names")
+    expect(names.notice?.contains("Write the minutes again") == true, "Ready name edit explains minutes regeneration")
+    names.setSpeaker("Speaker 1", name: "  ")
+    NativeAPI.replies = [.init(data: Data(labelled.utf8))]
+    _ = await names.flush()
+    expect((NativeAPI.requests.last?.1["speakers"] as? [String:Any])?["Speaker 1"] == nil, "Empty speaker name removes the mapping")
     let store = MeetingStore(id: "meeting")
     NativeAPI.replies = [.init(data: payload("Meeting",1))]; await store.load()
     NativeAPI.requests = []

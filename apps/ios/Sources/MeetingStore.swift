@@ -43,6 +43,17 @@ final class MeetingStore {
         guard let object = try? NativeAPI.object(proposals) else { return }
         change(["proposals": object]) { $0.proposals = proposals }
     }
+    func setSpeaker(_ key: String, name: String, userId: String? = nil) {
+        var map = meeting?.speakers ?? [:]
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { map[key] = nil }
+        else {
+            let matches = (meeting?.members ?? []).filter { $0.name?.caseInsensitiveCompare(trimmed) == .orderedSame }
+            map[key] = .init(name: name, userId: userId ?? (matches.count == 1 ? matches.first?.id : nil), auto: nil)
+        }
+        guard let object = try? NativeAPI.object(map) else { return }
+        change(["speakers":object]) { $0.speakers = map }
+    }
     @discardableResult func flush() async -> Bool {
         if let worker = saveWorker { return await worker.value }
         guard !pending.isEmpty else { return true }
@@ -62,6 +73,7 @@ final class MeetingStore {
                 if pending.isEmpty { meeting = response.meeting }
                 else { meeting?.version = response.meeting.version }
                 failure = nil
+                if fields["speakers"] != nil && response.meeting.status == "READY" { notice = T("Saved. To use the new names in the minutes, choose Write the minutes again.") }
             } catch let error as NativeAPIError where error.code == "VERSION_CONFLICT" {
                 if let current = try? JSONDecoder().decode(MeetingEnvelope.self, from: error.data) { meeting = current.meeting }
                 pending = [:]

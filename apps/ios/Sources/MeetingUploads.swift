@@ -39,7 +39,7 @@ final class MeetingUploads {
     private init() {
         if let data = try? Data(contentsOf: manifest), let saved = try? JSONDecoder().decode([String: Job].self, from: data) { jobs = saved }
     }
-    func begin(file: URL, title: String, projectId: String?, language: String, source: String, duration: Double?) async throws -> MeetingNote {
+    func begin(file: URL, title: String, projectId: String?, language: String, source: String, duration: Double?, speakerLabels: Bool = true, introEndSec: Double? = nil) async throws -> MeetingNote {
         guard let user = Keychain.load() else { throw APIError.unauthorized }
         let scoped = file.startAccessingSecurityScopedResource(); defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else { throw APIError.transport(T("This recording couldn't be read. Try another audio file.")) }
@@ -55,7 +55,7 @@ final class MeetingUploads {
             try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: privateFile.path)
         }.value
         do {
-            let body: [String: Any] = ["fileName":file.lastPathComponent, "mime":Self.mime(file.pathExtension), "size":bytes, "title":title, "projectId":jsonOrNull(projectId), "language":language, "source":source, "durationSec":duration.map { $0 as Any } ?? NSNull(), "recordedAt":ISO8601DateFormatter().string(from: Date())]
+            let body: [String: Any] = ["fileName":file.lastPathComponent, "mime":Self.mime(file.pathExtension), "size":bytes, "title":title, "projectId":jsonOrNull(projectId), "language":language, "source":source, "durationSec":duration.map { $0 as Any } ?? NSNull(), "recordedAt":ISO8601DateFormatter().string(from: Date()), "speakerLabels":speakerLabels, "introEndSec":(speakerLabels ? introEndSec : nil).map { $0 as Any } ?? NSNull()]
             let response: MeetingCreated = try await NativeAPI.request("/api/meetings", method: "POST", body: body)
             let job = Job(id: response.meeting.id, ownerId: user.userId, server: ServerEnvironment.current.rawValue, source: privateFolder.lastPathComponent + "/" + privateFile.lastPathComponent, bytes: bytes, chunkBytes: min(response.upload.maxChunkBytes, max(1, response.upload.chunkBytes)), received: response.meeting.audio.received, recordingSource: source == "record" ? file.path : nil)
             jobs[job.id] = job; save()
