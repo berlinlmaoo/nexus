@@ -202,5 +202,8 @@ extension AppLanguage {
         "Remove the folder filter %@": "Hapus filter folder %@",
         "You need Can edit or Full access to this project.": "Kamu perlu akses Bisa edit atau Akses penuh ke project ini.",
         "Couldn't update meeting notes. Try again.": "Catatan meeting tidak bisa diperbarui. Coba lagi.",
+        "Short description": "Deskripsi singkat",
+        "New field": "Field baru",
+        "Project duplicated": "Project diduplikat",
     ]
 }

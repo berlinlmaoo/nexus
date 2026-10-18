@@ -123,13 +123,13 @@ struct ProjectSettingsView: View {
     // MARK: identity
 
     private var identityCard: some View {
-        card("Identitas") {
+        card("Identity") {
             field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
-            field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
+            field(T("Description")) { TextField(T("Short description"), text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
             // No emoji and no colour any more (owner, 11 Oct 2026): the project's photo, or the Tasks icon.
             field(T("Photo")) { photoRow }
             Button { Task { await saveIdentity() } } label: {
-                Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
+                Text(savingIdentity ? T("Saving…") : (identitySaved ? T("Saved") + " ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity || !canManage)
         }
         .disabled(!canManage)
@@ -289,7 +289,7 @@ struct ProjectSettingsView: View {
             }
             if canManage {
                 NavigationLink { CustomFieldEditor(projectId: projectId) { await reloadFields() } } label: {
-                    Label("Field baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                    Label(T("New field"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
                 }
             }
         }
@@ -350,7 +350,7 @@ struct ProjectSettingsView: View {
             // Duplicate: BoD and above (it clones every task, assignee and member at once; web drawer).
             if isBoD {
                 Button { Task { await duplicate() } } label: {
-                    Label(busy ? "…" : "Duplikat project", systemImage: "doc.on.doc").font(NXFont.text(14, .bold)).foregroundStyle(NX.blue)
+                    Label(busy ? "…" : T("Duplicate project"), systemImage: "doc.on.doc").font(NXFont.text(14, .bold)).foregroundStyle(NX.blue)
                 }.disabled(busy)
             }
             if isBoD && canManage { Divider().overlay(NX.border) }
@@ -371,7 +371,7 @@ struct ProjectSettingsView: View {
 
     private func card<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(title)
+            SectionLabel(T(title))
             content()
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -387,7 +387,7 @@ struct ProjectSettingsView: View {
     private func flagToggle(_ title: String, _ sub: String, _ binding: Binding<Bool>, _ onSet: @escaping () async -> Void) -> some View {
         Toggle(isOn: Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; Task { await onSet() } })) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(T(title)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
         }.tint(NX.violetText)
@@ -592,7 +592,7 @@ struct ProjectSettingsView: View {
     }
     private func duplicate() async {
         busy = true
-        if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show("Project diduplikat ✓") }
+        if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show(T("Project duplicated") + " ✓") }
         else { show(T("Couldn't duplicate.")) }
         busy = false
     }

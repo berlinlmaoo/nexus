@@ -209,6 +209,6 @@ struct GideonPerformanceView: View {
     private func metric(_ label: String, _ value: String) -> some View { HStack(alignment: .top) { Text(T(label)).foregroundStyle(NX.mutedFg); Spacer(minLength: 12); Text(value).multilineTextAlignment(.trailing) }.font(NXFont.text(12)) }
     private func seconds(_ milliseconds: Double?) -> String { milliseconds.map { AppNumber.decimal($0 / 1000) + " s" } ?? "—" }
     private func percent(_ value: Double?) -> String { value.map { AppNumber.decimal($0) + "%" } ?? "—" }
-    private func clock(_ value: String) -> String { NativeDate.parse(value).map { AppDateLocale.formatter("HH:mm").string(from: $0) } ?? "—" }
+    private func clock(_ value: String) -> String { NativeDate.parse(value).map { AppDateLocale.formatter("HH:mm", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: $0) } ?? "—" }
     private func reasonText(_ reason: String) -> String { T(["transcribing":"The GPU is transcribing a meeting.","loading":"Loading the model into the GPU.","down":"The local engine isn't responding.","failing":"The last 3 answers failed."][reason] ?? "Unavailable") }
 }

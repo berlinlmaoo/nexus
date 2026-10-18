@@ -40,3 +40,15 @@ swiftc Sources/Shared/CalendarCore.swift Tests/CalendarFolders/main.swift -o "$N
 "$NATIVE_CHECK_TMP/calendar-folders"
 swiftc Sources/Shared/CalendarCore.swift Tests/CalendarGolden/main.swift -o "$NATIVE_CHECK_TMP/calendar-golden"
 "$NATIVE_CHECK_TMP/calendar-golden" Tests/CalendarGolden
+# Exercise NativeAPI through the app's actual URL-building branch (no networking or credentials).
+python3 - "$NATIVE_CHECK_TMP" <<'PY'
+from pathlib import Path
+import sys
+client = Path('Sources/APIClient.swift').read_text()
+start = client.index('        let url: URL', client.index('func makeRequest('))
+end = client.index('        var req = URLRequest(url: url)', start)
+stub = Path('Tests/NativeRequests/Stub.swift').read_text().replace('        // BUILD_REQUEST_URL', client[start:end])
+Path(sys.argv[1], 'request-stub.swift').write_text(stub)
+PY
+swiftc Sources/NativeAPI.swift "$NATIVE_CHECK_TMP/request-stub.swift" Tests/NativeRequests/main.swift -o "$NATIVE_CHECK_TMP/requests"
+"$NATIVE_CHECK_TMP/requests"
