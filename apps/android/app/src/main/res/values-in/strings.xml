@@ -3217,7 +3217,10 @@
     <string name="meet_intro_until">· perkenalan sampai %1$s</string>
     <string name="meet_telling_voices">Membedakan suara…</string>
     <string name="meet_speakers">Pembicara</string>
-    <string name="meet_voices">%1$s suara</string>
+    <plurals name="meet_voices">
+        <item quantity="one">%1$d suara</item>
+        <item quantity="other">%1$d suara</item>
+    </plurals>
     <string name="meet_speakers_hint">GIDEON membedakan suara dan membaca nama dari perkenalan. Suara hanya dipakai untuk memberi label rekaman ini.</string>
     <string name="meet_speaker_number">Pembicara %1$s</string>
     <string name="meet_who">Siapa ini?</string>

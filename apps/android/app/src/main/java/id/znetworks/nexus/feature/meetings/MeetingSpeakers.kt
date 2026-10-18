@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,7 +40,7 @@ private val voiceDark = listOf(0xFFC4B5FD, 0xFF7DD3FC, 0xFF6EE7B7, 0xFFFCD34D, 0
         onChange(JsonObject(next.mapValues { (_, v) -> NexusJson.encodeToJsonElement(MeetingSpeaker.serializer(), v) }))
     }
     MeetingSection(stringResource(R.string.meet_speakers)) {
-        Text(stringResource(R.string.meet_voices, voices.size.toString()), color = c.mutedFg, fontSize = 12.sp)
+        Text(pluralStringResource(R.plurals.meet_voices, voices.size, voices.size), color = c.mutedFg, fontSize = 12.sp)
         Text(stringResource(R.string.meet_speakers_hint), color = c.mutedFg, fontSize = 12.sp)
         Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(12.dp))) {
             voices.forEachIndexed { index, label ->

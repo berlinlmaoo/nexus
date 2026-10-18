@@ -3268,7 +3268,10 @@
     <string name="meet_intro_until">· introductions until %1$s</string>
     <string name="meet_telling_voices">Telling the voices apart…</string>
     <string name="meet_speakers">Speakers</string>
-    <string name="meet_voices">%1$s voices</string>
+    <plurals name="meet_voices">
+        <item quantity="one">%1$d voice</item>
+        <item quantity="other">%1$d voices</item>
+    </plurals>
     <string name="meet_speakers_hint">GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.</string>
     <string name="meet_speaker_number">Speaker %1$s</string>
     <string name="meet_who">Who is this?</string>
