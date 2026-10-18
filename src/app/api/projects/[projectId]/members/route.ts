@@ -121,6 +121,8 @@ export async function POST(
       } catch (e) {
         // Added by someone else a moment ago (unique userId+projectId): already in, not an error.
         if (bulk && (e as { code?: string })?.code === "P2002") { already.add(userId); continue }
+        // Single add racing another add of the same person: same answer as the pre-check above, not a 500.
+        if ((e as { code?: string })?.code === "P2002") return NextResponse.json({ error: "User is already a member" }, { status: 400 })
         throw e
       }
     }

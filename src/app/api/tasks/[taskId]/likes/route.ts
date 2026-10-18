@@ -51,15 +51,18 @@ export async function POST(
 
     if (existing) {
       // Unlike
-      await prisma.taskLike.delete({
-        where: { taskId_userId: { taskId: (await params).taskId, userId: session.user.id } },
+      // deleteMany: a second tap racing this one may have removed the like already (delete would throw P2025 → 500).
+      await prisma.taskLike.deleteMany({
+        where: { taskId: (await params).taskId, userId: session.user.id },
       })
       const count = await prisma.taskLike.count({ where: { taskId: (await params).taskId } })
       return NextResponse.json({ liked: false, count })
     } else {
       // Like
-      await prisma.taskLike.create({
-        data: { taskId: (await params).taskId, userId: session.user.id },
+      // ON CONFLICT DO NOTHING: a concurrent tap that already added the like is not an error.
+      await prisma.taskLike.createMany({
+        data: [{ taskId: (await params).taskId, userId: session.user.id }],
+        skipDuplicates: true,
       })
       const count = await prisma.taskLike.count({ where: { taskId: (await params).taskId } })
       return NextResponse.json({ liked: true, count })

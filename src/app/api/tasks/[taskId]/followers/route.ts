@@ -48,12 +48,15 @@ export async function POST(
     })
 
     if (existing) {
-      await prisma.taskFollower.delete({ where: { id: existing.id } })
+      // deleteMany: a concurrent toggle may have removed it already (delete would throw P2025 → 500).
+      await prisma.taskFollower.deleteMany({ where: { id: existing.id } })
       return NextResponse.json({ following: false })
     }
 
-    await prisma.taskFollower.create({
-      data: { taskId: (await params).taskId, userId: session.user.id },
+    // ON CONFLICT DO NOTHING: a concurrent tap (or a comment auto-follow) that added the row first is not an error.
+    await prisma.taskFollower.createMany({
+      data: [{ taskId: (await params).taskId, userId: session.user.id }],
+      skipDuplicates: true,
     })
 
     return NextResponse.json({ following: true }, { status: 201 })
