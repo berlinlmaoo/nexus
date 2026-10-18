@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { docWriteRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 
 export async function POST(
   req: NextRequest,
@@ -43,6 +44,8 @@ export async function POST(
 
     logAudit({ action: "create", entityType: "doc", entityId: duplicate.id, entityName: duplicate.title, userId: session.user.id, request: req, metadata: { duplicatedFrom: (await params).docId } })
 
+    // Realtime (QA final 19 Oct): the Pages list of every other open copy of this project refetches.
+    eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: original.projectId, docId: duplicate.id, actorId: session.user.id })
     return NextResponse.json({ doc: duplicate }, { status: 201 })
   } catch (error) {
     console.error("Error duplicating doc:", error)

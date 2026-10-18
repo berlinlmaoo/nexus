@@ -25,6 +25,7 @@ import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { numberFieldFormat } from "@/lib/custom-field-number"
 import { runAutomations } from "@/lib/automation-engine"
 import { emitTaskUpdated } from "@/lib/socket-emitter"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 /** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
 function auditDisplayValue(type: SupportedCustomFieldType, options: unknown, raw: string | null | undefined): string | null {
@@ -364,6 +365,8 @@ export async function POST(req: NextRequest) {
       metadata: { projectId, type: normalizedType, libraryId: linkedLibraryId },
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id })
     return NextResponse.json(
       {
         field: {
@@ -759,6 +762,8 @@ export async function PATCH(req: NextRequest) {
     })
 
     const updatedFieldType = normalizeCustomFieldType(updatedField?.type) || normalizedType
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(existingField.projectId, { actorId: session.user.id })
 
     return NextResponse.json({
       field: {
@@ -818,6 +823,8 @@ export async function DELETE(req: NextRequest) {
       remove: (tx) => tx.customField.delete({ where: { id } }),
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(existingField.projectId, { actorId: session.user.id })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting custom field:", error)

@@ -144,6 +144,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ d
       meta: { open: { type: "doc", id: docId, projectId: existing.projectId }, projectId: existing.projectId },
       remove: (tx) => tx.doc.delete({ where: { id: docId } }),
     })
+    // Realtime (QA final 19 Oct): the Pages list of every other open copy of this project refetches.
+    eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: existing.projectId, docId, actorId: session.user.id })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting doc:', error)
