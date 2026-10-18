@@ -673,7 +673,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                 {canMakeQuest && (
                   <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-9 sm:hidden"><Trophy className="h-4 w-4" />{tr("Make a quest")}</DropdownMenuItem>
                 )}
-                <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-9"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>
+                {/* Can view members can't copy (owner, 18 Oct 2026); the server already refuses (NEEDS_EDIT_ACCESS). */}
+                {canEditTask && <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-9"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>}
                 {!asPage && (
                   <DropdownMenuItem asChild className="min-h-9"><Link to="/tasks/$taskId" params={{ taskId }}><Maximize2 className="h-4 w-4" />{tr("Open as page")}</Link></DropdownMenuItem>
                 )}
