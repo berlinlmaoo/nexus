@@ -1585,7 +1585,7 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
               <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
               <dd className="min-w-0 break-words">
                 {row.from != null && row.from !== "" && <><span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden className="text-muted-foreground">→</span> </>}
-                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
+                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{(row.field === "Status" || row.field === "Calendar") && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
               </dd>
             </div>
           ))}
@@ -1633,6 +1633,9 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
     case "create_vault_share_link": return t("Create a share link");
     case "edit_doc": return t("Edit a doc");
     case "draft_announcement": return t("Post an announcement");
+    case "edit_sheet_cells": return t("Edit spreadsheet");
+    case "create_sheet": return t("Create a spreadsheet");
+    case "save_file_to_vault": return t("Save to Z Vault");
     default: return action;
   }
 }

@@ -64,6 +64,12 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Files GIDEON made for someone (18 Oct 2026, export_file): only through /api/gideon/files/:id, owner only.
+  const gideonExports = join(base, 'attachments', 'gideon', 'exports')
+  if (filePath === gideonExports || filePath.startsWith(gideonExports + sep)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   // Everything sent in chat — pictures (18 Oct 2026, security fix) as well as documents — loads only
   // for someone who can read the conversation of a message that carries it: the rule for reading the
   // messages themselves (chat-access chatFileCarrierFor, one indexed query). Until now a picture

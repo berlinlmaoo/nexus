@@ -45,6 +45,34 @@ provides_tools:
   - nexus_create_reminder
   - nexus_list_reminders
   - nexus_cancel_reminder
+  # Leave (18 Oct 2026): own balance, file a day off / annual leave / public holiday, approvers decide — always a
+  # card, applied through the Attendance endpoints as the person (their rules, the approval resolver). Sick and izin
+  # need a photo: the form, not chat. NOT gated by NEXUS_GIDEON_NO_ATTENDANCE (that flag is only the ticket tools).
+  - nexus_get_leave_balance
+  - nexus_submit_leave_request
+  - nexus_decide_attendance_request
+  # Bulk task work (18 Oct 2026): one card for many task changes; subtasks
+  - nexus_bulk_update_tasks
+  - nexus_add_subtasks
+  # Pipeline, Outlet Sales, Social Media Report (18 Oct 2026): always a card, the dashboards' own endpoints
+  - nexus_move_deal_stage
+  - nexus_add_payment_term
+  - nexus_log_outlet_sales
+  - nexus_log_social_media_day
+  # Legal draft (never finalised/signed), Z Vault search + share link, announcements (BoD) — always a card
+  - nexus_create_legal_draft
+  - nexus_search_vault
+  - nexus_create_vault_share_link
+  - nexus_draft_announcement
+  # Spreadsheets (read, edit cells, create), pictures stored in NEXUS (→ vision_analyze), files (PDF/DOCX/XLSX
+  # into the chat; saving to Z Vault is a card)
+  - nexus_search_sheets
+  - nexus_get_sheet
+  - nexus_edit_sheet_cells
+  - nexus_create_sheet
+  - nexus_read_nexus_image
+  - nexus_export_file
+  - nexus_save_file_to_vault
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

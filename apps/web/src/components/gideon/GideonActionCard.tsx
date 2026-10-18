@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlarmClock, AlarmClockOff, ArrowUpRight, CalendarCheck, CalendarX, Check, CheckCheck, FileText, KanbanSquare, Link2,
-  ListChecks, Loader2, Megaphone, MessageSquare, PencilLine, Receipt, Scale, Send, TrendingUp, type LucideIcon,
+  FolderInput, ListChecks, Loader2, Megaphone, Sheet, MessageSquare, PencilLine, Receipt, Scale, Send, TrendingUp, type LucideIcon,
 } from "lucide-react";
 import { decideGideonProposal, type GideonProposal } from "@/lib/gideon";
 import { useLang, type LangApi } from "@/lib/lang";
@@ -33,6 +33,9 @@ const KINDS: Record<string, Kind> = {
   log_social_media_day: { icon: TrendingUp, title: (t) => t("Enter social media numbers"), apply: (t) => t("Save"), done: (t) => t("Saved") },
   create_legal_draft: { icon: Scale, title: (t) => t("Create a legal draft"), apply: (t) => t("Create draft"), done: (t) => t("Draft created") },
   create_vault_share_link: { icon: Link2, title: (t) => t("Create a share link"), apply: (t) => t("Create link"), done: (t) => t("Link created") },
+  edit_sheet_cells: { icon: Sheet, title: (t) => t("Edit spreadsheet"), apply: (t) => t("Apply"), done: (t) => t("Applied") },
+  create_sheet: { icon: Sheet, title: (t) => t("Create a spreadsheet"), apply: (t) => t("Create"), done: (t) => t("Created") },
+  save_file_to_vault: { icon: FolderInput, title: (t) => t("Save to Z Vault"), apply: (t) => t("Save"), done: (t) => t("Saved") },
   edit_doc: { icon: PencilLine, title: (t) => t("Edit a doc"), apply: (t) => t("Apply edit"), done: (t) => t("Edited") },
   draft_announcement: { icon: Megaphone, title: (t) => t("Post an announcement"), apply: (t) => t("Post"), done: (t) => t("Posted") },
 };
@@ -46,11 +49,16 @@ const FIELD: Record<string, string> = {
   Views: "Views", Likes: "Likes", Comments: "Comments", Shares: "Shares", Template: "Template", Company: "Company", Number: "Number",
   File: "File", Expires: "Expires", Access: "Access", Doc: "Doc", Section: "Section", Edit: "Edit", Title: "Title", Audience: "Audience",
   Until: "Until", Task: "Task", Subtasks: "Subtasks", Platform: "Platform", Label: "Label", Fields: "Fields", Password: "Password",
+  Counterparty: "Counterparty", Location: "Location", Download: "Download", Tone: "Tone", Repeats: "Repeats", Announcement: "Announcement",
+  Folder: "Folder", Status: "Status", Probability: "Probability", Term: "Term", Invoice: "Invoice", Paid: "Paid",
+  "Contract value": "Contract value", Event: "Event", "What worked": "What worked", "What didn't": "What didn't", Posts: "Posts",
 };
 /** Values the server writes in English that read as a whole word or phrase. */
 const VALUE_WORDS = new Set([
   "Direct message", "New direct message", "Group", "Project room", "Approve", "Reject", "Annual leave", "Day off", "Sick", "Permission (izin)",
   "Public holiday", "Anyone with the link", "No expiry", "Replace section", "Append to the end", "Append under section", "Everyone",
+  "Attached — open the request to see it",
+  "Draft", "NEXUS members (login required)", "3 days", "7 days", "14 days", "30 days", "Allowed", "View only", "Info", "Good news", "Important",
 ]);
 
 export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
@@ -111,6 +119,26 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           ))}
         </dl>
       )}
+      {proposal.extra?.sheetEdit?.cells && proposal.extra.sheetEdit.cells.length > 0 && (
+        <div className="px-3 pb-2.5">
+          <div className="max-h-64 overflow-auto rounded-lg border border-border/70">
+            <table className="w-full text-left text-[12.5px]">
+              <thead className="sticky top-0 bg-muted/80 text-muted-foreground backdrop-blur">
+                <tr><th className="px-2 py-1 font-medium">{t("Cell")}</th><th className="px-2 py-1 font-medium">{t("Before")}</th><th className="px-2 py-1 font-medium">{t("After")}</th></tr>
+              </thead>
+              <tbody>
+                {proposal.extra.sheetEdit.cells.map((c, i) => (
+                  <tr key={i} className="border-t border-border/60">
+                    <td className="whitespace-nowrap px-2 py-1 font-mono text-muted-foreground">{c.ref}</td>
+                    <td className="max-w-[10rem] break-words px-2 py-1">{c.from ? <span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{c.from}</span> : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="max-w-[10rem] break-words px-2 py-1">{c.to ? <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{c.to}</span> : <span className="text-muted-foreground">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {preview && (
         <div className="px-3 pb-2.5">
           {previewField && <div className="mb-1 text-xs font-medium text-muted-foreground">{t(FIELD[previewField] ?? previewField)}</div>}
@@ -129,6 +157,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           )}
         </div>
       )}
+      {applied && proposal.extra?.note && <div className="select-all break-all px-3 pb-2 text-xs text-muted-foreground">{proposal.extra.note}</div>}
       {error && <div className="px-3 pb-2 text-xs font-medium text-destructive">{error}</div>}
       {open && (
         <div className="flex justify-end gap-1.5 border-t border-border/60 px-2.5 py-2">
@@ -144,9 +173,21 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
   );
 }
 
+/** Server values with numbers in them (English on the wire; the released apps show them as they are). */
+const VALUE_PATTERNS: { re: RegExp; en: string }[] = [
+  { re: /^(\d+) calendar days$/, en: "{a} calendar days" },
+  { re: /^(\d+) of (\d+) days off left → (-?\d+) after this$/, en: "{a} of {b} days off left → {c} after this" },
+  { re: /^(\d+) of (\d+) leave days left → (-?\d+) after this$/, en: "{a} of {b} leave days left → {c} after this" },
+];
+
 function word(text: string | null, t: LangApi["t"]): string | null {
   if (!text) return text;
-  return VALUE_WORDS.has(text) ? t(text) : text;
+  if (VALUE_WORDS.has(text)) return t(text);
+  for (const p of VALUE_PATTERNS) {
+    const m = p.re.exec(text);
+    if (m) return t(p.en, { a: m[1], b: m[2] ?? "", c: m[3] ?? "" });
+  }
+  return text;
 }
 
 /** The step labels of these tools (the server's English table is lib/gideon-tools/meta.ts). */
@@ -175,6 +216,13 @@ export function extraStepLabel(tool: string, a: string, t: LangApi["t"]): string
     case "get_form_responses": return a ? t("Reading responses of {name}", { name: a }) : t("Reading form responses");
     case "get_performance": return t("Reading performance");
     case "draft_announcement": return t("Drafting an announcement");
+    case "search_sheets": return a ? t("Searching spreadsheets for “{q}”", { q: a }) : t("Searching spreadsheets");
+    case "get_sheet": return a ? t("Reading the spreadsheet {name}", { name: a }) : t("Reading a spreadsheet");
+    case "edit_sheet_cells": return a ? t("Preparing edits to {name}", { name: a }) : t("Preparing spreadsheet edits");
+    case "create_sheet": return a ? t("Preparing the spreadsheet {name}", { name: a }) : t("Preparing a spreadsheet");
+    case "read_nexus_image": return a ? t("Looking at {name}", { name: a }) : t("Looking at an image");
+    case "export_file": return a ? t("Making the file {name}", { name: a }) : t("Making a file");
+    case "save_file_to_vault": return a ? t("Preparing to save {name} to Z Vault", { name: a }) : t("Preparing a Z Vault save");
     default: return null;
   }
 }

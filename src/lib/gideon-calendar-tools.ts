@@ -77,6 +77,11 @@ export async function gideonGetCalendar(actorId: string, input: Record<string, u
   if (mine) items = items.filter((i) => inScope(i, "me", actorId, new Set()))
   const projectId = str(input.projectId)
   if (projectId) items = items.filter((i) => i.project?.id === projectId)
+  // A folder (18 Oct 2026): the projects of it and its sub-folders the person can see (tools route normalizeToolInput).
+  else if (Array.isArray(input.projectIds)) {
+    const inFolder = new Set(input.projectIds.filter((x): x is string => typeof x === "string"))
+    items = items.filter((i) => !!i.project?.id && inFolder.has(i.project.id))
+  }
   const unitArg = str(input.unitId) ?? str(input.division) ?? str(input.unit)
   if (unitArg) {
     const lower = unitArg.toLowerCase()

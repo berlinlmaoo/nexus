@@ -42,6 +42,7 @@ import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
 import { extraTool, runExtraTool } from '@/lib/gideon-tools'
+import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 
 type GideonAction =
   | 'list_projects'
@@ -154,6 +155,8 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   const assigneeId = rawAssignee === 'me' ? actor.id : rawAssignee
 
   if (projectId) taskListWhere.projectId = projectId
+  // A folder (18 Oct 2026): every project of the folder and its sub-folders this person can see (normalizeToolInput).
+  else if (Array.isArray(input.projectIds)) taskListWhere.projectId = { in: input.projectIds.filter((x): x is string => typeof x === 'string') }
   if (status) where.status = status
   if (priority) where.priority = priority
   if (assigneeId) where.assignees = { some: { userId: assigneeId } }
@@ -1329,6 +1332,24 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
       else if (action === 'list_tasks' || action === 'search_tasks' || action === 'get_project_summary') throw new Error(`No project this person can see is named like "${name}".`)
     }
   }
+  // folder (18 Oct 2026, the Folder view: Board + Calendar of every project in a folder and its sub-folders): a
+  // folder name or id → the ids of those projects this person can see, for list_tasks / search_tasks / get_calendar.
+  if ((action === 'list_tasks' || action === 'search_tasks' || action === 'get_calendar') && !asString(input.projectId)) {
+    const folder = asString(input.folder) ?? asString(input.folderId) ?? asString(input.folderName)
+    if (folder) {
+      const f = await folderProjectIds(actor, folder)
+      input.projectIds = f.projectIds
+      input.folderName = f.name
+      if (!f.projectIds.length) throw new Error(`The folder "${f.name}" has no project this person can see.`)
+    }
+  }
+  // "Put it on the calendar" (owner, 18 Oct 2026): the Calendar shows TASKS, and only ones with a PIC and a date
+  // (Master Calendar rule). A create_task with calendar=true must have a date; with nobody named the PIC is the
+  // person themselves (changeable on the card).
+  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
+    if (!parseDueInput(input.dueDate)) throw new Error('A task on the calendar needs a date. Ask which day (and time, if any).')
+    if (!(asStringArray(input.assigneeIds) ?? []).length) input.assigneeIds = [actor.id]
+  }
   // assignee (18 Oct 2026): "me" or a person's name → assigneeId, for list_tasks / search_tasks.
   if ((action === 'list_tasks' || action === 'search_tasks') && !asString(input.assigneeId)) {
     const who = asString(input.assignee) || asString(input.assigneeName) || asString(input.person)
@@ -1854,7 +1875,13 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   } else {
     throw new Error(`${action} cannot be proposed`)
   }
-  return { summary, diff, projectId, taskId, due: dueText, store }
+  // On the calendar (create_task calendar=true): say where it will show, on the card and in the reply.
+  let note: string | undefined
+  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
+    diff.push({ field: 'Calendar', to: 'Shows on the calendar (it has a PIC and a date)' })
+    note = `NOT created yet: it waits on the card below.${dueText ? ` Say the date as "${dueText}".` : ''} Once applied it appears on the Calendar on that day, because it has a PIC (${await userNames(asStringArray(input.assigneeIds) ?? [])}) and a date; the PIC can be changed on the card.`
+  }
+  return { summary, diff, projectId, taskId, due: dueText, store, note }
 }
 
 const DELETE_REFUSAL_TEXT: Record<'NOT_FOUND' | 'NEEDS_EDIT_ACCESS' | 'CHANGED', string> = {

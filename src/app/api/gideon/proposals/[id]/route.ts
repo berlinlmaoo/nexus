@@ -188,7 +188,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const updated = await prisma.gideonProposal.update({
       where: { id },
       data: outcome.ok
-        ? { status: "APPLIED", decidedAt: new Date(), result: { card: null, link: outcome.link ?? null, ...(outcome.result ?? {}) } as object, error: null }
+        ? { status: "APPLIED", decidedAt: new Date(), result: { card: null, link: outcome.link ?? null, note: outcome.message ?? null, ...(outcome.result ?? {}) } as object, error: null }
         : { status: "FAILED", decidedAt: new Date(), error: (outcome.message || "Failed").slice(0, 500) },
     })
     return NextResponse.json({ proposal: proposalView(updated) }, { status: outcome.ok ? 200 : 422 })
@@ -265,9 +265,10 @@ async function callAsPerson(req: NextRequest, c: WebCall): Promise<WebReply> {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host")
   if (host) headers["x-forwarded-host"] = host
   let body: BodyInit | undefined
-  if (c.form) {
+  if (c.form || c.files) {
     const fd = new FormData()
-    for (const [k, v] of Object.entries(c.form)) fd.set(k, v)
+    for (const [k, v] of Object.entries(c.form ?? {})) fd.set(k, v)
+    for (const [k, f] of Object.entries(c.files ?? {})) fd.set(k, new Blob([new Uint8Array(Buffer.from(f.base64, "base64"))], { type: f.type }), f.name)
     body = fd
   } else if (c.json !== undefined) {
     headers["content-type"] = "application/json"

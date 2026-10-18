@@ -84,7 +84,7 @@ export type GideonProposal = {
    * The 18 Oct 2026 package only (send_message, create_reminder, submit_leave_request, …): the long text in full and,
    * once applied, where the result is. Present (even null) only on those actions; their card is GideonActionCard.
    */
-  extra?: { preview: string | null; link: string | null } | null;
+  extra?: { preview: string | null; link: string | null; note?: string | null; sheetEdit?: { sheet?: string; project?: string; cells?: { ref: string; from: string | null; to: string | null }[]; newRows?: unknown[] } | null } | null;
 };
 export type GideonTaskTargetProject = { id: string; name: string; icon: string | null; color: string | null };
 /** Server gideon-runs.ts GideonTaskTargetView. */

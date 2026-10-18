@@ -152,7 +152,12 @@ export type GideonTaskTargetView = {
   /** Once applied: where it went. */
   chosenProjectId: string | null
 }
-export type GideonExtraView = { preview: string | null; link: string | null }
+/** `note`: what an applied card adds (e.g. "Skipped: 2 tasks changed by someone meanwhile"). */
+export type GideonExtraView = {
+  preview: string | null; link: string | null; note: string | null
+  /** edit_sheet_cells only: the cells before → after and the rows added, as the card shows them. */
+  sheetEdit?: { sheet?: string; project?: string; cells?: { ref: string; from: string | null; to: string | null }[]; newRows?: unknown[] } | null
+}
 /** What a delete card shows. `deleted`: applied; it can be restored from Control Room → Audit (`auditLogId`). */
 export type GideonTaskDeleteView = {
   taskId: string
@@ -530,6 +535,8 @@ function extraView(input: unknown, result: AnyObj | null | undefined): GideonExt
   return {
     preview: typeof i.preview === "string" && i.preview ? i.preview : null,
     link: typeof result?.link === "string" && result.link ? result.link : null,
+    note: typeof result?.note === "string" && result.note ? result.note : null,
+    ...(i.sheetEdit && typeof i.sheetEdit === "object" ? { sheetEdit: i.sheetEdit as GideonExtraView["sheetEdit"] } : {}),
   }
 }
 

@@ -16,6 +16,8 @@
  * proposal stays waiting (the delete_task rule, 18 Oct 2026). Native spec: docs/internal/gideon-tools-native.md.
  */
 
+import { SHEET_TOOL_META } from "./meta-sheets"
+
 export type ExtraApproval = "always" | "modes"
 
 type Meta = {
@@ -45,7 +47,7 @@ export const EXTRA_TOOL_META: Record<string, Meta> = {
   decide_attendance_request: { write: true, approval: "always", label: L("Preparing a decision: {a}", "Preparing a decision") },
   // 5. Bulk task work
   bulk_update_tasks: { write: true, approval: "always", label: L("Preparing changes to {a}", "Preparing changes to several tasks") },
-  add_subtasks: { write: true, approval: "modes", label: L("Adding subtasks to {a}", "Adding subtasks") },
+  add_subtasks: { write: true, approval: "always", label: L("Adding subtasks to {a}", "Adding subtasks") },
   // 6. Pipeline
   move_deal_stage: { write: true, approval: "always", label: L("Moving the deal {a}", "Moving a deal") },
   add_payment_term: { write: true, approval: "always", label: L("Adding a payment term to {a}", "Adding a payment term") },
@@ -66,6 +68,9 @@ export const EXTRA_TOOL_META: Record<string, Meta> = {
   // 14. Announcement
   draft_announcement: { write: true, approval: "always", label: L("Drafting an announcement: {a}", "Drafting an announcement") },
 }
+
+// Spreadsheets, NEXUS images and files (18 Oct 2026): their own metadata file, merged here.
+Object.assign(EXTRA_TOOL_META, SHEET_TOOL_META)
 
 export function isExtraAction(action: string): boolean {
   return Object.prototype.hasOwnProperty.call(EXTRA_TOOL_META, action)

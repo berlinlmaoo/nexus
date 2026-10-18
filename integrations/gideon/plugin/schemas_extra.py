@@ -77,6 +77,82 @@ EXTRA_SCHEMAS = {
         "Cancel one of the person's waiting reminders, by reminderId (from nexus_list_reminders) or part of its text.",
         {"reminderId": {"type": "string"}, "text": {"type": "string", "description": "Part of the reminder's text."}},
     ),
+    # 4. Leave / permission
+    "nexus_get_leave_balance": object_schema(
+        "The person's own leave numbers: day off left this period (28th → 27th; when it is used up there is no more, "
+        "no borrowing), annual leave left this year (12 days, every calendar day counts, weekends too; needs 12 months "
+        "of service), their pending requests, and who approves them.",
+        {},
+    ),
+    "nexus_submit_leave_request": object_schema(
+        "File a DAY_OFF (day off), LEAVE (cuti tahunan) or RED_DATE (public holiday) request AS the person. It ALWAYS "
+        "shows a card (type, dates, reason, balance, approver) and is filed only when they tap Submit, with exactly the "
+        "Attendance page's rules: one date per request except annual leave (a range), never a past day, a reason of 3+ "
+        "characters, no day off once the quota is used up. Sick (SICK) and izin (PERMIT) need a photo and cannot be "
+        "filed from chat: send the person to the Attendance page. Izin is never a day off or a cover for a forgotten "
+        "check-in. Never invent a reason; ask for it.",
+        {
+            "type": {"type": "string", "enum": ["DAY_OFF", "LEAVE", "RED_DATE", "SICK", "PERMIT"]},
+            "date": {"type": "string", "description": "YYYY-MM-DD (one day)."},
+            "startDate": {"type": "string", "description": "YYYY-MM-DD (annual leave range start)."},
+            "endDate": {"type": "string", "description": "YYYY-MM-DD (annual leave range end)."},
+            "reason": {"type": "string"},
+        },
+        required=["type", "reason"],
+    ),
+    "nexus_decide_attendance_request": object_schema(
+        "For an approver: approve or reject a pending attendance request (leave, day off, sick, izin) of someone they "
+        "approve for (the Approval chart decides; never their own). ALWAYS a card they confirm. A rejection needs a "
+        "reason the requester will read. Find requests with nexus_get_my_inbox (waitingForYou.attendanceRequests).",
+        {
+            "requestId": {"type": "string", "description": "From nexus_get_my_inbox."},
+            "person": {"type": "string", "description": "The requester's name, when no requestId."},
+            "date": {"type": "string", "description": "YYYY-MM-DD, to pick one of several requests of that person."},
+            "decision": {"type": "string", "enum": ["approve", "reject"]},
+            "note": {"type": "string", "description": "Required to reject (3+ characters); optional to approve."},
+        },
+        required=["decision"],
+    ),
+    # 5. Bulk task work
+    "nexus_bulk_update_tasks": object_schema(
+        "Change MANY tasks at once — move to another column/status, reassign (PIC), re-date, re-prioritise — on ONE card "
+        "that lists every change; nothing changes until the person taps Apply all (every approval mode). Either "
+        "changes = [{taskId, status?, section?, dueDate?, priority?, assignees? | addAssignees? / removeAssignees?}] "
+        "(different per task) or taskIds + the fields to set on all of them. Max 50 tasks. Find the tasks first with "
+        "nexus_list_tasks / nexus_search_tasks. A task someone edits meanwhile is skipped, not overwritten. Use this "
+        "instead of several nexus_update_task calls whenever 2+ tasks change.",
+        {
+            "changes": {"type": "array", "items": {"type": "object", "properties": {
+                "taskId": {"type": "string"},
+                "status": {"type": "string", "enum": ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]},
+                "section": {"type": "string", "description": "Column name in that task's project."},
+                "dueDate": {"type": ["string", "null"], "description": "YYYY-MM-DD (or ISO with time); null clears."},
+                "priority": {"type": "string", "enum": ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]},
+                "assignees": {"type": "array", "items": {"type": "string"}, "description": "Full new PIC list (names or ids)."},
+                "addAssignees": {"type": "array", "items": {"type": "string"}},
+                "removeAssignees": {"type": "array", "items": {"type": "string"}},
+            }, "required": ["taskId"], "additionalProperties": False}},
+            "taskIds": {"type": "array", "items": {"type": "string"}},
+            "status": {"type": "string", "enum": ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]},
+            "section": {"type": "string"},
+            "dueDate": {"type": ["string", "null"]},
+            "priority": {"type": "string", "enum": ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]},
+            "assignees": {"type": "array", "items": {"type": "string"}},
+            "addAssignees": {"type": "array", "items": {"type": "string"}},
+            "removeAssignees": {"type": "array", "items": {"type": "string"}},
+        },
+    ),
+    "nexus_add_subtasks": object_schema(
+        "Add subtasks (checklist items) under a task, one title each (max 20), optionally with PIC and a due date. "
+        "Always a card the person confirms.",
+        {
+            "taskId": {"type": "string", "description": "The parent task."},
+            "titles": {"type": "array", "items": {"type": "string"}},
+            "assignees": {"type": "array", "items": {"type": "string"}, "description": "Names or ids (project members)."},
+            "dueDate": {"type": "string", "description": "YYYY-MM-DD."},
+        },
+        required=["taskId", "titles"],
+    ),
 }
 
 EXTRA_ACTIONS = {name: name[len("nexus_"):] for name in EXTRA_SCHEMAS}

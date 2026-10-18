@@ -30,6 +30,8 @@ export type WebCall = {
   json?: unknown
   /** multipart/form-data fields (endpoints that only read formData, e.g. attendance requests). */
   form?: Record<string, string>
+  /** Files for a multipart body (with `form`), e.g. a Z Vault upload: base64 content. */
+  files?: Record<string, { name: string; type: string; base64: string }>
 }
 
 export type WebReply = { status: number; ok: boolean; body: Record<string, any> | null } // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -4,6 +4,16 @@ import type { ExtraTool, Input } from "./types"
 import { inboxTools } from "./inbox"
 import { chatTools } from "./chat"
 import { reminderTools } from "./reminders"
+import { leaveTools } from "./leave"
+import { bulkTaskTools } from "./tasks-bulk"
+import { pipelineTools } from "./pipeline"
+import { outletSocialTools } from "./outlet-social"
+import { legalTools } from "./legal"
+import { vaultTools } from "./vault"
+import { announcementTools } from "./announcement"
+import { sheetTools } from "./sheets"
+import { imageTools } from "./images"
+import { fileTools } from "./files"
 
 /**
  * The GIDEON tools of the 18 Oct 2026 package, by action (see meta.ts for approval rules and why). The tools route
@@ -13,6 +23,16 @@ export const EXTRA_TOOLS: Record<string, ExtraTool> = {
   ...inboxTools,
   ...chatTools,
   ...reminderTools,
+  ...leaveTools,
+  ...bulkTaskTools,
+  ...pipelineTools,
+  ...outletSocialTools,
+  ...legalTools,
+  ...vaultTools,
+  ...announcementTools,
+  ...sheetTools,
+  ...imageTools,
+  ...fileTools,
 }
 
 export function extraTool(action: string): ExtraTool | null {
