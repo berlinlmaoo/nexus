@@ -202,5 +202,9 @@ expectTrue(ChatAttachment.isDocument(nil, path: "/api/files/chat/a.xlsx"), "lega
 expectTrue(!ChatAttachment.isDocument("image/jpeg", path: "/api/files/chat/a.jpg"), "images keep their photo viewer")
 expectTrue(!ChatAttachment.isDocument(nil, path: nil), "text-only messages don't become files")
 
+let docsMedia = json(#"{"messageId":"d1","url":"/api/files/chat/spec.pdf","attachmentType":"application/pdf","name":"Specification.pdf","size":2048}"#, as: ChatMediaItem.self)
+expectTrue(docsMedia?.name == "Specification.pdf" && docsMedia?.size == 2048, "Docs tab preserves file name and size")
+expectTrue(media?.items.first?.name == nil && media?.items.first?.size == nil, "older media remains compatible")
+
 print(failures == 0 ? "OK — \(checks) checks passed" : "\(failures) of \(checks) checks failed")
 exit(failures == 0 ? 0 : 1)

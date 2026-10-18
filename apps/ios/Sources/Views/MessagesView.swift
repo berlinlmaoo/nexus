@@ -399,7 +399,7 @@ struct ConvoRow: View {
         guard let last = convo.lastMessage else { return T("No messages yet") }
         if last.isSystem { return last.systemSentence(meId: meId) }
         if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty {
-            return ChatAttachment.isDocument(last.attachmentType, path: path) ? (last.attachmentName ?? T("Document")) : T("Photo")
+            return ChatAttachment.isDocument(last.attachmentType, path: path) ? ("📎 " + (last.attachmentName ?? T("Document"))) : T("Photo")
         }
         return last.content
     }
@@ -1500,7 +1500,7 @@ struct ChatThreadView: View {
     static func quotePreview(_ q: ChatMessage.Quoted, hasPicture: Bool = false) -> String {
         let body = (q.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if body.isEmpty {
-            if ChatAttachment.isDocument(q.attachmentType, path: q.attachmentUrl) { return q.attachmentName ?? T("Document") }
+            if ChatAttachment.isDocument(q.attachmentType, path: q.attachmentUrl) { return "📎 " + (q.attachmentName ?? T("Document")) }
             let isPicture = hasPicture || (q.attachmentUrl?.isEmpty == false)
                 || (q.attachmentType ?? "").lowercased().hasPrefix("image")
             if isPicture { return T("Photo") }

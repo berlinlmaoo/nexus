@@ -13,6 +13,8 @@ swiftc Sources/GideonCreditModels.swift Tests/GideonCredits/Stub.swift Tests/Gid
 "$NATIVE_CHECK_TMP/credits"
 swiftc Sources/ChatSystemText.swift Sources/MessagesModels.swift Sources/ChatAttachment.swift Tests/ChatSystemText/Stub.swift Tests/ChatSystemText/main.swift -o "$NATIVE_CHECK_TMP/chat"
 "$NATIVE_CHECK_TMP/chat"
+swiftc Sources/AppDateLocale.swift Sources/NativeRefusal.swift Sources/LocalizationRun21.swift Tests/GideonCredits/Stub.swift Tests/NativeRefusal/main.swift -o "$NATIVE_CHECK_TMP/refusals"
+"$NATIVE_CHECK_TMP/refusals"
 # The block-conversion code is Foundation-only; the rest of the file is the app's networking/editor state.
 python3 - "$NATIVE_CHECK_TMP" <<'PY'
 from pathlib import Path

@@ -166,7 +166,7 @@ private struct LegalPageParagraph: View {
                         if p.editable { editor.editing = p.index }
                         else { LegalToasts.shared.warning(p.lockReason == "number" ? T("The document number can't be edited.") : T("Has a field, image or link: edit it in Word and upload the file as a new version.")) }
                     }
-                    .background(editing ? Color.blue.opacity(0.06) : changed ? Color.yellow.opacity(0.1) : .clear)
+                    .background(editor.selected.contains(p.index) ? NX.violet.opacity(0.12) : editing ? Color.blue.opacity(0.06) : changed ? Color.yellow.opacity(0.1) : .clear)
                     .overlay(alignment: .leading) { marginControl.offset(x: -30) }
                 if editing {
                     HStack {
@@ -239,7 +239,20 @@ private struct LegalParagraphText: UIViewRepresentable {
         let base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black, .paragraphStyle: style]
         let result = NSMutableAttributedString(string: "")
         if let marker = l?.marker { result.append(NSAttributedString(string: marker + "\t", attributes: base)) }
-        if text == paragraph.text, let runs = l?.runs, !runs.isEmpty {
+        if !editing && text != paragraph.text {
+            for segment in LegalText.diffWords(paragraph.text, text) {
+                var attributes = base
+                if segment.type == "del" {
+                    attributes[.foregroundColor] = UIColor(ChipTone.danger.fg)
+                    attributes[.backgroundColor] = UIColor(NX.danger.opacity(0.14))
+                    attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                } else if segment.type == "ins" {
+                    attributes[.foregroundColor] = UIColor(ChipTone.success.fg)
+                    attributes[.backgroundColor] = UIColor(NX.success.opacity(0.16))
+                }
+                result.append(NSAttributedString(string: segment.text, attributes: attributes))
+            }
+        } else if text == paragraph.text, let runs = l?.runs, !runs.isEmpty {
             for run in runs {
                 var attributes = base
                 var traits = font.fontDescriptor.symbolicTraits

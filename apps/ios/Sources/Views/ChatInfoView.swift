@@ -1279,6 +1279,7 @@ private struct ChatMediaList: View {
     }
 
     private func fileName(_ item: ChatMediaItem) -> String {
+        if let name = item.name, !name.isEmpty { return name }
         if let title = item.title, !title.isEmpty { return title }
         let last = item.url.split(separator: "/").last.map(String.init) ?? item.url
         return last.split(separator: "?").first.map(String.init) ?? last
@@ -1293,7 +1294,7 @@ private struct ChatMediaList: View {
     }
 
     private func secondary(_ item: ChatMediaItem) -> String {
-        [item.sender?.name, ChatMute.dateText(item.createdAt)].compactMap { $0 }.joined(separator: " · ")
+        [item.size.map { AppNumber.bytes(Double($0)) }, item.sender?.name, ChatMute.dateText(item.createdAt)].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func open(_ item: ChatMediaItem) async {

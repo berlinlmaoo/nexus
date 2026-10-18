@@ -164,6 +164,7 @@ struct APIClient {
         // (13 Oct 2026: English unless the person chose Indonesian). Read from defaults, not from
         // AppLanguage, so building a request never touches observable UI state off the main thread.
         req.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
+        req.setValue("chat-files", forHTTPHeaderField: "X-Nexus-Caps")
         if authed, let session = Keychain.load() {
             // Written onto the request itself, so the session travels with whichever host was picked.
             // Nothing here consults a cookie store, so no domain rule can quietly withhold it — and
@@ -3189,7 +3190,7 @@ extension APIClient {
         // (REPORT_NOT_OPEN, a night after today): the app's language picks one.
         let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
         let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
-        if let code = obj["code"] as? String, let message = NativeRefusal.message(code) { return message }
+        if let code = obj["code"] as? String, let message = NativeRefusal.message(code, maxBytes: obj["maxBytes"] as? Int) { return message }
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
         // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).
         if let readable = AccessRefusal.readable(code: obj["code"] as? String, message: text) { return readable }

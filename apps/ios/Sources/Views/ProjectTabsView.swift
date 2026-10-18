@@ -1250,7 +1250,15 @@ struct CalendarTab: View {
                     // P-I14 / P-M12).
                     let rest = undated
                     let emptyMonth = tasksByDay.isEmpty && !rest.isEmpty
-                    if emptyMonth { undatedBox(rest, leading: true).id("undated") }
+                    if emptyMonth {
+                        HStack {
+                            Text(rest.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), rest.count))
+                                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 8)
+                            Button(T("Show them")) { withAnimation { proxy.scrollTo("undated", anchor: .top) } }
+                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                        }
+                    }
                     // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06). On iPad / Mac
                     // the picked day's panel sits beside the month, as the web's: under it, the Mac's panel
                     // was below the fold (UI tour run 16, R16-M-08).
@@ -1263,7 +1271,7 @@ struct CalendarTab: View {
                         monthCard
                         dayPanel
                     }
-                    if !rest.isEmpty && !emptyMonth { undatedBox(rest, leading: false).id("undated") }
+                    if !rest.isEmpty { undatedBox(rest, leading: false).id("undated") }
                 }
                 // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
                 .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)

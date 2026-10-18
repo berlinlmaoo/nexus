@@ -42,8 +42,8 @@ struct GideonCreditMeter: View {
                     HStack(spacing: 6) {
                         Image(systemName: s.unlimited ? "infinity" : "chart.bar.fill").foregroundStyle(NX.violetText)
                         Text(s.unlimited
-                             ? String(format: T("Credits today %d · Unlimited"), s.today.used)
-                             : String(format: T("Credits today %d/%d"), s.today.used, s.today.limit))
+                             ? String(format: T("Credits today %@ · Unlimited"), AppNumber.int(s.today.used))
+                             : String(format: T("Credits today %@/%@"), AppNumber.int(s.today.used), AppNumber.int(s.today.limit)))
                         Image(systemName: "chevron.up").font(.system(size: 8))
                     }
                     .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg)
@@ -53,7 +53,7 @@ struct GideonCreditMeter: View {
                 if s.enforced && !s.unlimited && s.next != "ok" {
                     Text(s.next == "blocked"
                          ? T("You're out of credits for today, including backup answers. GIDEON Model 0 is still free.")
-                         : String(format: T("You're out of credits: GIDEON Aphrodite answers instead (%d left today)."), max(0, s.fallbackPerDay - s.fallbackToday)))
+                         : String(format: T("You're out of credits: GIDEON Aphrodite answers instead (%@ left today)."), AppNumber.int(max(0, s.fallbackPerDay - s.fallbackToday))))
                         .font(NXFont.text(12)).foregroundStyle(NX.warning)
                 }
             }
@@ -94,7 +94,7 @@ struct GideonCreditUsageView: View {
                                 if item.fallback { Text(T("Aphrodite backup answer")).font(NXFont.text(11)).foregroundStyle(NX.warning) }
                             }
                             Spacer(minLength: 0)
-                            Text(item.credits == 0 ? T("Free") : String(item.credits))
+                            Text(item.credits == 0 ? T("Free") : AppNumber.int(item.credits))
                                 .font(NXFont.text(13, .semibold)).monospacedDigit()
                         }
                         Divider()
@@ -120,15 +120,15 @@ struct GideonCreditUsageView: View {
                 Label(T("Unlimited"), systemImage: "infinity").font(NXFont.display(22, .bold))
                 Text(T("Your role has unlimited GIDEON credits."))
             } else {
-                Text(String(format: T("Credits today %d/%d"), s.today.used, s.today.limit)).font(NXFont.text(16, .semibold))
+                Text(String(format: T("Credits today %@/%@"), AppNumber.int(s.today.used), AppNumber.int(s.today.limit))).font(NXFont.text(16, .semibold))
                 ProgressView(value: Double(min(s.today.used, s.today.limit)), total: Double(max(1, s.today.limit))).tint(NX.violet)
                 Text(T("Resets at 00:00 WIB. Unused credits don't carry over."))
-                Text(String(format: T("Monthly pool %d/%d"), s.pool.used, s.pool.limit)).font(NXFont.text(14, .semibold))
+                Text(String(format: T("Monthly pool %@/%@"), AppNumber.int(s.pool.used), AppNumber.int(s.pool.limit))).font(NXFont.text(14, .semibold))
                 ProgressView(value: Double(min(s.pool.used, s.pool.limit)), total: Double(max(1, s.pool.limit))).tint(NX.violet)
                 Text(s.period.startKey + " – " + s.period.endKey)
                 Text(T("Used after today's credits run out. Renews on the 28th."))
-                if s.pool.bonus > 0 { Text(String(format: T("Includes %d bonus credits."), s.pool.bonus)) }
-                if s.over > 0 { Text(String(format: T("%d credits over your limit this period."), s.over)).foregroundStyle(NX.warning) }
+                if s.pool.bonus > 0 { Text(String(format: T("Includes %@ bonus credits."), AppNumber.int(s.pool.bonus))) }
+                if s.over > 0 { Text(String(format: T("%@ credits over your limit this period."), AppNumber.int(s.over))).foregroundStyle(NX.warning) }
                 if !s.enforced { Text(T("Nothing is blocked yet.")) }
             }
             Text(T("A typical question: Phaëthon ≈ 10 credits, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 free."))

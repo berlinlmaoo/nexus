@@ -707,6 +707,7 @@ enum GideonClient {
         request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
         request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
+        request.setValue("chat-files", forHTTPHeaderField: "X-Nexus-Caps")
         return request
     }
 

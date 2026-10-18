@@ -425,11 +425,13 @@ struct ChatMediaItem: Decodable, Sendable, Identifiable {
     let url: String
     let attachmentType: String?
     let title: String?
+    let name: String?
+    let size: Int?
 
     /// A message can carry several links, one item each: the id has to tell them apart.
     var id: String { messageId + "|" + url }
 
-    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, url, attachmentType, title }
+    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, url, attachmentType, title, name, size }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -439,6 +441,8 @@ struct ChatMediaItem: Decodable, Sendable, Identifiable {
         sender = try? c.decodeIfPresent(ChatPersonRef.self, forKey: .sender)
         attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
         title = try? c.decodeIfPresent(String.self, forKey: .title)
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        size = try? c.decodeIfPresent(Int.self, forKey: .size)
     }
 }
 

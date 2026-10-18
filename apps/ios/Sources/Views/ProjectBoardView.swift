@@ -2051,7 +2051,7 @@ struct ProjectDetailView: View {
         arranged.append(contentsOf: subs.filter { s in !next.contains(s.parentId ?? "") })
         lanes = lanes.map { l -> ProjectDetail.Lane in l.id == laneId ? l.with(tasks: arranged) : l }
         do {
-            try await APIClient.shared.reorderTasks(taskListId: laneId, movedIds: moved, beforeId: beforeId)
+            try await APIClient.shared.reorderTasks(taskListId: laneId, movedIds: order.filter { set.contains($0) }, beforeId: beforeId)
             reorderUndo = ReorderUndo(laneId: laneId, order: order, count: moved.count)
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")

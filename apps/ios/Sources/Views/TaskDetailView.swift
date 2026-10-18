@@ -120,6 +120,9 @@ struct TaskDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if task != nil {
                     HStack(spacing: 10) {
+                        if let t = task {
+                            AskGideonButton(context: GideonContext(projectId: t.projectId, projectName: nil, taskId: t.id, taskTitle: t.title))
+                        }
                         socialButton("Follow", icon: social.following ? "bell.fill" : "bell", active: social.following) { await social.toggle("followers", id: taskId) }
                         socialButton("Favourite", icon: social.favourite ? "star.fill" : "star", active: social.favourite) { await social.toggle("favourite", id: taskId) }
                         socialButton("Like", icon: social.liked ? "heart.fill" : "heart", active: social.liked) { await social.toggle("likes", id: taskId) }
