@@ -25,7 +25,7 @@ struct BatchMoveResult: Decodable, Sendable {
 extension APIClient {
 
     private static func redesignEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     private func redesignRun<Payload: Decodable>(_ req: URLRequest, as type: Payload.Type) async throws -> Payload {
@@ -110,6 +110,14 @@ extension APIClient {
         _ = try await redesignRaw(req)
     }
 
+    /// Relative moves preserve other people's concurrent drags. A vanished anchor is a 409; the
+    /// board shows the server's reason and reloads rather than replaying a stale whole-column order.
+    func reorderTasks(taskListId: String, movedIds: [String], beforeId: String?) async throws {
+        let body: [String: Any] = ["taskListId": taskListId, "movedIds": movedIds,
+                                   "beforeId": jsonOrNull(beforeId)]
+        _ = try await redesignRaw(try redesignJSON("/api/tasks/reorder", method: "POST", body: body))
+    }
+
     // MARK: delete with undo, assignees
 
     /// DELETE /api/tasks/:id, answering the audit row that can put it back (dev server; nil from older
@@ -181,7 +189,7 @@ extension APIClient {
     /// The project's status options (sections), light: no tasks. MEMBER and up; a viewer gets 403 and the
     /// caller falls back to the project payload.
     func statusOptions(projectId: String) async throws -> [SectionInfo] {
-        let path = "/api/projects/\(projectId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? projectId)/sections"
+        let path = "/api/projects/\(projectId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? projectId)/sections"
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await perform(makeRequest(path)) } catch { throw APIError.nothingAnswered(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }

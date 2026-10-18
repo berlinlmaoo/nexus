@@ -24,11 +24,16 @@ final class RemoteConfig {
         /// 2026 (owner, server cd89d72): off, the app never promises one or counts down to it — the
         /// Live Activity and the phone's own alerts say since when, without a check-out time.
         var outsideAutoCheckout: Bool?
+        var meetingNotesEnabled: Bool?
+        var presenceStatus: Bool?
     }
     struct Values: Codable, Equatable, Sendable {
         var outsideHourAlertMinutes: Int?
         /// How often the Calendar refetches while it is on screen, in seconds.
         var calendarPollSeconds: Int?
+        var meetingMaxMinutes: Int?
+        var meetingMaxMB: Int?
+        var meetingAudioRetentionDays: Int?
     }
     struct Banner: Codable, Equatable, Sendable {
         let id: String
@@ -42,6 +47,7 @@ final class RemoteConfig {
         var values: Values?
         var texts: [String: [String: String]]?
         var banner: Banner?
+        var gideonTiers: [String: GideonTierAvailability]?
     }
 
     private(set) var body = Body()
@@ -67,6 +73,11 @@ final class RemoteConfig {
     /// Floored at 15 s: a 0 (or a typo) from the server must not turn the Calendar's poll into a busy loop.
     var calendarPollSeconds: Int { max(15, body.values?.calendarPollSeconds ?? 60) }
     var banner: Banner? { body.banner }
+    var presenceStatus: Bool { body.flags?.presenceStatus ?? true }
+    var meetingNotesEnabled: Bool { body.flags?.meetingNotesEnabled ?? true }
+    var meetingMaxMinutes: Int { max(1, body.values?.meetingMaxMinutes ?? 180) }
+    var meetingMaxBytes: Int { max(1, body.values?.meetingMaxMB ?? 500) * 1_048_576 }
+    var meetingAudioRetentionDays: Int { max(1, body.values?.meetingAudioRetentionDays ?? 30) }
 
     /// The server's sentence for `key` in the app's language, else its English one, else `fallback`
     /// (the app's own copy, already translated by the caller).
@@ -87,6 +98,7 @@ final class RemoteConfig {
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let fresh = try? JSONDecoder().decode(Body.self, from: data) else { return }
+        if let tiers = fresh.gideonTiers { GideonTierStatus.shared.accept(tiers) }
         guard fresh != body else { return }
         body = fresh
         UserDefaults.standard.set(data, forKey: Self.key)

@@ -61,6 +61,9 @@ targets:
       # Dev server simply cannot be reached from that build.
       - name: Dev server address
         basedOnDependencyAnalysis: false
+        inputFiles:
+          # Run after ProcessInfoPlistFile; otherwise it can overwrite the injected address.
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           case " $SWIFT_ACTIVE_COMPILATION_CONDITIONS " in *" NEXUS_DEV_SERVER "*) ;; *) exit 0 ;; esac
           F="$HOME/.config/nexus/ios-dev-server-url"
@@ -198,6 +201,7 @@ targets:
       # watch decodes the same shapes with the same code — a duplicated model is a model that drifts.
       - path: Sources/Config.swift
       - path: Sources/Keychain.swift
+      - path: Sources/SessionIdentity.swift
       - path: Sources/AttendanceModels.swift
       # The snapshot the complication draws — the same type the phone's widgets read.
       - path: Sources/Shared/AttendanceSnapshot.swift

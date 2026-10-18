@@ -4,6 +4,12 @@ import SwiftUI
 /// subtasks (toggle), comments.
 struct TaskDetailView: View {
     let taskId: String
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+    @State private var social = TaskPageActions()
+    @State private var showCopyProject = false
+    @State private var showPropertyEditor = false
+    @State private var tagDraft = ""
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
@@ -76,6 +82,12 @@ struct TaskDetailView: View {
                             TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil, refreshToken: fieldsRefresh)
                                 .disabled(!canEditTask)
                         }
+                        if canEditTask, let pid = task.projectId {
+                            Button { showPropertyEditor = true } label: {
+                                Label(T("Add a property"), systemImage: "plus").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            }.buttonStyle(.plain).frame(minHeight: 36)
+                            .sheet(isPresented: $showPropertyEditor) { NavigationStack { CustomFieldEditor(projectId: pid) { fieldsRefresh += 1 } } }
+                        }
                         // The description is a block document, edited like a page (merged into the live
                         // document on the server, so web editors see it at once).
                         TaskBodyCard(taskId: task.id, projectId: task.projectId, title: task.title, refreshToken: fieldsRefresh)
@@ -87,7 +99,8 @@ struct TaskDetailView: View {
                         commentsCard(task)
                         TaskActivityCard(logs: task.activityLogs ?? [])
                     }
-                    .padding(16)
+                    .padding(hSize == .regular ? 32 : 20)
+                    .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
                 }
             } else if let loadFailure {
                 LoadErrorView(error: loadFailure, what: T("this task"),
@@ -104,19 +117,72 @@ struct TaskDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if let task {
-                    AskGideonButton(context: GideonContext(projectId: task.projectId, projectName: nil, taskId: task.id, taskTitle: task.title))
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                // Deleting a task needs Can edit or Full access (project access levels, 13 Oct 2026).
-                if canDeleteTask && task != nil {
+            #if targetEnvironment(macCatalyst)
+            // Give every action its own native bar item. Catalyst clips an HStack custom item
+            // to its first control, even when that stack requests its intrinsic width.
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if task != nil {
+                    if let t = task {
+                        AskGideonButton(context: GideonContext(projectId: t.projectId, projectName: nil, taskId: t.id, taskTitle: t.title))
+                            .accessibilityIdentifier("task.action.gideon")
+                    }
+                    socialButton("Follow", icon: social.following ? "bell.fill" : "bell", active: social.following) { await social.toggle("followers", id: taskId) }
+                        .tint(social.following ? NX.violetText : NX.mutedFg)
+                    socialButton("Favourite", icon: social.favourite ? "star.fill" : "star", active: social.favourite) { await social.toggle("favourite", id: taskId) }
+                        .tint(social.favourite ? NX.violetText : NX.mutedFg)
+                    socialButton("Like", icon: social.liked ? "heart.fill" : "heart", active: social.liked) { await social.toggle("likes", id: taskId) }
+                        .tint(social.liked ? NX.violetText : NX.mutedFg)
+                    if isBod {
+                        Button { showQuestComposer = true } label: { Image(systemName: "trophy").font(.system(size: 14)).foregroundStyle(NX.warning) }
+                            .accessibilityLabel(T("Make it a quest"))
+                            .accessibilityIdentifier("task.action.quest")
+                            .tint(NX.warning)
+                    }
                     Menu {
-                        Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                        if canEditTask {
+                            Button { Task { await copyTask() } } label: { Label(T("Copy task"), systemImage: "doc.on.doc") }
+                            Button { showCopyProject = true } label: { Label(T("Copy to another project"), systemImage: "folder") }
+                        }
+                        Button { dismiss(); router.open(.task(taskId)) } label: { Label(T("Open as page"), systemImage: "arrow.up.left.and.arrow.down.right") }
+                        if canDeleteTask { Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") } }
+                    } label: { Image(systemName: "ellipsis").font(.system(size: 16)) }
+                    .accessibilityLabel(T("Task actions"))
+                    .accessibilityIdentifier("task.action.more")
+                    .tint(NX.mutedFg)
                 }
             }
+            #else
+            ToolbarItem(placement: .topBarTrailing) {
+                if task != nil {
+                    HStack(spacing: 10) {
+                        if let t = task {
+                            AskGideonButton(context: GideonContext(projectId: t.projectId, projectName: nil, taskId: t.id, taskTitle: t.title))
+                                .accessibilityIdentifier("task.action.gideon")
+                        }
+                        socialButton("Follow", icon: social.following ? "bell.fill" : "bell", active: social.following) { await social.toggle("followers", id: taskId) }
+                        socialButton("Favourite", icon: social.favourite ? "star.fill" : "star", active: social.favourite) { await social.toggle("favourite", id: taskId) }
+                        socialButton("Like", icon: social.liked ? "heart.fill" : "heart", active: social.liked) { await social.toggle("likes", id: taskId) }
+                        if isBod {
+                            Button { showQuestComposer = true } label: { Image(systemName: "trophy").font(.system(size: 14)).foregroundStyle(NX.warning) }
+                                .accessibilityLabel(T("Make it a quest"))
+                                .accessibilityIdentifier("task.action.quest")
+                        }
+                        Menu {
+                            if canEditTask {
+                                Button { Task { await copyTask() } } label: { Label(T("Copy task"), systemImage: "doc.on.doc") }
+                                Button { showCopyProject = true } label: { Label(T("Copy to another project"), systemImage: "folder") }
+                            }
+                            Button { dismiss(); router.open(.task(taskId)) } label: { Label(T("Open as page"), systemImage: "arrow.up.left.and.arrow.down.right") }
+                            if canDeleteTask { Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") } }
+                        } label: { Image(systemName: "ellipsis").font(.system(size: 16)) }
+                        .accessibilityLabel(T("Task actions"))
+                        .accessibilityIdentifier("task.action.more")
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minHeight: 44)
+                }
+            }
+            #endif
         }
         .alert(T("Couldn't do that"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
@@ -132,7 +198,12 @@ struct TaskDetailView: View {
             // A comment typed here earlier and never posted comes back into the box.
             if newComment.isEmpty { newComment = LocalDrafts.text("comment:\(taskId)") }
             await load()
+            await social.load(taskId)
         }
+        .sheet(isPresented: $showCopyProject) { TaskCopyProjectSheet(taskId: taskId, sourceProjectId: task?.projectId) }
+        .alert(T("Couldn't do that"), isPresented: Binding(get: { social.error != nil }, set: { if !$0 { social.error = nil } })) {
+            Button(T("OK")) { social.error = nil }
+        } message: { Text(social.error ?? "") }
         // Closing the task saves what was typed (bughunt C-BUG-1 / Notion): the title and the
         // description, when they differ from what the server has.
         .onDisappear { flushEdits(); EditorKeys.shared.release(keysOwner) }
@@ -218,28 +289,7 @@ struct TaskDetailView: View {
                 .onChange(of: titleFocused) { _, focused in if !focused { commitTitle(t) } }
                 .disabled(!canEditTask)
 
-            // controls: status menu · priority menu · due
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    statusControl(t)
 
-                    Menu {
-                        ForEach(priorities, id: \.self) { p in
-                            Button(TaskPriorityName.label(p)) { Task { await update(t, ["priority": p]) } }
-                        }
-                    } label: { controlChip(TaskPriorityName.label(t.priority), system: "flag.fill", tone: prioTone(t.priority ?? "NONE")) }
-
-                    Button { startValue = parsedDue(t.startDate); showStartPicker = true } label: {
-                        controlChip(t.startDate == nil ? T("Start date") : String(format: T("Starts %@"), dueText(t.startDate)), system: "calendar.badge.clock", tone: .neutral)
-                    }.buttonStyle(.plain)
-
-                    Button { dueValue = parsedDue(t.dueDate); showDuePicker = true } label: {
-                        controlChip(dueText(t.dueDate), system: "calendar", tone: .neutral)
-                    }.buttonStyle(.plain)
-                }
-                // Not on the ScrollView: a disabled scroll view would not scroll the chips either.
-                .disabled(!canEditTask)
-            }
         }
         .sheet(isPresented: $showDuePicker) {
             datePickerSheet(T("Due date"), $dueValue, onSave: { await update(t, ["dueDate": isoDay(dueValue)]) }, onClear: { await update(t, ["dueDate": NSNull()]) }, close: { showDuePicker = false })
@@ -247,6 +297,18 @@ struct TaskDetailView: View {
         .sheet(isPresented: $showStartPicker) {
             datePickerSheet(T("Start date"), $startValue, onSave: { await update(t, ["startDate": isoDay(startValue)]) }, onClear: { await update(t, ["startDate": NSNull()]) }, close: { showStartPicker = false })
         }
+    }
+
+    private func socialButton(_ name: String, icon: String, active: Bool, action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: {
+            Image(systemName: icon).font(.system(size: 14)).foregroundStyle(active ? NX.violetText : NX.mutedFg)
+        }.disabled(social.busy).accessibilityLabel(T(name))
+            .accessibilityIdentifier("task.action.\(name.lowercased())")
+    }
+
+    private func copyTask() async {
+        do { try await APIClient.shared.duplicateTask(taskId, dueDate: nil) }
+        catch { actionError = error.localizedDescription }
     }
 
     private func datePickerSheet(_ title: String, _ value: Binding<Date>, onSave: @escaping () async -> Void, onClear: @escaping () async -> Void, close: @escaping () -> Void) -> some View {
@@ -310,50 +372,90 @@ struct TaskDetailView: View {
     }
 
     private func metaRow(_ t: TaskDetail) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 20) {
-                Button { showAssignee = true } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Text(T("Assignees")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                            if canEditTask {
-                                Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
-                            }
-                        }
-                        if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
-                            // Faces before the names (owner, 10 Oct 2026: "profile picture tiap orang gaada").
-                            HStack(spacing: 6) {
-                                HStack(spacing: -6) {
-                                    ForEach(Array(people.prefix(3).enumerated()), id: \.offset) { _, u in
-                                        AvatarView(url: u.avatar, initial: String((u.name ?? "?").first ?? "?").uppercased(), size: 20)
-                                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
-                                    }
-                                }
-                                assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                            }
-                        } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
-                    }
-                }.buttonStyle(.plain)
-                .disabled(!canEditTask)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(T("Due date")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                    Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+        VStack(alignment: .leading, spacing: 2) {
+            propertyRow("Status", icon: "circle.dashed") {
+                HStack(spacing: 8) {
+                    Button { Task { await update(t, ["status": t.isDone ? "TODO" : "DONE"]) } } label: {
+                        Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle").foregroundStyle(t.isDone ? NX.success : NX.mutedFg)
+                    }.buttonStyle(.plain).disabled(!canEditTask).accessibilityLabel(T("Done"))
+                    statusControl(t).disabled(!canEditTask)
                 }
-                Spacer()
             }
-            if let creator = t.creator, let name = creator.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-                Divider().overlay(NX.border)
-                creatorLine(SystemUsers.name(name, avatar: creator.avatar), creator)
+            propertyRow("Priority", icon: "flag") {
+                Menu {
+                    ForEach(priorities, id: \.self) { p in
+                        Button(TaskPriorityName.label(p)) { Task { await update(t, ["priority": p]) } }
+                    }
+                } label: { Text(TaskPriorityName.label(t.priority)).font(NXFont.text(14)).foregroundStyle(NX.foreground) }
+                .disabled(!canEditTask)
+            }
+            propertyRow("Assignees", icon: "person.2") {
+                Button { showAssignee = true } label: {
+                    if let people = t.assignees?.compactMap({ $0.user }), !people.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(Array(people.prefix(3).enumerated()), id: \.offset) { _, person in
+                                AvatarView(url: person.avatar, initial: String((person.name ?? "?").prefix(1)), size: 20, userId: person.id, name: person.name)
+                            }
+                            assigneeLine(people).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2)
+                        }
+                    } else { Text(T("Unassigned")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg) }
+                }.buttonStyle(.plain).disabled(!canEditTask)
+            }
+            propertyRow("Start date", icon: "calendar.badge.clock") {
+                Button { startValue = parsedDue(t.startDate); showStartPicker = true } label: {
+                    Text(t.startDate == nil ? "—" : dueText(t.startDate)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                }.buttonStyle(.plain).disabled(!canEditTask)
+            }
+            propertyRow("Due date", icon: "calendar") {
+                Button { dueValue = parsedDue(t.dueDate); showDuePicker = true } label: {
+                    Text(t.dueDate == nil ? "—" : dueText(t.dueDate)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                }.buttonStyle(.plain).disabled(!canEditTask)
+            }
+            propertyRow("Tags", icon: "tag") {
+                FlowLayout(spacing: 6) {
+                    ForEach(t.tags ?? [], id: \.self) { tag in
+                        HStack(spacing: 4) {
+                            Text(tag).font(NXFont.text(12))
+                            if canEditTask {
+                                Button { Task { await update(t, ["removeTags": [tag]]) } } label: { Image(systemName: "xmark").font(.system(size: 8)) }.buttonStyle(.plain)
+                            }
+                        }.padding(4).background(NX.muted, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    if canEditTask {
+                        TextField(T("Add tag"), text: $tagDraft).font(NXFont.text(13)).frame(width: 100)
+                            .onSubmit {
+                                let tag = tagDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !tag.isEmpty else { return }
+                                tagDraft = ""
+                                Task { await update(t, ["addTags": [tag]]) }
+                            }
+                    }
+                }
+            }
+            if let creator = t.creator, let name = creator.name {
+                propertyRow("Created by", icon: "person.crop.circle") {
+                    HStack(spacing: 6) {
+                        AvatarView(url: creator.avatar, initial: String(name.prefix(1)), size: 20, userId: creator.id, name: name)
+                        Text(SystemUsers.name(name, avatar: creator.avatar)).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                        if creator.deactivatedAt != nil { LeftTag() }
+                    }
+                }
             }
         }
-        .padding(14).nexusCard(padding: 14, radius: 18)
         .sheet(isPresented: $showAssignee) {
-            AssigneePicker(
-                projectId: t.projectId,
-                current: Set((t.assignees ?? []).compactMap { $0.user?.id }),
-                onSave: { ids in await update(t, ["assigneeIds": Array(ids)]) }
-            )
+            AssigneePicker(projectId: t.projectId, current: Set((t.assignees ?? []).compactMap { $0.user?.id }), onSave: { ids, base in
+                let edit = StringSetEdit(base: base, selected: ids)
+                await update(t, ["addAssigneeIds": edit.added, "removeAssigneeIds": edit.removed])
+            })
         }
+    }
+
+    private func propertyRow<Content: View>(_ label: String, icon: String, @ViewBuilder value: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Label(T(label), systemImage: icon).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .frame(width: hSize == .regular ? 150 : 115, alignment: .leading)
+            value().frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(minHeight: 40)
     }
 
     /// "Created by Rina", with her picture (owner, 8 Oct 2026). Every task has a maker, so this no
@@ -368,7 +470,7 @@ struct TaskDetailView: View {
             if SystemUsers.isAutomation(avatar: creator.avatar) {
                 AutomationAvatar(size: 22)
             } else {
-                AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22)
+                AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22, userId: creator.id, name: name)
             }
             (Text(before).foregroundColor(NX.mutedFg)
                 + Text(name).font(NXFont.text(13, .semibold)).foregroundColor(NX.foreground)
@@ -449,7 +551,7 @@ struct TaskDetailView: View {
     }
 
     private func commentsCard(_ t: TaskDetail) -> some View {
-        let comments = t.comments ?? []
+        let comments = (t.comments ?? []).sorted { ($0.createdAt ?? "", $0.id) < ($1.createdAt ?? "", $1.id) }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(NX.mutedFg)
@@ -465,7 +567,7 @@ struct TaskDetailView: View {
                             if SystemUsers.isAutomation(avatar: c.user?.avatar) {
                                 AutomationAvatar(size: 20)
                             } else {
-                                AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20)
+                                AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20, userId: c.user?.id, name: c.user?.name)
                             }
                             Text(SystemUsers.name(c.user?.name, avatar: c.user?.avatar, fallback: "Someone")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                             Spacer()
@@ -718,7 +820,7 @@ struct TaskDetailView: View {
     }
 
     private func prioTone(_ p: String) -> ChipTone {
-        switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .high; case "MEDIUM": return .info; default: return .neutral }
+        TaskPriorityName.tone(p)
     }
     private func dueText(_ iso: String?) -> String {
         guard let iso else { return T("No due date") }
@@ -742,14 +844,15 @@ struct TaskDetailView: View {
     }
 }
 
-/// Assign / unassign task members from the project's member pool. Commits the full assigneeIds set.
+/// Assign / unassign task members from the project's member pool. Saves only the changes.
 struct AssigneePicker: View {
     let projectId: String?
     let current: Set<String>
-    let onSave: (Set<String>) async -> Void
+    let onSave: (Set<String>, Set<String>) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var members: [ProjectDetail.ProjectMember] = []
     @State private var selected: Set<String> = []
+    @State private var baseSelection: Set<String> = []
     @State private var loading = true
     @State private var saving = false
 
@@ -766,7 +869,7 @@ struct AssigneePicker: View {
                         ForEach(members) { m in
                             Button { toggle(m.uid) } label: {
                                 HStack(spacing: 12) {
-                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 34)
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 34, userId: m.uid, name: m.displayName)
                                     Text(m.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer()
                                     if selected.contains(m.uid) {
@@ -786,7 +889,7 @@ struct AssigneePicker: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
+                    Button { Task { saving = true; await onSave(selected, baseSelection); dismiss() } } label: {
                         if saving { ProgressView().tint(NX.violetText) } else { Text(T("Save")).bold() }
                     }.disabled(saving)
                 }
@@ -800,6 +903,7 @@ struct AssigneePicker: View {
     }
     private func load() async {
         selected = current
+        baseSelection = current
         guard let pid = projectId else { loading = false; return }
         members = (try? await APIClient.shared.project(pid).members) ?? []
         loading = false

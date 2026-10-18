@@ -11,6 +11,9 @@ final class AuthStore {
     /// own spinner, while `isBusy` still disables both.
     var isPasskeyLoggingIn = false
     var loginError: String?
+    private(set) var identityReady = false
+    private var refreshingIdentity = false
+    var readySession: Session? { identityReady ? session : nil }
 
     var isAuthenticated: Bool { session != nil }
     var isBusy: Bool { isLoggingIn || isPasskeyLoggingIn }
@@ -18,6 +21,43 @@ final class AuthStore {
     init() {
         // Restore a persisted session on cold start.
         session = Keychain.load()
+        identityReady = session == nil
+    }
+
+    /// A valid token can outlive an ID migration. Never derive ownership from its cached user ID.
+    func refreshIdentity() async {
+        guard let before = session else { identityReady = true; return }
+        guard !refreshingIdentity else { return }
+        refreshingIdentity = true
+        defer { refreshingIdentity = false; identityReady = true }
+        do {
+            let user = try await APIClient.shared.profile(fresh: true).user
+            guard let current = session, current.token == before.token, current.cookieName == before.cookieName,
+                  let next = current.refreshedIdentity(id: user.id, name: user.name, email: user.email) else { return }
+            Keychain.save(next)
+            if current.userId != next.userId {
+                AttendanceQueue.shared.rebindIdentity(from: current.userId, to: next.userId)
+                MeetingUploads.shared.rebindIdentity(from: current.userId, to: next.userId)
+                MeetingRecorder.shared.rebindIdentity(from: current.userId, to: next.userId)
+                ResponseCache.clearAll()
+                OfflineSync.shared.reset()
+                Viewer.shared.reset()
+                PresenceStore.shared.reset()
+                GideonMemoryStore.shared.reset()
+                RealtimeClient.shared.reset()
+                GideonChat.shared.refreshIdentity()
+                CalendarWidgetPresence.stop()
+            }
+            PhoneSessionBridge.shared.publish(next)
+            session = next
+            if TourMode.isActive && TourState.shared.identity == "not-checked" {
+                TourState.shared.identity = "restored=\(before.userId);current=\(next.userId);sameCredentials=\(before.token == next.token && before.cookieName == next.cookieName)"
+            }
+        } catch APIError.unauthorized {
+            if session?.token == before.token { logout() }
+        } catch {
+            // Offline: keep the valid session and retry on the next foreground. No invented ID.
+        }
     }
 
     func login(email: String, password: String) async {
@@ -62,12 +102,15 @@ final class AuthStore {
             userName: res.user.name ?? "",
             userEmail: res.user.email ?? fallbackEmail
         )
+        PresenceStore.shared.reset()
+        GideonMemoryStore.shared.reset()
         Keychain.save(s)
         // A check-in queued before the session expired belongs to this person only if it is theirs.
         AttendanceQueue.shared.keepOnly(owner: s.userId)
         // The watch cannot sign in on its own, so it learns about this one here.
         PhoneSessionBridge.shared.publish(s)
         session = s
+        identityReady = true
     }
 
     /// The person changed their sign-in email in Tuning Room. The token stays valid (the server
@@ -119,6 +162,8 @@ final class AuthStore {
         if let session {
             Task { await NotificationManager.shared.unregister(session: session) }
         }
+        MeetingUploads.shared.suspendForLogout()
+        MeetingRecorder.shared.stopForLogout()
         Keychain.clear()
         // A cached roster or task list must not outlive the session that fetched it.
         ResponseCache.clearAll()
@@ -130,6 +175,8 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()
+        PresenceStore.shared.reset()
+        GideonMemoryStore.shared.reset()
         // Nor the realtime connection: it is authenticated as this person, and the next one to sign in
         // must not hear a single event meant for them. NexusApp would close it on the next render too;
         // this closes it now.

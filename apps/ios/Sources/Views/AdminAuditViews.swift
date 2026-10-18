@@ -385,7 +385,7 @@ private struct AuditRow: View {
                     .lineLimit(3).multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
-                    AvatarView(url: log.user?.avatar, initial: String(name.prefix(1)).uppercased(), size: 18)
+                    AvatarView(url: log.user?.avatar, initial: String(name.prefix(1)).uppercased(), size: 18, userId: log.user?.id, name: name)
                     Text(name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     if let when = AuditTime.relative(log.createdAt) {
                         Text("· \(when)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -641,7 +641,7 @@ private struct AuditEntrySheet: View {
                 DocReaderView(docId: id, title: e.entityType == "doc" ? (e.entityName ?? "") : "")
             } label: { label }.buttonStyle(.plain)
         case .folder(let id):
-            NavigationLink { FolderByIdView(folderId: id) } label: { label }.buttonStyle(.plain)
+            Button { leave(to: .folder(id)) } label: { label }.buttonStyle(.plain)
         default:
             Button { leave(to: target) } label: { label }.buttonStyle(.plain)
         }
@@ -674,7 +674,9 @@ private struct AuditEntrySheet: View {
                 switchTab("announcements")
             case .chat(let id):
                 router.open(.conversation(id))
-            case .project, .task, .doc, .folder:
+            case .folder(let id):
+                router.open(.calendarLink("/calendar?folder=" + NativeAPI.escape(id)))
+            case .project, .task, .doc:
                 break
             }
         }
@@ -752,7 +754,7 @@ private struct AuditEntrySheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
-                AvatarView(url: user?.avatar, initial: String(name.prefix(1)).uppercased(), size: 26)
+                AvatarView(url: user?.avatar, initial: String(name.prefix(1)).uppercased(), size: 26, userId: user?.id, name: name)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     Text([AuditTime.full(when), AuditTime.relative(when)].compactMap { $0 }.joined(separator: " · "))

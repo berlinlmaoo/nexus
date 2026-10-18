@@ -1301,20 +1301,22 @@ struct SocialSettingsSheet: View {
             }
 
             Section {
-                // ↑ ↓ and archive on every row, as the outlet's Report settings and the web: no drag handles
-                // (UI tour run 16, R16-I-22, decision 7).
-                ForEach(Array(active.enumerated()), id: \.element.id) { pos, p in
+                // A drag handle on every row to reorder (owner, 16 Oct 2026: fix 16's ↑ ↓ buttons are reverted).
+                ForEach(active) { p in
                     HStack(spacing: 14) {
                         TextField(T("Platform name"), text: nameBinding(p.id))
                             .foregroundStyle(NX.foreground)
-                        NXRowIconButton(title: T("Move up"), icon: "arrow.up", enabled: pos > 0) { movePlatform(p.id, by: -1) }
-                        NXRowIconButton(title: T("Move down"), icon: "arrow.down", enabled: pos < active.count - 1) { movePlatform(p.id, by: 1) }
                         NXRowIconButton(title: String(format: T("Archive %@"), p.name), icon: "archivebox", enabled: active.count > 1) {
                             if !p.platformId.isEmpty && (usage[p.platformId] ?? 0) > 0 { pendingArchive = p }
                             else if p.platformId.isEmpty { rows.removeAll { $0.id == p.id } }
                             else { setArchived(p.id, true) }
                         }
                     }
+                }
+                .onMove { from, to in
+                    var a = active
+                    a.move(fromOffsets: from, toOffset: to)
+                    rows = a + archived
                 }
                 HStack {
                     Image(systemName: "plus").foregroundStyle(NX.mutedFg)
@@ -1351,15 +1353,8 @@ struct SocialSettingsSheet: View {
         .contentMargins(.top, 8, for: .scrollContent)
         // The sheet goes on below its edge (Platforms, Add platform): the indicator shows once.
         .scrollIndicatorsFlash(onAppear: true)
+        .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    /// One step up or down among the active platforms (archived ones stay at the end).
-    private func movePlatform(_ id: String, by step: Int) {
-        var a = active
-        guard let i = a.firstIndex(where: { $0.id == id }), a.indices.contains(i + step) else { return }
-        a.swapAt(i, i + step)
-        rows = a + archived
     }
 
     private func add() {

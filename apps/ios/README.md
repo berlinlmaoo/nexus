@@ -185,3 +185,14 @@ reports, teams, room booking, Control Room.
 Push notification tersedia untuk mention chat dan task assignment setelah backend APNs dikonfigurasi.
 Reminder lokal tersedia untuk check-in 15 menit sebelum shift serta deadline task H-2/H-1/jatuh
 tempo. Belum ada: offline cache/queue.
+
+## Native contract checks
+
+Run `scripts/check-localization.sh` and `scripts/check-native-contracts.sh` from `apps/ios` before building.
+The latter compiles the Foundation-only Legal, GIDEON credit, chat/document and task edit models plus the
+block editor conversion tests. It needs Swift and Python 3, uses a temporary directory, and does not log in
+or write to a server. Simulator and Mac Catalyst builds still verify the SwiftUI screens.
+
+For DEV screenshot QA, follow `docs/UI-TOUR.md`. The Keychain entry must belong to the QA email used by the
+tour; an entry for a different account is not a QA credential. Use one simulator at a time and keep the
+build's derived data outside the checkout.

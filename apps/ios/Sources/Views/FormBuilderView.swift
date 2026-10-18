@@ -166,7 +166,7 @@ struct ProjectFormsBuilderTab: View {
         busyId = f.id
         defer { busyId = nil }
         do {
-            try await APIClient.shared.updateForm(f.id, ["isPublic": on])
+            try await APIClient.shared.updateForm(f.id, ["isPublic": on, "baseUpdatedAt": jsonOrNull(f.updatedAt)])
             NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
             flash(on ? T("Published — anyone with the link can open it.") : T("Unpublished — the public link stops working."))
         } catch APIError.unauthorized {
@@ -263,6 +263,8 @@ struct FormBuilderView: View {
 
     /// The form as the server last returned it; nil until a new form is created.
     @State private var saved: BuilderForm?
+    @State private var formConflict: BuilderForm?
+    @State private var canChangeForm = true
     @State private var loaded = false
     @State private var loadError: String?
 
@@ -383,6 +385,33 @@ struct FormBuilderView: View {
         } message: { a in
             Text(alertMessage(a))
         }
+        .background { Color.clear.alert(T("The form changed"), isPresented: Binding(get: { formConflict != nil }, set: { if !$0 { formConflict = nil } })) {
+            Button(T("Keep my edits")) {
+                if let latest = formConflict {
+                    let remote = FormStudioDraft(form: latest)
+                    if let base = baseline {
+                        var merged = remote
+                        if draft.name != base.name { merged.name = draft.name }
+                        if draft.description != base.description { merged.description = draft.description }
+                        if draft.fields != base.fields { merged.fields = draft.fields }
+                        if draft.isPublic != base.isPublic { merged.isPublic = draft.isPublic }
+                        if draft.requireAuth != base.requireAuth { merged.requireAuth = draft.requireAuth }
+                        if draft.schedule != base.schedule { merged.schedule = draft.schedule }
+                        if draft.branding != base.branding { merged.branding = draft.branding }
+                        if draft.settings != base.settings { merged.settings = draft.settings }
+                        draft = merged
+                    }
+                    baseline = remote; saved = latest; formConflict = nil
+                    Task { await flush() }
+                }
+            }
+            Button(T("Use latest version"), role: .destructive) {
+                if let latest = formConflict {
+                    saved = latest; draft = FormStudioDraft(form: latest); baseline = draft; saveState = .saved; formConflict = nil
+                }
+            }
+            Button(T("Cancel"), role: .cancel) { formConflict = nil }
+        } message: { Text(T("Someone saved this form while you were editing. Keep your edits over the latest version, or use their version.")) } }
     }
 
     // MARK: top bar
@@ -489,8 +518,10 @@ struct FormBuilderView: View {
                 Button { Task { await flush(); showFill = true } } label: {
                     Label(T("Open the form page"), systemImage: "arrow.up.right.square")
                 }
-                Button { showDuplicate = true } label: {
-                    Label(T("Duplicate to another project"), systemImage: "plus.square.on.square")
+                if canChangeForm {
+                    Button { showDuplicate = true } label: {
+                        Label(T("Duplicate to another project"), systemImage: "plus.square.on.square")
+                    }
                 }
             }
             Divider()
@@ -499,9 +530,7 @@ struct FormBuilderView: View {
             }
             .disabled(deleting)
         } label: {
-            // Neutral grey as every other overflow button (decision 27 of run 20, Mac R20-M-09: it took the violet tint).
             Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium))
-                .foregroundStyle(NX.mutedFg)
                 .frame(width: 30, height: 30).contentShape(Rectangle())
         }
         .tint(NX.mutedFg)
@@ -806,6 +835,7 @@ struct FormBuilderView: View {
             baseline = d
         }
         let detail = try? await detailCall
+        canChangeForm = detail?.canEditProject ?? true
         sections = detail?.taskLists ?? []
         members = (detail?.members ?? []).filter { !$0.uid.isEmpty }
         customFields = (try? await customFieldsCall) ?? []
@@ -832,7 +862,7 @@ struct FormBuilderView: View {
     /// One save at a time; an edit made meanwhile goes right after. `force` creates a new form even
     /// when nothing was typed yet (Preview needs a form to open).
     private func flush(force: Bool = false) async {
-        guard !stopped, let base = baseline else { return }
+        guard !stopped, formConflict == nil, canChangeForm, let base = baseline else { return }
         if inflight { again = true; againForce = againForce || force; return }
         let snapshot = draft
         guard snapshot != base || (force && currentId == nil) else { return }
@@ -843,6 +873,7 @@ struct FormBuilderView: View {
         do {
             let out: BuilderForm
             if let id = currentId {
+                if let updatedAt = saved?.updatedAt { requestBody["baseUpdatedAt"] = updatedAt }
                 out = try await APIClient.shared.updateForm(id, requestBody)
             } else {
                 requestBody["projectId"] = projectId
@@ -864,6 +895,12 @@ struct FormBuilderView: View {
             return
         } catch let failure {
             inflight = false
+            if let api = failure as? APIError, case .http(409, _) = api, let id = currentId,
+               let latest = try? await APIClient.shared.builderForms(projectId: projectId).first(where: { $0.id == id }) {
+                formConflict = latest
+                again = false
+                againForce = false
+            }
             saveState = .failed((failure as? LocalizedError)?.errorDescription ?? T("Try again in a moment."))
         }
         if again {

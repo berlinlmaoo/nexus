@@ -22,7 +22,6 @@ extension AppLanguage {
         "Checking the rooms…": "Mengecek ruangan…",
         "Couldn't check the rooms.": "Gagal mengecek ruangan.",
         "%@ is booked then. Pick a free room below.": "%@ sudah dibooking di jam itu. Pilih ruangan yang kosong di bawah.",
-        "%d seats": "%d kursi",
         "Booked by %@ until %@": "Dibooking %@ sampai %@",
         "No room is free then. Nearest free times:": "Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:",
         "Room booked": "Ruangan dibooking",

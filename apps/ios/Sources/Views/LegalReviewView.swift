@@ -12,6 +12,7 @@ import SwiftUI
 @Observable
 final class LegalEditorModel {
     private(set) var paragraphs: [LegalParagraph] = []
+    private(set) var page = LegalPageSetup()
     private(set) var loadedKey: String?
     var loading = false
     var error: String?
@@ -35,6 +36,8 @@ final class LegalEditorModel {
         do {
             let r = try await APIClient.shared.legalParagraphs(id: documentId)
             paragraphs = r.paragraphs
+            page = r.page ?? LegalPageSetup()
+            selected = []
             loadedKey = key
             error = nil
             reset()
@@ -57,138 +60,252 @@ final class LegalEditorModel {
 struct LegalParagraphEditor: View {
     let doc: LegalDocument
     @Bindable var editor: LegalEditorModel
+    @State private var width: CGFloat = 0
+
+    private struct Block: Identifiable {
+        let id: Int
+        let paragraphs: [LegalParagraph]
+        var isTable: Bool { paragraphs.first?.layout?.cell != nil }
+    }
+    private var blocks: [Block] {
+        var result: [Block] = []
+        var table: [LegalParagraph] = []
+        func flush() {
+            if let first = table.first { result.append(Block(id: first.index, paragraphs: table)); table = [] }
+        }
+        for p in editor.paragraphs {
+            if let cell = p.layout?.cell {
+                if table.first?.layout?.cell?.table != cell.table { flush() }
+                table.append(p)
+            } else { flush(); result.append(Block(id: p.index, paragraphs: [p])) }
+        }
+        flush()
+        return result
+    }
+    private var paper: Bool { width >= 640 }
+    private var scale: CGFloat { paper ? min(1, width / (editor.page.width * 4 / 3)) : 1 }
+    private var left: CGFloat { paper ? editor.page.marginLeft * 4 / 3 * scale : 36 }
+    private var right: CGFloat { paper ? editor.page.marginRight * 4 / 3 * scale : 16 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(PlatformWording.tapOrClick(tap: "Tap a paragraph to edit it, or tick paragraphs to ask GIDEON to change them.",
                                             click: "Click a paragraph to edit it, or tick paragraphs to ask GIDEON to change them."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             if editor.loading && editor.paragraphs.isEmpty {
                 LegalLoadingRow()
             } else if let error = editor.error, editor.paragraphs.isEmpty {
-                Text(error).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                EmptyState(icon: "doc.text", title: T("Couldn't open this document"), subtitle: error)
+            } else if editor.paragraphs.isEmpty {
+                EmptyState(icon: "doc.text", title: T("No paragraphs to edit"), subtitle: T("Upload a Word version to review its paragraphs here."))
             } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(editor.paragraphs) { p in
-                        if p.isBlank {
-                            EmptyView()
-                        } else {
-                            LegalParagraphRow(paragraph: p, editor: editor)
-                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(blocks) { block in
+                        if block.isTable { table(block.paragraphs) }
+                        else if let p = block.paragraphs.first { row(p) }
                     }
                 }
-                .padding(8)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                .padding(.leading, left).padding(.trailing, right)
+                .padding(.top, paper ? editor.page.marginTop * 4 / 3 * scale : 24)
+                .padding(.bottom, paper ? 72 * scale : 24)
+                .frame(maxWidth: paper ? editor.page.width * 4 / 3 * scale : .infinity, alignment: .leading)
+                .background(Color.white)
+                .overlay(Rectangle().strokeBorder(Color.black.opacity(0.1)))
+                .frame(maxWidth: .infinity)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .task(id: "\(doc.id)-\(doc.currentVersion)") { await editor.load(documentId: doc.id, version: doc.currentVersion) }
+    }
+
+    private func row(_ p: LegalParagraph) -> some View {
+        LegalPageParagraph(paragraph: p, page: editor.page, scale: scale, indentScale: paper ? 1 : 0.55, editor: editor)
+    }
+
+    private func table(_ paragraphs: [LegalParagraph]) -> some View {
+        let rows = Array(Set(paragraphs.compactMap { $0.layout?.cell?.row })).sorted()
+        let cols = Array(Set(paragraphs.compactMap { $0.layout?.cell?.col })).sorted()
+        return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+            ForEach(rows, id: \.self) { r in
+                GridRow {
+                    ForEach(cols, id: \.self) { c in
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(paragraphs.filter { $0.layout?.cell?.row == r && $0.layout?.cell?.col == c }) { p in row(p) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 24, alignment: .topLeading)
+                        .padding(6)
+                        .overlay(Rectangle().strokeBorder(Color.black.opacity(0.25), lineWidth: 0.5))
+                    }
+                }
+            }
+        }.padding(.vertical, 5)
     }
 }
 
-private struct LegalParagraphRow: View {
+private struct LegalPageParagraph: View {
     let paragraph: LegalParagraph
+    let page: LegalPageSetup
+    let scale: CGFloat
+    let indentScale: CGFloat
     @Bindable var editor: LegalEditorModel
-    @FocusState private var focused: Bool
-
     private var p: LegalParagraph { paragraph }
+    private var editing: Bool { editor.editing == p.index }
     private var text: String { editor.edits[p.index] ?? p.text }
-    private var changed: Bool { editor.edits[p.index].map { $0 != p.text } ?? false }
-    private var isHeading: Bool { (p.style ?? "").range(of: "^(Heading|Judul|Title)", options: [.regularExpression, .caseInsensitive]) != nil }
-    private var ticked: Bool { editor.selected.contains(p.index) }
+    private var changed: Bool { text != p.text }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Button { editor.toggle(p.index) } label: {
-                Image(systemName: ticked ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 16)).foregroundStyle(ticked ? NX.violetText : NX.mutedFg)
-                    .opacity(p.editable ? 1 : 0.3)
-                    .touchTarget44(drawn: 16)
-            }
-            .buttonStyle(.plain)
-            .disabled(!p.editable)
-            .accessibilityLabel(String(format: T("Select paragraph %d"), p.index + 1))
-            .accessibilityAddTraits(ticked ? .isSelected : [])
-            .padding(.top, 2)
-
-            Group {
-                if editor.editing == p.index {
-                    editingBody
-                } else if p.editable {
-                    Button { editor.editing = p.index } label: { readBody }
-                        .buttonStyle(.plain)
-                } else {
-                    lockedBody
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 6).padding(.vertical, 5)
-        .background(changed ? NX.warning.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            if ticked { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.violet.opacity(0.45)) }
-        }
-    }
-
-    private var font: Font { NXFont.text(p.inTable ? 13 : 14, isHeading ? .semibold : .regular) }
-
-    @ViewBuilder private var readBody: some View {
         Group {
-            if changed {
-                Text(LegalDiffText.attributed(LegalText.diffWords(p.text, text)))
+            if p.isBlank && !changed && !editing {
+                Color.clear.frame(height: (p.layout?.size ?? page.size ?? 11) * 4 / 3 * scale * (p.layout?.lineHeight ?? 1) * 1.15)
+                    .accessibilityHidden(true)
             } else {
-                Text(text.isEmpty ? " " : text)
-            }
-        }
-        .font(font).foregroundStyle(NX.foreground).lineSpacing(3)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .contentShape(Rectangle())
-    }
-
-    private var editingBody: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TextEditor(text: Binding(get: { text }, set: { editor.edits[p.index] = $0 }))
-                .font(font)
-                .focused($focused)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: max(60, min(220, CGFloat(text.count / 45 + 2) * 20)))
-                .padding(.horizontal, 4)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.violet.opacity(0.5)))
-            HStack(spacing: 6) {
-                Button(T("Undo")) {
-                    editor.edits[p.index] = nil
-                    editor.editing = nil
+                ZStack(alignment: .leading) {
+                    LegalParagraphText(paragraph: p, page: page, scale: scale, indentScale: indentScale,
+                        text: Binding(get: { text }, set: { editor.edits[p.index] = $0 }), editing: editing)
+                        .accessibilityIdentifier("legal.paragraph.\(p.index)")
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if p.editable { editor.editing = p.index }
+                            else { LegalToasts.shared.warning(p.lockReason == "number" ? T("The document number can't be edited.") : T("Has a field, image or link: edit it in Word and upload the file as a new version.")) }
+                        }
+                        .background(editor.selected.contains(p.index) ? NX.violet.opacity(0.12) : editing ? Color.blue.opacity(0.06) : changed ? Color.yellow.opacity(0.1) : .clear)
+                    // Keep the selection control outside the paragraph's editing gesture.
+                    marginControl.offset(x: -30)
                 }
-                .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
-                Spacer(minLength: 0)
-                Button(T("Done")) { editor.editing = nil }
-                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                if editing {
+                    HStack {
+                        Button(T("Undo")) { editor.edits[p.index] = nil; editor.editing = nil }
+                        Spacer()
+                        Button(T("Done")) { editor.editing = nil }
+                            .accessibilityIdentifier("legal.paragraph.done.\(p.index)")
+                    }.font(NXFont.text(11)).foregroundStyle(Color.black.opacity(0.65))
+                }
             }
         }
-        .onAppear { focused = true }
+        .padding(.top, (p.layout?.spaceBefore ?? 0) * 4 / 3 * scale)
+        .padding(.bottom, (p.layout?.spaceAfter ?? 0) * 4 / 3 * scale)
     }
-
-    private var lockReason: String {
-        p.lockReason == "number"
-            ? T("The document number can't be edited.")
-            : T("Has a field, image or link: edit it in Word and upload the file as a new version.")
+    private var marginControl: some View {
+        Button { if p.editable { editor.toggle(p.index) } } label: {
+            Image(systemName: p.editable ? (editor.selected.contains(p.index) ? "checkmark.square.fill" : "square") : "lock.fill")
+                .font(.system(size: p.editable ? 14 : 10)).foregroundStyle(p.editable ? NX.violetText : Color.gray)
+                .frame(width: 24, height: 28)
+        }.buttonStyle(.plain).disabled(!p.editable)
+        .accessibilityLabel(String(format: T("Select paragraph %d"), p.index + 1))
+        .accessibilityIdentifier("legal.paragraph.select.\(p.index)")
     }
+}
 
-    private var lockedBody: some View {
-        Button { LegalToasts.shared.warning(lockReason) } label: {
-            HStack(alignment: .top, spacing: 6) {
-                Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(NX.mutedFg).padding(.top, 4)
-                Text(p.text.isEmpty ? "—" : p.text).font(font).foregroundStyle(NX.mutedFg).lineSpacing(3)
-                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+/// Both reading and editing use the document's typography, including justified text and hanging lists.
+private struct LegalParagraphText: UIViewRepresentable {
+    let paragraph: LegalParagraph
+    let page: LegalPageSetup
+    let scale: CGFloat
+    let indentScale: CGFloat
+    @Binding var text: String
+    let editing: Bool
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.isScrollEnabled = false
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isSelectable = false
+        view.isUserInteractionEnabled = false
+        view.attributedText = attributed()
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.scheduleUpdate(view)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let w = max(1, proposal.width ?? 300)
+        let fitted = uiView.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
+        // UITextView can return a short paragraph's natural width. Keep the page's proposed width:
+        // shrinking it reapplies the paragraph indent inside that width and wraps/clips headings.
+        return CGSize(width: w, height: ceil(fitted.height))
+    }
+    private func attributed() -> NSAttributedString {
+        let l = paragraph.layout
+        let unit = 4.0 / 3 * scale
+        let font = UIFont(name: page.font ?? "Arial", size: (l?.size ?? page.size ?? 11) * unit)
+            ?? UIFont.systemFont(ofSize: (l?.size ?? page.size ?? 11) * unit)
+        let style = NSMutableParagraphStyle()
+        switch l?.align { case "center": style.alignment = .center; case "right": style.alignment = .right; case "justify": style.alignment = .justified; default: style.alignment = .left }
+        style.headIndent = max(0, (l?.indentLeft ?? 0) * unit * indentScale)
+        style.firstLineHeadIndent = max(0, style.headIndent + ((l?.firstLine ?? 0) - (l?.hanging ?? 0)) * unit * indentScale)
+        style.lineHeightMultiple = (l?.lineHeight ?? 1) * 1.15
+        style.tabStops = [NSTextTab(textAlignment: .left, location: max(style.headIndent, font.pointSize * 1.5))]
+        let base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black, .paragraphStyle: style]
+        let result = NSMutableAttributedString(string: "")
+        if let marker = l?.marker { result.append(NSAttributedString(string: marker + "\t", attributes: base)) }
+        if !editing && text != paragraph.text {
+            for segment in LegalText.diffWords(paragraph.text, text) {
+                var attributes = base
+                if segment.type == "del" {
+                    attributes[.foregroundColor] = UIColor(ChipTone.danger.fg)
+                    attributes[.backgroundColor] = UIColor(NX.danger.opacity(0.14))
+                    attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                } else if segment.type == "ins" {
+                    attributes[.foregroundColor] = UIColor(ChipTone.success.fg)
+                    attributes[.backgroundColor] = UIColor(NX.success.opacity(0.16))
+                }
+                result.append(NSAttributedString(string: segment.text, attributes: attributes))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+        } else if text == paragraph.text, let runs = l?.runs, !runs.isEmpty {
+            for run in runs {
+                var attributes = base
+                var traits = font.fontDescriptor.symbolicTraits
+                if run.b == true { traits.insert(.traitBold) }
+                if run.i == true { traits.insert(.traitItalic) }
+                if let descriptor = font.fontDescriptor.withSymbolicTraits(traits) { attributes[.font] = UIFont(descriptor: descriptor, size: font.pointSize) }
+                if run.u == true { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+                result.append(NSAttributedString(string: run.text, attributes: attributes))
+            }
+        } else { result.append(NSAttributedString(string: text.isEmpty ? " " : text, attributes: base)) }
+        return result
+    }
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: LegalParagraphText
+        init(_ parent: LegalParagraphText) { self.parent = parent }
+        private var updateScheduled = false
+
+        // Both isEditable and first-responder changes can synchronously ask SwiftUI to update its
+        // responder graph. Run them outside updateUIView, coalescing onto the latest paragraph state.
+        func scheduleUpdate(_ view: UITextView) {
+            guard !updateScheduled else { return }
+            updateScheduled = true
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.updateScheduled = false
+                let parent = self.parent
+                if !parent.editing && view.isFirstResponder { view.resignFirstResponder() }
+                if view.isEditable != parent.editing { view.isEditable = parent.editing }
+                if view.isSelectable != parent.editing { view.isSelectable = parent.editing }
+                if view.isUserInteractionEnabled != parent.editing { view.isUserInteractionEnabled = parent.editing }
+                let content = parent.attributed()
+                if view.attributedText != content && !view.isFirstResponder {
+                    view.attributedText = content
+                    view.invalidateIntrinsicContentSize()
+                }
+                let typing = content.attributes(at: 0, effectiveRange: nil)
+                if (view.typingAttributes as NSDictionary) != (typing as NSDictionary) { view.typingAttributes = typing }
+                if parent.editing && view.window != nil && !view.isFirstResponder { view.becomeFirstResponder() }
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(lockReason)
+
+        func textViewDidChange(_ textView: UITextView) {
+            let marker = parent.paragraph.layout?.marker.map { $0 + "\t" } ?? ""
+            let value = textView.text ?? ""
+            parent.text = !marker.isEmpty && value.hasPrefix(marker) ? String(value.dropFirst(marker.count)) : value
+            textView.invalidateIntrinsicContentSize()
+        }
     }
 }
 
@@ -215,7 +332,7 @@ struct LegalSaveEditsBar: View {
     }
 
     private var count: some View {
-        Text(String(format: T("%d paragraphs changed"), editor.pending.count))
+        Text(editor.pending.count == 1 ? T("1 paragraph changed") : String(format: T("%d paragraphs changed"), editor.pending.count))
             .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
     }
 
@@ -265,6 +382,7 @@ struct LegalGideonPanel: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(editor.selected.isEmpty
                      ? T("Tick the paragraphs to change, or describe the clause and GIDEON picks the fewest paragraphs.")
+                     : editor.selected.count == 1 ? T("GIDEON may change only the paragraph you ticked.")
                      : String(format: T("GIDEON may change only the %d paragraphs you ticked."), editor.selected.count))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 if !editor.selected.isEmpty {
@@ -540,7 +658,7 @@ struct LegalDiffView: View {
             Text(T("These versions have the same text.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text(String(format: T("%d paragraphs changed"), changes)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(changes == 1 ? T("1 paragraph changed") : String(format: T("%d paragraphs changed"), changes)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 ForEach(rows) { row in
                     switch row {
                     case .folded(let n, _):

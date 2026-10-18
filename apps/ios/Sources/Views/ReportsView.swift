@@ -248,7 +248,7 @@ struct ReportRosterRow: View {
         let h = row.headline
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                AvatarView(url: row.avatar, initial: String(row.displayName.first ?? "?").uppercased(), size: 38)
+                AvatarView(url: row.avatar, initial: String(row.displayName.first ?? "?").uppercased(), size: 38, userId: row.userId, name: row.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(row.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)

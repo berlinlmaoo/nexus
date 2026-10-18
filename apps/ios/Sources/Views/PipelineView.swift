@@ -1135,7 +1135,7 @@ struct PipelineDealCard: View {
                     if !people.isEmpty {
                         HStack(spacing: -5) {
                             ForEach(people) { p in
-                                AvatarView(url: p.avatar, initial: String(p.name.first ?? "?").uppercased(), size: 20)
+                                AvatarView(url: p.avatar, initial: String(p.name.first ?? "?").uppercased(), size: 20, userId: p.id, name: p.name)
                                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                             }
                         }

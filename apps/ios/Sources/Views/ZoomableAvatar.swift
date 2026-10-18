@@ -20,6 +20,7 @@ struct ZoomableAvatar: View {
     var size: CGFloat = 36
     /// Shown above the photo in the viewer.
     var name: String? = nil
+    var userId: String? = nil
 
     @State private var hasPhoto = false
     @State private var viewing: PhotoRef?
@@ -36,12 +37,13 @@ struct ZoomableAvatar: View {
                 Button {
                     viewing = PhotoRef(url: photoURL, name: name)
                 } label: {
-                    AvatarView(url: url, initial: initial, size: size)
+                    AvatarView(url: url, initial: initial, size: size, userId: userId, name: name)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(T("View profile photo"))
+                .accessibilityLabel(PresenceStore.shared.status(userId).map { (name ?? initial) + " · " + $0.localizedLabel(AppLanguage.shared.lang.rawValue) } ?? T("View profile photo"))
+                .accessibilityHint(T("View profile photo"))
             } else {
-                AvatarView(url: url, initial: initial, size: size)
+                AvatarView(url: url, initial: initial, size: size, userId: userId, name: name)
             }
         }
         .task(id: photoURL) {

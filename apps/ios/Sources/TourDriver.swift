@@ -68,6 +68,7 @@ enum NetDiagnostics {
 final class TourState {
     static let shared = TourState()
     var status = "starting"
+    var identity = "not-checked"
 }
 
 /// Attached once, on the app's root (NexusApp). Draws nothing and does nothing unless TourMode is on.
@@ -82,6 +83,11 @@ struct TourDriver: ViewModifier {
         if TourMode.isActive {
             content
                 .overlay(alignment: .topLeading) { marker }
+                .overlay(alignment: .topLeading) {
+                    Text(state.identity).font(.system(size: 2)).foregroundStyle(Color.primary.opacity(0.02))
+                        .frame(width: 2, height: 2).clipped().allowsHitTesting(false)
+                        .accessibilityIdentifier("nexus.tour.identity")
+                }
                 .task { await run() }
         } else {
             content
@@ -106,6 +112,16 @@ struct TourDriver: ViewModifier {
         fixMacWindow()
         #endif
         switch TourMode.argument("nexusTourStep") ?? "screen" {
+        case "restore-session":
+            #if DEBUG || NEXUS_DEV_SERVER
+            if let value = ProcessInfo.processInfo.environment["NEXUS_TOUR_RESTORED_SESSION"],
+               let data = value.data(using: .utf8), let session = try? JSONDecoder().decode(Session.self, from: data) {
+                // Prevent a profile request from the seeding process overwriting the snapshot.
+                auth.logout()
+                Keychain.save(session)
+                state.status = "session-restored"
+            } else { state.status = "session-restore-failed" }
+            #endif
         case "signout":
             // The tour's own Keychain account (Keychain.swift): the person's real session is untouched.
             if auth.session != nil { auth.logout() }
@@ -149,6 +165,10 @@ struct TourDriver: ViewModifier {
         }
         // Let the signed-in shape (tab bar or sidebar) mount before asking it to move.
         try? await Task.sleep(for: .milliseconds(1200))
+        if let origin = TourMode.argument("nexusTourOrigin"), let url = URL(string: origin) {
+            open(url)
+            try? await Task.sleep(for: .milliseconds(1500))
+        }
         if let route = TourMode.argument("nexusTourRoute"), let url = URL(string: route) {
             // A project route without its id (an empty TOUR_PROJECT_ID, run 3) opens the Projects list;
             // that is a wrong screen, not a picture of the project.
@@ -156,7 +176,18 @@ struct TourDriver: ViewModifier {
                 state.status = "wrong-screen:\(screen) (no project id in \(route))"
                 return
             }
-            open(url)
+            if url.isFileURL {
+                // A simulator install can relocate the app's data container between seeding and launch.
+                let local = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(url.lastPathComponent)
+                let received = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber
+                let localSize = (try? FileManager.default.attributesOfItem(atPath: local.path))?[.size] as? NSNumber
+                let proof: [String: Any] = ["receivedPath": url.path, "home": NSHomeDirectory(), "receivedBytes": received?.intValue ?? -1, "localPath": local.path, "localBytes": localSize?.intValue ?? -1]
+                if let data = try? JSONSerialization.data(withJSONObject: proof), let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try? data.write(to: folder.appendingPathComponent("nexus-tour-file-proof.json"))
+                }
+                open(localSize != nil ? local : url)
+            } else { open(url) }
             if let expected = ProjectTarget(url) {
                 if let problem = await waitUntilLanded(expected) {
                     state.status = "wrong-screen:\(screen) \(problem)"

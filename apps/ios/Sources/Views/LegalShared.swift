@@ -364,7 +364,7 @@ struct LegalToggle: View {
     @Binding var isOn: Bool
     var body: some View {
         Toggle(isOn: $isOn) { Text(label).font(NXFont.text(14)).foregroundStyle(NX.foreground) }
-            .tint(NX.violetText)
+            .tint(NX.violet)
     }
 }
 

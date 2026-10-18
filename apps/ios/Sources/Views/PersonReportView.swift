@@ -302,7 +302,7 @@ struct PersonReportSections: View {
 
     private func identity(_ p: PersonReport.Person) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: p.avatar, initial: String(p.displayName.first ?? "?").uppercased(), size: 48)
+            AvatarView(url: p.avatar, initial: String(p.displayName.first ?? "?").uppercased(), size: 48, userId: p.id, name: p.displayName)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(p.displayName).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -453,15 +453,7 @@ struct PersonReportSections: View {
         .contentShape(Rectangle())
     }
 
-    static func priorityColor(_ p: String?) -> Color {
-        switch p {
-        case "URGENT": return NX.danger
-        case "HIGH": return NX.priorityHigh
-        case "MEDIUM": return NX.blue
-        case "LOW": return NX.mutedFg
-        default: return NX.border
-        }
-    }
+    static func priorityColor(_ p: String?) -> Color { TaskPriorityName.color(p) }
 
     // MARK: Projects
 

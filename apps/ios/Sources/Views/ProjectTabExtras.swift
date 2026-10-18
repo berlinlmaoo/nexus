@@ -204,7 +204,6 @@ struct ProjectTableTab: View {
     private func grid(_ cols: TableColumns, visibleWidth: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
@@ -267,6 +266,7 @@ struct ProjectTableTab: View {
             groupHeader(lane, count: tasks.count, collapsed: isCollapsed)
                 .modifier(TableRowTop(key: "g:\(lane.id)", tops: $rowTops))
             if !isCollapsed {
+                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
                 let order: () -> [String] = { tasks.map(\.id) }
                 ForEach(Array(tasks.prefix(limit))) { t in
                     row(t, laneId: lane.id, cols: cols, order: order)
@@ -308,9 +308,9 @@ struct ProjectTableTab: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                Image(systemName: "play.fill")
+                    .font(.system(size: 9)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                     .frame(width: 18)
                 if statusOptions && !lane.id.hasPrefix("grp:") {
                     StatusPill(name: lane.name, colorKey: lane.colorKey, size: 14)
@@ -631,7 +631,7 @@ struct ProjectTableRow: View {
     private var avatars: some View {
         HStack(spacing: -6) {
             ForEach(task.assigneeAvatars, id: \.id) { a in
-                AvatarView(url: a.url, initial: a.initial, size: 26)
+                AvatarView(url: a.url, initial: a.initial, size: 26, userId: a.userId, name: a.name)
                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
             }
             if task.assigneeAvatars.isEmpty { TableEmptyMark() }

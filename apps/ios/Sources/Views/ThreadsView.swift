@@ -120,7 +120,7 @@ struct MentionSuggestions: View {
                 ForEach(matches) { m in
                     Button { onPick(m) } label: {
                         HStack(spacing: 6) {
-                            AvatarView(url: m.avatar, initial: m.initial, size: 22)
+                            AvatarView(url: m.avatar, initial: m.initial, size: 22, userId: m.id, name: m.displayName)
                             Text(m.displayName).font(NXFont.text(12, .semibold))
                                 .foregroundStyle(NX.foreground).lineLimit(1)
                         }
@@ -283,7 +283,7 @@ struct ThreadsView: View {
             // Web Composer: your photo, then a borderless field.
             HStack(alignment: .top, spacing: 12) {
                 let me = auth.session.map { $0.userName.isEmpty ? $0.userEmail : $0.userName } ?? ""
-                AvatarView(url: myAvatar, initial: String(me.first ?? "?").uppercased(), size: 40)
+                AvatarView(url: myAvatar, initial: String(me.first ?? "?").uppercased(), size: 40, userId: Keychain.load()?.userId, name: me)
                 TextField(T("What's new?"), text: $draft, axis: .vertical)
                     .font(NXFont.text(15)).lineLimit(2...6)
                     .padding(.vertical, 8)
@@ -413,7 +413,7 @@ struct ThreadsView: View {
     /// "Name · 5d · edited" on one line, the text and photos under the name, then like · comment.
     private func postCard(_ p: FeedPost) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: p.author?.avatar, initial: p.initial, size: 40)
+            AvatarView(url: p.author?.avatar, initial: p.initial, size: 40, userId: p.author?.id, name: p.authorName)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(p.authorName).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -623,7 +623,7 @@ struct PostThreadView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 10) {
-                            AvatarView(url: post.author?.avatar, initial: post.initial, size: 34)
+                            AvatarView(url: post.author?.avatar, initial: post.initial, size: 34, userId: post.author?.id, name: post.authorName)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(post.authorName).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
                                 if let d = ProjDate.parse(post.createdAt) {
@@ -701,7 +701,7 @@ struct PostThreadView: View {
 
     private func commentRow(_ c: FeedComment) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: c.author?.avatar, initial: c.initial, size: 28)
+            AvatarView(url: c.author?.avatar, initial: c.initial, size: 28, userId: c.author?.id, name: c.author?.name)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(c.authorName).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)

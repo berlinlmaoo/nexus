@@ -169,7 +169,8 @@ struct CalendarView: View {
     private var myHomes: [String] { structure?.me?.homeUnitIds ?? [] }
     private var access: String? { structure?.access ?? items?.access }
     private var range: (from: String, to: String) { CalDays.gridRange(selected) }
-    private var rangeKey: String { "\(range.from)|\(range.to)" }
+    private var folderQuery: String? { filters.folders.isEmpty ? nil : filters.folders.sorted().joined(separator: ",") }
+    private var rangeKey: String { "\(range.from)|\(range.to)|\(folderQuery ?? "")" }
     /// The tasks on screen belong to the month on screen. Not so while another month is on its way
     /// (a silent load keeps the last one up) or after it failed — and "No tasks" would then be a
     /// confident wrong answer about a month nobody has seen yet.
@@ -244,6 +245,7 @@ struct CalendarView: View {
     }
     private var filtersBinding: Binding<CalFilters> {
         Binding(get: { filters }, set: { new in
+            if new.folders != filters.folders { items = nil; overdue = nil; itemsRev += 1; overdueRev += 1; savedAt = nil; error = nil; errorKey = nil }
             filtersJSON = (try? String(data: JSONEncoder().encode(new), encoding: .utf8)) ?? ""
         })
     }
@@ -460,6 +462,7 @@ struct CalendarView: View {
         .publishesCalendarMenu(menuActions)
         .task { await firstLoad() }
         .task(id: rangeKey) { await loadItems(silent: items != nil) }
+        .task(id: folderQuery) { await loadOverdue() }
         .task { await pollLoop() }
         .onChange(of: scenePhase) { _, phase in
             active = phase == .active
@@ -475,6 +478,7 @@ struct CalendarView: View {
         }
         .onChange(of: router.calendarDate) { _, _ in if router.calendarOnScreen == instance { claimRouterDate() } }
         .onChange(of: router.calendarTaskId) { _, _ in if router.calendarOnScreen == instance { claimRouterTask() } }
+        .onChange(of: router.calendarLink) { _, _ in if router.calendarOnScreen == instance { claimRouterLink() } }
         .onChange(of: router.calendarScope) { _, _ in if router.calendarOnScreen == instance { claimRouterScope() } }
         .onChange(of: today) { old, new in if selected == old { selected = new } }
         .onChange(of: carry) { _, state in if router.calendarOnScreen == instance { router.calendarState = state } }
@@ -483,7 +487,7 @@ struct CalendarView: View {
         .sheet(item: $sheet) { s in
             switch s {
             case .filters:
-                CalFilterSheet(filters: filtersBinding, ix: ix, items: items?.items ?? [], people: people, myHomes: myHomes)
+                CalFilterSheet(filters: filtersBinding, ix: ix, items: items?.items ?? [], people: people, myHomes: myHomes, folders: structure?.folders ?? [])
             case .shortcuts:
                 KeyboardShortcutsHelp().environment(auth).environment(router)
             case let .preview(id, project, notMember, masked):
@@ -620,7 +624,7 @@ struct CalendarView: View {
             }
             if divisionFellBack { chartNote }
             legendRow
-            if !chipFilters(filters).isEmpty { activeFilterRow }
+            if !filters.folders.isEmpty || !chipFilters(filters).isEmpty { activeFilterRow }
             if let savedAt { CalSavedNotice(savedAt: savedAt) }
         }
     }
@@ -1151,6 +1155,13 @@ struct CalendarView: View {
         let shown = chipFilters(f)
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                ForEach(f.folders, id: \.self) { id in
+                    let name = structure?.folders?.first { $0.id == id }?.name ?? T("Folder")
+                    Button { var next = filters; next.folders.removeAll { $0 == id }; filtersBinding.wrappedValue = next } label: {
+                        HStack(spacing: 5) { Image(systemName: "folder"); Text(name).lineLimit(1); Image(systemName: "xmark").font(NXFont.text(CalType.size(9), .bold)) }
+                            .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.violetText).padding(.horizontal, 10).frame(minHeight: 30).background(NX.accentBg, in: Capsule()).frame(minHeight: 44)
+                    }.buttonStyle(.plain).accessibilityLabel(String(format: T("Remove the folder filter %@"), name))
+                }
                 ForEach(shown, id: \.self) { c in
                     let text = chipLabel(c, f)
                     Button { removeFilter(c, from: shown) } label: {
@@ -1170,7 +1181,7 @@ struct CalendarView: View {
                     .accessibilityHint(T("Removes this filter"))
                     .accessibilityFocused($a11yTarget, equals: .filterChip(c))
                 }
-                if shown.count > 1 {
+                if shown.count + f.folders.count > 1 {
                     Button {
                         withAnimation(.snappy(duration: 0.2)) { resetFilters() }
                         moveVoiceOver(to: .filtersButton)
@@ -1207,7 +1218,8 @@ struct CalendarView: View {
                 }
             } else if !facts.hasTasks {
                 let goAction: (String, () -> Void)? = month != String(today.prefix(7)) ? (T("Go to this month"), goToday) : nil
-                banner(String(format: T("Nothing has a due date in %@ yet."), monthName), action: goAction)
+                if !filters.folders.isEmpty { banner(T("Nothing matches the filters this month."), action: (T("Reset filters"), resetFilters)) }
+                else { banner(String(format: T("Nothing has a due date in %@ yet."), monthName), action: goAction) }
             } else if shownThisMonth == 0 {
                 emptyMonthBanner
             }
@@ -1417,14 +1429,16 @@ struct CalendarView: View {
                 notLoaded
             } else if tree.total == 0 {
                 dayEmpty
-            } else if let root = tree.root {
+            } else {
                 VStack(spacing: 10) {
-                    if !root.items.isEmpty || !root.people.isEmpty {
-                        let key = "own:\(root.unit.id)"
-                        CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
-                    }
-                    ForEach(root.children) { node in
-                        CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
+                    if let root = tree.root {
+                        if !root.items.isEmpty || !root.people.isEmpty {
+                            let key = "own:\(root.unit.id)"
+                            CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
+                        }
+                        ForEach(root.children) { node in
+                            CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
+                        }
                     }
                     if lensByPerson && !tree.unplaced.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1437,7 +1451,8 @@ struct CalendarView: View {
                         }
                         .nexusCard(padding: 10, radius: 18)
                     }
-                    if placementsShown(root) > tree.total {
+                    if !lensByPerson { noDivisionSection(tree) }
+                    if let root = tree.root, placementsShown(root) > tree.total {
                         Text(String(format: T("A task can show under several divisions. Total: %d unique tasks."), tree.total))
                             .font(NXFont.text(CalType.size(11.5))).foregroundStyle(NX.mutedFg)
                     }
@@ -1447,6 +1462,22 @@ struct CalendarView: View {
     }
 
     /// The viewer's own row first; everyone else keeps the order the rules gave them.
+    @ViewBuilder private func noDivisionSection(_ tree: CalDayTree) -> some View {
+        let rows = tree.unplaced.compactMap { row -> CalPersonRow? in
+            let items = row.items.filter { $0.placements.isEmpty }
+            return items.isEmpty ? nil : CalPersonRow(userId: row.userId, items: items)
+        }
+        if !rows.isEmpty {
+            let count = Set(rows.flatMap { $0.items.map(\.key) }).count
+            VStack(alignment: .leading, spacing: 4) {
+                Text((T("No division") + " · " + AppNumber.int(count)).uppercased()).calCaps().foregroundStyle(NX.mutedFg).accessibilityAddTraits(.isHeader)
+                ForEach(viewerFirst(rows), id: \.userId) { row in
+                    CalPersonBlock(row: row, unitId: nil, ix: ix, people: people, today: today, now: now, windowDays: windowDays, onOpen: openItem)
+                }
+            }.nexusCard(padding: 10, radius: 18)
+        }
+    }
+
     private func viewerFirst(_ rows: [CalPersonRow]) -> [CalPersonRow] {
         guard let me = auth.session?.userId, let at = rows.firstIndex(where: { $0.userId == me }), at > 0 else { return rows }
         var out = rows
@@ -1818,6 +1849,7 @@ struct CalendarView: View {
         claimRouterDate()
         claimRouterTask()
         claimRouterScope()
+        claimRouterLink()
         router.calendarState = carry
         // Opens at the top like the web: header, filters and the month with today marked (owner, 13 Oct 2026).
         // The opening peek to today's tasks is gone; the Today button still brings them up.
@@ -1919,6 +1951,29 @@ struct CalendarView: View {
         divisionFellBack = fellBack
     }
 
+    private func claimRouterLink() {
+        guard let path = router.calendarLink else { return }
+        router.calendarLink = nil
+        let query = URLComponents(string: "https://native.invalid" + path)?.queryItems ?? []
+        func value(_ key: String) -> String? { query.first { $0.name == key }?.value }
+        func ids(_ key: String) -> [String] { (value(key) ?? "").split(separator: ",").map(String.init) }
+        var next = filters
+        next.folders = Array(ids("folder").prefix(50))
+        if value("unit") != nil { next.units = ids("unit") }
+        if value("person") != nil { next.people = ids("person") }
+        if value("project") != nil { next.projects = ids("project") }
+        if value("prio") != nil { next.priorities = ids("prio") }
+        if let scope = value("scope").flatMap(CalScope.init(rawValue:)) { next.scope = scope }
+        if let done = value("done") { next.hideDone = ["hide","0","false"].contains(done) }
+        if let overdue = value("overdue") { next.overdueOnly = ["1","true"].contains(overdue) }
+        filtersBinding.wrappedValue = next
+        if let lens = value("lens"), ["person","division"].contains(lens) { lensRaw = lens }
+        if let view = value("view") { mode = view == "people" ? .people : .month }
+        if let focus = value("focus") { focusId = focus.isEmpty ? nil : focus }
+        if let day = NotificationTarget.calendarDay(value("date")) { router.calendarDate = day; claimRouterDate() }
+        if let task = value("task"), !task.isEmpty { router.calendarTaskId = task; claimRouterTask() }
+    }
+
     // MARK: Loading
 
     /// The saved copies first, read and decoded off the main actor (CalCachedRead): the screen used to
@@ -1926,13 +1981,14 @@ struct CalendarView: View {
     /// (impeccable re-audit round 3, 8 Oct 2026). Each goes on screen only if nothing fresher has
     /// arrived meanwhile, for the same person and — the month — for the range still on screen.
     private func firstLoad() async {
+        let folder = folderQuery
         let id = uid
         let r = range
         let saved = await CalCachedRead.load(
             structure: structure == nil ? APIClient.calStructureKey(id) : nil,
-            items: items == nil ? APIClient.calItemsKey(id, from: r.from, to: r.to) : nil,
-            overdue: overdue == nil ? APIClient.calOverdueKey(id) : nil)
-        if id == uid {
+            items: items == nil ? APIClient.calItemsKey(id, from: r.from, to: r.to, folder: folder) : nil,
+            overdue: overdue == nil ? APIClient.calOverdueKey(id, folder: folder) : nil)
+        if id == uid && folder == folderQuery {
             if structure == nil, let s = saved.structure { setStructure(s) }
             if items == nil, r == range, let hit = saved.items {
                 setItems(hit.value)
@@ -1947,28 +2003,30 @@ struct CalendarView: View {
 
     /// Pull to refresh, Try again, ⌘R: everything, the Bagan included.
     private func refreshAll(silent: Bool) async {
+        let folder = folderQuery
         let id = uid
-        async let freshOverdue = try? APIClient.shared.calendarOverdue(userId: id)
+        async let freshOverdue = try? APIClient.shared.calendarOverdue(userId: id, folder: folder)
         await loadStructure()
         await loadItems(silent: silent)
-        if let o = await freshOverdue { setOverdue(o) }
+        if let o = await freshOverdue, folder == folderQuery { setOverdue(o) }
     }
 
     /// The poll and coming back to the app: the month and the overdue list, side by side, and nothing
     /// on screen moves until they are in. The Bagan only when the items say its version changed
     /// (`loadItems`), not three requests a minute.
     private func backgroundRefresh() async {
+        let folder = folderQuery
         if structure == nil { await loadStructure() }
         let id = uid
-        async let freshOverdue = try? APIClient.shared.calendarOverdue(userId: id)
+        async let freshOverdue = try? APIClient.shared.calendarOverdue(userId: id, folder: folder)
         await loadItems(silent: true, quiet: true)
-        if let o = await freshOverdue { setOverdue(o) }
+        if let o = await freshOverdue, folder == folderQuery { setOverdue(o) }
     }
 
     /// The structure and its index always change together — and only when the Bagan did: the same
     /// version is the same chart, so the index is not rebuilt for nothing.
     private func setStructure(_ s: CalStructure) {
-        if let old = structure, old.version != nil, old.version == s.version, old.access == s.access, old.me == s.me { return }
+        if let old = structure, old.version != nil, old.version == s.version, old.access == s.access, old.me == s.me, old.folders == s.folders { return }
         structure = s
         ix = CalIndex(units: s.units, people: s.people)
         ixRev += 1
@@ -2024,8 +2082,9 @@ struct CalendarView: View {
     /// `quiet`: a background refresh. It shows nothing while in flight (no dimming, no skeleton, no
     /// banner going away and back) and only its answer changes the screen.
     private func loadItems(silent: Bool, quiet: Bool = false) async {
+        let folder = folderQuery
         let r = range
-        let key = "\(r.from)|\(r.to)"
+        let key = rangeKey
         loadGen += 1
         let gen = loadGen
         if !silent { loading = items == nil }
@@ -2041,8 +2100,8 @@ struct CalendarView: View {
             }
         }
         do {
-            let fresh = try await APIClient.shared.calendarItems(from: r.from, to: r.to, userId: uid)
-            guard r == range else { return }
+            let fresh = try await APIClient.shared.calendarItems(from: r.from, to: r.to, userId: uid, folder: folder)
+            guard r == range, folder == folderQuery, gen == loadGen else { return }
             setItems(fresh)
             if error != nil { error = nil }
             if errorKey != nil { errorKey = nil }
@@ -2052,15 +2111,15 @@ struct CalendarView: View {
             Task { await CalendarWidgetPresence.refresh() }
         } catch APIError.unauthorized {
             auth.logout()
-        } catch _ where Task.isCancelled || r != range {
+        } catch _ where Task.isCancelled || r != range || folder != folderQuery || gen != loadGen {
             // Cancelled (month changed again, screen pushed away) or superseded: not "offline". The
             // load for the range on screen decides what shows.
             return
         } catch let failure as APIError where failure.nobodyAnswered {
             // The saved copy, read off the main actor too. Meanwhile the month may have changed or a
             // newer load started: then that one decides, as for any superseded load.
-            let saved = await CalCachedRead.load(structure: nil, items: APIClient.calItemsKey(uid, from: r.from, to: r.to), overdue: nil)
-            guard r == range, gen == loadGen else { return }
+            let saved = await CalCachedRead.load(structure: nil, items: APIClient.calItemsKey(uid, from: r.from, to: r.to, folder: folder), overdue: nil)
+            guard r == range, folder == folderQuery, gen == loadGen else { return }
             if let hit = saved.items {
                 setItems(hit.value)
                 savedAt = hit.savedAt
@@ -2079,7 +2138,8 @@ struct CalendarView: View {
     }
 
     private func loadOverdue() async {
-        do { setOverdue(try await APIClient.shared.calendarOverdue(userId: uid)) } catch { /* the rail just stays empty */ }
+        let folder = folderQuery
+        do { let fresh = try await APIClient.shared.calendarOverdue(userId: uid, folder: folder); if folder == folderQuery { setOverdue(fresh) } } catch { /* the rail just stays empty */ }
     }
 
     /// Ask again every `calendarPollSeconds` while the screen is up and the app is in front. The clock

@@ -11,7 +11,13 @@ enum GideonStepText {
     static func text(_ s: GideonStep) -> String {
         let a = String((s.arg ?? "").prefix(60))
         let has = !a.isEmpty
-        switch s.tool ?? "" {
+        let tool = s.tool ?? ""
+        switch tool.hasPrefix("nexus_") ? String(tool.dropFirst(6)) : tool {
+        case "remember": return T("Remembering")
+        case "forget": return T("Forgetting")
+        case "list_my_memories": return T("Checking GIDEON Memory")
+        case "get_person_status": return String(format: T("Checking where %@ is"), a)
+        case "set_my_status": return String(format: T("Preparing your status: %@"), a)
         case "list_projects": return T("Listing projects")
         case "list_members": return T("Looking up people")
         case "list_tasks": return has ? String(format: T("Listing tasks in %@"), a) : T("Listing tasks")
@@ -24,6 +30,7 @@ enum GideonStepText {
         case "search_docs": return has ? String(format: T("Searching docs for “%@”"), a) : T("Searching docs")
         case "get_doc": return has ? String(format: T("Reading doc %@"), a) : T("Reading a doc")
         case "create_task": return has ? String(format: T("Creating task %@"), a) : T("Creating a task")
+        case "delete_task": return has ? String(format: T("Deleting task %@"), a) : T("Deleting a task")
         case "update_task": return has ? String(format: T("Updating task %@"), a) : T("Updating a task")
         case "add_task_comment": return has ? String(format: T("Commenting on %@"), a) : T("Commenting on a task")
         case "create_document": return has ? String(format: T("Writing doc %@"), a) : T("Writing a doc")
@@ -71,7 +78,7 @@ struct GideonStepsLine: View {
                         if streaming && !running.isEmpty {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                            Image(systemName: open ? "chevron.down" : "checkmark").font(.system(size: 9, weight: .semibold))
                         }
                         Text(title(shown, running: running)).lineLimit(1)
                         if !streaming && failed > 0 {
@@ -177,9 +184,12 @@ struct GideonEmptyPrompt: View {
                 .frame(maxWidth: 420)
                 .padding(.top, 6)
             VStack(spacing: 6) {
-                ForEach(Self.suggestions(for: page), id: \.self) { s in
+                ForEach(Array(Self.suggestions(for: page).enumerated()), id: \.offset) { index, s in
                     Button { onAsk(s) } label: {
                         // One line where a size down makes it fit ("…Cite / the sources.", Q-IA12).
+                        HStack(spacing: 10) {
+                            Image(systemName: ["calendar", "checklist", "doc.text", "bubble.left"][index % 4])
+                                .font(.system(size: 14)).foregroundStyle(NX.mutedFg).frame(width: 18)
                         ViewThatFits(in: .horizontal) {
                             Text(s).font(NXFont.text(14, .medium)).lineLimit(1).fixedSize()
                             Text(s).font(NXFont.text(12.5, .medium)).lineLimit(1).fixedSize()
@@ -188,9 +198,8 @@ struct GideonEmptyPrompt: View {
                             .foregroundStyle(NX.foreground)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        }
+                            .padding(.horizontal, 8).padding(.vertical, 10)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -290,7 +299,7 @@ struct GideonChatListColumn: View {
             Button(T("Cancel"), role: .cancel) {}
         } message: { r in
             let name = GideonChatTitle.text(r.title).map { "“\($0)”. " } ?? ""
-            Text(name + T("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay."))
+            Text(name + T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted."))
         }
         .background { Color.clear.alert(T("Couldn't do that"), isPresented: Binding(get: { actionFailure != nil }, set: { if !$0 { actionFailure = nil } })) {
             Button("OK", role: .cancel) {}

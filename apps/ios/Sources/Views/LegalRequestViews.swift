@@ -1270,7 +1270,7 @@ struct LegalRequestLinksSheet: View {
                     Section(l.company?.name ?? T("General (company chosen in the form)")) {
                         Text(url(l)).font(.system(size: 12, design: .monospaced)).foregroundStyle(l.accepting ? NX.foreground : NX.mutedFg)
                             .strikethrough(!l.accepting).textSelection(.enabled)
-                        Toggle(T("Taking requests"), isOn: Binding(get: { l.accepting }, set: { v in Task { await setAccepting(l, v) } })).tint(NX.violetText)
+                        Toggle(T("Taking requests"), isOn: Binding(get: { l.accepting }, set: { v in Task { await setAccepting(l, v) } })).tint(NX.violet)
                         Button { UIPasteboard.general.string = url(l); LegalToasts.shared.success(T("Link copied")) } label: { Label(T("Copy"), systemImage: "doc.on.doc") }
                         Button { regenerating = l } label: { Label(T("Regenerate"), systemImage: "arrow.clockwise") }
                         if let at = l.rotatedAt { Text(String(format: T("Regenerated %@"), LegalLabels.date(at))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }

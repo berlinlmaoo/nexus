@@ -915,7 +915,7 @@ struct FormStudioSettingsTab: View {
                     Text(T("Anyone logged in can submit, and their submissions show in My Submissions.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.violetText)
+            .tint(NX.onyx)
             if draft.requireAuth {
                 Label(T("People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions."), systemImage: "lock")
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -1065,7 +1065,7 @@ struct FormStudioSettingsTab: View {
                     Text(String(format: T("%d so far"), responseCount)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.violetText)
+            .tint(NX.onyx)
             if draft.settings.responseLimit > 0 {
                 HStack(spacing: 10) {
                     TextField(T("Maximum responses"), text: limitBinding)
@@ -1167,7 +1167,7 @@ struct FormStudioSettingsTab: View {
     private func notifyChip(_ id: String) -> some View {
         let m = members.first(where: { $0.uid == id })
         return HStack(spacing: 6) {
-            AvatarView(url: m?.user?.avatar, initial: m?.initial ?? "?", size: 20)
+            AvatarView(url: m?.user?.avatar, initial: m?.initial ?? "?", size: 20, userId: m?.uid, name: m?.displayName)
             Text(m?.displayName ?? T("Former member")).font(NXFont.text(13, .semibold)).lineLimit(1)
             Button { draft.settings.notifyUserIds.removeAll { $0 == id } } label: {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
@@ -1186,7 +1186,7 @@ struct FormStudioSettingsTab: View {
             if on { draft.settings.notifyUserIds.removeAll { $0 == m.uid } } else { draft.settings.notifyUserIds.append(m.uid) }
         } label: {
             HStack(spacing: 10) {
-                AvatarView(url: m.user?.avatar, initial: m.initial, size: 24)
+                AvatarView(url: m.user?.avatar, initial: m.initial, size: 24, userId: m.uid, name: m.displayName)
                 Text(m.displayName).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer(minLength: 6)
                 Image(systemName: on ? "checkmark.square.fill" : "square")

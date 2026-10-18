@@ -240,7 +240,7 @@ struct AdminView: View {
                 case "announcements": AdminAnnouncementsSection()
                 case "extra-dayoff": AdminExtraDayOffSection()
                 case "suspects": AdminSuspectSection()
-                case "gideon": AdminGideonUsageSection()
+                case "gideon": GideonControlRoomView()
                 case "app": AdminAppInstallsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
@@ -258,7 +258,9 @@ struct AdminView: View {
         .task {
             await viewer.loadIfNeeded()
             workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId
+            if router.gideonAdminTab != nil { showTab("gideon") }
         }
+        .onChange(of: router.gideonAdminTab) { _, tab in if tab != nil { showTab("gideon") } }
     }
 
     /// Switches to the tab with this id, when this viewer has it.
@@ -413,7 +415,7 @@ struct AdminUsersSection: View {
                                     ForEach(Array(registered.enumerated()), id: \.element.id) { idx, r in
                                         if idx > 0 { Divider().overlay(NX.border) }
                                         HStack(spacing: 12) {
-                                            AvatarView(url: r.avatar, initial: r.initial, size: 34)
+                                            AvatarView(url: r.avatar, initial: r.initial, size: 34, userId: r.id, name: r.displayName)
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(r.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                                 Text(r.email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -501,7 +503,7 @@ struct AdminUsersSection: View {
                 ForEach(Array(leftRows.enumerated()), id: \.element.id) { idx, u in
                     if idx > 0 { Divider().overlay(NX.border) }
                     HStack(spacing: 12) {
-                        AvatarView(url: u.avatar, initial: u.initial, size: 34)
+                        AvatarView(url: u.avatar, initial: u.initial, size: 34, userId: u.id, name: u.displayName)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(u.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             if let e = u.email, !e.isEmpty {
@@ -552,10 +554,11 @@ struct AdminUsersSection: View {
             if let uid = m.userId { openUser = uid }
         } label: {
             HStack(spacing: 12) {
-                AvatarView(url: m.avatarURL, initial: m.initial, size: 40)
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 40, userId: m.userId, name: m.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    PresenceLine(userId: m.userId)
                     // Hanya digambar saat MENYALA: 46 dari 49 orang tidak memakai keduanya, dan
                     // lencana "mati" di tiap baris membuat yang menyala berhenti terlihat.
                     if (m.flexiTimeEnabled ?? false) || (m.noGeofenceMode ?? false) || (m.googleWorkspaceEmail?.isEmpty == false) {
@@ -584,6 +587,7 @@ struct AdminUsersSection: View {
                 }
                 Spacer(minLength: 6)
                 RoleChip(role: m.role ?? "STAFF")
+                Text(T("Details")).font(NXFont.text(12, .medium)).foregroundStyle(NX.violetText).fixedSize()
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
@@ -1153,6 +1157,7 @@ struct CreateAnnouncementSheet: View {
 struct AdminGideonUsageSection: View {
     @State private var data: GideonUsage?
     @State private var loading = true
+    @State private var reviewPerson: String?
     /// Why it didn't load (LoadErrorView: offline / no access / server, with Try again).
     @State private var failure: Error?
 
@@ -1179,7 +1184,7 @@ struct AdminGideonUsageSection: View {
                     } else {
                         VStack(spacing: 0) {
                             ForEach(rows, id: \.id) { row in
-                                personRow(row)
+                                Button { reviewPerson = row.id } label: { personRow(row) }.buttonStyle(.plain).accessibilityIdentifier("gideon.personRow." + row.id)
                                 if row.id != rows.last?.id { Divider().overlay(NX.border) }
                             }
                         }
@@ -1191,11 +1196,12 @@ struct AdminGideonUsageSection: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .modifier(GideonPersonPresentation(person: $reviewPerson))
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)").font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
+            Text(AppNumber.int(value)).font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
             Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1213,12 +1219,14 @@ struct AdminGideonUsageSection: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 1) {
-                Text("\(row.asked ?? 0)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(AppNumber.int(row.asked ?? 0)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
                 Text(T("questions")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func shortDate(_ iso: String?) -> String? {
@@ -1842,7 +1850,7 @@ struct ApproverPickSheet: View {
                         ForEach(list, id: \.idv) { m in
                             Button { onPick(m.userId) } label: {
                                 HStack(spacing: 10) {
-                                    AvatarView(url: m.avatarURL, initial: m.initial, size: 30)
+                                    AvatarView(url: m.avatarURL, initial: m.initial, size: 30, userId: m.userId, name: m.displayName)
                                     Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer(minLength: 4)
                                     if m.userId == target.current { Image(systemName: "checkmark").foregroundStyle(NX.success) }
@@ -1914,7 +1922,7 @@ struct AccountEditSheet: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56)
+                    AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56, userId: target.id, name: name)
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
                         Label(T("Change photo"), systemImage: "photo").font(NXFont.text(13, .semibold))
                     }

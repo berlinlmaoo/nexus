@@ -332,5 +332,27 @@ if let p = decode(LegalPrepared.self, #"{"fields": [], "numberPreview": "P/1/ADD
     expect(p.series == nil, true, "no series for an addendum")
 }
 
+// Page typography and numbered/table paragraphs are part of the native rendering contract.
+if let r = decode(LegalParagraphsResponse.self, #"""
+{"version":2,"current":2,"page":{"width":595.3,"marginLeft":72,"marginRight":64,"marginTop":36,"font":"Arial","size":11},
+ "paragraphs":[{"index":0,"text":"Agreement","editable":true,"inTable":false,"layout":{"align":"center","size":16,"runs":[{"text":"Agreement","b":true}]}},
+ {"index":1,"text":"Clause","editable":true,"inTable":false,"layout":{"indentLeft":36,"hanging":18,"firstLine":0,"marker":"(1)","spaceBefore":6,"spaceAfter":8,"lineHeight":1.5}},
+ {"index":2,"text":"Cell","editable":true,"inTable":true,"layout":{"cell":{"table":0,"row":1,"col":2},"runs":[{"text":"Cell","i":true,"u":true}]}},
+ {"index":3,"text":"","editable":false,"lockReason":"empty","inTable":false}]}
+"""#, "page layout") {
+    expect(r.page?.width ?? 0, 595.3, "page width in points")
+    expect(r.page?.font ?? "", "Arial", "document font")
+    expect(r.paragraphs[0].layout?.runs?.first?.b, true, "bold runs")
+    expect(r.paragraphs[1].layout?.marker ?? "", "(1)", "numbered marker")
+    expect(r.paragraphs[1].layout?.hanging ?? 0, 18, "hanging indent")
+    expect(r.paragraphs[2].layout?.cell?.col ?? -1, 2, "table column")
+    expect(r.paragraphs[2].layout?.runs?.first?.u, true, "underlined table run")
+    expect(r.paragraphs[3].isBlank, true, "blank line retains spacing")
+}
+if let old = decode(LegalParagraphsResponse.self, #"{"version":1,"current":1,"paragraphs":[{"index":0,"text":"Old doc","editable":true}]}"#, "legacy paragraph layout") {
+    expect(old.page == nil, true, "older server omits page")
+    expect(old.paragraphs[0].layout == nil, true, "older server omits layout")
+}
+
 print("\(checks) checks, \(failures) failures")
 exit(failures == 0 ? 0 : 1)

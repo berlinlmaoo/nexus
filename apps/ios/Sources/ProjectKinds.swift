@@ -75,8 +75,9 @@ extension ProjectTab {
         }
     }
 
-    /// What the tab bar and Project settings → Tabs call it.
-    var label: String { T(rawValue) }
+    /// What the tab bar and Project settings → Tabs call it. The chat tab is the Messages feature and is named so
+    /// (owner, 16 Oct 2026, as web and Android); its raw value "Chat" stays, it is the tab's key in links.
+    var label: String { self == .chat ? T("Messages") : T(rawValue) }
 
     /// The tabs a project can hide, in tab-bar order.
     static var hideable: [ProjectTab] { allCases.filter { $0.key != nil } }

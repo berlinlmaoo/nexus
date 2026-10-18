@@ -86,7 +86,7 @@ struct MemberAttendanceSheet: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            AvatarView(url: member.avatarURL, initial: member.initial, size: 46)
+            AvatarView(url: member.avatarURL, initial: member.initial, size: 46, userId: member.userId, name: member.displayName)
             VStack(alignment: .leading, spacing: 3) {
                 Text(member.displayName).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 if let e = member.emailText { Text(e).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
@@ -147,7 +147,7 @@ struct MemberAttendanceSheet: View {
                 ForEach(1...7, id: \.self) { d in
                     HStack(spacing: 10) {
                         Text(weekdayNames[d - 1]).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).frame(width: 34, alignment: .leading)
-                        Toggle("", isOn: Binding(get: { dayEnabled[d] ?? false }, set: { dayEnabled[d] = $0 })).toggleStyle(.switch).labelsHidden().tint(NX.violetText).fixedSize()
+                        Toggle("", isOn: Binding(get: { dayEnabled[d] ?? false }, set: { dayEnabled[d] = $0 })).toggleStyle(.switch).labelsHidden().tint(NX.violet).fixedSize()
                         if dayEnabled[d] == true {
                             DatePicker("", selection: Binding(get: { dayStart[d] ?? startTime }, set: { dayStart[d] = $0 }), displayedComponents: .hourAndMinute).labelsHidden().datePickerStyle(.compact)
                             DatePicker("", selection: Binding(get: { dayEnd[d] ?? endTime }, set: { dayEnd[d] = $0 }), displayedComponents: .hourAndMinute).labelsHidden().datePickerStyle(.compact)

@@ -59,10 +59,8 @@ struct HomeScheduleCard: View {
     var body: some View {
         HomeWideCard(title: T("Your schedule"), onSeeAll: onOpenMyTasks) {
             if items.isEmpty {
-                // Regular muted, as web; no "Open My Tasks" here: the Tasks tile above says it already (decision 8 of
-                // run 20, R20-B-05, web WB-7).
                 EmptyState(icon: "calendar.badge.clock", title: T("No upcoming tasks with a due date."),
-                           compact: true, quietTitle: true)
+                           actionTitle: T("Open My Tasks"), actionIcon: nil, action: onOpenMyTasks, compact: true)
             } else {
                 VStack(spacing: 4) {
                     ForEach(items) { t in
@@ -166,7 +164,7 @@ struct HomeLeaderboardCard: View {
                                 }
                             }
                             .accessibilityLabel(String(format: T("Rank %d"), item.rank))
-                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30)
+                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30, userId: item.row.userId, name: item.row.name)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                 // With the tier badge, as the web widget's rows (R20-B-05).

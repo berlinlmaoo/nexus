@@ -652,6 +652,31 @@ struct LegalLinks: Decodable {
 
 // MARK: - Review, versions, GIDEON
 
+struct LegalPageSetup: Decodable {
+    var width: Double = 595.3
+    var marginLeft: Double = 72
+    var marginRight: Double = 72
+    var marginTop: Double = 72
+    var font: String? = nil
+    var size: Double? = nil
+}
+
+struct LegalParagraphLayout: Decodable {
+    struct Run: Decodable { let text: String; let b: Bool?; let i: Bool?; let u: Bool? }
+    struct Cell: Decodable { let table: Int; let row: Int; let col: Int }
+    let align: String?
+    let indentLeft: Double?
+    let hanging: Double?
+    let firstLine: Double?
+    let spaceBefore: Double?
+    let spaceAfter: Double?
+    let lineHeight: Double?
+    let size: Double?
+    let marker: String?
+    let runs: [Run]?
+    let cell: Cell?
+}
+
 struct LegalParagraph: Decodable, Identifiable {
     let index: Int
     let text: String
@@ -660,14 +685,16 @@ struct LegalParagraph: Decodable, Identifiable {
     let lockReason: String?
     let style: String?
     let inTable: Bool
+    let layout: LegalParagraphLayout?
     var id: Int { index }
     /// A blank line (lockReason "empty", or an editable paragraph with no text): not drawn in Review & edit.
     var isBlank: Bool { lockReason == "empty" || (editable && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-    private enum K: String, CodingKey { case index, text, editable, lockReason, style, inTable }
+    private enum K: String, CodingKey { case index, text, editable, lockReason, style, inTable, layout }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         index = c.lv(.index, 0); text = c.lv(.text, ""); editable = c.lv(.editable, false)
         lockReason = c.lo(.lockReason); style = c.lo(.style); inTable = c.lv(.inTable, false)
+        layout = c.lo(.layout)
     }
 }
 
@@ -675,10 +702,11 @@ struct LegalParagraphsResponse: Decodable {
     let version: Int
     let current: Int
     let paragraphs: [LegalParagraph]
-    private enum K: String, CodingKey { case version, current, paragraphs }
+    let page: LegalPageSetup?
+    private enum K: String, CodingKey { case version, current, paragraphs, page }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
-        version = c.lv(.version, 0); current = c.lv(.current, 0); paragraphs = c.lv(.paragraphs, [])
+        version = c.lv(.version, 0); current = c.lv(.current, 0); paragraphs = c.lv(.paragraphs, []); page = c.lo(.page)
     }
 }
 

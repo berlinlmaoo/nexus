@@ -106,10 +106,15 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     /// move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. Builds before it
     /// ignore the field and draw the diff rows; the server refuses their Apply ("open on the latest app or the web").
     let bookingChange: GideonBookingChange?
+    let taskDelete: GideonTaskDelete?
+    let taskTarget: GideonTaskTarget?
+    let extra: GideonActionExtra?
     struct Row: Decodable, Sendable, Equatable {
         let field: String?
         let from: GideonLoose?
         let to: GideonLoose?
+        let fromDay: String?
+        let toDay: String?
     }
     var isPending: Bool { status == "PENDING" }
 }
@@ -173,7 +178,6 @@ struct GideonBookingChange: Decodable, Sendable, Equatable {
 struct GideonRoomAvailability: Decodable, Sendable, Equatable {
     struct Room: Decodable, Sendable, Equatable, Identifiable {
         let room: String
-        let capacity: Int?
         let free: Bool
         let busy: Busy?
         var id: String { room }
@@ -337,6 +341,9 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     var sources: [GideonRef] = []
     var cards: [GideonCard] = []
     var proposals: [GideonProposal] = []
+    var memories: [GideonMemory] = []
+    var creditNotice: GideonCreditNotice? = nil
+    var stopped = false
 
     init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
          attachments: [GideonAttachment] = []) {
@@ -349,7 +356,7 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
 }
 
 /// Wire shapes. The server answers history as `{messages:[{role,content,tools,attachments}]}`.
-private struct GideonHistoryResponse: Decodable {
+struct GideonHistoryResponse: Decodable {
     let messages: [Row]?
     /// The conversation this is (dev server): absent from older servers.
     let chat: ChatRef?
@@ -359,8 +366,10 @@ private struct GideonHistoryResponse: Decodable {
         let sources: [GideonRef]?
         let cards: [GideonCard]?
         let proposals: [GideonProposal]?
+        let memories: [GideonMemory]?
     }
     struct Row: Decodable {
+        let id: String?
         let role: String?
         let content: String?
         let tools: [String]?
@@ -389,6 +398,12 @@ private struct GideonEvent: Decodable {
     let sources: [GideonRef]?
     let card: GideonCard?
     let proposal: GideonProposal?
+    let memory: GideonMemory?
+    let summary: GideonCreditSummary?
+    let notice: GideonCreditNotice?
+    let tier: String?
+    let reason: String?
+    let code: String?
 }
 
 /// What the stream hands the chat, in order.
@@ -403,7 +418,10 @@ enum GideonStreamEvent: Sendable {
     case sources([GideonRef])
     case card(GideonCard)
     case proposal(GideonProposal)
+    case memory(GideonMemory)
+    case credits(GideonCreditSummary?, GideonCreditNotice?)
     case chat(id: String, title: String?)
+    case unavailable(tier: String, reason: String?)
 }
 
 private struct GideonChatsResponse: Decodable { let chats: [GideonChatSummary]? }
@@ -490,8 +508,16 @@ enum GideonClient {
         let (data, response) = try await fetch(request)
         try check(response)
         let decoded = try JSONDecoder().decode(GideonHistoryResponse.self, from: data)
-        let turns: [GideonTurn] = (decoded.messages ?? []).compactMap { row in
-            guard let role = GideonTurn.Role(rawValue: row.role ?? ""), let content = row.content else { return nil }
+        let turns = historyTurns(decoded.messages ?? [])
+        return (turns, decoded.chat?.id, decoded.chat?.title)
+    }
+
+    static func historyTurns(_ rows: [GideonHistoryResponse.Row], includeMemories: Bool = true) -> [GideonTurn] {
+        rows.compactMap { row in
+            guard let role = GideonTurn.Role(rawValue: row.role ?? "") else { return nil }
+            let ownMemories = includeMemories && role == .assistant ? row.meta?.memories ?? [] : []
+            guard row.content != nil || !ownMemories.isEmpty else { return nil }
+            let content = row.content ?? ""
             // A kept file with no url is dropped rather than drawn. A chip that opens nothing is
             // precisely what this feature exists to stop showing, so an attachment the server can
             // no longer name is better represented by the plain text it was always shown as.
@@ -503,14 +529,14 @@ enum GideonClient {
                                         url: url,
                                         mime: item.mime ?? "")
             }
-            var turn = GideonTurn(role: role, content: content, tools: row.tools ?? [], attachments: carried)
+            var turn = GideonTurn(id: row.id ?? UUID().uuidString, role: role, content: content, tools: row.tools ?? [], attachments: carried)
             turn.steps = row.meta?.steps ?? []
             turn.sources = row.meta?.sources ?? []
             turn.cards = row.meta?.cards ?? []
             turn.proposals = row.meta?.proposals ?? []
+            turn.memories = ownMemories
             return turn
         }
-        return (turns, decoded.chat?.id, decoded.chat?.title)
     }
 
     /// The person's conversations, newest first; `q` searches titles and messages.
@@ -543,18 +569,22 @@ enum GideonClient {
     /// Apply or discard a proposed change. The server re-checks access at the moment of applying, and a
     /// double tap applies once (409 "Already decided" still carries the proposal).
     /// `booking`: the room and slot picked on a book_room card (required to apply one).
-    static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil) async throws -> GideonProposal? {
+    static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil,
+                       confirmTaskId: String? = nil, confirmProposal: Bool = false, task: GideonTaskChoice? = nil) async throws -> GideonProposal? {
         var request = authed("/api/gideon/proposals/\(enc(proposalId))")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["decision": apply ? "apply" : "discard"]
         if let booking { body["booking"] = booking.body }
+        if apply && confirmProposal { body["confirm"] = ["proposalId": proposalId] }
+        if apply, let confirmTaskId { body["confirm"] = ["taskId": confirmTaskId] }
+        if apply, let task { body["task"] = task.body }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
         let env = try? JSONDecoder().decode(GideonProposalEnvelope.self, from: data)
-        if (200..<300).contains(http.statusCode) || [409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
+        if (200..<300).contains(http.statusCode) || [400, 403, 409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
         throw APIError.http(http.statusCode, env?.error)
     }
 
@@ -657,11 +687,20 @@ enum GideonClient {
                             continuation.yield(.sources(event.sources ?? []))
                         case "card":
                             if let card = event.card { continuation.yield(.card(card)) }
+                        case "memory":
+                            if let memory = event.memory { continuation.yield(.memory(memory)) }
                         case "proposal":
                             if let p = event.proposal { continuation.yield(.proposal(p)) }
                         case "chat":
                             if let id = event.id { continuation.yield(.chat(id: id, title: event.title)) }
+                        case "credits":
+                            continuation.yield(.credits(event.summary, event.notice))
+                        case "tier_unavailable":
+                            continuation.yield(.unavailable(tier: event.tier ?? "experimental", reason: event.reason))
                         case "error":
+                            if event.code == "model0_unavailable" {
+                                throw APIError.transport(T("GIDEON Model 0 is unavailable right now."))
+                            }
                             throw GideonProblem.stream(event.content ?? "")
                         case "done":
                             continuation.finish()
@@ -700,10 +739,12 @@ enum GideonClient {
         // Who is asking, like every other request in the app (it was missing here).
         request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
         request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
+        request.setValue("chat-files", forHTTPHeaderField: "X-Nexus-Caps")
         return request
     }
 
-    private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+    private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s }
 
     private static func check(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
@@ -940,6 +981,19 @@ final class GideonChat {
 
     /// Lets the running question go (web newChat → abortRef.abort()). A new generation, so the drain that
     /// was cancelled can neither clear `sending` for the next one nor write into the new transcript.
+    /// Stop keeps the partial answer on screen and cancels the streaming request, as on the web.
+    func stop() {
+        if let id = answeringId, let index = turns.firstIndex(where: { $0.id == id }) { turns[index].stopped = true }
+        let queued = outbox
+        abandonInFlight()
+        answeringId = nil
+        outbox = queued
+        if !outbox.isEmpty {
+            sending = true
+            drainTask = Task { await drain() }
+        }
+    }
+
     private func abandonInFlight() {
         generation += 1
         drainTask?.cancel()
@@ -993,9 +1047,10 @@ final class GideonChat {
     }
 
     /// Apply or discard a proposal shown in the thread; the turn shows the result.
-    func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil) async {
+    func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil, task: GideonTaskChoice? = nil) async {
         do {
-            if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking) {
+            if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking,
+                                                          confirmTaskId: proposal.action == "delete_task" ? proposal.taskDelete?.taskId : nil, confirmProposal: GideonToolAction.get(proposal.action) != nil, task: task) {
                 replace(updated)
                 if apply, let e = updated.error, !e.isEmpty { error = e }
             }
@@ -1006,6 +1061,23 @@ final class GideonChat {
         }
     }
 
+    func updateMemory(_ memory: GideonMemory) {
+        for i in turns.indices {
+            if let j = turns[i].memories.firstIndex(where: { $0.id == memory.id }) { turns[i].memories[j] = memory }
+        }
+    }
+    func reconcileMemories(_ memories: [GideonMemory]) {
+        let current = Dictionary(memories.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        for i in turns.indices {
+            for j in turns[i].memories.indices {
+                if let value = current[turns[i].memories[j].id] { turns[i].memories[j] = value }
+                else { turns[i].memories[j].status = "DELETED" }
+            }
+        }
+    }
+    func forgetAllMemories() {
+        for i in turns.indices { for j in turns[i].memories.indices { turns[i].memories[j].status = "DELETED" } }
+    }
     private func replace(_ p: GideonProposal) {
         for i in turns.indices {
             if let j = turns[i].proposals.firstIndex(where: { $0.id == p.id }) { turns[i].proposals[j] = p }
@@ -1102,6 +1174,7 @@ final class GideonChat {
         answeringId = answer.id
         defer { if answeringId == answer.id { answeringId = nil } }
 
+        defer { Task { await GideonCredits.shared.refresh() } }
         let wantNew = startNew
         startNew = false
         do {
@@ -1113,6 +1186,8 @@ final class GideonChat {
                 if generation != gen { break }
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
                 switch event {
+                case .unavailable(let tier, let reason):
+                    GideonTierStatus.shared.unavailable(tier, reason: reason)
                 case .delta(let chunk):
                     // Only the first chunk is animated, and only to cross-fade the dots out.
                     if turns[index].content.isEmpty {
@@ -1131,9 +1206,16 @@ final class GideonChat {
                     turns[index].sources = refs
                 case .card(let card):
                     turns[index].cards.append(card)
+                case .memory(let memory):
+                    if let j = turns[index].memories.firstIndex(where: { $0.id == memory.id }) { turns[index].memories[j] = memory }
+                    else { turns[index].memories.append(memory) }
+                    GideonMemoryStore.shared.acceptOwn(memory)
                 case .proposal(let p):
                     if let j = turns[index].proposals.firstIndex(where: { $0.id == p.id }) { turns[index].proposals[j] = p }
                     else { turns[index].proposals.append(p) }
+                case .credits(let summary, let notice):
+                    if let summary { GideonCredits.shared.accept(summary) }
+                    if let notice { turns[index].creditNotice = notice }
                 case .chat(let id, let title):
                     chatId = id
                     if let title { chatTitle = title }
@@ -1142,7 +1224,7 @@ final class GideonChat {
             if generation != gen { return }
             // A stream that ends without a word is a failure the user can see but not explain.
             if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty,
-               turns[index].proposals.isEmpty, turns[index].cards.isEmpty {
+               turns[index].proposals.isEmpty, turns[index].cards.isEmpty, turns[index].memories.isEmpty {
                 turns.remove(at: index)
                 error = T("GIDEON didn't answer. Try again.")
                 retryAction = .resend(item)
@@ -1159,7 +1241,9 @@ final class GideonChat {
             // A cancelled drain is `reset()` taking the session away, not something that went
             // wrong. The transcript this would write into belongs to somebody who has signed out.
             guard !Task.isCancelled, generation == gen else { return }
-            turns.removeAll { $0.id == answer.id }
+            // A memory tool can finish before the connection drops. Keep its decision chip;
+            // the private server record already exists even if no answer text arrived.
+            turns.removeAll { $0.id == answer.id && $0.memories.isEmpty }
             // Worded by GideonProblem (status / code / the route's fixed sentences, EN + ID). A failure a
             // retry can fix keeps the question for "Try again"; nothing was stored server-side for a
             // failed turn, so asking again cannot duplicate it.
@@ -1194,6 +1278,7 @@ final class GideonChat {
     /// that reason. Cancelling the drain is part of it: an answer still arriving would otherwise
     /// write itself into the transcript the next person sees.
     func reset() {
+        GideonCredits.shared.reset()
         generation += 1
         pickEpoch += 1
         drainTask?.cancel()
@@ -1214,6 +1299,13 @@ final class GideonChat {
         pageContext = nil
         GideonPages.shared.reset()
     }
+
+    /// Re-read canonical chat/context handles, retaining the same person's unsent draft and files.
+    func refreshIdentity() {
+        let savedDraft = draft, savedAttachment = attachment, savedDocument = document
+        reset()
+        draft = savedDraft; attachment = savedAttachment; document = savedDocument
+    }
 }
 
 
@@ -1223,6 +1315,21 @@ final class GideonChat {
 struct GideonPrefs: Codable, Sendable, Equatable {
     var assistantName: String?
     var instructions: String?
+    var reviewNotice = false
+
+    init(assistantName: String? = nil, instructions: String? = nil, reviewNotice: Bool = false) {
+        self.assistantName = assistantName
+        self.instructions = instructions
+        self.reviewNotice = reviewNotice
+    }
+
+    private enum CodingKeys: String, CodingKey { case assistantName, instructions, reviewNotice }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        assistantName = try c.decodeIfPresent(String.self, forKey: .assistantName)
+        instructions = try c.decodeIfPresent(String.self, forKey: .instructions)
+        reviewNotice = try c.decodeIfPresent(Bool.self, forKey: .reviewNotice) ?? false
+    }
 }
 
 extension GideonClient {
@@ -1259,6 +1366,11 @@ extension GideonClient {
     static func savePrefs(_ p: GideonPrefs) async throws -> GideonPrefs {
         let body: [String: Any] = ["assistantName": p.assistantName ?? NSNull(), "instructions": p.instructions ?? NSNull()]
         return try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "PUT", body: body)))
+    }
+
+    /// Acknowledgement must not write the personalisation fields from a stale view.
+    static func acknowledgeReviewNotice() async throws -> GideonPrefs {
+        try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "PUT", body: ["reviewNoticeSeen": true])))
     }
 
     /// An answer saved as a page in a project (MEMBER). Returns the new page's id.

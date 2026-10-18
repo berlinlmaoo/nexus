@@ -34,7 +34,7 @@ struct FormResponseRow: Decodable, Identifiable {
 
 extension APIClient {
     func formResponses(_ formId: String) async throws -> FormResponsesPayload {
-        let enc = formId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? formId
+        let enc = formId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? formId
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await perform(makeRequest("/api/forms/\(enc)/responses")) } catch { throw APIError.nothingAnswered(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
@@ -170,7 +170,7 @@ private struct FormResponseRowView: View {
         Button(action: onOpen) {
             HStack(spacing: 10) {
                 if let p = row.submitter {
-                    AvatarView(url: p.avatar, initial: String((p.name ?? p.email ?? "?").prefix(1)).uppercased(), size: 28)
+                    AvatarView(url: p.avatar, initial: String((p.name ?? p.email ?? "?").prefix(1)).uppercased(), size: 28, userId: p.id, name: p.name ?? p.email)
                 } else {
                     Circle().fill(NX.muted).frame(width: 28, height: 28)
                 }

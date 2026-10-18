@@ -12,7 +12,6 @@ extension AppLanguage {
         "Check-in location": "Lokasi absen",
         "Check-in location is taken by the NEXUS app on your phone.": "Lokasi absen dibaca oleh aplikasi NEXUS di HP-mu.",
         // Leaderboard (PD-17)
-        "%d-way tie for 1st": "%d orang seri di peringkat 1",
         // Settings › Password (PD-5 / MC-5) and passkeys on a Mac (MC-6)
         "Sign in with Touch ID": "Masuk pakai Touch ID",
         "Sign in with Touch ID instead of typing your password. Your password keeps working.":

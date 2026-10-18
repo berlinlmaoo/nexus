@@ -72,7 +72,7 @@ func humanizeEnum(_ raw: String) -> String {
 }
 
 func prioTone(_ p: String) -> ChipTone {
-    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .high; case "MEDIUM": return .info; default: return .neutral }
+    TaskPriorityName.tone(p)
 }
 
 /// A task's priority as a compact pill (owner, 10 Oct 2026: the NexusChip was too big beside the card
@@ -140,7 +140,7 @@ struct ProjectTaskRow: View {
                 if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
                 HStack(spacing: -7) {
                     ForEach(task.assigneeAvatars, id: \.id) { a in
-                        AvatarView(url: a.url, initial: a.initial, size: 22)
+                        AvatarView(url: a.url, initial: a.initial, size: 22, userId: a.userId, name: a.name)
                             .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                     }
                 }
@@ -222,6 +222,8 @@ struct ListTab: View {
     /// "+ New task" under each group (group id, title → the new task's id); nil below Can edit.
     var onAddTask: ((String, String) async -> String?)? = nil
 
+    var composeLaneId: String? = nil
+    var composeRequest: UUID? = nil
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var collapsed: Set<String> = []
     /// iPad / Mac two-line rows: each value column as wide as its widest value, shared by every row.
@@ -232,20 +234,28 @@ struct ListTab: View {
     var body: some View {
         // Computed once per render: every row of the List draws the same columns.
         let columns = hSize == .regular ? columnLayout : ListColumns.Layout()
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                ForEach(lanes) { lane in
-                    group(lane, columns: columns)
+        return ScrollViewReader { scroll in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(lanes) { lane in
+                        group(lane, columns: columns).id(lane.id)
+                    }
+                }
+                .padding(.horizontal, hSize == .regular ? 32 : 14)
+                .padding(.vertical, 12)
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+            .onChange(of: composeRequest) { _, request in
+                if request != nil, let id = composeLaneId {
+                    collapsed.remove(id)
+                    withAnimation(.snappy) { scroll.scrollTo(id, anchor: .top) }
                 }
             }
-            .padding(.horizontal, hSize == .regular ? 32 : 14)
-            .padding(.vertical, 12)
+            // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
+            // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
+            // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
+            .environment(slotWidths)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
-        // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
-        // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
-        // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
-        .environment(slotWidths)
     }
 
     /// Grouped by status (or priority), the group header already says it: the row leaves that chip out
@@ -277,7 +287,7 @@ struct ListTab: View {
                 // "+ New task" right under the group's header, as the web List; an empty group shows only that
                 // row, no "No tasks" line (UI tour run 19, R19-I-17). Without Add it still says it is empty.
                 if let onAddTask {
-                    ListNewTaskRow { title in await onAddTask(lane.id, title) }
+                    ListNewTaskRow(composeRequest: composeLaneId == lane.id ? composeRequest : nil) { title in await onAddTask(lane.id, title) }
                 }
                 if (lane.tasks ?? []).isEmpty {
                     if onAddTask == nil {
@@ -304,7 +314,7 @@ struct ListTab: View {
     @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: ListColumns.Layout, order: @escaping () -> [String]) -> some View {
         let by = groupedBy(laneId)
         let base = ListTaskRow(task: t, status: by.status && hSize != .regular ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
-                               oneLine: hSize == .regular && listWidth >= 760, columnLayout: columns, hidePriority: by.priority,
+                               columnLayout: columns, hidePriority: by.priority,
                                onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
@@ -857,7 +867,7 @@ struct TimelineTab: View {
                 .frame(width: timelineW, alignment: .leading)
                 .overlay(alignment: .topLeading) {
                     if let todayX {
-                        Rectangle().fill(NX.onyx.opacity(0.55)).frame(width: 1)
+                        Rectangle().fill(NX.violet.opacity(0.65)).frame(width: 1)
                             .frame(maxHeight: .infinity)
                             .padding(.top, header ? monthH + dayH : 0)
                             .padding(.leading, todayX)
@@ -980,7 +990,7 @@ struct TimelineTab: View {
                     Text("\(cal.component(.day, from: d))").font(NXFont.text(isToday ? 11 : 12, .bold))
                         .foregroundStyle(isToday ? NX.background : NX.foreground.opacity(0.8))
                         .frame(width: 22, height: 22)
-                        .background(isToday ? NX.onyx : Color.clear, in: Circle())
+                        .background(isToday ? NX.violet : Color.clear, in: Circle())
                 }
                 .frame(width: dayW, height: dayH)
                 .background((wd == 1 || wd == 7) ? NX.muted.opacity(0.5) : Color.clear)
@@ -1081,16 +1091,7 @@ struct TimelineTab: View {
     }
 
     /// GANTT_BAR: the bar's colour by priority.
-    static func barColor(_ p: String?) -> Color {
-        switch (p ?? "NONE").uppercased() {
-        case "URGENT": return Color(hex: "#f43f5e")
-        // Orange, so High is not a second red beside Urgent (UI tour run 15, Q-IA29 / Q-M17).
-        case "HIGH":   return Color(hex: "#f97316")
-        case "MEDIUM": return Color(hex: "#0ea5e9")
-        case "LOW":    return Color(hex: "#8b5cf6")
-        default:       return Color(hex: "#14b8a6")
-        }
-    }
+    static func barColor(_ p: String?) -> Color { TaskPriorityName.color(p) }
 
     /// "3 Sep", or "3 Sep → 5 Sep" (the year only outside the current one).
     static func spanLabel(_ w: Win) -> String {
@@ -1179,7 +1180,6 @@ struct CalendarTab: View {
     @State private var allUndated = false
     /// An empty month: the one-line hint opens the "No date" box (UI tour run 15, Q-IA28 / Q-M16: a 12-chip
     /// cloud ~300 pt tall pushed the month below the fold; the web says it in one line).
-    @State private var showUndated = false
     private static let undatedPreview = 12
 
     private var cal: Calendar { ProjDate.cal }
@@ -1242,15 +1242,12 @@ struct CalendarTab: View {
                     let rest = undated
                     let emptyMonth = tasksByDay.isEmpty && !rest.isEmpty
                     if emptyMonth {
-                        ProjectRangeHint(icon: "calendar.badge.exclamationmark",
-                                         text: rest.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), rest.count),
-                                         actionTitle: showUndated ? T("Hide them") : T("Show them")) {
-                            withAnimation(.snappy) { showUndated.toggle() }
-                            if !showUndated { return }
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(150))
-                                withAnimation { proxy.scrollTo("undated", anchor: .top) }
-                            }
+                        HStack {
+                            Text(rest.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), rest.count))
+                                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 8)
+                            Button(T("Show them")) { withAnimation { proxy.scrollTo("undated", anchor: .top) } }
+                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
                         }
                     }
                     // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06). On iPad / Mac
@@ -1265,7 +1262,7 @@ struct CalendarTab: View {
                         monthCard
                         dayPanel
                     }
-                    if !rest.isEmpty && (!emptyMonth || showUndated) { undatedBox(rest, leading: false).id("undated") }
+                    if !rest.isEmpty { undatedBox(rest, leading: false).id("undated") }
                 }
                 // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
                 .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)
@@ -1482,6 +1479,7 @@ struct CalendarTab: View {
                             .padding(4)
                             .frame(maxWidth: .infinity, minHeight: 50, alignment: .topLeading)
                             .nxMonthCell(inMonth: true, selected: on)
+                            .overlay { if !on, let date = dateFor(day), cal.isDateInWeekend(date) { RoundedRectangle(cornerRadius: 8).fill(NX.muted.opacity(0.25)).allowsHitTesting(false) } }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -1504,7 +1502,10 @@ extension CalendarTab {
     /// rose here alone; UI tour run 14, N-19). On a selected (violet) cell the disc turns white.
     func dayNumber(_ day: Int, today: Int?, onFill: Bool) -> some View {
         // Today on the navy disc of every month grid (NXMonthGrid; UI tour run 16, R16-I-06 / R16-B-09).
-        NXMonthDayNumber(day: day, isToday: day == today, wide: wideGrid)
+        HStack(spacing: 2) {
+            NXMonthDayNumber(day: day, isToday: day == today, wide: wideGrid)
+            if day == 1 { Text(ProjLocaleDate.fmt("MMM").string(from: monthDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+        }
     }
 
     func wideCell(_ day: Int, items: [BoardTask], today: Int?) -> some View {
@@ -1545,6 +1546,7 @@ extension CalendarTab {
         .padding(6)
         .frame(maxWidth: .infinity, minHeight: Self.wideCellH, alignment: .topLeading)
         .nxMonthCell(inMonth: true, selected: isSelected)
+        .overlay { if !isSelected, let date = dateFor(day), cal.isDateInWeekend(date) { RoundedRectangle(cornerRadius: 8).fill(NX.muted.opacity(0.25)).allowsHitTesting(false) } }
         .contentShape(Rectangle())
         .onTapGesture { selected = day }
     }
@@ -1735,7 +1737,7 @@ struct CreateTaskSheet: View {
         }
     }
     private func prioColor(_ p: String) -> Color {
-        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.priorityHigh; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
+        TaskPriorityName.color(p)
     }
 
     // MARK: custom field rendering (port of web TaskComposer)
@@ -1850,6 +1852,7 @@ struct ProjectChatTab: View {
     @Environment(AuthStore.self) private var auth
     @State private var room: Conversation?
     @State private var loading = true
+    @State private var roomFailure: Error?
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
@@ -1858,15 +1861,24 @@ struct ProjectChatTab: View {
                                members: room.members ?? [], projectId: projectId,
                                canPost: canPost && room.canPost != false)
             }
-            else { TabEmpty(icon: "bubble.left.and.bubble.right", text: T("Project chat isn't available yet.")) }
+            else if let roomFailure {
+                LoadErrorView(error: roomFailure, what: T("Messages"), retry: { Task { await loadRoom() } }, compact: true)
+            } else {
+                EmptyState(icon: "bubble.left.and.bubble.right", title: T("This project's chat room isn't active yet."),
+                           subtitle: T("No chat room is linked to this project for your account. Ask someone with Full access to check project membership, then refresh."),
+                           actionTitle: T("Refresh"), action: { Task { await loadRoom() } })
+            }
         }
-        .task {
+        .task { await loadRoom() }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusWorkspaceChanged)) { _ in Task { await loadRoom() } }
+    }
+    private func loadRoom() async {
+            loading = true; roomFailure = nil
             do {
                 let convos = try await APIClient.shared.conversations()
                 room = convos.first { $0.type == "PROJECT" && $0.projectId == projectId }
-            } catch APIError.unauthorized { auth.logout() } catch { room = nil }
+            } catch APIError.unauthorized { auth.logout() } catch { roomFailure = error }
             loading = false
-        }
     }
 }
 
