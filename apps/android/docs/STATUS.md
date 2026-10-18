@@ -1,5 +1,17 @@
 # NEXUS Android: status
 
+## Owner parity follow-up (18 Oct 2026)
+
+All three items in `CODEX-INPUT/round-parity-18oct.md` are complete. Checked the deployed DEV web directly because the local web source still had the older layout. Green implementation commits: `6837c92c` (GIDEON) and `96c8b547` (Auto assign), authored as Berlin without attribution trailers.
+
+| Item | Result | Screenshots in `C:/Users/Berlin/Documents/Dev/nexus-shots/` |
+|---|---|---|
+| GIDEON composer | Credits above the box; only the shortened, centred disclaimer below. Meter still opens credits/history. | `parity18-gideon-en.png`, `parity18-gideon-id.png`, `parity18-gideon-dark.png` |
+| Review notice | Exact new EN/ID wording; existing per-account acknowledgement behavior retained. | `parity18-gideon-notice-en.png`, `parity18-gideon-notice-id.png` |
+| Auto assign | Picker has avatars/names without access labels. Empty selection starts open; a pick folds to the one-line summary. Change/Ganti reopens; Done/Selesai folds. Matches web selection/enabled-state saving, including disabling on last removal. | `parity18-auto-empty-en.png`, `parity18-auto-summary-en.png`, `parity18-auto-open-en.png`, `parity18-auto-done-en.png`; corresponding `-id.png`; `parity18-auto-multiple-id.png`, `parity18-auto-open-dark.png` |
+
+Validation: **773 JVM tests, zero failures/errors/skips; `testDebugUnitTest assembleDebug` PASS**. Visually checked English, Indonesian and dark mode on **Pixel_7**, visible window and host GPU, against DEV only. Native picker actions and persisted empty/single/multiple selections checked against live API reads; saved selection starts folded on reopening settings. The isolated QA project was removed and re-read as 404. Original notice acknowledgement and server language restored; local app left English/light. Pixel_7 shut down; the other worker's emulator was left alone. No outstanding items in this list, publication, version change or push.
+
 ## R21 UI audit follow-up (18 Oct 2026, `feat/android-r21`)
 
 Completed review and parity corrections for all 59 supplied findings; [AUDIT-R21.md](AUDIT-R21.md) records each disposition and evidence. Finding 53 retains the approved web room-booking wording; duplicate/mixed findings are explained in the matrix. Eleven small implementation commits after audit baseline `b5f00ac7`, each green, authored as Berlin.
