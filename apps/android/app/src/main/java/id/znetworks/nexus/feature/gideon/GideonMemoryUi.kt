@@ -139,7 +139,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
             if (memory.kind == "DATE") MemoryRules.date(memory.monthDay, LocalConfiguration.current.locales[0])?.let { Text(it, color = c.mutedFg, fontSize = 12.sp) }
             if (memory.status == "PENDING") FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.gm_suggested), color = c.accentFg, fontSize = 12.sp, modifier = Modifier.background(c.accentBg, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-                NxButton(stringResource(R.string.gm_save), { act { store.save(memory) } }, enabled = !busy && !paused, compact = true)
+                NxButton(stringResource(R.string.gm_save), { act { store.save(memory) } }, enabled = !busy && !paused, kind = NxButtonKind.PRIMARY, compact = true)
             }
             Row {
                 TextButton(onClick = { editing = true }, enabled = !busy) { Text(stringResource(R.string.gm_edit)) }
