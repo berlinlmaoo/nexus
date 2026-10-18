@@ -136,7 +136,7 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     private fun act(block: suspend () -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
-        try { block() } catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
+        try { block() } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
         _state.update { it.copy(busy = false) }
         load()
     }
@@ -165,7 +165,7 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     withContext(Dispatchers.IO) { api.upload(picked, folder) { d, t -> _state.update { it.copy(upload = picked.name to (if (t > 0) d.toFloat() / t else 0f)) } } }
                     done++
                 } catch (e: ApiError) {
-                    _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.td_upload_failed)) }
+                    _state.update { it.copy(notice = e.describe(res)) }
                     break
                 }
             }
@@ -435,7 +435,7 @@ private fun ShareDialog(item: VaultItem, api: VaultApi, canExternal: Boolean, on
                     try {
                         val sh = api.share(item.id, internal, download, expires)
                         clipboard.setText(AnnotatedString(sh.url)); error = null; tick++
-                    } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+                    } catch (e: ApiError) { error = e.describe(res) }
                 }
             }) { Text(stringResource(R.string.vault_create_link)) }
         },
@@ -454,7 +454,7 @@ fun VaultPublicScreen(slug: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var p by remember { mutableStateOf<VaultPublic?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(slug) { try { p = api.public(slug) } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
+    LaunchedEffect(slug) { try { p = api.public(slug) } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }

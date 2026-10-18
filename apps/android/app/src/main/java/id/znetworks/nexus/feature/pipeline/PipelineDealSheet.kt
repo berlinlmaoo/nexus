@@ -102,7 +102,9 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
     var laterOpen by remember(deal.id) { mutableStateOf(false) }
-    val save = { fields: JsonObject -> vm.update(deal.id, fields) }
+    val save = { fields: JsonObject -> vm.update(deal.id, JsonObject(fields + buildMap {
+        if ("links" in fields) put("linksBase", deal.raw["links"] ?: JsonArray(emptyList()))
+    })) }
     val v = data.vocab
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(c.background).imePadding()) {

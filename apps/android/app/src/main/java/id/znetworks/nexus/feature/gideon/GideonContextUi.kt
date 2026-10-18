@@ -376,8 +376,7 @@ internal fun RoomRows(rooms: List<GRoomSlot>, selected: String?, enabled: Boolea
                 tint = if (isSelected) c.violetText else c.mutedFg, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                val seats = r.capacity?.let { " · " + stringResource(R.string.gx_room_seats, it) }.orEmpty()
-                Text(roomLabel(r.room) + seats, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
+                Text(roomLabel(r.room), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
                 r.busy?.let { b ->
                     Text(stringResource(R.string.gx_room_booked_by, b.by ?: stringResource(R.string.gx_someone), BookRoomTime.clock(b.endsAt)),
                         fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)

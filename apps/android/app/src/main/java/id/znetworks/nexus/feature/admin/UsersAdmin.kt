@@ -198,7 +198,10 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         else if (m.role == "STAFF" || m.role == "MANAGER") Text(stringResource(R.string.ad_not_placed), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
                         memberships[m.userId]?.let { Text(UsersLogic.membershipSummary(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg) }
                     }
-                    Pill(Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Pill(Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
+                        TextButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
+                    }
                 }
             }
             // Signed up but not in this workspace yet: one tap brings them in (BoD).

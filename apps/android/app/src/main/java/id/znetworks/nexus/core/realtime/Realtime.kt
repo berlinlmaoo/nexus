@@ -57,6 +57,7 @@ data class RealtimeEvent(
     val typing: Boolean? = null,
     /** The payload as JSON text, for screens that read more than the ids (the Spreadsheet's `sheet-cells`). */
     val raw: String? = null,
+    val updatedAt: String? = null,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -114,7 +115,7 @@ object RealtimeEvents {
             TYPING -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId"), personName = o.str("name"), avatar = o.str("avatar"),
                 typing = (o["typing"] as? JsonPrimitive)?.booleanOrNull)
             // the task itself / { taskId } / { taskId, comment }
-            "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
+            "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"), updatedAt = o.str("updatedAt"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
             PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))

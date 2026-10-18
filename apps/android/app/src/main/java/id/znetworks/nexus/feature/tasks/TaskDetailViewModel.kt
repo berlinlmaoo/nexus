@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.core.net.ConcurrentEdits
+import id.znetworks.nexus.ui.components.sentence
 import id.znetworks.nexus.core.net.Uploads
 import id.znetworks.nexus.feature.projects.BoardTask
 import id.znetworks.nexus.feature.projects.ProjectMemberRef
@@ -70,7 +72,7 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun load() = viewModelScope.launch {
         try {
             val t = api.task(taskId)
-            _state.update { it.copy(task = t.value, savedAt = t.savedAtMillis, loading = false, error = null) }
+            _state.update { if (ConcurrentEdits.older(t.value.updatedAt, it.task?.updatedAt)) it else it.copy(task = t.value, savedAt = t.savedAtMillis, loading = false, error = null) }
             loadExtras(t.value.projectId)
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = e.describe(res)) }
@@ -108,8 +110,16 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun setPriority(p: String) = patch("priority" to JsonPrimitive(p))
     fun setDue(d: LocalDate?) = patch("dueDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setStart(d: LocalDate?) = patch("startDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
-    fun setDescription(text: String, onDone: () -> Unit) = patch("description" to JsonPrimitive(text), onDone = onDone)
-    fun setAssignees(ids: Set<String>) = patch("assigneeIds" to JsonArray(ids.map { JsonPrimitive(it) }))
+    fun setDescription(text: String, baseText: String, onDone: () -> Unit) = act(R.string.td_update_failed) {
+        api.saveDescription(taskId, text, baseText)
+        onDone()
+    }
+    fun setAssignees(ids: Set<String>, base: Set<String>) = act(R.string.td_update_failed) {
+        projects.updateTask(taskId, ConcurrentEdits.delta(base, ids, "addAssigneeIds", "removeAssigneeIds"))
+    }
+    fun setTags(tags: Set<String>, base: Set<String>) = act(R.string.td_update_failed) {
+        projects.updateTask(taskId, ConcurrentEdits.delta(base, tags, "addTags", "removeTags"))
+    }
 
     private fun patch(vararg fields: Pair<String, JsonElement>, onDone: () -> Unit = {}) = act(R.string.td_update_failed) {
         projects.updateTask(taskId, JsonObject(fields.toMap()))
@@ -215,7 +225,7 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
             block()
         } catch (e: ApiError) {
             // PROOF_REQUIRED and the like carry their own sentence.
-            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(fallback)) }
+            _state.update { it.copy(actionError = e.sentence(res, fallback)) }
         }
         _state.update { it.copy(busy = false) }
         load()

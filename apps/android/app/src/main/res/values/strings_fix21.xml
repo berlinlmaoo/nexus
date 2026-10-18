@@ -1,0 +1,13 @@
+<resources>
+    <string name="r21_assignees_changed">The assignees changed elsewhere. The latest list has been loaded. Check it and try again.</string>
+    <string name="r21_text_changed">Someone saved changes first. Your draft is kept. Review the latest content before saving again.</string>
+    <string name="r21_sheet_changed">The sheet columns changed elsewhere. The latest structure has been loaded. Try your change again.</string>
+    <string name="r21_tags_limit">Too many tags. Remove a tag and try again.</string>
+    <string name="r21_vault_full">Z Vault is full. Free some space before uploading again.</string>
+    <string name="r21_folder_gone">This folder was removed. Choose another folder.</string>
+    <string name="r21_folder_cycle">A folder cannot be moved inside itself or one of its subfolders.</string>
+    <string name="r21_file_gone">This file was removed. Refresh Z Vault.</string>
+    <string name="lb_tied">%1$d tied</string>
+    <string name="lb_more">+%1$d more</string>
+    <string name="ad_details">Details</string>
+</resources>

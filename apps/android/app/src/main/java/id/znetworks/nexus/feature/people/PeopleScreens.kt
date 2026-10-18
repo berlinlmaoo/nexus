@@ -134,7 +134,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                             leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, null) })
                     }
                     // The web card: "XP ranking for everyone", the podium (2 · 1 · 3), then one list of everyone.
-                    if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(ranked.take(3)) } }
+                    if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(PeopleLogic.podium(b.rows)) } }
                     if (shown.isEmpty()) item { Text(stringResource(R.string.lb_no_match), fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(8.dp)) }
                     // A tied rank shares its crown / step: ranks come from the whole board (1, 1, 1, 4).
                     itemsIndexed(shown, key = { _, it -> it.second.userId }) { i, (rank, r) ->
@@ -165,9 +165,9 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
     }
 }
 
-/** Web leaderboard-podium.tsx: places 2 · 1 · 3; a tie shares its step (1 / 1 / 1 are three gold steps of one height). */
+/** One step per score; list ranks below remain competition ranks. */
 @Composable
-private fun Podium(top: List<Pair<Int, BoardRow>>) {
+private fun Podium(top: List<List<BoardRow>>) {
     val c = Nx.colors
     val dark = isSystemInDarkTheme()
     data class Step(val bar: Color, val text: Color, val ring: Color, val crown: Color, val height: androidx.compose.ui.unit.Dp, val avatar: androidx.compose.ui.unit.Dp)
@@ -181,19 +181,26 @@ private fun Podium(top: List<Pair<Int, BoardRow>>) {
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             listOf(1, 0, 2).forEach { place ->
-                val entry = top.getOrNull(place)
-                if (entry == null) { Spacer(Modifier.weight(1f)); return@forEach }
-                val (rank, r) = entry
+                val entry = top.getOrNull(place).orEmpty()
+                val r = entry.firstOrNull()
+                val rank = place + 1
                 val st = style(rank)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box {
-                        Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r.name, r.avatar, st.avatar) }
-                        Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
+                    Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                        Row {
+                            entry.take(3).forEachIndexed { i, person ->
+                                Box(Modifier.offset(x = (-8 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, if (entry.size == 1) st.avatar else 28.dp) }
+                            }
+                            if (entry.size > 3) Text("+${entry.size - 3}", fontSize = 11.sp, color = c.mutedFg)
+                        }
+                        if (entry.size == 1) Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
                             contentAlignment = Alignment.Center) { Icon(Icons.Outlined.WorkspacePremium, null, tint = st.crown, modifier = Modifier.size(14.dp)) }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("%,d".format(Locale.getDefault(), r.totalXp), fontSize = 14.sp, color = c.mutedFg)
+                    if (entry.size > 1) Text(stringResource(R.string.lb_tied, entry.size), fontSize = 12.sp, color = c.mutedFg)
+                    Text(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, textAlign = TextAlign.Center)
+                    if (entry.size > 2) Text(stringResource(R.string.lb_more, entry.size - 2), fontSize = 11.sp, color = c.mutedFg)
+                    Text(r?.let { "%,d".format(Locale.getDefault(), it.totalXp) + " XP" } ?: "—", fontSize = 13.sp, color = c.mutedFg)
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.fillMaxWidth().height(st.height).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(st.bar),
                         contentAlignment = Alignment.TopCenter) {

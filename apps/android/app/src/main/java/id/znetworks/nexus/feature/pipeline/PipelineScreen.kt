@@ -201,7 +201,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         val next = edit(now.costs) ?: return
         if (next == now.costs) return
         if (!PipelineCosts.valid(next)) { _state.update { it.copy(notice = res.getString(R.string.pc_invalid)) }; return }
-        update(dealId, PipelineCosts.patch(next))
+        update(dealId, JsonObject(PipelineCosts.patch(next) + ("costsBase" to kotlinx.serialization.json.JsonArray(now.costs.map(PipelineCost::json)))))
     }
 
     /** Make (or find) the won deal's execution folder (§15), then open it; an answer without a folder opens the project. */
@@ -249,7 +249,12 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         }
     }
 
-    fun addTerm(dealId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) = term(R.string.pl_t_add_failed, { api.addTerm(projectId, dealId, fields) }, onDone)
+    private val termRequests = mutableMapOf<String, String>()
+    fun addTerm(dealId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) = term(R.string.pl_t_add_failed, {
+        val key = dealId + fields.toString()
+        val id = termRequests.getOrPut(key) { java.util.UUID.randomUUID().toString() }
+        api.addTerm(projectId, dealId, JsonObject(fields + ("clientRequestId" to JsonPrimitive(id)))).also { termRequests.remove(key) }
+    }, onDone)
     fun updateTerm(dealId: String, termId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) =
         term(R.string.pl_save_failed, { api.updateTerm(projectId, dealId, termId, fields) }, onDone)
     fun deleteTerm(dealId: String, termId: String) = term(R.string.pl_t_delete_failed, { api.deleteTerm(projectId, dealId, termId) })

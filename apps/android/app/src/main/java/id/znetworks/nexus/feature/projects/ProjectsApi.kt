@@ -174,6 +174,10 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun setFieldValue(fieldId: String, taskId: String, value: JsonElement) =
         patch("/api/custom-fields", buildJsonObject { put("id", fieldId); put("taskId", taskId); put("value", value) })
 
+    suspend fun setFieldChoices(fieldId: String, taskId: String, base: List<String>, chosen: List<String>) =
+        patch("/api/custom-fields", JsonObject(mapOf("id" to JsonPrimitive(fieldId), "taskId" to JsonPrimitive(taskId)) +
+            id.znetworks.nexus.core.net.ConcurrentEdits.delta(base, chosen, "addValues", "removeValues")))
+
     suspend fun createField(projectId: String, name: String, type: String, options: List<String>) = post("/api/custom-fields", buildJsonObject {
         put("projectId", projectId); put("name", name.trim()); put("type", type)
         if (options.isNotEmpty()) putJsonArray("options") { options.forEach { add(JsonPrimitive(it)) } }

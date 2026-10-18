@@ -158,11 +158,16 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     }
 
     /** A new event (all filled boxes) or only what changed on an existing one; [onSaved] gets the event back. */
+    private val createRequests = mutableMapOf<String, String>()
     fun save(eventId: String?, fields: kotlinx.serialization.json.JsonObject, onSaved: (OutletEvent) -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
         try {
             // A no-op PATCH returns the event and writes no audit row, so an unchanged save is harmless.
-            val e = if (eventId == null) api.create(projectId, fields) else api.update(projectId, eventId, fields)
+            val e = if (eventId == null) {
+                val key = fields.toString()
+                val id = createRequests.getOrPut(key) { java.util.UUID.randomUUID().toString() }
+                api.create(projectId, kotlinx.serialization.json.JsonObject(fields + ("clientRequestId" to kotlinx.serialization.json.JsonPrimitive(id)))).also { createRequests.remove(key) }
+            } else api.update(projectId, eventId, fields)
             _state.update { it.copy(notice = when {
                 e.isReported -> res.getString(R.string.os_saved_reported, e.name)
                 eventId == null -> res.getString(R.string.os_saved_new, e.name)

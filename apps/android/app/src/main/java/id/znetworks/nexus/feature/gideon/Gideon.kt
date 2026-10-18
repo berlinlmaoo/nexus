@@ -86,7 +86,7 @@ data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: G
 
 /** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
 @Serializable data class GRoomAvailability(val rooms: List<GRoomSlot> = emptyList(), val freeSlots: List<GFreeSlot> = emptyList())
-@Serializable data class GRoomSlot(val room: String, val capacity: Int? = null, val free: Boolean = false, val busy: GRoomBusy? = null)
+@Serializable data class GRoomSlot(val room: String, val free: Boolean = false, val busy: GRoomBusy? = null)
 @Serializable data class GRoomBusy(val title: String? = null, val by: String? = null, val endsAt: String? = null)
 @Serializable data class GFreeSlot(val startsAt: String, val endsAt: String)
 

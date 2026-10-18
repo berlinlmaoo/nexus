@@ -1,0 +1,13 @@
+<resources>
+    <string name="r21_assignees_changed">Penanggung jawab diubah di tempat lain. Daftar terbaru sudah dimuat. Periksa lalu coba lagi.</string>
+    <string name="r21_text_changed">Orang lain menyimpan perubahan lebih dulu. Drafmu tetap disimpan. Tinjau isi terbaru sebelum menyimpan lagi.</string>
+    <string name="r21_sheet_changed">Kolom spreadsheet diubah di tempat lain. Struktur terbaru sudah dimuat. Coba perubahanmu lagi.</string>
+    <string name="r21_tags_limit">Terlalu banyak tag. Hapus satu tag lalu coba lagi.</string>
+    <string name="r21_vault_full">Z Vault penuh. Kosongkan ruang sebelum mengunggah lagi.</string>
+    <string name="r21_folder_gone">Folder ini sudah dihapus. Pilih folder lain.</string>
+    <string name="r21_folder_cycle">Folder tidak bisa dipindahkan ke dalam dirinya atau subfoldernya sendiri.</string>
+    <string name="r21_file_gone">File ini sudah dihapus. Muat ulang Z Vault.</string>
+    <string name="lb_tied">%1$d orang seri</string>
+    <string name="lb_more">+%1$d lagi</string>
+    <string name="ad_details">Detail</string>
+</resources>

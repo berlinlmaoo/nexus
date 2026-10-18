@@ -52,6 +52,10 @@ data class MemberRecord(val person: RecPerson, val viewer: ViewerRights? = null,
                         val days: List<RecDay> = emptyList(), val xp: RecXp? = null, val requests: List<RecRequest> = emptyList())
 
 object PeopleLogic {
+    /** The three best distinct scores, retaining everyone tied on each step. */
+    fun podium(rows: List<BoardRow>): List<List<BoardRow>> =
+        ranks(rows).map { it.second }.groupBy { it.totalXp }.values.take(3)
+
     /**
      * Standard competition ranking (web lib/competition-rank.ts, QA 13 Oct): equal XP shares a rank and the next
      * skips (1, 1, 1, 4); within a tie people are listed by name A–Z (Indonesian collation), not "ahead".

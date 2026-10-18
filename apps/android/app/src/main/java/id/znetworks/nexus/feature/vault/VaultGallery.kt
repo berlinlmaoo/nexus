@@ -74,6 +74,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.ui.components.ImageMemory
 import id.znetworks.nexus.ui.components.RemoteImages
@@ -139,7 +140,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(at) {
         list = null; error = null
-        try { list = api.list(at) } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.vm_failed) }
+        try { list = api.list(at) } catch (e: ApiError) { error = e.describe(res) }
     }
     val root = "Vault"
     val here = list?.breadcrumb?.lastOrNull()?.name ?: root
@@ -180,7 +181,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
             busy = true; error = null
             scope.launch {
                 try { onMoved(api.move(item.id, at), here) }
-                catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.vm_failed) }
+                catch (e: ApiError) { error = e.describe(res) }
                 busy = false
             }
         }, enabled = list != null && block == null && !busy) { Text(stringResource(R.string.vm_here)) } },

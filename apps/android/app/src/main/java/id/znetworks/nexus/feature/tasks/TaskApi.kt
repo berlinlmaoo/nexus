@@ -15,6 +15,10 @@ import okhttp3.Request
 /** One task and what hangs off it: comments, files, dependencies, time, quests (API.md §2.4). */
 class TaskApi(private val api: ApiClient, private val uploads: Uploads) {
 
+    suspend fun saveDescription(taskId: String, text: String, baseText: String) = api.send(
+        Request.Builder().url(api.url("/api/tasks/$taskId/body"))
+            .put(id.znetworks.nexus.core.net.ConcurrentEdits.description(text, baseText).toString().toJsonBody()).build(), JsonObject.serializer())
+
     suspend fun task(id: String) = api.getCached("/api/tasks/$id", "task-$id", TaskDetail.serializer())
 
     suspend fun attachments(taskId: String) =

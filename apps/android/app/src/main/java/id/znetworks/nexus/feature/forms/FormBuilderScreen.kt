@@ -99,6 +99,7 @@ sealed interface StudioAlert {
 enum class StudioTab { QUESTIONS, SETTINGS, SHARE, RESPONSES }
 
 data class BuilderState(
+    val canEdit: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
     val projectName: String = "",
@@ -139,6 +140,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
     val state = _state.asStateFlow()
     private var toastJob: Job? = null
     private var undoJob: Job? = null
+    private var baseUpdatedAt: JsonElement? = null
 
     val autosave = FormAutosave<FormStudioDraft>(viewModelScope, send = { snap, base, _ -> send(snap, base) },
         hasId = { _state.value.formId != null }, describe = ::describe)
@@ -155,6 +157,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
                 val f = api.builderForms(projectId).firstOrNull { it.id == openedId }
                 if (f == null) { _state.update { it.copy(loading = false, error = res.getString(R.string.fb_gone)) }; return@launch }
                 val d = FormStudioDraft.of(f)
+                baseUpdatedAt = f.raw["updatedAt"]
                 _state.update { it.copy(slug = f.slug, storedSchedule = f.schedule, responseCount = f.submissions, draft = d) }
                 autosave.start(d, saved = true)
             } catch (e: ApiError) { _state.update { it.copy(loading = false, error = e.describe(res)) }; return@launch }
@@ -165,7 +168,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
         }
         // Routing and mapping pick from these, exactly as the web's editor does.
         runCatching { projects.project(projectId).value }.getOrNull()?.let { d ->
-            _state.update { s -> s.copy(projectName = d.name, sections = d.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }.map { Named(it.id, it.name) },
+            _state.update { s -> s.copy(canEdit = id.znetworks.nexus.feature.projects.ProjectAccess.of(d).canEdit, projectName = d.name, sections = d.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }.map { Named(it.id, it.name) },
                 members = d.members.mapNotNull { m -> m.uid.takeIf { it.isNotEmpty() }?.let { StudioMember(it, m.user?.name ?: "—", m.user?.avatar) } }) }
         }
         runCatching { projects.customFields(projectId) }.getOrNull()?.let { l -> _state.update { it.copy(customFields = l) } }
@@ -175,7 +178,8 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
     /** One save: PATCH what changed, or create the form (its first save). Bookkeeping happens here, even after the screen left. */
     private suspend fun send(snap: FormStudioDraft, base: FormStudioDraft) {
         val id = _state.value.formId
-        val body = FormStudioLogic.payload(snap, base, creating = id == null, untitled = res.getString(R.string.fs_untitled_form))
+        val changes = FormStudioLogic.payload(snap, base, creating = id == null, untitled = res.getString(R.string.fs_untitled_form))
+        val body = JsonObject(changes + if (id != null && baseUpdatedAt != null) mapOf("baseUpdatedAt" to baseUpdatedAt!!) else emptyMap())
         val out = if (id != null) api.updateForm(id, body) else api.createForm(JsonObject(body + ("projectId" to JsonPrimitive(projectId))))
         if (id == null && autosave.stopped) {
             // Discarded while it was being created: don't leave it behind.
@@ -183,6 +187,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
             return
         }
         _state.update { it.copy(formId = out.id, slug = out.slug, storedSchedule = out.schedule) }
+        baseUpdatedAt = out.raw["updatedAt"]
     }
 
     fun edit(f: (FormStudioDraft) -> FormStudioDraft) {
@@ -321,7 +326,7 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
             if (!s.loading && s.error == null) {
                 HeaderIconButton(Icons.Filled.Visibility, stringResource(R.string.fb_preview), { vm.openSaved(onOpenForm) })
                 Spacer(Modifier.width(6.dp))
-                MoreMenu(hasId = s.formId != null, busy = s.busy, onOpenPage = { vm.openSaved(onOpenForm) }, onDuplicate = { duplicating = true }, onDelete = vm::askDelete)
+                if (s.canEdit) MoreMenu(hasId = s.formId != null, busy = s.busy, onOpenPage = { vm.openSaved(onOpenForm) }, onDuplicate = { duplicating = true }, onDelete = vm::askDelete)
             }
         }
         if (!s.loading && s.error == null) {

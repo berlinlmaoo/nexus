@@ -24,12 +24,14 @@ class AppLanguageTest {
         org.junit.Assert.assertEquals("1.000", java.text.NumberFormat.getNumberInstance(AppLanguage.locale(AppLanguage.INDONESIAN)).format(1000))
     }
 
-    @Test fun septemberIsSep() {
-        // Run 9 (14 Oct): en-GB says "1 Sept"; web and iOS say "1 Sep". Day first and 24-hour stay.
+    @Test fun septemberKeepsDayFirstAnd24HourTimeAcrossLocaleProviders() {
+        // Android ICU uses Sep for en-150; current desktop JDK CLDR uses Sept. The JVM test must
+        // tolerate that provider difference while checking the selected locale, day order and 24h time.
         val en = AppLanguage.locale(AppLanguage.ENGLISH)
-        assertEquals("1 Sep", java.time.format.DateTimeFormatter.ofPattern("d MMM", en).format(java.time.LocalDate.of(2026, 9, 1)))
-        assertEquals("1 Sep 2026, 14:05", java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
-            .withLocale(en).format(java.time.LocalDateTime.of(2026, 9, 1, 14, 5)))
+        assertEquals("en-150", en.toLanguageTag())
+        org.junit.Assert.assertTrue(java.time.format.DateTimeFormatter.ofPattern("d MMM", en).format(java.time.LocalDate.of(2026, 9, 1)).matches(Regex("1 Sept?")))
+        org.junit.Assert.assertTrue(java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
+            .withLocale(en).format(java.time.LocalDateTime.of(2026, 9, 1, 14, 5)).matches(Regex("1 Sept? 2026, 14:05")))
         assertEquals("1 Sep", java.time.format.DateTimeFormatter.ofPattern("d MMM", AppLanguage.locale(AppLanguage.INDONESIAN)).format(java.time.LocalDate.of(2026, 9, 1)))
     }
 }

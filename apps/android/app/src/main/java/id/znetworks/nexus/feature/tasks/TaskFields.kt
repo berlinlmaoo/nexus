@@ -104,8 +104,12 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit)
     fun commit(f: CustomFieldDef, v: JsonElement) {
         fields = fields.map { if (it.id == f.id) it.copy(value = v) else it }
         scope.launch {
-            try { api.setFieldValue(f.id, taskId, v) }
-            catch (e: ApiError) { onError((e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
+            try {
+                if (f.kind == "MULTI_SELECT") api.setFieldChoices(f.id, taskId, FieldValues.list(f.value), FieldValues.list(v))
+                else api.setFieldValue(f.id, taskId, v)
+                fields = api.taskFields(projectId, taskId)
+            }
+            catch (e: ApiError) { onError(e.describe(res)); fields = runCatching { api.taskFields(projectId, taskId) }.getOrDefault(fields) }
         }
     }
     Column(

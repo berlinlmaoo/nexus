@@ -125,7 +125,10 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
     LaunchedEffect(s.deleted) { if (s.deleted) onBack() }
     // The task's project room while it is open: an edit or a comment elsewhere shows up here (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom(s.task?.projectId?.let { "project:$it" })
-    id.znetworks.nexus.core.realtime.LiveRefresh(vm.taskId, liveMs = null, fallbackMs = 60_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesTask(it, vm.taskId) }) { vm.load().join() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.taskId, liveMs = 60_000, fallbackMs = 60_000, matches = {
+        id.znetworks.nexus.core.realtime.RealtimeEvents.touchesTask(it, vm.taskId) &&
+            !id.znetworks.nexus.core.net.ConcurrentEdits.older(it.updatedAt, s.task?.updatedAt)
+    }) { vm.load().join() }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -403,7 +406,8 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
         }
     }
     if (picking) {
-        var chosen by remember { mutableStateOf(t.assignees.mapNotNull { it.user?.id ?: it.userId }.toSet()) }
+        val base = remember { t.assignees.mapNotNull { it.user?.id ?: it.userId }.toSet() }
+        var chosen by remember { mutableStateOf(base) }
         AlertDialog(
             onDismissRequest = { picking = false },
             title = { Text(stringResource(R.string.td_assigned_title)) },
@@ -422,7 +426,7 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { picking = false; vm.setAssignees(chosen) }, enabled = s.members.isNotEmpty()) { Text(stringResource(R.string.save)) } },
+            confirmButton = { TextButton(onClick = { picking = false; vm.setAssignees(chosen, base) }, enabled = s.members.isNotEmpty()) { Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
@@ -432,7 +436,9 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
 private fun DescriptionCard(t: TaskDetail, vm: TaskDetailViewModel) {
     val c = Nx.colors
     val original = t.descriptionText
-    var draft by rememberSaveable(t.id, original) { mutableStateOf(original) }
+    var base by rememberSaveable(t.id) { mutableStateOf(original) }
+    var draft by rememberSaveable(t.id) { mutableStateOf(original) }
+    LaunchedEffect(original) { if (draft == base) { draft = original; base = original } }
     Card {
         Caption(stringResource(R.string.td_description))
         TextField(
@@ -443,9 +449,9 @@ private fun DescriptionCard(t: TaskDetail, vm: TaskDetailViewModel) {
             shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth(),
         )
         if (draft != original) Row {
-            TextButton(onClick = { draft = original }) { Text(stringResource(R.string.cancel)) }
+            TextButton(onClick = { draft = original; base = original }) { Text(stringResource(R.string.cancel)) }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { vm.setDescription(draft) {} }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+            TextButton(onClick = { vm.setDescription(draft, base) { base = draft } }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
         }
     }
 }

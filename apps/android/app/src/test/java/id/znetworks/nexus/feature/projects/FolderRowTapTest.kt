@@ -7,7 +7,7 @@ import java.io.File
 /** Owner, 10 Oct (iOS 7e0c34f): the whole folder row opens / closes it; the calendar button keeps its own tap, set apart. */
 class FolderRowTapTest {
     @Test fun wholeRowToggles() {
-        val node = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectTree.kt").readText()
+        val node = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectTree.kt").readText().replace("\r\n", "\n")
             .substringAfter("internal fun FolderNode(").substringBefore("DropdownMenu(")
         val row = node.indexOf(".combinedClickable(onClickLabel")
         val calendar = node.indexOf("a.openFolderView(f.id)")
