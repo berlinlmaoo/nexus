@@ -21,6 +21,7 @@ export const ID_MEETING_SPEAKERS: Record<string, string> = {
   "Speaker {n}": "Pembicara {n}",
   "Speakers": "Pembicara",
   "{n} voices": "{n} suara",
+  "1 voice": "1 suara",
   "GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.": "GIDEON membedakan suara dan membaca nama dari perkenalan. Suara hanya dipakai untuk memberi label rekaman ini.",
   "Not named": "Belum diberi nama",
   "Name for {voice}": "Nama untuk {voice}",
