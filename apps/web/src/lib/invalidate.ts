@@ -27,7 +27,7 @@ const PROJECT_TREE_SEGMENTS = new Set(["projects", "project-folders", "project-p
 
 /** The project a key is the header/detail, member list or saved views of: ["nexus","project",id], ["nexus","project-members",id], ["nexus","project-views",id], ["project-members",id]. */
 function projectIdOfKey(key: readonly unknown[]): unknown {
-  if (key.length === 3 && key[0] === "nexus" && (key[1] === "project" || key[1] === "project-members" || key[1] === "project-views")) return key[2];
+  if (key.length === 3 && key[0] === "nexus" && (key[1] === "project" || key[1] === "project-members" || key[1] === "project-views" || key[1] === "project-custom-fields")) return key[2];
   if (key.length === 2 && key[0] === "project-members") return key[1];
   return undefined;
 }
