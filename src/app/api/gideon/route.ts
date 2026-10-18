@@ -16,6 +16,7 @@ import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, t
 import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
+import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -420,6 +421,9 @@ export async function POST(req: NextRequest) {
     let tokens: number | null = null
     // What the run cost, as the shim read it back from Hermes' state.db (GIDEON credits, 18 Oct 2026).
     let usage: ShimUsage | null = null
+    // Which shim URL this answer went to, and when (a broken connection is checked against its /health: restart or not).
+    let shimUrlUsed: string | null = null
+    let shimSince = 0
     try {
       if (runId) await sendEvent({ type: 'run', id: runId })
       const url = process.env.GIDEON_CHAT_URL
@@ -550,12 +554,23 @@ export async function POST(req: NextRequest) {
           await sendEvent({ type: 'text', content: txt.send[uiLang] })
         }
       }
+      // The shim restarted under this answer (18 Oct 2026, lib/gideon-shim-retry.ts): recorded as `shim_restart`, which
+      // the Performance panel does not count as a model error, and said as what it is.
+      const shimRestarted = async () => {
+        failure = SHIM_RESTART
+        await sendEvent({ type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART })
+      }
       const timeoutMs = tier === 'experimental' ? 440000 : 150000
       // Token-by-token when the shim offers it (GIDEON_STREAM_URL) and there is no document: the
       // streaming runner reads images but has no document reader.
       const streamUrl = process.env.GIDEON_STREAM_URL
       if (streamUrl && !documentBase64) {
-        const res = await fetch(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        shimUrlUsed = streamUrl
+        shimSince = Date.now()
+        // One quiet retry when the shim is restarting / unreachable before anything ran.
+        const shim = await fetchShim(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) }, { stream: true })
+        const res = shim.res
+        if (shim.restarting) { await shimRestarted(); return }
         if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok || !res.body) {
           failure = `shim ${res.status}`
@@ -602,9 +617,15 @@ export async function POST(req: NextRequest) {
           }
         }
         if (!reply && upstreamError === 'model0_unavailable') { await model0Refused(); return }
+        // The shim's drain cap stopped this run during a restart.
+        if (!reply && upstreamError === SHIM_RESTART) { await shimRestarted(); return }
         if (!reply && upstreamError) failure = upstreamError
       } else {
-        const res = await fetch(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        shimUrlUsed = url
+        shimSince = Date.now()
+        const shim = await fetchShim(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) }, { stream: false })
+        const res = shim.res
+        if (shim.restarting) { await shimRestarted(); return }
         if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok) {
           failure = `shim ${res.status}`
@@ -705,8 +726,11 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('GIDEON API error:', error)
-      failure = failure || (error instanceof Error ? error.message : 'error')
-      await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
+      // A connection the shim broke by restarting (deploy, config change) is `shim_restart`, not a model error.
+      failure = failure || (shimUrlUsed ? await shimFailureKind(error, shimUrlUsed, shimSince).catch(() => (error instanceof Error ? error.message : 'error')) : (error instanceof Error ? error.message : 'error'))
+      await sendEvent(failure === SHIM_RESTART
+        ? { type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART }
+        : { type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
       unsubscribe()
       await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens, usage })

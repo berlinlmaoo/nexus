@@ -303,6 +303,7 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
     // The usage report names the session (GIDEON credits); written even when the run fails.
     const usageFile = path.join(WORKDIR, `gideon-usage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`)
     const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", provider, "--usage-file", usageFile], { cwd: WORKDIR, env })
+    trackChild(child, tier)
     let out = "", err = ""
     try { child.stdin.end() } catch {}
     child.stdout.on("data", (d) => { out += d.toString() })
@@ -315,7 +316,7 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
       let report = null
       try { report = JSON.parse(fs.readFileSync(usageFile, "utf8")) } catch {}
       try { fs.unlinkSync(usageFile) } catch {}
-      resolve({ reply, usage: runUsage(report, tier, model) })
+      resolve({ reply, usage: runUsage(report, tier, model), capped: !!child.gideonCapped })
     })
     child.on("error", (e) => { clearTimeout(timer); console.error("[hermes-chat] spawn error", e.message); try { fs.unlinkSync(usageFile) } catch {}; resolve({ reply: "", usage: null }) })
   })
@@ -334,6 +335,7 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
     const tierName = TIER_NAMES[TIERS[tier] ? tier : DEFAULT_TIER] || "GIDEON"
     const full = "[You are answering as " + tierName + ".]\n" + buildAttachedPrompt(prompt, imagePath, null)
     const child = spawn(PYTHON, [RUNNER, "--model", model, "--provider", provider, "--toolsets", STREAM_TOOLSETS], { cwd: WORKDIR, env })
+    trackChild(child, tier)
     let err = "", sawFinal = false, outChars = 0, pending = "", finalUsage = null
     child.stdout.on("data", (d) => {
       pending += d.toString()
@@ -361,6 +363,8 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
     child.on("close", (code) => {
       clearTimeout(timer)
       if (!sawFinal) console.error(`[${SHIM_NAME}] stream ended without final (code ${code}); err:`, err.slice(-200).replace(/\n/g, " "))
+      // Stopped at the drain cap of a restart: NEXUS reads this as `shim_restart`, not a model failure.
+      if (!sawFinal && child.gideonCapped) { try { res.write(JSON.stringify({ t: "error", c: "shim_restart" }) + "\n") } catch {} }
       // One last line with what the run cost (GIDEON credits, 18 Oct 2026). Older NEXUS servers skip unknown `t`.
       const usage = runUsage(finalUsage, tier, model)
       if (usage) { try { res.write(JSON.stringify({ t: "usage", usage }) + "\n") } catch {} }
@@ -375,10 +379,72 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
   })
 }
 
+// ── Graceful restart (18 Oct 2026) ────────────────────────────────────────────────────────────────────────
+// A restart used to kill every answer in flight (systemd's SIGTERM reached the Hermes children too) and NEXUS
+// recorded each one as FAILED "shim 502" / "terminated", so Control Room › GIDEON › Performance called a healthy
+// tier Unavailable. Now SIGTERM starts a drain: new POSTs get 503 {"error":"shim_restarting"} with Retry-After
+// (NEXUS retries once, then records `shim_restart`, which is not a model error); answers in flight run to their
+// end, at most GIDEON_DRAIN_MS (120 s) after the signal, Model 0 up to its own timeout; the process exits when the
+// last one is done. A run still going at its cap is stopped and its stream ends with the error line `shim_restart`.
+// Needs KillMode=mixed (SIGTERM reaches node only, not the children) and TimeoutStopSec >= 460 in the unit (runbook L.30).
+const STARTED_AT = new Date().toISOString()
+const DRAIN_MS = parseInt(process.env.GIDEON_DRAIN_MS || "120000", 10)
+let drainingSince = 0
+const flights = new Set() // open POST responses
+const children = new Set() // Hermes / runner children
+function trackChild(child, tier) {
+  child.gideonTier = TIERS[tier] ? tier : DEFAULT_TIER
+  child.gideonStarted = Date.now()
+  children.add(child)
+  const done = () => { children.delete(child); if (drainingSince) setImmediate(drainTick) }
+  child.on("close", done)
+  child.on("error", done)
+}
+function childDeadline(child) {
+  if (child.gideonTier === "experimental") return child.gideonStarted + TIERS.experimental.timeoutMs + 5000
+  return drainingSince + DRAIN_MS
+}
+function retryAfterSec() {
+  const until = Math.max(drainingSince + Math.min(DRAIN_MS, 30000), ...[...children].map(childDeadline))
+  return Math.max(1, Math.min(440, Math.ceil((until - Date.now()) / 1000)))
+}
+function drainTick() {
+  const now = Date.now()
+  for (const c of children) {
+    if (!c.gideonCapped && now >= childDeadline(c)) {
+      c.gideonCapped = true
+      console.log(`[${SHIM_NAME}] drain cap reached: stopping a ${c.gideonTier} run after ${Math.round((now - c.gideonStarted) / 1000)}s`)
+      try { c.kill("SIGKILL") } catch {}
+    }
+  }
+  if (!flights.size && !children.size) {
+    console.log(`[${SHIM_NAME}] drained in ${Math.round((now - drainingSince) / 1000)}s, exiting`)
+    process.exit(0)
+  }
+}
+function startDrain(sig) {
+  if (drainingSince) return
+  drainingSince = Date.now()
+  console.log(`[${SHIM_NAME}] ${sig}: draining ${flights.size} request(s) / ${children.size} run(s); new requests get 503 shim_restarting`)
+  setInterval(drainTick, 500)
+  // Backstop: nothing outlives the longest cap (Model 0's own timeout), whatever happens.
+  setTimeout(() => { console.error(`[${SHIM_NAME}] drain backstop, exiting with ${children.size} run(s) left`); process.exit(0) }, Math.max(DRAIN_MS, TIERS.experimental.timeoutMs + 5000) + 15000)
+  drainTick()
+}
+process.on("SIGTERM", () => startDrain("SIGTERM"))
+process.on("SIGINT", () => startDrain("SIGINT"))
+
 const server = http.createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/health") { res.writeHead(200); return res.end("ok") }
+  if (req.method === "GET" && req.url === "/health") { res.writeHead(200, { "x-gideon-shim": drainingSince ? "draining" : "ready", "x-gideon-shim-started": STARTED_AT }); return res.end("ok") }
   if (req.method !== "POST") { res.writeHead(404); return res.end("not found") }
   if (!SECRET || req.headers["x-oracle-secret"] !== SECRET) { res.writeHead(401); return res.end("unauthorized") }
+  // Restarting (graceful drain above): a clear, retryable refusal, never a half-started answer.
+  if (drainingSince) {
+    res.writeHead(503, { "Content-Type": "application/json", "Retry-After": String(retryAfterSec()), "x-gideon-shim": "restarting", Connection: "close" })
+    return res.end(JSON.stringify({ error: "shim_restarting" }))
+  }
+  flights.add(res)
+  res.on("close", () => { flights.delete(res); if (drainingSince) setImmediate(drainTick) })
   const isStream = req.url.startsWith("/chat-stream")
   const isChat = req.url.startsWith("/chat") && !isStream
   const isInterpret = req.url.startsWith("/interpret")
@@ -480,14 +546,19 @@ const server = http.createServer((req, res) => {
       console.log(`[${SHIM_NAME}] stream ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> ${r.ok ? `out=${r.outChars}c` : "FAILED"} tok=${tok} sess=${r.usage ? r.usage.sessionId : "-"} (${Date.now() - started}ms)`)
       return res.end()
     }
-    let reply, usage = null
+    let reply, usage = null, capped = false
     try {
-      ;({ reply, usage } = await runHermes(prompt, actorEmail, chosen, imagePath, doc, runId))
+      ;({ reply, usage, capped } = await runHermes(prompt, actorEmail, chosen, imagePath, doc, runId))
     } finally {
       if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
       if (doc) { try { fs.unlinkSync(doc.path) } catch {} }
     }
     console.log(`[${SHIM_NAME}] ${chosen}${imagePath ? " +gambar" : ""}${doc ? " +dokumen" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
+    if (capped && !reply) {
+      // "stopped", not "restarting": this run already started, so NEXUS records it without retrying.
+      res.writeHead(503, { "Content-Type": "application/json", "x-gideon-shim": "stopped" })
+      return res.end(JSON.stringify({ error: "shim_restart", ...(usage ? { usage } : {}) }))
+    }
     res.writeHead(200, { "Content-Type": "application/json" })
     // `usage` is additive (18 Oct 2026): older NEXUS servers read only `reply`.
     return res.end(JSON.stringify(usage ? { reply, usage } : { reply }))

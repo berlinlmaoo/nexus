@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { finishRun, startRun, type ApprovalMode, type GideonTrigger } from "@/lib/gideon-runs"
+import { fetchShim, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
 
 /**
  * One door to GIDEON for server-side jobs: the Hermes shim behind GIDEON_CHAT_URL.
@@ -60,8 +61,10 @@ export async function askGideon(input: {
     scheduleId: input.scheduleId ?? null,
   })
   input.onRun?.(runId)
+  const since = Date.now()
   try {
-    const res = await fetch(url, {
+    // One quiet retry when the shim is restarting (lib/gideon-shim-retry.ts); a run lost to a restart is `shim_restart`.
+    const shim = await fetchShim(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-oracle-secret": secret },
       body: JSON.stringify({
@@ -72,7 +75,13 @@ export async function askGideon(input: {
         ...(runId ? { runId } : {}),
       }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 240_000),
-    })
+    }, { stream: false })
+    const res = shim.res
+    if (shim.restarting) {
+      console.error(`gideon-chat: shim restarting (${input.tag ?? "untagged"})`)
+      await finishRun(runId, { ok: false, error: SHIM_RESTART })
+      return null
+    }
     if (!res.ok) {
       console.error(`gideon-chat: shim refused (${input.tag ?? "untagged"})`, { status: res.status })
       await finishRun(runId, { ok: false, error: `shim ${res.status}` })
@@ -89,7 +98,7 @@ export async function askGideon(input: {
     await finishRun(runId, { ok: true, replyChars: reply.length, usage: data.usage })
     return reply
   } catch (error) {
-    await finishRun(runId, { ok: false, error: error instanceof Error ? error.message : "error" })
+    await finishRun(runId, { ok: false, error: await shimFailureKind(error, url, since).catch(() => (error instanceof Error ? error.message : "error")) })
     throw error
   }
 }

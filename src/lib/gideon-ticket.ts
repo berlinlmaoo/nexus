@@ -1,5 +1,6 @@
 import path from "path"
 import { finishRun, startRun } from "@/lib/gideon-runs"
+import { fetchShim, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
 import { readFile } from "fs/promises"
 import sharp from "sharp"
 import prisma from "@/lib/prisma"
@@ -488,7 +489,8 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       })),
     })
 
-    const res = await fetch(url, {
+    // One quiet retry when the shim is restarting (lib/gideon-shim-retry.ts); a review lost to a restart is `shim_restart`.
+    const shim = await fetchShim(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-oracle-secret": secret },
       body: JSON.stringify({
@@ -503,7 +505,16 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
         ...(imageBase64 ? { imageBase64, imageType: "jpg" } : {}),
       }),
       signal: AbortSignal.timeout(280000),
+    }, { stream: false }).catch(async (error) => {
+      runError = await shimFailureKind(error, url, claimedAt.getTime()).catch(() => null)
+      throw error
     })
+    const res = shim.res
+    if (shim.restarting) {
+      console.error("gideon-ticket: shim restarting", { complaintId })
+      runError = SHIM_RESTART
+      return
+    }
     if (!res.ok) {
       console.error("gideon-ticket: shim refused", { complaintId, status: res.status })
       runError = `shim ${res.status}`
@@ -562,7 +573,8 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     }
   } catch (error) {
     console.error("gideon-ticket: review failed", { complaintId, error })
-    runError = error instanceof Error ? error.message : "review failed"
+    // Already classified when the shim call itself broke (`shim_restart` for a restart).
+    runError = runError ?? (error instanceof Error ? error.message : "review failed")
   } finally {
     if (runId) await finishRun(runId, { ok: runOk, error: runError, usage: runUsage })
     // Let go of the claim — only our own (a stale one taken over by another process is theirs now).

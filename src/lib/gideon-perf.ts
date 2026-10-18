@@ -8,6 +8,7 @@ import { createInAppNotification } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { ORG_WORKSPACE_ID, isOrgBodPlus } from "@/lib/org"
 import { createLogger } from "@/lib/logger"
+import { NON_MODEL_FAILURES, SHIM_RESTART } from "@/lib/gideon-shim-retry"
 
 /**
  * Control Room › GIDEON › Performance (owner, 18 Oct 2026). BoD / One Above All only.
@@ -27,6 +28,10 @@ import { createLogger } from "@/lib/logger"
  * Alerts to the One Above All (notification type GIDEON_ALERT), each once per episode: Model 0 down > 5 min,
  * error rate > 5 % over 15 min (at least 5 answers), VRAM ≥ 98 % for 2 min, GPU ≥ 85 °C for 2 min. A recovery
  * notice follows when it clears; an alert that comes back within 30 min of clearing is not sent again.
+ *
+ * Not model errors (lib/gideon-shim-retry.ts NON_MODEL_FAILURES): `model0_unavailable` (the GPU was away) and
+ * `shim_restart` (the shim restarted under the answer). Neither counts in the error rate, the "last 3 answers failed"
+ * rule or the error-rate alert; restarts are shown as their own small count per tier.
  */
 
 const log = createLogger("gideon-perf")
@@ -216,6 +221,9 @@ export type TierLive = {
   inFlight: number
   answers15m: number
   failures15m: number
+  /** Answers lost to a shim restart in 15 min / 24 h: not errors, shown apart. */
+  restarts15m: number
+  restarts24h: number
   errorRate: number | null
   p50Ms: number | null
   p95Ms: number | null
@@ -260,11 +268,13 @@ export type PerfSummary = {
   alerts: AlertView[]
 }
 
-type RunAgg = { tier: string; inflight: bigint; finished: bigint; failed: bigint; p50: number | null; p95: number | null; answers24: bigint }
+type RunAgg = { tier: string; inflight: bigint; finished: bigint; failed: bigint; restarts: bigint; restarts24: bigint; p50: number | null; p95: number | null; answers24: bigint }
 
 const zeroTiers = <T,>(v: T) => Object.fromEntries(TIER_IDS.map((t) => [t, v])) as Record<TierId, T>
 const isTier = (t: string | null): t is TierId => !!t && (TIER_IDS as readonly string[]).includes(t)
 const n = (v: bigint | number | null | undefined) => Number(v ?? 0)
+/** Finished runs that say something about the model: everything except NON_MODEL_FAILURES (null error included). */
+const modelOutcome = (): Prisma.GideonRunWhereInput => ({ OR: [{ error: null }, { error: { notIn: [...NON_MODEL_FAILURES] } }] })
 
 export async function buildPerfSummary(): Promise<PerfSummary> {
   const now = Date.now()
@@ -277,14 +287,16 @@ export async function buildPerfSummary(): Promise<PerfSummary> {
     prisma.$queryRaw<RunAgg[]>`
       SELECT "tier",
         count(*) FILTER (WHERE "status" = 'RUNNING' AND "startedAt" > ${inflightSince}) AS inflight,
-        count(*) FILTER (WHERE "status" IN ('SUCCEEDED','FAILED') AND "finishedAt" > ${since15} AND coalesce("error",'') <> 'model0_unavailable') AS finished,
-        count(*) FILTER (WHERE "status" = 'FAILED' AND "finishedAt" > ${since15} AND coalesce("error",'') <> 'model0_unavailable') AS failed,
+        count(*) FILTER (WHERE "status" IN ('SUCCEEDED','FAILED') AND "finishedAt" > ${since15} AND coalesce("error",'') NOT IN ('model0_unavailable','shim_restart')) AS finished,
+        count(*) FILTER (WHERE "status" = 'FAILED' AND "finishedAt" > ${since15} AND coalesce("error",'') NOT IN ('model0_unavailable','shim_restart')) AS failed,
+        count(*) FILTER (WHERE "status" = 'FAILED' AND "finishedAt" > ${since15} AND "error" = ${SHIM_RESTART}) AS restarts,
+        count(*) FILTER (WHERE "status" = 'FAILED' AND "error" = ${SHIM_RESTART}) AS restarts24,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "status" = 'SUCCEEDED' AND "finishedAt" > ${since15}) AS p50,
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "status" = 'SUCCEEDED' AND "finishedAt" > ${since15}) AS p95,
         count(*) FILTER (WHERE "startedAt" > ${since24}) AS answers24
       FROM "GideonRun" WHERE "startedAt" > ${since24} AND "tier" IS NOT NULL GROUP BY "tier"`,
     prisma.gideonRun.findMany({
-      where: { finishedAt: { gt: since15 }, tier: { not: null }, NOT: { error: "model0_unavailable" } },
+      where: { finishedAt: { gt: since15 }, tier: { not: null }, ...modelOutcome() },
       orderBy: { finishedAt: "desc" }, take: 200, select: { tier: true, status: true },
     }),
     prisma.gideonCreditUsage.groupBy({ by: ["tier"], where: { createdAt: { gt: since15 } }, _avg: { credits: true } }),
@@ -341,7 +353,7 @@ export async function buildPerfSummary(): Promise<PerfSummary> {
     const round = (v: number | null | undefined) => (v == null ? null : Math.round(v * 10) / 10)
     return {
       id, status, reason, inFlight,
-      answers15m: finished, failures15m: failed, errorRate: finished ? failed / finished : null,
+      answers15m: finished, failures15m: failed, restarts15m: n(a?.restarts), restarts24h: n(a?.restarts24), errorRate: finished ? failed / finished : null,
       p50Ms: a?.p50 != null ? Math.round(a.p50) : null, p95Ms: a?.p95 != null ? Math.round(a.p95) : null,
       avgCredits15m: round(c15.get(id)), avgCredits24h: round(c24.get(id)), answers24h: n(a?.answers24),
     }
@@ -456,8 +468,8 @@ const ALERT_TEXT: Record<AlertKey, (v: Record<string, string | number>) => { en:
 async function conditions(live: LiveGpu): Promise<Record<AlertKey, Condition>> {
   const since = new Date(Date.now() - THRESHOLDS.errorRateWindowMin * 60_000)
   const [total, failed] = await Promise.all([
-    prisma.gideonRun.count({ where: { finishedAt: { gt: since }, status: { in: ["SUCCEEDED", "FAILED"] }, NOT: { error: "model0_unavailable" } } }),
-    prisma.gideonRun.count({ where: { finishedAt: { gt: since }, status: "FAILED", NOT: { error: "model0_unavailable" } } }),
+    prisma.gideonRun.count({ where: { finishedAt: { gt: since }, status: { in: ["SUCCEEDED", "FAILED"] }, ...modelOutcome() } }),
+    prisma.gideonRun.count({ where: { finishedAt: { gt: since }, status: "FAILED", ...modelOutcome() } }),
   ])
   const pct = total ? (failed / total) * 100 : 0
   const g = live.gpu
