@@ -137,8 +137,6 @@ struct ListPropLine: View {
                 chips
             }
         }
-        // A done row's values faded, as the web mutes the whole row (decision 23 of run 20, R20-B-09).
-        .opacity(task.isDone ? 0.55 : 1)
     }
 
     /// Fixed slots, always in this order: the fields, due date, priority, status, people. A slot with no
@@ -491,6 +489,7 @@ struct ListNewTaskRow: View {
                 .hoverEffect(.highlight)
             }
         }
+        .onAppear { if composeRequest != nil { editing = true; focused = true } }
         .onChange(of: composeRequest) { _, request in
             if request != nil { editing = true; focused = true }
         }

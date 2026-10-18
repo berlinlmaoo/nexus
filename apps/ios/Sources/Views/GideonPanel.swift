@@ -926,10 +926,8 @@ struct GideonPanel: View {
     private func attachmentChip(art: GideonChipArt, label: String,
                                 onBubble: Bool = false,
                                 remove: (() -> Void)?) -> some View {
-        // In a bubble the chip sits on the near-black question, where the muted grey it wears under the
-        // composer is nearly gone: the bubble's own text colour, softened.
-        let tone: Color = onBubble ? NX.card.opacity(0.85) : NX.mutedFg
-        let plate: Color = onBubble ? NX.card.opacity(0.18) : NX.muted.opacity(0.6)
+        let tone: Color = onBubble ? NX.foreground.opacity(0.85) : NX.mutedFg
+        let plate: Color = onBubble ? NX.violet.opacity(0.08) : NX.muted.opacity(0.6)
         return HStack(spacing: 10) {
             switch art {
             case .local(let image):

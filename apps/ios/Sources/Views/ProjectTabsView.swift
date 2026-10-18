@@ -244,6 +244,9 @@ struct ListTab: View {
             .padding(.vertical, 12)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+        .onChange(of: composeRequest) { _, request in
+            if request != nil, let id = composeLaneId { collapsed.remove(id) }
+        }
         // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
         // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
         // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
@@ -1242,6 +1245,7 @@ struct CalendarTab: View {
                     // P-I14 / P-M12).
                     let rest = undated
                     let emptyMonth = tasksByDay.isEmpty && !rest.isEmpty
+                    if emptyMonth { undatedBox(rest, leading: true).id("undated") }
                     // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06). On iPad / Mac
                     // the picked day's panel sits beside the month, as the web's: under it, the Mac's panel
                     // was below the fold (UI tour run 16, R16-M-08).
@@ -1254,7 +1258,7 @@ struct CalendarTab: View {
                         monthCard
                         dayPanel
                     }
-                    if !rest.isEmpty { undatedBox(rest, leading: emptyMonth).id("undated") }
+                    if !rest.isEmpty && !emptyMonth { undatedBox(rest, leading: false).id("undated") }
                 }
                 // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
                 .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)

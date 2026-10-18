@@ -32,6 +32,7 @@ final class RealtimeClient {
 
     @ObservationIgnored private let engine: RealtimeEngine
     /// The session the engine is running for; another token means another sign-in.
+    @ObservationIgnored private var taskVersions = TaskVersionTracker()
     @ObservationIgnored private var token: String?
     /// Conversations with news, folded so the two events of one message (`message-created` to the
     /// room, `conversation-updated` to each member) cost one refresh, not two.
@@ -105,6 +106,7 @@ final class RealtimeClient {
 
     /// Signed out: close now, and forget the session.
     func reset() {
+        taskVersions.reset()
         token = nil
         meId = nil
         engine.stop()
@@ -112,6 +114,11 @@ final class RealtimeClient {
         chatFlush?.cancel()
         chatFlush = nil
         chatNews.removeAll()
+    }
+
+    func rememberTask(_ id: String, updatedAt: String?) { taskVersions.remember(id, updatedAt) }
+    func rememberTasks(_ tasks: [BoardTask]) {
+        for task in tasks { rememberTask(task.id, updatedAt: task.updatedAt) }
     }
 
     // MARK: rooms
@@ -225,7 +232,13 @@ final class RealtimeClient {
         case "new-notification":
             Task { await InboxBadge.shared.refresh(force: true) }
             center.post(name: .nexusInboxChanged, object: nil)
+        case "gideon-credits":
+            Task { await GideonCredits.shared.refresh() }
         case "task-created", "task-updated":
+            let id = payload?["id"]?.string
+            let updatedAt = payload?["updatedAt"]?.string
+            guard taskVersions.accepts(id, updatedAt) else { return }
+            if let id { taskVersions.remember(id, updatedAt) }
             tasksChanged(taskId: payload?["id"]?.string, parentId: payload?["parentId"]?.string)
         case "task-deleted", "comment-added":
             tasksChanged(taskId: payload?["taskId"]?.string, parentId: nil)

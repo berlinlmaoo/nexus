@@ -39,7 +39,7 @@ final class TaskPageActions {
                 _ = try await APIClient.shared.taskPageRequest("/api/tasks/\(id)/\(action)", method: "POST")
             }
             await load(id)
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription; await load(id) }
     }
 }
 

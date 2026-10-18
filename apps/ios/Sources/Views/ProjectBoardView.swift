@@ -1186,7 +1186,7 @@ struct ProjectDetailView: View {
                                      count: "\(matchCount)/\(totalCount)")
             }
             if let v = toolView {
-                Menu { viewMenuItems(v) } label: {
+                Button { filterView = v } label: {
                     Image(systemName: "slider.horizontal.3").font(.system(size: 15, weight: .regular)).foregroundStyle(NX.mutedFg)
                         .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
                 }

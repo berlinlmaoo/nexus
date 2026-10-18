@@ -86,7 +86,7 @@ struct TaskDetailView: View {
                             Button { showPropertyEditor = true } label: {
                                 Label(T("Add a property"), systemImage: "plus").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             }.buttonStyle(.plain).frame(minHeight: 36)
-                            .sheet(isPresented: $showPropertyEditor) { CustomFieldEditor(projectId: pid) { fieldsRefresh += 1 } }
+                            .sheet(isPresented: $showPropertyEditor) { NavigationStack { CustomFieldEditor(projectId: pid) { fieldsRefresh += 1 } } }
                         }
                         // The description is a block document, edited like a page (merged into the live
                         // document on the server, so web editors see it at once).
@@ -392,9 +392,9 @@ struct TaskDetailView: View {
             }
         }
         .sheet(isPresented: $showAssignee) {
-            AssigneePicker(projectId: t.projectId, current: Set((t.assignees ?? []).compactMap { $0.user?.id }), onSave: { ids in
-                let base = Set((t.assignees ?? []).compactMap { $0.user?.id })
-                await update(t, ["addAssigneeIds": Array(ids.subtracting(base)), "removeAssigneeIds": Array(base.subtracting(ids))])
+            AssigneePicker(projectId: t.projectId, current: Set((t.assignees ?? []).compactMap { $0.user?.id }), onSave: { ids, base in
+                let edit = StringSetEdit(base: base, selected: ids)
+                await update(t, ["addAssigneeIds": edit.added, "removeAssigneeIds": edit.removed])
             })
         }
     }
@@ -793,14 +793,15 @@ struct TaskDetailView: View {
     }
 }
 
-/// Assign / unassign task members from the project's member pool. Commits the full assigneeIds set.
+/// Assign / unassign task members from the project's member pool. Saves only the changes.
 struct AssigneePicker: View {
     let projectId: String?
     let current: Set<String>
-    let onSave: (Set<String>) async -> Void
+    let onSave: (Set<String>, Set<String>) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var members: [ProjectDetail.ProjectMember] = []
     @State private var selected: Set<String> = []
+    @State private var baseSelection: Set<String> = []
     @State private var loading = true
     @State private var saving = false
 
@@ -837,7 +838,7 @@ struct AssigneePicker: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
+                    Button { Task { saving = true; await onSave(selected, baseSelection); dismiss() } } label: {
                         if saving { ProgressView().tint(NX.violetText) } else { Text(T("Save")).bold() }
                     }.disabled(saving)
                 }
@@ -851,6 +852,7 @@ struct AssigneePicker: View {
     }
     private func load() async {
         selected = current
+        baseSelection = current
         guard let pid = projectId else { loading = false; return }
         members = (try? await APIClient.shared.project(pid).members) ?? []
         loading = false

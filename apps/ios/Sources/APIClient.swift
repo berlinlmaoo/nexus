@@ -707,14 +707,19 @@ struct APIClient {
     func project(_ id: String) async throws -> ProjectDetail {
         let d = try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
         let icon = d.icon, kind = d.type
-        await MainActor.run { ProjectIconStore.shared.set(id, icon); ProjectIconStore.shared.recordTypes([(id, kind)]) }
+        await MainActor.run {
+            ProjectIconStore.shared.set(id, icon); ProjectIconStore.shared.recordTypes([(id, kind)])
+            RealtimeClient.shared.rememberTasks((d.taskLists ?? []).flatMap { $0.tasks ?? [] })
+        }
         return d
     }
 
     /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
     /// `parentId`/`taskListId`/`quests` → board & list merge subtasks into their lane + show "+N XP".
     func projectTasks(_ projectId: String) async throws -> [BoardTask] {
-        try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self, cache: "project-tasks-\(projectId)")
+        let tasks = try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self, cache: "project-tasks-\(projectId)")
+        await MainActor.run { RealtimeClient.shared.rememberTasks(tasks) }
+        return tasks
     }
 
     func workspaceInfo() async throws -> WorkspaceInfo {
@@ -959,7 +964,9 @@ struct APIClient {
     }
 
     func taskDetail(_ id: String) async throws -> TaskDetail {
-        try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
+        let task = try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
+        await MainActor.run { RealtimeClient.shared.rememberTask(id, updatedAt: task.updatedAt) }
+        return task
     }
 
     // MARK: - Project status updates (the Overview's last card, owner 11 Oct 2026)

@@ -276,13 +276,12 @@ struct Podium: View {
                 .accessibilityElement(children: .combine)
             }
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(group.isEmpty ? NX.muted : barColor).frame(height: height)
                 // Dark on the coloured step, as the web's podium (white was hard to read on gold).
                 Text("\(place)").font(NXFont.display(22, .black)).foregroundStyle(Color(hex: "#78350f").opacity(0.9)).padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
-        .opacity(group.isEmpty ? 0 : 1)
     }
 
     /// "Ana, Budi +4 more": the first two names, then how many more share the step.
