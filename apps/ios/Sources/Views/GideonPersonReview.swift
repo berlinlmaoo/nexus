@@ -270,7 +270,7 @@ struct GideonPersonPresentation: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if hSize == .regular {
             content.sheet(isPresented: Binding(get: { person != nil }, set: { if !$0 { person = nil } })) {
-                if let person { GideonPersonReview(userId: person).frame(idealWidth: 1024, idealHeight: 760).presentationDetents([.fraction(0.86)]) }
+                if let person { GideonPersonReview(userId: person).modifier(PageWideFittedSheet(maxHeight: 1_100)) }
             }
         } else {
             content.fullScreenCover(isPresented: Binding(get: { person != nil }, set: { if !$0 { person = nil } })) {
