@@ -26,7 +26,7 @@ import { resolveRoomName } from "@/lib/room-booking-rooms"
 
 const log = createLogger("gideon-runs")
 
-export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | "WRITE" | "AUTOFILL"
+export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | "WRITE" | "AUTOFILL" | "MEETING"
 export type ApprovalMode = "always_ask" | "review" | "dont_ask"
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["always_ask", "review", "dont_ask"]
 

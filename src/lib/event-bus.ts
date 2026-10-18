@@ -93,6 +93,10 @@ export const BUS_EVENTS = {
   FORM_RESPONSES_CHANGED: "form-responses-changed",
   /** A GIDEON answer was billed (or the person's credits changed) → `user:<id>` ("gideon-credits", their own summary). */
   GIDEON_CREDITS: "gideon-credits",
+  /** A GIDEON tier became unavailable or came back (Model 0 lends the GPU to the meeting transcriber) → every socket. */
+  GIDEON_TIERS: "gideon-tiers",
+  /** A meeting recording moved (status/progress/edit/apply/delete) → its uploader's `user:<id>` + its `project:<id>`. Ids only. */
+  MEETING_CHANGED: "meeting-changed",
 } as const
 
 // Every named event crosses processes (lib/realtime-bridge.ts).

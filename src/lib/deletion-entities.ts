@@ -89,6 +89,8 @@ export const RESTORABLE: Record<string, Spec> = {
   pipeline_term: { table: "PipelinePaymentTerm", label: "payment term" },
   // An event (night) of an Outlet Sales Dashboard project with its report (owner, 10 Oct 2026).
   outlet_sales_event: { table: "OutletSalesEvent", label: "outlet event" },
+  // A meeting recording's transcript and minutes, Beta (18 Oct 2026). The audio file is removed at delete time.
+  meeting_note: { table: "MeetingNote", label: "meeting notes" },
 }
 
 export function rootTableOf(entityType: string): string {

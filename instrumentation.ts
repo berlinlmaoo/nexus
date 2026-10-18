@@ -21,6 +21,11 @@ export async function register() {
     const { startGideonTicker } = await import("@/lib/gideon-triggers")
     startGideonTicker()
   }
+  // Meeting notes (lib/meeting-notes.ts, 18 Oct 2026): transcripts and minutes. Leader only. Off with NEXUS_MEETING_TICKER=0.
+  if (process.env.NEXUS_MEETING_TICKER !== "0") {
+    const { startMeetingTicker } = await import("@/lib/meeting-notes")
+    startMeetingTicker()
+  }
   if (process.env.NEXUS_AUTOMATION_TICKER === "0") return
   const { startAutomationTicker } = await import("@/lib/automation-ticker")
   startAutomationTicker()
