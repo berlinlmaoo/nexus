@@ -8,6 +8,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BoardLogicTest {
+    @Test fun manualOrderBreaksTiesByCreationThenId() {
+        val a = BoardTask("a", position = 0, createdAt = "2026-10-18T01:00:00Z")
+        val b = a.copy(id = "b")
+        val older = a.copy(id = "z", createdAt = "2026-10-17T01:00:00Z")
+        val laterPosition = older.copy(id = "p", position = 1)
+        val shuffled = listOf(b, laterPosition, a, older)
+        val result = BoardLogic.mergeSubtasks(listOf(Lane("lane", tasks = shuffled)), emptyList())
+        assertEquals(listOf("z", "a", "b", "p"), result.single().tasks.map { it.id })
+    }
     private fun t(id: String, title: String = id, lane: String = "L1", parent: String? = null, who: String? = null) =
         BoardTask(id, title, taskListId = lane, parentId = parent, assignees = listOfNotNull(who?.let { Assignee(user = UserRef(name = it)) }))
 

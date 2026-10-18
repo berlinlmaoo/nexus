@@ -33,6 +33,7 @@ private fun ApiError.conflictOrVault(res: Resources): String? {
         "ASSIGNEES_CHANGED" -> R.string.r21_assignees_changed
         "DESCRIPTION_CHANGED", "DOC_CHANGED", "FORM_CHANGED" -> R.string.r21_text_changed
         "SHEET_STRUCTURE_CHANGED" -> R.string.r21_sheet_changed
+        "REORDER_ANCHOR_GONE" -> R.string.r21_reorder_changed
         "TOO_MANY_TAGS" -> R.string.r21_tags_limit
         "VAULT_FULL" -> R.string.r21_vault_full
         "FOLDER_GONE" -> R.string.r21_folder_gone

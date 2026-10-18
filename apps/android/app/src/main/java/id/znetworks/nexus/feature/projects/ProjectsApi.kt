@@ -281,9 +281,10 @@ class ProjectsApi(private val api: ApiClient) {
             putJsonArray("auditLogIds") { auditLogIds.forEach { add(JsonPrimitive(it)) } }
         })).let { BatchResult(it.restored, it.failed) }
 
-    /** A column's top-level order, top first (manual order). */
-    suspend fun reorder(taskListId: String, orderedIds: List<String>, movedId: String?) = post("/api/tasks/reorder", buildJsonObject {
-        put("taskListId", taskListId); putJsonArray("orderedIds") { orderedIds.forEach { add(JsonPrimitive(it)) } }; movedId?.let { put("movedId", it) }
+    /** A relative move applied to the server's current column order; null anchor means the end. */
+    suspend fun reorder(taskListId: String, movedIds: List<String>, beforeId: String? = null) = post("/api/tasks/reorder", buildJsonObject {
+        put("taskListId", taskListId); putJsonArray("movedIds") { movedIds.forEach { add(JsonPrimitive(it)) } }
+        put("beforeId", beforeId?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
     })
 
     /** The copy's id (`{task, copiedTo}`). */

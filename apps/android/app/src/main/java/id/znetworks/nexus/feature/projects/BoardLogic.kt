@@ -2,19 +2,21 @@ package id.znetworks.nexus.feature.projects
 
 /** The board's pure rules, ported from iOS ProjectBoardView (mergeSubtasks, matches). */
 object BoardLogic {
+    val taskOrder = compareBy<BoardTask>({ it.position ?: Int.MAX_VALUE }, { it.createdAt.orEmpty() }, { it.id })
 
     /**
      * Subtasks (from `GET /api/tasks?projectId=`) placed right under their parent in their own lane;
      * orphans (parent in another lane) at the lane's end. Each gets its parent's title.
      */
     fun mergeSubtasks(lanes: List<Lane>, all: List<BoardTask>): List<Lane> {
+        val ordered = lanes.map { it.copy(tasks = it.tasks.sortedWith(taskOrder)) }
         val titles = all.associate { it.id to it.title } + lanes.flatMap { it.tasks }.associate { it.id to it.title }
         val subsByLane = all.filter { it.isSubtask && !it.taskListId.isNullOrBlank() }
             .map { it.copy(parentTitle = titles[it.parentId]) }
             .groupBy { it.taskListId!! }
-        if (subsByLane.isEmpty()) return lanes
-        return lanes.map { lane ->
-            val subs = subsByLane[lane.id].orEmpty()
+        if (subsByLane.isEmpty()) return ordered
+        return ordered.map { lane ->
+            val subs = subsByLane[lane.id].orEmpty().sortedWith(taskOrder)
             if (subs.isEmpty()) return@map lane
             val parents = lane.tasks.filterNot { it.isSubtask }
             val parentIds = parents.map { it.id }.toSet()

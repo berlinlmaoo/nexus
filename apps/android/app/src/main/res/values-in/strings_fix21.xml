@@ -1,4 +1,5 @@
 <resources>
+    <string name="r21_reorder_changed">Task di sebelah tempat tujuan sudah dipindah atau dihapus. Muat ulang kolom, lalu coba lagi.</string>
     <plurals name="gc_step_count"><item quantity="other">✓ %1$d langkah</item></plurals>
     <string name="gc_ai_disclaimer">GIDEON adalah AI dan bisa keliru. Periksa lagi informasi penting.</string>
     <string name="gc_review_notice">Chat GIDEON bisa ditinjau oleh anggota BoD untuk keperluan kerja.</string>
