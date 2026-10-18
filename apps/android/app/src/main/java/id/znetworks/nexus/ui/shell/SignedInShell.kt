@@ -279,7 +279,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Inbox -> { openInbox(); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
-            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}" + (t.view?.let { "?view=${enc(it)}" } ?: "")) }
+            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}?view=${enc(t.view.orEmpty())}&date=${enc(t.date.orEmpty())}") }
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${enc(t.id)}") }
             is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=${enc(it)}" } ?: "threads") }
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/${enc(it)}" } ?: "tickets") }
@@ -570,7 +570,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 MoreScreen(session, shellLogout, onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } },
                     tabs = if (sidebar) emptySet() else tabs.map { it.route }.toSet())
             }
-            composable("project/{id}?view={view}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null })) { entry ->
+            composable("project/{id}?view={view}&date={date}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null }, androidx.navigation.navArgument("date") { nullable = true; defaultValue = null })) { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
@@ -579,6 +579,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
                     onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
                     initialView = entry.arguments?.getString("view"),
+                    initialDate = entry.arguments?.getString("date"),
                     onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {

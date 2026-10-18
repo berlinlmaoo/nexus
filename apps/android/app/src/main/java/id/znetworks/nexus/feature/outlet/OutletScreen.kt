@@ -117,7 +117,9 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     /** A reload keeps what is on screen; only a first load says it failed. */
     fun load() = viewModelScope.launch {
         try {
-            val d = api.month(projectId, _state.value.month)
+            val requested = _state.value.month
+            val d = api.month(projectId, requested)
+            if (_state.value.month != requested && _state.value.month != d.month) return@launch
             _state.update { s -> s.copy(data = d, month = d.month, loading = false, error = null, forbidden = false, day = s.day?.takeIf { it.startsWith(d.month) } ?: defaultDay(d)) }
         } catch (e: ApiError) {
             val h = e as? ApiError.Http
@@ -194,10 +196,11 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
 
 /** One Outlet Sales tab of the project screen; all four share the month and the chosen day. */
 @Composable
-fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, vm: OutletViewModel = viewModel()) {
+fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? = null, vm: OutletViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
+    LaunchedEffect(initialDay) { initialDay?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }?.let { vm.pickDay(it.toString()) } }
     // A ping on the project room: refetch whatever month is shown (an event may have moved between months).
     LiveRefresh(vm.projectId, liveMs = null, fallbackMs = 60_000,
         matches = { it.name == RealtimeEvents.OUTLET_SALES_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }

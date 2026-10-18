@@ -100,6 +100,7 @@ enum class StudioTab { QUESTIONS, SETTINGS, SHARE, RESPONSES }
 
 data class BuilderState(
     val canEdit: Boolean = false,
+    val conflict: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
     val projectName: String = "",
@@ -148,10 +149,10 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
     init { load() }
 
     private fun describe(e: Throwable): String =
-        (e as? ApiError.Http)?.serverMessage ?: (e as? ApiError)?.describe(res) ?: res.getString(R.string.fs_try_moment)
+        (e as? ApiError)?.describe(res) ?: res.getString(R.string.fs_try_moment)
 
     fun load() = viewModelScope.launch {
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, error = null, conflict = false) }
         if (openedId != null) {
             try {
                 val f = api.builderForms(projectId).firstOrNull { it.id == openedId }
@@ -180,7 +181,8 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
         val id = _state.value.formId
         val changes = FormStudioLogic.payload(snap, base, creating = id == null, untitled = res.getString(R.string.fs_untitled_form))
         val body = JsonObject(changes + if (id != null && baseUpdatedAt != null) mapOf("baseUpdatedAt" to baseUpdatedAt!!) else emptyMap())
-        val out = if (id != null) api.updateForm(id, body) else api.createForm(JsonObject(body + ("projectId" to JsonPrimitive(projectId))))
+        val out = try { if (id != null) api.updateForm(id, body) else api.createForm(JsonObject(body + ("projectId" to JsonPrimitive(projectId)))) }
+        catch (e: ApiError.Http) { if (e.code == "FORM_CHANGED") _state.update { it.copy(conflict = true) }; throw e }
         if (id == null && autosave.stopped) {
             // Discarded while it was being created: don't leave it behind.
             runCatching { api.deleteForm(out.id, force = false) }
@@ -307,6 +309,7 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
     var tab by rememberSaveable { mutableStateOf(StudioTab.QUESTIONS) }
     var openField by rememberSaveable { mutableStateOf<String?>(null) }
     var duplicating by remember { mutableStateOf(false) }
+    var reloadLatest by remember { mutableStateOf(false) }
     LaunchedEffect(s.done) { if (s.done) onBack() }
     BackHandler(onBack = onBack)
     val untitled = stringResource(R.string.fs_untitled_form)
@@ -330,6 +333,10 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
             }
         }
         if (!s.loading && s.error == null) {
+            if (save is FormSaveState.Failed) Row(Modifier.fillMaxWidth().background(c.warning.copy(alpha = 0.08f)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text((save as FormSaveState.Failed).message, color = c.warningFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                if (s.conflict) TextButton(onClick = { reloadLatest = true }) { Text(stringResource(R.string.r21_load_latest)) }
+            }
             val tabs = listOf(PageTab(StudioTab.QUESTIONS, stringResource(R.string.fs_tab_questions)), PageTab(StudioTab.SETTINGS, stringResource(R.string.fs_tab_settings)),
                 PageTab(StudioTab.SHARE, stringResource(R.string.fs_tab_share)),
                 PageTab(StudioTab.RESPONSES, stringResource(R.string.fr_title), count = s.responseCount.takeIf { it > 0 }))
@@ -376,6 +383,10 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
     }
     s.alert?.let { a -> StudioAlertDialog(a, vm) }
     if (duplicating) DuplicateDialog(s.draft.name, { vm.otherProjects() }, onDismiss = { duplicating = false }) { name, target -> duplicating = false; vm.duplicate(name, target) }
+    if (reloadLatest) androidx.compose.material3.AlertDialog(onDismissRequest = { reloadLatest = false },
+        title = { Text(stringResource(R.string.r21_load_latest)) }, text = { Text(stringResource(R.string.r21_discard_draft)) },
+        confirmButton = { TextButton(onClick = { reloadLatest = false; vm.load() }) { Text(stringResource(R.string.r21_load_latest)) } },
+        dismissButton = { TextButton(onClick = { reloadLatest = false }) { Text(stringResource(R.string.cancel)) } })
 }
 
 @Composable

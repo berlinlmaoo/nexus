@@ -247,7 +247,7 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 (0 until 7).forEach { i ->
                     val day = week.getOrNull(i)
-                    Box(Modifier.weight(1f).height(44.dp)) {
+                    Box(Modifier.weight(1f).height(44.dp).background(if (i >= 5) c.muted.copy(alpha = 0.4f) else Color.Transparent)) {
                         if (day != null) {
                             val on = selected == day
                             val has = byDay[day].orEmpty().isNotEmpty()
@@ -259,7 +259,7 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
-                                Text("$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
+                                Text(if (day == 1) DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else c.foreground)
                                 Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
                             }
                         }
@@ -381,6 +381,9 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
         Box(Modifier.width(1.dp).height(bodyH).background(c.border))
         Box(Modifier.weight(1f).horizontalScroll(h)) {
             Box(Modifier.width(dayW * dayCount).height(bodyH)) {
+                days.filter { it.dayOfWeek == DayOfWeek.SATURDAY || it.dayOfWeek == DayOfWeek.SUNDAY }.forEach { day ->
+                    Box(Modifier.offset(x = x(day), y = 74.dp).width(dayW).height(bodyH - 74.dp).background(c.muted.copy(alpha = 0.3f)))
+                }
                 Column(Modifier.fillMaxSize()) {
                     // Month row, then weekday + date (weekends tinted, today in a filled circle).
                     Row(Modifier.height(32.dp)) {
@@ -398,7 +401,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                             Column(Modifier.width(dayW).fillMaxHeight().background(if (weekend) c.muted.copy(alpha = 0.5f) else Color.Transparent),
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                 Text(d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()), fontSize = 10.sp, color = c.mutedFg)
-                                Box(Modifier.size(20.dp).background(if (isToday) c.onyx else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
+                                  Box(Modifier.size(20.dp).background(if (isToday) c.violet else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
                                     Text("${d.dayOfMonth}", fontSize = 11.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) c.background else c.mutedFg)
                                 }
                             }
@@ -422,7 +425,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                     }
                 }
                 // Today's line down the body, at the centre of its column.
-                Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.onyx.copy(alpha = 0.55f)))
+                Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.violet.copy(alpha = 0.65f)))
             }
         }
     }

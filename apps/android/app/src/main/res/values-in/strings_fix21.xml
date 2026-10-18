@@ -1,4 +1,6 @@
 <resources>
+    <string name="r21_load_latest">Muat versi terbaru</string>
+    <string name="r21_discard_draft">Ganti draf yang belum disimpan dengan versi tersimpan terbaru?</string>
     <string name="r21_copy_project">Salin ke proyek lain</string>
     <string name="r21_copy">Salin</string>
     <string name="r21_tags_help">Pisahkan tag dengan koma (maksimal 20).</string>

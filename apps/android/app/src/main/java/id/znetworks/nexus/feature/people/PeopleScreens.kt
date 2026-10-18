@@ -187,11 +187,14 @@ private fun Podium(top: List<List<BoardRow>>) {
                 val st = style(rank)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) {
-                        Row {
+                        if (entry.size == 1) Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r?.name, r?.avatar, st.avatar) }
+                        else Box(Modifier.width((32 + (entry.take(3).size - 1).coerceAtLeast(0) * 18 + if (entry.size > 3) 18 else 0).dp).height(36.dp)) {
                             entry.take(3).forEachIndexed { i, person ->
-                                Box(Modifier.offset(x = (-8 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, if (entry.size == 1) st.avatar else 28.dp) }
+                                Box(Modifier.offset(x = (18 * i).dp).border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(person.name, person.avatar, 28.dp) }
                             }
-                            if (entry.size > 3) Text("+${entry.size - 3}", fontSize = 11.sp, color = c.mutedFg)
+                            if (entry.size > 3) Box(Modifier.offset(x = 54.dp).size(32.dp).background(c.card, CircleShape).border(2.dp, st.ring, CircleShape), contentAlignment = Alignment.Center) {
+                                Text("+${entry.size - 3}", fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
+                            }
                         }
                         if (entry.size == 1) Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
                             contentAlignment = Alignment.Center) { Icon(Icons.Outlined.WorkspacePremium, null, tint = st.crown, modifier = Modifier.size(14.dp)) }

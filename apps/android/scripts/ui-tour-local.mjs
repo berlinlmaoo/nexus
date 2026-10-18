@@ -80,7 +80,7 @@ const routes={dashboard:'home','my-tasks':'tasks',calendar:'calendar',messages:'
   'form-builder':form?'form-builder/'+project+'?form='+form:null,
   'legal-archive':'legal?tab=documents','legal-document':doc?'legal-doc/'+doc:null,'legal-templates':'legal?tab=templates',
   'legal-requests':'legal?tab=requests','legal-settings':'legal?tab=settings',
-  'legal-request-form':legalLink?.token?'legal-request-form/'+legalLink.token:null};
+  'legal-request-form':legalLink?.path?'legal-request-form/'+legalLink.path.split('/f/legal-')[1]:null};
 for(const view of ['overview','board','list','table','calendar','timeline']) routes['project-'+view]=project?'project/'+project+'?view='+view:null;
 for(const view of ['overview','calendar','day','settings']) routes['outlet-'+view]=outlet?'project/'+outlet+'?view='+(['overview','settings'].includes(view)?'overview':'calendar'):null;
 const only=arg('only')?.split(',');
@@ -97,6 +97,7 @@ for(const screen of config.screens) {
     let actionResult;
     if(screen.id==='project-templates') {
       await tap('Add|Tambah'); actionResult=await tap('New project|Proyek baru');
+      if(!actionResult) { await pause(1200);actionResult=await tap('New project|Proyek baru'); }
     } else if(screen.id==='settings-security') actionResult=await tap('Security|Keamanan');
     else if(screen.id==='outlet-settings') actionResult=await tap('Report settings|Pengaturan laporan');
     else if(screen.id==='outlet-day') {

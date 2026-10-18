@@ -9,6 +9,14 @@ import kotlinx.serialization.json.booleanOrNull
 // Project types, per-project tabs, named icons (owner, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
 
 object ProjectTabsLogic {
+    fun outletLink(key: String): ProjectTab? = when (key.lowercase()) {
+        "overview" -> ProjectTab.OUTLET_OVERVIEW
+        "calendar" -> ProjectTab.OUTLET_CALENDAR
+        "board" -> ProjectTab.OUTLET_BOARD
+        "form", "forms" -> ProjectTab.OUTLET_FORM
+        "chat" -> ProjectTab.CHAT
+        else -> null
+    }
     /**
      * The server's tab keys, in tab-bar order ("table" = the task grid, "sheet" = the Spreadsheet, 13 Oct). "sprints" is
      * retired (SPRINTS-OVERVIEW, 11 Oct): an old project's hidden "sprints" is kept as an unknown key and ignored.

@@ -16,7 +16,7 @@ sealed interface Target {
     /** A top-level tab by route ("tasks", "projects"). */
     data class Tab(val route: String) : Target
     /** [view]: a link's `?view=` (board, list, table, calendar, timeline, overview, forms…). */
-    data class Project(val id: String, val view: String? = null) : Target
+    data class Project(val id: String, val view: String? = null, val date: String? = null) : Target
     data class Task(val id: String) : Target
     /** Messages: the list, or one conversation. */
     data class Chat(val conversationId: String?) : Target
@@ -101,7 +101,7 @@ object Links {
         val query = rest.substringAfter('?', "").takeIf { '?' in rest }
         // nexus://projects/<id>?view=board (iOS TourDriver routes): the project, on that view.
         val sub = rest.substringBefore('?').substringAfter('/', "").trimEnd('/')
-        if (screen == "projects" && sub.isNotEmpty() && '/' !in sub) return Target.Project(sub, queryMap(query)["view"])
+        if (screen == "projects" && sub.isNotEmpty() && '/' !in sub) return Target.Project(sub, queryMap(query)["view"], queryMap(query)["date"])
         return parsePath("/$screen", query)
     }
 
@@ -121,7 +121,7 @@ object Links {
             // The deeper id wins: /projects/<p>/tasks/<t> is the task.
             Regex("^/projects/[^/]+/tasks/([^/]+)$").matches(p) -> Target.Task(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/tasks/([^/]+)$").matches(p) -> Target.Task(path.trimEnd('/').substringAfterLast('/'))
-            Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'), q["v"] ?: q["view"])
+            Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'), q["v"] ?: q["view"], q["date"])
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/dashboard" -> Target.Tab("home")
             Regex("^/people/([^/]+)$").matches(p) -> Target.Profile(path.trimEnd('/').substringAfterLast('/'))

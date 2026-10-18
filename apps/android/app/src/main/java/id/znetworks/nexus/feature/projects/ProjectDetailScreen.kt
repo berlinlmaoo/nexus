@@ -477,6 +477,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                         /** Projects (a project that is gone). */ onOpenProjects: () -> Unit = onBack,
                         /** A link's `?view=`: a layout (board, list, table, calendar, timeline), overview or a module tab (forms, sheet…). */
                         initialView: String? = null,
+                        initialDate: String? = null,
                         vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
@@ -555,6 +556,10 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
         if (linkApplied || s.detail == null || s.views == null) return@LaunchedEffect
         linkApplied = true; templateOpenedGuard = true
         val want = initialView!!.lowercase()
+        if (s.detail?.type == "OUTLET_SALES") {
+            ProjectTabsLogic.outletLink(want)?.takeIf { it in tabs }?.let { tab = it }
+            return@LaunchedEffect
+        }
         when (want) {
             "overview" -> tab = ProjectTab.OVERVIEW
             "forms" -> tab = ProjectTab.FORMS
@@ -683,7 +688,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                         ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
                                         ProjectTab.OUTLET_BOARD to id.znetworks.nexus.feature.outlet.OutletView.BOARD,
                                         ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
-                                    id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key })
+                                    id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key }, initialDay = initialDate)
                                 }
                                 ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
                                 ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
