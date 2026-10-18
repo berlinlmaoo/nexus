@@ -456,10 +456,10 @@ enum GideonTier: String, CaseIterable, Identifiable, Sendable {
 
     var label: String {
         switch self {
-        case .astra: return "Astra"
-        case .luna: return "Luna"
-        case .terra: return "Terra"
-        case .experimental: return "Experimental"
+        case .astra: return "Artemis"
+        case .luna: return "Phaëthon"
+        case .terra: return "Aphrodite"
+        case .experimental: return "Model 0"
         }
     }
 

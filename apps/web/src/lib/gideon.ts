@@ -7,15 +7,16 @@ import { useSyncExternalStore } from "react";
 import { getLang } from "@/lib/lang";
 import { ApiError } from "@/lib/nexus-api";
 
-/** The three GIDEON tiers. Which model each one runs is decided on the server side. */
+/** GIDEON tiers. Display names are GIDEON's own (owner, 18 Oct 2026: not GPT's); the ids stay for older apps. Which
+ *  model each one runs is decided in the shim (astra = Artemis, luna = Phaëthon, the default, terra = Aphrodite). */
 export const GIDEON_TIERS = [
-  { id: "astra", name: "Astra", blurb: "Deepest. For analysis and decisions." },
-  { id: "luna", name: "Luna", blurb: "Everyday work." },
-  { id: "terra", name: "Terra", blurb: "Light. Short questions." },
+  { id: "astra", name: "Artemis", blurb: "Deepest. For analysis and decisions." },
+  { id: "luna", name: "Phaëthon", blurb: "Everyday work." },
+  { id: "terra", name: "Aphrodite", blurb: "Light. Short questions." },
   // Runs on the RTX 5070 in the office, not on anybody's API. Measurably weaker than the hosted
   // tiers — it got a task count wrong that Luna got right — so the label says experimental and
   // means it.
-  { id: "experimental", name: "Experimental", blurb: "Local model in the office. Slow and can be wrong." },
+  { id: "experimental", name: "Model 0", blurb: "Local model in the office. Slow and can be wrong." },
 ] as const;
 
 export type GideonTier = (typeof GIDEON_TIERS)[number]["id"];
