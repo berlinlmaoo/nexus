@@ -111,5 +111,7 @@ export async function POST(req: NextRequest) {
     }
   })()
 
-  return new Response(stream.readable, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" } })
+  // No `Connection` header: hop-by-hop, Node owns it (see the note in ../route.ts: forcing keep-alive made
+  // the next request on the proxied connection fail with 400).
+  return new Response(stream.readable, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" } })
 }
