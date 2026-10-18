@@ -58,6 +58,19 @@ export const fetchGideonReviewTranscript = (userId: string, chatId: string, befo
     `/api/gideon/people/${encodeURIComponent(userId)}/chats/${encodeURIComponent(chatId)}${before ? `?before=${encodeURIComponent(before)}` : ""}`,
   );
 
+// ── GIDEON Memory (19 Oct 2026) ─────────────────────────────────────────────────────────────────────────
+// Only ever the signed-in person's own memories (server: src/app/api/gideon/memory, lib/gideon-memory.ts).
+
+export type GideonMemoryState = { paused: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[] };
+export const GIDEON_MEMORY_KEY = ["gideon-memory"] as const;
+export const getGideonMemory = () => gjson<GideonMemoryState>("/api/gideon/memory");
+export const addGideonMemory = (p: { text: string; kind?: string; date?: string | null }) => gjson<{ memory: import("@/lib/gideon").GideonMemory }>("/api/gideon/memory", { method: "POST", body: JSON.stringify(p) });
+export const setGideonMemoryPaused = (paused: boolean) => gjson<GideonMemoryState>("/api/gideon/memory", { method: "PATCH", body: JSON.stringify({ paused }) });
+export const forgetAllGideonMemory = () => gjson<{ deleted: number }>("/api/gideon/memory", { method: "DELETE" });
+export const updateGideonMemory = (id: string, p: { text?: string; kind?: string; date?: string | null; status?: "ACTIVE" }) =>
+  gjson<{ memory: import("@/lib/gideon").GideonMemory }>(`/api/gideon/memory/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(p) });
+export const deleteGideonMemory = (id: string) => gjson<{ deleted: boolean }>(`/api/gideon/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+
 // ── Personalize ────────────────────────────────────────────────────────────────────────────────────────
 
 /** reviewNotice: show the one-time "chats can be reviewed by the BoD" notice (until dismissed with reviewNoticeSeen). */

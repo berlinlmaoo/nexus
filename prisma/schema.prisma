@@ -3652,7 +3652,42 @@ model GideonPreference {
   /// When the person dismissed the one-time notice "GIDEON chats can be reviewed by members of the Board of
   /// Directors for work purposes." (18 Oct 2026, UU PDP transparency). Null = still to be shown.
   reviewNoticeSeenAt DateTime?
+  /// GIDEON Memory paused (19 Oct 2026): nothing new is remembered and nothing remembered is used, until resumed.
+  memoryPaused  Boolean  @default(false)
   updatedAt     DateTime @default(now()) @updatedAt
+}
+
+/// GIDEON Memory (owner, 19 Oct 2026): what GIDEON remembers about ONE person so it can be personal with them
+/// (how to address them, language, answer length, role/projects they focus on, working hours, dates they chose to
+/// share, things they asked it to remember). Read ONLY into that person's own private chat prompt and shown ONLY to
+/// them (Settings › GIDEON Memory): not to OAA/BoD, not through any tool about other people, not in @GIDEON
+/// mentions, digests or the editor. lib/gideon-memory.ts. userId is a DB foreign key (cascade) without a Prisma
+/// relation, like GideonChat; offboarding and account deletion delete the rows explicitly (the User row stays).
+model GideonMemory {
+  id           String    @id @default(uuid(7))
+  userId       String
+  /// PREFERENCE | FACT | PERSON | DATE
+  kind         String    @default("FACT")
+  text         String
+  /// Normalised text. One live memory per (userId, textKey): DB-ONLY partial unique index
+  /// "GideonMemory_user_text_live_key" WHERE "deletedAt" IS NULL (Prisma cannot express a partial unique).
+  textKey      String
+  /// "MM-DD" for a DATE memory (a birthday), so GIDEON can greet them on that day.
+  monthDay     String?
+  /// ACTIVE (used in their prompts) | PENDING (GIDEON suggested it; waits for Save / Don't save in the chat)
+  status       String    @default("ACTIVE")
+  /// CHAT (from a chat) | SETTINGS (typed in GIDEON Memory)
+  source       String    @default("CHAT")
+  sourceChatId String?
+  sourceRunId  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  /// Soft delete ("forget"): never used or shown again; purged for good after 30 days (cron purge-sheet-revisions).
+  deletedAt    DateTime?
+
+  @@index([userId, status, deletedAt])
+  @@index([sourceRunId])
+  @@index([deletedAt])
 }
 
 /// AI Autofill on a project custom field (Notion "AI Autofill"): GIDEON fills the field from the task.

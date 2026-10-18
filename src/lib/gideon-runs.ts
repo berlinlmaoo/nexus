@@ -7,6 +7,7 @@ import { createLogger } from "@/lib/logger"
 import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
 import { resolveRoomName } from "@/lib/room-booking-rooms"
 import { createTaskNeedsProject, type TaskTargetProject } from "@/lib/gideon-task-target"
+import { memoryView, type MemoryView } from "@/lib/gideon-memory"
 
 /**
  * GIDEON runs (owner, 12 Oct 2026 — "GIDEON replies like Notion's agent").
@@ -174,13 +175,15 @@ export type GideonTaskDeleteView = {
   auditLogId: string | null
 }
 export type GideonStepView = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null }
-export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[] }
+/** memories (19 Oct 2026): what this answer saved or suggested to GIDEON Memory (the Save / Don't save chip). Owner-only. */
+export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[]; memories?: MemoryView[] }
 
 export type RunEvent =
   | { type: "step"; step: GideonStepView }
   | { type: "sources"; sources: GideonRef[] }
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposalView }
+  | { type: "memory"; memory: MemoryView }
 
 // ── Bus ───────────────────────────────────────────────────────────────────────────────────────────────
 // globalThis, not a module variable: Next bundles each route separately, and the chat route and the tools
@@ -320,6 +323,9 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "move_room_booking": return a ? `Moving booking ${a}` : "Moving a booking"
     case "cancel_room_booking": return a ? `Cancelling booking ${a}` : "Cancelling a booking"
     case "delete_task": return a ? `Deleting task ${a}` : "Deleting a task"
+    case "remember": return "Remembering"
+    case "forget": return "Forgetting"
+    case "list_my_memories": return "Checking GIDEON Memory"
     default: return extraStepLabel(tool, a) ?? tool.replace(/_/g, " ")
   }
 }
@@ -605,9 +611,10 @@ export function citedRefs(reply: string, refs: GideonRef[]): GideonRef[] {
  * `citedBy` (the reply): keep only the sources it cites (citedRefs), before the cap of 20.
  */
 export async function runMeta(runId: string, opts: { citedBy?: string } = {}): Promise<GideonRunMeta> {
-  const [steps, proposals] = await Promise.all([
+  const [steps, proposals, memories] = await Promise.all([
     prisma.gideonRunStep.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
     prisma.gideonProposal.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
+    prisma.gideonMemory.findMany({ where: { sourceRunId: runId }, orderBy: { createdAt: "asc" } }).catch(() => []),
   ])
   const sources: GideonRef[] = []
   const cards: GideonCard[] = []
@@ -622,6 +629,7 @@ export async function runMeta(runId: string, opts: { citedBy?: string } = {}): P
     sources: (opts.citedBy !== undefined ? citedRefs(opts.citedBy, sources) : sources).slice(0, 20),
     cards,
     proposals: proposals.map(proposalView),
+    ...(memories.length ? { memories: memories.map(memoryView) } : {}),
   }
 }
 

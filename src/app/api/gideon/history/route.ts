@@ -8,6 +8,7 @@ import prisma from '@/lib/prisma'
 import { parseGideonAttachments } from '@/lib/gideon-attachments'
 import { softDeleteGideonChats } from '@/lib/gideon-chat-retention'
 import { proposalView, type GideonRunMeta } from '@/lib/gideon-runs'
+import { memoryView } from '@/lib/gideon-memory'
 
 // Newest N turns are enough to resume a conversation; older ones stay in the table but are not
 // shipped to the client (keeps the payload and the prompt context bounded).
@@ -44,11 +45,16 @@ export async function GET(req: Request) {
     const proposals = runIds.length
       ? await prisma.gideonProposal.findMany({ where: { runId: { in: runIds } }, orderBy: { createdAt: 'asc' } })
       : []
+    // GIDEON Memory chips (19 Oct 2026) likewise: Saved / Not saved since, or edited in Settings.
+    const memories = runIds.length
+      ? await prisma.gideonMemory.findMany({ where: { userId: session.user.id, sourceRunId: { in: runIds } }, orderBy: { createdAt: 'asc' } })
+      : []
     const metaOf = (row: { runId: string | null; meta: unknown }) => {
       if (!row.meta || typeof row.meta !== 'object') return null
       const meta = row.meta as GideonRunMeta
       const mine = proposals.filter((p) => p.runId === row.runId).map(proposalView)
-      return { ...meta, proposals: mine.length ? mine : (meta.proposals ?? []) }
+      const mems = memories.filter((m) => m.sourceRunId === row.runId).map(memoryView)
+      return { ...meta, proposals: mine.length ? mine : (meta.proposals ?? []), ...(mems.length ? { memories: mems } : {}) }
     }
     // Fetched newest-first to apply the cap, rendered oldest-first.
     //
