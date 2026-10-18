@@ -165,6 +165,10 @@ struct TourDriver: ViewModifier {
         }
         // Let the signed-in shape (tab bar or sidebar) mount before asking it to move.
         try? await Task.sleep(for: .milliseconds(1200))
+        if let origin = TourMode.argument("nexusTourOrigin"), let url = URL(string: origin) {
+            open(url)
+            try? await Task.sleep(for: .milliseconds(1500))
+        }
         if let route = TourMode.argument("nexusTourRoute"), let url = URL(string: route) {
             // A project route without its id (an empty TOUR_PROJECT_ID, run 3) opens the Projects list;
             // that is a wrong screen, not a picture of the project.

@@ -206,5 +206,6 @@ extension AppLanguage {
         "New field": "Field baru",
         "Project duplicated": "Project diduplikat",
         "Experimental": "Eksperimental",
+        "Starting the microphone…": "Menyiapkan mikrofon…",
     ]
 }

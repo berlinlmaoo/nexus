@@ -1449,6 +1449,7 @@ struct CalendarView: View {
                         }
                         .nexusCard(padding: 10, radius: 18)
                     }
+                    if !lensByPerson { noDivisionSection(tree) }
                     if placementsShown(root) > tree.total {
                         Text(String(format: T("A task can show under several divisions. Total: %d unique tasks."), tree.total))
                             .font(NXFont.text(CalType.size(11.5))).foregroundStyle(NX.mutedFg)
@@ -1459,6 +1460,22 @@ struct CalendarView: View {
     }
 
     /// The viewer's own row first; everyone else keeps the order the rules gave them.
+    @ViewBuilder private func noDivisionSection(_ tree: CalDayTree) -> some View {
+        let rows = tree.unplaced.compactMap { row -> CalPersonRow? in
+            let items = row.items.filter { $0.placements.isEmpty }
+            return items.isEmpty ? nil : CalPersonRow(userId: row.userId, items: items)
+        }
+        if !rows.isEmpty {
+            let count = Set(rows.flatMap { $0.items.map(\.key) }).count
+            VStack(alignment: .leading, spacing: 4) {
+                Text((T("No division") + " · " + AppNumber.int(count)).uppercased()).calCaps().foregroundStyle(NX.mutedFg).accessibilityAddTraits(.isHeader)
+                ForEach(viewerFirst(rows), id: \.userId) { row in
+                    CalPersonBlock(row: row, unitId: nil, ix: ix, people: people, today: today, now: now, windowDays: windowDays, onOpen: openItem)
+                }
+            }.nexusCard(padding: 10, radius: 18)
+        }
+    }
+
     private func viewerFirst(_ rows: [CalPersonRow]) -> [CalPersonRow] {
         guard let me = auth.session?.userId, let at = rows.firstIndex(where: { $0.userId == me }), at > 0 else { return rows }
         var out = rows

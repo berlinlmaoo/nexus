@@ -5,6 +5,8 @@ import Observation
 @MainActor @Observable
 final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     static let shared = MeetingRecorder()
+    private(set) var preparing = false
+    @ObservationIgnored private var preparationEpoch = UUID()
     private(set) var recording = false
     private(set) var paused = false
     private(set) var elapsed: Double = 0
@@ -44,27 +46,42 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
         }
     }
     func start() async {
-        guard !recording, !paused else { return }
-        failure = nil; notice = nil
+        guard !recording, !paused, !preparing else { return }
+        preparing = true; failure = nil; notice = nil
+        let epoch = UUID(); preparationEpoch = epoch
+        let expectedOwner = Keychain.load()?.userId
+        defer { preparing = false }
         let allowed = await withCheckedContinuation { continuation in AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) } }
+        guard epoch == preparationEpoch, expectedOwner == Keychain.load()?.userId else { return }
         guard allowed else { failure = T("Microphone access was blocked. Allow it in Settings, then try again."); return }
+        let maxSeconds = Double(RemoteConfig.shared.meetingMaxMinutes * 60)
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record)
-            // Some input routes don't offer spokenAudio; retain a supported recording mode there.
-            if session.availableModes.contains(.spokenAudio) { try session.setMode(.spokenAudio) }
-            try session.setActive(true)
-            let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MeetingRecordings", isDirectory: true)
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let file = folder.appendingPathComponent("Meeting-" + UUID().uuidString + ".m4a")
-            let recorder = try AVAudioRecorder(url: file, settings: [AVFormatIDKey:kAudioFormatMPEG4AAC, AVSampleRateKey:44_100, AVNumberOfChannelsKey:1, AVEncoderBitRateKey:40_000, AVEncoderAudioQualityKey:AVAudioQuality.medium.rawValue])
-            recorder.delegate = self
-            guard recorder.prepareToRecord(), recorder.record(forDuration: Double(RemoteConfig.shared.meetingMaxMinutes * 60)) else { throw APIError.transport(T("Couldn't start recording. Try again.")) }
-            self.recorder = recorder; self.file = file; elapsed = 0; owner = Keychain.load()?.userId
-            limit = Double(RemoteConfig.shared.meetingMaxMinutes * 60); recording = true; paused = false
+            // Activating an input route and preparing an encoder can wait on Core Audio.
+            // Transfer the prepared recorder once; subsequent recorder access stays on MainActor.
+            let prepared = try await Task.detached(priority: .userInitiated) {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record)
+                if session.availableModes.contains(.spokenAudio) { try session.setMode(.spokenAudio) }
+                try session.setActive(true)
+                let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MeetingRecordings", isDirectory: true)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let file = folder.appendingPathComponent("Meeting-" + UUID().uuidString + ".m4a")
+                let recorder = try AVAudioRecorder(url: file, settings: [AVFormatIDKey:kAudioFormatMPEG4AAC, AVSampleRateKey:44_100, AVNumberOfChannelsKey:1, AVEncoderBitRateKey:40_000, AVEncoderAudioQualityKey:AVAudioQuality.medium.rawValue])
+                guard recorder.prepareToRecord() else { throw APIError.transport(T("Couldn't start recording. Try again.")) }
+                return (recorder, file)
+            }.value
+            guard epoch == preparationEpoch, expectedOwner == Keychain.load()?.userId else {
+                prepared.0.stop(); try? FileManager.default.removeItem(at: prepared.1); deactivate(); return
+            }
+            prepared.0.delegate = self
+            guard prepared.0.record(forDuration: maxSeconds) else { throw APIError.transport(T("Couldn't start recording. Try again.")) }
+            recorder = prepared.0; file = prepared.1; elapsed = 0; owner = expectedOwner
+            limit = maxSeconds; recording = true; paused = false
             saveDraft(); tick()
-        } catch { failure = error.localizedDescription }
+        } catch { if epoch == preparationEpoch { failure = error.localizedDescription }; deactivate() }
     }
+    func cancelPreparation() { preparationEpoch = UUID() }
+    private func deactivate() { Task.detached { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) } }
     func rebindIdentity(from old: String, to new: String) {
         if owner == old { owner = new; saveDraft() }
         else if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == old {
@@ -73,7 +90,7 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
             restoreForCurrentUser()
         }
     }
-    func stopForLogout() { stop(); file = nil; owner = nil }
+    func stopForLogout() { cancelPreparation(); stop(); file = nil; owner = nil }
 
     func pause() {
         guard recording else { return }
@@ -91,20 +108,22 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     func stop() {
         if let time = recorder?.currentTime, time > 0 { elapsed = time }
         recorder?.stop(); saveDraft(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        deactivate()
     }
     private func tick() {
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                self.elapsed = self.recorder?.currentTime ?? self.elapsed
+                let now = self.recorder?.currentTime ?? self.elapsed
+                if Int(now) != Int(self.elapsed) { self.elapsed = now }
                 if self.elapsed >= self.limit { self.stop(); self.notice = T("Maximum recording length reached.") }
             }
         }
     }
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         Task { @MainActor in
+            guard self.recorder === recorder else { return }
             if elapsed >= limit - 1 { notice = T("Maximum recording length reached.") }
             saveDraft(); recording = false; paused = false; ticker?.invalidate(); ticker = nil
             if !flag { failure = T("Recording stopped unexpectedly. The audio file is kept on this device.") }

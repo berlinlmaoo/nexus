@@ -53,6 +53,7 @@ final class NEXUSUITour: XCTestCase {
         let appTab: String?
         /// "legalDoc": tap the row of the looked-up Legal document.
         let appOpen: String?
+        let appOrigin: String?
         /// Buttons the app tour presses in order once the screen is up ("A|B", "?A": see the header).
         let appTaps: [String]?
         /// Targeted interaction checks after opening the page; used by fix-round QA configs.
@@ -202,10 +203,10 @@ final class NEXUSUITour: XCTestCase {
             case .success(let filled):
                 resolved = filled
             }
-            guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") else { continue }
+            guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") || resolved.hasPrefix("file://") else { continue }
             XCTContext.runActivity(named: "Screen \(screen.id)") { _ in
                 let started = Date()
-                launch(step: "screen", screen: screen.id, route: resolved)
+                launch(step: "screen", screen: screen.id, route: resolved, origin: screen.appOrigin)
                 var status = waitForMarker(timeout: 60) {
                     $0.hasPrefix("ready:") || $0.hasPrefix("no-session") || $0.hasPrefix("wrong-screen")
                 }
@@ -635,7 +636,8 @@ final class NEXUSUITour: XCTestCase {
                 pause(1)
             case "type":
                 let field = app.textFields.matching(textMatch).firstMatch
-                let target = field.exists ? field : app.textViews.matching(textMatch).firstMatch
+                let search = app.searchFields.matching(textMatch).firstMatch
+                let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
                 press(target)
                 dismissKeyboardIntroduction()
@@ -875,7 +877,7 @@ final class NEXUSUITour: XCTestCase {
     }
 
     @MainActor
-    private func launch(step: String, screen: String? = nil, route: String? = nil,
+    private func launch(step: String, screen: String? = nil, route: String? = nil, origin: String? = nil,
                         extraEnvironment: [String: String] = [:]) {
         if app.state != .notRunning { app.terminate() }
         var args = [
@@ -888,6 +890,7 @@ final class NEXUSUITour: XCTestCase {
         ]
         if let screen { args += ["-nexusTourScreen", screen] }
         if let route { args += ["-nexusTourRoute", route] }
+        if let origin { args += ["-nexusTourOrigin", origin] }
         if let window = env["TOUR_MAC_WINDOW"], !window.isEmpty { args += ["-nexusTourWindow", window] }
         app.launchArguments = args
         app.launchEnvironment = extraEnvironment
