@@ -1,0 +1,15 @@
+# GIDEON Hermes session retention, PROD (owner, 19 Oct 2026). The prod shim uses the DEFAULT profile
+# (~/.hermes), which also holds Telegram / WhatsApp / api_server gateway sessions, cron runs and Berlin's own
+# CLI sessions — so --scope shim: ONLY source 'cli' sessions started in the shim workdir (cwd .../oracle-workdir)
+# are ever deleted. Idle > 90 days -> deleted; compacts when anything was deleted. Runbook L.31.
+[Unit]
+Description=GIDEON PROD Hermes session retention (90 days, shim sessions only)
+
+[Service]
+Type=oneshot
+User=debian
+Environment=HOME=/home/debian
+Environment=HERMES_HOME=/home/debian/.hermes
+ExecStart=/home/debian/.hermes/hermes-agent/.venv/bin/python /home/debian/gideon/gideon-forget.py retention --days 90 --scope shim
+Nice=10
+IOSchedulingClass=idle
