@@ -102,6 +102,30 @@ final class NEXUSUITour: XCTestCase {
         continueAfterFailure = true
     }
 
+    /// Runs before the normal tour's sign-out, preserving a real pre-migration Keychain session.
+    @MainActor
+    func testRestoredIdentity() throws {
+        app = XCUIApplication()
+        let expected = setting("TOUR_EXPECTED_USER_ID") ?? ""
+        XCTAssertFalse(expected.isEmpty, "Set the canonical profile ID for this DEV check")
+        if let restored = setting("TOUR_RESTORED_SESSION_JSON") {
+            launch(step: "restore-session", extraEnvironment: ["NEXUS_TOUR_RESTORED_SESSION": restored])
+            XCTAssertEqual(waitForMarker(timeout: 30) { $0.hasPrefix("session-restored") }, "session-restored")
+        }
+        launch(step: "screen", screen: "identity-restored", route: "nexus://dashboard")
+        let result = waitForMarker(timeout: 45) { $0.hasPrefix("ready:") || $0.hasPrefix("no-session:") }
+        XCTAssertTrue(result.hasPrefix("ready:"), result)
+        let marker = app.staticTexts["nexus.tour.identity"]
+        XCTAssertTrue(marker.waitForExistence(timeout: 15))
+        let identity = marker.label
+        XCTAssertTrue(identity.contains("current=" + expected), identity)
+        XCTAssertTrue(identity.contains("sameCredentials=true"), identity)
+        if let old = setting("TOUR_EXPECTED_OLD_ID") { XCTAssertTrue(identity.contains("restored=" + old + ";"), identity) }
+        pause(2)
+        snap("identity-restored")
+        persist(Data(identity.utf8), "tour-identity-proof.txt")
+    }
+
     @MainActor
     func testTour() throws {
         app = XCUIApplication()

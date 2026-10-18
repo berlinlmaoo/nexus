@@ -3,18 +3,6 @@ import Security
 
 /// The logged-in session: the NextAuth JWT (issued by /api/auth/app-login) + the cookie name to
 /// send it under, plus the cached user. Persisted in the iOS Keychain so it survives app restarts.
-struct Session: Codable, Sendable {
-    var token: String
-    var cookieName: String
-    var userId: String
-    var userName: String
-    var userEmail: String
-
-    /// The exact header value the backend expects: `<cookieName>=<jwt>`. All 197 API routes'
-    /// `auth()` validate this as a normal web session.
-    var cookieHeader: String { "\(cookieName)=\(token)" }
-}
-
 /// Minimal Keychain wrapper for the single session blob. Thread-safe (Security framework).
 enum Keychain {
     /// The UI screenshot tour keeps its QA session apart from the person's own (TourMode).

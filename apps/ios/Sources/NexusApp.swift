@@ -65,11 +65,11 @@ struct NexusApp: App {
                         }
                         // The UI screenshot tour (Sources/TourDriver.swift); draws and does nothing otherwise.
                         .modifier(TourDriver(auth: auth, router: router))
-                        .task(id: auth.session?.userId) {
+                        .task(id: auth.readySession?.userId) {
                             // The tour's QA account must not register this device for pushes, start the
                             // work-hours trail or send queued check-ins: it is only here to be photographed.
                             if TourMode.isActive { return }
-                            if let userId = auth.session?.userId {
+                            if let userId = auth.readySession?.userId {
                                 await NotificationManager.shared.activate(userId: userId)
                                 await APIClient.shared.sendUiLanguage(AppLanguage.shared.lang)
                                 // The banner promises "sends itself when NEXUS is back". Until 0.1.5 the
@@ -91,18 +91,20 @@ struct NexusApp: App {
                             if phase == .active { Task { await versionGate.checkPolicy() } }
                             if phase == .active { Task { await RemoteConfig.shared.refresh() } }
                             // A pin made on the web or another device shows up when the app comes back.
-                            if phase == .active, auth.session != nil { Task { await ProjectShortcuts.shared.syncPins() } }
                             // On the way out, which is the only moment iOS will accept the request: an app
                             // in the foreground is not a candidate for either window.
                             if phase == .background { BackgroundRefresh.schedule() }
-                            guard phase == .active, let userId = auth.session?.userId else { return }
-                            Task { await NotificationManager.shared.reconcileReminders(userId: userId) }
-                            Task { await AttendanceQueue.shared.flush() }
-                            // Today's record decides whether the work-hours trail runs. Nothing
-                            // else fetches it on a plain return to the app, and a check-in made on
-                            // the web (or a check-out) must start or stop the tracker all the same.
-                            Task { await WorkLocationTracker.shared.reconcileFromServer() }
-                            Task { await CalendarWidgetPresence.refresh() }
+                            guard phase == .active else { return }
+                            Task {
+                                await auth.refreshIdentity()
+                                guard let userId = auth.readySession?.userId else { return }
+                                await ProjectShortcuts.shared.syncPins()
+                                if TourMode.isActive { return }
+                                await NotificationManager.shared.reconcileReminders(userId: userId)
+                                await AttendanceQueue.shared.flush()
+                                await WorkLocationTracker.shared.reconcileFromServer()
+                                await CalendarWidgetPresence.refresh()
+                            }
                         }
                         // The "why NEXUS wants Always location" sheet, on a host of its own so it
                         // never shares a view with another `.sheet`.
@@ -122,10 +124,16 @@ struct NexusApp: App {
             // the background and on sign-out. Here on the outer stack rather than on RootView, so it
             // keeps following both while the update gate stands in RootView's place.
             .onChange(of: scenePhase, initial: true) { _, phase in
-                RealtimeClient.shared.reconcile(session: auth.session, phase: phase)
+                RealtimeClient.shared.reconcile(session: auth.readySession, phase: phase)
             }
             .onChange(of: auth.session?.token, initial: true) { _, _ in
-                RealtimeClient.shared.reconcile(session: auth.session, phase: scenePhase)
+                RealtimeClient.shared.reconcile(session: auth.readySession, phase: scenePhase)
+            }
+            .onChange(of: auth.session?.userId) { _, _ in
+                RealtimeClient.shared.reconcile(session: auth.readySession, phase: scenePhase)
+            }
+            .onChange(of: auth.identityReady, initial: true) { _, _ in
+                RealtimeClient.shared.reconcile(session: auth.readySession, phase: scenePhase)
             }
         }
         // The Calendar's keyboard commands, as a Calendar menu (CalendarView.swift): in the menu bar on

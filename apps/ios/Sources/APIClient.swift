@@ -1009,8 +1009,10 @@ struct APIClient {
 
     // MARK: - Dashboard
 
-    func profile() async throws -> ProfileResponse {
-        try await run(makeRequest("/api/user/profile"), decode: ProfileResponse.self, cache: "profile")
+    func profile(fresh: Bool = false) async throws -> ProfileResponse {
+        var request = makeRequest("/api/user/profile")
+        if fresh { request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = 10 }
+        return try await run(request, decode: ProfileResponse.self, cache: fresh ? nil : "profile")
     }
 
     func gamification() async throws -> Gamification {

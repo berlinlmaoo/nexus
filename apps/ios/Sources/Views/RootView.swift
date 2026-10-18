@@ -22,9 +22,13 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var router = router
-        if auth.isAuthenticated {
+        if auth.isAuthenticated && !auth.identityReady {
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task { await auth.refreshIdentity() }
+        } else if auth.isAuthenticated {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
+                .id(auth.session?.userId)
                 .preferredColorScheme(appearance.theme.colorScheme)
                 .task(id: auth.session?.userId) {
                     guard let userId = auth.session?.userId, warmedUserId != userId else { return }

@@ -11,6 +11,9 @@ final class AuthStore {
     /// own spinner, while `isBusy` still disables both.
     var isPasskeyLoggingIn = false
     var loginError: String?
+    private(set) var identityReady = false
+    private var refreshingIdentity = false
+    var readySession: Session? { identityReady ? session : nil }
 
     var isAuthenticated: Bool { session != nil }
     var isBusy: Bool { isLoggingIn || isPasskeyLoggingIn }
@@ -18,6 +21,39 @@ final class AuthStore {
     init() {
         // Restore a persisted session on cold start.
         session = Keychain.load()
+        identityReady = session == nil
+    }
+
+    /// A valid token can outlive an ID migration. Never derive ownership from its cached user ID.
+    func refreshIdentity() async {
+        guard let before = session else { identityReady = true; return }
+        guard !refreshingIdentity else { return }
+        refreshingIdentity = true
+        defer { refreshingIdentity = false; identityReady = true }
+        do {
+            let user = try await APIClient.shared.profile(fresh: true).user
+            guard let current = session, current.token == before.token, current.cookieName == before.cookieName,
+                  let next = current.refreshedIdentity(id: user.id, name: user.name, email: user.email) else { return }
+            Keychain.save(next)
+            if current.userId != next.userId {
+                AttendanceQueue.shared.rebindIdentity(from: current.userId, to: next.userId)
+                ResponseCache.clearAll()
+                OfflineSync.shared.reset()
+                Viewer.shared.reset()
+                RealtimeClient.shared.reset()
+                GideonChat.shared.refreshIdentity()
+                CalendarWidgetPresence.stop()
+            }
+            PhoneSessionBridge.shared.publish(next)
+            session = next
+            if TourMode.isActive && TourState.shared.identity == "not-checked" {
+                TourState.shared.identity = "restored=\(before.userId);current=\(next.userId);sameCredentials=\(before.token == next.token && before.cookieName == next.cookieName)"
+            }
+        } catch APIError.unauthorized {
+            if session?.token == before.token { logout() }
+        } catch {
+            // Offline: keep the valid session and retry on the next foreground. No invented ID.
+        }
     }
 
     func login(email: String, password: String) async {
@@ -68,6 +104,7 @@ final class AuthStore {
         // The watch cannot sign in on its own, so it learns about this one here.
         PhoneSessionBridge.shared.publish(s)
         session = s
+        identityReady = true
     }
 
     /// The person changed their sign-in email in Tuning Room. The token stays valid (the server

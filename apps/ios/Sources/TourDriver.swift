@@ -68,6 +68,7 @@ enum NetDiagnostics {
 final class TourState {
     static let shared = TourState()
     var status = "starting"
+    var identity = "not-checked"
 }
 
 /// Attached once, on the app's root (NexusApp). Draws nothing and does nothing unless TourMode is on.
@@ -82,6 +83,11 @@ struct TourDriver: ViewModifier {
         if TourMode.isActive {
             content
                 .overlay(alignment: .topLeading) { marker }
+                .overlay(alignment: .topLeading) {
+                    Text(state.identity).font(.system(size: 2)).foregroundStyle(Color.primary.opacity(0.02))
+                        .frame(width: 2, height: 2).clipped().allowsHitTesting(false)
+                        .accessibilityIdentifier("nexus.tour.identity")
+                }
                 .task { await run() }
         } else {
             content
@@ -106,6 +112,16 @@ struct TourDriver: ViewModifier {
         fixMacWindow()
         #endif
         switch TourMode.argument("nexusTourStep") ?? "screen" {
+        case "restore-session":
+            #if DEBUG || NEXUS_DEV_SERVER
+            if let value = ProcessInfo.processInfo.environment["NEXUS_TOUR_RESTORED_SESSION"],
+               let data = value.data(using: .utf8), let session = try? JSONDecoder().decode(Session.self, from: data) {
+                // Prevent a profile request from the seeding process overwriting the snapshot.
+                auth.logout()
+                Keychain.save(session)
+                state.status = "session-restored"
+            } else { state.status = "session-restore-failed" }
+            #endif
         case "signout":
             // The tour's own Keychain account (Keychain.swift): the person's real session is untouched.
             if auth.session != nil { auth.logout() }

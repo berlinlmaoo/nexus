@@ -201,6 +201,7 @@ targets:
       # watch decodes the same shapes with the same code — a duplicated model is a model that drifts.
       - path: Sources/Config.swift
       - path: Sources/Keychain.swift
+      - path: Sources/SessionIdentity.swift
       - path: Sources/AttendanceModels.swift
       # The snapshot the complication draws — the same type the phone's widgets read.
       - path: Sources/Shared/AttendanceSnapshot.swift

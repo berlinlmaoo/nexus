@@ -1262,6 +1262,13 @@ final class GideonChat {
         pageContext = nil
         GideonPages.shared.reset()
     }
+
+    /// Re-read canonical chat/context handles, retaining the same person's unsent draft and files.
+    func refreshIdentity() {
+        let savedDraft = draft, savedAttachment = attachment, savedDocument = document
+        reset()
+        draft = savedDraft; attachment = savedAttachment; document = savedDocument
+    }
 }
 
 
