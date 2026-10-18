@@ -54,7 +54,7 @@ function MeetingsPage() {
                   </span>
                   {queueLine(m.queue, m.status, t) && <span className="mt-0.5 block truncate text-xs font-medium text-sidebar-primary">{queueLine(m.queue, m.status, t)}</span>}
                 </span>
-                <MeetingStatusChip status={m.status} className="shrink-0" />
+                <MeetingStatusChip status={m.status} waiting={m.queue?.waiting} className="shrink-0" />
               </Link>
             ))}
           </div>
