@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum MemoryKind: String, CaseIterable, Identifiable {
     case fact = "FACT", preference = "PREFERENCE", person = "PERSON", date = "DATE"
@@ -29,7 +30,6 @@ struct GideonMemoryView: View {
     @State private var editKind: MemoryKind = .fact
     @State private var editDay = ""
     @State private var confirmAll = false
-    @FocusState private var editorFocused: Bool
     var body: some View {
         Group {
             if embedded { pageContent }
@@ -97,14 +97,13 @@ struct GideonMemoryView: View {
     @ViewBuilder private func row(_ memory: GideonMemory) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if editing == memory.id {
-                TextField(T("Edit memory"), text: $editText).textFieldStyle(.roundedBorder).focused($editorFocused).submitLabel(.done)
-                    .onSubmit { saveEdit(memory) }
-                    .onKeyPress(.escape) { editing = nil; return .handled }
+                MemoryInlineTextField(text: $editText, onSubmit: { saveEdit(memory) }, onCancel: { editing = nil })
+                    .frame(height: 36)
                     .onChange(of: editText) { _, value in if value.count > store.textMax { editText = String(value.prefix(store.textMax)) } }
                     .accessibilityIdentifier("memory.edit.text")
                 Picker(T("Type"), selection: $editKind) { ForEach(MemoryKind.allCases) { Text($0.label).tag($0) } }.pickerStyle(.menu)
                 if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.roundedBorder) }
-                HStack { Button(T("Cancel")) { editing = nil; editorFocused = false }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
+                HStack { Button(T("Cancel")) { editing = nil }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
             } else {
                 Text(memory.text).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
@@ -113,7 +112,7 @@ struct GideonMemoryView: View {
                 }
                 HStack {
                     Spacer()
-                    Button { editing = memory.id; editText = memory.text; editKind = MemoryKind(rawValue: memory.kind) ?? .fact; editDay = memory.monthDay ?? ""; editorFocused = true } label: { Label(T("Edit"), systemImage: "pencil") }.accessibilityIdentifier("memory.edit." + memory.id)
+                    Button { editing = memory.id; editText = memory.text; editKind = MemoryKind(rawValue: memory.kind) ?? .fact; editDay = memory.monthDay ?? "" } label: { Label(T("Edit"), systemImage: "pencil") }.accessibilityIdentifier("memory.edit." + memory.id)
                     Button(role: .destructive) { Task { await store.remove(memory) } } label: { Label(T("Delete"), systemImage: "trash") }.accessibilityIdentifier("memory.delete." + memory.id)
                 }.font(NXFont.text(12)).buttonStyle(.borderless).disabled(store.busy)
             }
@@ -157,5 +156,57 @@ struct GideonMemoryChip: View {
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .contain).accessibilityIdentifier("memory.chip." + memory.id)
             .sheet(isPresented: $open) { GideonMemorySheet().environment(auth) }
             .onChange(of: store.sessionExpired) { _, expired in if expired { auth.logout() } }
+    }
+}
+
+/// UITextField handles editing keys before SwiftUI's onKeyPress. Keep Escape in its responder chain.
+private struct MemoryInlineTextField: UIViewRepresentable {
+    @Binding var text: String
+    var onSubmit: () -> Void
+    var onCancel: () -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> MemoryInlineUIKitField {
+        let field = MemoryInlineUIKitField()
+        field.borderStyle = .roundedRect
+        field.font = UIFont.preferredFont(forTextStyle: .body)
+        field.adjustsFontForContentSizeCategory = true
+        field.returnKeyType = .done
+        field.accessibilityIdentifier = "memory.edit.text"
+        field.placeholder = T("Edit memory")
+        field.delegate = context.coordinator
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        field.onEscape = { context.coordinator.parent.onCancel() }
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        DispatchQueue.main.async { [weak field] in field?.becomeFirstResponder() }
+        return field
+    }
+    func updateUIView(_ field: MemoryInlineUIKitField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text { field.text = text }
+        field.textColor = UIColor(NX.foreground)
+        field.backgroundColor = UIColor(NX.card)
+        field.placeholder = T("Edit memory")
+    }
+    static func dismantleUIView(_ field: MemoryInlineUIKitField, coordinator: Coordinator) {
+        field.onEscape = nil; field.delegate = nil; field.resignFirstResponder()
+    }
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: MemoryInlineTextField
+        init(_ parent: MemoryInlineTextField) { self.parent = parent }
+        @objc func changed(_ field: UITextField) { parent.text = field.text ?? "" }
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool { parent.onSubmit(); return false }
+    }
+}
+private final class MemoryInlineUIKitField: UITextField {
+    var onEscape: (() -> Void)?
+    override var keyCommands: [UIKeyCommand]? {
+        let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelMemoryEdit))
+        escape.wantsPriorityOverSystemBehavior = true
+        return (super.keyCommands ?? []) + [escape]
+    }
+    @objc private func cancelMemoryEdit() { onEscape?() }
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if presses.contains(where: { $0.key?.keyCode == .keyboardEscape }) { onEscape?(); return }
+        super.pressesBegan(presses, with: event)
     }
 }
