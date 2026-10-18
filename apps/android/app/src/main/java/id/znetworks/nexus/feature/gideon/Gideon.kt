@@ -101,6 +101,10 @@ data class GMessage(
     val tools: List<String> = emptyList(),
     val attachments: List<GAttachment> = emptyList(),
     val meta: GMeta? = null,
+    val id: String? = null,
+    val createdAt: String? = null,
+    val tier: String? = null,
+    val credits: Int? = null,
 ) {
     val steps: List<GStep> get() = meta?.steps.orEmpty()
     val cards: List<GCard> get() = meta?.cards.orEmpty()

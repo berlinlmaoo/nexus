@@ -1,0 +1,26 @@
+<resources>
+    <string name="gp_overview">Ringkasan</string>
+    <string name="gp_questions">%1$d pertanyaan · %2$d jawaban</string>
+    <string name="gp_tools">%1$d pemanggilan alat</string>
+    <string name="gp_chats">%1$d chat</string>
+    <string name="gp_deleted_count">%1$d dihapus pengguna</string>
+    <string name="gp_last_used">Terakhir dipakai: %1$s</string>
+    <string name="gp_period_used">Kredit periode ini: %1$d</string>
+    <string name="gp_today_used">Kredit hari ini: %1$d</string>
+    <string name="gp_limits">Batas harian %1$d · Pool periode %2$d</string>
+    <string name="gp_tier_usage">%1$d jawaban · %2$d kredit</string>
+    <string name="gp_chat_usage">%1$d pesan · %2$d kredit</string>
+    <string name="gp_credits_count">%1$d kredit</string>
+    <string name="gp_search">Cari di chat-nya</string>
+    <string name="gp_from">Tanggal mulai</string>
+    <string name="gp_to">Tanggal akhir</string>
+    <string name="gp_all">Semua</string>
+    <string name="gp_kept">Masih ada</string>
+    <string name="gp_deleted">Dihapus pengguna</string>
+    <string name="gp_oaa_only">Hanya One Above All yang bisa membaca chat GIDEON.</string>
+    <string name="gp_empty">Tidak ada pesan GIDEON yang cocok dengan filter ini.</string>
+    <string name="gp_untitled">Chat tanpa judul</string>
+    <string name="gp_read_only">Dilihat sebagai One Above All · hanya baca</string>
+    <string name="gp_back_chats">Kembali ke daftar chat</string>
+    <string name="gp_earlier">Tampilkan pesan sebelumnya</string>
+</resources>

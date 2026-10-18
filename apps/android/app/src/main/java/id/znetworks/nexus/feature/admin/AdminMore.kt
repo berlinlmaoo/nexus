@@ -5,6 +5,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -324,6 +325,7 @@ fun GideonUsageTab() {
     val res = LocalContext.current.resources
     var u by remember { mutableStateOf<GideonUsage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var person by remember { mutableStateOf<UsageUser?>(null) }
     LaunchedEffect(Unit) { try { u = api.gideonUsage() } catch (e: ApiError) { error = e.describe(res) } }
     val x = u
     when {
@@ -335,8 +337,9 @@ fun GideonUsageTab() {
                     Stat(stringResource(R.string.gu_people), x.totals.people, Modifier.weight(1f)); Stat(stringResource(R.string.gu_asked), x.totals.asked, Modifier.weight(1f)); Stat(stringResource(R.string.gu_tools), x.totals.toolCalls, Modifier.weight(1f))
                 }
             }
+            item { Text(stringResource(R.string.gu_people), fontSize = 16.sp, color = c.foreground, fontWeight = FontWeight.SemiBold) }
             items(x.users.sortedByDescending { it.asked }, key = { it.id }) { p ->
-                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).clickable { person = p }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(p.name, p.avatar, 28.dp); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p.name ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
@@ -346,6 +349,7 @@ fun GideonUsageTab() {
             }
         }
     }
+    person?.let { p -> GideonPersonSheet(p.id, p.name) { person = null } }
 }
 
 @Composable

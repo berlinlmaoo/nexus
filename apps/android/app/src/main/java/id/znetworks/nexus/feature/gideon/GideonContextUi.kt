@@ -195,7 +195,7 @@ internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode)
  * asked first in a centred dialog. Once decided, the status line (and what Apply made).
  */
 @Composable
-internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -> Unit) {
+internal fun ProposalCard(p: GProposal, deciding: Boolean, readOnly: Boolean = false, onDecide: (Boolean) -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(12.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(12.dp),
@@ -223,13 +223,13 @@ internal fun ProposalCard(p: GProposal, deciding: Boolean, onDecide: (Boolean) -
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
         }
-        if (p.isPending) {
+        if (p.isPending && !readOnly) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (deciding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 NxButton(stringResource(R.string.gx_discard), { onDecide(false) }, kind = NxButtonKind.GHOST, enabled = !deciding, compact = true)
                 NxButton(stringResource(R.string.gx_apply), { onDecide(true) }, kind = NxButtonKind.PRIMARY, icon = Icons.Filled.Check, enabled = !deciding, compact = true)
             }
-        } else {
+        } else if (!p.isPending) {
             val text = when (GideonReview.status(p)) {
                 GideonReview.Status.APPLIED -> stringResource(R.string.gx_applied)
                 GideonReview.Status.DISCARDED -> stringResource(R.string.gx_discarded)

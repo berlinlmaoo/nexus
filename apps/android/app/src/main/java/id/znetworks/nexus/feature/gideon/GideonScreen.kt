@@ -245,12 +245,13 @@ private fun FreshChat(onAsk: (String) -> Unit) {
 }
 
 @Composable
-private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, onDecide: (GDecision) -> Unit) {
+private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, readOnly: Boolean = false, onDecide: (GDecision) -> Unit) {
     val c = Nx.colors
     val list = rememberLazyListState()
-    LaunchedEffect(s.messages.size, s.thinking) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
+    LaunchedEffect(s.messages.size, s.thinking) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
+            if (readOnly) m.createdAt?.let { Text(id.znetworks.nexus.feature.chat.chatTime(it), fontSize = 11.sp, color = c.mutedFg) }
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Column(Modifier.widthIn(max = 320.dp).background(c.muted, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
                     m.attachments.forEach { a -> Text("📎 " + (a.name?.takeIf { it.isNotBlank() && it != "image" } ?: stringResource(R.string.gd_image_attached)), fontSize = 12.sp, color = c.mutedFg) }
@@ -268,7 +269,12 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     val b = p.booking
                     // A room booking has its own card with the room picker; every other change is a diff.
                     val change = p.bookingChange
-                    if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = { x, y -> loadRooms(x, y, null) },
+                    if (readOnly) {
+                        ProposalCard(p, deciding = false, readOnly = true) {}
+                        b?.let { Text(listOfNotNull(it.room, it.startsAt, it.endsAt).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg) }
+                        change?.let { Text(listOfNotNull(it.before.room, it.before.startsAt, it.after?.room, it.after?.startsAt).joinToString(" → "), fontSize = 12.sp, color = c.mutedFg) }
+                    }
+                    else if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = { x, y -> loadRooms(x, y, null) },
                         onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
                     // Moving / cancelling one (16 Oct 2026): the booking before and after.
                     else if ((p.action == "move_room_booking" || p.action == "cancel_room_booking") && change != null)
@@ -277,6 +283,8 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     else ProposalCard(p, deciding = p.id in s.deciding) { apply -> onDecide(GDecision(p, apply)) }
                 }
                 m.cards.forEach { card -> ResultCard(card) }
+                if (readOnly && m.credits != null) Text((GideonTier.entries.firstOrNull { it.key == m.tier }?.label ?: "GIDEON") + " · " +
+                    stringResource(R.string.gp_credits_count, m.credits), fontSize = 11.sp, color = c.mutedFg)
             }
         }
         if (s.thinking) item {
@@ -286,6 +294,12 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
             }
         }
     }
+}
+
+/** Shares the normal rendering but has no composer, mutations, approval controls or room requests. */
+@Composable
+internal fun GideonReadOnlyTranscript(messages: List<GMessage>) {
+    Transcript(GideonChat.State(messages = messages), false, loadRooms = { _, _, _ -> null }, readOnly = true) {}
 }
 
 @Composable
