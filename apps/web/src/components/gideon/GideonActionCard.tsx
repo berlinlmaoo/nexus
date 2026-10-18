@@ -50,7 +50,7 @@ const FIELD: Record<string, string> = {
   File: "File", Expires: "Expires", Access: "Access", Doc: "Doc", Section: "Section", Edit: "Edit", Title: "Title", Audience: "Audience",
   Until: "Until", Task: "Task", Subtasks: "Subtasks", Platform: "Platform", Label: "Label", Fields: "Fields", Password: "Password",
   Counterparty: "Counterparty", Location: "Location", Download: "Download", Tone: "Tone", Repeats: "Repeats", Announcement: "Announcement",
-  Folder: "Folder", Status: "Status", Probability: "Probability", Term: "Term", Invoice: "Invoice", Paid: "Paid",
+  Folder: "Folder", Status: "Status", Probability: "Probability", Term: "Term", Terms: "Terms", Invoice: "Invoice", Paid: "Paid",
   "Contract value": "Contract value", Event: "Event", "What worked": "What worked", "What didn't": "What didn't", Posts: "Posts",
 };
 /** Values the server writes in English that read as a whole word or phrase. */
