@@ -575,7 +575,10 @@ final class NEXUSUITour: XCTestCase {
             case "tap":
                 let button = app.buttons.matching(match).firstMatch
                 let field = app.textViews.matching(textMatch).firstMatch
-                let target = button.exists ? button : field.exists ? field : app.staticTexts.matching(match).firstMatch
+                let text = app.staticTexts.matching(match).firstMatch
+                // Catalyst menus may expose a native pop-up control rather than a Button.
+                let other = app.descendants(matching: .any).matching(match).firstMatch
+                let target = button.exists ? button : field.exists ? field : text.exists ? text : other
                 guard target.waitForExistence(timeout: 15), target.isHittable else { return "wrong-screen: missing interaction target \(action.label)" }
                 press(target)
                 pause(1)
@@ -590,9 +593,14 @@ final class NEXUSUITour: XCTestCase {
             case "scroll":
                 let window = app.windows.firstMatch
                 let amount = min(0.55, max(0.1, Double(action.text ?? "0.33") ?? 0.33))
-                let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
-                let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78 - amount))
+                let x: CGFloat = action.label == "sidebar" ? 0.1 : 0.5
+                let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.78))
+                #if targetEnvironment(macCatalyst)
+                start.scroll(byDeltaX: 0, deltaY: -macWheelSign * CGFloat(amount) * window.frame.height)
+                #else
+                let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.78 - amount))
                 start.press(forDuration: 0.05, thenDragTo: end)
+                #endif
                 pause(1)
             case "hover":
                 let target = app.buttons.matching(match).firstMatch
@@ -624,6 +632,27 @@ final class NEXUSUITour: XCTestCase {
                 let target = app.textViews.matching(identifier: action.label).firstMatch
                 guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
                     return "wrong-screen: missing expected text in \(action.label)"
+                }
+            case "checkFrame":
+                let target = app.textViews.matching(identifier: action.label).firstMatch
+                let limits = (action.text ?? "").split(separator: ",").compactMap { Double($0) }
+                guard target.waitForExistence(timeout: 10), limits.count == 2,
+                      target.frame.width >= CGFloat(limits[0]), target.frame.height <= CGFloat(limits[1]) else {
+                    return "wrong-screen: unexpected frame for \(action.label): \(target.exists ? target.frame.debugDescription : "missing")"
+                }
+            case "checkRow":
+                var frames: [CGRect] = []
+                let window = app.windows.firstMatch.frame
+                for suffix in (action.text ?? "").split(separator: ",") {
+                    let id = action.label + String(suffix)
+                    let target = app.descendants(matching: .any).matching(identifier: id).firstMatch
+                    guard target.exists, target.isHittable else { return "wrong-screen: unavailable control \(id)" }
+                    let frame = target.frame
+                    guard !frame.isEmpty, window.contains(CGPoint(x: frame.midX, y: frame.midY)),
+                          !frames.contains(where: { abs($0.midX - frame.midX) < 8 && abs($0.midY - frame.midY) < 8 }) else {
+                        return "wrong-screen: overlapping controls in \(action.label)"
+                    }
+                    frames.append(frame)
                 }
             case "wait": pause(Double(action.text ?? "2") ?? 2)
             case "absent":

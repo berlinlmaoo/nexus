@@ -467,6 +467,7 @@ struct GideonPanel: View {
         .buttonStyle(.plain)
         .disabled(chat.sending)
         .accessibilityLabel(T("GIDEON tier"))
+        .accessibilityIdentifier("gideon.tier")
     }
 
     // MARK: - title (compact)

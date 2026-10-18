@@ -122,6 +122,7 @@ struct TaskDetailView: View {
                     HStack(spacing: 10) {
                         if let t = task {
                             AskGideonButton(context: GideonContext(projectId: t.projectId, projectName: nil, taskId: t.id, taskTitle: t.title))
+                                .accessibilityIdentifier("task.action.gideon")
                         }
                         socialButton("Follow", icon: social.following ? "bell.fill" : "bell", active: social.following) { await social.toggle("followers", id: taskId) }
                         socialButton("Favourite", icon: social.favourite ? "star.fill" : "star", active: social.favourite) { await social.toggle("favourite", id: taskId) }
@@ -129,6 +130,7 @@ struct TaskDetailView: View {
                         if isBod {
                             Button { showQuestComposer = true } label: { Image(systemName: "trophy").font(.system(size: 14)).foregroundStyle(NX.warning) }
                                 .accessibilityLabel(T("Make it a quest"))
+                                .accessibilityIdentifier("task.action.quest")
                         }
                         Menu {
                             if canEditTask {
@@ -139,7 +141,12 @@ struct TaskDetailView: View {
                             if canDeleteTask { Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") } }
                         } label: { Image(systemName: "ellipsis").font(.system(size: 16)) }
                         .accessibilityLabel(T("Task actions"))
-                    }.frame(minHeight: 44)
+                        .accessibilityIdentifier("task.action.more")
+                    }
+                    // Catalyst otherwise sizes this custom bar item to its first button, clipping
+                    // and overlapping the remaining actions inside the centred task dialog.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minHeight: 44)
                 }
             }
         }
@@ -262,6 +269,7 @@ struct TaskDetailView: View {
         Button { Task { await action() } } label: {
             Image(systemName: icon).font(.system(size: 14)).foregroundStyle(active ? NX.violetText : NX.mutedFg)
         }.disabled(social.busy).accessibilityLabel(T(name))
+            .accessibilityIdentifier("task.action.\(name.lowercased())")
     }
 
     private func copyTask() async {

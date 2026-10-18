@@ -226,7 +226,10 @@ private struct LegalParagraphText: UIViewRepresentable {
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let w = max(1, proposal.width ?? 300)
-        return uiView.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
+        let fitted = uiView.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
+        // UITextView can return a short paragraph's natural width. Keep the page's proposed width:
+        // shrinking it reapplies the paragraph indent inside that width and wraps/clips headings.
+        return CGSize(width: w, height: ceil(fitted.height))
     }
     private func attributed() -> NSAttributedString {
         let l = paragraph.layout
