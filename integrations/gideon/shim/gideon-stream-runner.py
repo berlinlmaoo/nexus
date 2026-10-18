@@ -71,6 +71,21 @@ _MISS = re.compile(
     re.I,
 )
 _BRIDGE = {"tool_search", "tool_describe", "tool_call"}
+# A question about something only a DEFERRED tool can see (Pipeline, Legal, Room Booking) answered with
+# "not found" by a run that never opened the catalog is a miss too: the workspace search cannot see deals,
+# legal documents or bookings, so "not found" there means "did not look" (18 Oct 2026, Aphrodite on a deal).
+_DEFERRED_DOMAIN = re.compile(r"\b(deal|deals|pipeline|legal|kontrak|contract|nda|pks|spk|mou|ruang|ruangan|room|booking|book|meeting room)\b", re.I)
+_NOT_FOUND = re.compile(r"(belum|tidak|nggak|gak|ga) (bisa |dapat )?(memastikan|menemukan|ketemu|ditemukan|teridentifikasi|ada data)|not find|couldn't find|could not find|can't confirm|no (results|match)", re.I)
+
+
+def _question(prompt: str) -> str:
+    """The person's own message: what NEXUS puts after the last "Pesan terbaru dari <name>:" / "Pesan dari"."""
+    for marker in ("Pesan terbaru dari ", "Pesan dari "):
+        i = prompt.rfind(marker)
+        if i >= 0:
+            j = prompt.find(":", i)
+            return prompt[j + 1:] if j >= 0 else prompt[i:]
+    return prompt[-600:]
 
 
 def _patch_hermes(eager: set, cache_scope: str) -> None:
@@ -217,8 +232,9 @@ def main() -> int:
             response, result = _run(prompt, args.model, args.provider, toolsets, tools_seen)
             sessions.append(result.get("session_id"))
             # Only when tools were deferred at all, the run never touched the bridge, and the answer reads as "can't".
-            if (retry_on_miss and eager and (response or "").strip() and _MISS.search(response)
-                    and not (_BRIDGE & set(tools_seen))):
+            missed = bool((response or "").strip()) and (
+                _MISS.search(response) or (_DEFERRED_DOMAIN.search(_question(prompt)) and _NOT_FOUND.search(response)))
+            if retry_on_miss and eager and missed and not (_BRIDGE & set(tools_seen)):
                 emit({"t": "router_miss", "first": response.strip()[:300], "tools": [t for t in tools_seen if t][:20]})
                 emit({"t": "reset"})
                 _STATE["eager_all"] = True
