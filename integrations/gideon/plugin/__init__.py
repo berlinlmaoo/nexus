@@ -1,5 +1,6 @@
 import os
 
+from .humanize import humanize_json
 from .client import call_nexus, check_available
 from .schemas import SCHEMAS
 
@@ -30,6 +31,9 @@ _ACTION_BY_TOOL = {
     "nexus_move_room_booking": "move_room_booking",
     "nexus_cancel_room_booking": "cancel_room_booking",
     "nexus_create_document": "create_document",
+    # Pipeline deals and Legal documents (18 Oct 2026): read only.
+    "nexus_search_deals": "search_deals",
+    "nexus_search_legal_documents": "search_legal_documents",
     "nexus_get_attendance_day": "get_attendance_day",
     # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both
     # at POST /api/complaints/[id]/correction, and that is the only place attendance or XP moves.
@@ -54,9 +58,19 @@ _ATTENDANCE_TOOLS = {
 }
 
 
+def _function_schema(name, schema):
+    """Hermes wants an OpenAI function schema ({name, description, parameters}). SCHEMAS holds plain JSON
+    schemas with the description on top; handed over as they were (until 18 Oct 2026) the model saw every
+    NEXUS tool with NO parameters at all — it called nexus_list_tasks with {} and got every task it could see,
+    and never knew projectId / assigneeId / limit existed."""
+    params = {k: v for k, v in schema.items() if k != "description"}
+    return {"name": name, "description": schema.get("description", ""), "parameters": params}
+
+
 def _make_handler(action):
     def _handler(args=None, **_kwargs):
-        return call_nexus(action, args or {})
+        # Enums -> human labels before the model sees them (see humanize.py).
+        return humanize_json(call_nexus(action, args or {}))
 
     return _handler
 
@@ -69,7 +83,7 @@ def register(ctx) -> None:
         ctx.register_tool(
             name=tool_name,
             toolset="nexus",
-            schema=SCHEMAS[tool_name],
+            schema=_function_schema(tool_name, SCHEMAS[tool_name]),
             handler=_make_handler(action),
             check_fn=check_available,
             requires_env=["NEXUS_BASE_URL", "NEXUS_SERVICE_TOKEN"],
