@@ -61,7 +61,7 @@ export const fetchGideonReviewTranscript = (userId: string, chatId: string, befo
 // ── GIDEON Memory (19 Oct 2026) ─────────────────────────────────────────────────────────────────────────
 // Only ever the signed-in person's own memories (server: src/app/api/gideon/memory, lib/gideon-memory.ts).
 
-export type GideonMemoryState = { paused: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[] };
+export type GideonMemoryState = { paused: boolean; available?: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[] };
 export const GIDEON_MEMORY_KEY = ["gideon-memory"] as const;
 export const getGideonMemory = () => gjson<GideonMemoryState>("/api/gideon/memory");
 export const addGideonMemory = (p: { text: string; kind?: string; date?: string | null }) => gjson<{ memory: import("@/lib/gideon").GideonMemory }>("/api/gideon/memory", { method: "POST", body: JSON.stringify(p) });

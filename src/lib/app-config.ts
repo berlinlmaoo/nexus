@@ -39,6 +39,9 @@ export type AppConfig = {
     /** Meeting notes, Beta (owner, 18 Oct 2026): GIDEON turns a meeting recording into minutes and tasks. Off = the
      *  entry points are hidden and new uploads are refused; meetings already made stay readable. */
     meetingNotesEnabled: boolean
+    /** GIDEON Memory (owner, 19 Oct 2026): per-person memory. Off = an emergency kill switch: nothing is remembered or
+     *  used, the memory tools refuse, Settings › GIDEON Memory still lists and deletes what is there. */
+    gideonMemory: boolean
     /** GIDEON tools package (owner, 18 Oct 2026), one flag per group (lib/gideon-tools/meta.ts EXTRA_TOOL_GROUP).
      *  Off = those tools answer "not available yet" and their cards cannot be applied. */
     gideonToolsInbox: boolean
@@ -88,7 +91,7 @@ const GIDEON_TOOL_FLAG_DEFAULTS = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, presenceStatus: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {

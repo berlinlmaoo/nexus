@@ -3,13 +3,14 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import {
-  MEMORY_MAX, MEMORY_TEXT_MAX, MemoryRefusal, deleteAllMemories, isMemoryPaused, listMemories, saveMemory, setMemoryPaused,
+  MEMORY_MAX, MEMORY_TEXT_MAX, MemoryRefusal, deleteAllMemories, isMemoryPaused, listMemories, memoryFeatureOn, saveMemory, setMemoryPaused,
 } from "@/lib/gideon-memory"
 
 /**
  * GIDEON Memory (owner, 19 Oct 2026): what GIDEON remembers about the SESSION USER. Only ever their own — there is
  * no way to ask for anyone else's (not for OAA/BoD either; Control Room never reads this table).
- *   GET                         → { paused, max, textMax, memories: MemoryView[] }   (ACTIVE + PENDING suggestions)
+ *   GET                         → { paused, available, max, textMax, memories: MemoryView[] }   (ACTIVE + PENDING)
+ *     available=false: the remote-config kill switch is off (adding refused; listing and deleting still work)
  *   POST  { text, kind?, date? } → { memory }       add one (typed in Settings; saved as ACTIVE)
  *   PATCH { paused: boolean }   → { paused, ... }   pause / resume GIDEON Memory
  *   DELETE                      → { deleted: n }    forget everything
@@ -17,8 +18,8 @@ import {
  */
 
 async function state(userId: string) {
-  const [paused, memories] = await Promise.all([isMemoryPaused(userId), listMemories(userId, { includePending: true })])
-  return { paused, max: MEMORY_MAX, textMax: MEMORY_TEXT_MAX, memories }
+  const [paused, available, memories] = await Promise.all([isMemoryPaused(userId), memoryFeatureOn(), listMemories(userId, { includePending: true })])
+  return { paused, available, max: MEMORY_MAX, textMax: MEMORY_TEXT_MAX, memories }
 }
 
 function refusal(e: unknown) {
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const body = (await req.json().catch(() => ({}))) as { text?: unknown; kind?: unknown; date?: unknown }
+  if (!(await memoryFeatureOn())) return NextResponse.json({ error: "GIDEON Memory is not available right now.", code: "unavailable" }, { status: 503 })
   try {
     // Typed by the person themself: that is an explicit ask (sensitive topics allowed; secrets still refused).
     const { memory, created } = await saveMemory(session.user.id, { text: body.text, kind: body.kind, date: body.date, status: "ACTIVE", source: "SETTINGS", explicit: true })

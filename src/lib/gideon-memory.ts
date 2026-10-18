@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { todayWib } from "@/lib/gideon-dates"
+import { getAppConfig } from "@/lib/app-config"
 import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay, monthDayInText, memoryTextFromQuestion, statesPreference, styleDirectives, type MemoryKind } from "@/lib/gideon-memory-text"
 
 /**
@@ -84,6 +85,12 @@ export function dropRunQuestion(runId: string | null) {
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Remote config flags.gideonMemory (default on): the emergency kill switch. A config read error keeps it on. */
+export async function memoryFeatureOn(): Promise<boolean> {
+  const cfg = await getAppConfig(null).catch(() => null)
+  return (cfg?.flags as Record<string, unknown> | undefined)?.gideonMemory !== false
+}
 
 export async function isMemoryPaused(userId: string): Promise<boolean> {
   const p = await prisma.gideonPreference.findUnique({ where: { userId }, select: { memoryPaused: true } })
@@ -350,6 +357,7 @@ export async function runMemoryTool(
   input: Record<string, unknown>,
   run: { id: string; trigger: string } | null,
 ): Promise<{ data: Record<string, unknown>; memories: MemoryView[] }> {
+  if (!(await memoryFeatureOn())) throw new MemoryRefusal("paused", "GIDEON Memory is not available right now. Nothing was saved.")
   if (action === "list_my_memories") {
     if (await isMemoryPaused(actorId)) return { data: { paused: true, memories: [], note: "GIDEON Memory is paused by this person." }, memories: [] }
     const list = await listMemories(actorId)

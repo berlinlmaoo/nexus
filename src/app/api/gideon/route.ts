@@ -17,7 +17,7 @@ import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
 import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
-import { dropRunQuestion, MEMORY_RULES, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
+import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -508,7 +508,11 @@ export async function POST(req: NextRequest) {
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
       // GIDEON Memory (owner, 19 Oct 2026): THIS person's own memories only, after who-is-asking (cached prefix).
-      const memory = await memoryPromptLines(userId, session.user?.name || '', { tier }).catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
+      // Kill switch (remote config flags.gideonMemory): off = no memory rules, nothing remembered is used.
+      const memoryOn = await memoryFeatureOn()
+      const memory = memoryOn
+        ? await memoryPromptLines(userId, session.user?.name || '', { tier }).catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
+        : { personal: [] as string[], dynamic: [] as string[] }
       // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
       const rules = [
         // Only for a client that renders Markdown; the released apps show the text as is.
@@ -519,7 +523,7 @@ export async function POST(req: NextRequest) {
             ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
             : '',
         approvalPromptLine(approvalMode),
-        MEMORY_RULES,
+        memoryOn ? MEMORY_RULES : '',
       ].filter(Boolean)
       const dynamic = [
         // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
@@ -659,7 +663,7 @@ export async function POST(req: NextRequest) {
       }
       // GIDEON Memory safety net (Model 0 rarely calls tools): a stated preference / "inget ya" with no memory tool call
       // becomes a Save / Don't save suggestion from the person's own words. Before runMeta, so the turn stores it.
-      if (reply && runId && asked && tier === 'experimental') {
+      if (reply && runId && asked && tier === 'experimental' && memoryOn) {
         const suggested = await suggestMemoryFromQuestion(userId, asked, runId, chat?.id ?? null).catch(() => null)
         if (suggested && streamClient) await sendEvent({ type: 'memory', memory: suggested })
       }

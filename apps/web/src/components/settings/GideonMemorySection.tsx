@@ -65,7 +65,9 @@ export function GideonMemorySection() {
 
   const data = q.data;
   const items = data?.memories ?? [];
-  const paused = !!data?.paused;
+  // The remote-config kill switch (available=false) behaves like paused here, with its own line.
+  const unavailable = data?.available === false;
+  const paused = !!data?.paused || unavailable;
   const atMax = !!data && items.length >= data.max;
 
   return (
@@ -81,7 +83,7 @@ export function GideonMemorySection() {
             <div className="text-sm font-medium">{t("Use GIDEON Memory")}</div>
             <div className="text-xs text-muted-foreground">{t("Off: GIDEON doesn't remember anything new and doesn't use what's here.")}</div>
           </div>
-          <Switch checked={!paused} disabled={!data || pause.isPending} onCheckedChange={(on) => pause.mutate(!on)} aria-label={t("Use GIDEON Memory")} className="mt-0.5 shrink-0" />
+          <Switch checked={!paused} disabled={!data || pause.isPending || unavailable} onCheckedChange={(on) => pause.mutate(!on)} aria-label={t("Use GIDEON Memory")} className="mt-0.5 shrink-0" />
         </label>
 
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(); }}>
@@ -98,7 +100,8 @@ export function GideonMemorySection() {
             </button>
           </div>
         </form>
-        {paused && <p className="text-xs text-muted-foreground">{t("GIDEON Memory is off. Turn it on to add or use memories.")}</p>}
+        {unavailable ? <p className="text-xs text-muted-foreground">{t("GIDEON Memory is not available right now.")}</p>
+          : paused && <p className="text-xs text-muted-foreground">{t("GIDEON Memory is off. Turn it on to add or use memories.")}</p>}
         {atMax && !paused && <p className="text-xs text-muted-foreground">{t("GIDEON Memory is full ({n}). Delete something to add more.", { n: data?.max ?? 0 })}</p>}
 
         {q.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}

@@ -11,6 +11,7 @@ export const ID_GIDEON_MEMORY: Record<string, string> = {
   "Off: GIDEON doesn't remember anything new and doesn't use what's here.": "Mati: GIDEON tidak mengingat hal baru dan tidak memakai yang ada di sini.",
   "e.g. Keep answers short.": "mis. Jawab singkat saja.",
   "Something for GIDEON to remember": "Hal yang perlu GIDEON ingat",
+  "GIDEON Memory is not available right now.": "Memori GIDEON sedang tidak tersedia.",
   "GIDEON Memory is off. Turn it on to add or use memories.": "Memori GIDEON sedang mati. Nyalakan untuk menambah atau memakai memori.",
   "GIDEON Memory is full ({n}). Delete something to add more.": "Memori GIDEON penuh ({n}). Hapus sesuatu untuk menambah.",
   "Nothing remembered yet": "Belum ada yang diingat",
