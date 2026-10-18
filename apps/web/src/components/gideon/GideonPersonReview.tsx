@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Eye, Loader2, MessageCircle, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarDays, Eye, Loader2, MessageCircle, Search, Trash2, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { DateField } from "@/components/DateField";
 import { EmptyState } from "@/components/EmptyState";
@@ -238,8 +238,12 @@ function Chats({ userId }: { userId: string }) {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search their chats")} aria-label={t("Search their chats")} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <DateField value={from} onChange={setFrom} max={to ?? undefined} placeholder={t("From")} ariaLabel={t("From date")} className="h-8 text-xs" />
-            <DateField value={to} onChange={setTo} min={from ?? undefined} placeholder={t("To")} ariaLabel={t("To date")} className="h-8 text-xs" align="end" />
+            {([[from, setFrom, t("From"), t("From date"), { max: to ?? undefined }, "start"], [to, setTo, t("To"), t("To date"), { min: from ?? undefined }, "end"]] as const).map(([v, set, ph, label, lim, align]) => (
+              <div key={label} className="flex h-8 min-w-0 items-center gap-1 rounded-md border border-border bg-background pl-2 focus-within:ring-2 focus-within:ring-ring">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <DateField value={v} onChange={set} {...lim} placeholder={ph} ariaLabel={label} align={align} className="min-h-7 px-1 py-0.5 text-xs hover:bg-transparent focus-visible:ring-0" />
+              </div>
+            ))}
           </div>
           <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={t("Show")}>
             {([["all", t("All")], ["none", t("Kept")], ["only", t("Deleted by user")]] as const).map(([k, label]) => (
