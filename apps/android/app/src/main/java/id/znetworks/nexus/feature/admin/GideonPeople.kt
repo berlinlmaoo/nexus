@@ -131,7 +131,7 @@ fun GideonPersonSheet(userId: String, name: String?, onDismiss: () -> Unit) {
             if (creditsOnly && limits != null) {
                 if (limits["unlimited"]?.jsonPrimitive?.booleanOrNull == true) Text(stringResource(R.string.gc_unlimited))
                 else Text(stringResource(R.string.gp_limits, limits["daily"]?.jsonPrimitive?.intOrNull ?: 0,
-                    limits["monthly"]?.jsonPrimitive?.intOrNull ?: 0))
+                    (limits["monthly"]?.jsonPrimitive?.intOrNull ?: 0) + (limits["bonus"]?.jsonPrimitive?.intOrNull ?: 0)))
             }
         }
         if (creditsOnly) items(d.credits.tiers, key = { it.tier }) { tier ->

@@ -29,6 +29,12 @@ class GideonCreditsTest {
             assertEquals(daily, s.today.limit); assertEquals(pool, s.pool.limit)
         }
     }
+    @Test fun summaryPoolLimitAlreadyIncludesBonus() {
+        val s = NexusJson.decodeFromString(GCreditResponse.serializer(), """{"summary":{"pool":{"limit":2750,"bonus":250,"used":100,"remaining":2650}}}""").summary
+        assertEquals(2750, s.pool.limit)
+        assertEquals(250, s.pool.bonus)
+        assertEquals(s.pool.limit - s.pool.used, s.pool.remaining)
+    }
     @Test fun partialStreamsKeepStepsRunningAndProposalsVisible() {
         val frame = """data: {"type":"step","step":{"id":"one","status":"running"}}
 data: {"type":"delta","content":"Hello"}

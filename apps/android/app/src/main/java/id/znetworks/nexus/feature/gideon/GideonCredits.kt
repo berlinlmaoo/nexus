@@ -71,7 +71,8 @@ fun GideonCreditMeter(api: ApiClient, refreshKey: Any?) {
             else {
                 Text(label)
                 if (!s.unlimited) {
-                    Text(stringResource(R.string.gc_pool, s.pool.used, s.pool.limit + s.pool.bonus))
+                    // Summary.pool.limit already includes the bonus (unlike the admin role's monthly limit).
+                    Text(stringResource(R.string.gc_pool, s.pool.used, s.pool.limit))
                     Text(s.period.startKey + " – " + s.period.endKey, fontSize = 12.sp)
                     Text(stringResource(R.string.gc_resets), fontSize = 12.sp)
                 }
