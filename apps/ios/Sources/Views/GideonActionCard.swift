@@ -6,6 +6,7 @@ struct GideonActionCard: View {
     var readOnly = false
     let onApply: () -> Void
     let onDiscard: () -> Void
+    private var applyLabel: String { AppLanguage.shared.gideonActionApply(action) }
     private var pending: Bool { proposal.isPending && !readOnly }
     @Environment(AppRouter.self) private var router
     var body: some View {
@@ -34,11 +35,11 @@ struct GideonActionCard: View {
             if let edit = proposal.extra?.sheetEdit { sheetDiff(edit) }
             if let error = proposal.error, !error.isEmpty { Text(error).font(NXFont.text(12)).foregroundStyle(NX.danger).textSelection(.enabled) }
             if pending {
-                Text(String(format: T("Nothing happens until you tap %@. Times are WIB."), T(action.apply))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(String(format: T("Nothing happens until you tap %@. Times are WIB."), applyLabel)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 HStack {
                     Spacer()
                     Button(T("Discard"), action: onDiscard).buttonStyle(.nxBordered)
-                    Button(T(action.apply), action: onApply).buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
+                    Button(applyLabel, action: onApply).buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
                 }
             } else {
                 Text(proposal.status == "APPLIED" && !readOnly ? T(action.done) : gideonProposalState(proposal, readOnly: readOnly))

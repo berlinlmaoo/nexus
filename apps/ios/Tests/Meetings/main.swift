@@ -46,5 +46,12 @@ func payload(_ title: String, _ version: Int) -> Data { Data(base.replacingOccur
     expect(store.deleted, "Deleted event closes this meeting")
     expect(MeetingUploads.shared.removed == ["meeting"], "Deletion cancels and removes only this meeting's pending audio")
 }
+let current = URL(fileURLWithPath: "/new-container/Library/Application Support/MeetingUploads")
+expect(MeetingStorage.resolve("uuid/meeting.wav", in: current)?.path == current.path + "/uuid/meeting.wav", "Relative audio survives container relocation")
+expect(MeetingStorage.resolve("/old-container/Library/Application Support/MeetingUploads/uuid/meeting.wav", in: current)?.path == current.path + "/uuid/meeting.wav", "Old absolute manifest is rebased")
+expect(MeetingStorage.resolve("../outside.wav", in: current) == nil, "Saved paths stay inside private audio storage")
+expect(MeetingStorage.resolve("/other-app/unrelated.wav", in: current) == nil, "Unrelated absolute files are not adopted")
+let recordings = current.deletingLastPathComponent().appendingPathComponent("MeetingRecordings")
+expect(MeetingStorage.resolve("Meeting-draft.m4a", in: recordings)?.lastPathComponent == "Meeting-draft.m4a", "Draft filename is stable")
 try await run()
 print("\(checks) meeting wire and concurrent autosave checks passed")

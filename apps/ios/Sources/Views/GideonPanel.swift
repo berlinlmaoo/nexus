@@ -239,7 +239,7 @@ struct GideonPanel: View {
                     GideonChatsSheet { id in Task { await chat.openChat(id) } }
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : GideonToolAction.get(d.proposal.action)?.apply ?? "Apply") : T("Discard"), role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
+                    Button(d.buttonLabel, role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
                         Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
@@ -1462,6 +1462,12 @@ struct GideonDecision: Identifiable {
     var task: GideonTaskChoice? = nil
     var id: String { proposal.id + (apply ? "-apply" : "-discard") }
     var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
+    var buttonLabel: String {
+        guard apply else { return T("Discard") }
+        if proposal.action == "delete_task" { return T("Delete task") }
+        if let action = GideonToolAction.get(proposal.action) { return AppLanguage.shared.gideonActionApply(action) }
+        return T("Apply")
+    }
     /// The picked room for a booking (the server's summary was written before the room was chosen).
     var message: String {
         if let booking, !booking.room.isEmpty {

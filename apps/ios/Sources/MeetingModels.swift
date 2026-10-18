@@ -105,3 +105,18 @@ enum MeetingIssue {
     }
     private enum RemoteConfigDefaults { static let maxBytes = 500 * 1_048_576 }
 }
+
+/// Persist app-relative paths so an app update can relocate its data container.
+/// Accept the earlier absolute-path manifests, but always resolve inside the current private folder.
+enum MeetingStorage {
+    static func resolve(_ saved: String, in folder: URL) -> URL? {
+        let relative: String
+        if saved.hasPrefix("/") {
+            guard let range = saved.range(of: "/" + folder.lastPathComponent + "/", options: .backwards) else { return nil }
+            relative = String(saved[range.upperBound...])
+        } else { relative = saved }
+        let parts = relative.split(separator: "/", omittingEmptySubsequences: false)
+        guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { return nil }
+        return folder.appendingPathComponent(relative).standardizedFileURL
+    }
+}

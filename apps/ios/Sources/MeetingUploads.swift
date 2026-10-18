@@ -57,7 +57,7 @@ final class MeetingUploads {
         do {
             let body: [String: Any] = ["fileName":file.lastPathComponent, "mime":Self.mime(file.pathExtension), "size":bytes, "title":title, "projectId":jsonOrNull(projectId), "language":language, "source":source, "durationSec":duration.map { $0 as Any } ?? NSNull(), "recordedAt":ISO8601DateFormatter().string(from: Date())]
             let response: MeetingCreated = try await NativeAPI.request("/api/meetings", method: "POST", body: body)
-            let job = Job(id: response.meeting.id, ownerId: user.userId, server: ServerEnvironment.current.rawValue, source: privateFile.path, bytes: bytes, chunkBytes: min(response.upload.maxChunkBytes, max(1, response.upload.chunkBytes)), received: response.meeting.audio.received, recordingSource: source == "record" ? file.path : nil)
+            let job = Job(id: response.meeting.id, ownerId: user.userId, server: ServerEnvironment.current.rawValue, source: privateFolder.lastPathComponent + "/" + privateFile.lastPathComponent, bytes: bytes, chunkBytes: min(response.upload.maxChunkBytes, max(1, response.upload.chunkBytes)), received: response.meeting.audio.received, recordingSource: source == "record" ? file.path : nil)
             jobs[job.id] = job; save()
             Task { await schedule(job.id, reconcile: true) }
             return response.meeting
@@ -102,13 +102,13 @@ final class MeetingUploads {
                 if response.meeting.status != "UPLOADING" { completed[id] = response.meeting; finish(id); return }
                 job.received = response.meeting.audio.received
             }
-            guard isCurrent(job), FileManager.default.fileExists(atPath: job.source) else { throw APIError.transport(T("The local recording is missing. Choose the file again.")) }
+            guard isCurrent(job), let sourceURL = MeetingStorage.resolve(job.source, in: folder), FileManager.default.fileExists(atPath: sourceURL.path) else { throw APIError.transport(T("The local recording is missing. Choose the file again.")) }
             guard job.received >= 0 && job.received <= job.bytes else { throw APIError.decoding }
             let completing = job.received == job.bytes
-            let chunk = URL(fileURLWithPath: job.source).deletingLastPathComponent().appendingPathComponent(completing ? "complete.json" : "chunk-\(job.received).bin")
+            let chunk = sourceURL.deletingLastPathComponent().appendingPathComponent(completing ? "complete.json" : "chunk-\(job.received).bin")
             if completing { try Data("{}".utf8).write(to: chunk, options: .atomic) }
             else {
-                let offset = job.received, count = min(job.chunkBytes, job.bytes - job.received), sourceURL = URL(fileURLWithPath: job.source)
+                let offset = job.received, count = min(job.chunkBytes, job.bytes - job.received)
                 try await Task.detached(priority: .utility) {
                     let file = try FileHandle(forReadingFrom: sourceURL); defer { try? file.close() }
                     try file.seek(toOffset: UInt64(offset))
@@ -154,7 +154,7 @@ final class MeetingUploads {
     }
     private func finish(_ id: String) {
         if let job = jobs.removeValue(forKey: id) {
-            try? FileManager.default.removeItem(at: URL(fileURLWithPath: job.source).deletingLastPathComponent())
+            if let source = MeetingStorage.resolve(job.source, in: folder) { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
             if let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
         }
         active.remove(id); fractions[id] = 1; failures[id] = nil; save()

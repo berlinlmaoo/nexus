@@ -93,7 +93,7 @@ struct NXProjectLink: Equatable {
         let value = { (k: String) -> String? in
             query.first { $0.name == k }?.value.flatMap { $0.isEmpty ? nil : $0 }
         }
-        let view = value("view")?.lowercased(), event = value("event"), date = value("date"), form = value("form")
+        let view = (value("view") ?? value("v"))?.lowercased(), event = value("event"), date = value("date"), form = value("form")
         guard view != nil || event != nil || date != nil || form != nil else { return nil }
         self.projectId = projectId
         self.view = view

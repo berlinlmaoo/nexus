@@ -283,5 +283,17 @@ extension AppLanguage {
         "Audience": "Audiens",
         "Content": "Konten",
         "Choose an earlier date.": "Pilih tanggal lebih awal.",
+        "Move": "Pindahkan",
     ]
+}
+
+// Tool Apply labels have a narrower meaning than the existing Forms/Threads actions.
+extension AppLanguage {
+    func gideonActionApply(_ action: GideonToolAction) -> String {
+        if lang == .id {
+            if action.id == "submit_leave_request" { return "Ajukan" }
+            if action.id == "draft_announcement" { return "Posting" }
+        }
+        return translate(action.apply)
+    }
 }

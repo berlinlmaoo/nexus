@@ -20,23 +20,24 @@ final class MeetingRecorder: NSObject, AVAudioRecorderDelegate {
     private var owner: String?
     private struct Draft: Codable { let path: String; let owner: String; let elapsed: Double }
     private let draftURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("meeting-recording.json")
+    private var recordingsFolder: URL { draftURL.deletingLastPathComponent().appendingPathComponent("MeetingRecordings", isDirectory: true) }
     func restoreForCurrentUser() {
         guard !recording, !paused, let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.owner == Keychain.load()?.userId,
-              FileManager.default.fileExists(atPath: draft.path) else { return }
-        file = URL(fileURLWithPath: draft.path); owner = draft.owner; elapsed = draft.elapsed
+              let source = MeetingStorage.resolve(draft.path, in: recordingsFolder), FileManager.default.fileExists(atPath: source.path) else { return }
+        file = source; owner = draft.owner; elapsed = draft.elapsed
     }
     private func saveDraft() {
         guard let file, let owner else { return }
-        let draft = Draft(path: file.path, owner: owner, elapsed: elapsed)
+        let draft = Draft(path: file.lastPathComponent, owner: owner, elapsed: elapsed)
         if let data = try? JSONEncoder().encode(draft) { try? data.write(to: draftURL, options: .atomic) }
     }
     func uploaded(_ path: String) {
-        let recordings = draftURL.deletingLastPathComponent().appendingPathComponent("MeetingRecordings").path + "/"
-        guard path.hasPrefix(recordings) else { return }
-        try? FileManager.default.removeItem(atPath: path)
-        if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), draft.path == path { try? FileManager.default.removeItem(at: draftURL) }
-        if file?.path == path { file = nil; owner = nil; elapsed = 0 }
+        guard let source = MeetingStorage.resolve(path, in: recordingsFolder) else { return }
+        try? FileManager.default.removeItem(at: source)
+        if let data = try? Data(contentsOf: draftURL), let draft = try? JSONDecoder().decode(Draft.self, from: data), MeetingStorage.resolve(draft.path, in: recordingsFolder) == source { try? FileManager.default.removeItem(at: draftURL) }
+        if file == source { file = nil; owner = nil; elapsed = 0 }
     }
+
     private override init() {
         super.init()
         restoreForCurrentUser()
