@@ -470,15 +470,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Unsupported custom field type" }, { status: 400 })
     }
 
-    if (taskId) {
-      const allowed = await canAccessTaskCustomFields(session.user.id, existingField.projectId, taskId)
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
-    } else {
+    // Writing a value is an edit (Can edit, lib/rbac.ts) like every other task edit. The workspace-wide
+    // fallback of canAccessTaskCustomFields is for READING only: it let any workspace member (a Staff outside
+    // the project, a Can view or Can comment member) overwrite the field values of a task (QA final 19 Oct).
+    {
       const { allowed } = await requireProjectMember(session.user.id, existingField.projectId)
       if (!allowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
       }
     }
 

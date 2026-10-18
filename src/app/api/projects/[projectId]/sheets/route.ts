@@ -68,7 +68,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       try {
         return await createSheetAt(projectId, body, session.user.id)
       } catch (error) {
-        if (attempt < 4 && (error as { code?: string })?.code === "P2002") continue
+        // Up to 12 tries with a short random pause: six clicks/tabs at once used to exhaust 4 tries (QA final 19 Oct).
+        if (attempt < 12 && (error as { code?: string })?.code === "P2002") {
+          await new Promise((r) => setTimeout(r, 5 + Math.random() * 40))
+          continue
+        }
         throw error
       }
     }
