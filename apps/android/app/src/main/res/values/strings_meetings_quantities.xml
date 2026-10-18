@@ -1,0 +1,10 @@
+<resources>
+    <plurals name="meet_apply_tasks">
+        <item quantity="one">Save the minutes and create %1$d task</item>
+        <item quantity="other">Save the minutes and create %1$d tasks</item>
+    </plurals>
+    <plurals name="meet_saved_tasks">
+        <item quantity="one">Minutes saved and %1$d task created</item>
+        <item quantity="other">Minutes saved and %1$d tasks created</item>
+    </plurals>
+</resources>

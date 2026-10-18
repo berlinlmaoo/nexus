@@ -1,0 +1,10 @@
+<resources>
+    <plurals name="meet_apply_tasks">
+        <item quantity="one">Simpan notulen dan buat %1$d task</item>
+        <item quantity="other">Simpan notulen dan buat %1$d task</item>
+    </plurals>
+    <plurals name="meet_saved_tasks">
+        <item quantity="one">Notulen disimpan dan %1$d task dibuat</item>
+        <item quantity="other">Notulen disimpan dan %1$d task dibuat</item>
+    </plurals>
+</resources>

@@ -6,7 +6,7 @@
     <string name="rem_empty">Belum ada pengingat</string>
     <string name="rem_empty_hint">Tulis pengingat dan pilih waktu di atas.</string>
     <string name="rem_text_error">Tulis pengingat 1–280 karakter.</string>
-    <string name="rem_time_error">Pilih waktu mendatang dalam setahun ke depan (WIB).</string>
+    <string name="rem_time_error">Pilih waktu pengingat mendatang yang valid (WIB).</string>
     <string name="rem_too_many">Pengingat terlalu banyak. Batalkan satu sebelum menambah lagi.</string>
     <string name="rem_gone">Pengingat itu sudah tidak tersedia.</string>
     <string name="rem_failed">Pengingat belum bisa diperbarui. Coba lagi.</string>

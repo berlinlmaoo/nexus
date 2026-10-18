@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -126,7 +127,7 @@ import java.time.LocalDate
                 if (MeetingRules.retryable(m)) NxButton(stringResource(R.string.gx_try_again), { vm.action("retry", lang) }, enabled = !state.busy)
             } }
             if (m.status == "APPLIED") item { Column(Modifier.fillMaxWidth().background(c.success.copy(alpha = .08f), RoundedCornerShape(12.dp)).padding(12.dp)) {
-                Text(stringResource(R.string.meet_saved, m.taskCount.toString()), color = c.success, fontWeight = FontWeight.SemiBold)
+                Text(pluralStringResource(R.plurals.meet_saved_tasks, m.taskCount, m.taskCount), color = c.success, fontWeight = FontWeight.SemiBold)
                 m.doc?.let { doc -> TextButton(onClick = { container.router.open(Target.Docs(doc.id)) }) { Text(stringResource(R.string.meet_open_minutes)) } }
             } }
             if (m.status in setOf("READY", "APPLIED")) {
@@ -210,13 +211,15 @@ import java.time.LocalDate
             if (m.projectId == null) Text(stringResource(R.string.meet_need_project), color = c.warningFg, fontSize = 12.sp)
             if (m.proposals.any { it.include && it.title.isBlank() }) Text(stringResource(R.string.meet_empty_title), color = c.warningFg, fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.meet_apply_summary, m.proposals.count { it.include }.toString()), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                val count = m.proposals.count { it.include }
+                Text(pluralStringResource(R.plurals.meet_apply_tasks, count, count), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
                 NxButton(stringResource(R.string.meet_apply), { confirmation = "apply" }, kind = NxButtonKind.PRIMARY, enabled = MeetingRules.canApply(m) && !state.busy && !state.saving)
             }
         }
     }
     confirmation?.let { action -> AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(stringResource(when (action) { "delete" -> R.string.meet_delete; "rewrite" -> R.string.meet_rewrite; else -> R.string.meet_apply })) }, text = {
-        Text(stringResource(when (action) { "delete" -> R.string.meet_delete_confirm; "rewrite" -> R.string.meet_rewrite_confirm; else -> R.string.meet_apply_summary }, *if (action == "apply") arrayOf(m?.proposals?.count { it.include }.toString()) else emptyArray()))
+        val count = m?.proposals?.count { it.include } ?: 0
+        Text(if (action == "apply") pluralStringResource(R.plurals.meet_apply_tasks, count, count) else stringResource(if (action == "delete") R.string.meet_delete_confirm else R.string.meet_rewrite_confirm))
     }, confirmButton = { TextButton(onClick = { confirmation = null; vm.action(action, lang) }) { Text(stringResource(when (action) { "delete" -> R.string.meet_delete; "rewrite" -> R.string.meet_rewrite; else -> R.string.meet_apply }), color = if (action == "delete") c.dangerText else c.foreground) } }, dismissButton = { TextButton(onClick = { confirmation = null }) { Text(stringResource(R.string.cancel)) } }) }
 }
 

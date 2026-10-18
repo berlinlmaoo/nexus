@@ -6,7 +6,7 @@
     <string name="rem_empty">No reminders yet</string>
     <string name="rem_empty_hint">Write a reminder and choose a time above.</string>
     <string name="rem_text_error">Write a reminder of 1–280 characters.</string>
-    <string name="rem_time_error">Choose a future time within the next year (WIB).</string>
+    <string name="rem_time_error">Choose a valid future reminder time (WIB).</string>
     <string name="rem_too_many">You have too many reminders. Cancel one before adding another.</string>
     <string name="rem_gone">That reminder is no longer available.</string>
     <string name="rem_failed">Could not update reminders. Try again.</string>
