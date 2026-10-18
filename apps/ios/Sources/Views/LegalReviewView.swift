@@ -213,14 +213,12 @@ private struct LegalParagraphText: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
         let content = attributed()
-        if !editing && view.isFirstResponder { view.resignFirstResponder() }
-        if view.attributedText != content && !view.isFirstResponder { view.attributedText = content }
         view.isEditable = editing
         view.isSelectable = editing
         view.isUserInteractionEnabled = editing
+        if view.attributedText != content && !view.isFirstResponder { view.attributedText = content }
         view.typingAttributes = content.attributes(at: 0, effectiveRange: nil)
-        if editing && !view.isFirstResponder { view.becomeFirstResponder() }
-        if !editing && view.isFirstResponder { view.resignFirstResponder() }
+        context.coordinator.updateFocus(view, editing: editing)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let w = max(1, proposal.width ?? 300)
@@ -269,6 +267,28 @@ private struct LegalParagraphText: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: LegalParagraphText
         init(_ parent: LegalParagraphText) { self.parent = parent }
+        private var wantsFocus = false
+        private var focusScheduled = false
+
+        // Changing the first responder inside updateUIView re-enters SwiftUI's graph update.
+        // Defer it once, and read the latest editing state when the queued operation runs.
+        func updateFocus(_ view: UITextView, editing: Bool) {
+            wantsFocus = editing
+            guard !focusScheduled, editing != view.isFirstResponder else { return }
+            focusScheduled = true
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.focusScheduled = false
+                if self.wantsFocus {
+                    if view.window != nil && !view.isFirstResponder { view.becomeFirstResponder() }
+                } else {
+                    if view.isFirstResponder { view.resignFirstResponder() }
+                    let content = self.parent.attributed()
+                    if view.attributedText != content { view.attributedText = content }
+                }
+            }
+        }
+
         func textViewDidChange(_ textView: UITextView) {
             let marker = parent.paragraph.layout?.marker.map { $0 + "\t" } ?? ""
             let value = textView.text ?? ""

@@ -535,7 +535,7 @@ final class NEXUSUITour: XCTestCase {
                     return "wrong-screen: \(screen.id) (no \"\(Self.labels(step)[0])\" button found)"
                 }
                 revealNativeTab(button)
-                guard button.isHittable else { return "wrong-screen: \(screen.id) (button is offscreen: \(Self.labels(step)[0]))" }
+                guard app.windows.firstMatch.frame.intersects(button.frame), button.isHittable else { return "wrong-screen: \(screen.id) (button is offscreen: \(Self.labels(step)[0]))" }
                 // A sheet over it (the button is no longer hittable), a chip now selected, or a new picture.
                 guard tapUntil(button, landed: { !button.exists || !button.isHittable || button.isSelected }) else {
                     return "wrong-screen: \(screen.id) (tapped \"\(Self.labels(step)[0])\", nothing opened)"
@@ -635,7 +635,7 @@ final class NEXUSUITour: XCTestCase {
     @MainActor
     private func revealNativeTab(_ button: XCUIElement) {
         for _ in 0..<8 {
-            guard button.exists, !button.isHittable else { return }
+            guard button.exists else { return }
             let frame = button.frame
             let window = app.windows.firstMatch.frame
             guard frame.maxX > window.maxX || frame.minX < window.minX else { return }
