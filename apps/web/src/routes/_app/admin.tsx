@@ -770,7 +770,9 @@ function UserRow(props: UserRowProps) {
           )}
         </td>
         <td className="px-4 py-3 text-right">
-          <div className="flex items-center justify-end gap-2">
+          {/* Phone: role chip above Details, so Details is always on screen instead of past the swipe edge
+              (owner, 18 Oct 2026). sm+ keeps one row. */}
+          <div className="flex flex-col items-end justify-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             {orgInfo ? (
               <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             ) : deactivated ? (
