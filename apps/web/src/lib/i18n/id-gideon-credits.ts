@@ -10,7 +10,7 @@ export const ID_GIDEON_CREDITS: Record<string, string> = {
   "answers": "jawaban",
   "Answers": "Jawaban",
   "Ask GIDEON something. Each answer shows up here with what it cost.": "Tanya sesuatu ke GIDEON. Setiap jawaban muncul di sini beserta biayanya.",
-  "A typical question: Phaëthon ≈ 10 credits, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 free.": "Pertanyaan biasa: Phaëthon ≈ 10 kredit, Artemis ≈ 45, Aphrodite ≈ 1, Model 0 gratis.",
+  "A short question costs about: Phaëthon 15, Artemis 70, Aphrodite 1, Model 0 free. Questions that search your work cost several times more.": "Kira-kira biaya pertanyaan singkat: Phaëthon 15, Artemis 70, Aphrodite 1, Model 0 gratis. Pertanyaan yang mencari di pekerjaanmu bisa beberapa kali lipat.",
   "backup answer": "jawaban cadangan",
   "bonus": "bonus",
   "Bonus added": "Bonus ditambahkan",
