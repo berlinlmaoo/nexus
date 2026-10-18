@@ -405,7 +405,7 @@ struct LegalDocumentsPane: View {
     }
 
     private var wideHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: narrowTable ? 8 : 12) {
             Text(T("Number")).frame(width: numberW, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
             if showCounterparty { Text(T("Counterparty")).frame(width: counterpartyW, alignment: .leading) }
@@ -424,7 +424,7 @@ struct LegalDocumentsPane: View {
     /// Counterparty (mostly "—"), a Company wide enough for "The Z Networks" on one line; Title takes the rest.
     /// 170 since run 17: the folded number needs at most ~170 pt ("PATS/PKS-UNIV/…/2026/005"), and the 40 pt
     /// spare went to Title, which still stopped at "…University" after two lines (UI tour run 17, R17-M-09).
-    private var counterpartyW: CGFloat { narrowTable ? 96 : 130 }
+    private var counterpartyW: CGFloat { narrowTable ? 84 : 130 }
     /// A wide table (a Mac window, an iPad in landscape) gives the number the web's width: "SPK/CH/PATS-UNIV/…/2027/001"
     /// rather than "SPK/CH/…/2027/001" (UI tour run 20, R20-B-23).
     private var wideTable: Bool { width - 2 * gutter >= 1000 }
@@ -432,10 +432,10 @@ struct LegalDocumentsPane: View {
     /// wide columns Title had ~130 pt and ended "[TEST] seq 03_SPK_City_…", while "PATS" and "14 Oct" sat in
     /// ~150 pt of empty room each (UI tour run 18, iPad R18-I-02).
     private var narrowTable: Bool { width - 2 * gutter < 760 }
-    private var numberW: CGFloat { narrowTable ? 150 : wideTable ? 230 : 170 }
+    private var numberW: CGFloat { narrowTable ? 124 : wideTable ? 230 : 170 }
     // "The Z Networks" whole with room before the Date column (iPad R20-I-07: it butted against it).
-    private var companyW: CGFloat { narrowTable ? 104 : 124 }
-    private var dateW: CGFloat { narrowTable ? 62 : 90 }
+    private var companyW: CGFloat { narrowTable ? 92 : 124 }
+    private var dateW: CGFloat { narrowTable ? 56 : 90 }
     private var statusW: CGFloat { narrowTable ? 74 : 80 }
 
     /// A person's name kept on one line: "Signed 14 Oct by QA / Dev 5" broke it (UI tour run 20, R20-I-14).
@@ -476,7 +476,7 @@ struct LegalDocumentsPane: View {
     }
 
     private func wideRow(_ d: LegalDocumentSummary) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: narrowTable ? 8 : 12) {
             // Numbers run long ("SPK/CH/PATS-UNIV/YOGYAKARTA/JAN/2027/001"): cut in the middle so the series
             // prefix and the sequence both stay readable, with the full number on hover (UI tour run 11, MC-2).
             // The whole number in a wider column (run 14, P-M16: "SPK/CH/PATS-UNI…TA/JAN/2027/001" with a 180 pt
@@ -501,15 +501,19 @@ struct LegalDocumentsPane: View {
             .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
                 // The whole title, as the web's archive (UI tour run 19, iPad R19-I-04: two lines and "…").
-                Text(LegalLabels.title(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
+                if narrowTable {
+                    LegalArchiveTitle(text: LegalLabels.title(d.title))
+                        .font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                } else {
+                    Text(LegalLabels.title(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                }
                 let sub = subtitle(d)
                 // The whole meta line, wrapped ("4 addenda · Signed 14 Oct by QA…" was cut; iPad R20-I-07).
                 if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true) }
                 parentLine(d)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: narrowTable ? 180 : nil, maxWidth: .infinity, alignment: .leading)
             if showCounterparty {
                 Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                     .lineLimit(2).frame(width: counterpartyW, alignment: .leading)

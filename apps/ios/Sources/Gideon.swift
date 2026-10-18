@@ -394,6 +394,9 @@ private struct GideonEvent: Decodable {
     let proposal: GideonProposal?
     let summary: GideonCreditSummary?
     let notice: GideonCreditNotice?
+    let tier: String?
+    let reason: String?
+    let code: String?
 }
 
 /// What the stream hands the chat, in order.
@@ -410,6 +413,7 @@ enum GideonStreamEvent: Sendable {
     case proposal(GideonProposal)
     case credits(GideonCreditSummary?, GideonCreditNotice?)
     case chat(id: String, title: String?)
+    case unavailable(tier: String, reason: String?)
 }
 
 private struct GideonChatsResponse: Decodable { let chats: [GideonChatSummary]? }
@@ -672,7 +676,12 @@ enum GideonClient {
                             if let id = event.id { continuation.yield(.chat(id: id, title: event.title)) }
                         case "credits":
                             continuation.yield(.credits(event.summary, event.notice))
+                        case "tier_unavailable":
+                            continuation.yield(.unavailable(tier: event.tier ?? "experimental", reason: event.reason))
                         case "error":
+                            if event.code == "model0_unavailable" {
+                                throw APIError.transport(T("GIDEON Model 0 is unavailable right now."))
+                            }
                             throw GideonProblem.stream(event.content ?? "")
                         case "done":
                             continuation.finish()
@@ -1141,6 +1150,8 @@ final class GideonChat {
                 if generation != gen { break }
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
                 switch event {
+                case .unavailable(let tier, let reason):
+                    GideonTierStatus.shared.unavailable(tier, reason: reason)
                 case .delta(let chunk):
                     // Only the first chunk is animated, and only to cross-fade the dots out.
                     if turns[index].content.isEmpty {

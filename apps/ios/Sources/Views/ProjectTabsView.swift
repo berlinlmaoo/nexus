@@ -1860,6 +1860,7 @@ struct ProjectChatTab: View {
     @Environment(AuthStore.self) private var auth
     @State private var room: Conversation?
     @State private var loading = true
+    @State private var roomFailure: Error?
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
@@ -1868,15 +1869,24 @@ struct ProjectChatTab: View {
                                members: room.members ?? [], projectId: projectId,
                                canPost: canPost && room.canPost != false)
             }
-            else { TabEmpty(icon: "bubble.left.and.bubble.right", text: T("Project chat isn't available yet.")) }
+            else if let roomFailure {
+                LoadErrorView(error: roomFailure, what: T("Messages"), retry: { Task { await loadRoom() } }, compact: true)
+            } else {
+                EmptyState(icon: "bubble.left.and.bubble.right", title: T("This project's chat room isn't active yet."),
+                           subtitle: T("No chat room is linked to this project for your account. Ask someone with Full access to check project membership, then refresh."),
+                           actionTitle: T("Refresh"), action: { Task { await loadRoom() } })
+            }
         }
-        .task {
+        .task { await loadRoom() }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusWorkspaceChanged)) { _ in Task { await loadRoom() } }
+    }
+    private func loadRoom() async {
+            loading = true; roomFailure = nil
             do {
                 let convos = try await APIClient.shared.conversations()
                 room = convos.first { $0.type == "PROJECT" && $0.projectId == projectId }
-            } catch APIError.unauthorized { auth.logout() } catch { room = nil }
+            } catch APIError.unauthorized { auth.logout() } catch { roomFailure = error }
             loading = false
-        }
     }
 }
 

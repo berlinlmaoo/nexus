@@ -63,6 +63,10 @@ final class RealtimeClient {
         // Access to a project ended while its screen was open (web lib/realtime.tsx onJoinDenied): that
         // project / sheet refetches and shows the no-access state, and the project lists refresh.
         engine.onDenied = { room, reason in
+            if room == "gideon:perf" {
+                NotificationCenter.default.post(name: .nexusGideonPerfDenied, object: nil)
+                return
+            }
             guard reason == "revoked", !room.isEmpty else { return }
             let center = NotificationCenter.default
             center.post(name: .nexusRoomRevoked, object: nil, userInfo: [RealtimeKey.room: room])
@@ -169,6 +173,7 @@ final class RealtimeClient {
     /// After every connect: whatever was sent while the link was down is gone, so every live screen
     /// on display reloads once. The screens' quiet reloads are cheap and coalesce.
     private func catchUp() {
+        NotificationCenter.default.post(name: .nexusRealtimeConnected, object: nil)
         let center = NotificationCenter.default
         center.post(name: .nexusWorkspaceChanged, object: nil)
         center.post(name: .nexusAuditChanged, object: nil)
@@ -234,6 +239,15 @@ final class RealtimeClient {
             center.post(name: .nexusInboxChanged, object: nil)
         case "gideon-credits":
             Task { await GideonCredits.shared.refresh() }
+        case "gideon-tiers":
+            if let json = payload?["tiers"]?.serialized.data(using: .utf8),
+               let tiers = try? JSONDecoder().decode([String: GideonTierAvailability].self, from: json) {
+                GideonTierStatus.shared.accept(tiers)
+            }
+        case "gideon-perf":
+            center.post(name: .nexusGideonPerf, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
+        case "meeting-changed":
+            center.post(name: .nexusMeetingChanged, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
         case "task-created", "task-updated":
             let id = payload?["id"]?.string
             let updatedAt = payload?["updatedAt"]?.string

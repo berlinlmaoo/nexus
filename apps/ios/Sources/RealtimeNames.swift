@@ -11,6 +11,10 @@ import Foundation
 // Post from any thread: LiveRefresh hops to the main queue before it acts.
 
 extension Notification.Name {
+    static let nexusGideonPerf = Notification.Name("nexus.gideon-perf")
+    static let nexusGideonPerfDenied = Notification.Name("nexus.gideon-perf-denied")
+    static let nexusRealtimeConnected = Notification.Name("nexus.realtime-connected")
+    static let nexusMeetingChanged = Notification.Name("nexus.meeting-changed")
     /// Control Room → Audit: the log gained an entry, or an entry changed (a delete was restored).
     /// userInfo, optional: `RealtimeKey.auditId` — the entry that changed.
     static let nexusAuditChanged = Notification.Name("nexus.audit.changed")

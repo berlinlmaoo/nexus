@@ -24,5 +24,13 @@ extension AppLanguage {
         "Couldn't apply: %@": "Tidak bisa diterapkan: %@",
         "No projects found": "Project tidak ditemukan",
         "Try a different search.": "Coba pencarian lain.",
+        "Unavailable right now": "Sedang tidak tersedia",
+        "The office GPU is transcribing a meeting.": "GPU kantor sedang mentranskrip meeting.",
+        "It's starting up again.": "Sedang dinyalakan lagi.",
+        "The local model isn't responding.": "Model lokal tidak merespons.",
+        "GIDEON Model 0 is unavailable right now.": "GIDEON Model 0 sedang tidak tersedia.",
+        "Use GIDEON Phaëthon": "Pakai GIDEON Phaëthon",
+        "This project's chat room isn't active yet.": "Ruang chat project ini belum aktif.",
+        "No chat room is linked to this project for your account. Ask someone with Full access to check project membership, then refresh.": "Belum ada ruang chat project yang terhubung ke akunmu. Minta orang dengan Akses penuh memeriksa keanggotaan project, lalu muat ulang.",
     ]
 }

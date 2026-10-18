@@ -125,6 +125,7 @@ struct GideonPanel: View {
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @State private var showReviewNotice = false
+    @State private var tierStatus = GideonTierStatus.shared
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
     /// "Review before writing ▾" in the composer (web gideon-approval), remembered on the device.
     @AppStorage("gideon.approval") private var approvalRaw = GideonApprovalMode.fallback.rawValue
@@ -237,6 +238,7 @@ struct GideonPanel: View {
                 } message: { Text(T("Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.")) } }
         }
         .task {
+            await tierStatus.refresh(force: true)
             if let p = try? await GideonClient.prefs() {
                 assistantName = p.assistantName ?? ""
                 showReviewNotice = p.reviewNotice
@@ -450,12 +452,13 @@ struct GideonPanel: View {
     /// "Luna ▾" (web SelectPicker): the tier, with each one's blurb in the menu.
     private var tierChip: some View {
         Menu {
-            Picker(T("GIDEON tier"), selection: $tierRaw) {
-                ForEach(GideonTier.allCases) { option in
-                    Text(option.label).tag(option.rawValue)
-                }
+            ForEach(GideonTier.allCases) { option in
+                let status = tierStatus.state(option)
+                Button { tierRaw = option.rawValue } label: {
+                    Text(option.label)
+                    if !status.available { Text(T("Unavailable right now") + " · " + status.reasonText) }
+                }.disabled(!status.available)
             }
-            .pickerStyle(.inline)
             Text(tier.blurb)
         } label: {
             HStack(spacing: 4) {
@@ -990,6 +993,14 @@ struct GideonPanel: View {
     /// what is attached, and + · "Review before writing ▾" · send.
     private var composerArea: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if !tierStatus.state(tier).available {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text((tier == .experimental ? T("GIDEON Model 0 is unavailable right now.") : tier.label + " · " + T("Unavailable right now")) + " " + tierStatus.state(tier).reasonText)
+                        .font(NXFont.text(12)).foregroundStyle(NX.warning)
+                    Button(T("Use GIDEON Phaëthon")) { tierRaw = "luna" }.buttonStyle(.nxBordered)
+                }.padding(10).background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("gideon.tierUnavailable")
+            }
             if showReviewNotice {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "info.circle").foregroundStyle(NX.violetText)
@@ -1134,7 +1145,7 @@ struct GideonPanel: View {
     /// Deliberately does not consult `sending`. The composer stays live while GIDEON is thinking;
     /// what a mid-flight tap does is the store's problem, not the button's.
     private var canSend: Bool {
-        !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        tierStatus.state(tier).available && !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - attachments
@@ -1257,6 +1268,10 @@ struct GideonPanel: View {
     /// screen: the decode is done in a tap that is already paying for a layout pass, so the bubble's
     /// first draw and every redraw an arriving answer forces are cache reads and nothing more.
     private func submit() {
+        guard tierStatus.state(tier).available else {
+            chat.error = T("GIDEON Model 0 is unavailable right now.") + " " + tierStatus.state(tier).reasonText
+            return
+        }
         guard let turn = chat.submit(tier: tier, approvalMode: approvalMode) else { return }
         guard let index = turn.attachments.firstIndex(where: { $0.kind == .image }),
               let bytes = turn.attachments[index].bytes else { return }
