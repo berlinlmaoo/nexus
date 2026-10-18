@@ -24,7 +24,7 @@ async function load() {
   }
 }
 
-const { memoryKey, memoryRisk, asksToRemember, isAffirmation, parseMonthDay, monthDayInText, parseKind, cleanMemoryText, statesPreference, memoryTextFromQuestion } = await load()
+const { memoryKey, memoryRisk, asksToRemember, isAffirmation, parseMonthDay, monthDayInText, parseKind, cleanMemoryText, statesPreference, memoryTextFromQuestion, styleDirectives } = await load()
 
 let n = 0
 const t = (name, fn) => { fn(); n++; console.log("ok", name) }
@@ -87,6 +87,14 @@ t("a stated preference, and the memory text from a question", () => {
   assert.equal(memoryTextFromQuestion("Tolong ingat ya, aku pegang Intoo"), "Aku pegang Intoo")
   assert.equal(memoryTextFromQuestion("panggil aku pakai aku-kamu ya"), "Panggil aku pakai aku-kamu ya")
   assert.equal(memoryTextFromQuestion("x".repeat(300)), null)
+})
+
+t("style directives from preferences", () => {
+  assert.match(styleDirectives(["Lebih suka disapa dengan aku-kamu, bukan gue-lo."]).join(), /kamu.*JANGAN/)
+  assert.match(styleDirectives(["Pakai gue-lo aja"]).join(), /"lo"/)
+  assert.match(styleDirectives(["Bahasa formal ya"]).join(), /Anda/)
+  assert.deepEqual(styleDirectives(["Jawab singkat, pakai bahasa Inggris"]), ["answer in English", "jawab singkat"])
+  assert.deepEqual(styleDirectives(["Suka kopi"]), [])
 })
 
 console.log(`gideon-memory-text: ${n} groups passed`)

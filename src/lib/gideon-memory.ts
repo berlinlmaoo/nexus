@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { todayWib } from "@/lib/gideon-dates"
-import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay, monthDayInText, memoryTextFromQuestion, statesPreference, type MemoryKind } from "@/lib/gideon-memory-text"
+import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay, monthDayInText, memoryTextFromQuestion, statesPreference, styleDirectives, type MemoryKind } from "@/lib/gideon-memory-text"
 
 /**
  * GIDEON Memory (owner, 19 Oct 2026: "memory per orang boleh, jadi GIDEON bisa personal ke orang-orangnya dan lebih
@@ -113,7 +113,11 @@ const KIND_WORD: Record<MemoryKind, string> = { PREFERENCE: "gaya", PERSON: "ten
  * context: the block only changes when a memory does, so it stays in the cached prefix). Capped to
  * MEMORY_PROMPT_CHARS: preferences first (they shape every answer), then the rest, newest kept.
  */
-export async function memoryPromptLines(userId: string, personName: string, now: Date = new Date()): Promise<{ personal: string[]; dynamic: string[] }> {
+export async function memoryPromptLines(userId: string, personName: string, opts: { tier?: string; now?: Date } = {}): Promise<{ personal: string[]; dynamic: string[] }> {
+  const now = opts.now ?? new Date()
+  // Model 0 (local 9B, 32k window) gets only how to talk to them and today's date: it tended to recite every fact
+  // it was handed, which reads as creepy. The hosted tiers get everything, used only when relevant.
+  const styleOnly = opts.tier === "experimental"
   const who = personName?.trim() || "Orang ini"
   const none = { personal: [] as string[], dynamic: [] as string[] }
   if (await isMemoryPaused(userId)) {
@@ -128,7 +132,9 @@ export async function memoryPromptLines(userId: string, personName: string, now:
   if (!rows.length) return none
   const sorted = rows
     .map((r) => ({ ...r, kind: parseKind(r.kind) }))
+    .filter((r) => !styleOnly || r.kind === "PREFERENCE" || r.kind === "DATE")
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
+  if (!sorted.length) return none
   const lines: string[] = []
   let used = 0
   for (const r of sorted) {
@@ -143,8 +149,10 @@ export async function memoryPromptLines(userId: string, personName: string, now:
   ]
   // The style preferences once more right before the conversation (small models such as Model 0 follow what is near
   // the question; outside the cached prefix, a few dozen tokens).
-  const prefs = sorted.filter((r) => r.kind === "PREFERENCE").map((r) => r.text).join("; ").slice(0, 300)
-  const dynamic = prefs ? [`[GAYA ${who.toUpperCase()}] ${prefs} — patuhi di jawaban ini.`] : []
+  const prefTexts = sorted.filter((r) => r.kind === "PREFERENCE").map((r) => r.text)
+  const orders = styleDirectives(prefTexts)
+  const prefs = prefTexts.join("; ").slice(0, 300)
+  const dynamic = prefs ? [`[GAYA ${who.toUpperCase()}] ${orders.length ? `${orders.join("; ")}. ` : ""}(${prefs}) — patuhi di jawaban ini.`] : []
   // A date they shared is today (WIB): one warm line, once — only in the first answer of their day.
   const today = todayWib(now).slice(5)
   const todays = rows.filter((r) => r.monthDay === today)

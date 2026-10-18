@@ -98,3 +98,19 @@ export function memoryTextFromQuestion(question: string): string | null {
   if (!s || s.length > MEMORY_TEXT_MAX) return null
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+/**
+ * Concrete orders for the style the person chose, read from their PREFERENCE memories. A small model (Model 0)
+ * ignores "follow their preference" but follows "say kamu, never lo". Empty when nothing is recognised.
+ */
+export function styleDirectives(prefs: string[]): string[] {
+  const t = prefs.join(" ; ").toLowerCase()
+  const out: string[] = []
+  if (/aku[- ]?kamu/.test(t)) out.push("sapa dia \"kamu\" dan sebut dirimu \"aku\" — JANGAN pakai lo, lu, gue, gw")
+  else if (/(gue|gw|gua)[- ]?(lo|lu)|(lo|lu)[- ]?(gue|gw|gua)/.test(t)) out.push("sapa dia \"lo\" dan sebut dirimu \"gue\"")
+  else if (/saya[- ]?anda|\bformal\b|\banda\b/.test(t)) out.push("bahasa formal: sapa dia \"Anda\", sebut dirimu \"saya\"")
+  if (/\b(english|bahasa inggris|inggris)\b/.test(t)) out.push("answer in English")
+  if (/\b(singkat|pendek|short|brief|ringkas)\b/.test(t)) out.push("jawab singkat")
+  else if (/\b(detail|panjang|lengkap|detailed)\b/.test(t)) out.push("jawab detail")
+  return out
+}
