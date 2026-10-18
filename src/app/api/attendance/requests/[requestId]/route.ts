@@ -9,6 +9,7 @@ import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 import { notifyAttendanceRequestReviewed } from "@/lib/attendance-review-notify"
 import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
+import { touchPresenceSoon } from "@/lib/presence"
 
 export async function PATCH(
   request: NextRequest,
@@ -122,6 +123,8 @@ export async function PATCH(
         },
       })
 
+      // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+      touchPresenceSoon(updated.userId)
       return NextResponse.json({ request: serializeAttendanceRequest(updated) })
     }
 
@@ -221,6 +224,8 @@ export async function PATCH(
       xpRefunded,
     }).catch((e) => console.error("notifyAttendanceRequestReviewed failed", e))
 
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(updated.userId)
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })
   } catch (error) {
     console.error("Error updating attendance request:", error)

@@ -16,6 +16,7 @@ import { attendanceActionSchema } from "@/lib/validations"
 import { attendanceClientOf, browserAttendanceRefusal } from "@/lib/attendance-outside"
 import { androidBrowserAttendanceBlocked } from "@/lib/app-config"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { touchPresenceSoon } from "@/lib/presence"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 
@@ -412,6 +413,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(session.user.id)
     return NextResponse.json({ record: serializeAttendanceRecord(record) }, { status: 201 })
   } catch (error) {
     console.error("Error checking in attendance:", error)

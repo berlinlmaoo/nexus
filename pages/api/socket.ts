@@ -627,6 +627,14 @@ export function initializeSocketServer(
     if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("reminders-changed", { id: data.id ?? null })
   })
 
+  // Presence status (lib/presence.ts, 19 Oct 2026): the status itself travels, because everyone in a workspace may
+  // see it and its reason (owner). To each workspace room the person is in, plus their own user room (other tabs).
+  eventBus.on(BUS_EVENTS.PRESENCE_CHANGED, (data: { userId?: string; workspaceIds?: string[]; status?: unknown }) => {
+    if (typeof data?.userId !== "string" || !data.userId || !data.status) return
+    const rooms = [`user:${data.userId}`, ...(data.workspaceIds ?? []).filter((w) => typeof w === "string" && w).map((w) => `workspace:${w}`)]
+    io.to(rooms).emit("presence-changed", { userId: data.userId, status: data.status })
+  })
+
   // GIDEON tier availability (18 Oct 2026): the same public fact for everyone, so it goes to every socket.
   eventBus.on(BUS_EVENTS.GIDEON_TIERS, (data: { tiers: unknown }) => {
     io.emit("gideon-tiers", { tiers: data?.tiers ?? null })

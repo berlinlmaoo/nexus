@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  AlarmClock, AlarmClockOff, ArrowUpRight, CalendarCheck, CalendarX, Check, CheckCheck, FileText, KanbanSquare, Link2,
+  AlarmClock, AlarmClockOff, ArrowUpRight, CalendarCheck, CircleDot, CalendarX, Check, CheckCheck, FileText, KanbanSquare, Link2,
   FolderInput, ListChecks, Loader2, Megaphone, Sheet, MessageSquare, PencilLine, Receipt, Scale, Send, TrendingUp, type LucideIcon,
 } from "lucide-react";
 import { decideGideonProposal, type GideonProposal } from "@/lib/gideon";
@@ -38,6 +38,7 @@ const KINDS: Record<string, Kind> = {
   save_file_to_vault: { icon: FolderInput, title: (t) => t("Save to Z Vault"), apply: (t) => t("Save"), done: (t) => t("Saved") },
   edit_doc: { icon: PencilLine, title: (t) => t("Edit a doc"), apply: (t) => t("Apply edit"), done: (t) => t("Edited") },
   draft_announcement: { icon: Megaphone, title: (t) => t("Post an announcement"), apply: (t) => t("Post"), done: (t) => t("Posted") },
+  set_my_status: { icon: CircleDot, title: (t) => t("Set your status"), apply: (t) => t("Set status"), done: (t) => t("Status set") },
 };
 const FALLBACK: Kind = { icon: FileText, title: (t) => t("Make a change"), apply: (t) => t("Apply"), done: (t) => t("Applied") };
 
@@ -51,6 +52,7 @@ const FIELD: Record<string, string> = {
   Until: "Until", Task: "Task", Subtasks: "Subtasks", Platform: "Platform", Label: "Label", Fields: "Fields", Password: "Password",
   Counterparty: "Counterparty", Location: "Location", Download: "Download", Tone: "Tone", Repeats: "Repeats", Announcement: "Announcement",
   Folder: "Folder", Status: "Status", Probability: "Probability", Term: "Term", Terms: "Terms", Invoice: "Invoice", Paid: "Paid",
+  From: "From",
   "Contract value": "Contract value", Event: "Event", "What worked": "What worked", "What didn't": "What didn't", Posts: "Posts",
 };
 /** Values the server writes in English that read as a whole word or phrase. */
@@ -233,6 +235,8 @@ export function extraStepLabel(tool: string, a: string, t: LangApi["t"]): string
     case "read_nexus_image": return a ? t("Looking at {name}", { name: a }) : t("Looking at an image");
     case "export_file": return a ? t("Making the file {name}", { name: a }) : t("Making a file");
     case "save_file_to_vault": return a ? t("Preparing to save {name} to Z Vault", { name: a }) : t("Preparing a Z Vault save");
+    case "get_person_status": return a ? t("Checking where {name} is", { name: a }) : t("Checking statuses");
+    case "set_my_status": return a ? t("Preparing your status: {name}", { name: a }) : t("Preparing your status");
     default: return null;
   }
 }

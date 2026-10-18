@@ -15,6 +15,7 @@ import {
 } from "@/lib/attendance"
 import { cancelAttendancePenaltiesForDate, isAutoDeduction, lockAttendanceRequests } from "@/lib/attendance-absence"
 import { notifyAttendanceOverride } from "@/lib/attendance-review-notify"
+import { touchPresenceSoon } from "@/lib/presence"
 
 type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
 const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "PERMIT", "CLEAR_PENALTY"])
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded })
     }
 
@@ -166,6 +168,7 @@ export async function POST(req: NextRequest) {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, canceledRequests: singleDay.length })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "PRESENT", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (present) failed", e))
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, canceledRequests: singleDay.length, multiDayRequestsLeft: multiDay })
     }
 
@@ -241,6 +244,7 @@ export async function POST(req: NextRequest) {
     const { closed } = outcome
     if (outcome.kind === "already") {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, alreadyCovered: true, closedAttendance: closed.count })
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, alreadyCovered: true, closedAttendance: closed.count })
     }
     const { conflicting } = outcome
@@ -248,6 +252,7 @@ export async function POST(req: NextRequest) {
     await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
     notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })
       .catch((e) => console.error("notifyAttendanceOverride (status) failed", e))
+    touchPresenceSoon(targetUserId)
     return NextResponse.json({ ok: true, action, date: dateKey, refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
   } catch (error) {
     console.error("attendance override error:", error)

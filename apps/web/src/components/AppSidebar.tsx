@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi } from "@/lib/nexus-api";
+import { PresenceDot, PresenceLine, usePresence } from "@/lib/presence";
+import { SetStatusDialog } from "@/components/SetStatusDialog";
 import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
@@ -47,6 +49,8 @@ export function AppSidebar() {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const profileQuery = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const me = profileQuery.data?.user;
+  const myStatus = usePresence(me?.id);
+  const [statusOpen, setStatusOpen] = useState(false);
   // Org role gates management-only nav (Control Room /admin + Crew Hub /teams):
   // visible to BoD/Manager, hidden from Staff (and while role is still unknown).
   const orgRoleQuery = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
@@ -175,19 +179,31 @@ export function AppSidebar() {
         {/* Who's signed in gets the whole row and the actions sit on their own row under it: on one row the
             four buttons left "QA D…" / "qa5@…" (UI tour run 10, WD-7). The full name and email are on hover. */}
         <div className="flex flex-col gap-1 overflow-hidden px-1 py-1">
-        <div className="flex min-w-0 items-center gap-2" title={[me?.name, me?.email].filter(Boolean).join("\n") || undefined}>
-          {me?.avatar ? (
-            <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
-          ) : (
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-sidebar-border">
-              {(me?.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}
-            </span>
-          )}
-          <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+        {/* The identity row sets one's presence status (19 Oct 2026); the status replaces the email line while the
+            feature is on (the email stays in the tooltip). */}
+        <button
+          type="button"
+          onClick={() => setStatusOpen(true)}
+          disabled={!myStatus}
+          className="flex min-w-0 items-center gap-2 rounded-md text-left transition-colors enabled:hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:cursor-default"
+          title={[me?.name, me?.email, myStatus ? t("Set a status") : null].filter(Boolean).join("\n") || undefined}
+        >
+          <span className="relative shrink-0">
+            {me?.avatar ? (
+              <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
+            ) : (
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-sidebar-border">
+                {(me?.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}
+              </span>
+            )}
+            {myStatus && <PresenceDot status={myStatus} size={9} className="absolute -bottom-px -right-px outline-sidebar" />}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
             <span className="truncate text-xs font-medium">{me?.name ?? "—"}</span>
-            <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>
-          </div>
-        </div>
+            {myStatus ? <PresenceLine userId={me?.id} showUntil={false} className="flex max-w-full text-[10px]" /> : <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>}
+          </span>
+        </button>
+        <SetStatusDialog open={statusOpen} onOpenChange={setStatusOpen} meId={me?.id} />
         <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
           <button
             onClick={toggleTheme}

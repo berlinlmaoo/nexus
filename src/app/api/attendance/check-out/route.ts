@@ -18,6 +18,7 @@ import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 import { assessReflection } from "@/lib/reflection-quality"
 import { summarizeReflectionDay } from "@/lib/reflection-summaries"
+import { touchPresenceSoon } from "@/lib/presence"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 // Daily Reflection — mandatory recap before a day can be closed out.
@@ -407,6 +408,8 @@ export async function POST(request: NextRequest) {
     // a slow or dead agent must not slow down or fail a check-out.
     void summarizeReflectionDay(record.id)
 
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(session.user.id)
     return NextResponse.json({ record: serializeAttendanceRecord(record), pendingApproval: isOffsite })
   } catch (error) {
     console.error("Error checking out attendance:", error)

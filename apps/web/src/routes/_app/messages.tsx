@@ -18,6 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtime } from "@/lib/realtime";
 import { useTypingRooms } from "@/lib/chat-typing";
 import { t, useLang } from "@/lib/lang";
+import { PresenceLine, usePresence } from "@/lib/presence";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/LoadError";
 
@@ -145,6 +146,8 @@ function Messages() {
   useEffect(() => { if (!activeId && !goneId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, goneId, rows, phone]);
   const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
   const activeKey = active?.id ?? null;
+  // The other person's presence status shows under a DM's name (19 Oct 2026).
+  const dmPeerStatus = usePresence(active?.type === "DM" ? dmPeer(active, meId)?.id : null);
   const activeKeyRef = useRef<string | null>(null);
   activeKeyRef.current = activeKey;
 
@@ -301,6 +304,9 @@ function Messages() {
                     <span className="block truncate font-semibold">{convoTitle(active, meId)}</span>
                     {typingRooms.get(active.id)?.length ? (
                       <span className="block truncate text-xs font-medium text-primary">{t("typing…")}</span>
+                    ) : active.type === "DM" && dmPeerStatus ? (
+                      // Presence status of the other person (19 Oct 2026), live.
+                      <PresenceLine userId={dmPeer(active, meId)?.id} className="flex max-w-full" />
                     ) : (
                       <span className="block truncate text-xs text-muted-foreground">
                         {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
