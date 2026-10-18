@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, ChevronRight, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Link2, Loader2, LogOut, MessageSquare,
+  ArrowLeft, ChevronRight, Download, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Link2, Loader2, LogOut, MessageSquare,
   Pencil, Search, Trash2, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
@@ -19,6 +19,8 @@ import { ApiError, fmtTime, nexusApi, type NexusChatMediaType, type NexusConvers
 import { isMuted } from "@/lib/chat-unread";
 import { localeOf, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { humanSize } from "@/lib/vault-media";
+import { attachmentDisplayName, fileIconFor, fileTypeLabel, openHref } from "@/lib/chat-files";
 
 /**
  * The chat info panel, like WhatsApp's group info (SYSTEM-MESSAGES contract, Part 2, owner 8 Oct 2026):
@@ -673,6 +675,40 @@ function MediaList({ conversationId, type, onJump }: { conversationId: string; t
             </button>
           ))}
         </div>
+        {more}
+      </>
+    );
+  }
+  if (type === "docs") {
+    // A document opens (PDF, in the browser's viewer) or downloads under the name it was sent as.
+    return (
+      <>
+        <ul>
+          {items.map((it, i) => {
+            const name = it.name || it.title || attachmentDisplayName(null, it.url);
+            const Icon = fileIconFor(name, it.attachmentType);
+            const pdf = fileTypeLabel(name) === "PDF";
+            const meta = [fileTypeLabel(name), humanSize(it.size ?? null)].filter(Boolean).join(" · ");
+            return (
+              <li key={`${it.messageId}:${i}`} className="flex items-center gap-1 rounded-xl transition-colors hover:bg-accent">
+                <a
+                  href={pdf ? openHref(it.url, name) : it.url}
+                  {...(pdf ? { target: "_blank", rel: "noopener noreferrer" } : { download: name })}
+                  title={pdf ? t("Open {name}", { name }) : t("Download {name}", { name })}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" aria-hidden /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{name}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{[meta, it.sender.name, fmtDate(it.createdAt)].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </a>
+                <a href={it.url} download={name} title={t("Download")} aria-label={t("Download {name}", { name })} className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><Download className="h-4 w-4" /></a>
+                <button onClick={() => onJump(it.messageId)} title={t("Show in chat")} aria-label={t("Show in chat")} className="mr-1 shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-background"><MessageSquare className="h-4 w-4" /></button>
+              </li>
+            );
+          })}
+        </ul>
         {more}
       </>
     );

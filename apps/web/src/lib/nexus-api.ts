@@ -638,6 +638,9 @@ export type NexusReplyPreview = {
   /** The quoted picture, for a thumbnail (servers since 8 Oct 2026). */
   attachmentUrl?: string | null;
   attachmentType?: string | null;
+  /** A quoted document's name and size (servers since 18 Oct 2026). */
+  attachmentName?: string | null;
+  attachmentSize?: number | null;
   user?: NexusUser | null;
 };
 
@@ -663,9 +666,15 @@ export type NexusMessage = {
   content: string;
   createdAt?: string | null;
   user?: NexusUser | null;
-  /** Set when the message carries a picture. Always a /api/files/chat/ path the server issued. */
+  /**
+   * Set when the message carries a picture or (servers since 18 Oct 2026) a document. Always a
+   * /api/files/chat/ path the server issued. A document has a non-image attachmentType.
+   */
   attachmentUrl?: string | null;
   attachmentType?: string | null;
+  /** A document's name as it was sent ("Laporan Q3.pdf") and its size in bytes; null on pictures. */
+  attachmentName?: string | null;
+  attachmentSize?: number | null;
   /** Set when this message replies to another one in the same conversation; null otherwise. */
   replyTo?: NexusReplyPreview | null;
   /**
@@ -739,6 +748,9 @@ export type NexusChatMediaPage = {
     url: string;
     attachmentType?: string | null;
     title?: string;
+    /** docs: the file's own name and size (servers since 18 Oct 2026). */
+    name?: string | null;
+    size?: number | null;
   }>;
   nextCursor: string | null;
 };
@@ -2517,21 +2529,23 @@ export const nexusApi = {
   sendMessage: (
     id: string,
     content: string,
-    extra?: { mentionedUserIds?: string[]; attachmentUrl?: string; attachmentType?: string; replyToId?: string },
+    extra?: { mentionedUserIds?: string[]; attachmentUrl?: string; attachmentType?: string; attachmentName?: string; replyToId?: string },
   ) =>
     apiFetch<{ message: NexusMessage }>(`/api/conversations/${id}/messages`, {
       method: "POST",
       body: JSON.stringify({ content, ...extra }),
     }),
   /**
-   * One image per message, 8MB cap, images only. Membership is checked server-side before a byte is
-   * written, and the returned path is the ONLY form sendMessage will accept as an attachment.
+   * One picture (8 MB) or document (25 MB: PDF, Word, Excel, PowerPoint, CSV, TXT, ZIP) per message,
+   * with upload progress. Membership is checked server-side before a byte is written, a document's
+   * bytes must match its extension, and the returned path is the ONLY form sendMessage will accept
+   * as an attachment. Refusals are ApiErrors whose payload.code is UNSUPPORTED_TYPE or TOO_LARGE.
    */
-  uploadChatImage: (conversationId: string, file: File) => {
+  uploadChatFile: (conversationId: string, file: File, onProgress: (pct: number) => void, control?: UploadControl) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("conversationId", conversationId);
-    return apiFetch<{ url: string; type: string }>("/api/upload/chat", { method: "POST", body: fd });
+    return xhrUpload<{ url: string; type: string; kind?: "image" | "file"; name?: string; size?: number }>("/api/upload/chat", fd, file, onProgress, control);
   },
   /**
    * Add people to a GROUP chat. The server refuses DMs (two people is what a DM means) and project

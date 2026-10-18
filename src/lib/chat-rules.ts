@@ -71,6 +71,8 @@ export function chatPreviewText(input: {
   content?: string | null
   attachmentUrl?: string | null
   attachmentType?: string | null
+  /** A document's name (18 Oct 2026): "📎 Laporan.pdf" instead of "📎 Lampiran". */
+  attachmentName?: string | null
   max?: number
 }): string {
   const max = input.max ?? 160
@@ -78,7 +80,9 @@ export function chatPreviewText(input: {
   if (!text) {
     if (!input.attachmentUrl) return ""
     const t = (input.attachmentType ?? "").toLowerCase()
-    return !t || t.startsWith("image/") ? "📷 Foto" : "📎 Lampiran"
+    if (!t || t.startsWith("image/")) return "📷 Foto"
+    const name = (input.attachmentName ?? "").replace(/\s+/g, " ").trim()
+    return name ? `📎 ${name.length > max - 3 ? name.slice(0, max - 4) + "…" : name}` : "📎 Lampiran"
   }
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text
 }
@@ -124,6 +128,7 @@ export function buildChatPush(input: {
   content?: string | null
   attachmentUrl?: string | null
   attachmentType?: string | null
+  attachmentName?: string | null
   isMention: boolean
 }): ChatPushContent {
   const senderName = (input.senderName ?? "").trim() || "Seseorang"
