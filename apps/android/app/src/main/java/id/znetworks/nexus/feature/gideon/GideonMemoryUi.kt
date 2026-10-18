@@ -74,7 +74,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     } }
     LaunchedEffect(Unit) { act { store.refresh() } }
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        PageHeader(stringResource(R.string.gm_title), subtitle = stringResource(R.string.gm_subtitle), onBack = onBack) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
+        PageHeader(stringResource(R.string.gm_title), subtitle = stringResource(R.string.gm_subtitle), subtitleMaxLines = Int.MAX_VALUE, onBack = onBack) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {

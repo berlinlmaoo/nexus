@@ -79,6 +79,7 @@ fun PageHeader(
     leading: (@Composable () -> Unit)? = null,
     tabs: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
+    subtitleMaxLines: Int = 2,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Nx.colors
@@ -102,7 +103,7 @@ fun PageHeader(
                     modifier = Modifier.semantics { heading() }.then(if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier),
                 )
                 if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, fontFamily = TextFont, fontSize = 14.sp, lineHeight = 19.sp, color = c.mutedFg, maxLines = 2,
+                    Text(subtitle, fontFamily = TextFont, fontSize = 14.sp, lineHeight = 19.sp, color = c.mutedFg, maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
