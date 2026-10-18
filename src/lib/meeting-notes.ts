@@ -557,7 +557,17 @@ export async function summarizeMeeting(id: string): Promise<void> {
     }
     const lines = transcriptLines(segments, (l) => speakers[l]?.name || l)
     const runIds: string[] = []
+    // A shim that is restarting or busy answers 502 / nothing: two more tries, 20 s and 60 s later, before giving up
+    // (seen 18 Oct 2026: the agents VM restarting turned a whole meeting into FAILED).
     const ask = async (prompt: string, title: string) => {
+      for (const wait of [0, 20_000, 60_000]) {
+        if (wait) await new Promise((r) => setTimeout(r, wait))
+        const reply = await askOnce(prompt, title)
+        if (reply) return reply
+      }
+      return null
+    }
+    const askOnce = async (prompt: string, title: string) => {
       const reply = await askGideon({
         prompt: prompt.slice(0, PROMPT_CAP + 400),
         user: creator.name ?? "",
