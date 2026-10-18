@@ -1,4 +1,20 @@
 <resources>
+    <string name="chat_file_rules">Pilih file PDF, Word, Excel, PowerPoint, CSV, TXT atau ZIP maksimal 25 MB.</string>
+    <string name="chat_file_download">Unduh atau bagikan file</string>
+    <string name="gc_title">Kredit GIDEON</string>
+    <string name="gc_unlimited">Tanpa batas</string>
+    <string name="gc_today">Kredit hari ini %1$d/%2$d</string>
+    <string name="gc_pool">Pool bulanan %1$d/%2$d kredit</string>
+    <string name="gc_resets">Kredit harian direset pukul 00.00 WIB. Pool bulanan dipakai setelah kredit harian habis dan diperbarui setiap tanggal 28.</string>
+    <string name="gc_fallback">Kredit habis: GIDEON Aphrodite menjawab sebagai gantinya (sisa %1$d hari ini).</string>
+    <string name="gc_blocked">Kredit dan jawaban cadangan hari ini sudah habis. GIDEON Model 0 tetap gratis.</string>
+    <string name="gc_answer_fallback">Dijawab Aphrodite sebagai cadangan.</string>
+    <string name="gc_history">Riwayat penggunaan</string>
+    <string name="gc_empty">Belum ada penggunaan tercatat.</string>
+    <string name="gc_loading">Memuat kredit…</string>
+    <string name="gc_more">Muat lagi</string>
+    <string name="gc_stop">Hentikan</string>
+    <string name="gc_steps">✓ %1$d langkah</string>
     <string name="r21_follow">Ikuti task</string>
     <string name="r21_favorite">Favoritkan task</string>
     <string name="r21_like">Sukai task</string>

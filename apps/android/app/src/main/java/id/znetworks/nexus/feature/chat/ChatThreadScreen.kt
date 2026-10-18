@@ -44,6 +44,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import id.znetworks.nexus.core.files.FileOpener
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -260,6 +263,29 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun dismissNotice() = _state.update { it.copy(notice = null) }
     fun clearAttachment() = _state.update { it.copy(attachment = null) }
 
+    fun attachDocument(uri: Uri) {
+        val f = c.uploads.describe(uri)
+        if (f == null || !ChatDocuments.accepts(f.name, f.size)) { _state.update { it.copy(notice = res.getString(R.string.chat_file_rules)) }; return }
+        if (_state.value.uploading) return
+        _state.update { it.copy(uploading = true, notice = null) }
+        viewModelScope.launch {
+            try {
+                val up = c.uploads.send(f, "/api/upload/chat", listOf("conversationId" to id), emptyList(), ChatUpload.serializer()) { _, _ -> }
+                _state.update { it.copy(attachment = up) }
+            } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
+            _state.update { it.copy(uploading = false) }
+        }
+    }
+
+    fun openDocument(m: Message, share: Boolean) = viewModelScope.launch {
+        val url = m.attachmentUrl ?: return@launch
+        try {
+            if (!FileOpener.open(getApplication(), c.api, url,
+                    m.attachmentName ?: url.substringAfterLast('/').substringBefore('?'), m.attachmentType, share))
+                _state.update { it.copy(notice = res.getString(R.string.td_no_viewer)) }
+        } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
+    }
+
     /** The composer clears only after the server says yes: a failed send leaves the text in place. */
     fun send(text: String, onSent: () -> Unit) {
         val s = _state.value
@@ -405,6 +431,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     var viewing by remember { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::attach) }
+    val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::attachDocument) }
     val camera = rememberCameraCapture("chat") { vm.attach(it) }
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.sendLocation() }
     val lastId = s.messages.lastOrNull()?.id
@@ -532,6 +559,14 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                                 ChatPhoto(m.attachmentUrl, Modifier.padding(vertical = 4.dp).size(220.dp).clip18(), ContentScale.Crop, maxPx = 900,
                                     ink = if (mine) Color.White else c.mutedFg) { viewing = m.attachmentUrl }
                             }
+                            if (m.attachmentUrl != null && !m.isImage) Row(Modifier.fillMaxWidth().clickable { vm.openDocument(m, false) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Description, null, tint = fg, modifier = Modifier.size(28.dp))
+                                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                                    Text(m.attachmentName ?: stringResource(R.string.files), color = fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(id.znetworks.nexus.feature.tasks.sizeText(m.attachmentSize), color = fg, fontSize = 11.sp)
+                                }
+                                IconButton(onClick = { vm.openDocument(m, true) }) { Icon(Icons.Filled.Download, stringResource(R.string.chat_file_download), tint = fg) }
+                            }
                             when (val p = ChatPayload.parse(m.content)) {
                                 is ChatPayload.Location -> Row(Modifier.clickable {
                                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(p.url))) }
@@ -578,9 +613,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             }
             if (s.uploading || s.attachment != null) Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (s.uploading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else if (s.attachment?.kind == "file") Icon(Icons.Filled.Description, null, modifier = Modifier.size(40.dp))
                 else RemoteImage(s.attachment?.url, Modifier.size(56.dp).clip18(), ContentScale.Crop, maxPx = 200)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(if (s.uploading) R.string.chat_uploading else R.string.chat_photo_ready), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                Text(if (s.attachment?.kind == "file" && !s.uploading) s.attachment?.name.orEmpty() else stringResource(if (s.uploading) R.string.chat_uploading else R.string.chat_photo_ready), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
                 if (!s.uploading) IconButton(onClick = vm::clearAttachment) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
             }
             if (matches.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -599,6 +635,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 Box {
                     IconButton(onClick = { attachMenu = true }, enabled = !s.uploading) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.violetText) }
                     DropdownMenu(attachMenu, { attachMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, leadingIcon = { Icon(Icons.Filled.Description, null) }, onClick = {
+                            attachMenu = false; documents.launch(arrayOf("*/*"))
+                        })
                         DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, leadingIcon = { Icon(Icons.Filled.Image, null) }, onClick = {
                             attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         })

@@ -1,4 +1,20 @@
 <resources>
+    <string name="chat_file_rules">Choose a PDF, Word, Excel, PowerPoint, CSV, TXT or ZIP file up to 25 MB.</string>
+    <string name="chat_file_download">Download or share file</string>
+    <string name="gc_title">GIDEON credits</string>
+    <string name="gc_unlimited">Unlimited</string>
+    <string name="gc_today">Credits today %1$d/%2$d</string>
+    <string name="gc_pool">Monthly pool %1$d/%2$d credits</string>
+    <string name="gc_resets">Daily credits reset at 00:00 WIB. The monthly pool is used after daily credits and renews on the 28th.</string>
+    <string name="gc_fallback">Out of credits: GIDEON Aphrodite answers instead (%1$d left today).</string>
+    <string name="gc_blocked">Today\'s credits and backup answers are used up. GIDEON Model 0 is still free.</string>
+    <string name="gc_answer_fallback">Answered by Aphrodite as a backup.</string>
+    <string name="gc_history">Usage history</string>
+    <string name="gc_empty">No usage recorded yet.</string>
+    <string name="gc_loading">Loading credits…</string>
+    <string name="gc_more">Load more</string>
+    <string name="gc_stop">Stop</string>
+    <string name="gc_steps">✓ %1$d steps</string>
     <string name="r21_follow">Follow task</string>
     <string name="r21_favorite">Favourite task</string>
     <string name="r21_like">Like task</string>

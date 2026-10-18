@@ -193,12 +193,14 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                     }
                     ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() }
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { send(draft) }, enabled = !s.thinking && (draft.isNotBlank() || upload != null)) {
+                    if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
+                    else IconButton(onClick = { send(draft) }, enabled = draft.isNotBlank() || upload != null) {
                         Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.foreground else c.mutedFg)
                     }
                 }
             }
         }
+        GideonCreditMeter(container.api, s.thinking)
     }
     decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
@@ -239,12 +241,16 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Column(Modifier.widthIn(max = 320.dp).background(c.muted, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                Column(Modifier.widthIn(max = 320.dp).background(c.violet.copy(alpha = 0.06f), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
                     m.attachments.forEach { a -> Text("📎 " + (a.name?.takeIf { it.isNotBlank() && it != "image" } ?: stringResource(R.string.gd_image_attached)), fontSize = 12.sp, color = c.mutedFg) }
                     SelectionContainer { Text(m.content, fontSize = 15.sp, lineHeight = 21.sp, color = c.foreground) }
                 }
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                m.steps.forEach { st -> StepLine(st) }
+                if (m.steps.isNotEmpty()) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Text(stringResource(R.string.gc_steps, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
+                    if (expanded) m.steps.forEach { st -> StepLine(st) }
+                }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
                 // Review before writing: the changes waiting for Apply, then what GIDEON made directly.
                 m.proposals.forEach { p ->

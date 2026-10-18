@@ -6,6 +6,8 @@ import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.net.NexusJson
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -142,7 +144,9 @@ object GideonRules {
      * the interim text (a tool round started), `final` is the authoritative answer, `step` upserts a step by id,
      * `chat` names the conversation, `error` is a sentence, `done` stops. Bad frames are skipped.
      */
-    fun parse(raw: String, decode: (String) -> JsonObject?): GStream {
+    fun parse(raw: String, decode: (String) -> JsonObject?): GStream = parse(raw, true, decode)
+
+    fun parse(raw: String, complete: Boolean, decode: (String) -> JsonObject?): GStream {
         val text = StringBuilder(); var error: String? = null
         val steps = LinkedHashMap<String, GStep>()
         var chatId: String? = null; var chatTitle: String? = null
@@ -171,7 +175,7 @@ object GideonRules {
             }
         }
         // A run that finished has no step left running.
-        val done = steps.values.map { if (it.status == "running") it.copy(status = "done") else it }
+        val done = steps.values.map { if (complete && it.status == "running") it.copy(status = "done") else it }
         val answer = text.toString().let { if (GideonProblem.isEmptyPlaceholder(it)) "" else it }
         return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList())
     }
@@ -333,6 +337,8 @@ object GideonChatGroups {
  * Cleared on logout (AppContainer).
  */
 class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) {
+    private var answerJob: Job? = null
+    fun stop() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.update { it.copy(thinking = false) }; loadChats() }
     data class State(
         val chatId: String? = null,
         val chatTitle: String? = null,
@@ -460,7 +466,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val history = _state.value.messages + q
         val chatId = _state.value.chatId
         _state.update { it.copy(messages = history, thinking = true, error = null) }
-        scope.launch {
+        answerJob = scope.launch {
             var problem: GideonProblem? = null
             try {
                 val body = buildJsonObject {
@@ -480,15 +486,22 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                         null -> Unit
                     }
                 }
-                val raw = api.sendText(Request.Builder().url(api.url("/api/gideon")).header("Accept", "text/event-stream")
-                    .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000)
-                val r = GideonRules.parse(raw) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                val raw = StringBuilder()
+                fun paint(r: GStream) {
+                    if (gen != generation) return
+                    _state.update { s -> s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
+                        messages = if (r.answered || r.steps.isNotEmpty()) history + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals)) else history) }
+                }
+                api.sendEventLines(Request.Builder().url(api.url("/api/gideon")).header("Accept", "text/event-stream")
+                    .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000) { line ->
+                    raw.append(line).append('\n')
+                    if (line.startsWith("data:")) paint(GideonRules.parse(raw.toString(), complete = false) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() })
+                }
+                val r = GideonRules.parse(raw.toString()) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() }
                 if (gen != generation) return@launch
                 problem = r.error?.let(GideonProblem::stream) ?: if (!r.answered) GideonProblem.noAnswer else null
-                _state.update { s ->
-                    s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
-                        messages = if (r.answered) s.messages + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals)) else s.messages)
-                }
+                paint(r)
+            } catch (e: CancellationException) { throw e
             } catch (e: ApiError) {
                 problem = GideonProblem.from(e)
             }
@@ -533,5 +546,5 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
     }
 
     /** Logout: the next person never sees this transcript. */
-    fun reset() { generation++; failed = null; _state.value = State() }
+    fun reset() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.value = State() }
 }

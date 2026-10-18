@@ -10,11 +10,14 @@ In progress. No APK publication, version change, push or production access.
 - Validation: 743 JVM tests green and assembleDebug green, portable JDK 21, 3 GB Gradle heap. Windows source checks normalize CRLF; the locale-provider test accepts the desktop CLDR September abbreviation while preserving Android's existing locale selection.
 - Page parity: task property rows (label left/value right, Status completion tick), Follow/Favourite/Like/quest actions, oldest-first comments with bottom composer, description without heading, custom properties and Add property. Grouped tables repeat headers. Board/List already had inline New at the top. Legal now reads page/layout metadata and renders a white reflowed page, typography/runs, clause markers, indents/spacing, blank lines, gutter locks/ticks and table cells; paragraph edits use the same typography.
 - Second green step: 745 JVM tests and assembleDebug pass. Pixel_7 restarted with a visible window and `-gpu host` following the owner's updated setup.
-- Remaining: GIDEON streaming/credits and chat files; Pixel_7 DEV logic flows and screenshot tour. Estimates and QA results will be updated after validation.
+- GIDEON: cancellable SSE reading renders partial answers/proposals, Stop cancels the socket, faint violet user bubble, plain assistant text, expandable step summary. Composer credits meter uses GET /api/gideon/credits, refreshes after answers, opens monthly pool + paginated usage history, shows Unlimited / Tanpa batas and enforced fallback/blocked notices. EN + ID.
+- Chat documents: server endpoint exists; Android file picker validates the same document extensions and 25 MB limit, sends attachment metadata, renders file cards and opens/downloads through the authenticated file client.
+- Third green step: 750 JVM tests and assembleDebug pass. Corrected local build invocation to pass hostname only to nexusDevHost (the app adds port 8443). No real host is committed.
+- Remaining: Pixel_7 DEV logic flows and screenshot tour, and any device defects found (estimate 2–3 hours including re-shoots).
 
 | QA area | Result |
 |---|---|
-| JVM + debug build | PASS — 745 tests, debug build |
+| JVM + debug build | PASS — 750 tests, debug build |
 | Pixel_7 screen tour | Pending |
 | QA-only task/comment/message/GIDEON/Legal/Vault flows | Pending |
 | Real attendance | Excluded by task instruction |

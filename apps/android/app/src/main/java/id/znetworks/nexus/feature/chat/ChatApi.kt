@@ -68,7 +68,10 @@ class ChatApi(private val api: ApiClient) {
         post("/api/conversations/$id/messages", buildJsonObject {
             put("content", content.trim())
             if (mentionIds.isNotEmpty()) putJsonArray("mentionedUserIds") { mentionIds.forEach { add(JsonPrimitive(it)) } }
-            attachment?.let { put("attachmentUrl", it.url); it.type?.let { t -> put("attachmentType", t) } }
+            attachment?.let {
+                put("attachmentUrl", it.url); it.type?.let { t -> put("attachmentType", t) }
+                it.kind?.let { v -> put("attachmentKind", v) }; it.name?.let { v -> put("attachmentName", v) }; it.size?.let { v -> put("attachmentSize", v) }
+            }
             replyToId?.let { put("replyToId", it) }
         })
 

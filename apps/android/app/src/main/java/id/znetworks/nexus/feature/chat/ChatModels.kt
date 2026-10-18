@@ -24,6 +24,9 @@ data class Message(
     val content: String = "",
     val attachmentUrl: String? = null,
     val attachmentType: String? = null,
+    val attachmentKind: String? = null,
+    val attachmentName: String? = null,
+    val attachmentSize: Long? = null,
     val replyToId: String? = null,
     val createdAt: String? = null,
     val user: ChatUser? = null,
@@ -106,7 +109,13 @@ data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMo
 @Serializable data class ChatSearchPage(val results: List<ChatSearchHit> = emptyList(), val nextCursor: String? = null)
 
 @Serializable
-data class ChatUpload(val url: String, val type: String? = null)
+data class ChatUpload(val url: String, val type: String? = null, val kind: String? = null, val name: String? = null, val size: Long? = null)
+
+object ChatDocuments {
+    const val MAX_BYTES = 25L * 1024 * 1024
+    val extensions = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip")
+    fun accepts(name: String, bytes: Long) = bytes in 1..MAX_BYTES && name.substringAfterLast('.', "").lowercase() in extensions
+}
 
 /**
  * Richer messages survive as plain strings (the web still reads them); the app upgrades the known
