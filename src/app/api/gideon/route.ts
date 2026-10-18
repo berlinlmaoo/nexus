@@ -535,12 +535,25 @@ export async function POST(req: NextRequest) {
         ...(documentBase64 ? { documentBase64, documentType, documentName } : {}),
       })
       const headers = { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' }
+      // The shim says Model 0 can't be reached (503 / "model0_unavailable", 18 Oct 2026): the GPU went to a meeting
+      // transcript between the tier check above and this call. Said plainly, with the switch offer, never "error 503".
+      const model0Refused = async () => {
+        const txt = tierUnavailableText('transcribing')
+        failure = 'model0_unavailable'
+        if (streamClient) {
+          await sendEvent({ type: 'tier_unavailable', tier: 'experimental', reason: null, since: null, fallback: 'luna', label: txt.label, message: txt.send })
+          await sendEvent({ type: 'error', content: txt.send[uiLang], code: 'model0_unavailable' })
+        } else {
+          await sendEvent({ type: 'text', content: txt.send[uiLang] })
+        }
+      }
       const timeoutMs = tier === 'experimental' ? 440000 : 150000
       // Token-by-token when the shim offers it (GIDEON_STREAM_URL) and there is no document: the
       // streaming runner reads images but has no document reader.
       const streamUrl = process.env.GIDEON_STREAM_URL
       if (streamUrl && !documentBase64) {
         const res = await fetch(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok || !res.body) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` })
@@ -582,9 +595,11 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+        if (!reply && upstreamError === 'model0_unavailable') { await model0Refused(); return }
         if (!reply && upstreamError) failure = upstreamError
       } else {
         const res = await fetch(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: res.status === 415 ? 'Dokumen belum bisa dibaca GIDEON di server ini.' : `Gideon error (${res.status}).` })

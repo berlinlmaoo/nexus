@@ -318,6 +318,7 @@ async function submitTranscript(row: NonNullable<MeetingRow>, settings: MeetingS
 const WHISPER_ERRORS: Record<string, { code: string; text: string }> = {
   too_long: { code: "too_long", text: "The recording is longer than the limit." },
   undecodable: { code: "undecodable", text: "The file has no audio we can read." },
+  gpu_busy: { code: "gpu_busy", text: "The office GPU was busy for too long. Try again." },
 }
 
 async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
