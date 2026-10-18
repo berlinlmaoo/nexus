@@ -35,5 +35,6 @@ class GideonActionCardsTest {
         assertEquals("0", GideonReview.loose(p.extra.sheetEdit!!.cells.single().from))
         assertEquals("New\nvalue", GideonReview.loose(p.extra.sheetEdit.cells.single().to))
         assertEquals("Tue 20 Oct 18:00", actionDay(p.diff.single().toText, p.diff.single().toDay, Locale.ENGLISH))
+        assertEquals("Tue 20 Oct 18:00 WIB", actionDay("tomorrow 18:00 WIB", "2026-10-20", Locale.ENGLISH))
     }
 }

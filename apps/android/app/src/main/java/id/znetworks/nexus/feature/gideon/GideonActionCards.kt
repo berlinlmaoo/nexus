@@ -40,7 +40,7 @@ import java.time.format.DateTimeFormatter
 internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): String {
     if (day == null) return value ?: "—"
     val date = runCatching { LocalDate.parse(day).format(DateTimeFormatter.ofPattern("EEE d MMM", locale)) }.getOrNull() ?: return value ?: day
-    return date + (Regex("\\b\\d{2}:\\d{2}$").find(value.orEmpty())?.value?.let { " $it" } ?: "")
+    return date + (Regex("\\b\\d{2}:\\d{2}(?: WIB)?$").find(value.orEmpty())?.value?.let { " $it" } ?: "")
 }
 
 @Composable internal fun GProperty(label: String, content: @Composable RowScope.() -> Unit) {
