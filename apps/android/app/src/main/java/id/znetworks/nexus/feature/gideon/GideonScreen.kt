@@ -171,6 +171,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             MentionPicker(q, container.api) { ref -> chat.addRef(ref); draft = GideonMention.strip(draft); runCatching { focus.requestFocus() } }
         }
         ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
+        GideonCreditMeter(container.api, s.thinking)
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
         Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
             Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -205,9 +206,9 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 }
             }
         }
-        GideonCreditMeter(container.api, s.thinking)
         Text(stringResource(R.string.gc_ai_disclaimer), fontSize = 11.sp, color = c.mutedFg,
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 8.dp))
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))
     }
     if (showReviewNotice) AlertDialog(onDismissRequest = {
         prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false
