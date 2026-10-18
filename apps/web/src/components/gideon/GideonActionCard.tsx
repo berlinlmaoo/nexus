@@ -86,12 +86,22 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
   };
 
   // The long text has its own block; its row would only repeat it.
+  const sheetCells = proposal.extra?.sheetEdit?.cells ?? [];
+  // A cell edit draws its own table: the per-cell rows and the text preview would only repeat it.
+  const cellRefs = new Set(sheetCells.map((c) => c.ref));
   const previewField = preview ? proposal.diff.find((r) => r.to === preview)?.field : undefined;
-  const rows = proposal.diff.filter((r) => r.field !== previewField);
+  const rows = proposal.diff.filter((r) => r.field !== previewField && !cellRefs.has(r.field));
+  const showPreview = preview && !sheetCells.length;
+  // Server texts in both languages ("English · Indonesia"): the reader's half.
+  const half = (text: string | null | undefined) => {
+    if (!text) return text ?? "";
+    const parts = text.split(" · ");
+    return parts.length === 2 ? (locale.startsWith("id") ? parts[1] : parts[0]) : text;
+  };
   const statusLine =
     applied ? kind.done(t) :
     proposal.status === "DISCARDED" ? t("Discarded") :
-    proposal.status === "FAILED" ? t("Couldn't apply: {reason}", { reason: proposal.error ?? "" }) :
+    proposal.status === "FAILED" ? t("Couldn't apply: {reason}", { reason: half(proposal.error) }) :
     proposal.status === "APPLYING" ? t("Applying…") : null;
 
   return (
@@ -119,7 +129,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           ))}
         </dl>
       )}
-      {proposal.extra?.sheetEdit?.cells && proposal.extra.sheetEdit.cells.length > 0 && (
+      {sheetCells.length > 0 && (
         <div className="px-3 pb-2.5">
           <div className="max-h-64 overflow-auto rounded-lg border border-border/70">
             <table className="w-full text-left text-[12.5px]">
@@ -127,7 +137,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
                 <tr><th className="px-2 py-1 font-medium">{t("Cell")}</th><th className="px-2 py-1 font-medium">{t("Before")}</th><th className="px-2 py-1 font-medium">{t("After")}</th></tr>
               </thead>
               <tbody>
-                {proposal.extra.sheetEdit.cells.map((c, i) => (
+                {sheetCells.map((c, i) => (
                   <tr key={i} className="border-t border-border/60">
                     <td className="whitespace-nowrap px-2 py-1 font-mono text-muted-foreground">{c.ref}</td>
                     <td className="max-w-[10rem] break-words px-2 py-1">{c.from ? <span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{c.from}</span> : <span className="text-muted-foreground">—</span>}</td>
@@ -139,7 +149,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           </div>
         </div>
       )}
-      {preview && (
+      {showPreview && (
         <div className="px-3 pb-2.5">
           {previewField && <div className="mb-1 text-xs font-medium text-muted-foreground">{t(FIELD[previewField] ?? previewField)}</div>}
           <div className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border/70 bg-background px-3 py-2 text-[13px] leading-relaxed">{preview}</div>
@@ -157,7 +167,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           )}
         </div>
       )}
-      {applied && proposal.extra?.note && <div className="select-all break-all px-3 pb-2 text-xs text-muted-foreground">{proposal.extra.note}</div>}
+      {applied && proposal.extra?.note && <div className="select-all break-all px-3 pb-2 text-xs text-muted-foreground">{half(proposal.extra.note)}</div>}
       {error && <div className="px-3 pb-2 text-xs font-medium text-destructive">{error}</div>}
       {open && (
         <div className="flex justify-end gap-1.5 border-t border-border/60 px-2.5 py-2">

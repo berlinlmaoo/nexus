@@ -9,19 +9,15 @@ from .schemas import object_schema, LIMIT
 EXTRA_SCHEMAS = {
     # 1. What needs me now
     "nexus_get_my_inbox": object_schema(
-        "What needs the person now, in one call: unread notifications (assignments, comments, due dates, Threads, "
-        "announcements), mentions (tasks, docs, Threads, chat), unread chat, and everything waiting on THEIR decision — "
-        "attendance requests and offsite check-outs they approve, GIDEON cards they have not decided, support tickets "
-        "(BoD), Legal requests where they are PIC. Use it for 'apa yang perlu gw kerjain/approve', 'ada notif apa', "
-        "'siapa mention gw', 'ada yang nunggu approval gw?'. Only the person's own inbox.",
+        "What needs the person now: unread notifications, mentions, unread chats, and what waits on their decision (requests they approve, GIDEON cards, tickets, Legal). Own inbox only.",
         {
-            "section": {"type": "string", "enum": ["all", "notifications", "mentions", "chat", "approvals"], "description": "Default all."},
-            "limit": {"type": "integer", "minimum": 1, "maximum": 25, "description": "Rows per list (default 8)."},
+            "section": {"type": "string", "enum": ["all", "notifications", "mentions", "chat", "approvals"]},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 25},
         },
     ),
     # 2. Chat
     "nexus_list_conversations": object_schema(
-        "The person's own chats (DMs, groups, project rooms they are a member of), newest first, with unread counts and "
+        "My chats. The person's own chats (DMs, groups, project rooms they are a member of), newest first, with unread counts and "
         "the last message. Use to find a chat or 'chat mana yang belum gw baca'.",
         {
             "query": {"type": "string", "description": "Part of the chat / person / project name."},
@@ -30,7 +26,7 @@ EXTRA_SCHEMAS = {
         },
     ),
     "nexus_read_conversation": object_schema(
-        "Read the messages of ONE of the person's chats (they must be a member) to summarise or answer from it. Name it "
+        "Read one of my chats. Read the messages of ONE of the person's chats (they must be a member) to summarise or answer from it. Name it "
         "by `with` (a person: their DM), `conversation` (a group or project room name) or conversationId. Newest "
         "`limit` messages (default 40, max 100), oldest first; unread=true = only what they have not read; "
         "since=YYYY-MM-DD for a period.",
@@ -44,7 +40,7 @@ EXTRA_SCHEMAS = {
         },
     ),
     "nexus_send_message": object_schema(
-        "Send a chat message AS the person, to a person (`with`, their DM — made if none yet) or a group / project room "
+        "Send a chat message (card). Send a chat message AS the person, to a person (`with`, their DM — made if none yet) or a group / project room "
         "(`conversation`). It NEVER sends by itself: it ALWAYS shows a card with the exact text and the recipient, and "
         "it is sent only when they tap Send. Write the text exactly as it should appear, in the person's voice; never "
         "add facts they did not give. After calling, say in one sentence that it waits on the card.",
@@ -59,7 +55,7 @@ EXTRA_SCHEMAS = {
     ),
     # 3. Reminders
     "nexus_create_reminder": object_schema(
-        "A personal reminder for the person ('ingetin gw besok jam 9 follow up vendor'): it goes off as a NEXUS "
+        "Set a reminder. A personal reminder for the person ('ingetin gw besok jam 9 follow up vendor'): it goes off as a NEXUS "
         "notification + push at that time (WIB). Resolve the time yourself: at = YYYY-MM-DDTHH:MM in WIB (a bare "
         "'jam 9' = 09:00; 'besok' = tomorrow; a weekday = the next one). Must be in the future, at most a year ahead. "
         "Say the resolved day, date and time in your reply.",
@@ -70,22 +66,22 @@ EXTRA_SCHEMAS = {
         required=["text", "at"],
     ),
     "nexus_list_reminders": object_schema(
-        "The person's reminders that have not gone off yet (and, with includeDone, the last ones that did).",
+        "My reminders. The person's reminders that have not gone off yet (and, with includeDone, the last ones that did).",
         {"includeDone": {"type": "boolean"}},
     ),
     "nexus_cancel_reminder": object_schema(
-        "Cancel one of the person's waiting reminders, by reminderId (from nexus_list_reminders) or part of its text.",
+        "Cancel a reminder. Cancel one of the person's waiting reminders, by reminderId (from nexus_list_reminders) or part of its text.",
         {"reminderId": {"type": "string"}, "text": {"type": "string", "description": "Part of the reminder's text."}},
     ),
     # 4. Leave / permission
     "nexus_get_leave_balance": object_schema(
-        "The person's own leave numbers: day off left this period (28th → 27th; when it is used up there is no more, "
+        "My leave / day-off balance. The person's own leave numbers: day off left this period (28th → 27th; when it is used up there is no more, "
         "no borrowing), annual leave left this year (12 days, every calendar day counts, weekends too; needs 12 months "
         "of service), their pending requests, and who approves them.",
         {},
     ),
     "nexus_submit_leave_request": object_schema(
-        "File a DAY_OFF (day off), LEAVE (cuti tahunan) or RED_DATE (public holiday) request AS the person. It ALWAYS "
+        "File day off / leave (card). File a DAY_OFF (day off), LEAVE (cuti tahunan) or RED_DATE (public holiday) request AS the person. It ALWAYS "
         "shows a card (type, dates, reason, balance, approver) and is filed only when they tap Submit, with exactly the "
         "Attendance page's rules: one date per request except annual leave (a range), never a past day, a reason of 3+ "
         "characters, no day off once the quota is used up. Sick (SICK) and izin (PERMIT) need a photo and cannot be "
@@ -101,7 +97,7 @@ EXTRA_SCHEMAS = {
         required=["type", "reason"],
     ),
     "nexus_decide_attendance_request": object_schema(
-        "For an approver: approve or reject a pending attendance request (leave, day off, sick, izin) of someone they "
+        "Approve/reject a request (card). For an approver: approve or reject a pending attendance request (leave, day off, sick, izin) of someone they "
         "approve for (the Approval chart decides; never their own). ALWAYS a card they confirm. A rejection needs a "
         "reason the requester will read. Find requests with nexus_get_my_inbox (waitingForYou.attendanceRequests).",
         {
@@ -115,7 +111,7 @@ EXTRA_SCHEMAS = {
     ),
     # 5. Bulk task work
     "nexus_bulk_update_tasks": object_schema(
-        "Change MANY tasks at once — move to another column/status, reassign (PIC), re-date, re-prioritise — on ONE card "
+        "Change many tasks (card). Change MANY tasks at once — move to another column/status, reassign (PIC), re-date, re-prioritise — on ONE card "
         "that lists every change; nothing changes until the person taps Apply all (every approval mode). Either "
         "changes = [{taskId, status?, section?, dueDate?, priority?, assignees? | addAssignees? / removeAssignees?}] "
         "(different per task) or taskIds + the fields to set on all of them. Max 50 tasks. Find the tasks first with "
@@ -143,7 +139,7 @@ EXTRA_SCHEMAS = {
         },
     ),
     "nexus_add_subtasks": object_schema(
-        "Add subtasks (checklist items) under a task, one title each (max 20), optionally with PIC and a due date. "
+        "Add subtasks (card). Add subtasks (checklist items) under a task, one title each (max 20), optionally with PIC and a due date. "
         "Always a card the person confirms.",
         {
             "taskId": {"type": "string", "description": "The parent task."},
