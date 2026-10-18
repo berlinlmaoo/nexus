@@ -1,5 +1,18 @@
 # NEXUS Android: status
 
+## Small polish — item 18 (19 Oct 2026)
+
+All three fixes are complete; reviewed head 578e7fab is retained. Green commits: f813b0d6 (menu icons/voice plurals), 405c537d (native links). **822 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** DEV verification used Pixel_7 with a visible window and host GPU; versionCode remains 13.
+
+| Fix | Verification |
+|---|---|
+| Composer + menu icons | Meeting notes, Gallery and Files now have matching leading icons; all labels align. Actions opened the meeting list and Android photo/file pickers. EN/light and ID/dark reviewed. |
+| Native links | Cold-start nexus://people/<id> opened the intended profile; nexus://gideon opened GIDEON. Vault item links resolved the actual parent and opened the native media viewer or authenticated PDF in Android's viewer; folder, trashed and missing targets were checked. Closing media left the parent folder visible without reopening. Router regression tests cover scheme IDs, GIDEON and item/folder separation. |
+| Meeting voice count | Android quantity resources render EN 1 voice / n voices and ID n suara. Existing QA meeting showed 1 voice and 1 suara on device; its data was not edited. |
+
+[15 reviewed screenshots](../../../../nexus-shots/round18-index.html). Only this round's QA image, PDF and folder were created and removed. English/light restored; Pixel_7 shut down. No push, publication or version change. Nothing remains for item 18.
+
+
 ## Presence and GIDEON Memory — items 16/17 (19 Oct 2026)
 
 Both items are implemented on feat/android-r21, following the supplied native contracts and deployed DEV web reference. **820 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** QA used the supplied BoD session on **Pixel_7 / emulator-5556, visible window, host GPU**. No version change, push or publication. Small green commits use Berlin <bagasputro.bp@gmail.com>, with no attribution trailers.
