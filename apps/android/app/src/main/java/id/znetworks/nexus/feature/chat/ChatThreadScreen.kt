@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -534,18 +535,18 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
             }
             if (s.loading && s.messages.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-            items(s.messages, key = { it.id }) { m ->
+            itemsIndexed(s.messages, key = { _, message -> message.id }) { index, m ->
                 if (!s.hasMore && m == s.messages.firstOrNull()) Text(stringResource(R.string.chat_conversation_start), fontSize = 12.sp, color = c.mutedFg,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
                 val date = chatDay(m.createdAt)
-                if (date != null && (m == s.messages.firstOrNull() || date != chatDay(s.messages.getOrNull(s.messages.indexOf(m) - 1)?.createdAt))) {
+                if (date != null && (index == 0 || date != chatDay(s.messages.getOrNull(index - 1)?.createdAt))) {
                     Text(if (date == java.time.LocalDate.now()) stringResource(R.string.cal_today) else id.znetworks.nexus.core.i18n.AppDateFormats.ofPattern("d MMM yyyy").format(date),
                         color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
                 }
                 // A group's log line ("Budi added Mira"): a centred muted pill, no avatar, no bubble, no actions;
                 // a tap shows its time (SYSTEM-MESSAGES).
-                if (m.isSystem) { SystemPill(m, vm.meId); return@items }
+                if (m.isSystem) { SystemPill(m, vm.meId); return@itemsIndexed }
                 val mine = m.userId == vm.meId || m.user?.id == vm.meId
                 var msgMenu by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
@@ -567,7 +568,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                             }
                             if (m.isImage) {
                                 ChatPhoto(m.attachmentUrl, Modifier.padding(vertical = 4.dp).size(220.dp).clip18(), ContentScale.Crop, maxPx = 900,
-                                    ink = if (mine) Color.White else c.mutedFg) { viewing = m.attachmentUrl }
+                                    ink = if (mine) fg else c.mutedFg) { viewing = m.attachmentUrl }
                             }
                             if (m.attachmentUrl != null && !m.isImage) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(fg.copy(alpha = 0.10f)).clickable { vm.openDocument(m, false) }.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Description, null, tint = fg, modifier = Modifier.size(28.dp))
@@ -588,7 +589,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                                     Icon(Icons.Filled.Checklist, null, tint = fg); Spacer(Modifier.width(6.dp))
                                     Text(p.title.ifBlank { stringResource(R.string.chat_open_task) }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
                                 }
-                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) Color.White else c.violetText, fg), fontSize = 15.sp, color = fg)
+                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) fg else c.violetText, fg), fontSize = 15.sp, color = fg)
                             }
                             Text(chatTime(m.createdAt), fontSize = 10.sp, color = fg.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.End))
                         }

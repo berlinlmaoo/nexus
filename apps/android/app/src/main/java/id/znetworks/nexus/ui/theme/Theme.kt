@@ -110,6 +110,18 @@ fun NexusLightTheme(content: @Composable () -> Unit) = NexusThemeOf(NxLight, dar
 
 @Composable
 private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.SideEffect {
+        val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>().firstOrNull()
+        activity?.window?.let { window ->
+            androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
     val scheme = if (dark) {
         darkColorScheme(
             // The dev web's --primary (13 Oct 2026 redesign): buttons, checks and switches in the light ink, never

@@ -650,9 +650,10 @@ private fun ListRow(t: BoardTask, lanes: List<Lane>, vm: ProjectDetailViewModel,
             .combinedClickable(onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) },
                 onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true })
             .padding(start = if (t.isSubtask) 30.dp else 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Top) {
-            Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
-                tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f),
-                modifier = Modifier.padding(top = 1.dp).size(48.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) }.padding(14.dp))
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) }, contentAlignment = Alignment.TopCenter) {
+                Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
+                    tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f), modifier = Modifier.padding(top = 1.dp).size(20.dp))
+            }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -728,15 +729,17 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
             val circle = if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked
             val tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.6f)
             Box(Modifier.padding(top = 1.dp).size(48.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
-                contentAlignment = Alignment.Center) {
+                contentAlignment = Alignment.TopCenter) {
                 Icon(circle, stringResource(R.string.task_toggle_done), Modifier.size(18.dp), tint = tint)
             }
             Spacer(Modifier.width(8.dp))
-            Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
-                textDecoration = if (t.isDone) TextDecoration.LineThrough else null, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
+                    textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
+                PropLine(props.items(t))
+            }
             if (t.questXp > 0) { Spacer(Modifier.width(6.dp)); Pill("+${t.questXp} XP", c.violetText) }
         }
-        PropLine(props.items(t), Modifier.padding(start = 28.dp))
     }
 }
 

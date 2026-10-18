@@ -269,7 +269,7 @@ fun CompactSearchField(
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Nx.colors
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(22.dp)
     androidx.compose.foundation.text.BasicTextField(
         value, onValueChange, singleLine = true,
         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = c.foreground),

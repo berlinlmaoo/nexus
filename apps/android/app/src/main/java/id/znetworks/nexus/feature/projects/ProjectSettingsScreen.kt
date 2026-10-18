@@ -416,7 +416,7 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
                         options.forEach { o -> FilterChip(true, { options = options - o }, { Text("$o ✕", fontSize = 12.sp) }) }
                     }
                     OutlinedTextField(draft, { draft = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_add_option)) },
-                        trailingIcon = { IconButton(onClick = { if (draft.isNotBlank() && draft.trim() !in options) options = options + draft.trim(); draft = "" }) { Icon(Icons.Filled.Add, null) } },
+                        trailingIcon = { IconButton(onClick = { if (draft.isNotBlank() && draft.trim() !in options) options = options + draft.trim(); draft = "" }) { Icon(Icons.Filled.Add, stringResource(R.string.ps_add_option)) } },
                         modifier = Modifier.fillMaxWidth())
                 }
             }

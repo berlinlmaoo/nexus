@@ -257,11 +257,12 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                             Column(
                                 Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
                                     .background(if (on) c.violet else if (has) c.violet.copy(alpha = 0.08f) else Color.Transparent)
-                                    .then(if (isToday && !on) Modifier.background(c.navy, CircleShape) else Modifier)
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
-                                Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) Color.White else if (isToday) c.onNavy else c.foreground)
+                                Box(Modifier.background(if (isToday) c.navy else Color.Transparent, CircleShape).padding(horizontal = 6.dp, vertical = 3.dp), contentAlignment = Alignment.Center) {
+                                    Text(if (day == 1) AppDateFormats.ofPattern("d MMM", Locale.getDefault()).format(month.atDay(day)) else "$day", fontSize = 13.sp, fontWeight = if (on || isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) c.onNavy else if (on) Color.White else c.foreground)
+                                }
                                 Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
                             }
                         }
@@ -413,7 +414,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
                         rows.forEach { (t, win) ->
                             Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                                if (win == null) Text(stringResource(R.string.ov_filter_nodue), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                                if (win == null) Text(stringResource(R.string.tl_no_date), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.offset(x = with(density) { h.value.toDp() }).background(c.background).padding(horizontal = 8.dp))
                                 if (win != null) Row(
                                     Modifier.offset(x = x(win.start) + 2.dp).width(maxOf(w(win) - 4.dp, dayW * 0.8f)).height(32.dp).clip(RoundedCornerShape(8.dp))
                                         .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(horizontal = 8.dp),

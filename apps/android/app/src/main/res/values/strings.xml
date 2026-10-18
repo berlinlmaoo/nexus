@@ -2,6 +2,7 @@
 <!-- English is the source language. Indonesian overlay lives in values-in (Android's code for "id").
      Keep keys and English text aligned with iOS Localization.swift. -->
 <resources>
+    <string name="rb_no_more_in">No more bookings in %1$s</string>
     <string name="audit_undo">Undo</string>
     <string name="audit_credits_unlimited">∞  Credits today %1$d · Unlimited</string>
     <string name="audit_admin_users">Users</string>

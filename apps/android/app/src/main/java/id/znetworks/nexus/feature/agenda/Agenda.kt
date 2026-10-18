@@ -207,7 +207,7 @@ fun RoomBookingScreen(onBack: () -> Unit) {
                 }
                 if (upcoming.isEmpty() && !showPast) item {
                     id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.CalendarMonth,
-                        stringResource(R.string.rb_nothing_in, DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(month)),
+                        stringResource(R.string.rb_no_more_in, DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(month)),
                         stringResource(R.string.rb_empty_sub), stringResource(R.string.rb_new), { composing = true to null })
                 }
                 AgendaLogic.byDay(if (showPast) l else upcoming, past = false).forEach { (day, items) ->
