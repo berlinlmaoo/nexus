@@ -233,7 +233,8 @@ export function useProjectTreeActions({ folders, canManage, workspaceId }: { fol
     isPinnedProject: (id) => pinnedProjects.has(id),
     isPinnedFolder: (id) => pinnedFolders.has(id),
     openProject: (id) => navigate({ to: "/projects/$projectId", params: { projectId: id } }),
-    openFolderView: (id) => navigate({ to: "/folders/$folderId", params: { folderId: id } }),
+    // A folder's view is the one Calendar, filtered to the folder (owner, 18 Oct 2026).
+    openFolderView: (id) => navigate({ to: "/calendar", search: { folder: id } }),
     projectSettings: (id) => navigate({ to: "/projects/$projectId", params: { projectId: id }, search: { settings: 1 } }),
     newProjectIn: (folderId) => navigate({ to: "/projects", search: { new: 1, folder: folderId ?? undefined } }),
     newFolder: (parent) => {

@@ -177,6 +177,7 @@ SCHEMAS = {
             "date": {"type": "string", "description": "One day only, YYYY-MM-DD (instead of from/to)."},
             "mine": {"type": "boolean", "description": "Only tasks the person is doing."},
             "projectId": {"type": "string"},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
             "projectName": {"type": "string"},
             "division": {"type": "string", "description": "A division or unit of the org chart, by name or id: its tasks and those of the units under it."},
         },
@@ -240,6 +241,16 @@ SCHEMAS = {
         {"bookingId": {"type": "string", "description": "The booking's id (from nexus_list_room_bookings)."}},
         ["bookingId"],
     ),
+    "nexus_delete_task": object_schema(
+        "Delete a NEXUS task for the person, as them, when they ask to delete / remove / hapus / buang a task. It never "
+        "deletes on its own: it ALWAYS puts a card in the chat showing the task (title, project, status, due, assignees) "
+        "with a Delete button, and nothing happens until they tap it. Only someone with Can edit in the task's project may "
+        "delete (the same rule as the Delete button); otherwise you get a refusal to relay. A deleted task can be restored "
+        "from the Audit. Find the task first (nexus_search_tasks / nexus_list_tasks, or the id from a task you just "
+        "created or updated). If several tasks match, ask which one. Never set it to Cancelled/Done instead unless asked.",
+        {"taskId": {"type": "string", "description": "The task's id (from nexus_search_tasks / nexus_list_tasks / nexus_get_task)."}},
+        ["taskId"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},
@@ -272,6 +283,7 @@ SCHEMAS = {
         {
             "projectId": {"type": "string"},
             "project": {"type": "string", "description": "Project name, instead of projectId."},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
             "assignee": {"type": "string", "description": "'me' (the person asking) or a person's name."},
             "assigneeId": {"type": "string"},
             "open": {"type": "boolean", "description": "Only unfinished tasks (not Done / Cancelled)."},
@@ -291,6 +303,7 @@ SCHEMAS = {
             "query": {"type": "string"},
             "projectId": {"type": "string"},
             "project": {"type": "string", "description": "Project name, instead of projectId."},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
             "assignee": {"type": "string", "description": "'me' or a person's name."},
             "open": {"type": "boolean"},
             "status": TASK_STATUS,
@@ -339,6 +352,8 @@ SCHEMAS = {
     ),
     "nexus_create_task": object_schema(
         "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification. "
+        "When the person did not name a project, call it WITHOUT projectId (optionally project='<name>' if one was said): the "
+        "card then shows a project picker with only the projects they can edit — never ask which project in the chat. "
         "ONE call per task, complete: put the people it is for in assigneeIds and the deadline in dueDate here — never create "
         "first and assign or date it with nexus_update_task afterwards. When the answer is proposed:true, the returned "
         "proposalId is the task's only id until it is approved; nexus_update_task with taskId = that proposalId joins the same card.",
@@ -351,6 +366,7 @@ SCHEMAS = {
             "priority": TASK_PRIORITY,
             "dueDate": {"type": "string", "description": "YYYY-MM-DD or ISO datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00. A weekday name means the NEXT one, never today (said on a Friday, 'Friday' = next week's Friday); only 'today' is today. Say the resolved date in your reply."},
             "assigneeIds": {"type": "array", "items": {"type": "string"}, "description": "The people the task is for (user ids from nexus_list_members). Include them here, in this call."},
+            "calendar": {"type": "boolean", "description": "true when the person asks to put something on the calendar / schedule it (masukin ke kalender, jadwalin): the Calendar shows tasks, and only ones with a PIC and a date — dueDate is then required and the PIC defaults to the person (changeable on the card)."},
             "customFields": CUSTOM_FIELD_UPDATES,
         },
         required=["title"],

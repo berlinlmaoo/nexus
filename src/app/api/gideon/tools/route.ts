@@ -25,6 +25,8 @@ import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
+import { deleteTaskAs, TaskDeleteRefusal } from '@/lib/task-delete'
+import { createTaskNeedsProject, editableTaskProjects } from '@/lib/gideon-task-target'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
 import {
@@ -39,6 +41,8 @@ import { listDocuments } from '@/lib/legal/archive'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
+import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
+import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 
 type GideonAction =
   | 'list_projects'
@@ -66,6 +70,7 @@ type GideonAction =
   | 'cancel_room_booking'
   | 'search_deals'
   | 'search_legal_documents'
+  | 'delete_task'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -150,6 +155,8 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   const assigneeId = rawAssignee === 'me' ? actor.id : rawAssignee
 
   if (projectId) taskListWhere.projectId = projectId
+  // A folder (18 Oct 2026): every project of the folder and its sub-folders this person can see (normalizeToolInput).
+  else if (Array.isArray(input.projectIds)) taskListWhere.projectId = { in: input.projectIds.filter((x): x is string => typeof x === 'string') }
   if (status) where.status = status
   if (priority) where.priority = priority
   if (assigneeId) where.assignees = { some: { userId: assigneeId } }
@@ -1325,6 +1332,24 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
       else if (action === 'list_tasks' || action === 'search_tasks' || action === 'get_project_summary') throw new Error(`No project this person can see is named like "${name}".`)
     }
   }
+  // folder (18 Oct 2026, the Folder view: Board + Calendar of every project in a folder and its sub-folders): a
+  // folder name or id → the ids of those projects this person can see, for list_tasks / search_tasks / get_calendar.
+  if ((action === 'list_tasks' || action === 'search_tasks' || action === 'get_calendar') && !asString(input.projectId)) {
+    const folder = asString(input.folder) ?? asString(input.folderId) ?? asString(input.folderName)
+    if (folder) {
+      const f = await folderProjectIds(actor, folder)
+      input.projectIds = f.projectIds
+      input.folderName = f.name
+      if (!f.projectIds.length) throw new Error(`The folder "${f.name}" has no project this person can see.`)
+    }
+  }
+  // "Put it on the calendar" (owner, 18 Oct 2026): the Calendar shows TASKS, and only ones with a PIC and a date
+  // (Master Calendar rule). A create_task with calendar=true must have a date; with nobody named the PIC is the
+  // person themselves (changeable on the card).
+  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
+    if (!parseDueInput(input.dueDate)) throw new Error('A task on the calendar needs a date. Ask which day (and time, if any).')
+    if (!(asStringArray(input.assigneeIds) ?? []).length) input.assigneeIds = [actor.id]
+  }
   // assignee (18 Oct 2026): "me" or a person's name → assigneeId, for list_tasks / search_tasks.
   if ((action === 'list_tasks' || action === 'search_tasks') && !asString(input.assigneeId)) {
     const who = asString(input.assignee) || asString(input.assigneeName) || asString(input.person)
@@ -1345,9 +1370,16 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
   return input
 }
 
-async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>): Promise<unknown> {
+/**
+ * `approved`: this call is the Apply of a proposal the person approved (x-gideon-approved). delete_task runs ONLY
+ * then — never straight from the model, whatever the approval mode (owner, 18 Oct 2026).
+ */
+async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>, approved = false): Promise<unknown> {
   const input = await normalizeToolInput(actor, action, rawInput)
   switch (action) {
+    case 'delete_task':
+      if (!approved) throw new Error('Deleting a task always waits for the person to confirm it on a card in the NEXUS GIDEON chat. Nothing was deleted.')
+      return applyDeleteTask(actor, input)
     case 'list_projects':
       return listProjects(actor, input)
     case 'list_members':
@@ -1409,6 +1441,9 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
     case 'resolve_ticket':
       return resolveTicketByGideon(actor, input)
     default:
+      // The 18 Oct 2026 package (inbox, chat, reminders, …): lib/gideon-tools. A write there runs only as an Apply
+      // or, for approval "modes", straight from the model when no card is needed (needsApproval said so).
+      if (extraTool(action)) return runExtraTool(actor, action, input, { approved, direct: !approved })
       throw new UnknownActionError(`Unknown GIDEON tool action: ${action}`)
   }
 }
@@ -1442,8 +1477,12 @@ export async function POST(req: Request) {
     const proposal = await prisma.gideonProposal.findUnique({ where: { id: approvedId } })
     if (!proposal || proposal.status !== 'APPLYING' || proposal.userId !== auth.actor.id) return error('Proposal is not being applied', 409)
     try {
-      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}))
+      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}, true))
     } catch (err) {
+      // A delete refused at Apply (gone, changed, no longer Can edit): the card says why, in both languages.
+      if (err instanceof TaskDeleteRefusal) {
+        return NextResponse.json({ ok: false, error: DELETE_REFUSAL_TEXT[err.code], code: err.code }, { status: err.status })
+      }
       // The apply route keeps a booking card open when its slot was taken meanwhile (code ROOM_TAKEN).
       if (err instanceof BookRoomRefusal) {
         return NextResponse.json({ ok: false, error: err.message, code: err.code, ...err.detail }, { status: err.code === 'ROOM_TAKEN' ? 409 : 400 })
@@ -1464,7 +1503,8 @@ export async function POST(req: Request) {
     }
   }
 
-  const arg = await stepArg(action, input)
+  const extraArg = extraTool(action)?.stepArg
+  const arg = extraArg ? await Promise.resolve(extraArg(input)).catch(() => null) : await stepArg(action, input)
   const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
   const label = stepLabel(action, arg)
   publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'running' } })
@@ -1489,7 +1529,9 @@ export async function POST(req: Request) {
     }
 
     if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
-      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input)
+      const { proposal, due, note: extraNote } = await proposeWrite(auth.actor, run.id, action, input, { contextProjectId: run.projectId ?? null })
+      const picker = action === 'create_task' && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true
+      const pre = picker ? ((proposal.input as { taskTarget?: { preselectedProjectName?: string | null } }).taskTarget?.preselectedProjectName ?? null) : null
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
       publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
@@ -1500,12 +1542,18 @@ export async function POST(req: Request) {
         summary: proposal.summary,
         // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
         ...(due ? { due } : {}),
-        note: action === 'move_room_booking'
+        note: extraNote
+          ? extraNote
+          : action === 'move_room_booking'
           ? 'NOT moved yet. It is waiting for the person on the card below, which shows the booking before and after (and every room with whether it is free then) and where they tap Apply; tell them so, do not say it is moved.'
           : action === 'cancel_room_booking'
           ? 'NOT cancelled yet. It is waiting for the person to confirm it on the card below; tell them so, do not say it is cancelled.'
           : action === 'book_room'
           ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
+          : action === 'delete_task'
+          ? 'NOT deleted yet. It is waiting for the person to confirm it on the card below, which shows the task and a Delete button; tell them so in one short sentence, never say it is deleted. Do not offer to set it to Cancelled or Done instead. After they confirm it can still be restored from the Audit.'
+          : picker
+          ? `NOT created yet. The card below has a project picker${pre ? `, preselected to ${pre}` : ''} (only projects this person can edit), plus section, PIC and due date; they ${pre ? 'confirm or change it' : 'pick the project'} there and tap Apply. Tell them so in one short sentence; do NOT ask which project in the chat.${due ? ` Say the due date as "${due}".` : ''}`
           : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
           : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
@@ -1647,14 +1695,14 @@ async function userNames(ids: string[]): Promise<string> {
 }
 
 /** `store`: facts resolved when describing that the proposal keeps in its input (a booking's "before"). */
-type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown> }
+type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown>; note?: string }
 
 /**
  * Check the write exactly as far as it can be checked without making it (access, the task and list it
  * names) and describe it as a diff. Applying it later re-runs the real action as the same person, so a
  * permission lost in between still refuses.
  */
-async function describeWrite(actor: User, action: string, input: Record<string, unknown>): Promise<WriteDescription> {
+async function describeWrite(actor: User, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}): Promise<WriteDescription> {
   let summary = ''
   const diff: GideonDiffRow[] = []
   let projectId: string | null = null
@@ -1662,7 +1710,48 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   let dueText: string | null | undefined
   let store: Record<string, unknown> | undefined
 
-  if (action === 'create_task') {
+  // The 18 Oct 2026 package describes its own writes (lib/gideon-tools); `preview` (a long text shown in full on
+  // the card) travels in the stored input.
+  const extra = extraTool(action)
+  if (extra?.describe) {
+    if (!(await extraToolEnabled(action))) throw new Error(EXTRA_DISABLED_TEXT)
+    const d = await extra.describe(actor, input)
+    return {
+      summary: d.summary,
+      diff: d.diff,
+      projectId: d.projectId ?? null,
+      taskId: d.taskId ?? null,
+      store: { ...(d.store ?? {}), ...(d.preview ? { preview: d.preview.slice(0, 8000) } : {}) },
+      note: d.note,
+    }
+  }
+
+  if (action === 'create_task' && createTaskNeedsProject(input)) {
+    // No project named (owner, 18 Oct 2026): the card gets a project picker — only projects this person can edit —
+    // instead of a "which project?" in the chat. Preselected when it is obvious: a project name the model passed,
+    // the project the chat is about (open page / @-mention), or the only one there is. Checked again on Apply.
+    const title = asString(input.title)
+    if (!title) throw new Error('title is required')
+    const status = asTaskStatus(input.status) || 'TODO'
+    const projects = await editableTaskProjects(actor.id)
+    if (!projects.length) throw new Error('This person cannot add tasks to any project (it needs Can edit access in one). Tell them so.')
+    const hint = (asString(input.project) ?? asString(input.projectName) ?? asString(input.project_name) ?? '').toLowerCase()
+    const byName = hint ? (projects.find((p) => p.name.toLowerCase() === hint) ?? (projects.filter((p) => p.name.toLowerCase().includes(hint)).length === 1 ? projects.find((p) => p.name.toLowerCase().includes(hint)) : undefined)) : undefined
+    const pre = byName ?? projects.find((p) => p.id === ctx.contextProjectId) ?? (projects.length === 1 ? projects[0] : undefined)
+    projectId = pre?.id ?? null
+    summary = pre ? `Create task “${title}” in ${pre.name}` : `Create task “${title}”`
+    const due = parseDueInput(input.dueDate)
+    dueText = dueLabel(due)
+    const assignees = asStringArray(input.assigneeIds) ?? []
+    diff.push(
+      { field: 'Title', to: title },
+      { field: 'Project', to: pre?.name ?? '—' },
+      { field: 'Status', to: STATUS_WORD[status] ?? status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(due) },
+      { field: 'Assignees', to: await userNames(assignees) },
+    )
+    store = { pickProject: true, taskTarget: { projects, preselectedProjectId: pre?.id ?? null, preselectedProjectName: pre?.name ?? null, dueDay: dueDay(due) } }
+  } else if (action === 'create_task') {
     const title = asString(input.title)
     if (!title) throw new Error('title is required')
     const status = asTaskStatus(input.status) || 'TODO'
@@ -1742,6 +1831,36 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     summary = change.summary
     diff.push(...change.diff)
     store = change.store
+  } else if (action === 'delete_task') {
+    const id = asString(input.taskId) ?? asString(input.task_id)
+    if (!id) throw new Error('taskId is required (find the task first with nexus_search_tasks or nexus_list_tasks)')
+    const existing = await getAccessibleTask(actor, id)
+    // The Delete button's own rule (DELETE /api/tasks/:id, lib/task-delete.ts): Can edit in the task's project.
+    // Checked again when the person taps Apply.
+    const { allowed } = await checkProjectAccess(actor.id, existing.taskList.projectId, ['MEMBER'])
+    if (!allowed) throw new Error(`This person cannot delete tasks in ${existing.taskList.project?.name ?? 'this project'}: deleting needs Can edit access there. Tell them so; do not propose anything else instead.`)
+    projectId = existing.taskList.projectId
+    taskId = existing.id
+    summary = `Delete task “${existing.title}”`
+    const assignees = existing.assignees.map((a: { user: { name: string | null } }) => a.user.name ?? '?')
+    const projectName = existing.taskList.project?.name ?? null
+    dueText = dueLabel(existing.dueDate)
+    diff.push(
+      { field: 'Task', to: existing.title },
+      { field: 'Project', to: projectName ?? '—' },
+      { field: 'Status', to: existing.taskList.name ?? STATUS_WORD[existing.status] ?? existing.status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(existing.dueDate) },
+      { field: 'Assignees', to: assignees.length ? assignees.join(', ') : '—' },
+    )
+    // What the card shows, kept as it was now; Apply deletes only this version of the task (updatedAt).
+    store = {
+      taskId: existing.id,
+      before: {
+        title: existing.title, projectId, projectName, status: existing.taskList.name ?? null,
+        progress: STATUS_WORD[existing.status] ?? existing.status, due: dueText ?? null, dueDay: dueDay(existing.dueDate),
+        assignees, updatedAt: existing.updatedAt.toISOString(),
+      },
+    }
   } else if (action === 'create_document') {
     const pid = String(input.projectId ?? '').trim()
     const title = String(input.title ?? '').trim()
@@ -1757,12 +1876,40 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   } else {
     throw new Error(`${action} cannot be proposed`)
   }
-  return { summary, diff, projectId, taskId, due: dueText, store }
+  // On the calendar (create_task calendar=true): say where it will show, on the card and in the reply.
+  let note: string | undefined
+  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
+    diff.push({ field: 'Calendar', to: 'Shows on the calendar (it has a PIC and a date)' })
+    note = `NOT created yet: it waits on the card below.${dueText ? ` Say the date as "${dueText}".` : ''} Once applied it appears on the Calendar on that day, because it has a PIC (${await userNames(asStringArray(input.assigneeIds) ?? [])}) and a date; the PIC can be changed on the card.`
+  }
+  return { summary, diff, projectId, taskId, due: dueText, store, note }
+}
+
+const DELETE_REFUSAL_TEXT: Record<'NOT_FOUND' | 'NEEDS_EDIT_ACCESS' | 'CHANGED', string> = {
+  NOT_FOUND: 'This task is already gone (someone deleted it). Nothing else was deleted · Task ini sudah tidak ada (sudah dihapus orang lain).',
+  NEEDS_EDIT_ACCESS: 'You no longer have Can edit access in this project, so the task was not deleted · Kamu tidak punya akses Can edit di project ini, jadi task tidak dihapus.',
+  CHANGED: 'This task changed after the card was made, so nothing was deleted. Check it and ask GIDEON again · Task ini berubah setelah kartu dibuat, jadi tidak dihapus. Cek lagi lalu minta GIDEON ulang.',
+}
+
+/**
+ * The approved delete (owner, 18 Oct 2026): the web Delete button's own path (lib/task-delete.ts) as the person —
+ * Can edit re-checked now, the copy for Control Room → Audit, the realtime ping — and only the task as the card
+ * showed it (updatedAt), so a task edited in between is not deleted on an old approval.
+ */
+async function applyDeleteTask(actor: User, input: Record<string, unknown>) {
+  const taskId = asString(input.taskId)
+  if (!taskId) throw new Error('taskId is required')
+  const before = (input.before && typeof input.before === 'object' ? input.before : {}) as { updatedAt?: unknown }
+  const { auditLogId, task } = await deleteTaskAs(actor.id, taskId, {
+    expectedUpdatedAt: typeof before.updatedAt === 'string' ? before.updatedAt : null,
+    via: 'GIDEON',
+  })
+  return { deleted: true, taskId: task.id, title: task.title, project: task.projectName, auditLogId, restore: 'It can be restored from Control Room → Audit.' }
 }
 
 /** Describe the write and store it as a proposal for the person to approve. */
-async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
-  const d = await describeWrite(actor, action, input)
+async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}) {
+  const d = await describeWrite(actor, action, input, ctx)
   const proposal = await prisma.gideonProposal.create({
     data: {
       runId,
@@ -1775,7 +1922,7 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
       taskId: d.taskId,
     },
   })
-  return { proposal, due: d.due ?? null }
+  return { proposal, due: d.due ?? null, note: d.note ?? null }
 }
 
 /** The fields of an update_task that a task not created yet can take into its create proposal. */
@@ -1794,11 +1941,13 @@ async function mergeIntoCreateProposal(actor: User, runId: string, input: Record
   if (!target) return null
   const merged: Record<string, unknown> = { ...((target.input as Record<string, unknown>) ?? {}) }
   for (const key of MERGEABLE_FIELDS) if (input[key] !== undefined) merged[key] = input[key]
-  const d = await describeWrite(actor, 'create_task', merged)
+  const d = await describeWrite(actor, 'create_task', merged, { contextProjectId: asString((target.input as Record<string, unknown> | null)?.taskTarget && ((target.input as { taskTarget?: { preselectedProjectId?: unknown } }).taskTarget?.preselectedProjectId)) ?? null })
+  // A picker card that now names its project becomes an ordinary create card (and the other way round).
+  const nextInput = { ...merged, ...(d.store ?? { pickProject: false, taskTarget: null }) }
   // Conditional, like the Apply claim: a proposal decided in the meantime is not changed under the person.
   const changed = await prisma.gideonProposal.updateMany({
     where: { id: target.id, status: 'PENDING' },
-    data: { input: merged as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
+    data: { input: nextInput as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
   })
   if (changed.count === 0) throw new Error('That task proposal was already decided; ask again.')
   const proposal = await prisma.gideonProposal.findUnique({ where: { id: target.id } })

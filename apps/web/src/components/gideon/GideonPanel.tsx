@@ -19,6 +19,9 @@ import { GideonCreditMeter } from "./GideonCreditMeter";
 import { CREDITS_KEY } from "@/lib/gideon-credits";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
+import { GideonDeleteTaskCard } from "./GideonDeleteTaskCard";
+import { GideonCreateTaskCard } from "./GideonCreateTaskCard";
+import { GideonActionCard, extraStepLabel } from "./GideonActionCard";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
@@ -93,8 +96,9 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "book_room": return a ? t("Booking {room}", { room: a }) : t("Booking a room");
     case "move_room_booking": return a ? t("Moving booking {name}", { name: a }) : t("Moving a booking");
     case "cancel_room_booking": return a ? t("Cancelling booking {name}", { name: a }) : t("Cancelling a booking");
+    case "delete_task": return a ? t("Deleting task {name}", { name: a }) : t("Deleting a task");
     case "vision_analyze": case "vision": return t("Looking at the image");
-    default: return s.label || s.tool;
+    default: return extraStepLabel(s.tool, a, t) ?? (s.label || s.tool);
   }
 }
 
@@ -668,6 +672,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {prefs?.reviewNotice && <ReviewNotice />}
         {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
+        {/* GIDEON credits sit above the composer (owner, 18 Oct 2026); the pool on hover / tap. */}
+        <div className="flex min-h-6 items-center px-1 pb-1"><GideonCreditMeter /></div>
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
         {(pageContext || refs.length > 0) && (
           <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
@@ -836,15 +842,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             )}
           </div>
         </div>
-        {/* GIDEON credits (owner, 18 Oct 2026): today's credits under the composer; the pool on hover / tap. Beside it
-            the standing "can make mistakes" line (owner, 18 Oct 2026, like ChatGPT): meter left, disclaimer right where
-            the box is wide enough, stacked and centred in the narrow panel and on phones. */}
-        <div className="@container">
-          <div className="flex min-h-6 flex-col items-center gap-0.5 px-1 pt-1 @lg:flex-row @lg:justify-between @lg:gap-3">
-            <GideonCreditMeter />
-            <p className="text-balance text-center text-xs text-muted-foreground @lg:text-right">{t("GIDEON is AI and can make mistakes.")}</p>
-          </div>
-        </div>
+        {/* The standing "can make mistakes" line under the composer (owner, 18 Oct 2026, like ChatGPT). */}
+        <p className="text-balance px-1 pt-1 text-center text-xs text-muted-foreground">{t("GIDEON is AI and can make mistakes.")}</p>
       </div>
   );
 
@@ -1524,6 +1523,7 @@ function ResultCard({ card }: { card: GideonCard }) {
 const FIELD_WORD: Record<string, string> = {
   Title: "Title", Section: "Section", Status: "Status", Priority: "Priority", Due: "Due", Assignees: "Assignees",
   Description: "Description", Comment: "Comment", Body: "Body", "Custom fields": "Custom fields",
+  Task: "Task", Project: "Project",
 };
 
 /**
@@ -1544,6 +1544,12 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
   if (proposal.action === "book_room" && proposal.booking) return <GideonBookRoomCard proposal={proposal} onDecided={onDecided} />;
   // Moving / cancelling one: the booking before and after (GideonBookingChangeCard).
   if ((proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") && proposal.bookingChange) return <GideonBookingChangeCard proposal={proposal} onDecided={onDecided} />;
+  // Deleting a task: the destructive card (always asked, every approval mode).
+  if (proposal.action === "delete_task" && proposal.taskDelete) return <GideonDeleteTaskCard proposal={proposal} onDecided={onDecided} />;
+  // A new task with no project named: the project picker (+ column, PIC, due), Apply once a project is picked.
+  if (proposal.action === "create_task" && proposal.taskTarget && proposal.status === "PENDING") return <GideonCreateTaskCard proposal={proposal} onDecided={onDecided} />;
+  // The 18 Oct 2026 package (message, reminder, leave, …): its own card, which sends the confirm the server wants.
+  if (proposal.extra !== undefined) return <GideonActionCard proposal={proposal} onDecided={onDecided} />;
   return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
 }
 
@@ -1579,7 +1585,7 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
               <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
               <dd className="min-w-0 break-words">
                 {row.from != null && row.from !== "" && <><span className="rounded-sm bg-red-500/10 px-0.5 text-red-700 line-through decoration-red-700/50 dark:text-red-400">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden className="text-muted-foreground">→</span> </>}
-                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
+                <span className="rounded-sm bg-emerald-500/10 px-0.5 font-medium text-emerald-800 dark:text-emerald-300">{(row.field === "Status" || row.field === "Calendar") && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
               </dd>
             </div>
           ))}
@@ -1611,6 +1617,25 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
     case "book_room": return t("Book a room");
     case "move_room_booking": return t("Move a booking");
     case "cancel_room_booking": return t("Cancel a booking");
+    case "delete_task": return t("Delete task");
+    case "send_message": return t("Send a message");
+    case "create_reminder": return t("Set a reminder");
+    case "cancel_reminder": return t("Cancel a reminder");
+    case "submit_leave_request": return t("Submit a request");
+    case "decide_attendance_request": return t("Decide a request");
+    case "bulk_update_tasks": return t("Change several tasks");
+    case "add_subtasks": return t("Add subtasks");
+    case "move_deal_stage": return t("Move a deal");
+    case "add_payment_term": return t("Add a payment term");
+    case "log_outlet_sales": return t("Enter outlet sales");
+    case "log_social_media_day": return t("Enter social media numbers");
+    case "create_legal_draft": return t("Create a legal draft");
+    case "create_vault_share_link": return t("Create a share link");
+    case "edit_doc": return t("Edit a doc");
+    case "draft_announcement": return t("Post an announcement");
+    case "edit_sheet_cells": return t("Edit spreadsheet");
+    case "create_sheet": return t("Create a spreadsheet");
+    case "save_file_to_vault": return t("Save to Z Vault");
     default: return action;
   }
 }

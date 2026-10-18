@@ -98,13 +98,13 @@ const PING_MAX_WAIT_MS = 2_000;
 
 /**
  * Task lists OTHER than a project's own payload that a task event can change: My Tasks, the dashboard, the
- * Master Calendar, folder task lists. Refetched only if on screen (an invalidation refetches active queries
+ * Master Calendar (a Folder filter included). Refetched only if on screen (an invalidation refetches active queries
  * only; the rest just goes stale). The project list, folders, pins, views and custom fields are never
  * touched by a task event any more.
  */
 function isOtherTaskList(key: readonly unknown[]): boolean {
   if (key[0] === "dashboard") return true;
-  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks" || key[1] === "folder-tasks");
+  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks");
 }
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {
@@ -182,7 +182,7 @@ export function RealtimeProvider({
           );
         };
         // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
-        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, projectIds: new Set<string>() };
+        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, bookings: false, projectIds: new Set<string>() };
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let burstStartedAt = 0;
         const flushPings = () => {
@@ -198,6 +198,8 @@ export function RealtimeProvider({
           if (pending.submissions) { queryClient.invalidateQueries({ queryKey: ["my-submissions"] }); queryClient.invalidateQueries({ queryKey: ["submission-detail"] }); queryClient.invalidateQueries({ queryKey: ["legal-requests-mine"] }); }
           // The Legal request board (14 Oct 2026; only Legal members' rooms get it): the board, an open request.
           if (pending.legal) { queryClient.invalidateQueries({ queryKey: ["legal", "requests"] }); queryClient.invalidateQueries({ queryKey: ["legal", "request"] }); }
+          if (pending.bookings) queryClient.invalidateQueries({ queryKey: ["room-bookings"] });
+          pending.bookings = false;
           pending.submissions = false;
           pending.legal = false;
           pending.tree = false;
@@ -225,6 +227,9 @@ export function RealtimeProvider({
             pending.submissions = true;
           } else if (data.kind === "legal") {
             pending.legal = true;
+          } else if (data.kind === "bookings") {
+            // Server since 19 Oct 2026: a room booking was made, moved or deleted — the Room Booking page refetches.
+            pending.bookings = true;
           } else if (data.kind === "vault") {
             // Server since 9 Oct 2026: a file or folder in Z Vault was added, moved, renamed, trashed,
             // restored or locked. Nothing about projects moved, so the project tree stays as it is.

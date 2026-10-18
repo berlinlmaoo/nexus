@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 // (owner, 13 Oct 2026: Notion-style levels, Full access manages statuses/columns).
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const SECTION_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
 // A status option's colour (owner, 12 Oct 2026, Notion-style statuses): the web palette's keys
@@ -95,6 +96,8 @@ export async function POST(
       })
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id! })
     return NextResponse.json(section, { status: 201 })
   } catch (error) {
     console.error("Error creating section:", error)
@@ -161,6 +164,8 @@ export async function PATCH(
     })
     if (!section) return NextResponse.json({ error: "Section not found" }, { status: 404 })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id! })
     return NextResponse.json(section)
   } catch (error) {
     console.error("Error updating section:", error)
@@ -238,6 +243,8 @@ export async function DELETE(
       },
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged((await params).projectId, { actorId: session.user.id! })
     return NextResponse.json({ message: "Section deleted", movedTo: firstRemaining.id })
   } catch (error) {
     console.error("Error deleting section:", error)

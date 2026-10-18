@@ -1,9 +1,9 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, Folder, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Switch } from "@/components/ui/switch";
-import type { CalFilters, CalIndex, CalItem } from "@/lib/calendar/core";
+import type { CalFilters, CalFolder, CalIndex, CalItem } from "@/lib/calendar/core";
 import { SLATE } from "@/lib/calendar/tone";
 import { CAL_SWITCH, CAPS, Face, FOCUS_PILL, FOCUS_ROW, SWATCH_EDGE, TOUCH_ROW, UnitDot, type PeopleLookup } from "./bits";
 
@@ -15,19 +15,24 @@ const ROW = cn("flex w-full items-center gap-2 border-b border-border/60 py-1.5 
 
 /**
  * Every filter of the Calendar. They all run in the browser over what is already loaded, and move the
- * dots, counts, legend, day panel and People view together. The server only decides what may be seen.
+ * dots, counts, legend, day panel and People view together. The server only decides what may be seen —
+ * and applies Folders (?folder=, a folder = every project in it and its subfolders), so a folder's tasks
+ * are never limited to what one month happened to load.
  * `onDone` (optional) adds a "Done" button that closes the popover or drawer around the panel.
  * Show (Everyone / Mine / My division) is not here: it is a view, not a filter, so it lives in the page
  * header on every screen size, the badge never counts it and Reset never changes it.
  */
-export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, people }: {
+export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, people, folders }: {
   filters: CalFilters; onChange: (f: CalFilters) => void; onReset: () => void; onDone?: () => void
   ix: CalIndex; items: CalItem[]; people: PeopleLookup
+  /** The folders the viewer can filter by, in tree order (structure.folders). */
+  folders: CalFolder[]
 }) {
   const { t, lang } = useLang();
   const [personQ, setPersonQ] = useState("");
   const [projectQ, setProjectQ] = useState("");
-  const [open, setOpen] = useState<Record<"units" | "people" | "projects", boolean>>({ units: false, people: false, projects: false });
+  const [folderQ, setFolderQ] = useState("");
+  const [open, setOpen] = useState<Record<"units" | "people" | "projects" | "folders", boolean>>({ units: false, people: false, projects: false, folders: false });
   const set = (patch: Partial<CalFilters>) => onChange({ ...filters, ...patch });
   const flip = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
@@ -51,6 +56,9 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
 
   const peopleShown = peopleIds.filter((id) => !pq || people(id).name.toLowerCase().includes(pq));
   const projectsShown = projects.filter((p) => !prq || p.name.toLowerCase().includes(prq));
+  const fq = folderQ.trim().toLowerCase();
+  // A search lists the matches flat (no indent: their parents may not be in the list).
+  const foldersShown = folders.filter((f) => !fq || f.name.toLowerCase().includes(fq));
 
 
   return (
@@ -92,6 +100,27 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
         </div>
         {!pq && <MoreToggle total={peopleIds.length} open={open.people} onClick={() => toggleOpen("people")} />}
       </Block>
+
+      {folders.length > 0 && (
+        <Block title={t("Folders")} count={filters.folders.length}>
+          <SearchBox value={folderQ} onChange={setFolderQ} placeholder={t("Search folders…")} />
+          <div className="mt-1.5 overflow-hidden rounded-xl border border-border">
+            {capped("folders", foldersShown, (f) => filters.folders.includes(f.id), !!fq).map((f) => {
+              const on = filters.folders.includes(f.id);
+              return (
+                <button key={f.id} type="button" role="checkbox" aria-checked={on} onClick={() => set({ folders: flip(filters.folders, f.id) })}
+                  className={cn(ROW, "pr-3")} style={{ paddingLeft: 10 + (fq ? 0 : f.depth) * 14 }}>
+                  <CheckBox on={on} />
+                  <Folder aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{f.name}</span>
+                </button>
+              );
+            })}
+            {fq && foldersShown.length === 0 && <div className="px-3 py-3 text-xs text-muted-foreground">{t("No folder matches.")}</div>}
+          </div>
+          {!fq && <MoreToggle total={folders.length} open={open.folders} onClick={() => toggleOpen("folders")} />}
+        </Block>
+      )}
 
       <Block title={t("Projects")} count={filters.projects.length}>
         <SearchBox value={projectQ} onChange={setProjectQ} placeholder={t("Search projects…")} />

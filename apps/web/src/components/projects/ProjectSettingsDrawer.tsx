@@ -134,6 +134,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   // "Bukti Pencairan before Done" and calendar mode were retired (server: lib/project-retired-flags.ts).
   const [autoAssignEnabled, setAutoAssignEnabled] = useState(!!project.autoAssignEnabled);
   const [autoAssignIds, setAutoAssignIds] = useState<string[]>(project.autoAssignAssigneeIds ?? []);
+  // The member list folds to a one-line summary once someone is picked (owner, 18 Oct 2026).
+  const [assignPickerOpen, setAssignPickerOpen] = useState(() => (project.autoAssignAssigneeIds ?? []).length === 0);
   const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
   const { t } = useLang();
   // The viewer's role in THIS project's workspace, not the user's first workspace.
@@ -215,6 +217,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     setAutoAssignIds(next);
     setAutoAssignEnabled(nextEnabled);
     settings.mutate({ autoAssignEnabled: nextEnabled, autoAssignAssigneeIds: next });
+    if (checked) setAssignPickerOpen(false);
   };
 
   const [bundleId, setBundleId] = useState("");
@@ -222,6 +225,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const applyBundle = useMutation({ mutationFn: () => nexusApi.applyWorkflowBundle(project.id, bundleId), onSuccess: invalidate });
 
   const currentMembers = project.members ?? [];
+  const assignedMembers = currentMembers.filter((m) => autoAssignIds.includes((m.userId || m.user?.id) ?? ""));
   const memberIds = useMemo(() => new Set(currentMembers.map((m) => m.userId || m.user?.id).filter(Boolean) as string[]), [currentMembers]);
 
   if (typeof document === "undefined") return null;
@@ -308,6 +312,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               {autoAssignError && <p className="text-xs font-semibold text-destructive">{autoAssignError}</p>}
               {settings.isError && <p className="text-xs font-semibold text-destructive">{saveErrorText(settings.error)}</p>}
 
+              {!assignPickerOpen && autoAssignIds.length > 0 ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/30 px-3 py-2">
+                  <div className="flex shrink-0 -space-x-1.5">
+                    {assignedMembers.slice(0, 3).map((m) => <MiniAvatar key={(m.userId || m.user?.id) ?? ""} user={m.user} size={22} />)}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{assignedMembers.map((m) => m.user?.name ?? m.user?.email ?? "").join(", ")}</span>
+                  {canManage && <button type="button" onClick={() => setAssignPickerOpen(true)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("Change")}</button>}
+                </div>
+              ) : (
+                <>
               <div className="rounded-2xl border border-border bg-muted/30 p-2">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Default assignees · {n}", { n: autoAssignIds.length })}</div>
                 {currentMembers.length === 0 && <p className="px-1 py-1 text-xs text-muted-foreground">{t("No members in this project yet — add some below first.")}</p>}
@@ -320,12 +334,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                         {checked ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                         <MiniAvatar user={m.user} size={22} />
                         <span className="flex-1 truncate text-sm font-medium">{m.user?.name ?? m.user?.email ?? id}</span>
-                        {m.role && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.role === "LEAD" ? t("Project Owner") : accessLevelLabel(memberLevelOf(m), t)}</span>}
                       </button>
                     );
                   })}
                 </div>
               </div>
+                  {autoAssignIds.length > 0 && canManage && (
+                    <div className="flex justify-end pt-1"><button type="button" onClick={() => setAssignPickerOpen(false)} className="rounded-lg px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("Done")}</button></div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

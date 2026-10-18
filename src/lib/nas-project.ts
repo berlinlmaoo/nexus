@@ -15,10 +15,12 @@
  *  NAS service account — override with NAS_PROJECT_FILES_ROOT if the account differs).
  */
 
+import { legacyIdOf } from "@/lib/legacy-ids"
 import {
   getNasSession,
   nasCreateFolder,
   nasList,
+  nasRename,
   validateNasPath,
   type NasListResult,
   NasError,
@@ -76,6 +78,7 @@ export async function listProjectFolder(
 ): Promise<NasListResult> {
   const folder = resolveProjectFolder(projectId, subPath)
   const sid = await getNasSession()
+  await migrateLegacyProjectFolder(sid, projectId)
   try {
     return await nasList(sid, folder, opts.offset ?? 0, opts.limit ?? 100, opts.sortBy ?? "name", opts.sortDirection ?? "asc")
   } catch (err) {
@@ -92,10 +95,30 @@ export async function listProjectFolder(
   }
 }
 
+/**
+ * Project folders are named by project id. A project converted to UUIDv7 (18 Oct 2026, UUID-MIGRATION.md)
+ * still has its folder under the old id: rename it to the new id the first time it is needed, before
+ * anything would create an empty folder under the new name. No-op for projects without an old id.
+ */
+const migratedFolders = new Set<string>()
+async function migrateLegacyProjectFolder(sid: string, projectId: string): Promise<void> {
+  if (migratedFolders.has(projectId)) return
+  const oldId = await legacyIdOf(projectId)
+  if (oldId && /^[a-zA-Z0-9_-]+$/.test(oldId)) {
+    try {
+      await nasRename(sid, `${getProjectFilesRoot()}/${oldId}`, projectId)
+    } catch {
+      // No folder under the old id (never opened, or already renamed): nothing to move.
+    }
+  }
+  migratedFolders.add(projectId)
+}
+
 /** Ensure a project folder (or sub-folder) exists, creating parents as needed. */
 export async function ensureProjectFolder(projectId: string, subPath?: string | null): Promise<string> {
   const folder = resolveProjectFolder(projectId, subPath)
   const sid = await getNasSession()
+  await migrateLegacyProjectFolder(sid, projectId)
   const parent = folder.slice(0, folder.lastIndexOf("/"))
   const name = folder.slice(folder.lastIndexOf("/") + 1)
   await nasCreateFolder(sid, parent, name, true)

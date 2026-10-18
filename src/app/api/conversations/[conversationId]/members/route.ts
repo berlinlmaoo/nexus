@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { resolveLegacyId, resolveLegacyIds } from "@/lib/legacy-ids"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, groupRoomAllowsUser, memberManagerContext } from "@/lib/chat-access"
@@ -82,9 +83,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     if (!manages) return managerRequired()
 
     const body = await req.json().catch(() => null)
-    const requested: string[] = Array.isArray(body?.userIds)
+    const asked: string[] = Array.isArray(body?.userIds)
       ? body.userIds.filter((u: unknown): u is string => typeof u === "string" && u.length > 0)
       : []
+    // Ids from before the UUIDv7 conversion (released apps' caches) are compared in JS below: resolve them first.
+    const legacy = await resolveLegacyIds(asked)
+    const requested = asked.map((u) => legacy.get(u) ?? u)
     if (requested.length === 0) return NextResponse.json({ error: "userIds required" }, { status: 400 })
 
     const reachable = await reachableUserIds(userId, convo.workspaceId)
@@ -142,7 +146,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     const convo = loaded.convo!
 
     const body = await req.json().catch(() => null)
-    const target = typeof body?.userId === "string" ? body.userId : null
+    const target = typeof body?.userId === "string" && body.userId ? await resolveLegacyId(body.userId) : null
     if (!target) return NextResponse.json({ error: "userId required" }, { status: 400 })
 
     // Removing someone else is a Manager-and-above act (owner, 8 Oct 2026); leaving is anyone's.

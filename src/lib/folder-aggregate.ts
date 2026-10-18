@@ -1,6 +1,7 @@
 /**
  * `aggregateProjectIds` in PATCH /api/project-folders/{id}: the curated project subset a folder's
- * aggregate view shows (iOS FolderAggregateView "Pick projects", web /folders/$folderId). `[]` means
+ * aggregate view shows (iOS FolderAggregateView "Pick projects"; the web folder calendar is gone since
+ * 18 Oct 2026 — one Calendar, filtered by folder — and no calendar reads this any more). `[]` means
  * "every project in the folder" — both clients send `[]` when everything is picked, so the folder
  * keeps including projects added later.
  *

@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { serveFile } from '@/lib/file-response'
 import { avatarThumbnail, avatarThumbWidth } from '@/lib/avatar-thumb'
 import prisma from '@/lib/prisma'
+import { legacyFileRedirect } from '@/lib/legacy-ids'
 import { stat } from 'fs/promises'
 import { chatFileCarrierFor, uploadedChatFile } from '@/lib/chat-access'
 import {
@@ -45,6 +46,12 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Files named after an id (avatars/<userId>.jpg, project-icons/<projectId>.png, folder-<folderId>.png,
+  // attendance/checkin-<userId>-…) were renamed by the UUIDv7 conversion. An old URL (a released app's
+  // cache, a link in a chat) is sent to the new name (lib/legacy-ids.ts, UUID-MIGRATION.md).
+  const moved = await legacyFileRedirect('/api/files', segments, req.nextUrl.search)
+  if (moved) return moved
+
   // Evidence photos from the retired Integrity feature (removed 12 Oct 2026) stay on disk but are no
   // longer served: nothing in NEXUS links to them and they name the person who was reported.
   if (filePath === join(base, 'peer-reports') || filePath.startsWith(join(base, 'peer-reports') + sep)) {
@@ -54,6 +61,12 @@ export async function GET(
   // Legal files (14 Oct 2026) are served only through /api/legal/*, behind its invitation gate.
   const legalDir = join(base, 'attachments', 'legal')
   if (filePath === legalDir || filePath.startsWith(legalDir + sep)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // Files GIDEON made for someone (18 Oct 2026, export_file): only through /api/gideon/files/:id, owner only.
+  const gideonExports = join(base, 'attachments', 'gideon', 'exports')
+  if (filePath === gideonExports || filePath.startsWith(gideonExports + sep)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

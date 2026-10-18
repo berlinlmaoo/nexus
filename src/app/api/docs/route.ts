@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { isWorkspaceMemberOf } from '@/lib/read-access'
 import { docWriteRefusal } from '@/lib/write-access'
+import { eventBus, BUS_EVENTS } from '@/lib/event-bus'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { docToText, sanitizeDoc } from '@/lib/blockdoc'
@@ -88,6 +89,8 @@ export async function POST(req: NextRequest) {
     })
     logAudit({ action: "create", entityType: "doc", entityId: doc.id, entityName: title, userId: session.user.id, request: req })
 
+    // Realtime (QA final 19 Oct): the Pages list of every other open copy of this project refetches.
+    eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId, docId: doc.id, actorId: session.user.id })
     return NextResponse.json({ doc }, { status: 201 })
   } catch (error) {
     console.error('Error creating doc:', error)

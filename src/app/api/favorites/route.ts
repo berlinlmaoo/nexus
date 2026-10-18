@@ -38,13 +38,21 @@ export async function POST(request: NextRequest) {
     })
 
     if (existing) {
-      await prisma.favorite.delete({ where: { id: existing.id } })
+      // deleteMany: a concurrent toggle may have removed it already (delete would throw P2025 → 500).
+      await prisma.favorite.deleteMany({ where: { id: existing.id } })
       return NextResponse.json({ favorited: false })
     }
 
-    const favorite = await prisma.favorite.create({
-      data: { type, targetId, userId: session.user.id },
-    })
+    let favorite
+    try {
+      favorite = await prisma.favorite.create({
+        data: { type, targetId, userId: session.user.id },
+      })
+    } catch (e) {
+      // A concurrent toggle (double click) created it a moment ago: it is favorited, not a 500.
+      if ((e as { code?: string })?.code !== "P2002") throw e
+      favorite = await prisma.favorite.findUniqueOrThrow({ where: { userId_type_targetId: { userId: session.user.id, type, targetId } } })
+    }
 
     return NextResponse.json({ favorited: true, favorite }, { status: 201 })
   } catch (error) {

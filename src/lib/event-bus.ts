@@ -93,6 +93,8 @@ export const BUS_EVENTS = {
   FORM_RESPONSES_CHANGED: "form-responses-changed",
   /** A GIDEON answer was billed (or the person's credits changed) → `user:<id>` ("gideon-credits", their own summary). */
   GIDEON_CREDITS: "gideon-credits",
+  /** A personal reminder was made, cancelled or went off (18 Oct 2026): `reminders-changed` { id } to user:<id>. */
+  REMINDERS_CHANGED: "reminders-changed",
   /** A GIDEON tier became unavailable or came back (Model 0 lends the GPU to the meeting transcriber) → every socket. */
   GIDEON_TIERS: "gideon-tiers",
   /** GIDEON performance panel (18 Oct 2026): a GPU sample { kind: "gpu", live }, or a ping { kind: "runs" | "alerts" } → room `gideon:perf` (BoD+). */

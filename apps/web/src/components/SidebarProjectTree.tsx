@@ -94,6 +94,8 @@ export function SidebarProjectTree() {
   const { t } = useLang();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  // A folder opens the Calendar filtered to it (one calendar, owner 18 Oct 2026): /calendar?folder=<one id>.
+  const calendarFolder = useRouterState({ select: (r) => (r.location.pathname === "/calendar" ? (r.location.search as { folder?: string }).folder ?? null : null) });
 
   const projectsQuery = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false, staleTime: 60_000 });
   const foldersQuery = useQuery({ queryKey: ["nexus", "project-folders"], queryFn: () => nexusApi.projectFolders(), retry: false, staleTime: 60_000 });
@@ -156,7 +158,7 @@ export function SidebarProjectTree() {
 
   // The folders above the project you're on open by themselves (once per project, so you can still close them).
   const activeProjectId = pathname.startsWith("/projects/") ? pathname.split("/")[2] ?? null : null;
-  const activeFolderId = pathname.startsWith("/folders/") ? pathname.split("/")[2] ?? null : null;
+  const activeFolderId = calendarFolder && !calendarFolder.includes(",") ? calendarFolder : null;
   const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeChain = useMemo(() => {
     const chain = new Set<string>();
@@ -406,7 +408,7 @@ export function SidebarProjectTree() {
             {rootFolders.map((f) => (
               <SidebarMenuItem key={f.id}>
                 <SidebarMenuButton asChild tooltip={f.name} isActive={activeFolderId === f.id || activeChain.has(f.id)}>
-                  <Link to="/folders/$folderId" params={{ folderId: f.id }}>
+                  <Link to="/calendar" search={{ folder: f.id }}>
                     <FolderGlyph folder={f} />
                     <span className="truncate">{f.name}</span>
                   </Link>

@@ -984,7 +984,7 @@ function FolderSection({ folder, count, collapsed, onToggle, actions, depth = 0,
         <ChevronRight className={cn("h-4 w-4 transition-transform duration-150", !collapsed && "rotate-90")} />
       </button>
       {folder ? (
-        <Link to="/folders/$folderId" params={{ folderId: folder.id }} draggable={false} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title={t("Open folder view")}>
+        <Link to="/calendar" search={{ folder: folder.id }} draggable={false} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title={t("Open folder view")}>
           <FolderGlyph folder={folder} open={!collapsed} size={20} className={cn(!folder.color && "text-muted-foreground")} />
           <h3 className="truncate font-semibold tracking-tight" title={folder.name}>{folder.name}</h3>
         </Link>

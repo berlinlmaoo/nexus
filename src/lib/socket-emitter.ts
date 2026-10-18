@@ -125,7 +125,7 @@ export function originTabOf(req: { headers: { get(name: string): string | null }
   return v && /^[A-Za-z0-9_-]{6,64}$/.test(v) ? v : null
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal" | "bookings"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
@@ -247,6 +247,11 @@ export function emitAutomationsChanged(projectId: string, automationId: string |
  */
 export function emitGideonCredits(userId: string, summary: unknown) {
   publishSafely(BUS_EVENTS.GIDEON_CREDITS, { userId, summary })
+}
+
+/** `reminders-changed` { id } to `user:<id>` (personal reminders, 18 Oct 2026): the Reminders page refetches. */
+export function emitRemindersChanged(userId: string, id: string) {
+  publishSafely(BUS_EVENTS.REMINDERS_CHANGED, { userId, id })
 }
 
 function publishSafely(event: string, data: unknown) {

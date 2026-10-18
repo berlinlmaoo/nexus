@@ -3,8 +3,10 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  redirect,
   useRouter,
 } from "@tanstack/react-router";
+import { resolveLegacyLocation } from "@/lib/legacy-link";
 import { Toaster } from "@/components/ui/sonner";
 import { useLang } from "@/lib/lang";
 
@@ -100,6 +102,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  // An old link (pre-UUIDv7 id in the address) is swapped for the new ids before anything loads.
+  beforeLoad: async ({ location }) => {
+    const target = await resolveLegacyLocation(location.href);
+    if (target) throw redirect({ href: target, replace: true });
+  },
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,

@@ -553,7 +553,7 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
     case "project": return <Link to="/projects/$projectId" params={{ projectId: target.id }} className={cls}>{children}{arrow}</Link>;
     case "task": return <Link to="/tasks/$taskId" params={{ taskId: target.id }} className={cls}>{children}{arrow}</Link>;
     case "doc": return <Link to="/docs/$docId" params={{ docId: target.id }} className={cls}>{children}{arrow}</Link>;
-    case "folder": return <Link to="/folders/$folderId" params={{ folderId: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "folder": return <Link to="/calendar" search={{ folder: target.id }} className={cls}>{children}{arrow}</Link>;
     case "attendance": return <Link to="/attendance" search={target.request ? { request: target.request } : {}} className={cls}>{children}{arrow}</Link>;
     case "room": return <Link to="/room-booking" search={{ booking: target.booking }} className={cls}>{children}{arrow}</Link>;
     case "calendar": return <Link to="/calendar" search={target.date ? { date: target.date } : {}} className={cls}>{children}{arrow}</Link>;

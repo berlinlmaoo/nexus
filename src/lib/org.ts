@@ -5,7 +5,10 @@ import { WORKSPACE_HIERARCHY } from "@/lib/rbac"
 // The company workspace. Anyone can sign up and becomes ONE_ABOVE_ALL of their own personal
 // workspace, so a role in "any workspace" must never grant company-level power. Company-wide
 // powers (feed, admin, NAS, buffer, XP, announcements...) are decided by the role HERE only.
-export const ORG_WORKSPACE_ID = process.env.NEXUS_ORG_WORKSPACE_ID?.trim() || "cmmroq7dk0001vewe92nk1g0w"
+// Its id was "cmmroq7dk0001vewe92nk1g0w" until the UUIDv7 conversion, which pins this new id for it
+// (scripts/uuid-migration/uuid-lib.sql, uuid_mig.pin), so prod and dev share it and nothing else needs to change.
+export const ORG_WORKSPACE_ID_V7 = "019cf14d-ebd8-7000-b947-67d4138beaf3"
+export const ORG_WORKSPACE_ID = process.env.NEXUS_ORG_WORKSPACE_ID?.trim() || ORG_WORKSPACE_ID_V7
 
 /** The user's role in the company workspace, or null when they are not a member of it. */
 export async function orgRoleOf(userId: string): Promise<WorkspaceRole | null> {

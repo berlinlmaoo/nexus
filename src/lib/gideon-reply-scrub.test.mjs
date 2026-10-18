@@ -7,6 +7,9 @@ assert.equal(s("Usulan pembatalan sudah dibuat (ID usulan: `cmu6d4q1i014c01qtzd9
 assert.equal(s("Tidak ada potongan yang bisa dibatalkan (`hasPenaltyToCancel = false`)."), "Tidak ada potongan yang bisa dibatalkan.")
 assert.equal(s("Catatan: recordedByNexus `recordedByNexus = true` jadi aman."), "Catatan: recorded by nexus jadi aman.")
 assert.equal(s("ID usulan: cmu6d4q1i014c01qtzd97uzbt"), "")
+// Ids since the UUIDv7 conversion (18 Oct 2026).
+assert.equal(s("Usulan pembatalan sudah dibuat (ID usulan: `019cf14d-ebd8-7000-b947-67d4138beaf3`). Nunggu approve BoD."), "Usulan pembatalan sudah dibuat. Nunggu approve BoD.")
+assert.equal(s("Tiket 019cf14d-ebd8-7000-b947-67d4138beaf3 sudah ditutup."), "Tiket sudah ditutup.")
 // Ordinary text is untouched: words starting with c, times, numbers, plain parentheses.
 const plain = "15 Sep: kamu masuk 12:14 (telat 14 menit), lalu nggak bisa check-out karena NEXUS mati 18:09–23:54.\nNunggu approve BoD."
 assert.equal(s(plain), plain)

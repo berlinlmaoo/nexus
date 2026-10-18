@@ -32,7 +32,11 @@ export type CalStructure = {
   v: number; version: string | null; access: CalAccess
   me: { userId: string; role: string | null; homeUnitIds: string[] } | null
   units: CalUnit[]; people: CalPerson[]
+  /** Project folders the viewer can filter by, in tree order (servers before 18 Oct 2026 leave it out). */
+  folders?: CalFolder[]
 }
+/** A project folder in the Folder filter; `depth` 0 = top level. */
+export type CalFolder = { id: string; name: string; icon: string; color: string; parentId: string | null; depth: number }
 export type CalItem = {
   key: string; id: string | null; masked: boolean; title: string | null
   day: string; time: string | null; due: string
@@ -174,16 +178,21 @@ export type CalFilters = {
   units: string[]
   people: string[]
   projects: string[]
+  /**
+   * Folders picked (a folder = every project in it and its subfolders). Applied by the server
+   * (?folder= on /api/calendar/items and /overdue), so filterItems never reads it.
+   */
+  folders: string[]
   priorities: string[]
   hideDone: boolean
   overdueOnly: boolean
 }
-export const NO_FILTERS: CalFilters = { scope: "all", units: [], people: [], projects: [], priorities: [], hideDone: false, overdueOnly: false }
+export const NO_FILTERS: CalFilters = { scope: "all", units: [], people: [], projects: [], folders: [], priorities: [], hideDone: false, overdueOnly: false }
 
 /** Everything that narrows the list, the scope included. */
 export function activeFilterCount(f: CalFilters): number {
   return (f.scope !== "all" ? 1 : 0) + (f.units.length ? 1 : 0) + (f.people.length ? 1 : 0) + (f.projects.length ? 1 : 0)
-    + (f.priorities.length ? 1 : 0) + (f.hideDone ? 1 : 0) + (f.overdueOnly ? 1 : 0)
+    + (f.folders.length ? 1 : 0) + (f.priorities.length ? 1 : 0) + (f.hideDone ? 1 : 0) + (f.overdueOnly ? 1 : 0)
 }
 
 /**

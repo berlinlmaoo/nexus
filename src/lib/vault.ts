@@ -260,6 +260,12 @@ export async function uniqueNameInFolder(
   ignoreItemId?: string,
   client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<string> {
+  // Inside a transaction, one name-picker per folder at a time (held to commit): eight people making
+  // "New folder" in the same folder at once all read the same siblings under the shared tree lock, and
+  // withFreeName's 5 retries ran out — 3 of 8 answered 500 (QA final 19 Oct 2026).
+  if (client !== prisma) {
+    await (client as Prisma.TransactionClient).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`vaultnames|${workspaceId}|${parentId ?? ""}`})::int8)`
+  }
   const siblings = await client.vaultItem.findMany({
     where: { workspaceId, parentId, deletedAt: null, ...(ignoreItemId ? { id: { not: ignoreItemId } } : {}) },
     select: { name: true },

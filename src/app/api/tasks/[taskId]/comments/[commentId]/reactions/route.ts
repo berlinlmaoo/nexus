@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
+import { isUniqueViolation } from "@/lib/prisma-errors"
 
 export async function POST(
   request: NextRequest,
@@ -42,18 +43,29 @@ export async function POST(
     })
 
     if (existing) {
-      await prisma.commentReaction.delete({ where: { id: existing.id } })
+      // deleteMany: a concurrent toggle may have removed it already (delete would throw P2025 → 500).
+      await prisma.commentReaction.deleteMany({ where: { id: existing.id } })
       return NextResponse.json({ toggled: "removed" })
     }
 
-    const reaction = await prisma.commentReaction.create({
-      data: {
-        commentId: (await params).commentId,
-        userId: session.user.id,
-        emoji,
-      },
-      include: { user: { select: { id: true, name: true } } },
-    })
+    let reaction
+    try {
+      reaction = await prisma.commentReaction.create({
+        data: {
+          commentId: (await params).commentId,
+          userId: session.user.id,
+          emoji,
+        },
+        include: { user: { select: { id: true, name: true } } },
+      })
+    } catch (e) {
+      // A concurrent toggle (double tap) added the same reaction a moment ago: it is there, not a 500.
+      if (!isUniqueViolation(e)) throw e
+      reaction = await prisma.commentReaction.findUniqueOrThrow({
+        where: { commentId_userId_emoji: { commentId: (await params).commentId, userId: session.user.id, emoji } },
+        include: { user: { select: { id: true, name: true } } },
+      })
+    }
 
     return NextResponse.json({ toggled: "added", reaction }, { status: 201 })
   } catch (error) {

@@ -48,7 +48,8 @@ export const MEETING_DIR = process.env.NEXUS_MEETING_DIR || path.join(process.cw
 /** Bytes per upload request. Under Cloudflare's 100 MB request cap with room to spare; small enough to retry cheaply. */
 export const MEETING_CHUNK_BYTES = 8 * 1024 * 1024
 export const MEETING_MAX_CHUNK = 16 * 1024 * 1024
-const ID_RE = /^[a-z0-9]{10,40}$/i
+// cuid (before the 18 Oct 2026 UUIDv7 conversion) or UUID; ids name audio files, so no "/" or ".".
+const ID_RE = /^[a-z0-9-]{10,40}$/i
 
 export type MeetingRow = Awaited<ReturnType<typeof prisma.meetingNote.findUnique>> & {}
 
