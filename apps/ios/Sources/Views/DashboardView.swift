@@ -305,8 +305,7 @@ struct DashboardView: View {
             // One height for the pair: the row is as tall as the taller card and both fill it.
             .fixedSize(horizontal: false, vertical: true)
             .environment(\.homeCardFillsRow, true)
-            // Side by side from 560 pt, as the web's left column (two ~280 pt cards).
-            .frame(minWidth: 560)
+            .frame(minWidth: 620)
             VStack(alignment: .leading, spacing: 18) {
                 HomeCalendarCard { router.go(.teamCalendar) }
                 scheduleCard
