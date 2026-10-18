@@ -739,6 +739,11 @@ final class NEXUSUITour: XCTestCase {
             case "absent":
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
+            case "enabled":
+                let target = app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isEnabled == (action.text == "true") else {
+                    return "wrong-screen: unexpected enabled state for \(action.label)"
+                }
             case "check":
                 #if targetEnvironment(macCatalyst)
                 let labelled = app.descendants(matching: .any).matching(match).firstMatch
@@ -747,7 +752,7 @@ final class NEXUSUITour: XCTestCase {
                 #else
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 #endif
-                guard target.waitForExistence(timeout: 20) else { return "wrong-screen: missing expected content \(action.label)" }
+                guard target.waitForExistence(timeout: min(300, Double(action.text ?? "20") ?? 20)) else { return "wrong-screen: missing expected content \(action.label)" }
             default: return "wrong-screen: unknown QA action \(action.kind)"
             }
         }
