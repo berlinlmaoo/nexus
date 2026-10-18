@@ -74,6 +74,7 @@ import { ID_GIDEON_DELETE } from "@/lib/i18n/id-gideon-delete";
 import { ID_GIDEON_TOOLS } from "@/lib/i18n/id-gideon-tools";
 import { ID_NOTION_VIEWS } from "@/lib/i18n/id-notion-views";
 import { ID_MEETINGS } from "@/lib/i18n/id-meetings";
+import { ID_MEETING_SPEAKERS } from "@/lib/i18n/id-meeting-speakers";
 import { ID_GIDEON_PERF } from "@/lib/i18n/id-gideon-perf";
 
 /**
@@ -95,6 +96,7 @@ const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDA
 Object.assign(ID, ID_RACE_COLLAB);
 // Meeting notes, Beta (18 Oct 2026).
 Object.assign(ID, ID_MEETINGS);
+Object.assign(ID, ID_MEETING_SPEAKERS);
 Object.assign(ID, ID_GIDEON_PERF);
 
 function read(): Lang {

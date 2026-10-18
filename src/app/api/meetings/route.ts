@@ -14,7 +14,7 @@ import { emitMeetingChanged, meetingAccess, meetingSettings, MEETING_CHUNK_BYTES
  * GET  /api/meetings?projectId=&limit=  → { meetings: [...] } — the person's own recordings, plus (with projectId)
  *      the project's recordings they can see. Newest first. Light rows (no transcript).
  * POST /api/meetings { fileName, mime, size, title?, projectId?, language?: auto|id|en, source?: upload|record,
- *      recordedAt?, durationSec? } → 201 { meeting, upload: { chunkBytes, maxChunkBytes } }.
+ *      recordedAt?, durationSec?, speakerLabels? (default true), introEndSec? } → 201 { meeting, upload: { chunkBytes, maxChunkBytes } }.
  *      Then PUT /api/meetings/:id/audio?offset=… per chunk and POST /api/meetings/:id/audio/complete.
  *      Refusals carry `code`: DISABLED 403, UNSUPPORTED_TYPE 415, TOO_LARGE 413, TOO_LONG 413, NEEDS_EDIT_ACCESS 403,
  *      RATE_LIMITED 429.
@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
   const language = MEETING_LANGUAGES.includes(body.language as never) ? (body.language as string) : "auto"
   const recordedAt = typeof body.recordedAt === "string" && !Number.isNaN(Date.parse(body.recordedAt)) ? new Date(body.recordedAt) : null
   const title = typeof body.title === "string" ? body.title.replace(/\s+/g, " ").trim().slice(0, 200) : ""
+  // Speaker labels (owner, 19 Oct 2026): on unless the person turned them off; introEndSec = the record screen's
+  // "Done with introductions" (seconds into the recording), only for a recording made here.
+  const introEndSec = Number(body.introEndSec)
+  const speakerLabels = body.speakerLabels !== false
   const row = await prisma.meetingNote.create({
     data: {
       createdById: userId,
@@ -85,6 +89,8 @@ export async function POST(req: NextRequest) {
       audioBytes: BigInt(Math.floor(size)),
       recordedAt,
       durationSec: Number.isFinite(durationSec) && durationSec > 0 ? durationSec : null,
+      speakerLabels,
+      introEndSec: speakerLabels && Number.isFinite(introEndSec) && introEndSec > 0 && introEndSec < settings.maxMinutes * 60 ? Math.round(introEndSec * 100) / 100 : null,
     },
   })
   emitMeetingChanged(row)

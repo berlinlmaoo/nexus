@@ -13,6 +13,17 @@ export type Mom = { attendees: string[]; topics: MomTopic[]; decisions: string[]
 export type TaskProposal = { key: string; include: boolean; title: string; description: string; assigneeIds: string[]; dueDate: string | null; actionIndex: number | null };
 export type TranscriptSegment = { start: number; end: number; text: string; speaker?: string | null };
 export type MeetingPerson = { id: string; name: string | null; avatar: string | null };
+export type SpeakerEntry = { name: string; userId: string | null; auto?: boolean };
+export type SpeakerMap = Record<string, SpeakerEntry>;
+
+/** "Speaker 3" → 3, for ordering and colours. */
+export const speakerIndex = (label: string) => { const m = /(\d+)\s*$/.exec(label); return m ? Number(m[1]) : 0; };
+/** Speakers in the order they first talk. */
+export function speakerLabelsOf(segments: TranscriptSegment[]): string[] {
+  const seen: string[] = [];
+  for (const s of segments) if (s.speaker && !seen.includes(s.speaker)) seen.push(s.speaker);
+  return seen.sort((a, b) => speakerIndex(a) - speakerIndex(b));
+}
 
 export type Meeting = {
   id: string;
@@ -27,6 +38,9 @@ export type Meeting = {
   audio: { name: string | null; mime: string | null; bytes: number; received: number; available: boolean; deletedAt: string | null; deleteAfter: string | null };
   durationSec: number | null;
   recordedAt: string | null;
+  /** Speaker labels asked for (19 Oct 2026); introEndSec = where the introductions ended (record screen marker). */
+  speakerLabels?: boolean;
+  introEndSec?: number | null;
   detectedLanguage: string | null;
   tier: string | null;
   doc: { id: string; title: string; url: string } | null;
@@ -65,9 +79,10 @@ export type MeetingFull = Meeting & {
   overview: string | null;
   mom: Mom | null;
   proposals: TaskProposal[];
-  speakers: Record<string, { name: string; userId: string | null }> | null;
+  /** "Speaker N" → a person. auto = read from the introductions; without auto = named by hand (wins). */
+  speakers: SpeakerMap | null;
   transcript: TranscriptSegment[];
-  transcribeStats: { position?: number | null; state?: string } | null;
+  transcribeStats: { position?: number | null; state?: string; stage?: string; speakers?: number | null; diarizeSec?: number | null } | null;
   tasks: Array<{ id: string; title: string; status: string; dueDate: string | null; projectId: string; section: string; assignees: MeetingPerson[] }>;
   members: MeetingPerson[];
 };
@@ -90,7 +105,7 @@ export const meetingKey = (id: string) => ["meeting", id] as const;
 
 export const listMeetings = (projectId?: string | null) => mjson<{ meetings: Meeting[]; settings: MeetingSettings }>(`/api/meetings${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`);
 export const getMeeting = (id: string) => mjson<{ meeting: MeetingFull }>(`/api/meetings/${encodeURIComponent(id)}`).then((r) => r.meeting);
-export const createMeeting = (body: { fileName: string; mime: string; size: number; title?: string; projectId?: string | null; language?: MeetingLanguage; source?: "upload" | "record"; recordedAt?: string; durationSec?: number | null }) =>
+export const createMeeting = (body: { fileName: string; mime: string; size: number; title?: string; projectId?: string | null; language?: MeetingLanguage; source?: "upload" | "record"; recordedAt?: string; durationSec?: number | null; speakerLabels?: boolean; introEndSec?: number | null }) =>
   mjson<{ meeting: Meeting; upload: { chunkBytes: number; maxChunkBytes: number } }>("/api/meetings", { method: "POST", body: JSON.stringify(body) });
 export const patchMeeting = (id: string, body: Record<string, unknown>) => mjson<{ meeting: MeetingFull }>(`/api/meetings/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
 export const applyMeeting = (id: string, body: { projectId: string; title: string; overview: string; mom: Mom; proposals: TaskProposal[]; lang: "en" | "id" }) =>

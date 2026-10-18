@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { FileAudio, Loader2, Mic, Pause, Play, Square, Upload, X } from "lucide-react";
+import { Check, FileAudio, Loader2, Mic, Pause, Play, Square, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SelectPicker } from "@/components/SelectPicker";
+import { Switch } from "@/components/ui/switch";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,10 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<string>(initialProject ?? "");
   const [language, setLanguage] = useState<MeetingLanguage>("auto");
+  /** Speaker labels (owner, 19 Oct 2026): voices told apart, named from a round of introductions at the start. */
+  const [speakerLabels, setSpeakerLabels] = useState(true);
+  /** Record mode: seconds into the recording where "Done with introductions" was pressed. */
+  const [introEnd, setIntroEnd] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +48,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   useEffect(() => {
     if (!open) return;
     setProjectId(initialProject ?? "");
-    setFile(null); setDuration(null); setTitle(""); setError(null); setProgress(0); setBusy(false); setMode("upload"); setSent(null);
+    setFile(null); setDuration(null); setTitle(""); setError(null); setProgress(0); setBusy(false); setMode("upload"); setSent(null); setSpeakerLabels(true); setIntroEnd(null);
   }, [open, initialProject]);
 
   const projectOptions = useMemo(() => (projects.data ?? [])
@@ -73,6 +78,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
       const { meeting, upload } = await createMeeting({
         fileName: file.name, mime: file.type, size: file.size, title: title.trim(), projectId: projectId || null, language,
         source: mode === "record" ? "record" : "upload", recordedAt: new Date(file.lastModified || Date.now()).toISOString(), durationSec: duration,
+        speakerLabels, introEndSec: speakerLabels && mode === "record" ? introEnd : null,
       });
       const queued = await uploadMeetingAudio(meeting.id, file, upload.chunkBytes, setProgress, ctl.signal);
       setSent(queued);
@@ -134,7 +140,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
         <div className="space-y-4">
           <div role="tablist" aria-label={t("How to add the recording")} className="inline-flex rounded-lg bg-muted p-0.5 text-sm">
             {(["upload", "record"] as const).map((m) => (
-              <button key={m} role="tab" type="button" aria-selected={mode === m} disabled={busy} onClick={() => { setMode(m); setFile(null); setDuration(null); setError(null); }}
+              <button key={m} role="tab" type="button" aria-selected={mode === m} disabled={busy} onClick={() => { setMode(m); setFile(null); setDuration(null); setError(null); setIntroEnd(null); }}
                 className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 font-medium text-muted-foreground transition-colors", mode === m && "bg-card text-foreground shadow-sm")}>
                 {m === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}{m === "upload" ? t("Upload a file") : t("Record")}
               </button>
@@ -162,8 +168,20 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
               </button>
             )
           ) : (
-            <Recorder disabled={busy} maxSeconds={maxMinutes * 60} onDone={(f, d) => { setFile(f); setDuration(d); if (!title) setTitle(t("Meeting {date}", { date: new Date().toLocaleDateString() })); }} recorded={file} onDiscard={() => { setFile(null); setDuration(null); }} />
+            <Recorder disabled={busy} maxSeconds={maxMinutes * 60} onDone={(f, d) => { setFile(f); setDuration(d); if (!title) setTitle(t("Meeting {date}", { date: new Date().toLocaleDateString() })); }} recorded={file} onDiscard={() => { setFile(null); setDuration(null); setIntroEnd(null); }}
+              introductions={speakerLabels} introEnd={introEnd} onIntroEnd={setIntroEnd} />
           )}
+          <div className="rounded-xl border border-border bg-card px-3 py-3">
+            <div className="flex items-start gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Users className="h-4 w-4" /></span>
+              <label htmlFor="meeting-speakers" className="min-w-0 flex-1 cursor-pointer">
+                <span className="block text-sm font-semibold">{t("Tell speakers apart")}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t("Start with a quick round of introductions so GIDEON can tell voices apart.")} <span className="italic">{t("“Hi, I'm Berlin…”")}</span></span>
+                <span className="mt-1 block text-xs text-muted-foreground">{t("Voices are only used to label this recording.")}</span>
+              </label>
+              <Switch id="meeting-speakers" checked={speakerLabels} disabled={busy} onCheckedChange={(v) => { setSpeakerLabels(v); if (!v) setIntroEnd(null); }} aria-label={t("Tell speakers apart")} />
+            </div>
+          </div>
           <input ref={input} type="file" accept={MEETING_AUDIO_ACCEPT} className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; void pick(f); }} />
 
           <label className="block">
@@ -203,7 +221,11 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
 }
 
 /** In-browser recording (MediaRecorder). Opus in WebM where supported, AAC in MP4 on Safari. */
-function Recorder({ onDone, onDiscard, recorded, disabled, maxSeconds }: { onDone: (f: File, durationSec: number) => void; onDiscard: () => void; recorded: File | null; disabled?: boolean; maxSeconds: number }) {
+function Recorder({ onDone, onDiscard, recorded, disabled, maxSeconds, introductions, introEnd, onIntroEnd }: {
+  onDone: (f: File, durationSec: number) => void; onDiscard: () => void; recorded: File | null; disabled?: boolean; maxSeconds: number;
+  /** Speaker labels on: the first phase of the recording is the round of introductions, ended by a tap. */
+  introductions: boolean; introEnd: number | null; onIntroEnd: (sec: number | null) => void;
+}) {
   const { t } = useLang();
   const [state, setState] = useState<"idle" | "recording" | "paused">("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -236,6 +258,7 @@ function Recorder({ onDone, onDiscard, recorded, disabled, maxSeconds }: { onDon
 
   const begin = async () => {
     setErr(null);
+    onIntroEnd(null);
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) { setErr(t("This browser can't record audio. Upload a file instead.")); return; }
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
@@ -288,7 +311,7 @@ function Recorder({ onDone, onDiscard, recorded, disabled, maxSeconds }: { onDon
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Mic className="h-4 w-4" /></span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{t("Recording ready")}</span>
-          <span className="block text-xs text-muted-foreground tabular-nums">{clock(elapsed)} · {(recorded.size / 1048576).toFixed(1)} MB</span>
+          <span className="block text-xs text-muted-foreground tabular-nums">{clock(elapsed)} · {(recorded.size / 1048576).toFixed(1)} MB{introductions && introEnd !== null ? ` · ${t("introductions until {time}", { time: clock(introEnd) })}` : ""}</span>
         </span>
         {!disabled && <button type="button" onClick={() => { onDiscard(); setElapsed(0); }} className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">{t("Discard")}</button>}
       </div>
@@ -303,9 +326,24 @@ function Recorder({ onDone, onDiscard, recorded, disabled, maxSeconds }: { onDon
         <div className="min-w-0 flex-1">
           <div className="text-2xl font-semibold tabular-nums leading-none">{clock(elapsed)}</div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden><div className="h-full rounded-full bg-sidebar-primary transition-[width] duration-100" style={{ width: `${state === "recording" ? Math.min(100, level * 160) : 0}%` }} /></div>
-          <div className="mt-1 text-xs text-muted-foreground">{state === "idle" ? t("Keep this tab open while recording.") : state === "paused" ? t("Paused") : t("Recording… keep this tab open.")}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{state === "idle" ? (introductions ? t("Start with a round of introductions. Keep this tab open while recording.") : t("Keep this tab open while recording.")) : state === "paused" ? t("Paused") : t("Recording… keep this tab open.")}</div>
         </div>
       </div>
+      {introductions && state !== "idle" && (
+        introEnd === null ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sidebar-primary/30 bg-accent/50 px-3 py-2.5" aria-live="polite">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sidebar-primary px-2 py-0.5 text-xs font-semibold text-sidebar-primary-foreground"><Users className="h-3 w-3" />{t("Introductions")}</span>
+            <span className="min-w-0 flex-1 basis-48 text-xs leading-relaxed">{t("Each person says their name in turn, then tap Done.")}</span>
+            <button type="button" onClick={() => onIntroEnd(Math.round(elapsed * 100) / 100)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-xs font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><Check className="h-3.5 w-3.5" />{t("Done with introductions")}</button>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="tabular-nums">{t("Introductions done at {time}", { time: clock(introEnd) })}</span>
+            <button type="button" onClick={() => onIntroEnd(null)} className="rounded px-1 font-medium text-foreground underline-offset-2 hover:underline">{t("Undo")}</button>
+          </div>
+        )
+      )}
       <div className="mt-3 flex gap-2">
         {state === "idle" ? (
           <button type="button" disabled={disabled} onClick={() => void begin()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90 disabled:opacity-50"><Mic className="h-4 w-4" />{t("Start recording")}</button>

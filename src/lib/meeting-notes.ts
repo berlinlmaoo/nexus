@@ -20,9 +20,9 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { logAudit } from "@/lib/audit"
 import { docToText, sanitizeDoc } from "@/lib/blockdoc"
 import {
-  buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanMom, cleanProposals, cleanSegments, clock, compactNotes, draftToProposals,
-  mergeNotesPrompt, minutesPrompt, parseMinutes, transcriptLines, type MeetingPromptMeta, type MemberLite, type Mom, type TaskProposal,
-  type TranscriptSegment,
+  buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanMom, cleanProposals, cleanSegments, cleanSpeakers, clock, compactNotes, draftToProposals,
+  introNames, mergeNotesPrompt, mergeSpeakers, minutesPrompt, parseMinutes, transcriptLines, type MeetingPromptMeta, type MemberLite, type Mom,
+  type NameCandidate, type TaskProposal, type TranscriptSegment,
 } from "@/lib/meeting-notes-core"
 
 /**
@@ -102,6 +102,8 @@ const num = (b: bigint | number | null | undefined) => (b === null || b === unde
 /** Measured on the office GPU: ~1.8 min per hour of audio, plus ~45 s per job (model load, Model 0 window). */
 const TRANSCRIBE_SEC_PER_AUDIO_SEC = 1.8 / 60
 const TRANSCRIBE_JOB_OVERHEAD_SEC = 45
+/** Speaker labels on top (word timings + voices on the CPU): measured 19 Oct 2026, 112 s → 157 s for 66 min of audio. */
+const SPEAKERS_SEC_PER_AUDIO_SEC = 0.7 / 60
 /** GIDEON writing the minutes: ~40 s, plus ~1 min per hour of audio (more parts to read). */
 const SUMMARY_BASE_SEC = 40
 const SUMMARY_SEC_PER_AUDIO_SEC = 60 / 3600
@@ -110,7 +112,8 @@ function audioSecOf(r: { durationSec: number | null; audioBytes: bigint | number
   // Unknown duration: estimated from the size at ~48 kbit/s.
   return r.durationSec && r.durationSec > 0 ? r.durationSec : Math.max(60, Number(r.audioBytes) / 6000)
 }
-const transcribeSec = (r: { durationSec: number | null; audioBytes: bigint | number }) => TRANSCRIBE_JOB_OVERHEAD_SEC + audioSecOf(r) * TRANSCRIBE_SEC_PER_AUDIO_SEC
+const transcribeSec = (r: { durationSec: number | null; audioBytes: bigint | number; speakerLabels?: boolean | null }) =>
+  TRANSCRIBE_JOB_OVERHEAD_SEC + audioSecOf(r) * (TRANSCRIBE_SEC_PER_AUDIO_SEC + (r.speakerLabels === false ? 0 : SPEAKERS_SEC_PER_AUDIO_SEC))
 const summarySec = (r: { durationSec: number | null; audioBytes: bigint | number }) => SUMMARY_BASE_SEC + audioSecOf(r) * SUMMARY_SEC_PER_AUDIO_SEC
 
 export type MeetingQueue = { waiting: boolean; position: number | null; etaSec: number }
@@ -122,14 +125,14 @@ export type MeetingQueue = { waiting: boolean; position: number | null; etaSec: 
  */
 export async function meetingQueue(row: NonNullable<MeetingRow>): Promise<MeetingQueue | null> {
   if (!["QUEUED", "TRANSCRIBING", "SUMMARIZING"].includes(row.status)) return null
-  const own = { durationSec: row.durationSec, audioBytes: row.audioBytes }
+  const own = { durationSec: row.durationSec, audioBytes: row.audioBytes, speakerLabels: row.speakerLabels }
   if (row.status === "SUMMARIZING") return { waiting: false, position: null, etaSec: Math.round(summarySec(own) * (1 - Math.min(0.9, row.progress || 0))) }
   const stats = (row.transcribeStats && typeof row.transcribeStats === "object" ? row.transcribeStats : {}) as { state?: string; position?: number | null }
   const running = row.status === "TRANSCRIBING" && stats.state === "running"
   const since = row.stageStartedAt ?? row.createdAt
   const ahead = running ? [] : await prisma.meetingNote.findMany({
     where: { id: { not: row.id }, status: { in: ["QUEUED", "TRANSCRIBING"] }, OR: [{ stageStartedAt: { lt: since } }, { stageStartedAt: null, createdAt: { lt: since } }] },
-    select: { durationSec: true, audioBytes: true, progress: true, status: true },
+    select: { durationSec: true, audioBytes: true, progress: true, status: true, speakerLabels: true },
     take: 50,
   }).catch(() => [])
   const transPos = typeof stats.position === "number" && stats.position > 0 ? stats.position : null
@@ -171,6 +174,8 @@ export async function serializeMeeting(row: NonNullable<MeetingRow>, access: Mee
     },
     durationSec: row.durationSec,
     recordedAt: row.recordedAt?.toISOString() ?? null,
+    speakerLabels: row.speakerLabels !== false,
+    introEndSec: row.introEndSec ?? null,
     detectedLanguage: row.detectedLanguage,
     tier: row.tier,
     doc: doc ? { id: doc.id, title: doc.title, url: `/docs/${doc.id}` } : null,
@@ -191,7 +196,7 @@ export async function serializeMeeting(row: NonNullable<MeetingRow>, access: Mee
     overview: row.overview,
     mom: row.mom ? cleanMom(row.mom) : null,
     proposals: cleanProposals(row.proposals),
-    speakers: row.speakers ?? null,
+    speakers: cleanSpeakers(row.speakers),
     transcript: cleanSegments(row.transcript),
     transcribeStats: row.transcribeStats ?? null,
     tasks: (tasks as Array<{ id: string; title: string; status: string; dueDate: Date | null; taskList: { projectId: string; name: string }; assignees: Array<{ user: { id: string; name: string | null; avatar: string | null } }> }>).map((t) => ({
@@ -364,6 +369,7 @@ type WhisperJob = {
   durationSec?: number | null
   segments?: unknown
   error?: string | null
+  stage?: string | null
   stats?: Record<string, unknown> | null
 }
 
@@ -404,6 +410,11 @@ async function submitTranscript(row: NonNullable<MeetingRow>, settings: MeetingS
     return
   }
   const q = new URLSearchParams({ id: row.id, language: row.language || "auto", maxSec: String(Math.round(settings.maxMinutes * 60)) })
+  // Speaker labels (owner, 19 Oct 2026). A transcriber that predates them ignores the parameters (no labels).
+  if (row.speakerLabels !== false) {
+    q.set("speakers", "1")
+    if (row.introEndSec && row.introEndSec > 0) q.set("introEnd", row.introEndSec.toFixed(2))
+  }
   try {
     const res = await whisperFetch(`/v1/jobs?${q}`, {
       method: "POST",
@@ -449,7 +460,7 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
   if (!job) return
   if (job.state === "queued" || job.state === "running") {
     const progress = job.state === "running" ? Math.max(0, Math.min(1, Number(job.progress) || 0)) : 0
-    const stats = { position: job.position ?? null, state: job.state }
+    const stats = { position: job.position ?? null, state: job.state, ...(job.stage ? { stage: job.stage } : {}) }
     // The transcriber knows the real length once it opened the file: the ETA uses it from then on.
     const learnedDuration = !row.durationSec && typeof job.durationSec === "number" && job.durationSec > 0 ? job.durationSec : undefined
     if (learnedDuration || Math.abs(progress - row.progress) >= 0.02 || JSON.stringify(row.transcribeStats ?? {}) !== JSON.stringify(stats)) {
@@ -470,6 +481,10 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
     return
   }
   const segments = cleanSegments(job.segments)
+  // Names for the voices from the introductions; a name someone set by hand stays (mergeSpeakers).
+  const speakers = segments.some((s) => s.speaker)
+    ? mergeSpeakers(row.speakers, introNames(segments, row.introEndSec, await speakerCandidates(row).catch(() => [])))
+    : cleanSpeakers(row.speakers)
   if (!segments.length) {
     await patchMeeting(row.id, { status: "FAILED", errorCode: "no_speech", error: "No speech was found in the recording.", durationSec: job.durationSec ?? undefined, lockedUntil: null }, { status: "TRANSCRIBING" })
   } else {
@@ -477,6 +492,7 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
       status: "SUMMARIZING",
       progress: 0,
       transcript: segments as unknown as Prisma.InputJsonValue,
+      speakers: speakers as unknown as Prisma.InputJsonValue,
       durationSec: typeof job.durationSec === "number" ? job.durationSec : segments[segments.length - 1].end,
       detectedLanguage: typeof job.language === "string" ? job.language.slice(0, 10) : null,
       transcribeStats: (job.stats ?? null) as Prisma.InputJsonValue,
@@ -487,6 +503,25 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
     }, { status: "TRANSCRIBING" })
   }
   await whisperFetch(`/v1/jobs/${row.id}`, { method: "DELETE" }).catch(() => {})
+}
+
+/**
+ * The people a voice can be: the project's members first (exact spelling for PIC suggestions), then everyone in
+ * the uploader's workspaces. Deactivated accounts never.
+ */
+export async function speakerCandidates(row: { projectId: string | null; createdById: string }): Promise<NameCandidate[]> {
+  const out = new Map<string, NameCandidate>()
+  for (const m of await projectMembers(row.projectId)) out.set(m.id, { id: m.id, name: m.name, inProject: true })
+  const ws = await prisma.workspaceMember.findMany({ where: { userId: row.createdById }, select: { workspaceId: true }, take: 20 })
+  if (ws.length) {
+    const people = await prisma.workspaceMember.findMany({
+      where: { workspaceId: { in: ws.map((w) => w.workspaceId) }, user: { deactivatedAt: null } },
+      select: { user: { select: { id: true, name: true } } },
+      take: 3000,
+    })
+    for (const p of people) if (p.user?.name && !out.has(p.user.id)) out.set(p.user.id, { id: p.user.id, name: p.user.name })
+  }
+  return [...out.values()]
 }
 
 // ---------------------------------------------------------------- GIDEON
@@ -544,7 +579,7 @@ export async function summarizeMeeting(id: string): Promise<void> {
     const project = row.projectId ? await prisma.project.findUnique({ where: { id: row.projectId }, select: { id: true, name: true } }) : null
     const members = project && (await checkProjectAccess(creator.id, project.id, ["VIEWER"])).allowed ? await projectMembers(project.id) : []
     const day = wibDay(row.recordedAt ?? row.createdAt)
-    const speakers = (row.speakers && typeof row.speakers === "object" ? row.speakers : {}) as Record<string, { name?: string }>
+    const speakers = cleanSpeakers(row.speakers)
     const segments = cleanSegments(row.transcript)
     const meta: MeetingPromptMeta = {
       title: row.title,
@@ -552,7 +587,7 @@ export async function summarizeMeeting(id: string): Promise<void> {
       weekday: day.weekday,
       projectName: project?.name ?? null,
       members: members.map((m) => m.name).slice(0, 80),
-      attendees: Object.values(speakers).map((s) => s?.name).filter((n): n is string => Boolean(n)),
+      attendees: [...new Set(Object.values(speakers).map((s) => s.name).filter(Boolean))],
       durationLabel: durationLabel(row.durationSec),
     }
     const lines = transcriptLines(segments, (l) => speakers[l]?.name || l)
@@ -737,7 +772,7 @@ export async function applyMeeting(meetingId: string, actor: { id: string; name:
       await tx.activityLog.create({ data: { action: "created task", details: `Created task "${p.title}" from meeting notes`, userId: actor.id, taskId: task.id, projectId: project.id } })
       created.push({ id: task.id, title: task.title, actionIndex: p.actionIndex, assignees: members.filter((m) => assigneeIds.includes(m.id)), dueDate: p.dueDate, assigneeIds })
     }
-    const speakers = (row.speakers && typeof row.speakers === "object" ? row.speakers : {}) as Record<string, { name?: string }>
+    const speakers = cleanSpeakers(row.speakers)
     const content = sanitizeDoc(buildMinutesDoc({
       lang: input.lang,
       dateLabel: wibDay(row.recordedAt ?? row.createdAt).date,

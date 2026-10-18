@@ -4398,8 +4398,12 @@ model MeetingNote {
   recordedAt       DateTime?
   /// [{ start, end, text, speaker? }]
   transcript       Json?
-  /// { "<speaker label>": { userId?, name } } — mapped by hand on the meeting page.
+  /// { "Speaker N": { name, userId?, auto? } } — auto = read from the introductions; a hand-made entry wins.
   speakers         Json?
+  /// Seconds where the round of introductions ended (record screen marker). Null = first 2 minutes searched.
+  introEndSec      Float?
+  /// Ask the transcriber for speaker labels (voices told apart; voiceprints never stored).
+  speakerLabels    Boolean   @default(true)
   overview         String?
   /// { attendees, topics, decisions, openQuestions, actionItems }
   mom              Json?
