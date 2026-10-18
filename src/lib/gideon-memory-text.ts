@@ -83,3 +83,18 @@ export function monthDayInText(text: string): string | null {
   if (m) return parseMonthDay(`${m[1]}/${m[2]}`)
   return null
 }
+
+/** The question states how they want GIDEON to talk to them (address style, language, answer length). */
+const PREF_RE = /\b(panggil (aku|gue|gw|gua|saya)|(pakai|pake|gunakan) (aku[- ]?kamu|gue[- ]?lo|gw[- ]?lo|saya[- ]?anda|bahasa (inggris|indonesia)|english|formal|santai)|call me|speak (english|indonesian)|(answer|reply|talk to me) in (english|indonesian)|jawab(an)?( yang| pakai| dengan)? (singkat|pendek|detail|panjang|poin)|lebih suka jawaban|keep (answers|it) (short|brief)|formal aja|santai aja)\b/i
+export function statesPreference(question: string): boolean {
+  return PREF_RE.test(question || "")
+}
+
+/** The memory a question carries, in the person's own words: "inget ya: X" → "X". Null when it is too long. */
+export function memoryTextFromQuestion(question: string): string | null {
+  const s = (question || "").replace(/\s+/g, " ").trim()
+    .replace(/^(tolong\s+|please\s+|btw[,\s]+)?(inget(in)?|ingat(kan)?|remember( that)?|catat|jangan lupa|don'?t forget|note( that)?)(\s+(ya|yah|yaa|dong|deh))?[\s,:!.-]*/i, "")
+    .trim()
+  if (!s || s.length > MEMORY_TEXT_MAX) return null
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}

@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { todayWib } from "@/lib/gideon-dates"
-import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay, monthDayInText, type MemoryKind } from "@/lib/gideon-memory-text"
+import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay, monthDayInText, memoryTextFromQuestion, statesPreference, type MemoryKind } from "@/lib/gideon-memory-text"
 
 /**
  * GIDEON Memory (owner, 19 Oct 2026: "memory per orang boleh, jadi GIDEON bisa personal ke orang-orangnya dan lebih
@@ -22,7 +22,7 @@ import { MEMORY_KINDS, asksToRemember, cleanMemoryText, isAffirmation, memoryKey
  * save runs under a per-person advisory lock (so the cap and the dismissed-check hold under concurrent saves).
  */
 
-export { MEMORY_KINDS, MEMORY_TEXT_MAX, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, parseKind, parseMonthDay } from "@/lib/gideon-memory-text"
+export { MEMORY_KINDS, MEMORY_TEXT_MAX, asksToRemember, cleanMemoryText, isAffirmation, memoryKey, memoryRisk, memoryTextFromQuestion, parseKind, parseMonthDay, statesPreference } from "@/lib/gideon-memory-text"
 export type { MemoryKind } from "@/lib/gideon-memory-text"
 /** Live memories per person (ACTIVE + PENDING). The prompt carries at most MEMORY_PROMPT_CHARS of them. */
 export const MEMORY_MAX = 40
@@ -113,10 +113,11 @@ const KIND_WORD: Record<MemoryKind, string> = { PREFERENCE: "gaya", PERSON: "ten
  * context: the block only changes when a memory does, so it stays in the cached prefix). Capped to
  * MEMORY_PROMPT_CHARS: preferences first (they shape every answer), then the rest, newest kept.
  */
-export async function memoryPromptLines(userId: string, personName: string, now: Date = new Date()): Promise<string[]> {
+export async function memoryPromptLines(userId: string, personName: string, now: Date = new Date()): Promise<{ personal: string[]; dynamic: string[] }> {
   const who = personName?.trim() || "Orang ini"
+  const none = { personal: [] as string[], dynamic: [] as string[] }
   if (await isMemoryPaused(userId)) {
-    return [`[GIDEON MEMORY] ${who} menjeda GIDEON Memory: jangan panggil nexus_remember dan jangan bilang kamu mengingat apa pun tentang dia. Kalau dia minta diingat, bilang Memory sedang dijeda dan bisa dinyalakan lagi di Settings › GIDEON Memory (Pengaturan › Memori GIDEON).`]
+    return { personal: [`[GIDEON MEMORY] ${who} menjeda GIDEON Memory: jangan panggil nexus_remember dan jangan bilang kamu mengingat apa pun tentang dia. Kalau dia minta diingat, bilang Memory sedang dijeda dan bisa dinyalakan lagi di Settings › GIDEON Memory (Pengaturan › Memori GIDEON).`], dynamic: [] }
   }
   const rows = await prisma.gideonMemory.findMany({
     where: { userId, deletedAt: null, status: "ACTIVE" },
@@ -124,7 +125,7 @@ export async function memoryPromptLines(userId: string, personName: string, now:
     take: MEMORY_MAX,
     select: { kind: true, text: true, monthDay: true },
   })
-  if (!rows.length) return []
+  if (!rows.length) return none
   const sorted = rows
     .map((r) => ({ ...r, kind: parseKind(r.kind) }))
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
@@ -136,10 +137,14 @@ export async function memoryPromptLines(userId: string, personName: string, now:
     lines.push(line)
     used += line.length + 1
   }
-  const out = [
+  const personal = [
     `[GIDEON MEMORY — yang ${who} sendiri setujui untuk kamu ingat. HANYA tentang dia; jangan pernah disebut ke atau dipakai untuk orang lain]\n${lines.join("\n")}\n` +
-      `Ikuti preferensi gaya, sapaan dan bahasanya di SETIAP jawaban (kalau dia minta aku-kamu, pakai aku-kamu; jangan gue-lo). Pakai yang lain hanya kalau relevan, wajar dan singkat — jangan mengulang "aku ingat kamu…" dan jangan terdengar mengawasi.`,
+      `Ikuti preferensi gaya, sapaan dan bahasanya di SETIAP jawaban (sapaan yang dia minta — aku-kamu, gue-lo, formal — dipakai persis, juga kalau pesannya sendiri memakai gaya lain). Pakai yang lain hanya kalau relevan, wajar dan singkat — jangan mengulang "aku ingat kamu…" dan jangan terdengar mengawasi.`,
   ]
+  // The style preferences once more right before the conversation (small models such as Model 0 follow what is near
+  // the question; outside the cached prefix, a few dozen tokens).
+  const prefs = sorted.filter((r) => r.kind === "PREFERENCE").map((r) => r.text).join("; ").slice(0, 300)
+  const dynamic = prefs ? [`[GAYA ${who.toUpperCase()}] ${prefs} — patuhi di jawaban ini.`] : []
   // A date they shared is today (WIB): one warm line, once — only in the first answer of their day.
   const today = todayWib(now).slice(5)
   const todays = rows.filter((r) => r.monthDay === today)
@@ -147,10 +152,31 @@ export async function memoryPromptLines(userId: string, personName: string, now:
     const start = new Date(`${todayWib(now)}T00:00:00+07:00`)
     const answeredToday = await prisma.gideonMessage.count({ where: { userId, role: "assistant", createdAt: { gte: start } } }).catch(() => 1)
     if (answeredToday === 0) {
-      out.push(`[HARI INI] Tanggal yang ${who} bagikan jatuh hari ini: ${todays.map((r) => r.text).join("; ")}. Buka jawabanmu dengan satu kalimat hangat yang pas (mis. selamat ulang tahun), lalu langsung jawab pertanyaannya.`)
+      dynamic.push(`[HARI INI] Tanggal yang ${who} bagikan jatuh hari ini: ${todays.map((r) => r.text).join("; ")}. Buka jawabanmu dengan satu kalimat hangat yang pas (mis. selamat ulang tahun), lalu langsung jawab pertanyaannya.`)
     }
   }
-  return out
+  return { personal, dynamic }
+}
+
+/**
+ * Safety net after an answer (Model 0 rarely calls tools): the person stated a preference or asked to remember
+ * something and the model called no memory tool in this run. A SUGGESTION is made from their own words (never saved
+ * without their Save tap; every text rule applies). Null when there is nothing to suggest.
+ */
+export async function suggestMemoryFromQuestion(userId: string, question: string, runId: string, chatId: string | null): Promise<MemoryView | null> {
+  const explicit = asksToRemember(question)
+  const pref = statesPreference(question)
+  if (!explicit && !pref) return null
+  const text = memoryTextFromQuestion(question)
+  if (!text) return null
+  const touched = await prisma.gideonRunStep.count({ where: { runId, tool: { in: ["remember", "forget"] } } })
+  if (touched) return null
+  try {
+    const { memory } = await saveMemory(userId, { text, kind: pref ? "PREFERENCE" : "FACT", status: "PENDING", source: "CHAT", explicit, chatId, runId })
+    return memory.status === "PENDING" ? memory : null
+  } catch {
+    return null
+  }
 }
 
 /** Static: the same text for every person and turn, so it sits in the cached part of the prompt. */
