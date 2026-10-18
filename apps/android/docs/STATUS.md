@@ -1,8 +1,27 @@
 # NEXUS Android: status
 
-## Presence and GIDEON Memory — items 16/17 (in progress)
+## Presence and GIDEON Memory — items 16/17 (19 Oct 2026)
 
-Presence implemented: server labels/tones, ID-based avatar dots and tooltips, profile/DM/Control Room lines, own status dialog with WIB scheduling and guarded clear, realtime/reconnect, remote flag, and set_my_status approval card. 810 unit tests + assembleDebug green; DEV Pixel_7 verification is in progress. GIDEON Memory implemented: own-session RAM store, SSE/history chips, Settings entry, add/group/date/edit/save/delete/pause/forget-all, EN/ID, settings link and suppression in OAA review. Stale Save/Don't save updates and account boundaries are guarded. 820 unit tests + assembleDebug green; device flows are being verified against isolated QA memories.
+Both items are implemented on feat/android-r21, following the supplied native contracts and deployed DEV web reference. **820 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** QA used the supplied BoD session on **Pixel_7 / emulator-5556, visible window, host GPU**. No version change, push or publication. Small green commits use Berlin <bagasputro.bp@gmail.com>, with no attribution trailers.
+
+Presence uses server labels and tones, real user IDs on avatars, accessible long-press tooltips, profile/DM/contact-info/Control Room lines, own Settings/profile entry, 80-character status text, WIB scheduling and displayed-ID clearing. A session RAM store patches presence-changed by user ID, refreshes on reconnect/foreground, rejects stale reads/account responses and hides all presence when disabled. GIDEON set_my_status uses the extra-package proposal confirmation, circle-dot icon and EN/ID labels; dated diff values retain their WIB time.
+
+GIDEON Memory adds private Settings and chat-menu entries, settings links, RAM-only account-scoped data, SSE/history upserts, fully wrapped suggestion chips, Save/Don't save/Saved/Not saved states, grouped typed rows, date formatting, inline Return/Escape editing, delete/toast, pause and a centred forget-all alert. Pending badges and primary Save sit under the text and wrap together. Pausing disables Add and Settings suggestion Save. The Indonesian privacy sentence displays in full. OAA read-only transcripts explicitly suppress memories even if metadata contains them. Late reads, streams and history cannot undo a decision or cross accounts.
+
+| Device check | Result / screenshot evidence |
+|---|---|
+| Presence dialog, save and clear | Native save updated own profile; native clear removed only the displayed manual ID. Earlier scheduled status restored. item16-status-dialog, item16-status-saved, item16-status-cleared, item16-profile |
+| Realtime | A second-device API change appeared on the already-open native profile without reopening or foregrounding it. item16-realtime-profile |
+| DM and Control Room | Other-person status in DM header, contact info and people rows under email; visible Details retained. item16-dm-status, item16-dm-info, item16-control-room-people-id-dark, item16-avatar-tooltip, item16-board-avatars |
+| GIDEON status | A request in dont_ask still returned PENDING. Native centred approval applied this run's proposal; API/history confirmed APPLIED and own manual status. item16-gideon-status-card, item16-gideon-status-applied, item16-gideon-history-applied |
+| Memory chat decisions | Native Save persisted ACTIVE, the Saved line opened Settings; Don't save removed a second suggestion and showed Not saved. item17-chat-suggestion, item17-chat-saved, item17-chat-not-saved |
+| Memory Settings | Native Add, Return save, Escape cancel, Delete with Forgotten toast and Settings suggestion Save verified against API. Grouping and full text reviewed. item17-memory-edited, item17-edit-cancelled, item17-memory-deleted, item17-settings-saved-final |
+| Pause and destructive alert | Native pause persisted and disabled Add/Pending Save, then restored. Centred Forget everything alert has correct count and 30-day wording; Cancel retained records. item17-memory-paused-final, item17-forget-confirm |
+| EN/light and ID/dark | Status text/scheduling controls, grouped Memory rows, dates, primary Save and full privacy copy inspected. item16-status-id-dark, item16-status-scheduling-id-dark, item17-memory-id-dark-final, item17-memory-id-dark-rows |
+
+Coverage limits: no shared DEV flags, roles or attendance were changed. Non-offline/manual presence states, disable/reconnect/race/account rules, limits, 404 handling, OAA suppression and delete-all wire/state behavior have unit coverage. Forget everything was not applied live because existing memories belong to other QA work. No account was signed out. Shared QA data changed independently during the run; cleanup preserved all four unrelated memories present in its immediate snapshot. This round's temporary memories/chats were removed; existing records, the earlier scheduled status and pause preference were preserved. English/light restored. Pixel_7 shut down at completion.
+
+[Reviewed screenshot index](../../../../nexus-shots/round1617-index.html). Screenshots and private QA fixtures stay outside Git. Implementation commits start at 26326f83 (presence), bcf219e5 (memory), with green device-driven corrections through 58c73330. Nothing remains for items 16/17.
 
 
 ## Android parity round — 19 Oct 2026
