@@ -317,6 +317,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString(), folder = t.folder, unit = t.unit, person = t.person, project = t.project, prio = t.prio, done = t.done, overdue = t.overdue)) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
+            Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
             Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
@@ -509,13 +510,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 val pid = e.arguments?.getString("project")
                 GideonScreen(onBack = { nav.popBackStack() }, project = pid?.let { it to (e.arguments?.getString("name") ?: "") })
             }
-            composable("admin") {
-                ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
+            listOf("admin", "admin-performance").forEach { adminRoute -> composable(adminRoute) {
+                ControlRoomScreen(onBack = { nav.popBackStack() }, initialTab = if (adminRoute == "admin-performance") "gideon" else "users", initialGideon = if (adminRoute == "admin-performance") "performance" else "people", nav = AdminNav(
                     openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") }, openOrgChart = { nav.navigate("org-chart") },
                     openProfile = { nav.navigate("profile/$it") }, openWeb = { openWeb(context, it) }, openAudit = { nav.navigate("audit/$it") },
                     openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
-            }
+            } }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }, onOpenChart = { nav.navigate("admin-chart") }) }
             // Teams are gone (deleted on the server 30 Sep 2026): a team link opens the Bagan IP & Divisi that replaced them.
             composable("admin-team/{id}") { OrgChartScreen(onBack = { nav.popBackStack() }) }

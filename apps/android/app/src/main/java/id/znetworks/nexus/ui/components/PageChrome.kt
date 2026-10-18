@@ -33,6 +33,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -208,8 +212,10 @@ fun <K> PageTabs(tabs: List<PageTab<K>>, value: K, onChange: (K) -> Unit, modifi
     }.horizontalScroll(scroll).padding(end = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         tabs.forEach { t ->
             val on = t.key == value
+            val selectedTab = remember(t.key) { BringIntoViewRequester() }
+            LaunchedEffect(on) { if (on) { androidx.compose.runtime.withFrameNanos { }; selectedTab.bringIntoView() } }
             Column(
-                Modifier.width(IntrinsicSize.Max).clickable(role = Role.Tab) { onChange(t.key) }.semantics { selected = on }.defaultMinSize(minHeight = 44.dp),
+                Modifier.width(IntrinsicSize.Max).bringIntoViewRequester(selectedTab).clickable(role = Role.Tab) { onChange(t.key) }.semantics { selected = on }.defaultMinSize(minHeight = 44.dp),
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 Row(Modifier.padding(top = 8.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {

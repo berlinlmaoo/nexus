@@ -88,12 +88,13 @@ class AdminNav(
 )
 
 @Composable
-fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable (String, Boolean) -> Boolean = { _, _ -> false }) {
+fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, initialTab: String = "users", initialGideon: String = "people", tabContent: @Composable (String, Boolean) -> Boolean = { _, _ -> false }) {
     val c = Nx.colors
     val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
     var ready by remember { mutableStateOf(viewer.role != null) }
     LaunchedEffect(Unit) { viewer.load(); ready = true }
-    var tab by rememberSaveable { mutableStateOf("users") }
+    var tab by rememberSaveable { mutableStateOf(initialTab) }
+    var gideonTab by rememberSaveable { mutableStateOf(initialGideon) }
     Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         val config by (LocalContext.current.applicationContext as NexusApplication).container.remoteConfig.body.collectAsState()
         val open = ready && viewer.canAdminister
@@ -104,6 +105,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
         if (!ready) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
         // Manager and above only, as the web: anybody else gets a door they can see is locked.
         if (!viewer.canAdminister) { TabEmpty(Icons.Filled.AdminPanelSettings, stringResource(R.string.ad_no_access)); return@Column }
+        if (tab !in tabs) { TabEmpty(Icons.Filled.AdminPanelSettings, stringResource(R.string.ad_no_access)); return@Column }
         Box(Modifier.weight(1f)) {
             when (tab) {
                 "users" -> UsersTab(viewer.isBoD, nav.openUser, nav.openChart, nav.openOrgChart)
@@ -113,7 +115,11 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
                 "extra-dayoff" -> ExtraDayOffTab(viewer.isBoD)
                 "suspects" -> FakeGpsTab()
                 "announcements" -> AnnouncementsTab()
-                "gideon" -> GideonUsageTab()
+                "gideon" -> Column(Modifier.fillMaxSize()) {
+                    val perf = PerformanceRules.allowed(viewer.role, viewer.isCompanyMember)
+                    PageTabs(listOfNotNull(PageTab("people", stringResource(R.string.gu_people)), if (perf) PageTab("performance", stringResource(R.string.perf_title)) else null), gideonTab, { gideonTab = it })
+                    if (gideonTab == "performance" && perf) GideonPerformanceTab() else GideonUsageTab()
+                }
                 "app" -> AppInstallsTab()
                 else -> if (!tabContent(tab, viewer.isBoD)) EmptyState(Icons.Filled.AdminPanelSettings, tabLabel(tab), stringResource(R.string.not_on_android_message),
                     stringResource(R.string.open_on_web), { nav.openWeb("/admin") }, Modifier.fillMaxSize())

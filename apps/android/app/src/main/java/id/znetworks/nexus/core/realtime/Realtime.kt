@@ -127,7 +127,7 @@ object RealtimeEvents {
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             // { room: "project:<id>" | "sheet:<id>", reason }
             JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
-                projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:")) }
+                projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:"), raw = json) }
             else -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), raw = json)
         }
     }

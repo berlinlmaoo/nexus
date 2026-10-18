@@ -46,6 +46,7 @@ sealed interface Target {
     data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null, val q: String? = null, val folder: String? = null, val unit: String? = null, val person: String? = null, val project: String? = null, val prio: String? = null, val done: String? = null, val overdue: String? = null) : Target
     /** Control Room (manager and above). */
     data object Admin : Target
+    data object GideonPerformance : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -143,7 +144,7 @@ object Links {
             p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"], q["q"], q["folder"], q["unit"], q["person"], q["project"], q["prio"], q["done"], q["overdue"])
             // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
-            p == "/admin" -> Target.Admin
+            p == "/admin" -> if (q["tab"] == "gideon" && q["gideon"] == "performance") Target.GideonPerformance else Target.Admin
             p == "/reminders" -> Target.Reminders
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
