@@ -487,7 +487,7 @@ export async function evaluateAlerts(live: LiveGpu): Promise<AlertView[]> {
     const nowIso = new Date(now).toISOString()
     const toSend: { key: AlertKey; kind: "fire" | "clear"; episode: string; vars: Record<string, string | number>; minutes: number }[] = []
     const state = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(4632018908)`
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(4632018908)`
       const row = await tx.appSetting.findUnique({ where: { key: ALERT_STATE_KEY } })
       const s = ((row?.value as unknown as AlertState) ?? {}) as AlertState
       for (const key of ALERT_KEYS) {
