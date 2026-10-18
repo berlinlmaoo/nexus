@@ -55,6 +55,13 @@ final class NEXUSUITour: XCTestCase {
         let appOpen: String?
         /// Buttons the app tour presses in order once the screen is up ("A|B", "?A": see the header).
         let appTaps: [String]?
+        /// Targeted interaction checks after opening the page; used by fix-round QA configs.
+        let appActions: [AppAction]?
+        struct AppAction: Decodable {
+            let kind: String
+            let label: String
+            let text: String?
+        }
         /// The same for the web in Safari.
         let webTaps: [String]?
         /// The app tour's page cap for this screen, over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
@@ -553,6 +560,33 @@ final class NEXUSUITour: XCTestCase {
                 return "wrong-screen: \(screen.id) (tapped \"\(title)\", the document did not open)"
             }
             pause(2.0)
+        }
+        for action in screen.appActions ?? [] {
+            let match = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", action.label, action.label)
+            switch action.kind {
+            case "tap":
+                let button = app.buttons.matching(match).firstMatch
+                let field = app.textViews.matching(match).firstMatch
+                let target = button.exists ? button : field.exists ? field : app.staticTexts.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 15), target.isHittable else { return "wrong-screen: missing interaction target \(action.label)" }
+                press(target)
+                pause(1)
+            case "type":
+                let field = app.textFields.matching(match).firstMatch
+                let target = field.exists ? field : app.textViews.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing input \(action.label)" }
+                press(target)
+                target.typeText(action.text ?? "")
+                pause(0.5)
+            case "orientation":
+                XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
+                pause(2)
+            case "wait": pause(Double(action.text ?? "2") ?? 2)
+            case "check":
+                let target = app.descendants(matching: .any).matching(match).firstMatch
+                guard target.waitForExistence(timeout: 20) else { return "wrong-screen: missing expected content \(action.label)" }
+            default: return "wrong-screen: unknown QA action \(action.kind)"
+            }
         }
         return nil
     }

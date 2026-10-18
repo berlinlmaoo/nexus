@@ -61,6 +61,9 @@ targets:
       # Dev server simply cannot be reached from that build.
       - name: Dev server address
         basedOnDependencyAnalysis: false
+        inputFiles:
+          # Run after ProcessInfoPlistFile; otherwise it can overwrite the injected address.
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           case " $SWIFT_ACTIVE_COMPILATION_CONDITIONS " in *" NEXUS_DEV_SERVER "*) ;; *) exit 0 ;; esac
           F="$HOME/.config/nexus/ios-dev-server-url"

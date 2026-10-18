@@ -993,7 +993,7 @@ struct GideonPanel: View {
                     } label: {
                         Image(systemName: "xmark").font(.system(size: 11))
                             .frame(width: 32, height: 32).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel(T("Dismiss"))
+                    }.buttonStyle(.plain).accessibilityLabel(T("Close"))
                 }
             }
         }

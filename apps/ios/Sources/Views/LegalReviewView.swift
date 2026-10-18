@@ -155,7 +155,7 @@ private struct LegalPageParagraph: View {
 
     var body: some View {
         Group {
-            if p.isBlank {
+            if p.isBlank && !changed && !editing {
                 Color.clear.frame(height: (p.layout?.size ?? page.size ?? 11) * 4 / 3 * scale * (p.layout?.lineHeight ?? 1) * 1.15)
                     .accessibilityHidden(true)
             } else {
@@ -213,6 +213,7 @@ private struct LegalParagraphText: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
         let content = attributed()
+        if !editing && view.isFirstResponder { view.resignFirstResponder() }
         if view.attributedText != content && !view.isFirstResponder { view.attributedText = content }
         view.isEditable = editing
         view.isSelectable = editing
