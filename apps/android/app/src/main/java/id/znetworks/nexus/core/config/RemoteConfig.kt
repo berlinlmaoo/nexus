@@ -42,6 +42,7 @@ import kotlinx.serialization.Serializable
     val values: ConfigValues? = null,
     val texts: Map<String, Map<String, String>>? = null,
     val banner: ConfigBanner? = null,
+    val gideonTiers: Map<String, id.znetworks.nexus.feature.gideon.GTierAvailability>? = null,
 ) {
     // Reads, with the server's defaults.
     val requireAlwaysLocation get() = flags?.requireAlwaysLocation ?: true

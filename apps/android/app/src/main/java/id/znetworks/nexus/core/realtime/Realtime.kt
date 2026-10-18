@@ -84,7 +84,7 @@ object RealtimeEvents {
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure") + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -128,7 +128,7 @@ object RealtimeEvents {
             // { room: "project:<id>" | "sheet:<id>", reason }
             JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
                 projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:")) }
-            else -> RealtimeEvent(name)
+            else -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), raw = json)
         }
     }
 

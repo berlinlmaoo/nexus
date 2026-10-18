@@ -5,4 +5,11 @@
     <string name="cal_no_folder_matches">Tidak ada folder yang cocok.</string>
     <string name="cal_show_all_folders">Tampilkan semua (%1$d)</string>
     <string name="cal_remove_folder_filter">Hapus filter folder %1$s</string>
+    <string name="g19_default">Default</string>
+    <string name="g19_experimental">Eksperimental</string>
+    <string name="g19_unavailable">Sedang tidak tersedia</string>
+    <string name="g19_use_phaethon">Pakai Phaëthon</string>
+    <string name="g19_transcribing">Mentranskrip meeting</string>
+    <string name="g19_loading">Memuat kembali</string>
+    <string name="g19_down">Mesin lokal tidak tersedia</string>
 </resources>

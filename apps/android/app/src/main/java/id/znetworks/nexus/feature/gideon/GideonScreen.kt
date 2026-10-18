@@ -2,6 +2,7 @@ package id.znetworks.nexus.feature.gideon
 
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import android.net.Uri
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
@@ -100,6 +101,8 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val container = (context.applicationContext as NexusApplication).container
     val chat = container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
+    val tiers by container.gideonTiers.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { container.gideonTiers.seed(container.remoteConfig.current.gideonTiers); container.gideonTiers.refresh() }
     val c = Nx.colors
     val res = context.resources
     val scope = rememberCoroutineScope()
@@ -128,7 +131,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { u -> scope.launch { readDoc(context, u, res)?.let { r -> r.fold({ upload = it }, { e -> note = e.message }) } } }
     }
-    fun send(text: String) { chat.ask(text, upload); draft = ""; upload = null }
+    fun send(text: String) { if (tiers.available(s.tier)) { chat.ask(text, upload); draft = ""; upload = null } }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         val title = if (showChats) stringResource(R.string.gx_chats)
@@ -172,6 +175,10 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         }
         ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
         GideonCreditMeter(container.api, s.thinking)
+        if (!tiers.available(s.tier)) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.g19_unavailable), color = c.warningFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { chat.setTier(GideonTier.LUNA) }) { Text(stringResource(R.string.g19_use_phaethon)) }
+        }
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
         Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
             Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -193,14 +200,25 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 TextButton(onClick = { tierMenu = true }) { Text(s.tier.label + " ⌄", fontSize = 12.sp, color = c.foreground) }
                 DropdownMenu(tierMenu, { tierMenu = false }, shape = RoundedCornerShape(16.dp), containerColor = c.card, border = androidx.compose.foundation.BorderStroke(1.dp, c.border)) {
                     GideonTier.entries.forEach { t ->
-                        DropdownMenuItem(modifier = Modifier.height(88.dp), text = { Column { Text(t.label, fontWeight = FontWeight.SemiBold); Text(stringResource(tierNote(t)), fontSize = 12.sp, color = c.mutedFg) } },
+                        DropdownMenuItem(modifier = Modifier.heightIn(min = 72.dp), enabled = tiers.available(t), text = { Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(t.label, fontWeight = FontWeight.SemiBold)
+                                if (t == GideonTier.LUNA || t == GideonTier.EXPERIMENTAL) Text(stringResource(if (t == GideonTier.LUNA) R.string.g19_default else R.string.g19_experimental), fontSize = 10.sp,
+                                    color = if (t == GideonTier.EXPERIMENTAL) c.warningFg else c.mutedFg,
+                                    modifier = Modifier.background(if (t == GideonTier.EXPERIMENTAL) c.warning.copy(alpha = 0.12f) else c.muted, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
+                            }
+                            if (!tiers.available(t)) {
+                                Text(stringResource(R.string.g19_unavailable), fontSize = 12.sp, color = c.mutedFg)
+                                Text(stringResource(when (tiers.tiers[t.key]?.reason) { "transcribing" -> R.string.g19_transcribing; "loading" -> R.string.g19_loading; else -> R.string.g19_down }), fontSize = 11.sp, color = c.mutedFg)
+                            }
+                        } },
                             leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) }, onClick = { tierMenu = false; chat.setTier(t) })
                     }
                 }
             }
 
                     if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
-                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (draft.isNotBlank() || upload != null) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = draft.isNotBlank() || upload != null) {
+                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) {
                         Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.background else c.mutedFg)
                     }
                 }
@@ -356,6 +374,7 @@ fun stepText(st: GStep): String {
 /** A failure in the app's language. */
 @Composable
 fun problemText(p: GideonProblem): String = when (p.kind) {
+    GideonProblem.Kind.TIER_UNAVAILABLE -> stringResource(R.string.g19_unavailable)
     GideonProblem.Kind.UNREACHABLE -> stringResource(R.string.gx_unreachable)
     GideonProblem.Kind.BUSY -> stringResource(R.string.gx_busy)
     GideonProblem.Kind.NOT_CONNECTED -> stringResource(R.string.gx_not_connected)

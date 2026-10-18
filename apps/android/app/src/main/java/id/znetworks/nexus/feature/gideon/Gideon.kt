@@ -174,7 +174,8 @@ object GideonRules {
                 "proposal" -> (o["proposal"] as? JsonObject)?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() }
                     ?.let { proposals[it.id] = it }
                 "chat" -> { chatId = o.s("id") ?: chatId; chatTitle = chatTitle ?: o.s("title") }
-                "error" -> error = o.s("content").orEmpty()
+                "tier_unavailable" -> error = "model0_unavailable"
+                "error" -> error = if (o.s("code") == "model0_unavailable" || error == "model0_unavailable") "model0_unavailable" else o.s("content").orEmpty()
                 "done" -> break@loop
             }
         }
@@ -190,7 +191,7 @@ object GideonRules {
  * route sentences. [kind] picks the app-language sentence; [raw] is a server sentence kept for OTHER.
  */
 data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String? = null) {
-    enum class Kind { UNREACHABLE, BUSY, NOT_CONNECTED, NO_ANSWER, TOO_LARGE, UNSUPPORTED, RATE_LIMITED, NO_DOCUMENTS, COULDNT_ANSWER, FAILED, OTHER }
+    enum class Kind { UNREACHABLE, BUSY, NOT_CONNECTED, NO_ANSWER, TOO_LARGE, UNSUPPORTED, RATE_LIMITED, NO_DOCUMENTS, COULDNT_ANSWER, FAILED, OTHER, TIER_UNAVAILABLE }
 
     companion object {
         val unreachable = GideonProblem(Kind.UNREACHABLE, true)
@@ -201,6 +202,7 @@ data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String
         /** A refusal as an HTTP status, before any answer streamed; [code] / [message] from the JSON body. */
         fun http(status: Int, code: String?, message: String?): GideonProblem {
             when (code.orEmpty().lowercase()) {
+                "model0_unavailable" -> return GideonProblem(Kind.TIER_UNAVAILABLE, false)
                 "file_too_large" -> return GideonProblem(Kind.TOO_LARGE, false)
                 "unsupported_file_type" -> return GideonProblem(Kind.UNSUPPORTED, false)
                 "not_configured", "gideon_unavailable" -> return notConnected
@@ -219,6 +221,7 @@ data class GideonProblem(val kind: Kind, val retryable: Boolean, val raw: String
 
         /** An `error` event inside the stream: fixed server sentences (some Indonesian only) and "Gideon error (NNN).". */
         fun stream(content: String): GideonProblem {
+            if (content == "model0_unavailable") return GideonProblem(Kind.TIER_UNAVAILABLE, false)
             val s = content.trim(); val lower = s.lowercase()
             Regex("^gideon error \\((\\d{3})\\)").find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { status ->
                 return when (status) {
