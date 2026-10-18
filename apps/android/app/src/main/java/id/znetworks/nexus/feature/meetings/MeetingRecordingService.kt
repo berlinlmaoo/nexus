@@ -60,6 +60,7 @@ class MeetingRecordingService : Service() {
     }
     @Suppress("DEPRECATION") private fun start() {
         if (recorder != null) return
+        accumulated = 0L; resumedAt = 0L
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { MeetingRecording.state.value = RecordingState(failed = true); stopSelf(); return }
         val file = File(MeetingFiles.directory(this), "record-${java.util.UUID.randomUUID()}.m4a")
         getSharedPreferences("meeting-recording", MODE_PRIVATE).edit().clear().putString("user", (application as NexusApplication).container.sessionStore.current?.userId).apply()
@@ -117,6 +118,7 @@ class MeetingRecordingService : Service() {
         audio.unregisterAudioRecordingCallback(silencing)
         focus?.let { audio.abandonAudioFocusRequest(it) }; focus = null
         MeetingRecording.state.value = s.copy(seconds = seconds, recording = false, finished = !broken, failed = broken, limitReached = limit)
+        if (broken) s.file?.let { File(MeetingFiles.directory(this), it).delete() }
         if (s.file != null && !broken) getSharedPreferences("meeting-recording", MODE_PRIVATE).edit().putString("file", s.file).putString("at", s.recordedAt).putFloat("seconds", seconds.toFloat()).apply()
         if (limit) notifications.notify(ID + 1, NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_stat_nexus).setContentTitle(getString(R.string.meet_limit_reached)).setContentIntent(openIntent()).setAutoCancel(true).build())
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()

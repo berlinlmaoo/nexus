@@ -1,4 +1,7 @@
 <resources>
+    <string name="meet_audio_failed">Could not play the audio. Try again.</string>
+    <string name="meet_audio_not_uploaded">Not uploaded yet</string>
+    <string name="meet_audio_retention">The audio is deleted on %1$s. The transcript and minutes stay.</string>
     <string name="meet_add_task">Add task</string>
     <string name="meet_title">Meeting notes</string>
     <string name="meet_recording_entry">Meeting recording</string>

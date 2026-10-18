@@ -48,11 +48,13 @@ internal fun meetingProblem(code: String?): Int = when (code?.lowercase()) {
 /** Apply local fields over the latest version while preserving a server's fresh member list and permissions. */
 internal fun meetingMerge(meeting: Meeting, fields: Map<String, JsonElement>): Meeting {
     val json = NexusJson.encodeToJsonElement(Meeting.serializer(), meeting).jsonObject
-    return NexusJson.decodeFromJsonElement(Meeting.serializer(), JsonObject(json + fields))
+    val merged = NexusJson.decodeFromJsonElement(Meeting.serializer(), JsonObject(json + fields))
+    return if (merged.projectId != meeting.projectId) merged.copy(project = null, members = emptyList()) else merged
 }
 
 class MeetingEditor(application: Application) : AndroidViewModel(application) {
     private val container = (application as NexusApplication).container
+    private val owner = container.sessionStore.current?.userId
     val api = MeetingsApi(container.api)
     private val mutable = MutableStateFlow(MeetingState())
     val state = mutable.asStateFlow()
@@ -83,6 +85,7 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
         delaySave = viewModelScope.launch { delay(650); viewModelScope.launch { save() } }
     }
     suspend fun save(): Boolean = saveLock.withLock {
+        if (container.sessionStore.current?.userId != owner) { pending.clear(); return@withLock false }
         val key = id ?: return@withLock false
         if (pending.isEmpty()) return@withLock mutable.value.error == null
         mutable.update { it.copy(saving = true) }
@@ -93,6 +96,7 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
                     val fresh = api.patch(key, version, JsonObject(fields))
                     version = fresh.version
                     mutable.update { it.copy(meeting = meetingMerge(fresh, pending), dirty = pending.isNotEmpty(), error = null) }
+                } catch (e: CancellationException) { requeue(fields); throw e
                 } catch (e: ApiError.Http) {
                     val remote = e.body?.get("meeting")?.let { runCatching { NexusJson.decodeFromJsonElement(Meeting.serializer(), it) }.getOrNull() }
                     if (e.code == "VERSION_CONFLICT" && remote != null) {
@@ -138,4 +142,10 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
     }
     fun deleted() { pending.clear(); mutable.update { it.copy(deleted = true, notice = R.string.meet_deleted) } }
     fun noticeSeen() { mutable.update { it.copy(notice = null) } }
+    override fun onCleared() {
+        delaySave?.cancel()
+        // Finish the last keystroke when navigating away before the debounce elapsed.
+        container.appScope.launch(Dispatchers.Main.immediate) { save() }
+        super.onCleared()
+    }
 }

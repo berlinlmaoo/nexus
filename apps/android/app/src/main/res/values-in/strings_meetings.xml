@@ -1,4 +1,7 @@
 <resources>
+    <string name="meet_audio_failed">Audio belum bisa diputar. Coba lagi.</string>
+    <string name="meet_audio_not_uploaded">Belum diunggah</string>
+    <string name="meet_audio_retention">Audio dihapus pada %1$s. Transkrip dan notulen tetap ada.</string>
     <string name="meet_add_task">Tambah task</string>
     <string name="meet_title">Catatan meeting</string>
     <string name="meet_recording_entry">Rekaman meeting</string>

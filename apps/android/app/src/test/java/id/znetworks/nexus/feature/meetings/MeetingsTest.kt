@@ -90,10 +90,11 @@ class MeetingsTest {
         assertEquals(InboxRules.Mark.MEETING, InboxRules.mark("meeting_notes_failed"))
     }
     @Test fun applyingLocalEditsKeepsServerVersionAndFreshProjectMembers() {
-        val server = Meeting("m", version = 9, members = listOf(id.znetworks.nexus.feature.gideon.GTaskMember("new-member", "New")))
+        val server = Meeting("m", version = 9, projectId = "new-project", members = listOf(id.znetworks.nexus.feature.gideon.GTaskMember("new-member", "New")))
         val edited = meetingMerge(server, mapOf("overview" to JsonPrimitive("Local\ntext"), "projectId" to JsonPrimitive("new-project")))
         assertEquals(9, edited.version)
         assertEquals("new-member", edited.members.single().id)
         assertEquals("Local\ntext", edited.overview)
+        assertTrue(meetingMerge(server, mapOf("projectId" to JsonPrimitive("other-project"))).members.isEmpty())
     }
 }

@@ -110,6 +110,7 @@ import java.io.File
     var projectsFailed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<Int?>(null) }
+    var discard by remember { mutableStateOf<String?>(null) }
     var uploadedId by rememberSaveable { mutableStateOf<String?>(null) }
     var uploaded by remember { mutableStateOf<Meeting?>(null) }
     LaunchedEffect(Unit) {
@@ -118,12 +119,12 @@ import java.io.File
             val prefs = context.getSharedPreferences("meeting-recording", Context.MODE_PRIVATE)
             val name = prefs.getString("file", null)
             if (name != null && File(MeetingFiles.directory(context), name).isFile && prefs.getString("user", null) == container.sessionStore.current?.userId) {
-                localName = name; fileName = name; source = "record"; duration = prefs.getFloat("seconds", 0f).toDouble(); recordedAt = prefs.getString("at", null)
+                localName = name; fileName = context.getString(R.string.meet_recording_entry) + ".m4a"; source = "record"; duration = prefs.getFloat("seconds", 0f).toDouble(); recordedAt = prefs.getString("at", null)
             }
         }
     }
     LaunchedEffect(recording.finished, recording.file) {
-        if (recording.finished && recording.file != null) { localName = recording.file; fileName = recording.file!!; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt }
+        if (recording.finished && recording.file != null) { localName = recording.file; fileName = title.ifBlank { context.getString(R.string.meet_recording_entry) } + ".m4a"; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt }
     }
     LaunchedEffect(uploadedId) {
         val id = uploadedId ?: return@LaunchedEffect
@@ -165,6 +166,12 @@ import java.io.File
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
         if (allowed) { localName = null; MeetingRecording.command(context, "start") } else problem = R.string.meet_permission
     }
+    fun discardLocal() {
+        localName?.let { name -> val file = File(MeetingFiles.directory(context), name); if (file.canonicalFile.parentFile == MeetingFiles.directory(context).canonicalFile) file.delete() }
+        localName = null; fileName = ""; duration = null
+        context.getSharedPreferences("meeting-recording", Context.MODE_PRIVATE).edit().clear().apply()
+        MeetingRecording.state.value = RecordingState()
+    }
     val c = Nx.colors
     Column(Modifier.fillMaxSize().background(c.background)) {
         PageHeader(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_new), onBack = onBack, leading = { MeetingBeta() })
@@ -172,12 +179,12 @@ import java.io.File
             if (!config.meetingNotesEnabled) { Text(stringResource(R.string.meet_not_available)); return@Column }
             if (uploadedId == null) {
                 OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.meet_title_field)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
-                GPicker(stringResource(R.string.meet_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } }
+                id.znetworks.nexus.feature.gideon.GProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
-                GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it }
+                id.znetworks.nexus.feature.gideon.GProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
                 if (!recording.recording) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NxButton(stringResource(R.string.meet_upload), { picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, enabled = !busy)
-                    NxButton(stringResource(R.string.meet_record), { permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy, icon = Icons.Outlined.Mic)
+                    NxButton(stringResource(R.string.meet_upload), { if (localName != null) discard = "upload" else picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, enabled = !busy)
+                    NxButton(stringResource(R.string.meet_record), { if (localName != null) discard = "record" else permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy, icon = Icons.Outlined.Mic)
                 }
                 if (recording.recording) {
                     Text(stringResource(if (recording.paused) R.string.meet_paused else R.string.meet_recording) + " · " + MeetingRules.timestamp(recording.seconds), color = c.foreground, fontWeight = FontWeight.SemiBold)
@@ -191,6 +198,7 @@ import java.io.File
                 if (localName != null) {
                     Text(fileName, color = c.foreground)
                     duration?.let { Text(MeetingRules.timestamp(it), color = c.mutedFg) }
+                    TextButton(onClick = { discard = "remove" }, enabled = !busy) { Text(stringResource(R.string.meet_remove), color = c.dangerText) }
                 }
                 Text(stringResource(R.string.meet_max, config.meetingMaxMinutes.toString()), fontSize = 12.sp, color = c.mutedFg)
                 Text(stringResource(R.string.meet_retention, config.meetingAudioRetentionDays.toString()), fontSize = 12.sp, color = c.mutedFg)
@@ -226,6 +234,9 @@ import java.io.File
             problem?.let { Text(stringResource(it), color = c.dangerText) }
         }
     }
+    discard?.let { next -> AlertDialog(onDismissRequest = { discard = null }, title = { Text(stringResource(R.string.meet_cancel_recording)) }, text = { Text(stringResource(R.string.meet_cancel_recording_hint)) }, confirmButton = {
+        TextButton(onClick = { discard = null; discardLocal(); if (next == "record") permission.launch(Manifest.permission.RECORD_AUDIO) else if (next == "upload") picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }) { Text(stringResource(R.string.meet_remove), color = c.dangerText) }
+    }, dismissButton = { TextButton(onClick = { discard = null }) { Text(stringResource(R.string.cancel)) } }) }
 }
 
 private class MeetingFileProblem(val resource: Int) : Exception()

@@ -258,13 +258,17 @@ import java.time.LocalDate
     var busy by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
     var position by remember { mutableFloatStateOf(0f) }
-    var problem by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<Int?>(null) }
     DisposableEffect(meeting.id) { onDispose { player?.release(); player = null } }
     fun play(at: Double? = null) {
         if (busy || !meeting.audio.available) return
         val existing = player
-        if (existing != null) { if (at != null) existing.seekTo((at * 1000).toInt()); existing.start(); playing = true; return }
-        busy = true; problem = false
+        if (existing != null) {
+            runCatching { if (at != null) existing.seekTo((at * 1000).toInt()); existing.start(); playing = true }
+                .onFailure { existing.release(); player = null; playing = false; problem = R.string.meet_audio_failed }
+            return
+        }
+        busy = true; problem = null
         scope.launch {
             try {
                 val file = FileOpener.fetch(context, container.api, "/api/meetings/${meeting.id}/audio", meeting.audio.name.ifBlank { "meeting.m4a" })
@@ -272,13 +276,14 @@ import java.time.LocalDate
                 created.setDataSource(file.absolutePath)
                 created.setOnPreparedListener { mp -> busy = false; at?.let { mp.seekTo((it * 1000).toInt()) }; mp.start(); playing = true }
                 created.setOnCompletionListener { playing = false }
-                created.setOnErrorListener { _, _, _ -> problem = true; busy = false; playing = false; true }
+                created.setOnErrorListener { mp, _, _ -> problem = R.string.meet_audio_failed; busy = false; playing = false; mp.release(); player = null; true }
                 created.prepareAsync()
             } catch (e: CancellationException) { throw e
-            } catch (_: Exception) { problem = true; busy = false }
+            } catch (e: Exception) { player?.release(); player = null; problem = if (e is ApiError.Http && e.status == 410) R.string.meet_audio_gone else R.string.meet_audio_failed; busy = false }
         }
     }
     LaunchedEffect(seek) { if (seek != null) { play(seek); onSeek() } }
+    LaunchedEffect(meeting.audio.available) { if (!meeting.audio.available) { player?.release(); player = null; playing = false } }
     LaunchedEffect(playing) { while (playing) { position = (player?.currentPosition ?: 0) / 1000f; delay(500) } }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,6 +293,8 @@ import java.time.LocalDate
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
         }
         if (player != null && !busy) Slider(position, { position = it; player?.seekTo((it * 1000).toInt()) }, valueRange = 0f..((player?.duration ?: 1000) / 1000f).coerceAtLeast(1f))
-        if (!meeting.audio.available || problem) Text(stringResource(R.string.meet_audio_gone), color = Nx.colors.mutedFg, fontSize = 12.sp)
+        if (!meeting.audio.available) Text(stringResource(if (meeting.audio.deletedAt != null) R.string.meet_audio_gone else R.string.meet_audio_not_uploaded), color = Nx.colors.mutedFg, fontSize = 12.sp)
+        problem?.let { Text(stringResource(it), color = Nx.colors.dangerText, fontSize = 12.sp) }
+        meeting.audio.deleteAfter?.takeIf { meeting.audio.available }?.let { Text(stringResource(R.string.meet_audio_retention, meetingDateTime(it)), color = Nx.colors.mutedFg, fontSize = 11.sp) }
     }
 }

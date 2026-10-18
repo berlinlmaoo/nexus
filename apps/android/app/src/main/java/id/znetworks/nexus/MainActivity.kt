@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
                 id.znetworks.nexus.core.nav.Target.NewMeeting()
             }
             data != null -> Links.parse(data.toString())
-            intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) -> Links.forNotification(
+            intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) || intent.hasExtra(EXTRA_MEETING_ID) -> Links.forNotification(
                 intent.getStringExtra(EXTRA_TYPE), intent.getStringExtra(EXTRA_LINK),
                 intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_PROJECT_ID),
                 intent.getStringExtra(EXTRA_MEETING_ID),
