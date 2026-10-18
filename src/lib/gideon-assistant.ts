@@ -28,7 +28,8 @@ function titleFrom(text: string): string | null {
  */
 export async function resolveGideonChat(userId: string, opts: { chatId?: string | null; newChat?: boolean; title?: string }) {
   if (opts.chatId) {
-    const own = await prisma.gideonChat.findFirst({ where: { id: opts.chatId, userId }, select: { id: true, title: true } })
+    // Live chats only: a chat the person deleted (another tab, another device) never takes new turns.
+    const own = await prisma.gideonChat.findFirst({ where: { id: opts.chatId, userId, deletedAt: null }, select: { id: true, title: true } })
     if (own) {
       if (!own.title && opts.title) {
         const title = titleFrom(opts.title)
@@ -38,8 +39,10 @@ export async function resolveGideonChat(userId: string, opts: { chatId?: string 
       return own
     }
   }
-  if (!opts.newChat) {
-    const latest = await prisma.gideonChat.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true } })
+  // A question sent from a chat that was deleted meanwhile starts a fresh one rather than landing in another.
+  const fromDeleted = opts.chatId ? Boolean(await prisma.gideonChat.findFirst({ where: { id: opts.chatId, userId }, select: { id: true } })) : false
+  if (!opts.newChat && !fromDeleted) {
+    const latest = await prisma.gideonChat.findFirst({ where: { userId, deletedAt: null }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true } })
     if (latest) return latest
   }
   return prisma.gideonChat.create({ data: { userId, title: titleFrom(opts.title ?? "") }, select: { id: true, title: true } })

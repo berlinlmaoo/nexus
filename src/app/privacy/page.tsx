@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 // Ganti di satu tempat ini kalau alamatnya lain. Harus kotak surat yang benar-benar dibaca —
 // reviewer Apple kadang mengetesnya.
 const CONTACT_EMAIL = "account@znetworks.id"
-const LAST_UPDATED = "31 Agustus 2026"
+const LAST_UPDATED = "18 Oktober 2026"
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -81,6 +81,9 @@ export default function PrivacyPolicyPage() {
             tim.
           </p>
           <p>
+            Chat GIDEON (asisten AI di NEXUS) bisa ditinjau oleh anggota BoD untuk keperluan kerja.
+          </p>
+          <p>
             Data disimpan di server milik Z Networks. Satu-satunya pihak ketiga yang menerima data
             adalah <b className="text-foreground">Apple Push Notification service</b>, yang meneruskan
             isi notifikasi ke perangkatmu. Tidak ada layanan analitik atau periklanan pihak ketiga.
@@ -92,6 +95,10 @@ export default function PrivacyPolicyPage() {
             Data disimpan selama akunmu aktif dan selama masih diperlukan sebagai catatan kerja.
             Akun dibuat dan dihapus oleh admin workspace; untuk meminta penghapusan akun atau
             salinan datamu, hubungi admin workspace atau alamat di bawah.
+          </p>
+          <p>
+            Chat GIDEON yang kamu hapus langsung hilang dari daftar chatmu, disimpan 90 hari untuk
+            peninjauan BoD, lalu dihapus beserta file lampirannya.
           </p>
         </Section>
 
