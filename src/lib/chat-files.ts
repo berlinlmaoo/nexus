@@ -213,3 +213,97 @@ export function shapeMessageForOldApp<T extends Shapeable & { replyTo?: Shapeabl
   const out = shapeForOldApp(m)
   return out.replyTo ? { ...out, replyTo: shapeForOldApp(out.replyTo) } : out
 }
+
+// ── who may load a chat file ────────────────────────────────────────────────────────────────────
+
+/**
+ * One message that carries a chat file, with what decides whether the caller may read its room —
+ * answered by ONE SQL query (chat-access.ts chatFileCarrierFor) instead of conversationAccess's three
+ * to five, because every picture in a thread asks this.
+ */
+export type ChatFileCarrier = {
+  conversationId: string
+  attachmentName: string | null
+  /** Conversation.type: "DM" | "GROUP" | "PROJECT". */
+  type: string
+  projectId: string | null
+  /** Conversation.workspaceId (null: a group/DM that spans workspaces or predates them). */
+  roomWorkspaceId: string | null
+  /** The caller has a ConversationMember row. */
+  isMember: boolean
+  /** The caller is in roomWorkspaceId (false when it is null). */
+  inRoomWorkspace: boolean
+  /** PROJECT rooms: the caller's role in the project's workspace, null when not in it. */
+  projectWorkspaceRole: string | null
+  /** PROJECT rooms: the caller has a ProjectMember row (any level, Can view included). */
+  isProjectMember: boolean
+}
+
+/**
+ * conversationAccess's rule on one carrier, from the row alone:
+ *   PROJECT  in the project's workspace AND (One Above All / BoD — `projectWide` — OR a project member
+ *            at any level): rbac projectAccessLevel is at least VIEW.
+ *   GROUP/DM a member row AND in the room's workspace. A room without a workspace needs the other
+ *            members' workspaces (chat-rules groupRoomAllows), which the row does not carry: "ask".
+ */
+export function chatCarrierVerdict(r: ChatFileCarrier, projectWide: (role: string) => boolean): "allow" | "deny" | "ask" {
+  if (r.type === "PROJECT" && r.projectId) {
+    if (!r.projectWorkspaceRole) return "deny"
+    return projectWide(r.projectWorkspaceRole) || r.isProjectMember ? "allow" : "deny"
+  }
+  if (!r.isMember) return "deny"
+  if (r.roomWorkspaceId) return r.inRoomWorkspace ? "allow" : "deny"
+  return "ask"
+}
+
+/**
+ * The first carrier (oldest message first) that lets the caller in, or the ones only the full check
+ * can decide. A forwarded picture is carried by several messages in several rooms: any one is enough.
+ */
+export function pickChatFileCarrier(
+  rows: readonly ChatFileCarrier[],
+  projectWide: (role: string) => boolean,
+): { carrier: ChatFileCarrier | null; ask: ChatFileCarrier[] } {
+  const ask: ChatFileCarrier[] = []
+  for (const r of rows) {
+    const v = chatCarrierVerdict(r, projectWide)
+    if (v === "allow") return { carrier: r, ask: [] }
+    if (v === "ask") ask.push(r)
+  }
+  return { carrier: null, ask }
+}
+
+/**
+ * How long the person who uploaded a file may load it before a message carries it: the composer
+ * draws the picture from its server URL before Send (web, and every released iOS build).
+ */
+export const CHAT_UPLOADER_GRACE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * A validator for a chat file. The stored name is a fresh uuid per upload and is never rewritten, so
+ * size + mtime identify the bytes.
+ */
+export function chatFileEtag(size: number, mtimeMs: number): string {
+  return `W/"${size.toString(36)}-${Math.floor(mtimeMs).toString(36)}"`
+}
+
+/**
+ * Whether a conditional GET may be answered 304: If-None-Match decides when present (RFC 9110
+ * 13.2.2, weak comparison), else If-Modified-Since at one-second precision.
+ */
+export function chatNotModified(
+  ifNoneMatch: string | null | undefined,
+  ifModifiedSince: string | null | undefined,
+  etag: string,
+  mtime: Date,
+): boolean {
+  if (ifNoneMatch) {
+    const bare = (t: string) => t.trim().replace(/^W\//, "")
+    return ifNoneMatch.split(",").some((t) => t.trim() === "*" || bare(t) === bare(etag))
+  }
+  if (ifModifiedSince) {
+    const since = Date.parse(ifModifiedSince)
+    return Number.isFinite(since) && Math.floor(mtime.getTime() / 1000) * 1000 <= since
+  }
+  return false
+}

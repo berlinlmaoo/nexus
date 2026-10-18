@@ -98,7 +98,11 @@ export async function POST(request: NextRequest) {
     await mkdir(uploadDir, { recursive: true })
     await writeFile(path.join(uploadDir, fileName), bytes)
 
-    logAudit({ action: "create", entityType: "chat_attachment", entityId: fileName, userId, request })
+    // Awaited: this row is the record that the uploader may load the file before it is sent (the
+    // composer draws it from its URL at once) and may attach it — /api/files and the messages route
+    // read it (chat-access uploadedChatFile).
+    const audited = await logAudit({ action: "create", entityType: "chat_attachment", entityId: fileName, userId, request })
+    if (!audited) return NextResponse.json({ error: "Upload failed. Try again." }, { status: 500 })
 
     return NextResponse.json({
       url: `/api/files/chat/${fileName}`,

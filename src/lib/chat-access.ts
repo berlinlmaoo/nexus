@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
-import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel, hasProjectWideAccess } from "@/lib/rbac"
 import { canManageGroupMembers, commonWorkspace, groupRoomAllows } from "@/lib/chat-rules"
+import { CHAT_FILE_PREFIX, CHAT_STORED_NAME, pickChatFileCarrier, type ChatFileCarrier } from "@/lib/chat-files"
 
 /**
  * Who may read and write a conversation.
@@ -233,4 +234,70 @@ export async function visibleConversationIdsOf(userId: string): Promise<string[]
 export async function canPostInConversation(userId: string, convo: { type: string; projectId: string | null }): Promise<boolean> {
   if (convo.type === "PROJECT" && convo.projectId) return hasProjectLevel(userId, convo.projectId, "COMMENT")
   return true
+}
+
+/** How many messages carrying one file are looked at (a picture forwarded into many rooms). */
+const CHAT_FILE_CARRIER_CAP = 25
+
+/**
+ * Who may load a chat file (/api/files/chat/…, pictures and documents alike): someone who can read
+ * the conversation of a message that carries it — conversationAccess, for every room kind.
+ *
+ * Pictures are drawn many times per screen (thread, list preview, quotes, the info screen's grid), so
+ * the common case is ONE query: the carriers found through the partial index Message_attachmentUrl_idx,
+ * each with the caller's member row, workspace membership and project membership beside it (all
+ * unique-index lookups), judged by chat-files chatCarrierVerdict. Only a group/DM without a workspace
+ * of its own (rooms from before 8 Oct 2026 spanning workspaces) asks conversationAccess itself.
+ *
+ * Returns the carrier that lets the caller in, or null: no message carries the file (not sent yet,
+ * or its message / group deleted), or none of their rooms are the caller's to read.
+ */
+export async function chatFileCarrierFor(userId: string, url: string): Promise<ChatFileCarrier | null> {
+  const rows = await prisma.$queryRaw<ChatFileCarrier[]>`
+    SELECT m."conversationId" AS "conversationId",
+           m."attachmentName" AS "attachmentName",
+           c."type"::text AS "type",
+           c."projectId" AS "projectId",
+           c."workspaceId" AS "roomWorkspaceId",
+           EXISTS (SELECT 1 FROM "ConversationMember" cm WHERE cm."conversationId" = c."id" AND cm."userId" = ${userId}) AS "isMember",
+           (c."workspaceId" IS NOT NULL AND EXISTS (
+             SELECT 1 FROM "WorkspaceMember" wm WHERE wm."workspaceId" = c."workspaceId" AND wm."userId" = ${userId})) AS "inRoomWorkspace",
+           (SELECT pw."role"::text FROM "Project" p JOIN "WorkspaceMember" pw ON pw."workspaceId" = p."workspaceId" AND pw."userId" = ${userId}
+             WHERE p."id" = c."projectId") AS "projectWorkspaceRole",
+           (c."projectId" IS NOT NULL AND EXISTS (
+             SELECT 1 FROM "ProjectMember" pm WHERE pm."projectId" = c."projectId" AND pm."userId" = ${userId})) AS "isProjectMember"
+      FROM "Message" m
+      JOIN "Conversation" c ON c."id" = m."conversationId"
+     WHERE m."attachmentUrl" = ${url}
+     ORDER BY m."createdAt" ASC
+     LIMIT ${CHAT_FILE_CARRIER_CAP}`
+  const { carrier, ask } = pickChatFileCarrier(rows, hasProjectWideAccess)
+  if (carrier) return carrier
+  for (const r of ask) {
+    if ((await conversationAccess(userId, r.conversationId)).ok) return r
+  }
+  return null
+}
+
+/**
+ * Whether this person uploaded this chat file (`/api/files/chat/<name>`): the upload route's audit row
+ * (entityType "chat_attachment", entityId = the stored name) is the record of who wrote it. `sinceMs`
+ * limits it to recent uploads. Found through the AuditLog userId index; asked only when no message
+ * carries the file.
+ */
+export async function uploadedChatFile(userId: string, url: string, sinceMs?: number): Promise<boolean> {
+  if (!url.startsWith(CHAT_FILE_PREFIX)) return false
+  const name = url.slice(CHAT_FILE_PREFIX.length)
+  if (!CHAT_STORED_NAME.test(name)) return false
+  const row = await prisma.auditLog.findFirst({
+    where: {
+      userId,
+      entityType: "chat_attachment",
+      action: "create",
+      entityId: name,
+      ...(sinceMs ? { createdAt: { gte: new Date(Date.now() - sinceMs) } } : {}),
+    },
+    select: { id: true },
+  })
+  return Boolean(row)
 }
