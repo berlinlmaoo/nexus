@@ -82,7 +82,6 @@ fun FormsScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit) {
             l == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             l.isEmpty() -> EmptyState(Icons.Filled.Description, stringResource(R.string.fm_empty_title), stringResource(R.string.fm_empty_body), stringResource(R.string.try_again), { reload++ })
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item { Text(stringResource(R.string.fm_intro), fontSize = 12.sp, color = c.mutedFg) }
                 items(l, key = { it.first.id }) { (f, project) -> FormCard(f, project ?: stringResource(R.string.fm_project)) { onOpenForm(f.slug ?: f.id) } }
             }
         }
@@ -102,10 +101,10 @@ private fun FormCard(f: FormSummary, project: String, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(f.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(f.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Text(project, fontSize = 12.sp, color = c.mutedFg)
+                if (f.isPublic == true) Pill(stringResource(R.string.fm_public), c.success)
             }
-            if (f.isPublic == true) Pill(stringResource(R.string.fm_public), c.success)
         }
         f.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = c.mutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         Row(verticalAlignment = Alignment.CenterVertically) {

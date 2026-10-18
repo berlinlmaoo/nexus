@@ -501,19 +501,19 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(28.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Box(Modifier.align(Alignment.TopEnd).offset(36.dp, (-36).dp).size(110.dp).background(accent.copy(alpha = 0.10f), CircleShape))
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 ProjectMark(p.icon, 44.dp, projectId = p.id)
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
                     Text(p.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.project_no_brief), fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
                 }
-                StatusChip(p.status)
                 trailing?.invoke()
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+            StatusChip(p.status)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Metric(stringResource(R.string.project_cards), "$total", Modifier.weight(1f))
                 Metric(stringResource(R.string.project_done), done?.toString() ?: "—", Modifier.weight(1f))

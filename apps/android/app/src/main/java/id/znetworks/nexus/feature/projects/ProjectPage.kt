@@ -147,7 +147,7 @@ fun ProjectPageHeader(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                 access.readOnlyChip?.let { l ->
                     val hint = stringResource(R.string.acc_hint)
                     Text(accessLabel(l), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
@@ -652,7 +652,7 @@ private fun ListRow(t: BoardTask, lanes: List<Lane>, vm: ProjectDetailViewModel,
             .padding(start = if (t.isSubtask) 30.dp else 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Top) {
             Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
                 tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f),
-                modifier = Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) })
+                modifier = Modifier.padding(top = 1.dp).size(48.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) }.padding(14.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -727,7 +727,7 @@ fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (
             }
             val circle = if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked
             val tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.6f)
-            Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
+            Box(Modifier.padding(top = 1.dp).size(48.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
                 contentAlignment = Alignment.Center) {
                 Icon(circle, stringResource(R.string.task_toggle_done), Modifier.size(18.dp), tint = tint)
             }

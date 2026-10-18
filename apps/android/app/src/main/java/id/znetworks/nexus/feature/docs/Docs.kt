@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.shell.openWeb
+import id.znetworks.nexus.ui.components.PageHeader
+import id.znetworks.nexus.ui.components.HeaderIconButton
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.chat.chatTime
@@ -78,6 +82,7 @@ data class Doc(
     val icon: String? = null,
     val updatedAt: String? = null,
     val project: DocProject? = null,
+    val projectId: String? = null,
 ) {
     val emoji: String get() = icon?.takeIf { it.isNotBlank() && !it.startsWith("/") } ?: "📄"
 }
@@ -136,7 +141,7 @@ private fun DocCard(d: Doc, onOpen: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(d.title.ifBlank { "—" }, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val preview = d.contentText?.takeIf { it.isNotBlank() } ?: DocBlocks.from(d.content).firstOrNull { it.text.isNotBlank() }?.text
-            Text(preview ?: d.project?.name.orEmpty(), fontSize = 12.sp, color = c.mutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(d.project?.name?.takeIf { it.isNotBlank() } ?: preview.orEmpty(), fontSize = 12.sp, color = c.mutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -145,16 +150,16 @@ private fun DocCard(d: Doc, onOpen: () -> Unit) {
 fun DocsScreen(onBack: () -> Unit, onOpenDoc: (String) -> Unit) {
     val api = docsApi()
     val c = Nx.colors
-    val res = LocalContext.current.resources
+    val context = LocalContext.current
+    val res = context.resources
     var docs by remember { mutableStateOf<List<Doc>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var q by rememberSaveable { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
-    LaunchedEffect(tick) { try { docs = api.all(); error = null } catch (e: ApiError) { error = e.describe(res) } }
+    LaunchedEffect(tick) { try { val projects = runCatching { id.znetworks.nexus.feature.projects.ProjectsApi((context.applicationContext as NexusApplication).container.api).projects().value }.getOrDefault(emptyList()); docs = api.all().map { d -> if (d.project == null) d.copy(project = projects.firstOrNull { it.id == d.projectId }?.let { DocProject(it.id, it.name) }) else d }; error = null } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_pages), subtitle = stringResource(R.string.sub_docs), onBack = onBack)
-        OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.docs_search)) },
-            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
+        id.znetworks.nexus.ui.components.CompactSearchField(q, { q = it }, stringResource(R.string.docs_search), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
         val all = docs
         val shown = all?.filter { q.isBlank() || it.title.contains(q.trim(), true) }
         when {
@@ -169,16 +174,29 @@ fun DocsScreen(onBack: () -> Unit, onOpenDoc: (String) -> Unit) {
 }
 
 @Composable
-fun DocReaderScreen(id: String, onBack: () -> Unit) {
+fun DocReaderScreen(id: String, onBack: () -> Unit, onGideon: () -> Unit = {}) {
     val api = docsApi()
     val c = Nx.colors
-    val res = LocalContext.current.resources
+    val context = LocalContext.current
+    val res = context.resources
+    var actions by remember { mutableStateOf(false) }
     var doc by remember { mutableStateOf<Doc?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(id) { try { doc = api.one(id) } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+        PageHeader(doc?.project?.name ?: stringResource(R.string.nav_pages), onBack = onBack) {
+            Box {
+                HeaderIconButton(androidx.compose.material.icons.Icons.Filled.MoreVert, stringResource(R.string.more), { actions = true })
+                androidx.compose.material3.DropdownMenu(actions, { actions = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.task_share_link)) }, onClick = {
+                        actions = false
+                        val url = (context.applicationContext as NexusApplication).container.api.url("/docs/$id").toString()
+                        context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, url) }, null))
+                    })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.open_on_web)) }, onClick = { actions = false; openWeb(context, "/docs/$id") })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("GIDEON") }, onClick = { actions = false; onGideon() })
+                }
+            }
         }
         val d = doc
         when {

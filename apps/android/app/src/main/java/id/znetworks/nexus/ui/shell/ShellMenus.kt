@@ -29,7 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.AssignmentTurnedIn
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.ConfirmationNumber
@@ -46,7 +46,7 @@ import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -88,7 +88,7 @@ internal fun ShellNav.Item.icon(): ImageVector = when (this) {
     ShellNav.Item.GIDEON -> Icons.Outlined.AutoAwesome
     ShellNav.Item.NOTIFICATIONS -> Icons.Outlined.Inbox
     ShellNav.Item.THREADS -> Icons.Outlined.AlternateEmail
-    ShellNav.Item.VAULT -> Icons.Outlined.Storage
+    ShellNav.Item.VAULT -> Icons.Outlined.Inventory2
     ShellNav.Item.MY_TASKS -> Icons.Outlined.CheckBox
     ShellNav.Item.SUBMISSIONS -> Icons.Outlined.Description
     ShellNav.Item.CALENDAR -> Icons.Outlined.CalendarMonth
@@ -96,7 +96,7 @@ internal fun ShellNav.Item.icon(): ImageVector = when (this) {
     ShellNav.Item.PROJECTS -> Icons.Outlined.Folder
     ShellNav.Item.LEGAL -> Icons.Outlined.Balance
     ShellNav.Item.LEADERBOARD -> Icons.Outlined.EmojiEvents
-    ShellNav.Item.REPORTS -> Icons.Outlined.BarChart
+    ShellNav.Item.REPORTS -> Icons.Outlined.Assessment
     ShellNav.Item.FORMS -> Icons.AutoMirrored.Outlined.Assignment
     ShellNav.Item.ATTENDANCE -> Icons.Outlined.AssignmentTurnedIn
     ShellNav.Item.TICKETS -> Icons.Outlined.ConfirmationNumber

@@ -451,7 +451,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenFile = { url -> scope.launch { runCatching { FileOpener.open(context, container.api, url, url.substringAfterLast('/')) } } })
             }
             composable("docs") { DocsScreen(onBack = { nav.popBackStack() }, onOpenDoc = { nav.navigate("doc/$it") }) }
-            composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onGideon = { nav.navigate("gideon") }) }
             composable("vault?folder={folder}&trash={trash}", arguments = listOf(
                 androidx.navigation.navArgument("folder") { nullable = true; defaultValue = null },
                 androidx.navigation.navArgument("trash") { nullable = true; defaultValue = null },

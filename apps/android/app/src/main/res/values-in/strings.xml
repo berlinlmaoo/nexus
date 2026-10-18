@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <plurals name="rb_show_earlier"><item quantity="other">Tampilkan %1$d booking sebelumnya bulan ini</item></plurals>
+    <plurals name="rb_hide_earlier"><item quantity="other">Sembunyikan %1$d booking sebelumnya</item></plurals>
+    <string name="task_share_link">Bagikan tautan</string>
     <string name="task_use_latest">Muat terbaru</string>
     <string name="task_latest_description">Deskripsi tersimpan terbaru</string>
     <string name="expand">Bentangkan</string>

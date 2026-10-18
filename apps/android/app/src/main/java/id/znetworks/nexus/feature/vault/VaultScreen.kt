@@ -241,7 +241,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         // The shelf's use against its 5 GB, in every mode (trash counts too); red past 90 % (web).
         VaultRules.usage(l?.quota)?.let { u ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                LinearProgressIndicator(progress = { u.percent / 100f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
+                LinearProgressIndicator(progress = { if (u.used > 0) (u.percent / 100f).coerceAtLeast(0.006f) else 0f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
                     // No Material stop dot at the far end: with a tiny share used it read as a lone dot (run 5).
                     drawStopIndicator = {}, gapSize = 0.dp,
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
@@ -314,7 +314,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                                 }
                             }
                         }
-                        HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 70.dp))
+                        HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.fillMaxWidth())
                         }
                     }
                     if (vm.trash) LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) { items(VaultRules.sorted(l.items), key = { it.id }) { itemRow(it) } }

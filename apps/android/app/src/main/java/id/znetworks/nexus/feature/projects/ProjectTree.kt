@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
@@ -142,7 +143,7 @@ internal fun DragHandle(drag: TreeDrag, item: TreeDrag.Item) {
     val current by rememberUpdatedState(item)
     var origin by remember { mutableStateOf(Offset.Zero) }
     Box(
-        Modifier.size(36.dp).onGloballyPositioned { origin = it.positionInRoot() }
+        Modifier.size(48.dp).onGloballyPositioned { origin = it.positionInRoot() }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { drag.start(current, origin + it) },
@@ -215,7 +216,7 @@ internal fun FolderNode(f: ProjectFolder, depth: Int, scope: String, a: TreeActi
                     }
                 }
                 if (s.canManage) DragHandle(a.drag, TreeDrag.FolderItem(f))
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more), tint = c.mutedFg) }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.fm_open_view)) }, onClick = { menu = false; a.openFolderView(f.id) })
