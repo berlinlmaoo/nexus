@@ -1,5 +1,13 @@
 # NEXUS Android: status
 
+## R21 UI audit follow-up (18 Oct 2026, `feat/android-r21`)
+
+Completed review and parity corrections for all 59 supplied findings; [AUDIT-R21.md](AUDIT-R21.md) records each disposition and evidence. Finding 53 retains the approved web room-booking wording; duplicate/mixed findings are explained in the matrix. Eleven small implementation commits after audit baseline `b5f00ac7`, each green, authored as Berlin.
+
+Validation: **773 JVM tests + assembleDebug PASS**. All affected surfaces checked on visible **Pixel_7 with host GPU against DEV**; final 25-route regression tour plus manual changed-flow captures, English/Indonesian and affected dark surfaces. Actual Gallery cover render, inline description conflict and notification Undo checked. [Local comparison index](../../../../nexus-shots/audit-r21-index.html). Temporary audit fixtures removed, QA profile language restored and emulator shut down. No attendance submission, push, publication or version change.
+
+Left for these 59 findings: no confirmed code defects outstanding. Physical-device GPS/camera validation remains outside this emulator pass; the earlier role-session/absent-feature estimates below are separate and remain explicit.
+
 ## Fix 21 (18 Oct 2026, `feat/android-r21`, DEV only)
 
 Implementation and the available Pixel_7 QA pass are complete. 768 JVM tests and `assembleDebug` pass with portable JDK 21, a 3 GB Gradle heap and two workers. Each green implementation step was committed. No push, APK publication, version change or production access; versionCode remains 13.
