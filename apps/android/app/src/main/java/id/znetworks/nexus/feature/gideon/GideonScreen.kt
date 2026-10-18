@@ -252,14 +252,14 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Column(Modifier.widthIn(max = 320.dp).background(c.violet.copy(alpha = 0.06f), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                Column(Modifier.widthIn(max = 320.dp).background(c.muted, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
                     m.attachments.forEach { a -> Text("📎 " + (a.name?.takeIf { it.isNotBlank() && it != "image" } ?: stringResource(R.string.gd_image_attached)), fontSize = 12.sp, color = c.mutedFg) }
                     SelectionContainer { Text(m.content, fontSize = 15.sp, lineHeight = 21.sp, color = c.foreground) }
                 }
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (m.steps.isNotEmpty()) {
                     var expanded by remember { mutableStateOf(false) }
-                    Text(if (m.steps.any { it.status == "running" }) stringResource(R.string.gc_thinking) else stringResource(R.string.gc_steps, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
+                    Text(if (m.steps.any { it.status == "running" }) stringResource(R.string.gc_thinking) else androidx.compose.ui.res.pluralStringResource(R.plurals.gc_step_count, m.steps.size, m.steps.size), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.clickable { expanded = !expanded })
                     if (expanded) m.steps.forEach { st -> StepLine(st) }
                 }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }

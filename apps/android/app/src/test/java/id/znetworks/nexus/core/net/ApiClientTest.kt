@@ -2,6 +2,9 @@ package id.znetworks.nexus.core.net
 
 import id.znetworks.nexus.core.session.Session
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.*
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -142,5 +145,27 @@ class ApiClientTest {
         try { c.get("/api/x", Ping.serializer()); fail() } catch (e: ApiError) {
             assertTrue(e is ApiError.Transport)
         }
+    }
+
+    @Test fun eventStreamEmitsBeforeEndAndCancellationReleasesTheCall() = runBlocking {
+        val firstLine = CompletableDeferred<String>()
+        server.enqueue(MockResponse.Builder().code(200)
+            .body("data: hello\n\n" + "x".repeat(256)).throttleBody(16, 2, TimeUnit.SECONDS).build())
+        val c = client()
+        val job = launch(Dispatchers.Default) {
+            c.sendEventLines(Request.Builder().url(server.url("/api/gideon")).build(), 10_000) {
+                if (!firstLine.isCompleted) firstLine.complete(it)
+            }
+        }
+        try {
+            assertEquals("data: hello", withTimeout(5000) { firstLine.await() })
+            assertTrue(job.isActive)
+            val req = server.takeRequest()
+            assertEquals("chat-files", req.headers["X-Nexus-Caps"])
+            assertEquals("__Secure-authjs.session-token=tok123", req.headers["Cookie"])
+            job.cancelAndJoin()
+            withTimeout(3000) { while (c.http.dispatcher.runningCallsCount() != 0) delay(10) }
+            assertTrue(job.isCancelled)
+        } finally { job.cancelAndJoin() }
     }
 }

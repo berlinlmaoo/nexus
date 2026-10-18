@@ -99,7 +99,11 @@ for(const screen of config.screens) {
     if(screen.id==='project-templates') {
       await tap('New project|Proyek baru'); actionResult=await tap('New project|Proyek baru');
       if(!actionResult) { await pause(1200);actionResult=await tap('New project|Proyek baru'); }
-      if(actionResult) await tap('Dashboards|Dashboard');
+      if(actionResult) {
+        const category=nodes().find(n=>n.text==='All'||n.text==='Semua');
+        if(category) { adb('shell','input','swipe','980',String(Math.round(category.y)),'160',String(Math.round(category.y)),'400');await pause(400); }
+        actionResult=await tap('Dashboards|Dashboard');
+      }
     } else if(screen.id==='settings-security') {
       const tab=nodes().find(n=>n.text==='Profile'||n.text==='Profil');
       if(tab) { adb('shell','input','swipe','950',String(Math.round(tab.y)),'180',String(Math.round(tab.y)),'400');await pause(400); }
