@@ -152,7 +152,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
-                s.messages.isEmpty() && !s.thinking -> FreshChat { send(it) }
+                s.messages.isEmpty() && s.pending.isEmpty() && !s.thinking -> FreshChat { send(it) }
                 else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
@@ -233,7 +233,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     }, text = { Text(stringResource(R.string.gc_review_notice)) }, confirmButton = {
         TextButton(onClick = { prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false }) { Text("OK") }
     })
-    decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking) }, onDismiss = { decision = null }) }
+    decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking, d.task) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
 }
 
@@ -270,6 +270,14 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
     val list = rememberLazyListState()
     LaunchedEffect(s.messages.size, s.thinking) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        val transcriptIds = s.messages.flatMap { it.proposals }.map { it.id }.toSet()
+        items(s.pending.filter { it.id !in transcriptIds }, key = { "pending:${it.id}" }) { p ->
+            when {
+                p.action == "create_task" && p.taskTarget != null && p.isPending -> CreateTaskCard(p, p.id in s.deciding, onDecide)
+                p.action == "delete_task" || p.extra != null -> ActionCard(p, p.id in s.deciding, onDecide)
+                else -> ProposalCard(p, p.id in s.deciding) { onDecide(GDecision(p, it)) }
+            }
+        }
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
             if (readOnly) m.createdAt?.let { Text(id.znetworks.nexus.feature.chat.chatTime(it), fontSize = 11.sp, color = c.mutedFg) }
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -290,7 +298,8 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     // A room booking has its own card with the room picker; every other change is a diff.
                     val change = p.bookingChange
                     if (readOnly) {
-                        ProposalCard(p, deciding = false, readOnly = true) {}
+                        if (p.action == "delete_task" || p.extra != null) ActionCard(p, false, {}, readOnly = true)
+                        else ProposalCard(p, deciding = false, readOnly = true) {}
                         b?.let { Text(listOfNotNull(it.room, it.startsAt, it.endsAt).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg) }
                         change?.let { Text(listOfNotNull(it.before.room, it.before.startsAt, it.after?.room, it.after?.startsAt).joinToString(" → "), fontSize = 12.sp, color = c.mutedFg) }
                     }
@@ -300,6 +309,8 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     else if ((p.action == "move_room_booking" || p.action == "cancel_room_booking") && change != null)
                         BookingChangeCard(p, change, deciding = p.id in s.deciding, loadRooms = loadRooms,
                             onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
+                    else if (p.action == "create_task" && p.taskTarget != null && p.isPending) CreateTaskCard(p, p.id in s.deciding, onDecide)
+                    else if (p.action == "delete_task" || p.extra != null) ActionCard(p, p.id in s.deciding, onDecide)
                     else ProposalCard(p, deciding = p.id in s.deciding) { apply -> onDecide(GDecision(p, apply)) }
                 }
                 m.cards.forEach { card -> ResultCard(card) }

@@ -42,7 +42,7 @@ import java.time.ZoneId
                                val projectName: String? = null, val status: String? = null)
 
 /** One row of a proposal's diff; `from` / `to` may arrive as a string, a number, a bool or null. */
-@Serializable data class GDiffRow(val field: String? = null, val from: JsonElement? = null, val to: JsonElement? = null) {
+@Serializable data class GDiffRow(val field: String? = null, val from: JsonElement? = null, val to: JsonElement? = null, val fromDay: String? = null, val toDay: String? = null) {
     val fromText: String? get() = GideonReview.loose(from)
     val toText: String? get() = GideonReview.loose(to)
 }
@@ -54,7 +54,8 @@ import java.time.ZoneId
  */
 @Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
                                    val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null,
-                                   val booking: GBooking? = null, val bookingChange: GBookingChange? = null) {
+                                   val booking: GBooking? = null, val bookingChange: GBookingChange? = null,
+                                   val taskDelete: GTaskDelete? = null, val taskTarget: GTaskTarget? = null, val extra: GExtra? = null) {
     val isPending: Boolean get() = status == "PENDING"
 }
 
@@ -84,7 +85,19 @@ data class GBookingChoice(val room: String, val startsAt: String, val endsAt: St
 @Serializable data class GBookingAfter(val room: String? = null, val candidates: List<String> = emptyList(), val startsAt: String = "", val endsAt: String = "")
 
 /** Apply / Discard of one proposal, as asked in the centred dialog. */
-data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null)
+data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null, val task: GTaskChoice? = null)
+
+@Serializable data class GTaskDelete(val taskId: String, val title: String = "", val projectName: String? = null, val status: String? = null, val progress: String? = null, val due: String? = null, val dueDay: String? = null, val assignees: List<String> = emptyList())
+@Serializable data class GProjectOption(val id: String, val name: String = "", val icon: String? = null)
+@Serializable data class GTaskTarget(val title: String = "", val projectId: String? = null, val taskListId: String? = null, val status: String? = null, val assigneeIds: List<String> = emptyList(), val dueDay: String? = null, val projects: List<GProjectOption> = emptyList())
+@Serializable data class GTaskMember(val id: String, val name: String = "", val avatar: String? = null)
+@Serializable data class GTaskSection(val id: String, val name: String = "", val taskStatus: String? = null)
+@Serializable data class GTaskTargets(val sections: List<GTaskSection> = emptyList(), val members: List<GTaskMember> = emptyList())
+@Serializable data class GTaskChoice(val projectId: String, val taskListId: String? = null, val assigneeIds: List<String> = emptyList(), val dueDate: String? = null)
+@Serializable data class GExtra(val preview: String? = null, val link: String? = null, val note: String? = null, val sheetEdit: GSheetEdit? = null)
+@Serializable data class GSheetEdit(val sheet: String? = null, val project: String? = null, val cells: List<GCellChange> = emptyList(), val newRows: JsonElement? = null)
+@Serializable data class GCellChange(val ref: String, val from: JsonElement? = null, val to: JsonElement? = null)
+@Serializable data class GProposals(val proposals: List<GProposal> = emptyList())
 
 /** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
 @Serializable data class GRoomAvailability(val rooms: List<GRoomSlot> = emptyList(), val freeSlots: List<GFreeSlot> = emptyList())
@@ -367,6 +380,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val approval: GideonApprovalMode = GideonApprovalMode.fallback,
         /** Proposals with an Apply / Discard on its way (their buttons wait). */
         val deciding: Set<String> = emptySet(),
+        val pending: List<GProposal> = emptyList(),
     )
 
     private val _state = MutableStateFlow(State())
@@ -384,6 +398,14 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         failed = null
         _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null,
             project = project, refs = emptyList(), deciding = emptySet()) }
+        refreshProposals()
+    }
+
+    fun refreshProposals() = scope.launch {
+        val gen = generation
+        runCatching { api.get("/api/gideon/proposals", GProposals.serializer()) }.getOrNull()?.let { proposals ->
+            if (gen == generation) _state.update { it.copy(pending = proposals.proposals) }
+        }
     }
 
     /** A page picked in the @ picker (once; at most [GideonMention.MAX_REFS]). */
@@ -398,21 +420,21 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
      * Apply or Discard a proposal (POST /api/gideon/proposals/:id {decision}); the card shows what came back. The
      * server re-checks access when applying, and a double tap applies once (409 still carries the proposal).
      */
-    fun decide(p: GProposal, apply: Boolean, booking: GBookingChoice? = null) {
+    fun decide(p: GProposal, apply: Boolean, booking: GBookingChoice? = null, task: GTaskChoice? = null) {
         if (p.id in _state.value.deciding) return
         _state.update { it.copy(deciding = it.deciding + p.id, error = null) }
         scope.launch {
             try {
                 val updated = try {
                     api.send(Request.Builder().url(api.url("/api/gideon/proposals/" + URLEncoder.encode(p.id, "UTF-8")))
-                        .post(GideonReview.body(apply, booking).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
+                        .post(GideonReview.body(apply, booking, p, task).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
                 } catch (e: ApiError.Http) {
                     val carried = if (GideonReview.carriesProposal(e.status)) (e.body?.get("proposal") as? JsonObject)
                         ?.let { j -> runCatching { api.json.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() } else null
                     carried ?: throw e
                 }
                 if (updated != null) {
-                    _state.update { it.copy(messages = GideonReview.replace(it.messages, updated)) }
+                    _state.update { it.copy(messages = GideonReview.replace(it.messages, updated), pending = it.pending.map { row -> if (row.id == updated.id) updated else row }) }
                     if (apply && !updated.error.isNullOrBlank()) _state.update { it.copy(error = GideonProblem(GideonProblem.Kind.OTHER, false, updated.error)) }
                 }
             } catch (e: ApiError) {

@@ -254,7 +254,7 @@ internal fun DecisionDialog(p: GProposal, apply: Boolean, onConfirm: () -> Unit,
         text = p.summary?.takeIf { it.isNotBlank() }?.let { s -> { Text(s) } },
         confirmButton = {
             TextButton(onClick = { onDismiss(); onConfirm() }) {
-                Text(stringResource(if (apply) R.string.gx_apply else R.string.gx_discard), color = if (apply) c.foreground else c.dangerText, fontWeight = FontWeight.Bold)
+                Text(if (apply && (p.action == "delete_task" || p.extra != null)) actionLabel(p.action, apply = true) else stringResource(if (apply) R.string.gx_apply else R.string.gx_discard), color = if (apply && p.action in setOf("delete_task", "cancel_reminder")) c.dangerText else c.foreground, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })

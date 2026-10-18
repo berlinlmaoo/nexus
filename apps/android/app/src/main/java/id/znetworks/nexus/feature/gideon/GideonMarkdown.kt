@@ -31,6 +31,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.ui.theme.Nx
+import kotlinx.coroutines.launch
 
 /**
  * GIDEON answers as markdown (web components/gideon/GideonMarkdown.tsx, iOS GideonMarkdown.swift): headings,
@@ -186,7 +187,12 @@ object GideonMd {
 }
 
 @Composable
-private fun annotated(spans: List<GideonMd.Span>, codeBg: Color, link: Color): AnnotatedString = buildAnnotatedString {
+private fun annotated(spans: List<GideonMd.Span>, codeBg: Color, link: Color): AnnotatedString {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val container = (context.applicationContext as id.znetworks.nexus.NexusApplication).container
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    return buildAnnotatedString {
     spans.forEach { s ->
         val style = SpanStyle(
             fontWeight = if (s.bold) FontWeight.SemiBold else null,
@@ -197,9 +203,18 @@ private fun annotated(spans: List<GideonMd.Span>, codeBg: Color, link: Color): A
         )
         if (s.url != null && (s.url.startsWith("http") || s.url.startsWith("/") || s.url.startsWith("mailto:"))) {
             val target = if (s.url.startsWith("/")) id.znetworks.nexus.core.net.NexusConfig.base + s.url else s.url
-            withLink(LinkAnnotation.Url(target, TextLinkStyles(SpanStyle(color = link, textDecoration = TextDecoration.Underline)))) { withStyle(style) { append(s.text) } }
+            withLink(LinkAnnotation.Url(target, TextLinkStyles(SpanStyle(color = link, textDecoration = TextDecoration.Underline)), androidx.compose.ui.text.LinkInteractionListener {
+                val uri = runCatching { java.net.URI(target) }.getOrNull()
+                if (uri != null && id.znetworks.nexus.core.net.NexusConfig.isNexusHost(uri.host) && uri.path.startsWith("/api/gideon/files/")) {
+                    scope.launch {
+                        runCatching { id.znetworks.nexus.core.files.FileOpener.open(context, container.api, target, s.text.substringAfterLast('/').replace(Regex("[^\\w. -]"), "_").ifBlank { "gideon-export" }, share = true) }
+                            .onFailure { android.widget.Toast.makeText(context, context.getString(id.znetworks.nexus.R.string.gx_failed), android.widget.Toast.LENGTH_LONG).show() }
+                    }
+                } else runCatching { uriHandler.openUri(target) }
+            })) { withStyle(style) { append(s.text) } }
         } else withStyle(style) { append(s.text) }
     }
+}
 }
 
 /** An answer drawn from its markdown (selectable by the caller's SelectionContainer). */
