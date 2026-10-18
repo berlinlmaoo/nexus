@@ -619,7 +619,7 @@ final class NEXUSUITour: XCTestCase {
                 if exists && target.elementType == .button { revealNativeTab(target) }
                 let targetFrame = exists ? target.frame : .zero
                 var usable = exists && !targetFrame.isEmpty && !targetFrame.isInfinite
-                    && app.windows.firstMatch.frame.intersects(targetFrame) && target.isHittable
+                    && targetFrame.minY >= app.windows.firstMatch.frame.minY && targetFrame.maxY <= app.windows.firstMatch.frame.maxY && target.isHittable
                 #if targetEnvironment(macCatalyst)
                 // Catalyst can report a visible native menu as non-hittable, or return an
                 // infinite activation point. Its on-screen frame still gives a real mouse point.
@@ -650,9 +650,17 @@ final class NEXUSUITour: XCTestCase {
             case "reveal":
                 for _ in 0..<10 {
                     let target = app.descendants(matching: .any).matching(textMatch).firstMatch
-                    if target.exists && target.isHittable && app.windows.firstMatch.frame.intersects(target.frame) { break }
                     let window = app.windows.firstMatch
-                    let upward = target.exists && !target.frame.isEmpty && target.frame.maxY < 140
+                    // isHittable can be true for a field with only its first pixels visible,
+                    // including under a pinned Apply bar. Bring its centre clear of that chrome.
+                    var visible = window.frame.insetBy(dx: 12, dy: 140)
+                    let keyboard = app.keyboards.firstMatch
+                    if keyboard.exists { visible.size.height = max(80, min(visible.maxY, keyboard.frame.minY - 90) - visible.minY) }
+                    let frame = target.exists ? target.frame : .zero
+                    let half = min(frame.height / 2, visible.height * 0.35)
+                    let clear = frame.midY - half >= visible.minY && frame.midY + half <= visible.maxY
+                    if target.exists && target.isHittable && !frame.isEmpty && clear { break }
+                    let upward = target.exists && !frame.isEmpty && frame.midY < visible.midY
                     let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: upward ? 0.35 : 0.75))
                     #if targetEnvironment(macCatalyst)
                     start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * window.frame.height * 0.4)
