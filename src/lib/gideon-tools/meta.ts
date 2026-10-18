@@ -16,8 +16,6 @@
  * proposal stays waiting (the delete_task rule, 18 Oct 2026). Native spec: docs/internal/gideon-tools-native.md.
  */
 
-import { SHEET_TOOL_META } from "./meta-sheets"
-
 export type ExtraApproval = "always" | "modes"
 
 type Meta = {
@@ -67,10 +65,16 @@ export const EXTRA_TOOL_META: Record<string, Meta> = {
   get_performance: { write: false, label: L("Reading performance: {a}", "Reading performance") },
   // 14. Announcement
   draft_announcement: { write: true, approval: "always", label: L("Drafting an announcement: {a}", "Drafting an announcement") },
+  // Spreadsheets, pictures stored in NEXUS, files (A/B/C). export_file only puts a file into the person's own
+  // GIDEON chat (nothing in NEXUS changes), so it is a read; saving it to Z Vault is a card.
+  search_sheets: { write: false, label: L("Searching spreadsheets for “{a}”", "Searching spreadsheets") },
+  get_sheet: { write: false, label: L("Reading the spreadsheet {a}", "Reading a spreadsheet") },
+  edit_sheet_cells: { write: true, approval: "always", label: L("Preparing edits to {a}", "Preparing spreadsheet edits") },
+  create_sheet: { write: true, approval: "always", label: L("Preparing the spreadsheet {a}", "Preparing a spreadsheet") },
+  read_nexus_image: { write: false, label: L("Looking at {a}", "Looking at an image") },
+  export_file: { write: false, label: L("Making the file {a}", "Making a file") },
+  save_file_to_vault: { write: true, approval: "always", label: L("Preparing to save {a} to Z Vault", "Preparing a Z Vault save") },
 }
-
-// Spreadsheets, NEXUS images and files (18 Oct 2026): their own metadata file, merged here.
-Object.assign(EXTRA_TOOL_META, SHEET_TOOL_META)
 
 export function isExtraAction(action: string): boolean {
   return Object.prototype.hasOwnProperty.call(EXTRA_TOOL_META, action)

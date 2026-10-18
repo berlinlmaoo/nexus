@@ -24,12 +24,14 @@ assert.equal(code(() => checkReminder("x", new Date("2026-10-18T10:00:30Z"), now
 assert.equal(code(() => checkReminder("x", new Date("2027-11-01T00:00:00Z"), now)), "TIME_FAR")
 
 // Approval rules: outward-facing / attendance / web-session writes are a card in every mode; reminders follow modes.
-for (const a of ["send_message", "submit_leave_request", "decide_attendance_request", "create_vault_share_link", "draft_announcement"]) {
+for (const a of ["send_message", "submit_leave_request", "decide_attendance_request", "create_vault_share_link", "draft_announcement", "bulk_update_tasks", "edit_sheet_cells", "save_file_to_vault", "edit_doc", "move_deal_stage", "log_outlet_sales"]) {
   assert.equal(extraNeedsApproval(a, "dont_ask"), true, a)
 }
 assert.equal(extraNeedsApproval("create_reminder", "dont_ask"), false)
 assert.equal(extraNeedsApproval("create_reminder", "review"), true)
 assert.equal(extraNeedsApproval("get_my_inbox", "always_ask"), false)
+assert.equal(extraNeedsApproval("export_file", "always_ask"), false)
+assert.equal(extraNeedsApproval("get_sheet", "always_ask"), false)
 assert.ok(EXTRA_WRITE_ACTIONS.includes("send_message") && !EXTRA_WRITE_ACTIONS.includes("get_my_inbox"))
 assert.ok(isExtraAction("read_conversation") && !isExtraAction("create_task") && !isExtraAction("toString"))
 assert.equal(extraStepLabel("send_message", "Rina"), "Writing a message to Rina")
