@@ -106,6 +106,8 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     /// move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. Builds before it
     /// ignore the field and draw the diff rows; the server refuses their Apply ("open on the latest app or the web").
     let bookingChange: GideonBookingChange?
+    let taskDelete: GideonTaskDelete?
+    let taskTarget: GideonTaskTarget?
     struct Row: Decodable, Sendable, Equatable {
         let field: String?
         let from: GideonLoose?
@@ -547,18 +549,21 @@ enum GideonClient {
     /// Apply or discard a proposed change. The server re-checks access at the moment of applying, and a
     /// double tap applies once (409 "Already decided" still carries the proposal).
     /// `booking`: the room and slot picked on a book_room card (required to apply one).
-    static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil) async throws -> GideonProposal? {
+    static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil,
+                       confirmTaskId: String? = nil, task: GideonTaskChoice? = nil) async throws -> GideonProposal? {
         var request = authed("/api/gideon/proposals/\(enc(proposalId))")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["decision": apply ? "apply" : "discard"]
         if let booking { body["booking"] = booking.body }
+        if apply, let confirmTaskId { body["confirm"] = ["taskId": confirmTaskId] }
+        if apply, let task { body["task"] = task.body }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
         let env = try? JSONDecoder().decode(GideonProposalEnvelope.self, from: data)
-        if (200..<300).contains(http.statusCode) || [409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
+        if (200..<300).contains(http.statusCode) || [400, 403, 409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
         throw APIError.http(http.statusCode, env?.error)
     }
 
@@ -1014,9 +1019,10 @@ final class GideonChat {
     }
 
     /// Apply or discard a proposal shown in the thread; the turn shows the result.
-    func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil) async {
+    func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil, task: GideonTaskChoice? = nil) async {
         do {
-            if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking) {
+            if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking,
+                                                          confirmTaskId: proposal.action == "delete_task" ? proposal.taskDelete?.taskId : nil, task: task) {
                 replace(updated)
                 if apply, let e = updated.error, !e.isEmpty { error = e }
             }

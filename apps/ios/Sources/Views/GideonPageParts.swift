@@ -24,6 +24,7 @@ enum GideonStepText {
         case "search_docs": return has ? String(format: T("Searching docs for “%@”"), a) : T("Searching docs")
         case "get_doc": return has ? String(format: T("Reading doc %@"), a) : T("Reading a doc")
         case "create_task": return has ? String(format: T("Creating task %@"), a) : T("Creating a task")
+        case "delete_task": return has ? String(format: T("Deleting task %@"), a) : T("Deleting a task")
         case "update_task": return has ? String(format: T("Updating task %@"), a) : T("Updating a task")
         case "add_task_comment": return has ? String(format: T("Commenting on %@"), a) : T("Commenting on a task")
         case "create_document": return has ? String(format: T("Writing doc %@"), a) : T("Writing a doc")

@@ -222,8 +222,8 @@ struct GideonPanel: View {
                     GideonChatsSheet { id in Task { await chat.openChat(id) } }
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                    Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
-                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking) }
+                    Button(d.apply ? T(d.proposal.action == "delete_task" ? "Delete task" : "Apply") : T("Discard"), role: d.proposal.action == "delete_task" && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
+                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
                 } message: { d in Text(d.message) }
@@ -763,7 +763,15 @@ struct GideonPanel: View {
     /// A room booking has its own card with the room picker (GideonBookRoomCard), and so does moving or cancelling
     /// one (GideonBookingChangeCard, 16 Oct 2026); every other change is a diff.
     @ViewBuilder private func proposalCard(_ p: GideonProposal) -> some View {
-        if p.action == "book_room", let b = p.booking {
+        if p.action == "delete_task", let task = p.taskDelete {
+            GideonDeleteTaskCard(proposal: p, task: task,
+                                onApply: { decision = GideonDecision(proposal: p, apply: true) },
+                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if p.action == "create_task", let target = p.taskTarget, p.isPending {
+            GideonCreateTaskCard(proposal: p, target: target,
+                                 onApply: { choice in decision = GideonDecision(proposal: p, apply: true, task: choice) },
+                                 onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if p.action == "book_room", let b = p.booking {
             GideonBookRoomCard(proposal: p, booking: b,
                                onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
@@ -1383,6 +1391,7 @@ struct GideonDecision: Identifiable {
     let apply: Bool
     /// book_room / move_room_booking: the room and slot picked on the card; cancel_room_booking: the booking id.
     var booking: GideonBookingChoice? = nil
+    var task: GideonTaskChoice? = nil
     var id: String { proposal.id + (apply ? "-apply" : "-discard") }
     var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
     /// The picked room for a booking (the server's summary was written before the room was chosen).
