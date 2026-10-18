@@ -4,6 +4,7 @@ struct GideonActionCard: View {
     let proposal: GideonProposal
     let action: GideonToolAction
     var readOnly = false
+    var onOpen: ((GideonRef) -> Void)? = nil
     let onApply: () -> Void
     let onDiscard: () -> Void
     private var applyLabel: String { AppLanguage.shared.gideonActionApply(action) }
@@ -46,7 +47,10 @@ struct GideonActionCard: View {
                     .font(NXFont.text(12, .medium)).foregroundStyle(proposal.status == "FAILED" ? NX.danger : NX.mutedFg)
                 if proposal.status == "APPLIED" {
                     if let link = proposal.extra?.link {
-                        Button(T("Open")) { if let url = URL(string: link, relativeTo: Config.baseURL)?.absoluteURL { router.open(url) } }
+                        Button(T("Open")) { if let url = URL(string: link, relativeTo: Config.baseURL)?.absoluteURL {
+                            if let ref = GideonLinkTarget.ref(for: url), ["doc", "task"].contains(ref.kind), let onOpen { onOpen(ref) }
+                            else { router.open(url) }
+                        } }
                     }
                     if let note = proposal.extra?.note { Text(note).font(NXFont.text(12)).textSelection(.enabled) }
                 }

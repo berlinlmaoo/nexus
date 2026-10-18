@@ -825,7 +825,7 @@ struct GideonPanel: View {
                                     onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else if let action = GideonToolAction.get(p.action) {
             GideonActionCard(proposal: p, action: action, readOnly: reviewTurns != nil,
-                             onApply: { decision = GideonDecision(proposal: p, apply: true) },
+                             onOpen: { openRef = $0 }, onApply: { decision = GideonDecision(proposal: p, apply: true) },
                              onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else {
             changeProposalCard(p)
