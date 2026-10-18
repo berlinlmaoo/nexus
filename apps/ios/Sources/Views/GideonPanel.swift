@@ -230,11 +230,11 @@ struct GideonPanel: View {
                 .background { Color.clear.alert(T("Delete this chat?"), isPresented: $confirmDeleteChat) {
                     Button(T("Delete"), role: .destructive) { Task { await chat.deleteCurrent() } }
                     Button(T("Cancel"), role: .cancel) {}
-                } message: { Text(T("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")) } }
+                } message: { Text(T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")) } }
                 .background { Color.clear.alert(T("Clear every GIDEON chat?"), isPresented: $confirmClearAll) {
                     Button(T("Clear history"), role: .destructive) { Task { await chat.clearAll() } }
                     Button(T("Cancel"), role: .cancel) {}
-                } message: { Text(T("Every conversation, message and attached file is deleted for good. Tasks and docs GIDEON made stay.")) } }
+                } message: { Text(T("Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.")) } }
         }
         .task { if let p = try? await GideonClient.prefs() { assistantName = p.assistantName ?? "" } }
         .onAppear { openOnce() }
@@ -1441,7 +1441,7 @@ struct GideonChatsSheet: View {
                     }
                 }
                 Button(T("Cancel"), role: .cancel) {}
-            } message: { _ in Text(T("Its messages are deleted for you on every device.")) }
+            } message: { _ in Text(T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")) }
             .alert(T("Couldn't delete the chat"), isPresented: Binding(get: { deleteFailure != nil }, set: { if !$0 { deleteFailure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(deleteFailure ?? "") }

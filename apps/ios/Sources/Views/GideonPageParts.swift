@@ -292,7 +292,7 @@ struct GideonChatListColumn: View {
             Button(T("Cancel"), role: .cancel) {}
         } message: { r in
             let name = GideonChatTitle.text(r.title).map { "“\($0)”. " } ?? ""
-            Text(name + T("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay."))
+            Text(name + T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted."))
         }
         .background { Color.clear.alert(T("Couldn't do that"), isPresented: Binding(get: { actionFailure != nil }, set: { if !$0 { actionFailure = nil } })) {
             Button("OK", role: .cancel) {}

@@ -11,6 +11,9 @@ extension AppLanguage {
         "This file is empty. Choose another file.": "File ini kosong. Pilih file lain.",
         "GIDEON is AI and can make mistakes. Check important information.": "GIDEON adalah AI dan bisa keliru. Periksa lagi informasi penting.",
         "GIDEON chats can be reviewed by members of the Board of Directors for work purposes.": "Chat GIDEON bisa ditinjau oleh anggota BoD untuk keperluan kerja.",
+        // Deleting a GIDEON chat is a soft delete kept 90 days for review (server, 18 Oct 2026); wording as on the web
+        "Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
+        "Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.": "Dihapus dari daftar chatmu. Disimpan 90 hari untuk peninjauan BoD, lalu dihapus.",
         // Mac Home Attendance card: no check-in on the Mac (M-07)
         "Use the NEXUS app on your phone to check in": "Pakai app NEXUS di HP-mu untuk check-in",
         // Leaderboard podium, a step several people share (web "{n} tied")
