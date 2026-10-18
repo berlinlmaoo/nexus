@@ -14,6 +14,7 @@ In progress. No APK publication, version change, push or production access.
 - Chat documents: server endpoint exists; Android file picker validates the same document extensions and 25 MB limit, sends attachment metadata, renders file cards and opens/downloads through the authenticated file client.
 - Third green step: 750 JVM tests and assembleDebug pass. Corrected local build invocation to pass hostname only to nexusDevHost (the app adds port 8443). No real host is committed.
 - Remaining: Pixel_7 DEV logic flows and screenshot tour, and any device defects found (estimate 2–3 hours including re-shoots).
+- Local tour companion `scripts/ui-tour-local.mjs` targets Pixel_7 explicitly, shares the API runner's one login through a consumed debug-private file, follows the iOS screen manifest, and records missing fixtures/native screens as skips. Generic debug routes cover Legal/detail screens. 750 JVM tests + debug build remain green.
 
 | QA area | Result |
 |---|---|

@@ -100,6 +100,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
         when (tour.step) {
+            "session" -> container.appScope.launch {
+                // Reuse the QA runner's single login. This file is written through run-as into the
+                // debug app's private directory, consumed once, and never put into intent extras/logs.
+                val file = java.io.File(filesDir, "tour-login.json")
+                if (!BuildConfig.DEBUG || !tour.wantsDev || id.znetworks.nexus.core.net.NexusConfig.env != id.znetworks.nexus.core.net.ServerEnv.DEV) return@launch
+                try {
+                    val login = id.znetworks.nexus.core.net.NexusJson.decodeFromString(id.znetworks.nexus.feature.auth.LoginResponse.serializer(), file.readText())
+                    container.auth.signedInWith(login)
+                    tour.status("signed-in")
+                } catch (_: Exception) { tour.status("session-import-failed") }
+                finally { file.delete() }
+            }
             "signout" -> {
                 if (container.sessionStore.current != null) container.auth.signOut()
                 container.appScope.launch { kotlinx.coroutines.delay(2500); tour.status("signed-out") }
