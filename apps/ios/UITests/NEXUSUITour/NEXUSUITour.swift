@@ -535,6 +535,9 @@ final class NEXUSUITour: XCTestCase {
                 guard button.waitForExistence(timeout: 15) else {
                     return "wrong-screen: \(screen.id) (no \"\(Self.labels(step)[0])\" button found)"
                 }
+                #if targetEnvironment(macCatalyst)
+                _ = bringToFront(app)
+                #endif
                 revealNativeTab(button)
                 guard app.windows.firstMatch.frame.intersects(button.frame), button.isHittable else { return "wrong-screen: \(screen.id) (button is offscreen: \(Self.labels(step)[0]))" }
                 // A sheet over it (the button is no longer hittable), a chip now selected, or a new picture.
@@ -574,12 +577,26 @@ final class NEXUSUITour: XCTestCase {
             switch action.kind {
             case "tap":
                 let button = app.buttons.matching(match).firstMatch
+                let popup = app.popUpButtons.matching(match).firstMatch
                 let field = app.textViews.matching(textMatch).firstMatch
                 let text = app.staticTexts.matching(match).firstMatch
                 // Catalyst menus may expose a native pop-up control rather than a Button.
                 let other = app.descendants(matching: .any).matching(match).firstMatch
-                let target = button.exists ? button : field.exists ? field : text.exists ? text : other
-                guard target.waitForExistence(timeout: 15), target.isHittable else { return "wrong-screen: missing interaction target \(action.label)" }
+                let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : other
+                let exists = target.waitForExistence(timeout: 15)
+                var usable = exists && target.isHittable
+                #if targetEnvironment(macCatalyst)
+                // Catalyst can report a visible native menu as non-hittable, or return an
+                // infinite activation point. Its on-screen frame still gives a real mouse point.
+                if exists, target.elementType == .popUpButton {
+                    let frame = target.frame
+                    usable = !frame.isEmpty && !frame.isInfinite && app.windows.firstMatch.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+                }
+                #endif
+                guard usable else {
+                    persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-missing-target.txt")
+                    return "wrong-screen: missing interaction target \(action.label)"
+                }
                 press(target)
                 pause(1)
             case "type":
@@ -628,6 +645,7 @@ final class NEXUSUITour: XCTestCase {
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
             case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
+            case "tree": persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-\(action.label).txt")
             case "checkValue":
                 let target = app.textViews.matching(identifier: action.label).firstMatch
                 guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
@@ -768,7 +786,11 @@ final class NEXUSUITour: XCTestCase {
     @MainActor
     private func press(_ element: XCUIElement) {
         #if targetEnvironment(macCatalyst)
-        element.click()
+        if element.elementType == .popUpButton {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        } else {
+            element.click()
+        }
         #else
         element.tap()
         #endif
