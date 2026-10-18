@@ -11,7 +11,7 @@ export const ID_GIDEON_PERF: Record<string, string> = {
   "{a} of {b} GB in VRAM": "{a} dari {b} GB di VRAM",
   "{f} of {n}": "{f} dari {n}",
   "{n} in 24 h": "{n} dalam 24 jam",
-  "{n} over 24 h": "{n} rata-rata 24 jam",
+  "Avg {n} over 24 h": "Rata-rata {n} dalam 24 jam",
   "{n} tokens/s": "{n} token/dtk",
   "{n}/s": "{n}/dtk",
   "{p} of input tokens came from the cache in 24 h": "{p} token input berasal dari cache dalam 24 jam",

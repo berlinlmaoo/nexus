@@ -188,7 +188,7 @@ function TierCard({ tier }: { tier: PerfTier }) {
         <Metric label={t("Slowest 5% (p95)")} value={ms(tier.p95Ms)} />
         <Metric label={t("Error rate")} value={tier.errorRate == null ? "—" : pct(tier.errorRate, 1)} warn={errorHigh} hint={tier.failures15m ? L.tn(tier.failures15m, "1 failed", "{n} failed") : undefined} />
         <Metric label={t("Answering now")} value={formatCount(tier.inFlight)} />
-        <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? formatCount(tier.avgCredits15m, 1) : "—"} hint={tier.id !== "experimental" && tier.avgCredits15m == null && tier.avgCredits24h != null ? t("{n} over 24 h", { n: formatCount(tier.avgCredits24h, 1) }) : undefined} />
+        <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? formatCount(tier.avgCredits15m, 1) : "—"} hint={tier.id !== "experimental" && tier.avgCredits15m == null && tier.avgCredits24h != null ? t("Avg {n} over 24 h", { n: formatCount(tier.avgCredits24h, 1) }) : undefined} />
       </dl>
       <div className="mt-auto border-t border-border/70 pt-2 text-xs text-muted-foreground">
         {tier.answers15m === 0 && tier.inFlight === 0
@@ -213,7 +213,7 @@ function Meter({ icon: Icon, label, value, sub, frac, warn }: { icon: typeof Cpu
   return (
     <div className="min-w-0 rounded-xl border border-border/70 bg-background/60 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Icon className="h-3.5 w-3.5" />{label}</div>
-      <div className={cn("mt-1 font-display text-xl font-bold tabular-nums", warn && "text-destructive")}>{value}</div>
+      <div className={cn("mt-1 whitespace-nowrap font-display text-lg font-bold tabular-nums sm:text-xl", warn && "text-destructive")}>{value}</div>
       {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
         <div className={cn("h-full rounded-full transition-[width] duration-700 ease-out", warn ? "bg-destructive" : "bg-sidebar-primary")} style={{ width: `${Math.round(Math.max(0, Math.min(1, frac ?? 0)) * 100)}%` }} />
@@ -304,12 +304,12 @@ function Model0Panel({ d }: { d: PerfSummary }) {
               <div className="text-sm text-muted-foreground">{t("None yet.")}</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-sm">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-[11px] text-muted-foreground">
                       <th className="py-1 pr-3 font-medium">{t("Time")}</th>
                       <th className="py-1 pr-3 text-right font-medium">{t("Tokens/s")}</th>
-                      <th className="py-1 pr-3 text-right font-medium">{t("Reading prompt")}</th>
+                      <th className="hidden py-1 pr-3 text-right font-medium sm:table-cell">{t("Reading prompt")}</th>
                       <th className="py-1 pr-3 text-right font-medium">{t("Tokens out")}</th>
                       <th className="py-1 text-right font-medium">{t("Took")}</th>
                     </tr>
@@ -319,7 +319,7 @@ function Model0Panel({ d }: { d: PerfSummary }) {
                       <tr key={r.at} className="border-t border-border/60 tabular-nums">
                         <td className="py-1.5 pr-3 text-muted-foreground">{timeLabel(r.at, L)}</td>
                         <td className="py-1.5 pr-3 text-right font-semibold">{r.evalTps != null ? formatCount(r.evalTps, 1) : "—"}</td>
-                        <td className="py-1.5 pr-3 text-right text-muted-foreground">{r.promptTps != null ? t("{n}/s", { n: formatCount(r.promptTps) }) : "—"}</td>
+                        <td className="hidden py-1.5 pr-3 text-right text-muted-foreground sm:table-cell">{r.promptTps != null ? t("{n}/s", { n: formatCount(r.promptTps) }) : "—"}</td>
                         <td className="py-1.5 pr-3 text-right">{r.outTokens != null ? formatCount(r.outTokens) : "—"}</td>
                         <td className="py-1.5 text-right">{ms(r.totalMs)}</td>
                       </tr>
@@ -378,9 +378,9 @@ function Charts({ d }: { d: PerfSummary }) {
     <section aria-label={t("Last 24 hours")} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <ChartCard title={t("Questions per tier")} sub={t("Per hour, last 24 h")} empty={anyQ ? null : noData}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barCategoryGap={2}>
+          <BarChart data={rows} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap={2}>
             {grid}{x}
-            <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} allowDecimals={false} tickFormatter={(v: number) => formatCount(v)} />
+            <YAxis tick={axisTick} tickLine={false} axisLine={false} width={36} allowDecimals={false} tickFormatter={(v: number) => formatCount(v)} />
             <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} contentStyle={tooltipStyle} formatter={(v: number | string, n: string) => [formatCount(Number(v)), n]} />
             {legend}
             {PERF_TIERS.map((id, i) => (
@@ -391,7 +391,7 @@ function Charts({ d }: { d: PerfSummary }) {
       </ChartCard>
       <ChartCard title={t("Typical answer time")} sub={t("p50 per hour, seconds")} empty={anyQ ? null : noData}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+          <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => formatCount(v)} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string, n: string) => [`${formatCount(Number(v), 1)} s`, n]} />
@@ -404,7 +404,7 @@ function Charts({ d }: { d: PerfSummary }) {
       </ChartCard>
       <ChartCard title={t("Credits spent")} sub={t("{n} in 24 h", { n: formatCount(totalCredits) })} empty={anyCredits ? null : t("No credits spent in the last 24 h.")}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+          <BarChart data={rows} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => formatCount(v)} />
             <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} contentStyle={tooltipStyle} formatter={(v: number | string) => [formatCount(Number(v)), t("Credits")]} />
@@ -414,7 +414,7 @@ function Charts({ d }: { d: PerfSummary }) {
       </ChartCard>
       <ChartCard title={t("Prompt cache hits")} sub={cache24 != null ? t("{p} of input tokens came from the cache in 24 h", { p: pct(cache24) }) : t("Share of input tokens served from the cache")} empty={anyCache ? null : noData}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+          <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string) => [`${formatCount(Number(v), 1)}%`, t("Cache hits")]} />
