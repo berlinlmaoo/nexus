@@ -42,6 +42,9 @@ export const ID_GIDEON: Record<string, string> = {
   "1 step": "1 langkah",
   "{n} steps": "{n} langkah",
   "1 failed": "1 gagal",
+  "1 restart": "1 kali restart",
+  "{n} restarts": "{n} kali restart",
+  "Restarts aren't counted as errors.": "Restart tidak dihitung sebagai error.",
 
   // Approval mode
   "Before GIDEON changes something": "Sebelum GIDEON mengubah sesuatu",

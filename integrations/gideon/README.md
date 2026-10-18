@@ -10,6 +10,7 @@ privately with the operations runbook, not here.
 | `plugin/` | Tool plugin for the agent runtime: every tool calls `POST /api/gideon/tools` on NEXUS as the asking user |
 | `shim/codex-oracle-shim.js` | HTTP shim NEXUS calls (`GET /health`, `POST /chat`, `POST /chat-stream`); picks the model tier |
 | `shim/gideon-stream-runner.py` | Token-by-token streaming for `/chat-stream` (NDJSON) |
+| `shim/systemd/graceful-restart.conf` | systemd drop-in for the shim unit: `KillMode=mixed`, `TimeoutStopSec=460` (graceful restart) |
 
 ## Environment (values are never stored here)
 
@@ -28,6 +29,17 @@ Shim env:
 Check that the tool path works, not just the shim: calling `call_nexus('list_projects', {'limit': 1})` from
 `plugin/client.py` must answer `{"ok":true,...}`. A 401 means `NEXUS_BASE_URL` points at the wrong service;
 `error code: 1010` means the request lost its User-Agent and was refused by the CDN.
+
+## Restarting the shim
+
+The shim drains on SIGTERM: answers in flight finish (hosted tiers up to `GIDEON_DRAIN_MS`, default 120 s after the
+signal; Model 0 up to its own timeout), new requests get `503 {"error":"shim_restarting"}` with `x-gideon-shim:
+restarting` and `Retry-After`, and `GET /health` answers `x-gideon-shim: draining` plus `x-gideon-shim-started`. A
+run still going at its cap ends with the stream line `{"t":"error","c":"shim_restart"}` (or `503` with
+`x-gideon-shim: stopped` on `/chat`). NEXUS retries a restarting or unreachable shim once and records what is still
+lost as `shim_restart`, which Control Room > GIDEON > Performance shows as "restarts", not as errors
+(`src/lib/gideon-shim-retry.ts`). The unit needs the drop-in in `shim/systemd/`, or systemd's SIGTERM still reaches
+the children and its 90 s stop timeout cuts the drain short. A restart therefore waits for the answers in flight.
 
 ## Rules that must not be broken
 

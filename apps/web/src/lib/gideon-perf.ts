@@ -19,6 +19,9 @@ export type PerfTier = {
   inFlight: number;
   answers15m: number;
   failures15m: number;
+  /** Answers lost to a shim restart (not errors; older servers omit it). */
+  restarts15m?: number;
+  restarts24h?: number;
   errorRate: number | null;
   p50Ms: number | null;
   p95Ms: number | null;

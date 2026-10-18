@@ -195,6 +195,10 @@ function TierCard({ tier }: { tier: PerfTier }) {
         {tier.answers15m === 0 && tier.inFlight === 0
           ? t("No answers in the last 15 min · {n} in 24 h", { n: formatCount(tier.answers24h) })
           : t("{a} answers in 15 min · {n} in 24 h", { a: formatCount(tier.answers15m), n: formatCount(tier.answers24h) })}
+        {/* Answers lost to a shim restart: shown apart, never counted as errors. */}
+        {(tier.restarts15m ?? 0) > 0 && (
+          <span title={t("Restarts aren't counted as errors.")}>{" · "}{L.tn(tier.restarts15m ?? 0, "1 restart", "{n} restarts")}</span>
+        )}
       </div>
     </div>
   );
