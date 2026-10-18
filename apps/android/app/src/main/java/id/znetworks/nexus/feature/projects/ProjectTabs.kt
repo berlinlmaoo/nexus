@@ -319,8 +319,8 @@ private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
     "URGENT" -> Color(0xFFF43F5E)
     "HIGH" -> Color(0xFFF97316)
     "MEDIUM" -> Color(0xFF0EA5E9)
-    "LOW" -> Color(0xFF8B5CF6)
-    else -> Color(0xFF14B8A6)
+    "LOW" -> Color(0xFF10B981)
+    else -> Color(0xFF9CA3AF)
 }
 
 /**

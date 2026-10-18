@@ -78,7 +78,8 @@ fun priorityColor(p: String?): Color = when (p.orEmpty().uppercase()) {
     "URGENT" -> Nx.colors.danger
     "HIGH" -> Nx.colors.priorityHighText
     "MEDIUM" -> Nx.colors.blue
-    else -> Nx.colors.mutedFg   // LOW is neutral (AVATARS-PRIORITY)
+    "LOW" -> Nx.colors.success
+    else -> Nx.colors.mutedFg
 }
 
 @Composable

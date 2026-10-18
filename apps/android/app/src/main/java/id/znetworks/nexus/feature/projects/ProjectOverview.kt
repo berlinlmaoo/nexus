@@ -387,7 +387,7 @@ private fun PriorityCard(m: OverviewMetrics, onDrill: (OverviewDrill) -> Unit) {
         Column(Modifier.padding(vertical = 6.dp)) {
             OverviewLogic.PRIORITIES.filter { it != "NONE" || (m.byPriority["NONE"] ?: 0) > 0 }.forEach { k ->
                 val n = m.byPriority[k] ?: 0
-                val tone = if (k == "NONE") c.mutedFg.copy(alpha = 0.4f) else if (k == "LOW") c.mutedFg.copy(alpha = 0.6f) else priorityColor(k)
+                val tone = priorityColor(k)
                 Row(Modifier.fillMaxWidth().clickable(enabled = n > 0) { onDrill(OverviewDrill(priority = k)) }.heightIn(min = 44.dp).padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.width(96.dp)) {
