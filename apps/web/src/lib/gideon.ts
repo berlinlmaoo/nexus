@@ -80,6 +80,11 @@ export type GideonProposal = {
   taskDelete?: GideonTaskDeleteView | null;
   /** create_task without a project (18 Oct 2026): the project picker (projects the person can edit). */
   taskTarget?: GideonTaskTargetView | null;
+  /**
+   * The 18 Oct 2026 package only (send_message, create_reminder, submit_leave_request, …): the long text in full and,
+   * once applied, where the result is. Present (even null) only on those actions; their card is GideonActionCard.
+   */
+  extra?: { preview: string | null; link: string | null } | null;
 };
 export type GideonTaskTargetProject = { id: string; name: string; icon: string | null; color: string | null };
 /** Server gideon-runs.ts GideonTaskTargetView. */
@@ -387,7 +392,7 @@ export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] 
  * and slot picked on a book_room card (required to apply one); on a move card the same plus `bookingId`, on a
  * cancel card `{ bookingId }` alone (required to apply those).
  */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, extra?: { confirm?: { taskId: string }; task?: GideonTaskChoice }): Promise<GideonProposal> {
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, extra?: { confirm?: { taskId?: string; proposalId?: string }; task?: GideonTaskChoice }): Promise<GideonProposal> {
   try {
     // `confirm`: a delete_task card sends the task id back; `task`: a create card's picked project, column, PIC, due
     // (each required to apply that kind).

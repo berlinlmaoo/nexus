@@ -3,6 +3,10 @@ import os
 from .humanize import humanize_json
 from .client import call_nexus, check_available
 from .schemas import SCHEMAS
+from .schemas_extra import EXTRA_SCHEMAS, EXTRA_ACTIONS
+
+# The 18 Oct 2026 package (inbox, chat, reminders, …): schemas_extra.py.
+SCHEMAS = {**SCHEMAS, **EXTRA_SCHEMAS}
 
 _ACTION_BY_TOOL = {
     "nexus_list_projects": "list_projects",
@@ -45,6 +49,7 @@ _ACTION_BY_TOOL = {
     # Menutup tiket yang sudah tidak menyisakan apa pun. Server yang memverifikasi (ledger kosong,
     # jatah day-off utuh, tidak ada usulan menunggu) dan menolak kalau tidak; ini bukan hak model.
     "nexus_resolve_ticket": "resolve_ticket",
+    **EXTRA_ACTIONS,
 }
 
 

@@ -37,6 +37,14 @@ provides_tools:
   # Read, added 18 Oct 2026: Pipeline deals and Legal documents (loaded on demand)
   - nexus_search_deals
   - nexus_search_legal_documents
+  # Added 18 Oct 2026 (owner-approved package, schemas_extra.py): inbox, chat, reminders
+  - nexus_get_my_inbox
+  - nexus_list_conversations
+  - nexus_read_conversation
+  - nexus_send_message
+  - nexus_create_reminder
+  - nexus_list_reminders
+  - nexus_cancel_reminder
   # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
   # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
   - nexus_get_attendance_day

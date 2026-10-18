@@ -623,6 +623,10 @@ export function initializeSocketServer(
     if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("gideon-credits", { summary: data.summary ?? null })
   })
 
+  eventBus.on(BUS_EVENTS.REMINDERS_CHANGED, (data: { userId: string; id: string }) => {
+    if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("reminders-changed", { id: data.id ?? null })
+  })
+
   // GIDEON tier availability (18 Oct 2026): the same public fact for everyone, so it goes to every socket.
   eventBus.on(BUS_EVENTS.GIDEON_TIERS, (data: { tiers: unknown }) => {
     io.emit("gideon-tiers", { tiers: data?.tiers ?? null })

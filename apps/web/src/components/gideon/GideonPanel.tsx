@@ -21,6 +21,7 @@ import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
 import { GideonDeleteTaskCard } from "./GideonDeleteTaskCard";
 import { GideonCreateTaskCard } from "./GideonCreateTaskCard";
+import { GideonActionCard, extraStepLabel } from "./GideonActionCard";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
@@ -97,7 +98,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "cancel_room_booking": return a ? t("Cancelling booking {name}", { name: a }) : t("Cancelling a booking");
     case "delete_task": return a ? t("Deleting task {name}", { name: a }) : t("Deleting a task");
     case "vision_analyze": case "vision": return t("Looking at the image");
-    default: return s.label || s.tool;
+    default: return extraStepLabel(s.tool, a, t) ?? (s.label || s.tool);
   }
 }
 
@@ -1547,6 +1548,8 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
   if (proposal.action === "delete_task" && proposal.taskDelete) return <GideonDeleteTaskCard proposal={proposal} onDecided={onDecided} />;
   // A new task with no project named: the project picker (+ column, PIC, due), Apply once a project is picked.
   if (proposal.action === "create_task" && proposal.taskTarget && proposal.status === "PENDING") return <GideonCreateTaskCard proposal={proposal} onDecided={onDecided} />;
+  // The 18 Oct 2026 package (message, reminder, leave, …): its own card, which sends the confirm the server wants.
+  if (proposal.extra !== undefined) return <GideonActionCard proposal={proposal} onDecided={onDecided} />;
   return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
 }
 
@@ -1615,6 +1618,21 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
     case "move_room_booking": return t("Move a booking");
     case "cancel_room_booking": return t("Cancel a booking");
     case "delete_task": return t("Delete task");
+    case "send_message": return t("Send a message");
+    case "create_reminder": return t("Set a reminder");
+    case "cancel_reminder": return t("Cancel a reminder");
+    case "submit_leave_request": return t("Submit a request");
+    case "decide_attendance_request": return t("Decide a request");
+    case "bulk_update_tasks": return t("Change several tasks");
+    case "add_subtasks": return t("Add subtasks");
+    case "move_deal_stage": return t("Move a deal");
+    case "add_payment_term": return t("Add a payment term");
+    case "log_outlet_sales": return t("Enter outlet sales");
+    case "log_social_media_day": return t("Enter social media numbers");
+    case "create_legal_draft": return t("Create a legal draft");
+    case "create_vault_share_link": return t("Create a share link");
+    case "edit_doc": return t("Edit a doc");
+    case "draft_announcement": return t("Post an announcement");
     default: return action;
   }
 }

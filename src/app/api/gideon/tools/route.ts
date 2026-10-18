@@ -41,6 +41,7 @@ import { listDocuments } from '@/lib/legal/archive'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
+import { extraTool, runExtraTool } from '@/lib/gideon-tools'
 
 type GideonAction =
   | 'list_projects'
@@ -1419,6 +1420,9 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
     case 'resolve_ticket':
       return resolveTicketByGideon(actor, input)
     default:
+      // The 18 Oct 2026 package (inbox, chat, reminders, …): lib/gideon-tools. A write there runs only as an Apply
+      // or, for approval "modes", straight from the model when no card is needed (needsApproval said so).
+      if (extraTool(action)) return runExtraTool(actor, action, input, { approved, direct: !approved })
       throw new UnknownActionError(`Unknown GIDEON tool action: ${action}`)
   }
 }
@@ -1478,7 +1482,8 @@ export async function POST(req: Request) {
     }
   }
 
-  const arg = await stepArg(action, input)
+  const extraArg = extraTool(action)?.stepArg
+  const arg = extraArg ? await Promise.resolve(extraArg(input)).catch(() => null) : await stepArg(action, input)
   const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
   const label = stepLabel(action, arg)
   publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'running' } })
@@ -1503,7 +1508,7 @@ export async function POST(req: Request) {
     }
 
     if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
-      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input, { contextProjectId: run.projectId ?? null })
+      const { proposal, due, note: extraNote } = await proposeWrite(auth.actor, run.id, action, input, { contextProjectId: run.projectId ?? null })
       const picker = action === 'create_task' && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true
       const pre = picker ? ((proposal.input as { taskTarget?: { preselectedProjectName?: string | null } }).taskTarget?.preselectedProjectName ?? null) : null
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
@@ -1516,7 +1521,9 @@ export async function POST(req: Request) {
         summary: proposal.summary,
         // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
         ...(due ? { due } : {}),
-        note: action === 'move_room_booking'
+        note: extraNote
+          ? extraNote
+          : action === 'move_room_booking'
           ? 'NOT moved yet. It is waiting for the person on the card below, which shows the booking before and after (and every room with whether it is free then) and where they tap Apply; tell them so, do not say it is moved.'
           : action === 'cancel_room_booking'
           ? 'NOT cancelled yet. It is waiting for the person to confirm it on the card below; tell them so, do not say it is cancelled.'
@@ -1667,7 +1674,7 @@ async function userNames(ids: string[]): Promise<string> {
 }
 
 /** `store`: facts resolved when describing that the proposal keeps in its input (a booking's "before"). */
-type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown> }
+type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown>; note?: string }
 
 /**
  * Check the write exactly as far as it can be checked without making it (access, the task and list it
@@ -1681,6 +1688,21 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   let taskId: string | null = null
   let dueText: string | null | undefined
   let store: Record<string, unknown> | undefined
+
+  // The 18 Oct 2026 package describes its own writes (lib/gideon-tools); `preview` (a long text shown in full on
+  // the card) travels in the stored input.
+  const extra = extraTool(action)
+  if (extra?.describe) {
+    const d = await extra.describe(actor, input)
+    return {
+      summary: d.summary,
+      diff: d.diff,
+      projectId: d.projectId ?? null,
+      taskId: d.taskId ?? null,
+      store: { ...(d.store ?? {}), ...(d.preview ? { preview: d.preview.slice(0, 8000) } : {}) },
+      note: d.note,
+    }
+  }
 
   if (action === 'create_task' && createTaskNeedsProject(input)) {
     // No project named (owner, 18 Oct 2026): the card gets a project picker — only projects this person can edit —
@@ -1872,7 +1894,7 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
       taskId: d.taskId,
     },
   })
-  return { proposal, due: d.due ?? null }
+  return { proposal, due: d.due ?? null, note: d.note ?? null }
 }
 
 /** The fields of an update_task that a task not created yet can take into its create proposal. */
