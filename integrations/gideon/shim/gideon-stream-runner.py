@@ -24,8 +24,9 @@ Cost (owner, 18 Oct 2026 — "cheaper per answer, not dumber"):
     plugin tool stays deferred behind Hermes' tool_search / tool_describe / tool_call bridge, whose
     description lists each one by name, so the model can still load any of them mid-answer.
   - GIDEON_CACHE_SCOPE: one prompt-cache scope for every run of this instance. Hermes derives the cache key
-    from the session id, and a one-shot run is a new session every time, so the identical system prompt +
-    tool schemas never hit the provider cache across questions. Same scope = same key = cached prefix (10%).
+    (and the Codex `session_id` header, which is what that backend actually routes its cache by) from the
+    session id, and a one-shot run is a new session every time, so the identical system prompt + tool
+    schemas never hit the provider cache across questions. Same scope = cached prefix (10% price).
   - Router-miss safety net: an answer that says it cannot / has no tool, from a run that never loaded a
     deferred tool, is retried ONCE with every tool loaded. The first attempt's text is withdrawn with a
     `reset` line; a {"t":"router_miss"} line tells the shim to log it.
@@ -90,6 +91,20 @@ def _patch_hermes(eager: set, cache_scope: str) -> None:
     if cache_scope:
         import agent.chat_completion_helpers as cch
         cch._prompt_cache_scope_for_agent = lambda _agent: cache_scope
+        # The ChatGPT Codex backend routes its prompt cache by the `session_id` HEADER, not by prompt_cache_key
+        # (measured 18 Oct 2026: same key + per-run session_id = 0 cached; same session_id = 6272 of 6448 cached on
+        # the next run). Requests are store=false and carry their whole input, so the header only picks the cache.
+        import agent.transports.codex as cx
+        build = cx.ResponsesApiTransport.build_kwargs
+
+        def build_kwargs(self, *a, **k):
+            kw = build(self, *a, **k)
+            headers = kw.get("extra_headers")
+            if isinstance(headers, dict) and "session_id" in headers:
+                headers["session_id"] = cache_scope
+            return kw
+
+        cx.ResponsesApiTransport.build_kwargs = build_kwargs
 
 
 _STATE: dict = {}
