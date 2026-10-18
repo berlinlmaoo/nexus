@@ -554,7 +554,7 @@ private fun DescriptionCard(t: TaskDetail, vm: TaskDetailViewModel) {
         if (draft != original) Row {
             TextButton(onClick = { draft = original; base = original }) { Text(stringResource(R.string.cancel)) }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { vm.setDescription(draft, base) { base = draft } }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+            TextButton(onClick = { vm.setDescription(draft, base, onConflict = { latest -> base = latest }) { base = draft } }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
         }
     }
 }

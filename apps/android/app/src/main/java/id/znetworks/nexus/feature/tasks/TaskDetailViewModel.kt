@@ -120,8 +120,17 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
     fun setDue(d: LocalDate?) = patch("dueDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
     fun setStart(d: LocalDate?) = patch("startDate" to (d?.let { JsonPrimitive(it.toString()) } ?: JsonNull))
-    fun setDescription(text: String, baseText: String, onDone: () -> Unit) = act(R.string.td_update_failed) {
-        api.saveDescription(taskId, text, baseText)
+    /**
+     * On 409 DESCRIPTION_CHANGED the draft stays and [onConflict] gets the stored text as the new base, so the
+     * next Save (after the warning) is checked against what is stored now instead of failing again forever.
+     */
+    fun setDescription(text: String, baseText: String, onConflict: (String) -> Unit, onDone: () -> Unit) = act(R.string.td_update_failed) {
+        try {
+            api.saveDescription(taskId, text, baseText)
+        } catch (e: ApiError.Http) {
+            if (e.code == "DESCRIPTION_CHANGED") (e.body?.get("text") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(onConflict)
+            throw e
+        }
         onDone()
     }
     fun setAssignees(ids: Set<String>, base: Set<String>) = act(R.string.td_update_failed) {
