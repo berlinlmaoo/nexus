@@ -582,7 +582,14 @@ final class NEXUSUITour: XCTestCase {
                 let text = app.staticTexts.matching(match).firstMatch
                 // Catalyst menus may expose a native pop-up control rather than a Button.
                 let other = app.descendants(matching: .any).matching(match).firstMatch
+                #if targetEnvironment(macCatalyst)
+                // Native menu items expose their title rather than a label. The indexed query
+                // matches that title as well as explicit accessibility identifiers.
+                let menuItem = app.menuItems[action.label]
+                let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : menuItem.exists ? menuItem : other
+                #else
                 let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : other
+                #endif
                 let exists = target.waitForExistence(timeout: 15)
                 var usable = exists && target.isHittable
                 #if targetEnvironment(macCatalyst)
@@ -677,7 +684,13 @@ final class NEXUSUITour: XCTestCase {
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
             case "check":
+                #if targetEnvironment(macCatalyst)
+                let labelled = app.descendants(matching: .any).matching(match).firstMatch
+                let menuItem = app.menuItems[action.label]
+                let target = labelled.exists ? labelled : menuItem.exists ? menuItem : labelled
+                #else
                 let target = app.descendants(matching: .any).matching(match).firstMatch
+                #endif
                 guard target.waitForExistence(timeout: 20) else { return "wrong-screen: missing expected content \(action.label)" }
             default: return "wrong-screen: unknown QA action \(action.kind)"
             }

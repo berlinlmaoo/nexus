@@ -127,12 +127,16 @@ struct TaskDetailView: View {
                             .accessibilityIdentifier("task.action.gideon")
                     }
                     socialButton("Follow", icon: social.following ? "bell.fill" : "bell", active: social.following) { await social.toggle("followers", id: taskId) }
+                        .tint(social.following ? NX.violetText : NX.mutedFg)
                     socialButton("Favourite", icon: social.favourite ? "star.fill" : "star", active: social.favourite) { await social.toggle("favourite", id: taskId) }
+                        .tint(social.favourite ? NX.violetText : NX.mutedFg)
                     socialButton("Like", icon: social.liked ? "heart.fill" : "heart", active: social.liked) { await social.toggle("likes", id: taskId) }
+                        .tint(social.liked ? NX.violetText : NX.mutedFg)
                     if isBod {
                         Button { showQuestComposer = true } label: { Image(systemName: "trophy").font(.system(size: 14)).foregroundStyle(NX.warning) }
                             .accessibilityLabel(T("Make it a quest"))
                             .accessibilityIdentifier("task.action.quest")
+                            .tint(NX.warning)
                     }
                     Menu {
                         if canEditTask {
@@ -144,6 +148,7 @@ struct TaskDetailView: View {
                     } label: { Image(systemName: "ellipsis").font(.system(size: 16)) }
                     .accessibilityLabel(T("Task actions"))
                     .accessibilityIdentifier("task.action.more")
+                    .tint(NX.mutedFg)
                 }
             }
             #else
