@@ -62,5 +62,6 @@ extension AppLanguage {
         "Use latest version": "Pakai versi terbaru",
         "The form changed": "Form berubah",
         "Someone saved this form while you were editing. Keep your edits over the latest version, or use their version.": "Seseorang menyimpan form ini saat kamu mengedit. Simpan editanmu di atas versi terbaru, atau pakai versi mereka.",
+        "Stopped": "Dihentikan",
     ]
 }

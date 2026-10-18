@@ -41,4 +41,3 @@ struct GideonCreditHistory: Decodable, Sendable {
     let items: [Item]
     let nextBefore: String?
 }
-
