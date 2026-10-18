@@ -47,6 +47,38 @@ const TIERS = {
 }
 const DEFAULT_TIER = "luna"
 
+// The tier line every request starts with (owner, 18 Oct 2026: "which GIDEON am I talking to?" must have one answer).
+// Model 0 once called itself "GIDEON Artemis" (it reads every tier name in SOUL), so its line names the others it is
+// NOT; the hosted tiers keep the short line they were tuned with.
+// GIDEON_M0_ADDENDUM=1 adds Model 0's tool-calling rules note (A/B 18 Oct 2026: it cost 2 answers, so off by default).
+const M0_ADDENDUM = process.env.GIDEON_M0_ADDENDUM === "1"
+const M0_DATE = process.env.GIDEON_M0_DATE !== "0"
+const M0_LANG = process.env.GIDEON_M0_LANG !== "0"
+function tierLine(tier) {
+  const key = TIERS[tier] ? tier : DEFAULT_TIER
+  const name = TIER_NAMES[key] || "GIDEON"
+  if (key !== "experimental") return "[You are answering as " + name + ".]\n"
+  let line = "[You are answering as GIDEON Model 0, the local GIDEON tier. If you name yourself or your tier, say exactly \"GIDEON Model 0\" — never Artemis, Phaëthon or Aphrodite.]\n"
+  // The 9B miscounts relative dates (booked "besok" on the 25th; "Jumat ini" = 25 Oct) and Hermes stamps the date in
+  // the VM's UTC, a day behind Jakarta before 07:00 WIB. Spell out today and tomorrow in WIB. GIDEON_M0_DATE=0 drops it.
+  if (M0_DATE) {
+    const fmt = (d) => d.toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    const now = new Date()
+    line += "[Today is " + fmt(now) + " (Asia/Jakarta, WIB); tomorrow (besok) is " + fmt(new Date(now.getTime() + 86400000)) + ".]\n"
+  }
+  // Language (owner, 18 Oct 2026: "Ada yang butuh gw kerjem?", "Judul任务的"). GIDEON_M0_LANG=0 drops it.
+  if (M0_LANG) {
+    line += "[Language: reply in the language the user writes in. Casual Indonesian (gw/lo) is fine, but use only real, correctly spelled words — no invented slang, garbled or half-English words; if unsure of a slang word, use the standard Indonesian one — and never Chinese, Cyrillic or any other script.]\n"
+  }
+  if (M0_ADDENDUM) {
+    line += "[Model 0 rules: (1) When the message needs NEXUS data or an action, CALL the nexus_* tool now, in this turn — never announce it (\"gw cek dulu\", \"sebentar\", \"let me check\") and stop. " +
+      "(2) Answer only from tool results; nothing found = say so, never invent tasks, rooms, deals or numbers. " +
+      "(3) Reply in the user's language and register (casual Indonesian gets casual Indonesian); no Chinese or other scripts. " +
+      "(4) Never write tool names, code, or a \"Sources:\" list in the reply.]\n"
+  }
+  return line
+}
+
 // ── Instance knobs (12 Oct 2026). All optional: unset, the shim behaves exactly as before. ──────────
 // HERMES_PROFILE_HOME: run every Hermes child with this HERMES_HOME (a profile dir). The DEV instance
 //   points it at ~/.hermes/profiles/gideon-dev, whose .env aims the NEXUS plugin at the dev server and
@@ -185,7 +217,7 @@ function forgetSessions(usage) {
 const ROUTER_MISS_LOG = process.env.GIDEON_ROUTER_MISS_LOG || path.join(__dirname, "router-misses.jsonl")
 function logRouterMiss(entry) {
   try { fs.appendFileSync(ROUTER_MISS_LOG, JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n") } catch (e) { console.error(`[${SHIM_NAME}] router-miss log failed:`, e.message) }
-  console.log(`[${SHIM_NAME}] router miss ${entry.tier} run=${entry.runId || "-"}`)
+  console.log(`[${SHIM_NAME}] router miss ${entry.kind || "cant"} ${entry.tier} run=${entry.runId || "-"}`)
 }
 
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
@@ -322,8 +354,7 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
     // the file gets the anydoc text extraction. So the two attachments get different wording, and
     // the image-only sentence is left exactly as it was.
     // The tier's GIDEON name rides along, so "which GIDEON am I talking to?" has an answer (owner, 18 Oct 2026).
-    const tierName = TIER_NAMES[TIERS[tier] ? tier : DEFAULT_TIER] || "GIDEON"
-    const full = "[You are answering as " + tierName + ".]\n" + buildAttachedPrompt(prompt, imagePath, doc)
+    const full = tierLine(tier) + buildAttachedPrompt(prompt, imagePath, doc)
     // The usage report names the session (GIDEON credits); written even when the run fails.
     const usageFile = path.join(WORKDIR, `gideon-usage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`)
     const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", provider, "--usage-file", usageFile], { cwd: WORKDIR, env })
@@ -355,8 +386,9 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
     const chosen = TIERS[tier] || TIERS[DEFAULT_TIER]
     const { model, provider, timeoutMs } = chosen
     // The tier line the one-shot path always had (SOUL: "the first line of each request says which one is answering").
-    const tierName = TIER_NAMES[TIERS[tier] ? tier : DEFAULT_TIER] || "GIDEON"
-    const full = "[You are answering as " + tierName + ".]\n" + buildAttachedPrompt(prompt, imagePath, null)
+    const full = tierLine(tier) + buildAttachedPrompt(prompt, imagePath, null)
+    // Per-tier knobs in the runner (GIDEON_EAGER_TOOLS_<TIER>, the Model 0 announce retry).
+    env.GIDEON_TIER = TIERS[tier] ? tier : DEFAULT_TIER
     const child = spawn(PYTHON, [RUNNER, "--model", model, "--provider", provider, "--toolsets", STREAM_TOOLSETS], { cwd: WORKDIR, env })
     let err = "", sawFinal = false, outChars = 0, pending = "", finalUsage = null
     child.stdout.on("data", (d) => {
@@ -369,7 +401,7 @@ function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
         try {
           const ev = JSON.parse(line)
           if (ev.t === "final") { sawFinal = true; outChars = String(ev.c || "").length; finalUsage = ev.usage || null }
-          if (ev.t === "router_miss") logRouterMiss({ tier, runId, first: String(ev.c || ev.first || "").slice(0, 300), tools: Array.isArray(ev.tools) ? ev.tools.slice(0, 20) : [] })
+          if (ev.t === "router_miss") logRouterMiss({ tier, runId, kind: ev.kind || "cant", first: String(ev.c || ev.first || "").slice(0, 300), tools: Array.isArray(ev.tools) ? ev.tools.slice(0, 20) : [] })
         } catch { continue }
         try { res.write(line + "\n") } catch {}
       }
