@@ -25,6 +25,7 @@ import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
+import { deleteTaskAs, TaskDeleteRefusal } from '@/lib/task-delete'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
 import {
@@ -66,6 +67,7 @@ type GideonAction =
   | 'cancel_room_booking'
   | 'search_deals'
   | 'search_legal_documents'
+  | 'delete_task'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1345,9 +1347,16 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
   return input
 }
 
-async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>): Promise<unknown> {
+/**
+ * `approved`: this call is the Apply of a proposal the person approved (x-gideon-approved). delete_task runs ONLY
+ * then — never straight from the model, whatever the approval mode (owner, 18 Oct 2026).
+ */
+async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>, approved = false): Promise<unknown> {
   const input = await normalizeToolInput(actor, action, rawInput)
   switch (action) {
+    case 'delete_task':
+      if (!approved) throw new Error('Deleting a task always waits for the person to confirm it on a card in the NEXUS GIDEON chat. Nothing was deleted.')
+      return applyDeleteTask(actor, input)
     case 'list_projects':
       return listProjects(actor, input)
     case 'list_members':
@@ -1442,8 +1451,12 @@ export async function POST(req: Request) {
     const proposal = await prisma.gideonProposal.findUnique({ where: { id: approvedId } })
     if (!proposal || proposal.status !== 'APPLYING' || proposal.userId !== auth.actor.id) return error('Proposal is not being applied', 409)
     try {
-      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}))
+      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}, true))
     } catch (err) {
+      // A delete refused at Apply (gone, changed, no longer Can edit): the card says why, in both languages.
+      if (err instanceof TaskDeleteRefusal) {
+        return NextResponse.json({ ok: false, error: DELETE_REFUSAL_TEXT[err.code], code: err.code }, { status: err.status })
+      }
       // The apply route keeps a booking card open when its slot was taken meanwhile (code ROOM_TAKEN).
       if (err instanceof BookRoomRefusal) {
         return NextResponse.json({ ok: false, error: err.message, code: err.code, ...err.detail }, { status: err.code === 'ROOM_TAKEN' ? 409 : 400 })
@@ -1506,6 +1519,8 @@ export async function POST(req: Request) {
           ? 'NOT cancelled yet. It is waiting for the person to confirm it on the card below; tell them so, do not say it is cancelled.'
           : action === 'book_room'
           ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
+          : action === 'delete_task'
+          ? 'NOT deleted yet. It is waiting for the person to confirm it on the card below, which shows the task and a Delete button; tell them so in one short sentence, never say it is deleted. Do not offer to set it to Cancelled or Done instead. After they confirm it can still be restored from the Audit.'
           : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
           : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
@@ -1742,6 +1757,36 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     summary = change.summary
     diff.push(...change.diff)
     store = change.store
+  } else if (action === 'delete_task') {
+    const id = asString(input.taskId) ?? asString(input.task_id)
+    if (!id) throw new Error('taskId is required (find the task first with nexus_search_tasks or nexus_list_tasks)')
+    const existing = await getAccessibleTask(actor, id)
+    // The Delete button's own rule (DELETE /api/tasks/:id, lib/task-delete.ts): Can edit in the task's project.
+    // Checked again when the person taps Apply.
+    const { allowed } = await checkProjectAccess(actor.id, existing.taskList.projectId, ['MEMBER'])
+    if (!allowed) throw new Error(`This person cannot delete tasks in ${existing.taskList.project?.name ?? 'this project'}: deleting needs Can edit access there. Tell them so; do not propose anything else instead.`)
+    projectId = existing.taskList.projectId
+    taskId = existing.id
+    summary = `Delete task “${existing.title}”`
+    const assignees = existing.assignees.map((a: { user: { name: string | null } }) => a.user.name ?? '?')
+    const projectName = existing.taskList.project?.name ?? null
+    dueText = dueLabel(existing.dueDate)
+    diff.push(
+      { field: 'Task', to: existing.title },
+      { field: 'Project', to: projectName ?? '—' },
+      { field: 'Status', to: existing.taskList.name ?? STATUS_WORD[existing.status] ?? existing.status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(existing.dueDate) },
+      { field: 'Assignees', to: assignees.length ? assignees.join(', ') : '—' },
+    )
+    // What the card shows, kept as it was now; Apply deletes only this version of the task (updatedAt).
+    store = {
+      taskId: existing.id,
+      before: {
+        title: existing.title, projectId, projectName, status: existing.taskList.name ?? null,
+        progress: STATUS_WORD[existing.status] ?? existing.status, due: dueText ?? null, dueDay: dueDay(existing.dueDate),
+        assignees, updatedAt: existing.updatedAt.toISOString(),
+      },
+    }
   } else if (action === 'create_document') {
     const pid = String(input.projectId ?? '').trim()
     const title = String(input.title ?? '').trim()
@@ -1758,6 +1803,28 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     throw new Error(`${action} cannot be proposed`)
   }
   return { summary, diff, projectId, taskId, due: dueText, store }
+}
+
+const DELETE_REFUSAL_TEXT: Record<'NOT_FOUND' | 'NEEDS_EDIT_ACCESS' | 'CHANGED', string> = {
+  NOT_FOUND: 'This task is already gone (someone deleted it). Nothing else was deleted · Task ini sudah tidak ada (sudah dihapus orang lain).',
+  NEEDS_EDIT_ACCESS: 'You no longer have Can edit access in this project, so the task was not deleted · Kamu tidak punya akses Can edit di project ini, jadi task tidak dihapus.',
+  CHANGED: 'This task changed after the card was made, so nothing was deleted. Check it and ask GIDEON again · Task ini berubah setelah kartu dibuat, jadi tidak dihapus. Cek lagi lalu minta GIDEON ulang.',
+}
+
+/**
+ * The approved delete (owner, 18 Oct 2026): the web Delete button's own path (lib/task-delete.ts) as the person —
+ * Can edit re-checked now, the copy for Control Room → Audit, the realtime ping — and only the task as the card
+ * showed it (updatedAt), so a task edited in between is not deleted on an old approval.
+ */
+async function applyDeleteTask(actor: User, input: Record<string, unknown>) {
+  const taskId = asString(input.taskId)
+  if (!taskId) throw new Error('taskId is required')
+  const before = (input.before && typeof input.before === 'object' ? input.before : {}) as { updatedAt?: unknown }
+  const { auditLogId, task } = await deleteTaskAs(actor.id, taskId, {
+    expectedUpdatedAt: typeof before.updatedAt === 'string' ? before.updatedAt : null,
+    via: 'GIDEON',
+  })
+  return { deleted: true, taskId: task.id, title: task.title, project: task.projectName, auditLogId, restore: 'It can be restored from Control Room → Audit.' }
 }
 
 /** Describe the write and store it as a proposal for the person to approve. */

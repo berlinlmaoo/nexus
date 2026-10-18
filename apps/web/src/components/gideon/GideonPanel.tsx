@@ -19,6 +19,7 @@ import { GideonCreditMeter } from "./GideonCreditMeter";
 import { CREDITS_KEY } from "@/lib/gideon-credits";
 import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import { GideonBookingChangeCard } from "./GideonBookingChangeCard";
+import { GideonDeleteTaskCard } from "./GideonDeleteTaskCard";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposalParts";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
@@ -93,6 +94,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "book_room": return a ? t("Booking {room}", { room: a }) : t("Booking a room");
     case "move_room_booking": return a ? t("Moving booking {name}", { name: a }) : t("Moving a booking");
     case "cancel_room_booking": return a ? t("Cancelling booking {name}", { name: a }) : t("Cancelling a booking");
+    case "delete_task": return a ? t("Deleting task {name}", { name: a }) : t("Deleting a task");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return s.label || s.tool;
   }
@@ -1519,6 +1521,7 @@ function ResultCard({ card }: { card: GideonCard }) {
 const FIELD_WORD: Record<string, string> = {
   Title: "Title", Section: "Section", Status: "Status", Priority: "Priority", Due: "Due", Assignees: "Assignees",
   Description: "Description", Comment: "Comment", Body: "Body", "Custom fields": "Custom fields",
+  Task: "Task", Project: "Project",
 };
 
 /**
@@ -1539,6 +1542,8 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
   if (proposal.action === "book_room" && proposal.booking) return <GideonBookRoomCard proposal={proposal} onDecided={onDecided} />;
   // Moving / cancelling one: the booking before and after (GideonBookingChangeCard).
   if ((proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") && proposal.bookingChange) return <GideonBookingChangeCard proposal={proposal} onDecided={onDecided} />;
+  // Deleting a task: the destructive card (always asked, every approval mode).
+  if (proposal.action === "delete_task" && proposal.taskDelete) return <GideonDeleteTaskCard proposal={proposal} onDecided={onDecided} />;
   return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
 }
 
@@ -1606,6 +1611,7 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
     case "book_room": return t("Book a room");
     case "move_room_booking": return t("Move a booking");
     case "cancel_room_booking": return t("Cancel a booking");
+    case "delete_task": return t("Delete task");
     default: return action;
   }
 }

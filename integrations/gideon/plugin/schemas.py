@@ -240,6 +240,16 @@ SCHEMAS = {
         {"bookingId": {"type": "string", "description": "The booking's id (from nexus_list_room_bookings)."}},
         ["bookingId"],
     ),
+    "nexus_delete_task": object_schema(
+        "Delete a NEXUS task for the person, as them, when they ask to delete / remove / hapus / buang a task. It never "
+        "deletes on its own: it ALWAYS puts a card in the chat showing the task (title, project, status, due, assignees) "
+        "with a Delete button, and nothing happens until they tap it. Only someone with Can edit in the task's project may "
+        "delete (the same rule as the Delete button); otherwise you get a refusal to relay. A deleted task can be restored "
+        "from the Audit. Find the task first (nexus_search_tasks / nexus_list_tasks, or the id from a task you just "
+        "created or updated). If several tasks match, ask which one. Never set it to Cancelled/Done instead unless asked.",
+        {"taskId": {"type": "string", "description": "The task's id (from nexus_search_tasks / nexus_list_tasks / nexus_get_task)."}},
+        ["taskId"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},

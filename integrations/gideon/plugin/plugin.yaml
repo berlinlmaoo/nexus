@@ -19,6 +19,8 @@ provides_tools:
   - nexus_update_task
   - nexus_add_task_comment
   - nexus_create_document
+  # Write, added 18 Oct 2026: delete a task — always a card the person confirms (restorable from the Audit)
+  - nexus_delete_task
   # Read, added 12 Oct 2026 (sources/citations in the NEXUS chat)
   - nexus_get_task
   - nexus_search_docs
