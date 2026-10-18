@@ -27,26 +27,68 @@ import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimU
 // they kept a dependency alive that nothing used. GIDEON's tools are Hermes's, served by
 // /api/gideon/tools.
 
-function buildGideonPrompt(history: { role: string; content: string }[], who: { name: string; email: string }, extra = ''): string {
-  const recent = (history || []).filter((m) => m && typeof m.content === "string").slice(-8)
-  const last = recent[recent.length - 1]?.content?.trim() || ""
+/**
+ * The prompt NEXUS hands the agent, ordered for the provider's prompt cache (owner, 18 Oct 2026). A cached input
+ * token costs a tenth of a fresh one, and a cache hit is a matching PREFIX: Hermes' system prompt and tool schemas
+ * come first and never change, then this message. So the rules that are the same for everyone go first (`rules`),
+ * then who is asking (`who`), then what changes every turn (`dynamic`: date, page context, search hits), then the
+ * conversation, then the question. Before, the person's name opened the message and every prefix diverged there.
+ *
+ * Long conversations are compacted: the last exchange verbatim, older turns one short line each, so a long chat
+ * does not resend every old answer in full. The question itself always ends the prompt whole (the shim used to
+ * keep only the first 6000 characters, which cut the question off a long one).
+ */
+const PROMPT_BUDGET = 14000
+const OLDER_LINE = 240
+
+function clipText(s: string, n: number): string {
+  const t = s.replace(/\s+/g, ' ').trim()
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t
+}
+
+function buildGideonPrompt(
+  history: { role: string; content: string }[],
+  who: { name: string; email: string },
+  parts: { rules?: string[]; personal?: string[]; dynamic?: string[] } = {},
+): string {
+  const msgs = (history || []).filter((m) => m && typeof m.content === "string" && m.content.trim())
+  const last = msgs[msgs.length - 1]?.content?.trim() || ""
+  if (!last) return ""
   const name = who.name?.trim() || "anggota tim NEXUS"
+  const rules = [
+    // Ditanya "lo pake LLM apa?" jawabannya sempat bocor separuh — menyebut framework dan angka versi
+    // model. Menyebut yang BUKAN dipakai sama bocornya, jadi keduanya dilarang sekalian.
+    `[SOAL DIRIMU SENDIRI] Kamu GIDEON, titik. Jangan pernah menyebut model, provider, vendor, framework, ` +
+      `atau tier yang kamu pakai — dan jangan menyebut yang TIDAK kamu pakai juga ("bukan Claude", "bukan GPT" ` +
+      `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
+      `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
+      `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.`,
+    ...(parts.rules || []),
+  ]
   const header =
     `[IDENTITAS LAWAN BICARA — WAJIB DIPATUHI] Kamu (Gideon) lagi ngobrol di chatbox NEXUS dengan "${name}"` +
     `${who.email ? ` (${who.email})` : ""}, anggota tim NEXUS. Ini SESI TERPISAH khusus dia. Sapa & rujuk dia ` +
     `sebagai "${name}". JANGAN sekali-kali manggil/menganggap dia sebagai orang lain (operator, admin, atau ` +
-    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.\n\n` +
-    // Ditanya "lo pake LLM apa?" jawabannya sempat bocor separuh — menyebut framework dan angka versi
-    // model. Menyebut yang BUKAN dipakai sama bocornya, jadi keduanya dilarang sekalian.
-    `[SOAL DIRIMU SENDIRI] Kamu GIDEON, titik. Jangan pernah menyebut model, provider, vendor, framework, ` +
-    `atau tier yang kamu pakai — dan jangan menyebut yang TIDAK kamu pakai juga ("bukan Claude", "bukan GPT" ` +
-    `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
-    `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
-    `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.\n\n`
-  const head = extra ? `${header}${extra}\n\n` : header
-  if (recent.length <= 1) return `${head}Pesan dari ${name}: ${last}`
-  const ctx = recent.slice(0, -1).map((m) => `${m.role === "user" ? name : "Gideon"}: ${m.content}`).join("\n")
-  return `${head}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
+    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.`
+  const head = [...rules, header, ...(parts.personal || []), ...(parts.dynamic || [])].filter(Boolean).join("\n\n")
+
+  const prior = msgs.slice(0, -1).slice(-16)
+  const speaker = (m: { role: string }) => (m.role === "user" ? name : "Gideon")
+  const recent = prior.slice(-2)
+  const older = prior.slice(0, -2)
+  const build = (olderLines: string[], recentCap: number) => {
+    const blocks: string[] = []
+    if (olderLines.length) blocks.push(`Ringkasan percakapan sebelumnya (dipotong):\n${olderLines.join("\n")}`)
+    if (recent.length) blocks.push(`Percakapan terakhir:\n${recent.map((m) => `${speaker(m)}: ${clipText(m.content, recentCap)}`).join("\n")}`)
+    const convo = blocks.length ? `${blocks.join("\n\n")}\n\n` : ""
+    return `${head}\n\n${convo}Pesan terbaru dari ${name}: ${last.slice(0, 6000)}`
+  }
+  let olderLines = older.map((m) => `- ${speaker(m)}: ${clipText(m.content, OLDER_LINE)}`)
+  let out = build(olderLines, 1500)
+  // Over budget: drop the oldest summary lines first, then shorten the last exchange. The question is never cut.
+  while (out.length > PROMPT_BUDGET && olderLines.length) { olderLines = olderLines.slice(1); out = build(olderLines, 1500) }
+  if (out.length > PROMPT_BUDGET) out = build([], 500)
+  return out
 }
 
 // File types GIDEON can actually be asked about. This is not a wish list: Hermes reaches a document
@@ -339,7 +381,12 @@ export async function POST(req: NextRequest) {
       }
       // The pre-search hits are offered to the model; only the ones its answer actually names become Sources.
       let preSearch: { stepId: string | null; refs: GideonRef[] } | null = null
-      if (streamClient && wantsSearch !== false && asked && !documentBase64 && !imageBase64) {
+      // Not for small talk ("halo", "makasih"): eight search hits about nothing were the biggest part of its bill.
+      // Every word must be small talk ("halo gideon, apa kabar?"), so "halo, progress project X?" still searches.
+      const SMALL_TALK = new Set(['halo', 'hallo', 'hai', 'hi', 'hello', 'hey', 'pagi', 'siang', 'sore', 'malam', 'selamat', 'makasih', 'thanks', 'thank', 'you', 'terima', 'kasih', 'ok', 'oke', 'okay', 'sip', 'mantap', 'gideon', 'ya', 'yah', 'kak', 'bro', 'apa', 'kabar', 'gimana', 'baik', 'banyak', 'dong', 'deh', 'nih', 'good', 'morning', 'how', 'are', 'test', 'tes'])
+      const askedWords = asked.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean)
+      const smallTalk = askedWords.length > 0 && askedWords.length <= 6 && askedWords.every((w) => SMALL_TALK.has(w))
+      if (streamClient && wantsSearch !== false && asked && !smallTalk && !documentBase64 && !imageBase64) {
         const started = Date.now()
         try {
           const { hits } = await searchWorkspace(userId, asked, { limit: 8, ...(scopeProjectId ? { projectId: scopeProjectId } : {}) })
@@ -361,8 +408,20 @@ export async function POST(req: NextRequest) {
         }
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
-      const extra = [
-        ...prefsLines,
+      // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
+      const rules = [
+        // Only for a client that renders Markdown; the released apps show the text as is.
+        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
+        rawUiLang === 'en'
+          ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
+          : rawUiLang === 'id'
+            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
+            : '',
+        approvalPromptLine(approvalMode),
+      ].filter(Boolean)
+      const dynamic = [
+        // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
+        datePromptLine(new Date(), rawUiLang === 'en' ? 'en' : 'id'),
         ...gathered.lines,
         ...scopeLines,
         ...searchLines,
@@ -373,18 +432,8 @@ export async function POST(req: NextRequest) {
           : scopeProjectId
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
-        approvalPromptLine(approvalMode),
-        // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
-        datePromptLine(new Date(), rawUiLang === 'en' ? 'en' : 'id'),
-        rawUiLang === 'en'
-          ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
-          : rawUiLang === 'id'
-            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
-            : '',
-        // Only for a client that renders Markdown; the released apps show the text as is.
-        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
-      ].filter(Boolean).join('\n\n')
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, extra)
+      ].filter(Boolean)
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: prefsLines, dynamic })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({
