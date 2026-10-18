@@ -324,9 +324,6 @@ struct ListTaskRow: View {
     let task: BoardTask
     let status: RowStatus?
     let wide: Bool
-    /// The List is at least 760 pt wide (a default Mac window, an iPad in landscape): one line per row, always
-    /// (decision 6 of run 20, R20-B-02). Narrower, a row that does not fit takes two lines.
-    var oneLine = false
     /// Wide: the columns every row of this List draws (same order, same width).
     var columnLayout = ListColumns.Layout()
     /// Grouped by priority: the row leaves the priority pill out.
@@ -373,18 +370,10 @@ struct ListTaskRow: View {
             // iPad left only Kategori, so the amount and the date vanished from the rows while the web and
             // the Mac show them (UI tour run 14, P-I1), and the title was cut short beside empty slots
             // (P-I10). The two-line row gives the title the whole width and lists every value under it.
-            // Run 20 (decision 6, R20-B-02): a List at least 760 pt wide keeps one line per row, as the web: the
-            // columns as wide as their widest value (shared by every row, so they still line up) before the title
-            // gives way; there the two-line row left ~380 pt blank right of the status on a Mac.
             ViewThatFits(in: .horizontal) {
                 wideRow(columnLayout)
                 if columnLayout.withoutText != columnLayout { wideRow(columnLayout.withoutText) }
-                if oneLine {
-                    wideRow(columnLayout.withoutText, measured: true)
-                    wideRow(columnLayout.withoutText, measured: true, titleMin: 120)
-                } else {
-                    compactRow
-                }
+                compactRow
             }
         } else {
             compactRow
@@ -430,8 +419,7 @@ struct ListTaskRow: View {
 
     @ViewBuilder private var leading: some View {
         if selecting { TaskSelectionMark(selected: selected) }
-        // Done: an outline check, as the web (decision 23 of run 20, R20-B-09).
-        Image(systemName: task.isDone ? "checkmark.circle" : "circle")
+        Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
             .font(.system(size: wide ? 17 : 15))
             .foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.55))
     }

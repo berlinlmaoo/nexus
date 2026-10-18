@@ -138,7 +138,7 @@ struct GideonBookRoomCard: View {
 }
 
 /// Every room for one slot, as rows (the book_room card and the move card): free ones selectable, busy ones
-/// disabled with who holds them until when, the capacity when it is known.
+/// disabled with who holds them until when.
 struct GideonRoomRows: View {
     let rooms: [GideonRoomAvailability.Room]
     let selected: String?
@@ -159,7 +159,6 @@ struct GideonRoomRows: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(RoomBooking.label(r.room)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                        if let n = r.capacity { Text("· " + String(format: T("%d seats"), n)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                     }
                     if let busy = r.busy {
                         Text(String(format: T("Booked by %@ until %@"), busy.by ?? T("someone"), GideonSlotClock.clock(busy.endsAt)))

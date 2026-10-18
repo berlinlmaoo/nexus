@@ -2533,9 +2533,7 @@ struct BoardCard: View {
             if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
-                // A done card is muted as a whole, as the web's: an outline check, faded chips (decision 23 of run 20,
-                // R20-B-09; it kept a solid green check and full-colour chips).
-                Image(systemName: task.isDone ? "checkmark.circle" : "circle")
+                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
                 Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
@@ -2549,7 +2547,6 @@ struct BoardCard: View {
             // The priority on the meta line with the values, as the web's card, not beside the title (R19-B-03).
             if hasMeta {
                 CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
-                    .opacity(task.isDone ? 0.55 : 1)
                 metaRow
             } else {
                 // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
@@ -2557,7 +2554,6 @@ struct BoardCard: View {
                 // R16-I-17: uneven empty bands under the chips).
                 HStack(alignment: .top, spacing: 8) {
                     CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
-                        .opacity(task.isDone ? 0.55 : 1)
                     if !task.assigneeAvatars.isEmpty {
                         Spacer(minLength: 0)
                         avatars

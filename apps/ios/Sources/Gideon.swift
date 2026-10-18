@@ -173,7 +173,6 @@ struct GideonBookingChange: Decodable, Sendable, Equatable {
 struct GideonRoomAvailability: Decodable, Sendable, Equatable {
     struct Room: Decodable, Sendable, Equatable, Identifiable {
         let room: String
-        let capacity: Int?
         let free: Bool
         let busy: Busy?
         var id: String { room }

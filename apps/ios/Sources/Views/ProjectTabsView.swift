@@ -304,7 +304,7 @@ struct ListTab: View {
     @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: ListColumns.Layout, order: @escaping () -> [String]) -> some View {
         let by = groupedBy(laneId)
         let base = ListTaskRow(task: t, status: by.status && hSize != .regular ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
-                               oneLine: hSize == .regular && listWidth >= 760, columnLayout: columns, hidePriority: by.priority,
+                               columnLayout: columns, hidePriority: by.priority,
                                onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
@@ -1179,7 +1179,6 @@ struct CalendarTab: View {
     @State private var allUndated = false
     /// An empty month: the one-line hint opens the "No date" box (UI tour run 15, Q-IA28 / Q-M16: a 12-chip
     /// cloud ~300 pt tall pushed the month below the fold; the web says it in one line).
-    @State private var showUndated = false
     private static let undatedPreview = 12
 
     private var cal: Calendar { ProjDate.cal }
@@ -1241,18 +1240,6 @@ struct CalendarTab: View {
                     // P-I14 / P-M12).
                     let rest = undated
                     let emptyMonth = tasksByDay.isEmpty && !rest.isEmpty
-                    if emptyMonth {
-                        ProjectRangeHint(icon: "calendar.badge.exclamationmark",
-                                         text: rest.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), rest.count),
-                                         actionTitle: showUndated ? T("Hide them") : T("Show them")) {
-                            withAnimation(.snappy) { showUndated.toggle() }
-                            if !showUndated { return }
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(150))
-                                withAnimation { proxy.scrollTo("undated", anchor: .top) }
-                            }
-                        }
-                    }
                     // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06). On iPad / Mac
                     // the picked day's panel sits beside the month, as the web's: under it, the Mac's panel
                     // was below the fold (UI tour run 16, R16-M-08).
@@ -1265,7 +1252,7 @@ struct CalendarTab: View {
                         monthCard
                         dayPanel
                     }
-                    if !rest.isEmpty && (!emptyMonth || showUndated) { undatedBox(rest, leading: false).id("undated") }
+                    if !rest.isEmpty { undatedBox(rest, leading: emptyMonth).id("undated") }
                 }
                 // iPad / Mac: the page's 24 pt gutter, the header's and the tabs', not 16 (UI tour run 19, Mac R19-M-09).
                 .padding(.vertical, 16).padding(.horizontal, hSize == .regular ? 24 : 16)
