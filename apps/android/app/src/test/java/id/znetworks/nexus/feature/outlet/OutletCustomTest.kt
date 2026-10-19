@@ -10,12 +10,12 @@ class OutletCustomTest {
     @Test fun customFieldsIncludeUsedArchivedItemsAndRetainCommunityTotals() {
         val d = OutletMonth(obj("""{"config":{"rsvp":[{"id":"vip","label":"VIP"},{"id":"old","label":"Old","archived":true},{"id":"unused","label":"Unused","archived":true}],"hosting":[],"communities":[{"id":"club","name":"Club","mode":"breakdown","items":[{"id":"team","label":"Team"}]}]}}"""))
         val e = OutletEvent(obj("""{"values":{"old":0,"club":4,"team":2},"communityTotals":{"club":6}}"""))
-        val fields = d.reportForm(e).fields.map { it.key }
+        val fields = d.reportForm(e, "archived", "Total only").fields.map { it.key }
         assertTrue(fields.containsAll(listOf("value:vip", "value:old", "value:club", "value:team")))
         assertFalse(fields.contains("value:unused"))
         assertEquals(0.0, e.number("value:old")!!, 0.0)
         assertEquals(6.0, e.number("community:club")!!, 0.0)
-        assertFalse(d.reportForm(null).fields.any { it.key == "value:old" })
+        assertFalse(d.reportForm(null, "archived", "Total only").fields.any { it.key == "value:old" })
     }
     @Test fun editsUseNestedValuesAndNeverResendUnchangedItems() {
         val form = OutletForm(listOf(OutletSection("rsvp", OutletText("RSVP", "RSVP"), "rsvpTotal", listOf(

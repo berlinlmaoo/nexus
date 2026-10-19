@@ -111,17 +111,20 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     private val res get() = getApplication<Application>().resources
     private val _state = MutableStateFlow(OutletState())
     val state = _state.asStateFlow()
+    private var loadSequence = 0
 
     init { load() }
 
     /** A reload keeps what is on screen; only a first load says it failed. */
     fun load() = viewModelScope.launch {
+        val sequence = ++loadSequence
         try {
             val requested = _state.value.month
             val d = api.month(projectId, requested)
-            if (_state.value.month != requested && _state.value.month != d.month) return@launch
+            if (sequence != loadSequence || (_state.value.month != requested && _state.value.month != d.month)) return@launch
             _state.update { s -> s.copy(data = d, month = d.month, loading = false, error = null, forbidden = false, day = s.day?.takeIf { it.startsWith(d.month) } ?: defaultDay(d)) }
         } catch (e: ApiError) {
+            if (sequence != loadSequence) return@launch
             val h = e as? ApiError.Http
             _state.update { it.copy(loading = false, forbidden = h?.status == 403, error = if (it.data == null) e.describe(res) else null) }
         }
@@ -133,7 +136,7 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
 
     fun setMonth(ym: String) {
         if (ym == _state.value.month) return
-        _state.update { it.copy(month = ym, day = null) }
+        _state.update { it.copy(month = ym, day = null, loading = true, error = null) }
         load()
     }
 
@@ -141,7 +144,7 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     fun thisMonth() = _state.value.data?.today?.take(7)?.let(::setMonth)
 
     fun pickDay(iso: String) {
-        if (!iso.startsWith(_state.value.month.orEmpty())) { _state.update { it.copy(month = iso.take(7), day = iso) }; load() }
+        if (!iso.startsWith(_state.value.month.orEmpty())) { _state.update { it.copy(month = iso.take(7), day = iso, loading = true, error = null) }; load() }
         else _state.update { it.copy(day = iso) }
     }
 
@@ -178,6 +181,7 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
             onSaved(e)
             load()
         } catch (e: ApiError) {
+            if ((e as? ApiError.Http)?.code == "CONFIG_CHANGED") load().join()
             _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
         }
         _state.update { it.copy(busy = false) }
@@ -215,7 +219,7 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
     LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     var detail by remember { mutableStateOf<OutletEvent?>(null) }
     var settings by remember { mutableStateOf(false) }
-    val d = s.data?.takeIf { it.month == s.month }
+    val d = s.data?.takeIf { it.month == s.month && !s.forbidden }
     val addEvent = { date: String? -> vm.openForm(null, date ?: d?.today?.takeIf { it.startsWith(s.month.orEmpty()) } ?: s.day); goTo(OutletView.FORM) }
     val fill = { e: OutletEvent -> detail = null; vm.openForm(e.id); goTo(OutletView.FORM) }
     when {
@@ -234,7 +238,7 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
             }
         }
     }
-    detail?.let { e -> EventSheet(e, d?.reportForm(e) ?: OutletForm.DEFAULT, d?.today, onFill = { fill(e) }, onClose = { detail = null }) }
+    detail?.let { e -> EventSheet(e, d?.currentReportForm(e) ?: OutletForm.DEFAULT, d?.today, onFill = { fill(e) }, onClose = { detail = null }) }
     if (settings) OutletSettings(vm) { settings = false }
 }
 
@@ -471,7 +475,7 @@ private fun Calendar(d: OutletMonth, day: String?, vm: OutletViewModel, onFill: 
         OutletDayTargets(d, selected, vm)
         val today = byDay[selected].orEmpty()
         if (today.isEmpty()) Text(stringResource(R.string.os_no_event_day), fontSize = 13.sp, color = c.mutedFg)
-        today.forEach { e -> EventCard(e, d.reportForm(e), d.today) { onFill(e) } }
+        today.forEach { e -> EventCard(e, d.currentReportForm(e), d.today) { onFill(e) } }
     }
 }
 

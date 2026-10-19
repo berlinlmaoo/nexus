@@ -40,4 +40,11 @@
     <string name="sm_archive_help">Existing figures and targets will be preserved.</string>
     <string name="sm_note_mark">Note</string>
     <string name="sm_target_mark">Target</string>
+    <string name="sm_contents">Contents posted</string>
+    <string name="sm_target_help">Targets to date add up each day\'s own target, or its share of the monthly target, through the date shown.</string>
+    <string name="sm_no_engagement_target">No engagement target</string>
+    <string name="sm_thousand">K</string>
+    <string name="sm_million">M</string>
+    <string name="sm_saved">Saved.</string>
+    <string name="sm_through">Through %1$s</string>
 </resources>

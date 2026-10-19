@@ -40,4 +40,11 @@
     <string name="sm_archive_help">Angka dan target yang ada akan tetap tersimpan.</string>
     <string name="sm_note_mark">Catatan</string>
     <string name="sm_target_mark">Target</string>
+    <string name="sm_contents">Konten diterbitkan</string>
+    <string name="sm_target_help">Target berjalan menjumlahkan target khusus setiap hari, atau bagian dari target bulanan, sampai tanggal yang ditampilkan.</string>
+    <string name="sm_no_engagement_target">Belum ada target interaksi</string>
+    <string name="sm_thousand">rb</string>
+    <string name="sm_million">jt</string>
+    <string name="sm_saved">Tersimpan.</string>
+    <string name="sm_through">Sampai %1$s</string>
 </resources>

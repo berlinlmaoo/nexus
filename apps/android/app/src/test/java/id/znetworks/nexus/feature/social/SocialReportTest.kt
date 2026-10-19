@@ -4,11 +4,22 @@ import id.znetworks.nexus.core.net.NexusJson
 import id.znetworks.nexus.core.realtime.RealtimeEvents
 import id.znetworks.nexus.feature.projects.*
 import kotlinx.serialization.json.*
+import androidx.compose.ui.text.AnnotatedString
 import org.junit.Assert.*
 import org.junit.Test
 
 class SocialReportTest {
     private fun obj(s: String) = NexusJson.parseToJsonElement(s) as JsonObject
+    @Test fun groupedInputKeepsCaretMappingAndBackingDigits() {
+        val raw = "1234567"
+        val result = GroupedNumber('.').filter(AnnotatedString(raw))
+        assertEquals("1.234.567", result.text.text)
+        (0..raw.length).forEach { offset ->
+            assertEquals(offset, result.offsetMapping.transformedToOriginal(result.offsetMapping.originalToTransformed(offset)))
+        }
+        assertEquals(1, result.offsetMapping.transformedToOriginal(2))
+        assertEquals("", GroupedNumber(',').filter(AnnotatedString("")).text.text)
+    }
 
     @Test fun socialProjectsNeverExposeTaskViews() {
         val tabs = ProjectTabsLogic.visible(emptySet(), isSocial = true)

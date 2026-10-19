@@ -17,10 +17,11 @@ import id.znetworks.nexus.feature.outlet.OutletFormat
 import kotlinx.serialization.json.*
 
 @Composable
-internal fun NumberBox(value: String, label: Int, enabled: Boolean, max: Long, change: (String) -> Unit) {
+internal fun NumberBox(value: String, label: Int, enabled: Boolean, max: Long, placeholder: String = "", change: (String) -> Unit) {
     OutlinedTextField(value, { if (it.isEmpty() || it.all(Char::isDigit)) change(it) }, label = { Text(stringResource(label)) },
-        enabled = enabled, isError = SocialDraft.number(value, max) == null,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+        enabled = enabled, isError = SocialDraft.number(value, max) == null, placeholder = { Text(placeholder) },
+        visualTransformation = remember(OutletFormat.isId()) { GroupedNumber(if (OutletFormat.isId()) '.' else ',') },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done), singleLine = true, modifier = Modifier.fillMaxWidth())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,8 +40,13 @@ internal fun SocialDayDialog(d: SocialMonth, date: String, vm: SocialViewModel, 
     var discard by remember { mutableStateOf(false) }
     var targets by remember { mutableStateOf(false) }
     val dismiss = { if (!busy) { if (changed) discard = true else close() } }
+    val dirtyNow by rememberUpdatedState(changed)
+    val busyNow by rememberUpdatedState(busy)
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { target ->
+        if (target == SheetValue.Hidden && dirtyNow && !busyNow) { discard = true; false } else !busyNow
+    })
     BackHandler { dismiss() }
-    ModalBottomSheet(onDismissRequest = dismiss) {
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(OutletFormat.longDay(date, d.today.take(4).toInt()), style = MaterialTheme.typography.titleLarge)
             if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
@@ -50,7 +56,7 @@ internal fun SocialDayDialog(d: SocialMonth, date: String, vm: SocialViewModel, 
                 SocialDraft.metrics.forEach { key -> NumberBox(draft["$id:$key"].orEmpty(), metricLabel(key), editable && !busy,
                     if (key == "posts") 10_000 else 1_000_000_000) { draft["$id:$key"] = it } }
                 val engagement = listOf("likes", "comments", "shares").mapNotNull { draft["$id:$it"]?.toDoubleOrNull() }.takeIf { it.isNotEmpty() }?.sum()
-                Text("${stringResource(R.string.sm_engagement)}: ${OutletFormat.vsTarget(engagement, figures.number("engagementTarget"), false)}")
+                Text("${stringResource(R.string.sm_engagement)}: ${reportNumber(engagement)} / ${reportNumber(figures.number("engagementTarget"))}")
                 Text(stringResource(when (figures.text("engagementTargetSource")) { "day" -> R.string.sm_own_target; "month" -> R.string.sm_month_share; else -> R.string.sm_no_target }))
             }
             listOf("worked" to R.string.sm_worked, "didntWork" to R.string.sm_didnt_work).forEach { (key, label) ->
@@ -77,14 +83,23 @@ internal fun SocialTargetsDialog(d: SocialMonth, date: String?, vm: SocialViewMo
         } }
     } }
     val valid = draft.all { (k, v) -> SocialDraft.number(v, if (k.endsWith(":postsTarget")) 1_000_000 else 2_000_000_000) != null }
-    AlertDialog(onDismissRequest = { if (!busy) close() }, title = { Text(stringResource(if (date == null) R.string.sm_month_targets else R.string.sm_day_targets)) },
+    var discard by remember { mutableStateOf(false) }
+    val changed = draft.any { (key, value) ->
+        val id = key.substringBefore(':'); val metric = key.substringAfter(':')
+        SocialDraft.number(value, if (metric == "postsTarget") 1_000_000 else 2_000_000_000) != (original[id]?.get(metric) ?: JsonNull)
+    }
+    val dismiss = { if (!busy) { if (changed) discard = true else close() } }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(stringResource(if (date == null) R.string.sm_month_targets else R.string.sm_day_targets)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
             Text(stringResource(R.string.sm_month_share))
             d.platforms.filter { !it.flag("archived") }.forEach { p ->
                 Text(p.text("name"))
                 SocialDraft.targetKeys.forEach { key -> NumberBox(draft["${p.text("id")}:$key"].orEmpty(), metricLabel(key), !busy,
-                    if (key == "postsTarget") 1_000_000 else 2_000_000_000) { draft["${p.text("id")}:$key"] = it } }
+                    if (key == "postsTarget") 1_000_000 else 2_000_000_000,
+                    placeholder = if (date != null) d.targets(null).firstOrNull { it.text("platformId") == p.text("id") }?.number(key)?.let {
+                        java.text.DecimalFormat("#,##0.##").format(it / java.time.YearMonth.parse(d.month).lengthOfMonth())
+                    }.orEmpty() else "") { draft["${p.text("id")}:$key"] = it } }
             }
         } }, confirmButton = { TextButton(enabled = !busy && valid, onClick = {
             val platforms = buildJsonObject {
@@ -100,7 +115,10 @@ internal fun SocialTargetsDialog(d: SocialMonth, date: String?, vm: SocialViewMo
             vm.write(if (date == null) "targets" else "day-targets", buildJsonObject {
                 put(if (date == null) "month" else "date", date ?: d.month); put("platforms", platforms)
             }, close)
-        }) { Text(stringResource(R.string.sm_save)) } }, dismissButton = { TextButton(onClick = close, enabled = !busy) { Text(stringResource(R.string.sm_close)) } })
+        }) { Text(stringResource(R.string.sm_save)) } }, dismissButton = { TextButton(onClick = dismiss, enabled = !busy) { Text(stringResource(R.string.sm_close)) } })
+    if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text(stringResource(R.string.sm_discard)) },
+        confirmButton = { TextButton(onClick = close) { Text(stringResource(R.string.sm_discard)) } },
+        dismissButton = { TextButton(onClick = { discard = false }) { Text(stringResource(R.string.sm_keep_editing)) } })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,15 +135,21 @@ internal fun SocialSettingsDialog(d: SocialMonth, vm: SocialViewModel, busy: Boo
     } }
     var discard by remember { mutableStateOf(false) }
     var dirty by remember { mutableStateOf(false) }
+    val dirtyNow by rememberUpdatedState(dirty)
+    val busyNow by rememberUpdatedState(busy)
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { target ->
+        if (target == SheetValue.Hidden && dirtyNow && !busyNow) { discard = true; false } else !busyNow
+    })
     LaunchedEffect(retry) {
         try { val r = vm.api.config(); config = r.objectAt("config").rows("platforms"); usage = r.objectAt("usage"); loadError = false }
         catch (_: ApiError) { loadError = true }
     }
     fun update(id: String, transform: (JsonObject) -> JsonObject) { config = config?.map { if (it.text("id") == id) transform(it) else it }; dirty = true }
     val dismiss = { if (!busy) { if (dirty) discard = true else close() } }
-    ModalBottomSheet(onDismissRequest = dismiss) {
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = sheet) {
         Column(Modifier.verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.sm_settings), style = MaterialTheme.typography.titleLarge)
+            Text(OutletFormat.monthLabel(d.month))
             if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
             if (loadError) TextButton(onClick = { retry++ }) { Text(stringResource(R.string.try_again)) }
             else if (config == null) CircularProgressIndicator()

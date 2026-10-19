@@ -77,7 +77,9 @@ internal fun OutletReportForm(d: OutletMonth, s: OutletState, vm: OutletViewMode
         val eid = s.formEventId ?: return@LaunchedEffect
         if (known.none { it.id == eid }) fetched = runCatching { vm.api.event(vm.projectId, eid) }.getOrNull()
     }
-    val form = remember(s.formTick, s.formEventId, event != null) { d.reportForm(event) }
+    val archivedLabel = stringResource(R.string.sm_archived)
+    val totalOnlyLabel = stringResource(R.string.oc_total_only)
+    val form = remember(s.formTick, s.formEventId, event != null, archivedLabel, totalOnlyLabel) { d.reportForm(event, archivedLabel, totalOnlyLabel) }
     val newDate = s.formDate ?: d.today ?: LocalDate.now().toString()
     // The working copy; re-read when another event is picked (not on a refresh, which would lose typing).
     var original by remember(s.formTick, s.formEventId, event != null) { mutableStateOf(OutletDraft.of(event, form, newDate)) }

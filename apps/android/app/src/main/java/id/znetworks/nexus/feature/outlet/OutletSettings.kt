@@ -31,13 +31,18 @@ internal fun OutletSettings(vm: OutletViewModel, close: () -> Unit) {
     var dirty by remember { mutableStateOf(false) }
     var discard by remember { mutableStateOf(false) }
     val state by vm.state.collectAsState()
+    val dirtyNow by rememberUpdatedState(dirty)
+    val busyNow by rememberUpdatedState(state.busy)
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { target ->
+        if (target == SheetValue.Hidden && dirtyNow && !busyNow) { discard = true; false } else !busyNow
+    })
     LaunchedEffect(retry) {
         try { val response = vm.api.config(vm.projectId); config = response.objectAt("config"); usage = response.objectAt("usage"); failed = false }
         catch (_: ApiError) { failed = true }
     }
     fun change(key: String, list: List<JsonObject>) { config = JsonObject(config.orEmpty() + (key to JsonArray(list))); dirty = true }
     val dismiss = { if (!state.busy) { if (dirty) discard = true else close() } }
-    ModalBottomSheet(onDismissRequest = dismiss) {
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = sheet) {
         Column(Modifier.verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.oc_settings), style = MaterialTheme.typography.titleLarge)
             state.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }

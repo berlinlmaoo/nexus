@@ -13,13 +13,13 @@ import id.znetworks.nexus.feature.social.*
 import kotlinx.serialization.json.*
 
 /** Server config drives fields, including archived items only when this event holds a value. */
-fun OutletMonth.reportForm(event: OutletEvent?): OutletForm {
+fun OutletMonth.reportForm(event: OutletEvent?, archivedLabel: String, totalOnlyLabel: String): OutletForm {
     val config = raw.objectAt("config")
     if (config.isEmpty()) return form
     fun field(item: JsonObject, title: String? = null): OutletField? {
         val id = item.text("id")
         if (item.flag("archived") && event?.number("value:$id") == null) return null
-        val name = (title ?: item.text("label")) + if (item.flag("archived")) " · " + (if (OutletFormat.isId()) "diarsipkan" else "archived") else ""
+        val name = (title ?: item.text("label")) + if (item.flag("archived")) " · " + archivedLabel else ""
         return OutletField("value:$id", "count", OutletText(name, name), false, 1_000_000.0, null)
     }
     val sections = form.sections.filter { it.key !in setOf("rsvp", "hosting") }.toMutableList()
@@ -32,16 +32,19 @@ fun OutletMonth.reportForm(event: OutletEvent?): OutletForm {
         val id = community.text("id")
         val fields = mutableListOf<OutletField>()
         val own = event?.number("value:$id")
-        if (community.text("mode") == "total" || own != null) field(community, if (OutletFormat.isId()) "Total saja" else "Total only")?.let(fields::add)
+        if (community.text("mode") == "total" || own != null) field(community, totalOnlyLabel)?.let(fields::add)
         community.rows("items").forEach { field(it)?.let(fields::add) }
         if ((!community.flag("archived") || fields.any { event?.number(it.key) != null }) && fields.isNotEmpty()) {
-            val title = community.text("name") + if (community.flag("archived")) " · " + (if (OutletFormat.isId()) "diarsipkan" else "archived") else ""
+            val title = community.text("name") + if (community.flag("archived")) " · " + archivedLabel else ""
             custom += OutletSection("community:$id", OutletText(title, title), "community:$id", fields)
         }
     }
     sections.addAll((sections.indexOfFirst { it.key == "pax" } + 1).coerceAtLeast(0), custom)
     return OutletForm(sections)
 }
+
+@Composable
+internal fun OutletMonth.currentReportForm(event: OutletEvent?) = reportForm(event, stringResource(R.string.sm_archived), stringResource(R.string.oc_total_only))
 
 /** Dynamic item ids travel inside `values`; legacy event keys keep their original wire shape. */
 fun outletValues(body: JsonObject): JsonObject = buildJsonObject {

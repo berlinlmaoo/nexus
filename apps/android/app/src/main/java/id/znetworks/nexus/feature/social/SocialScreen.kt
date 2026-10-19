@@ -4,7 +4,12 @@ import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -33,6 +38,8 @@ import kotlinx.serialization.json.*
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 
 data class SocialState(
     val month: String = YearMonth.now(ZoneId.of("Asia/Jakarta")).toString(),
@@ -66,7 +73,7 @@ class SocialViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     fun write(path: String, body: JsonObject, done: () -> Unit) = viewModelScope.launch {
         if (mutable.value.busy) return@launch
         mutable.update { it.copy(busy = true, error = null) }
-        try { api.put(path, body); load().join(); done() }
+        try { api.put(path, body); load().join(); done(); id.znetworks.nexus.ui.components.UiNotice.show(getApplication<Application>().getString(R.string.sm_saved)) }
         catch (e: ApiError) {
             if ((e as? ApiError.Http)?.code == "CONFIG_CHANGED") load().join()
             mutable.update { it.copy(error = e.describe(getApplication<Application>().resources)) }
@@ -80,7 +87,7 @@ class SocialViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
             val response = api.put("config", buildJsonObject { put("config", config) })
             configured(response.objectAt("config"))
             api.put("targets", targets)
-            load().join(); done()
+            load().join(); done(); id.znetworks.nexus.ui.components.UiNotice.show(getApplication<Application>().getString(R.string.sm_saved))
         } catch (e: ApiError) { mutable.update { it.copy(error = e.describe(getApplication<Application>().resources)) } }
         mutable.update { it.copy(busy = false) }
     }
@@ -112,48 +119,33 @@ fun SocialTab(calendar: Boolean, initialDate: String? = null, vm: SocialViewMode
             if (d.canManage) TextButton(onClick = { settings = true }) { Text(stringResource(R.string.sm_settings)) }
             if (d.canRecord) Button(onClick = { vm.month(d.today.take(7)); date = d.today }) { Text(stringResource(R.string.sm_record_today)) }
             if (calendar) {
+                Row(Modifier.fillMaxWidth()) {
+                    java.time.DayOfWeek.entries.forEach { Text(it.getDisplayName(TextStyle.NARROW, Locale.getDefault()), Modifier.weight(1f).padding(4.dp), style = MaterialTheme.typography.labelSmall) }
+                }
                 OutletFormat.grid(YearMonth.parse(s.month)).chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { day ->
                             val dayData = d.day(day.toString())
                             Column(Modifier.weight(1f).clickable { vm.month(day.toString().take(7)); date = day.toString() }.padding(4.dp)) {
-                                Text(day.dayOfMonth.toString(), color = if (day.toString() == d.today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                                if (dayData.number("engagement") != null) Text(OutletFormat.count(dayData.number("engagement")), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                                if (dayData.text("worked").isNotEmpty() || dayData.text("didntWork").isNotEmpty()) Text(stringResource(R.string.sm_note_mark), style = MaterialTheme.typography.labelSmall)
-                                if (d.targets(day.toString()).isNotEmpty()) Text(stringResource(R.string.sm_target_mark), style = MaterialTheme.typography.labelSmall)
+                                val today = day.toString() == d.today
+                                Text(day.dayOfMonth.toString(), modifier = Modifier.background(if (today) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent, CircleShape).padding(3.dp),
+                                    color = if (today) MaterialTheme.colorScheme.onPrimary else if (day.toString().startsWith(d.month)) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                                dayData.number("engagement")?.let { n -> Text(compact(n, stringResource(R.string.sm_thousand), stringResource(R.string.sm_million)), style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+                                Row {
+                                    if (dayData.text("worked").isNotEmpty() || dayData.text("didntWork").isNotEmpty()) Icon(Icons.Outlined.Notes, stringResource(R.string.sm_note_mark), Modifier.size(12.dp))
+                                    if (d.targets(day.toString()).isNotEmpty()) Icon(Icons.Outlined.Flag, stringResource(R.string.sm_target_mark), Modifier.size(12.dp))
+                                }
                             }
                         }
                     }
                 }
             } else {
                 TextButton(onClick = { info = true }) { Text(stringResource(R.string.sm_to_date)) }
+                d.overview.text("cutoff").takeIf { it.isNotEmpty() }?.let { Text(stringResource(R.string.sm_through, OutletFormat.shortDay(it, d.today.take(4).toInt()))) }
                 when {
                     d.overview["cutoff"] == JsonNull -> Text(stringResource(R.string.sm_not_started, OutletFormat.monthLabel(d.month)))
                     (d.overview.number("recordedDays") ?: 0.0) == 0.0 -> Text(stringResource(R.string.sm_empty, OutletFormat.monthLabel(d.month)))
-                    else -> d.overview.rows("platforms").forEach { platform ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(platform.text("name") + if (platform.flag("archived")) " · " + stringResource(R.string.sm_archived) else "", style = MaterialTheme.typography.titleMedium)
-                                SocialMetric(platform, "engagement", "engagementTargetToDate", R.string.sm_engagement)
-                                Text(stringResource(R.string.sm_month_target, OutletFormat.count(platform.number("engagementTargetMonth"))))
-                                val values = (platform["trend"] as? JsonArray).orEmpty().map { (it as? JsonPrimitive)?.floatOrNull ?: 0f }
-                                val color = MaterialTheme.colorScheme.primary
-                                Canvas(Modifier.fillMaxWidth().height(40.dp)) {
-                                    if (values.size > 1) {
-                                        val high = values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
-                                        val path = Path()
-                                        values.forEachIndexed { i, n ->
-                                            val x = size.width * i / (values.size - 1); val y = size.height * (1 - n / high)
-                                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                                        }
-                                        drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-                                    }
-                                }
-                                listOf("views", "likes", "comments", "shares").forEach { key -> Text("${stringResource(metricLabel(key))}: ${OutletFormat.count(platform.number(key))}") }
-                                SocialMetric(platform, "posts", "postsTargetToDate", R.string.sm_posts)
-                            }
-                        }
-                    }
+                    else -> SocialOverview(d)
                 }
             }
         }
@@ -164,6 +156,12 @@ fun SocialTab(calendar: Boolean, initialDate: String? = null, vm: SocialViewMode
     if (d != null && settings) SocialSettingsDialog(d, vm, s.busy, s.error) { settings = false }
 }
 
+internal fun compact(number: Double, thousand: String, million: String): String {
+    val divisor = when { number >= 1_000_000 -> 1_000_000; number >= 1000 -> 1000; else -> return number.toLong().toString() }
+    val shown = java.text.DecimalFormat("0.#").format(number / divisor)
+    return shown + (if (divisor == 1000) thousand else million)
+}
+
 internal fun metricLabel(key: String) = when (key) {
     "views" -> R.string.sm_views; "likes" -> R.string.sm_likes; "comments" -> R.string.sm_comments
     "shares" -> R.string.sm_shares; "posts" -> R.string.sm_posts; "postsTarget" -> R.string.sm_posts_target
@@ -172,6 +170,10 @@ internal fun metricLabel(key: String) = when (key) {
 
 @Composable
 internal fun SocialMetric(raw: JsonObject, metric: String, target: String, label: Int) {
-    Text("${stringResource(label)}: ${OutletFormat.vsTarget(raw.number(metric), raw.number(target), false, pct = raw.number(metric + "Pct")?.toInt())}")
+    val actual = reportNumber(raw.number(metric)); val goal = raw.number(target)?.let(::reportNumber)
+    val pct = raw.number(metric + "Pct")
+    Text("${stringResource(label)}: $actual" + (goal?.let { " / $it" } ?: "") + (pct?.let { " (${it.toInt()}%)" } ?: ""))
     raw.number(metric + "Pct")?.let { pct -> LinearProgressIndicator(progress = { (pct / 100).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth()) }
 }
+
+internal fun reportNumber(number: Double?) = number?.let { java.text.DecimalFormat("#,##0.##").format(it) } ?: "—"

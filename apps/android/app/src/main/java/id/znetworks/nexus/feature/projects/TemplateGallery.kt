@@ -153,7 +153,7 @@ fun TemplateGalleryDialog(pipelineAccess: Boolean, onDismiss: () -> Unit, onPick
     val showBlank = category == "all" && (q.isEmpty() || listOf("blank", blankTitle, blankBody).any { it.lowercase().contains(q) })
     val ctx = LocalContext.current
     val shownDashboards = dashboards.filter { d ->
-        (category == "all" || category == "dashboards") && (q.isEmpty() || listOf(d.title, ctx.getString(d.description)).any { it.lowercase().contains(q) })
+        (category == "all" || category == "dashboards") && (q.isEmpty() || listOf(d.title, ctx.getString(d.description), if (d == ProjectType.SOCIAL_MEDIA_REPORT) ctx.getString(R.string.sm_title) else "").any { it.lowercase().contains(q) })
     }
     val nothing = !loading && !showBlank && shown.isEmpty() && shownDashboards.isEmpty()
     val wide = LocalConfiguration.current.screenWidthDp >= 600
