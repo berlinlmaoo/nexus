@@ -313,6 +313,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
+            is Target.Booking -> { container.router.consumed(t); nav.navigate("rooms?booking=${enc(t.id)}") }
             is Target.Calendar -> {
                 container.router.consumed(t)
                 // A quadrant widget's whole list (audit #40).
@@ -503,7 +504,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("leaderboard") { LeaderboardScreen(onBack = { nav.popBackStack() }, onOpenPerson = { nav.navigate("profile/$it") }) }
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
-            composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
+            composable("rooms?booking={booking}", arguments = listOf(navArgument("booking") { nullable = true; defaultValue = null })) { e -> RoomBookingScreen(bookingId = e.arguments?.getString("booking"), onBack = { nav.popBackStack() }) }
             // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
             composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}&folder={folder}&unit={unit}&person={person}&project={project}&prio={prio}&done={done}&overdue={overdue}",
                 arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n", "folder", "unit", "person", "project", "prio", "done", "overdue").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->

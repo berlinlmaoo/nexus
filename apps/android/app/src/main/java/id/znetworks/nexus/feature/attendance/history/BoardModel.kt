@@ -52,6 +52,8 @@ data class Score(val shown: Int, val target: Int, val surplus: Int) {
 }
 
 object BoardModel {
+    fun offsetFor(date: LocalDate, today: LocalDate = OfficeTime.today()): Int = java.time.temporal.ChronoUnit.MONTHS.between(
+        java.time.YearMonth.parse(OfficeTime.periodKey(today)), java.time.YearMonth.parse(OfficeTime.periodKey(date))).toInt()
     /** The first column shown: three days before today when today is in [days] (so it sits in view), else the period's first day. */
     fun startColumn(days: List<java.time.LocalDate>, today: java.time.LocalDate): Int = days.indexOf(today).let { if (it > 3) it - 3 else 0 }
 

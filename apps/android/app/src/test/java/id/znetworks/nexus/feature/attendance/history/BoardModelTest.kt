@@ -9,6 +9,13 @@ import org.junit.Test
 import java.time.LocalDate
 
 class BoardModelTest {
+    @Test fun linkedDatesChooseTheAttendancePeriodRatherThanCalendarMonth() {
+        val today = LocalDate.parse("2026-10-19")
+        assertEquals(-1, BoardModel.offsetFor(LocalDate.parse("2026-09-27"), today))
+        assertEquals(0, BoardModel.offsetFor(LocalDate.parse("2026-09-28"), today))
+        assertEquals(0, BoardModel.offsetFor(LocalDate.parse("2026-10-27"), today))
+        assertEquals(1, BoardModel.offsetFor(LocalDate.parse("2026-10-28"), today))
+    }
     private fun row(day: String, dayType: String? = null, checkIn: String? = null, status: String? = null, user: String = "u1", name: String = "A") =
         HistoryRow(id = "r$day$user", attendanceDate = "${day}T00:00:00.000Z", attendanceDayType = dayType, checkInAt = checkIn,
             status = status, user = PersonRef(id = user, name = name))

@@ -107,6 +107,8 @@ class AgendaApi(private val api: ApiClient) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     suspend fun bookingPage(from: Instant, to: Instant) = api.get("/api/room-bookings?rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", Bookings.serializer())
     suspend fun bookings(from: Instant, to: Instant) = bookingPage(from, to).bookings
+    // This API has no single-booking GET. Resolve links once through its authorized ranged listing.
+    suspend fun findBooking(id: String) = bookingPage(Instant.EPOCH, Instant.parse("2100-01-01T00:00:00Z")).let { page -> page.bookings.firstOrNull { page.roomsAvailable && it.id == id } }
 
     private fun body(room: String, title: String, from: Instant, to: Instant, notes: String?) = kotlinx.serialization.json.buildJsonObject {
         put("room", kotlinx.serialization.json.JsonPrimitive(room)); put("title", kotlinx.serialization.json.JsonPrimitive(title))
@@ -157,7 +159,7 @@ private fun AgendaRow(time: String, title: String, chip: String?, sub: String?, 
 }
 
 @Composable
-fun RoomBookingScreen(onBack: () -> Unit) {
+fun RoomBookingScreen(bookingId: String? = null, onBack: () -> Unit) {
     val api = agendaApi()
     val c = Nx.colors
     val context = LocalContext.current
@@ -177,6 +179,15 @@ fun RoomBookingScreen(onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     // The composer: Pair(true, null) = a new booking, Pair(true, b) = editing b.
     var composing by remember { mutableStateOf<Pair<Boolean, Booking?>>(false to null) }
+    var wantedBooking by rememberSaveable(bookingId) { mutableStateOf(bookingId) }
+    var openedBooking by remember { mutableStateOf<Booking?>(null) }
+    LaunchedEffect(wantedBooking) {
+        val id = wantedBooking ?: return@LaunchedEffect
+        val found = runCatching { api.findBooking(id) }.getOrNull()
+        if (wantedBooking != id) return@LaunchedEffect
+        if (found == null) wantedBooking = null
+        else { openedBooking = found; AgendaLogic.zoned(found.startsAt)?.let { monthKey = YearMonth.from(it).toString() }; showPast = AgendaLogic.zoned(found.endsAt)?.toInstant()?.isBefore(Instant.now()) == true }
+    }
     var reload by remember { mutableIntStateOf(0) }
     LaunchedEffect(monthKey, reload) {
         list = null
@@ -235,4 +246,12 @@ fun RoomBookingScreen(onBack: () -> Unit) {
         }
     }
     if (composing.first && company == true && available != false) BookingComposer(composing.second, api, onDismiss = { composing = false to null }, onSaved = { composing = false to null; reload++ })
+    openedBooking?.takeIf { company == true && available != false }?.let { booking ->
+        val close = { openedBooking = null; wantedBooking = null }
+        if (AgendaLogic.canEdit(booking, meId, canAdminister)) BookingComposer(booking, api, onDismiss = close, onSaved = { close(); reload++ })
+        else androidx.compose.material3.AlertDialog(onDismissRequest = close, title = { Text(booking.title) }, text = { Column {
+            Text(roomLabel(booking.room)); Text(AgendaLogic.zoned(booking.startsAt)?.format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.getDefault())).orEmpty() + "–" + AgendaLogic.hhmm(booking.endsAt))
+            booking.description?.let { Text(it) }
+        } }, confirmButton = { TextButton(onClick = close) { Text(stringResource(R.string.au_close)) } })
+    }
 }

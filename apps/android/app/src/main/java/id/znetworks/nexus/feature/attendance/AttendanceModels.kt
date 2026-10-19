@@ -98,7 +98,7 @@ data class DayOffAllowance(
 )
 
 @Serializable
-data class DayOffGrant(val days: Int? = null, val reason: String? = null)
+data class DayOffGrant(val days: Int? = null, val reason: String? = null, val id: String? = null)
 
 @Serializable
 data class TodayRequest(

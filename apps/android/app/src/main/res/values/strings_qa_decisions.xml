@@ -1,4 +1,8 @@
 <resources>
+    <string name="qa_person_trail">%1$s\'s location trail</string>
+    <string name="qa_dayoff_allowance">Day-off allowance</string>
+    <string name="qa_dayoff_no_bonus">No extra days off this period.</string>
+    <string name="qa_dayoff_bonus_days">Extra days off: %1$d</string>
     <string name="qa_outlet_settings_short">Settings</string>
     <string name="qa_term_overpaid">· Overpaid by %1$s</string>
     <string name="qa_term_overpaid_warning">Overpaid by %1$s. It still counts as paid in full.</string>

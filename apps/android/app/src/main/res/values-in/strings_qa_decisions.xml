@@ -1,4 +1,8 @@
 <resources>
+    <string name="qa_person_trail">Jejak lokasi %1$s</string>
+    <string name="qa_dayoff_allowance">Jatah day off</string>
+    <string name="qa_dayoff_no_bonus">Tidak ada tambahan day off di periode ini.</string>
+    <string name="qa_dayoff_bonus_days">Tambahan day off: %1$d</string>
     <string name="qa_outlet_settings_short">Pengaturan</string>
     <string name="qa_term_overpaid">· Dibayar lebih %1$s</string>
     <string name="qa_term_overpaid_warning">Dibayar lebih %1$s. Tetap dihitung lunas.</string>

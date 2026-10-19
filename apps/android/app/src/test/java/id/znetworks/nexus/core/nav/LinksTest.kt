@@ -4,6 +4,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LinksTest {
+    @Test fun attendanceAndBookingLinksRetainTheirSpecificRecords() {
+        assertEquals(Target.Attendance(date = "2026-09-20"), Links.parse("/attendance?absent=2026-09-20"))
+        assertEquals(Target.Attendance(date = "2026-10-18"), Links.parse("nexus://attendance?date=2026-10-18"))
+        assertEquals(Target.Attendance(), Links.parse("/attendance?absent=2026-99-99"))
+        assertEquals(Target.Attendance(trailRecordId = "r", memberId = "u"), Links.parse("/attendance?trail=r&member=u"))
+        assertEquals(Target.Attendance(bonusId = "g"), Links.parse("/attendance?bonus=g"))
+        assertEquals(Target.Booking("b"), Links.parse("/room-booking?booking=b"))
+        assertEquals(Target.RoomBooking, Links.parse("/room-booking?booking="))
+    }
     @Test fun peopleAndGideonSchemeLinksStayNative() {
         assertEquals(Target.Profile("User-ID"), Links.parse("nexus://people/User-ID?from=messages#profile"))
         assertEquals(Target.Profile("u1"), Links.parse("nexus://people/u1/"))
