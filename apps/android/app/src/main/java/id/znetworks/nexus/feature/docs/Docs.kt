@@ -182,7 +182,10 @@ fun DocReaderScreen(id: String, onBack: () -> Unit, onGideon: () -> Unit = {}) {
     var actions by remember { mutableStateOf(false) }
     var doc by remember { mutableStateOf<Doc?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(id) { try { doc = api.one(id) } catch (e: ApiError) { error = e.describe(res) } }
+    var reload by remember { mutableStateOf(0) }
+    var editable by remember(id) { mutableStateOf(false) }
+    LaunchedEffect(id, reload) { editable = runCatching { BlockEditorApi((context.applicationContext as NexusApplication).container.api).load("doc", id).canEdit }.getOrDefault(false) }
+    LaunchedEffect(id, reload) { try { doc = api.one(id) } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
         PageHeader(doc?.project?.name ?: stringResource(R.string.nav_pages), onBack = onBack) {
             Box {
@@ -208,6 +211,7 @@ fun DocReaderScreen(id: String, onBack: () -> Unit, onGideon: () -> Unit = {}) {
                     Text(d.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, color = c.foreground)
                 }
                 Text(listOfNotNull(d.project?.name, chatTime(d.updatedAt).takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
+                if (editable) BlockEditorButton("doc", id) { reload++ }
                 val blocks = DocBlocks.from(d.content).ifEmpty { d.contentText?.split("\n")?.map { DocBlock("paragraph", it) }.orEmpty() }
                 if (blocks.all { it.text.isBlank() }) Text(stringResource(R.string.docs_empty_doc), fontSize = 14.sp, color = c.mutedFg)
                 var n = 0

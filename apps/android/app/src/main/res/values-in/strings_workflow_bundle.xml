@@ -1,0 +1,7 @@
+<resources>
+    <string name="wb_title">Paket alur kerja</string>
+    <string name="wb_help">Terapkan paket tersimpan ke proyek ini. Paket dapat menambahkan bagian, kolom, dan aturan automasi.</string>
+    <string name="wb_empty">Belum ada paket alur kerja di workspace ini.</string>
+    <string name="wb_confirm">Terapkan %1$s?</string>
+    <string name="wb_apply">Terapkan paket</string>
+</resources>

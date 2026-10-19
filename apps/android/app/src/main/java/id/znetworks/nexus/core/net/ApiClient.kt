@@ -143,14 +143,16 @@ class ApiClient(
         onEtag: (String?) -> Unit = {},
         /** The response headers of a successful answer (Legal names a saved file from its Content-Disposition). */
         onHeaders: (okhttp3.Headers) -> Unit = {},
+        postBody: okhttp3.RequestBody? = null,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): String? {
         // A malformed absolute URL from the server is a failed download, not a crash (audit S8).
         val url = if (pathOrUrl.startsWith("http")) runCatching { pathOrUrl.toHttpUrl() }.getOrElse { throw ApiError.Transport(IOException("Bad download URL")) }
             else url(pathOrUrl)
         val session = sessionProvider()
-        val have = if (target.exists() && etag != null) target.length() else 0L
+        val have = if (postBody == null && target.exists() && etag != null) target.length() else 0L
         val req = Request.Builder().url(url).header("Accept", "*/*").apply {
+            postBody?.let { post(it) }
             if (session != null && mayCarrySession(url.host)) header("Cookie", "${session.cookieName}=${session.token}")
             if (have > 0) { header("Range", "bytes=$have-"); header("If-Range", etag!!) }
         }.build()

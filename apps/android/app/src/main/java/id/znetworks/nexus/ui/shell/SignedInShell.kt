@@ -364,6 +364,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version) && !id.znetworks.nexus.core.tour.TourMode.active) }
     if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
+    val xpAnnouncements by container.announcements.queue.collectAsStateWithLifecycle()
+    val xpDisclosure by container.workTrail.disclosureFor.collectAsStateWithLifecycle()
+    id.znetworks.nexus.feature.people.XpPenaltyHost(!whatsNew && !alwaysAgain && xpAnnouncements.isEmpty() && xpDisclosure == null && !id.znetworks.nexus.core.tour.TourMode.active)
+
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
     // web's sidebar with every destination instead (dev web AppSidebar).
     val width = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp

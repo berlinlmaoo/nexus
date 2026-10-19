@@ -1,0 +1,36 @@
+<resources>
+    <string name="ab_new">New automation</string>
+    <string name="ab_edit">Edit automation</string>
+    <string name="ab_name">Name</string>
+    <string name="ab_enabled">Enabled</string>
+    <string name="ab_conditions">Conditions (optional)</string>
+    <string name="ab_match">Match</string>
+    <string name="ab_field">Field</string>
+    <string name="ab_operator">Operator</string>
+    <string name="ab_remove">Remove</string>
+    <string name="ab_add_condition">Add condition</string>
+    <string name="ab_add_action">Add action</string>
+    <string name="ab_schedule_hint">Without conditions, schedules run once. With conditions, they run on each matching task. Actions that need a task are skipped when none is selected.</string>
+    <string name="ab_up">Move up</string>
+    <string name="ab_delete_confirm">Delete this automation?</string>
+    <string name="ab_discard">Discard changes?</string>
+    <string name="ab_discard_action">Discard</string>
+    <string name="ab_value">Value</string>
+    <string name="ab_any">Any / default</string>
+    <string name="ab_trigger">Trigger</string>
+    <string name="ab_action">Action</string>
+    <string name="ab_repeat">Repeat</string>
+    <string name="ab_time">Time (HH:mm, WIB)</string>
+    <string name="ab_weekdays">1 = Monday, 7 = Sunday</string>
+    <string name="ab_month_day">Day of month (1-28)</string>
+    <string name="ab_from">From status</string>
+    <string name="ab_section">Section</string>
+    <string name="ab_due">Due date (+3, today, YYYY-MM-DD)</string>
+    <string name="ab_priority">Priority</string>
+    <string name="ab_suggestions">Suggestions</string>
+    <string name="ab_no_suggestions">No suggestions yet. Add more project activity first.</string>
+    <string name="ab_monthly">Monthly</string>
+    <string name="ab_required">Complete the required fields. Hours: 1-720; time: HH:mm; monthly day: 1-28; pick at least one weekly day.</string>
+    <string name="ab_to">To status</string>
+    <string name="ab_form">Form</string>
+</resources>
