@@ -1,0 +1,8 @@
+<resources>
+    <string name="cff_limit">Pilih file yang tidak kosong, maksimal 250 MB.</string>
+    <string name="cff_no_viewer">Tidak ada aplikasi yang bisa membuka file ini.</string>
+    <string name="cff_remove">Hapus</string>
+    <string name="cff_empty">Belum ada file.</string>
+    <string name="cff_add">Tambah file</string>
+    <string name="cff_confirm">Hapus “%1$s” dari properti ini?</string>
+</resources>

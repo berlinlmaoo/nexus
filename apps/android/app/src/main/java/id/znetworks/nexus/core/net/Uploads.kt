@@ -23,6 +23,10 @@ import java.util.UUID
 class Uploads(private val context: Context, private val api: ApiClient) {
     data class Picked(val uri: Uri, val name: String, val mime: String, val size: Long)
 
+    /** Routes without a chunk endpoint (for example custom-field files) stream one multipart request. */
+    suspend fun <T> sendSingle(file: Picked, path: String, fields: List<Pair<String, String>>, serializer: KSerializer<T>, onProgress: (Long, Long) -> Unit): T =
+        single(file, path, fields, serializer, onProgress)
+
     fun describe(uri: Uri): Picked? {
         val cr = context.contentResolver
         var name = "file"

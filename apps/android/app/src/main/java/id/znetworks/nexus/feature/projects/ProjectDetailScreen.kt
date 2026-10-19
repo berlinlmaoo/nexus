@@ -825,7 +825,7 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
                 OutlinedButton(onClick = { picking = true }) {
                     Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
-                NewTaskFields(fields, values) { id, v -> values = values + (id to v) }
+                NewTaskFields(fields, values, projectId) { id, v -> values = values + (id to v) }
             }
         },
         confirmButton = {
