@@ -74,7 +74,7 @@ export function GideonCreateTaskCard({ proposal, onDecided }: { proposal: Gideon
         </div>
         <div className={cn(row, !projectId && "ring-1 ring-amber-500/50")}>
           <span className="text-muted-foreground">{t("Project")}</span>
-          <SelectPicker value={projectId} onChange={(v) => { setProjectId(v || null); setError(null); }} options={projectOptions} placeholder={t("Choose a project")} ariaLabel={t("Project")} searchable searchPlaceholder={t("Search projects")} size="sm" disabled={!!pending} />
+          <SelectPicker value={projectId} onChange={(v) => { setProjectId(v || null); setError(null); }} options={projectOptions} placeholder={t("Choose a project")} ariaLabel={t("Project")} searchable searchPlaceholder={t("Search projects")} size="sm" disabled={!!pending} wrapLabels />
         </div>
         {projectId && (
           <>
