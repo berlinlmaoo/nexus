@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Apple, X } from "lucide-react";
 import { useLang } from "@/lib/lang";
+import { useModalTurn } from "@/lib/modal-queue";
 
 const KEY = "nexus-appstore-never";
 const URL = "https://apps.apple.com/id/app/id6807031457";
@@ -32,6 +33,10 @@ export function AppStoreModal() {
     }
   }, []);
 
+  // Last in the start-up modal queue (C-D1): shown only once the XP alert, announcements and the attendance
+  // reminder are closed or have nothing to show.
+  const turn = useModalTurn("appStore", open ? "want" : "idle");
+
   const later = () => setOpen(false);
   const never = () => {
     setOpen(false);
@@ -46,7 +51,7 @@ export function AppStoreModal() {
 
   return createPortal(
     <AnimatePresence>
-      {open && (
+      {open && turn && (
         <div className="fixed inset-0 z-[85] grid grid-cols-1 place-items-center p-4">
           <EscClose onClose={later} />
           <motion.div
