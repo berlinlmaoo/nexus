@@ -2376,11 +2376,12 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const canEditBars = useProjectCanEdit();
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
-  // Phone (UI round 19 Oct 2026, U-9, like Notion mobile): no frozen Name column by default — each bar carries its
-  // title — and a "Names" toggle shows a narrow one (120 px, title on 2 lines, no date line). Remembered on the device.
+  // Phone (UI round 19 Oct 2026, U-9): a narrow frozen Name column (120 px, title on 2 lines, no date line), ON by
+  // default since R-7 (owner, 19 Oct 2026); the "Names" toggle hides it (each bar still carries its title). Remembered
+  // on the device: only an explicit "0" (the person switched it off) hides it.
   // Duration and Progress stay desktop-only (the bar's tooltip and the task itself still say both).
   const compact = useIsMobile();
-  const [showNames, setShowNames] = useState(() => { try { return localStorage.getItem("nexus-tl-names") === "1"; } catch { return false; } });
+  const [showNames, setShowNames] = useState(() => { try { return localStorage.getItem("nexus-tl-names") !== "0"; } catch { return true; } });
   const toggleNames = () => setShowNames((v) => { const n = !v; try { localStorage.setItem("nexus-tl-names", n ? "1" : "0"); } catch { /* not remembered */ } return n; });
   const noNames = compact && !showNames;
   const leftW = compact ? (showNames ? 120 : 0) : GANTT_LEFT_W;

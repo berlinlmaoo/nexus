@@ -10,7 +10,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  clock, createMeeting, etaText, getMeeting, isMeetingAudio, MeetingApiError, MEETING_AUDIO_ACCEPT, readDuration, uploadMeetingAudio, useWebAppConfig, type Meeting, type MeetingLanguage,
+  clock, createMeeting, etaText, isMeetingAudio, MeetingApiError, MEETING_AUDIO_ACCEPT, readDuration, uploadMeetingAudio, useMeeting, useWebAppConfig, type Meeting, type MeetingLanguage,
 } from "@/lib/meetings";
 import { BetaBadge } from "./BetaBadge";
 
@@ -82,8 +82,6 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
       });
       const queued = await uploadMeetingAudio(meeting.id, file, upload.chunkBytes, setProgress, ctl.signal);
       setSent(queued);
-      // The queue estimate is computed when the server lists it; refresh it once the job is in line.
-      window.setTimeout(() => { void getMeeting(meeting.id).then((m) => setSent((cur) => (cur && cur.id === m.id ? m : cur))).catch(() => {}); }, 2500);
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
       setError(e instanceof MeetingApiError || e instanceof Error ? e.message : t("Upload failed. Try again."));
@@ -98,31 +96,29 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
     onOpenChange(v);
   };
 
-  if (sent) {
-    const q = sent.queue;
+  // R-6 (owner, 19 Oct 2026): from the moment Upload is pressed it is ONE screen with three steps — ① Upload
+  // ② Transcribe ③ Minutes & tasks ready — each with its own live line. The footer stays in the same place in every
+  // state: "Cancel upload" only while the file is still going up, then "Done" + "Open meeting".
+  if (busy || sent) {
+    const openMeeting = sent ? () => { onOpenChange(false); router.history.push(`/meetings/${sent.id}`); } : undefined;
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={open} onOpenChange={close}>
+        <DialogContent className="max-w-lg grid-cols-[minmax(0,1fr)]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">{t("Uploaded")}<BetaBadge /></DialogTitle>
-            <DialogDescription>{sent.title || sent.audio.name}</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">{t("Meeting notes")}<BetaBadge /></DialogTitle>
+            <DialogDescription className="truncate">{(sent?.title || title.trim() || file?.name) ?? ""}</DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-border bg-muted/20 p-4" aria-live="polite">
-            <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Loader2 className="h-4 w-4 animate-spin" /></span>
-              <div className="min-w-0 text-sm">
-                <div className="font-semibold">{t("Waiting for the transcription server…")}</div>
-                <div className="mt-0.5 text-muted-foreground tabular-nums">
-                  {q?.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line")}
-                  {q ? ` · ${t("ready in {eta}", { eta: etaText(q.etaSec, t) })}` : ""}
-                </div>
-              </div>
-            </div>
-            <p className="mt-3 text-sm">{t("You can leave this page — we'll notify you when it's ready.")}</p>
-          </div>
-          <DialogFooter>
-            <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">{t("Close")}</button>
-            <button type="button" onClick={() => { onOpenChange(false); router.history.push(`/meetings/${sent.id}`); }} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sidebar-primary px-3 py-2 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90">{t("Open meeting")}</button>
+          {sent ? <LiveSteps id={sent.id} initial={sent} bytes={file?.size ?? sent.audio.bytes} /> : <Steps meeting={null} progress={progress} bytes={file?.size ?? 0} />}
+          <p className="text-xs leading-relaxed text-muted-foreground">{t("You can leave this page — we'll notify you when it's ready.")}</p>
+          <DialogFooter className="flex-row justify-end gap-2">
+            {!sent ? (
+              <button type="button" onClick={() => close(false)} className="h-10 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent">{t("Cancel upload")}</button>
+            ) : (
+              <>
+                <button type="button" onClick={() => onOpenChange(false)} className="h-10 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent">{t("Done")}</button>
+                <button type="button" onClick={openMeeting} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90">{t("Open meeting")}</button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -184,12 +180,6 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
               introductions={speakerLabels} introEnd={introEnd} onIntroEnd={setIntroEnd} />
           ) : null}
 
-          {busy && (
-            <div aria-live="polite">
-              <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>{t("Uploading…")}</span><span className="tabular-nums">{Math.round(progress * 100)}%</span></div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-sidebar-primary transition-[width] duration-300" style={{ width: `${Math.max(2, progress * 100)}%` }} /></div>
-            </div>
-          )}
           {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
 
           {file ? (
@@ -214,6 +204,88 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** MB with one decimal: "12.3 MB". */
+const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+
+/** The upload is done: follow the meeting live (socket `meeting-changed`, same as the meeting page). */
+function LiveSteps({ id, initial, bytes }: { id: string; initial: Meeting; bytes: number }) {
+  const q = useMeeting(id);
+  // The queue estimate is computed when the server lists the job; read it again once it is in line.
+  const { refetch } = q;
+  useEffect(() => { const h = window.setTimeout(() => { void refetch(); }, 2500); return () => window.clearTimeout(h); }, [refetch]);
+  return <Steps meeting={q.data ?? initial} progress={1} bytes={bytes} />;
+}
+
+type StepState = "todo" | "active" | "done" | "failed";
+
+/** ① Upload ② Transcribe ③ Minutes & tasks ready — one row each, same layout in every state. */
+function Steps({ meeting, progress, bytes }: { meeting: Meeting | null; progress: number; bytes: number }) {
+  const { t } = useLang();
+  const st = meeting?.status ?? "UPLOADING";
+  const failed = st === "FAILED";
+  const transcribed = st === "SUMMARIZING" || st === "READY" || st === "APPLYING" || st === "APPLIED";
+  const ready = st === "READY" || st === "APPLYING" || st === "APPLIED";
+  const uploaded = !!meeting && st !== "UPLOADING";
+  const q = meeting?.queue ?? null;
+  const pct = (p: number) => `${Math.round(Math.max(0, Math.min(1, p)) * 100)}%`;
+  const eta = q ? t("ready in {eta}", { eta: etaText(q.etaSec, t) }) : null;
+
+  const upload: { state: StepState; detail: string; bar?: number } = uploaded
+    ? { state: "done", detail: mb(bytes) }
+    : { state: "active", detail: `${mb(bytes * Math.max(0, Math.min(1, progress)))} / ${mb(bytes)} · ${pct(progress)}`, bar: progress };
+  const transcribe: { state: StepState; detail: string; bar?: number } = !uploaded
+    ? { state: "todo", detail: t("Starts after the upload") }
+    : transcribed
+      ? { state: "done", detail: t("Transcript ready") }
+      : failed && !transcribed
+        ? { state: "failed", detail: meeting?.error || t("Transcription failed. Open the meeting to try again.") }
+        : st === "TRANSCRIBING" && !q?.waiting
+          ? { state: "active", detail: [pct(meeting?.progress ?? 0), eta].filter(Boolean).join(" · "), bar: meeting?.progress ?? 0 }
+          : { state: "active", detail: [t("Waiting for the transcription server…"), q?.position && q.position > 1 ? t("#{n} in line", { n: q.position }) : t("next in line"), eta].filter(Boolean).join(" · ") };
+  const minutes: { state: StepState; detail: string } = ready
+    ? { state: "done", detail: meeting?.taskCount ? t("Minutes saved and {n} tasks created", { n: meeting.taskCount }) : t("Ready to check — open the meeting, then Apply") }
+    : st === "SUMMARIZING"
+      ? { state: "active", detail: [t("Writing the minutes…"), eta].filter(Boolean).join(" · ") }
+      : failed && transcribed
+        ? { state: "failed", detail: meeting?.error || t("The minutes could not be written. Open the meeting to try again.") }
+        : { state: "todo", detail: t("Overview, minutes and proposed tasks") };
+
+  const rows: Array<{ n: number; label: string; s: { state: StepState; detail: string; bar?: number } }> = [
+    { n: 1, label: t("Upload"), s: upload },
+    { n: 2, label: t("Transcribe"), s: transcribe },
+    { n: 3, label: t("Minutes & tasks ready"), s: minutes },
+  ];
+  return (
+    <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" aria-live="polite">
+      {rows.map(({ n, label, s }) => (
+        <li key={n} className="flex items-start gap-3 px-3 py-3">
+          <span className={cn(
+            "grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums",
+            s.state === "done" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+            s.state === "active" && "bg-sidebar-primary text-sidebar-primary-foreground",
+            s.state === "failed" && "bg-destructive/15 text-destructive",
+            s.state === "todo" && "bg-muted text-muted-foreground",
+          )} aria-hidden>
+            {s.state === "done" ? <Check className="h-3.5 w-3.5" /> : s.state === "failed" ? <X className="h-3.5 w-3.5" /> : n}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={cn("text-sm font-semibold", s.state === "todo" && "text-muted-foreground")}>{label}</span>
+              {s.state === "active" && <Loader2 className="h-3.5 w-3.5 animate-spin text-sidebar-primary" aria-hidden />}
+            </div>
+            <div className={cn("mt-0.5 text-xs tabular-nums", s.state === "failed" ? "text-destructive" : "text-muted-foreground")}>{s.detail}</div>
+            {s.bar !== undefined && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-sidebar-primary transition-[width] duration-200" style={{ width: `${Math.max(2, Math.min(1, s.bar) * 100)}%` }} />
+              </div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
