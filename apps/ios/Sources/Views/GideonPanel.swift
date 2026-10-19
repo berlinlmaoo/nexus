@@ -1066,8 +1066,8 @@ struct GideonPanel: View {
                 .accessibilityIdentifier("gideon.reviewNotice")
             }
             mentionPicker
-            GideonCreditMeter().padding(.horizontal, 4).padding(.bottom, 4)
             composer
+            GideonCreditMeter().padding(.horizontal, 4)
             Text(T("GIDEON is AI and can make mistakes."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
