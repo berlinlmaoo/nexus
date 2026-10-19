@@ -55,4 +55,6 @@
     <string name="ui_messages_empty_groups">Belum ada percakapan grup</string>
     <string name="ui_messages_empty_projects">Belum ada percakapan proyek</string>
     <string name="ui_messages_projects_hint">Percakapan untuk proyekmu muncul di sini.</string>
+    <plurals name="ui_vault_move_selected"><item quantity="other">Pindahkan %1$d item</item></plurals>
+    <plurals name="ui_vault_moved"><item quantity="other">%1$d item dipindahkan ke %2$s</item></plurals>
 </resources>

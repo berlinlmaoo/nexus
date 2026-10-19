@@ -147,7 +147,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, items: List<VaultItem> = lis
     val root = "Vault"
     val here = list?.breadcrumb?.lastOrNull()?.name ?: root
     val block = list?.let { VaultRules.moveBlock(item.parentId, at, it.canWrite) }
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(stringResource(R.string.vm_title, item.name)) },
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(if (items.size == 1) stringResource(R.string.vm_title, item.name) else androidx.compose.ui.res.pluralStringResource(R.plurals.ui_vault_move_selected, items.size, items.size)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The path, to walk up: Vault › LOGO › …

@@ -197,6 +197,7 @@ class VaultViewModel(app: Application, private val handle: SavedStateHandle) : A
 
     /** After Move to…: "“INTOO (2)” moved to Vault" (the returned name: a clash got a suffix), then the fresh list. */
     fun moved(item: VaultItem, folderName: String) { _state.update { it.copy(notice = res.getString(R.string.vm_moved, item.name, folderName)) }; load() }
+    fun movedMany(count: Int, folderName: String) { _state.update { it.copy(notice = res.getQuantityString(R.plurals.ui_vault_moved, count, count, folderName)) }; load() }
 
     /** Raw bytes need the session: downloaded by the app, never handed to a browser. */
     fun open(i: VaultItem, share: Boolean) {
@@ -308,20 +309,17 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                             }
                             if ((i.shareCount ?: 0) > 0) { Pill("🔗 ${i.shareCount}", c.blue); Spacer(Modifier.width(4.dp)) }
                             if (s.opening == i.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Box {
+                            if (!selecting) Box {
                                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = c.mutedFg) }
                                 DropdownMenu(menu, { menu = false }) {
                                     if (vm.trash) {
                                         DropdownMenuItem(text = { Text(stringResource(R.string.vault_restore)) }, onClick = { menu = false; vm.restore(i) })
                                         DropdownMenuItem(text = { Text(stringResource(R.string.vault_delete_forever), color = c.danger) }, onClick = { menu = false; confirm = i })
                                     } else {
-                                        if (!i.isFolder) {
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.td_open_file)) }, onClick = { menu = false; vm.open(i, false) })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
-                                        }
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
                                         if (i.canModify == true) {
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vault_rename)) }, onClick = { menu = false; naming = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vault_to_trash), color = c.danger) }, onClick = { menu = false; confirm = i })
                                         }
                                     }
@@ -348,8 +346,8 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                                     DropdownMenu(menu, { menu = false }) {
                                         DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
                                         if (i.canModify == true) {
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vault_rename)) }, onClick = { menu = false; naming = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vault_to_trash), color = c.danger) }, onClick = { menu = false; confirm = i })
                                         }
                                     }
@@ -366,8 +364,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         text = { Text(stringResource(R.string.vault_to_trash_body)) }, confirmButton = { TextButton(onClick = {
             vm.deleteSelected(l?.items.orEmpty().filter { it.id in selected }); confirmSelected = false; selecting = false; selected = emptySet()
         }) { Text(stringResource(R.string.delete), color = c.dangerText) } }, dismissButton = { TextButton(onClick = { confirmSelected = false }) { Text(stringResource(R.string.cancel)) } })
-    if (batchMoving.isNotEmpty()) VaultMoveDialog(batchMoving.first(), vm.api, items = batchMoving, onDismiss = { batchMoving = emptyList() }) { item, folder ->
-        batchMoving = emptyList(); selecting = false; selected = emptySet(); vm.moved(item, folder)
+    if (batchMoving.isNotEmpty()) VaultMoveDialog(batchMoving.first(), vm.api, items = batchMoving, onDismiss = { batchMoving = emptyList(); vm.load() }) { _, folder ->
+        val count = batchMoving.size
+        batchMoving = emptyList(); selecting = false; selected = emptySet(); vm.movedMany(count, folder)
     }
     s.notice?.let { AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
     if (creating || naming != null) {
