@@ -113,6 +113,10 @@ struct MemberProfileView: View {
         .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        // Their attendance record follows check-ins and check-outs live (R-15); only once it has loaded.
+        .liveRefresh(every: 120, on: [.nexusAttendanceChanged, .nexusRealtimeConnected], refreshOnReturn: true) {
+            if recordState == .loaded { await loadRecord() }
+        }
         .navigationDestination(item: $openThread) { thread in
             ChatThreadView(conversationId: thread.id, title: thread.title, type: "DM")
         }

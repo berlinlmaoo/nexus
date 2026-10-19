@@ -161,6 +161,18 @@ struct ReportRosterPane: View {
             }
         }
         .task(id: periodKey ?? "current") { await load() }
+        // Reports per crew follow attendance live (R-15), quietly: the period on screen, no spinner.
+        .liveRefresh(every: 120, on: [.nexusAttendanceChanged, .nexusRealtimeConnected], refreshOnReturn: true) { await refreshQuietly() }
+    }
+
+    /// A failure leaves what is shown; a period switched meanwhile is not overwritten.
+    private func refreshQuietly() async {
+        guard !loading, roster != nil else { return }
+        let key = periodKey
+        guard let fresh = try? await APIClient.shared.reportRoster(period: key), key == periodKey else { return }
+        roster = fresh
+        loadedKey = .some(key)
+        savedAt = nil
     }
 
     private var searchField: some View {

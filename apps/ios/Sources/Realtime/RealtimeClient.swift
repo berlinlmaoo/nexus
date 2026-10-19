@@ -41,6 +41,9 @@ final class RealtimeClient {
     @ObservationIgnored private var meId: String?
     @ObservationIgnored private var chatFlush: Task<Void, Never>?
     @ObservationIgnored private var calendarFlush: Task<Void, Never>?
+    /// Attendance events folded into one refetch (R-15); `attendanceOwn` = one of them was this person's own.
+    @ObservationIgnored private var attendanceFlush: Task<Void, Never>?
+    @ObservationIgnored private var attendanceOwn = false
 
     private init() {
         engine = RealtimeEngine()
@@ -117,6 +120,7 @@ final class RealtimeClient {
         engine.stop()
         engine.clearRefusal()
         calendarFlush?.cancel(); calendarFlush = nil
+        attendanceFlush?.cancel(); attendanceFlush = nil; attendanceOwn = false
         chatFlush?.cancel()
         chatFlush = nil
         chatNews.removeAll()
@@ -272,8 +276,22 @@ final class RealtimeClient {
                 NotificationCenter.default.post(name: .nexusCalendarChanged, object: nil)
                 await CalendarWidgetPresence.refresh(force: true)
             }
-        case "attendance-changed":
-            center.post(name: .nexusAttendanceChanged, object: nil)
+        case "attendance-changed", "attendance-board-changed":
+            // R-15 (server since 19 Oct 2026, both only in this person's `user:` room): `attendance-changed`
+            // is their own attendance (check-in/out, a request, an override, …), `attendance-board-changed`
+            // someone whose attendance they may see ({ userIds, dates }, folded to one a second on the
+            // server). Ids only: every loaded attendance screen refetches through the API, ~400 ms after
+            // the last event so a burst is one refetch. Their own: the widgets and Live Activity follow.
+            if name == "attendance-changed" { attendanceOwn = true }
+            attendanceFlush?.cancel()
+            attendanceFlush = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(400))
+                guard let self, !Task.isCancelled else { return }
+                let own = self.attendanceOwn
+                self.attendanceOwn = false
+                NotificationCenter.default.post(name: .nexusAttendanceChanged, object: nil)
+                if own { await Self.refreshOwnAttendance() }
+            }
         case "xp-changed":
             center.post(name: .nexusXPChanged, object: nil)
             if let meId, payload?["userIds"]?.array?.contains(where: { $0.string == meId }) == true {
@@ -341,6 +359,13 @@ final class RealtimeClient {
             // nothing on iOS draws them.
             break
         }
+    }
+
+    /// The person's own today, read again for the widgets, the Watch and the Live Activity (R-15). Only
+    /// while connected, which is only while the app is in front.
+    private static func refreshOwnAttendance() async {
+        guard let today = try? await APIClient.shared.attendanceToday() else { return }
+        AttendancePresence.refresh(today: today)
     }
 
     /// Something changed among a project's tasks. Which project is told by the ROOM it came through,
