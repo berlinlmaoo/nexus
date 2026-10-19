@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Zoom %@%%": "Zoom %1$@%%",
         "Your nickname": "Nama panggilanmu",
         "Your role / occupation": "Peran / pekerjaanmu",
         "More about you": "Tentang dirimu",

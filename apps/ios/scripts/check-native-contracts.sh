@@ -89,3 +89,6 @@ Path(sys.argv[1],'memory-history.swift').write_text('import Foundation\n'+histor
 PY
 swiftc Sources/GideonMemoryModels.swift Sources/GideonMemoryStore.swift "$NATIVE_CHECK_TMP/memory-history.swift" Tests/GideonMemory/Stub.swift Tests/GideonMemory/main.swift -o "$NATIVE_CHECK_TMP/memory"
 "$NATIVE_CHECK_TMP/memory"
+
+swiftc Sources/Sheets/SheetGridZoom.swift Tests/SheetZoom/main.swift -o "$NATIVE_CHECK_TMP/sheet-zoom"
+"$NATIVE_CHECK_TMP/sheet-zoom"
