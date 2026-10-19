@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_rooms_company_title">Room booking is for the Z Networks office</string>
+    <string name="qa_rooms_company_body">The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.</string>
+    <string name="qa_booking_delete_body">The room is free again for that time. You can restore the booking from Control Room → Audit.</string>
     <string name="qa_dayoff_current">Day off: %1$d of %2$d left this period</string>
     <string name="qa_dayoff_next">Day off: %1$d of %2$d left in the period of that date</string>
     <string name="qa_dayoff_checked">Day-off balance is checked when you submit.</string>

@@ -80,7 +80,7 @@ import java.util.Locale
 @Serializable data class Booker(val id: String? = null, val name: String? = null)
 @Serializable data class Booking(val id: String, val room: String = "", val title: String = "", val description: String? = null,
                                  val startsAt: String = "", val endsAt: String = "", val createdBy: Booker? = null)
-@Serializable data class Bookings(val bookings: List<Booking> = emptyList())
+@Serializable data class Bookings(val bookings: List<Booking> = emptyList(), val roomsAvailable: Boolean = true)
 
 object AgendaLogic {
     private val zone = OfficeTime.ZONE
@@ -105,7 +105,8 @@ object AgendaLogic {
 
 class AgendaApi(private val api: ApiClient) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
-    suspend fun bookings(from: Instant, to: Instant) = api.get("/api/room-bookings?rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", Bookings.serializer()).bookings
+    suspend fun bookingPage(from: Instant, to: Instant) = api.get("/api/room-bookings?rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", Bookings.serializer())
+    suspend fun bookings(from: Instant, to: Instant) = bookingPage(from, to).bookings
 
     private fun body(room: String, title: String, from: Instant, to: Instant, notes: String?) = kotlinx.serialization.json.buildJsonObject {
         put("room", kotlinx.serialization.json.JsonPrimitive(room)); put("title", kotlinx.serialization.json.JsonPrimitive(title))
@@ -162,6 +163,8 @@ fun RoomBookingScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val res = context.resources
     val container = (context.applicationContext as NexusApplication).container
+    val company = id.znetworks.nexus.ui.components.rememberIsCompany()
+    var available by remember { mutableStateOf<Boolean?>(null) }
     val meId = container.sessionStore.current?.userId
     var canAdminister by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { container.viewer.load(); canAdminister = container.viewer.canAdminister } }
@@ -178,12 +181,16 @@ fun RoomBookingScreen(onBack: () -> Unit) {
     LaunchedEffect(monthKey, reload) {
         list = null
         val (from, to) = AgendaLogic.monthRange(month)
-        try { list = api.bookings(from, to); error = null } catch (e: ApiError) { error = e.describe(res) }
+        try { val page = api.bookingPage(from, to); list = if (page.roomsAvailable) page.bookings else emptyList(); available = page.roomsAvailable; error = null } catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
         // "New booking" as the header's primary action (web; the phones were read-only).
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_q_rooms), subtitle = stringResource(R.string.sub_rooms), onBack = onBack,
-            actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.rb_new), { composing = true to null }, primary = true) })
+            actions = { if (company == true && available != false) id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.rb_new), { composing = true to null }, primary = true) })
+        if (available == false || company == false) {
+            id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.MeetingRoom, stringResource(R.string.qa_rooms_company_title), stringResource(R.string.qa_rooms_company_body), stringResource(R.string.back), onBack, Modifier.fillMaxSize())
+            return@Column
+        }
         // The month row: "October 2026", then ‹ Today ›.
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()).format(month).replaceFirstChar { it.titlecase(Locale.getDefault()) },
@@ -227,5 +234,5 @@ fun RoomBookingScreen(onBack: () -> Unit) {
             }
         }
     }
-    if (composing.first) BookingComposer(composing.second, api, onDismiss = { composing = false to null }, onSaved = { composing = false to null; reload++ })
+    if (composing.first && company == true && available != false) BookingComposer(composing.second, api, onDismiss = { composing = false to null }, onSaved = { composing = false to null; reload++ })
 }

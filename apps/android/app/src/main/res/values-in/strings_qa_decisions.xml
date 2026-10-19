@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_rooms_company_title">Booking ruangan khusus kantor Z Networks</string>
+    <string name="qa_rooms_company_body">Ruang meeting dan studio milik workspace Z Networks. Minta admin menambahkanmu ke workspace itu kalau perlu booking ruangan.</string>
+    <string name="qa_booking_delete_body">Ruangan kosong lagi di jam itu. Booking bisa dipulihkan dari Control Room → Audit.</string>
     <string name="qa_dayoff_current">Day off: tersisa %1$d dari %2$d di periode ini</string>
     <string name="qa_dayoff_next">Day off: tersisa %1$d dari %2$d di periode tanggal itu</string>
     <string name="qa_dayoff_checked">Sisa day off diperiksa saat kamu mengirim.</string>

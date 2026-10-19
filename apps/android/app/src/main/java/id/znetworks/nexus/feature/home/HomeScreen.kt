@@ -685,7 +685,7 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
         (Triple(R.string.mt_vault, Icons.Filled.Storage, c.violetText) to { onOpenWeb("/vault") }).takeIf { showThreads },
         Triple(R.string.home_attendance, Icons.Filled.WatchLater, c.success) to onOpenAttendance,
         Triple(R.string.home_q_leaderboard, Icons.Filled.EmojiEvents, c.warning) to { onOpenWeb("/leaderboard") },
-        Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") },
+        (Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") }).takeIf { showThreads },
         // Threads is the company's (iOS 14b086f): no tile until known, none outside Z Networks.
         (Triple(R.string.home_q_threads, Icons.Filled.Forum, c.violetText) to { onOpenWeb("/threads") }).takeIf { showThreads },
         // The Calendar is a tab too: Ticket takes its place.

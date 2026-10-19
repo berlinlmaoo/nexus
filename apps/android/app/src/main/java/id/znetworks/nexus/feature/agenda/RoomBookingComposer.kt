@@ -154,6 +154,7 @@ fun BookingComposer(booking: Booking?, api: AgendaApi, onDismiss: () -> Unit, on
     val problem = BookingLogic.problem(title, date, start, end, timesChanged)
 
     fun refusal(e: ApiError, fallback: Int): String {
+        if ((e as? ApiError.Http)?.code == "ROOMS_NOT_AVAILABLE") return res.getString(R.string.qa_rooms_company_body)
         val (kind, conflict) = BookingLogic.refusal(e)
         return when (kind) {
             BookingLogic.Refusal.TAKEN -> if (conflict != null) res.getString(R.string.rb_taken_by, roomName(res, room), conflict) else res.getString(R.string.rb_taken, roomName(res, room))
@@ -225,7 +226,7 @@ fun BookingComposer(booking: Booking?, api: AgendaApi, onDismiss: () -> Unit, on
         }, dismissButton = { TextButton(onClick = { pickDate = false }) { Text(stringResource(R.string.cancel)) } }) { DatePicker(state) }
     }
     // A centred confirmation (house rule), like the web's "Delete this booking?".
-    if (confirmDelete && booking != null) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(stringResource(R.string.rb_delete_q)) },
+    if (confirmDelete && booking != null) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(stringResource(R.string.rb_delete_q)) }, text = { Text(stringResource(R.string.qa_booking_delete_body)) },
         confirmButton = { TextButton(onClick = {
             confirmDelete = false; busy = true
             scope.launch {
