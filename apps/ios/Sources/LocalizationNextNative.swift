@@ -25,7 +25,7 @@ extension AppLanguage {
         "Day off: %d of %d left in the period of that date.": "Day off: %1$d dari %2$d tersisa di periode tanggal itu.",
         "This booking was deleted or canceled.": "Booking ini sudah dihapus atau dibatalkan.",
         "%@’s location trail": "Jejak lokasi %1$@",
-        "None overdue": "Tak ada jatuh tempo",
+        "None overdue": "Tak ada telat",
         "%d/%d with costs": "%1$d/%2$d ada biaya",
         "Overpaid by %@": "Dibayar lebih %1$@",
         "Overpaid by %@. It still counts as paid in full.": "Dibayar lebih %1$@. Tetap dihitung lunas.",
