@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "No %@ chats yet": "Belum ada chat %1$@",
         "Status emoji": "Emoji status",
         "What are you up to?": "Lagi apa?",
         "A custom status currently sets you as Away.": "Status khusus saat ini mengatur ketersediaan menjadi Pergi.",

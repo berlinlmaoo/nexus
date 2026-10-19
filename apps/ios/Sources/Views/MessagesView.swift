@@ -4,10 +4,18 @@ import UIKit
 import UniformTypeIdentifiers
 import CoreLocation   // "kirim lokasi" reads CLLocationCoordinate2D members off LocationManager
 
+private enum MessageCategory: String, CaseIterable, Identifiable {
+    case direct = "Direct", groups = "Groups", projects = "Projects"
+    var id: String { rawValue }
+    var type: String { self == .direct ? "DM" : self == .groups ? "GROUP" : "PROJECT" }
+    init(type: String) { self = type == "GROUP" ? .groups : type == "PROJECT" ? .projects : .direct }
+}
+
 /// Port of messages.tsx: conversation list grouped Direct/Groups/Projects → tap → chat thread.
 struct MessagesView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
+    @State private var category: MessageCategory = .direct
     @State private var convos: [Conversation] = []
     @State private var loading = true
     @State private var error: String?
@@ -49,10 +57,11 @@ struct MessagesView: View {
     private var isSplit: Bool { hSize == .regular }
 
     private var meId: String? { auth.session?.userId }
-    private var groups: [(label: String, items: [Conversation])] {
-        [(T("Direct"), convos.filter { $0.type == "DM" }),
-         (T("Groups"), convos.filter { $0.type == "GROUP" }),
-         (T("Projects"), convos.filter { $0.type == "PROJECT" })].filter { !$0.1.isEmpty }
+    private var categoryKey: String { "messages.category." + (meId ?? "signed-out") }
+    private func items(_ tab: MessageCategory) -> [Conversation] { convos.filter { $0.type == tab.type } }
+    private func tabTitle(_ tab: MessageCategory) -> String {
+        let unread = items(tab).reduce(0) { $0 + max(0, $1.unreadCount ?? 0) }
+        return T(tab.rawValue) + (unread > 0 ? " · " + AppNumber.int(unread) : "")
     }
 
     var body: some View {
@@ -76,11 +85,16 @@ struct MessagesView: View {
         // Runs again every time the list comes back on screen (popping back from a thread), which
         // is what brings that thread's unread count and mute icon up to date.
         .task {
+            category = UserDefaults.standard.string(forKey: categoryKey).flatMap(MessageCategory.init(rawValue:)) ?? .direct
             await load()
             // An empty right-hand pane on first open is a screen asking to be clicked before it
             // shows anything. The phone has no equivalent: there, nothing is open yet by design.
-            if isSplit, selected == nil { selected = convos.first }
+            if isSplit, selected == nil { selected = items(category).first }
             await claimFocus()
+        }
+        .onChange(of: category) { _, value in
+            if meId != nil { UserDefaults.standard.set(value.rawValue, forKey: categoryKey) }
+            if isSplit, selected?.type != value.type { selected = items(value).first }
         }
         .onChange(of: router.focus) { _, _ in
             if !loading { Task { await claimFocus() } }
@@ -127,6 +141,7 @@ struct MessagesView: View {
             Task { await refreshQuietly() }
         }
         guard let c = found else { focusMissing = true; return }
+        category = MessageCategory(type: c.type)
         if isSplit { selected = c } else { pushedConvo = FocusedConversation(id: c.id) }
     }
 
@@ -276,62 +291,52 @@ struct MessagesView: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
-        if loading {
-            SkeletonList()
-        } else if let error {
-            ErrorState(message: error, icon: "bubble.left.and.bubble.right") { Task { await load() } }
-        } else if convos.isEmpty {
-            EmptyState(icon: "bubble.left.and.bubble.right", title: T("No chats yet"),
-                       subtitle: T("Direct messages and group chats with colleagues live here, and every project has a room of its own. Start one and it appears at the top."),
-                       actionTitle: T("Start a chat"), actionIcon: "square.and.pencil") { showNewChat = true }
+    private var content: some View {
+        VStack(spacing: 0) {
+            Picker(T("Messages"), selection: $category) {
+                ForEach(MessageCategory.allCases) { tab in Text(tabTitle(tab)).tag(tab) }
+            }.pickerStyle(.segmented).padding(.horizontal, 8).padding(.vertical, 10)
+                .accessibilityIdentifier("messages.tabs")
+            if loading { SkeletonList() }
+            else if let error { ErrorState(message: error, icon: "bubble.left.and.bubble.right") { Task { await load() } } }
+            else {
+                TabView(selection: $category) {
+                    ForEach(MessageCategory.allCases) { tab in categoryPage(tab).tag(tab) }
+                }.tabViewStyle(.page(indexDisplayMode: .never))
+            }
+        }
+    }
+    @ViewBuilder private func categoryPage(_ tab: MessageCategory) -> some View {
+        let rows = items(tab)
+        if rows.isEmpty {
+            EmptyState(icon: "bubble.left.and.bubble.right", title: String(format: T("No %@ chats yet"), T(tab.rawValue)),
+                       subtitle: T("Chat with your team and in project rooms."),
+                       actionTitle: tab == .projects ? nil : T("Start a chat"), actionIcon: "square.and.pencil") { showNewChat = true }
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(groups, id: \.label) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel(group.label).padding(.leading, 4)
-                            VStack(spacing: 0) {
-                                ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, c in
-                                    if idx > 0 { Divider().overlay(NX.border) }
-                                    if isSplit {
-                                        Button { selected = c } label: {
-                                            ConvoRow(convo: c, meId: meId,
-                                                     projectIcon: c.projectId.flatMap { projectIcons[$0] })
-                                        }
-                                        .buttonStyle(.plain)
-                                        .hoverEffect(.highlight)
-                                        .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
-                                    } else {
-                                        NavigationLink {
-                                            ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
-                                                           members: c.members ?? [], projectId: c.projectId,
-                                                           type: c.type, canManageMembers: c.canManageMembers,
-                                                           canPost: c.canPost != false)
-                                        } label: {
-                                            ConvoRow(convo: c, meId: meId,
-                                                     projectIcon: c.projectId.flatMap { projectIcons[$0] })
-                                        }
-                                        .buttonStyle(.plain)
-                                        .hoverEffect(.highlight)
-                                    }
-                                }
-                            }
-                            // The phone keeps its card; beside a thread (iPad / Mac) the list is flat, as the web's
-                            // (UI tour run 15, Q-M20: a floating card with a shadow).
-                            .background {
-                                if !isSplit {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                                        .nexusShadowSoft()
-                                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                                }
-                            }
-                        }
+                LazyVStack(spacing: 0) {
+                    ForEach(rows) { c in
+                        if c.id != rows.first?.id { Divider().overlay(NX.border) }
+                        conversationRow(c)
                     }
-                }
-                .padding(isSplit ? 8 : 16)
-            }
-            .refreshable { await load() }
+                }.padding(isSplit ? 8 : 16)
+            }.refreshable { await load() }
+                .accessibilityIdentifier("messages.page." + tab.type)
+        }
+    }
+    @ViewBuilder private func conversationRow(_ c: Conversation) -> some View {
+        if isSplit {
+            Button { selected = c } label: {
+                ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
+            }.buttonStyle(.plain).hoverEffect(.highlight)
+                .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
+        } else {
+            NavigationLink {
+                ChatThreadView(conversationId: c.id, title: c.title(meId: meId), members: c.members ?? [], projectId: c.projectId,
+                               type: c.type, canManageMembers: c.canManageMembers, canPost: c.canPost != false)
+            } label: {
+                ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
+            }.buttonStyle(.plain).hoverEffect(.highlight)
         }
     }
 
