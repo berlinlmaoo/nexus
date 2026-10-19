@@ -320,3 +320,5 @@ G21: Vault has a searchable file/folder ZIP selection dialog (up to 500 IDs), se
 Round-2 refinements: automation fields/forms are typed and searchable, status rules keep section IDs even when sections share a status enum, and schedule/action completeness is checked before save. Editor controls now include formatting, safe links and heading levels. Schedule weekday/status labels and failure visibility were corrected, and localized numeric ranges no longer contain encoding artifacts.
 
 Refinement validation: 864 JVM tests, zero failures, and assembleDebug passed with DEV routing configured. Added dedicated cases for shared-enum section routing, schedule bounds, typed operators, mark preservation and unsafe-link rejection. The round-2 bundle includes all committed groups and is regenerated after this report update.
+
+Isolation check: local body drafts and penalty acknowledgements are scoped by server origin as well as user ID, so DEV and production copies cannot reuse one another's saved state. Language names and token clipboard labels are resources in both locales. Validation remains 864 tests and assembleDebug passing.

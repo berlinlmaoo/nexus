@@ -29,4 +29,6 @@
     <string name="gpt_result">Filled: %1$d - Proposed: %2$d - Skipped: %3$d</string>
     <string name="gpt_fill_empty">Fill empty</string>
     <string name="gpt_refill">Refill all</string>
+    <string name="gpt_language_en">English</string>
+    <string name="gpt_language_id">Bahasa Indonesia</string>
 </resources>

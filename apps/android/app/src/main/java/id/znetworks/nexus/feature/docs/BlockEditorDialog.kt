@@ -33,7 +33,7 @@ private fun BlockEditorDialog(kind:String,id:String,onSaved:()->Unit,close:()->U
     val container=(ctx.applicationContext as NexusApplication).container
     val api=remember{BlockEditorApi(container.api)}
     val prefs=remember{ctx.getSharedPreferences("nexus.block-drafts",android.content.Context.MODE_PRIVATE)}
-    val draftKey=container.sessionStore.current?.userId.orEmpty()+":"+kind+":"+id
+    val draftKey=container.api.url("/").toString()+":"+container.sessionStore.current?.userId.orEmpty()+":"+kind+":"+id
     val scope=rememberCoroutineScope()
     var base by remember{mutableStateOf<JsonObject?>(null)}
     var doc by remember{mutableStateOf<JsonObject?>(null)}

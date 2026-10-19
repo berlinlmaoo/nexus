@@ -10,4 +10,5 @@
     <string name="mt_once">Salin token ini sekarang</string>
     <string name="mt_once_help">Token hanya ditampilkan sekali dan dihapus dari layar saat Anda meninggalkan aplikasi. Token memakai izin task Anda.</string>
     <string name="mt_revoke_confirm">Cabut %1$s?</string>
+    <string name="mt_clipboard">Token MCP NEXUS</string>
 </resources>

@@ -29,4 +29,6 @@
     <string name="gpt_result">Terisi: %1$d - Diusulkan: %2$d - Dilewati: %3$d</string>
     <string name="gpt_fill_empty">Isi yang kosong</string>
     <string name="gpt_refill">Isi ulang semua</string>
+    <string name="gpt_language_en">English</string>
+    <string name="gpt_language_id">Bahasa Indonesia</string>
 </resources>

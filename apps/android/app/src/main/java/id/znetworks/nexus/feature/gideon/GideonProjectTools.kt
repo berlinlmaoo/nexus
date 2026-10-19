@@ -132,7 +132,7 @@ private fun ScheduleEditor(row: JsonObject, busy: Boolean, error: String?, close
             listOf(1,2,3,4,5,6,0).forEach { day -> Row { Checkbox(day in days,{ on -> days = if(on) days + day else days - day },enabled = !busy); Text(stringResource(listOf(R.string.au_d7,R.string.au_d1,R.string.au_d2,R.string.au_d3,R.string.au_d4,R.string.au_d5,R.string.au_d6)[day]),Modifier.padding(top=12.dp)) } }
             OutlinedTextField(time,{ time=it },label={Text(stringResource(R.string.gpt_time))},enabled=!busy)
             BuilderPick(stringResource(R.string.gpt_timezone),zone,listOf("Asia/Jakarta","Asia/Makassar","Asia/Jayapura","Asia/Singapore","UTC").map{it to it},!busy){zone=it}
-            BuilderPick(stringResource(R.string.gpt_language),language,listOf("en" to "English","id" to "Bahasa Indonesia"),!busy){language=it}
+            BuilderPick(stringResource(R.string.gpt_language),language,listOf("en" to stringResource(R.string.gpt_language_en),"id" to stringResource(R.string.gpt_language_id)),!busy){language=it}
             OutlinedTextField(instructions,{ if(it.length<=500) instructions=it },label={Text(stringResource(R.string.gpt_instructions))},enabled=!busy)
         }
     },confirmButton={TextButton(onClick={save(buildJsonObject{put("weekdays",JsonArray(days.distinct().map{JsonPrimitive(it)}));put("time",time);put("timezone",zone);put("language",language);put("instructions",instructions.trim().takeIf{it.isNotEmpty()}?.let{JsonPrimitive(it)}?:JsonNull)})},enabled=!busy&&days.isNotEmpty()&&Regex("([01][0-9]|2[0-3]):[0-5][0-9]").matches(time)){Text(stringResource(R.string.save))}},dismissButton={TextButton(onClick={discard=true},enabled=!busy){Text(stringResource(R.string.cancel))}})
