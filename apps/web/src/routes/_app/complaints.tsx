@@ -53,10 +53,11 @@ const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 // there would quietly empty the inbox into a tab implying somebody was already handling it. So it
 // gets its own colour, and the Inbox tab below asks for it alongside OPEN.
 const STATUS: Record<string, { label: string; cls: string }> = {
-  OPEN: { label: "Open", cls: "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30" },
+  // Board words and colours (R-9, 19 Oct 2026): New grey · Awaiting decision violet · In review amber · Done green.
+  OPEN: { label: "New", cls: "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:ring-slate-500/30" },
   AWAITING_DECISION: { label: "Awaiting decision", cls: "bg-violet-100 text-violet-700 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30" },
-  IN_REVIEW: { label: "In review", cls: "bg-sky-100 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30" },
-  RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30" },
+  IN_REVIEW: { label: "In review", cls: "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30" },
+  RESOLVED: { label: "Done", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30" },
   CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-400 dark:ring-slate-500/30" },
 };
 // A status this build has never heard of gets a neutral chip and its own name Title-Cased, rather
