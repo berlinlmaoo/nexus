@@ -17,6 +17,7 @@ import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
 import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
+import { buildGideonPrompt, DEFAULT_HISTORY_MODE, HISTORY_MODES, type HistoryMode } from '@/lib/gideon-history'
 import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
@@ -31,118 +32,18 @@ import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, park
 // they kept a dependency alive that nothing used. GIDEON's tools are Hermes's, served by
 // /api/gideon/tools.
 
+// The prompt builder (cache order, long-history compaction, the person's standing rules) is pure and lives in
+// src/lib/gideon-history.ts so it can be unit-tested; only the AppSetting lookup stays here.
 /**
- * The prompt NEXUS hands the agent, ordered for the provider's prompt cache (owner, 18 Oct 2026). A cached input
- * token costs a tenth of a fresh one, and a cache hit is a matching PREFIX: Hermes' system prompt and tool schemas
- * come first and never change, then this message. So the rules that are the same for everyone go first (`rules`),
- * then who is asking (`who`), then what changes every turn (`dynamic`: date, page context, search hits), then the
- * conversation, then the question. Before, the person's name opened the message and every prefix diverged there.
- *
- * Long conversations are compacted: the last exchange verbatim, older turns one short line each, so a long chat
- * does not resend every old answer in full. The question itself always ends the prompt whole (the shim used to
- * keep only the first 6000 characters, which cut the question off a long one).
+ * Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts.
+ * { standing: false } turns off the pinned block of the person's standing rules (kill switch; default on).
  */
-const PROMPT_BUDGET = 14000
-const OLDER_LINE = 240
-
-function clipText(s: string, n: number): string {
-  const t = s.replace(/\s+/g, ' ').trim()
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t
-}
-
-function buildGideonPrompt(
-  history: { role: string; content: string }[],
-  who: { name: string; email: string },
-  parts: { rules?: string[]; personal?: string[]; dynamic?: string[]; historyMode?: HistoryMode } = {},
-): string {
-  const msgs = (history || []).filter((m) => m && typeof m.content === "string" && m.content.trim())
-  const last = msgs[msgs.length - 1]?.content?.trim() || ""
-  if (!last) return ""
-  const name = who.name?.trim() || "anggota tim NEXUS"
-  const rules = [
-    // Ditanya "lo pake LLM apa?" jawabannya sempat bocor separuh — menyebut framework dan angka versi
-    // model. Menyebut yang BUKAN dipakai sama bocornya, jadi keduanya dilarang sekalian.
-    `[SOAL DIRIMU SENDIRI] Kamu GIDEON, titik. Jangan pernah menyebut model, provider, vendor, framework, ` +
-      `atau tier yang kamu pakai — dan jangan menyebut yang TIDAK kamu pakai juga ("bukan Claude", "bukan GPT" ` +
-      `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
-      `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
-      `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.`,
-    ...(parts.rules || []),
-  ]
-  const header =
-    `[IDENTITAS LAWAN BICARA — WAJIB DIPATUHI] Kamu (Gideon) lagi ngobrol di chatbox NEXUS dengan "${name}"` +
-    `${who.email ? ` (${who.email})` : ""}, anggota tim NEXUS. Ini SESI TERPISAH khusus dia. Sapa & rujuk dia ` +
-    `sebagai "${name}". JANGAN sekali-kali manggil/menganggap dia sebagai orang lain (operator, admin, atau ` +
-    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.`
-  const head = [...rules, header, ...(parts.personal || []), ...(parts.dynamic || [])].filter(Boolean).join("\n\n")
-
-  const speaker = (m: { role: string }) => (m.role === "user" ? name : "Gideon")
-  const tail = (convo: string) => `${head}\n\n${convo}Pesan terbaru dari ${name}: ${last.slice(0, 6000)}`
-  const mode = parts.historyMode ?? DEFAULT_HISTORY_MODE
-
-  if (mode === "window" || mode === "wide") {
-    // window: the last 16 messages, the last exchange verbatim, older ones one clipped line each (until 18 Oct).
-    // wide: the same with the last 60 messages and the last two exchanges verbatim.
-    const prior = msgs.slice(0, -1).slice(mode === "wide" ? -60 : -16)
-    const recent = prior.slice(mode === "wide" ? -4 : -2)
-    const older = prior.slice(0, prior.length - recent.length)
-    const build = (olderLines: string[], recentCap: number) => {
-      const blocks: string[] = []
-      if (olderLines.length) blocks.push(`Ringkasan percakapan sebelumnya (dipotong):\n${olderLines.join("\n")}`)
-      if (recent.length) blocks.push(`Percakapan terakhir:\n${recent.map((m) => `${speaker(m)}: ${clipText(m.content, recentCap)}`).join("\n")}`)
-      return tail(blocks.length ? `${blocks.join("\n\n")}\n\n` : "")
-    }
-    let olderLines = older.map((m) => `- ${speaker(m)}: ${clipText(m.content, OLDER_LINE)}`)
-    let out = build(olderLines, 1500)
-    // Over budget: drop the oldest summary lines first, then shorten the last exchange. The question is never cut.
-    while (out.length > PROMPT_BUDGET && olderLines.length) { olderLines = olderLines.slice(1); out = build(olderLines, 1500) }
-    if (out.length > PROMPT_BUDGET) out = build([], 500)
-    return out
+async function historyOptions(): Promise<{ historyMode: HistoryMode; standingRules: boolean }> {
+  const v = await getAppSetting<{ mode?: string; standing?: boolean }>("gideon-history").catch(() => null)
+  return {
+    historyMode: v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE,
+    standingRules: v?.standing !== false,
   }
-
-  // pinned / facts (18 Oct 2026, recall tests): what the PERSON said is where budgets, names, dates, decisions and
-  // rules live, and it is short, so it is carried for the whole conversation (pinned: every message; facts: the ones
-  // that carry a number, a date or a decision word, plus the last few). GIDEON's own older answers are what gets
-  // dropped: only the last few, clipped. The last exchange stays verbatim.
-  const prior = msgs.slice(0, -1).slice(-200)
-  const recent = prior.slice(-2)
-  const older = prior.slice(0, -2)
-  const olderUser = older.map((m, i) => ({ m, i })).filter((x) => x.m.role === "user")
-  const keepUser = mode === "facts"
-    ? olderUser.filter((x, k) => FACT_RE.test(x.m.content) || k >= olderUser.length - 4)
-    : olderUser
-  let said = keepUser.map((x) => `- ${clipText(x.m.content, 300)}`)
-  let answers = older.filter((m) => m.role !== "user").slice(-4).map((m) => `- Gideon: ${clipText(m.content, 200)}`)
-  const build = (recentCap: number) => {
-    const blocks: string[] = []
-    if (said.length) blocks.push(`Yang sudah dikatakan ${name} di percakapan ini (urut, dipotong; angka, nama, tanggal, keputusan dan aturan di sini tetap berlaku):\n${said.join("\n")}`)
-    if (answers.length) blocks.push(`Jawaban Gideon sebelumnya (dipotong):\n${answers.join("\n")}`)
-    if (recent.length) blocks.push(`Percakapan terakhir:\n${recent.map((m) => `${speaker(m)}: ${clipText(m.content, recentCap)}`).join("\n")}`)
-    return tail(blocks.length ? `${blocks.join("\n\n")}\n\n` : "")
-  }
-  let out = build(1500)
-  // Over budget: older answers go first, then the person's lines from the MIDDLE (the start of a conversation is
-  // where its ground rules are set), then the last exchange is shortened. The question is never cut.
-  while (out.length > PROMPT_BUDGET && answers.length) { answers = answers.slice(1); out = build(1500) }
-  while (out.length > PROMPT_BUDGET && said.length > 8) { said = [...said.slice(0, 6), ...said.slice(7)]; out = build(1500) }
-  if (out.length > PROMPT_BUDGET) out = build(500)
-  return out
-}
-
-/** A message that states something worth carrying: a number, a date, a name-and-date, a decision or a rule. */
-const FACT_RE = /\d|\b(jangan|never|selalu|always|pilih|pilihnya|pakai|keputusan|memutuskan|aturan|wajib|harus|budget|anggaran|deadline|tenggat|vendor|tanggal|catat|ingat|remember|note|decided|decision|rule)\b/i
-
-type HistoryMode = "window" | "wide" | "pinned" | "facts"
-const HISTORY_MODES = new Set<HistoryMode>(["window", "wide", "pinned", "facts"])
-const DEFAULT_HISTORY_MODE: HistoryMode = "facts"
-
-// Recall tests (18 Oct 2026, gideon-eval/recall.mjs, chats of 20/40/80 turns, early facts at turns 2-5 + one mid-chat):
-// window 0/5 at every length, wide 5/5 only at 20 turns, pinned and facts 5/5 everywhere; facts was the cheapest
-// (Phaethon ~2,8 credits per answer vs pinned ~3,5), so it is the default.
-/** Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts. */
-async function historyMode(): Promise<HistoryMode> {
-  const v = await getAppSetting<{ mode?: string }>("gideon-history").catch(() => null)
-  return v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE
 }
 
 // File types GIDEON can actually be asked about. This is not a wish list: Hermes reaches a document
@@ -539,7 +440,7 @@ export async function POST(req: NextRequest) {
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
       ].filter(Boolean)
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], historyMode: await historyMode() })
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], ...(await historyOptions()) })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({
