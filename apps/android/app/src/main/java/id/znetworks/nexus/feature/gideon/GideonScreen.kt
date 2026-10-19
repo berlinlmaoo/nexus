@@ -171,7 +171,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
-                s.messages.isEmpty() && s.pending.isEmpty() && !s.thinking -> FreshChat { send(it) }
+                s.messages.isEmpty() && !s.thinking && (s.chatId == null || s.pending.isEmpty()) -> FreshChat { send(it) }
                 else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
@@ -193,7 +193,6 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             MentionPicker(q, container.api) { ref -> chat.addRef(ref); draft = GideonMention.strip(draft); runCatching { focus.requestFocus() } }
         }
         ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
-        GideonCreditMeter(container.api, s.thinking)
         if (!tiers.available(s.tier)) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.g19_notice, s.tier.label), color = c.warningFg, fontSize = 12.sp)
@@ -230,6 +229,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 }
             }
         }
+        GideonCreditMeter(container.api, s.thinking)
         Text(stringResource(R.string.gc_ai_disclaimer), fontSize = 11.sp, color = c.mutedFg,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))
