@@ -161,7 +161,16 @@ export async function GET() {
 
     // The user's effective shift for the "My Work Schedule" display (resolved pre-check-in against
     // the first active office; USER/TEAM overrides are office-independent anyway).
-    const firstOffice = await prisma.officeLocation.findFirst({ where: { workspaceId: context.workspace.id, isActive: true } })
+    // The office they last checked in at when it is still active (offices can run different shifts — a
+    // staff of an office on 15:00–00:00 was shown 09:00–18:00 from whichever office the database
+    // returned first); else the oldest active office, a stable pick.
+    const lastAt = await prisma.attendanceRecord.findFirst({
+      where: { userId: session.user.id, workspaceId: context.workspace.id },
+      orderBy: { attendanceDate: "desc" },
+      select: { officeLocation: true },
+    })
+    const firstOffice = (lastAt?.officeLocation?.isActive ? lastAt.officeLocation : null)
+      ?? await prisma.officeLocation.findFirst({ where: { workspaceId: context.workspace.id, isActive: true }, orderBy: { createdAt: "asc" } })
     let myShift: { startTime: string; endTime: string; source: string; flexi?: boolean } | null = null
     if (firstOffice) {
       const shift = await resolveEffectiveAttendanceShift({ userId: session.user.id, workspaceId: context.workspace.id, office: firstOffice })

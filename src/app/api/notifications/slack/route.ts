@@ -3,11 +3,16 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { orgRoleOf } from "@/lib/org"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Posts an arbitrary message (any channel, any blocks) to the company Slack: the company's One Above
+  // All only, like /api/notifications/email. No client calls it; it was open to every signed-in user.
+  if ((await orgRoleOf(session.user.id)) !== "ONE_ABOVE_ALL")
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {
     const { channel, message, blocks } = await req.json()
