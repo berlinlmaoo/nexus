@@ -817,6 +817,11 @@ final class NEXUSUITour: XCTestCase {
             case "absent":
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
+            case "selected":
+                let target = app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isSelected == (action.text == "true") else {
+                    return "wrong-screen: unexpected selection for \(action.label)"
+                }
             case "enabled":
                 let target = app.buttons.matching(match).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isEnabled == (action.text == "true") else {
