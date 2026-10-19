@@ -532,9 +532,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     el.style.height = `${el.scrollHeight}px`;
   }, [input, view]);
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
-  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going.
+  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going,
+  // and in a new chat too when there are more than 2 (QA final 19 Oct 2026, E-D1: 13 open cards pushed the box
+  // ~2,400 px down). The header still says how many and opens them.
   const [waitingOpen, setWaitingOpen] = useState<boolean | null>(null);
-  const waitingShown = waitingOpen ?? turns.length === 0;
+  const waitingShown = waitingOpen ?? (turns.length === 0 && openWaiting.length <= 2);
 
   // "@" in the composer: the word after it is a search for a page to attach.
   const onInputChange = (value: string, caret: number) => {
@@ -692,7 +694,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const waitingSection = openWaiting.length > 0 && (
     <section className="space-y-2 rounded-xl border border-border bg-muted/30 p-2.5">
-      <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
+      <button type="button" onClick={() => setWaitingOpen(!waitingShown)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
         <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
         {waitingShown ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
