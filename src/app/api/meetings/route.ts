@@ -14,7 +14,7 @@ import { emitMeetingChanged, meetingAccess, meetingSettings, MEETING_CHUNK_BYTES
  * GET  /api/meetings?projectId=&limit=  → { meetings: [...] } — the person's own recordings, plus (with projectId)
  *      the project's recordings they can see. Newest first. Light rows (no transcript).
  * POST /api/meetings { fileName, mime, size, title?, projectId?, language?: auto|id|en, source?: upload|record,
- *      recordedAt?, durationSec?, speakerLabels? (default true), introEndSec? } → 201 { meeting, upload: { chunkBytes, maxChunkBytes } }.
+ *      recordedAt?, durationSec?, speakerLabels? (default false — owner, 19 Oct), introEndSec? } → 201 { meeting, upload: { chunkBytes, maxChunkBytes } }.
  *      Then PUT /api/meetings/:id/audio?offset=… per chunk and POST /api/meetings/:id/audio/complete.
  *      Refusals carry `code`: DISABLED 403, UNSUPPORTED_TYPE 415, TOO_LARGE 413, TOO_LONG 413, NEEDS_EDIT_ACCESS 403,
  *      RATE_LIMITED 429.
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   // Speaker labels (owner, 19 Oct 2026): on unless the person turned them off; introEndSec = the record screen's
   // "Done with introductions" (seconds into the recording), only for a recording made here.
   const introEndSec = Number(body.introEndSec)
-  const speakerLabels = body.speakerLabels !== false
+  const speakerLabels = body.speakerLabels === true  // owner 19 Oct: clients that do not ask (released apps) get no speaker labels
   const row = await prisma.meetingNote.create({
     data: {
       createdById: userId,
