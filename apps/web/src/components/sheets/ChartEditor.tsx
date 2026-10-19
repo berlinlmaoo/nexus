@@ -200,7 +200,7 @@ export function ChartEditor({ spec, shape, sheetName, columnLabel, onChange, onC
 function Check({ checked, onChange, children }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-xs">
-      <input type="checkbox" className="h-4 w-4 accent-primary" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="h-4 w-4 accent-ring" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{children}</span>
     </label>
   );

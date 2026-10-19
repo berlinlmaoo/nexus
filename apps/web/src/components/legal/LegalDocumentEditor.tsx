@@ -108,7 +108,7 @@ export function LegalDocumentEditor({ doc, selected, onSelect }: { doc: LegalDoc
         {p.editable
           ? onSelect && (
             <input type="checkbox" aria-label={t("Select paragraph {n}", { n: p.index + 1 })} checked={isSelected} onChange={() => onSelect(p.index)}
-              className={cn("h-3.5 w-3.5 cursor-pointer accent-primary transition-opacity pointer-coarse:opacity-100", isSelected || (selected?.size ?? 0) > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100")} />
+              className={cn("h-3.5 w-3.5 cursor-pointer accent-ring transition-opacity pointer-coarse:opacity-100", isSelected || (selected?.size ?? 0) > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100")} />
           )
           : <Lock aria-hidden className="h-3 w-3 text-neutral-400" />}
       </span>

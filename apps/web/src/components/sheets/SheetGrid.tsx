@@ -2826,7 +2826,7 @@ export function SheetGrid({
             </>
           )}
           <label className="flex items-center gap-1 text-2xs text-muted-foreground">
-            <input type="checkbox" checked={find.matchCase} onChange={(e) => setFind((f) => ({ ...f, matchCase: e.target.checked }))} className="h-3 w-3 accent-primary" />
+            <input type="checkbox" checked={find.matchCase} onChange={(e) => setFind((f) => ({ ...f, matchCase: e.target.checked }))} className="h-3 w-3 accent-ring" />
             {t("Match case")}
           </label>
           <span className="text-2xs tabular-nums text-muted-foreground">{find.q.trim() ? t("{n} found", { n: findHits.length }) : ""}</span>
@@ -4347,12 +4347,12 @@ function ResizeDialog({ kind, label, initial, onApply, onClose }: {
       footer={<><button className="rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-muted" onClick={onClose}>{t("Cancel")}</button><button className={primaryBtn} onClick={() => onApply(mode === "fit" ? "fit" : Number(v) || initial)}>{t("OK")}</button></>}
     >
       <label className="flex items-center gap-2 py-1 text-sm">
-        <input type="radio" checked={mode === "px"} onChange={() => setMode("px")} className="accent-primary" />
+        <input type="radio" checked={mode === "px"} onChange={() => setMode("px")} className="accent-ring" />
         {kind === "rows" ? t("Specify row height") : t("Enter new column width in pixels")}
         <input value={v} onChange={(e) => { setV(e.target.value.replace(/[^0-9]/g, "")); setMode("px"); }} inputMode="numeric" className="ml-auto h-8 w-20 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-ring" />
       </label>
       <label className="flex items-center gap-2 py-1 text-sm">
-        <input type="radio" checked={mode === "fit"} onChange={() => setMode("fit")} className="accent-primary" />
+        <input type="radio" checked={mode === "fit"} onChange={() => setMode("fit")} className="accent-ring" />
         {t("Fit to data")}
       </label>
     </SheetDialog>

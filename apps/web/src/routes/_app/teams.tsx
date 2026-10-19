@@ -103,7 +103,7 @@ function TeamShiftControl({ team }: { team: NexusTeam }) {
     <div className="mt-4">
       <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Team work hours")}</span>
       <label className="mt-1.5 flex items-center gap-2 text-xs font-semibold">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-3.5 w-3.5 accent-ring" />
         {tr("Use a custom shift just for this team")}
       </label>
       {enabled ? (

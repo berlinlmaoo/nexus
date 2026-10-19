@@ -222,7 +222,7 @@ function GroupOptions({ g, canEdit, onPatch }: { g: PivotGroupSpec; canEdit: boo
         </select>
       </label>
       <label className="flex h-8 items-center gap-1.5 text-xs">
-        <input type="checkbox" disabled={!canEdit} checked={g.totals !== false} onChange={(e) => onPatch({ totals: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />
+        <input type="checkbox" disabled={!canEdit} checked={g.totals !== false} onChange={(e) => onPatch({ totals: e.target.checked })} className="h-3.5 w-3.5 accent-ring" />
         {t("Show totals")}
       </label>
     </div>
@@ -288,7 +288,7 @@ function FilterOptions({ f, values, canEdit, onPatch }: { f: PivotFilterSpec; va
             {visible.length ? visible.map((v) => (
               <li key={v}>
                 <label className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted">
-                  <input type="checkbox" disabled={!canEdit} checked={!hidden.has(v)} onChange={(e) => toggle(v, e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
+                  <input type="checkbox" disabled={!canEdit} checked={!hidden.has(v)} onChange={(e) => toggle(v, e.target.checked)} className="h-3.5 w-3.5 accent-ring" />
                   <span className={cn("min-w-0 flex-1 truncate", v === "" && "italic text-muted-foreground")}>{v === "" ? t("(Blanks)") : v}</span>
                 </label>
               </li>
@@ -333,7 +333,7 @@ export function PivotCreateDialog({ defaultRange, onCreate, onClose }: {
         <fieldset className="space-y-1.5">
           <legend className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("Insert to")}</legend>
           <label className="flex items-center gap-2 text-xs">
-            <input type="radio" name="pivot-target" checked readOnly className="h-3.5 w-3.5 accent-primary" />
+            <input type="radio" name="pivot-target" checked readOnly className="h-3.5 w-3.5 accent-ring" />
             {t("New sheet")}
           </label>
         </fieldset>

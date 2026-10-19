@@ -50,7 +50,7 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
       <div role="radiogroup" aria-label={label} className="space-y-0.5">
         {(opts.length ? opts : [t("Option")]).map((o, i) => (
           <label key={`${i}:${o}`} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
-            <input type="radio" disabled={disabled} name={field.id} checked={value === o} onChange={() => onChange(o)} className="h-4 w-4 shrink-0 accent-primary" />
+            <input type="radio" disabled={disabled} name={field.id} checked={value === o} onChange={() => onChange(o)} className="h-4 w-4 shrink-0 accent-ring" />
             <span className="min-w-0 break-words">{o}</span>
           </label>
         ))}
@@ -69,7 +69,7 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
       <div role="group" aria-label={label} className="space-y-0.5">
         {(opts.length ? opts : [t("Option")]).map((o, i) => (
           <label key={`${i}:${o}`} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
-            <input type="checkbox" disabled={disabled} checked={arr.includes(o)} onChange={(e) => onChange(e.target.checked ? [...arr, o] : arr.filter((x) => x !== o))} className="h-4 w-4 shrink-0 rounded accent-primary" />
+            <input type="checkbox" disabled={disabled} checked={arr.includes(o)} onChange={(e) => onChange(e.target.checked ? [...arr, o] : arr.filter((x) => x !== o))} className="h-4 w-4 shrink-0 rounded accent-ring" />
             <span className="min-w-0 break-words">{o}</span>
           </label>
         ))}
@@ -130,7 +130,7 @@ export function QuestionBlock({ field, value, onChange, disabled, attachment, on
     return (
       <div>
         <label className={cn("flex items-start gap-2.5 text-[15px] font-semibold", !disabled && "cursor-pointer")}>
-          <input type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-primary" />
+          <input type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-ring" />
           <span className="min-w-0 break-words">{title}{field.required && <span className="text-destructive"> *</span>}</span>
         </label>
         {field.description && <p className="mt-1 whitespace-pre-line pl-[26px] text-sm text-muted-foreground">{field.description}</p>}
