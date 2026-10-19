@@ -412,7 +412,7 @@ export function MeetingPage({ id }: { id: string }) {
               <div className="truncate text-xs text-muted-foreground">{m.project ? t("As a page in {project}", { project: m.project.name }) : t("Choose a project first")}</div>
             </div>
             <button type="button" onClick={() => void apply()} disabled={applying || !m.projectId || included.some((p) => !p.title.trim())}
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90 disabled:opacity-50">
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90 disabled:bg-muted disabled:text-muted-foreground">
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{t("Apply")}
             </button>
           </div>
@@ -533,7 +533,8 @@ function ProposalCard({ p, members, readOnly, actionText, onChange, onRemove }: 
   const [open, setOpen] = useState(false);
   const picked = members.filter((mm) => p.assigneeIds.includes(mm.id));
   return (
-    <div className={cn("rounded-xl border bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors", p.include ? "border-border" : "border-dashed border-border opacity-60")}>
+    // R-16 (19 Oct 2026, as on iOS): a soft filled card, no outline; Owner a people chip, "Due [Add date]", a trash icon.
+    <div className={cn("rounded-xl border px-3 py-2.5 transition-colors", p.include ? "border-transparent bg-muted/50" : "border-dashed border-border bg-transparent opacity-60")}>
       <div className="flex items-start gap-2.5">
         <button type="button" role="checkbox" aria-checked={p.include} aria-label={p.include ? t("Don't create this task") : t("Create this task")} disabled={readOnly} onClick={() => onChange({ ...p, include: !p.include })}
           className={cn("mt-1 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition-colors", p.include ? "border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground" : "border-border bg-background")}>
@@ -546,11 +547,16 @@ function ProposalCard({ p, members, readOnly, actionText, onChange, onRemove }: 
               picked.length ? <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{picked.map((u) => u.name).join(", ")}</span> : null
             ) : (
               <PeoplePicker members={members} value={p.assigneeIds} onChange={(ids) => onChange({ ...p, assigneeIds: ids })}
-                trigger={<button type="button" className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border px-2 text-xs hover:bg-muted">
-                  {picked.length ? <><span className="flex -space-x-1">{picked.slice(0, 3).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={18} />)}</span><span className="max-w-[10rem] truncate">{picked.map((u) => u.name).join(", ")}</span></> : <><User className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-muted-foreground">{t("PIC")}</span></>}
+                trigger={<button type="button" aria-label={picked.length ? `${t("Owner")}: ${picked.map((u) => u.name).join(", ")}` : t("Owner")} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-background px-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                  {picked.length ? <><span className="flex -space-x-1">{picked.slice(0, 3).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={18} />)}</span><span className="max-w-[10rem] truncate">{picked.map((u) => u.name).join(", ")}</span></> : <><UserPlus className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-muted-foreground">{t("Owner")}</span></>}
                 </button>} />
             )}
-            <DateField value={p.dueDate} onChange={(v) => onChange({ ...p, dueDate: v ? v.slice(0, 10) : null })} disabled={readOnly} placeholder={t("Due date")} ariaLabel={t("Due date")} className="!min-h-7 h-7 !w-auto rounded-full border border-border px-2 text-xs" />
+            {(p.dueDate || !readOnly) && (
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-background pl-2.5 pr-0.5 text-xs">
+                <span className="text-muted-foreground">{t("Due")}</span>
+                <DateField value={p.dueDate} onChange={(v) => onChange({ ...p, dueDate: v ? v.slice(0, 10) : null })} disabled={readOnly} placeholder={t("Add date")} ariaLabel={t("Due date")} emptyClassName="text-sidebar-primary" className="!min-h-6 h-6 !w-auto rounded-full px-1.5 text-xs font-medium" />
+              </span>
+            )}
             {(p.description || actionText || !readOnly) && (
               <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}{t("Details")}</button>
             )}
@@ -562,7 +568,7 @@ function ProposalCard({ p, members, readOnly, actionText, onChange, onRemove }: 
             </div>
           )}
         </div>
-        {!readOnly && <button type="button" aria-label={t("Remove")} onClick={onRemove} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
+        {!readOnly && <button type="button" aria-label={t("Remove")} title={t("Remove")} onClick={onRemove} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><Trash2 className="h-3.5 w-3.5" /></button>}
       </div>
     </div>
   );
