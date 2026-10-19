@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Download, Filter, HeartPulse, KanbanSquare, Loader2, Plus, Search, Table2, X } from "lucide-react";
+import { ChevronRight, Download, Eye, EyeOff, Filter, HeartPulse, KanbanSquare, Loader2, Plus, Search, Table2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -15,6 +15,7 @@ import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
 import { PipelineHealth } from "./PipelineHealth";
 import { DealDrawer } from "./DealDrawer";
+import { PresentationContext } from "./presentation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PersonOption } from "./fields";
 import { HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, StagePill, applyLocal, personName } from "./pipeline-ui";
@@ -91,6 +92,9 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   const [service, setService] = useState(ALL);
   const [health, setHealth] = useState<HealthKey | "">("");
   const [openId, setOpenId] = useState<string | null>(null);
+  // Presentation mode (Control Tower v7): hides every rupiah on screen. Plain state on purpose, never
+  // stored — each load starts with it off (presentation.tsx).
+  const [presenting, setPresenting] = useState(false);
 
   const data = q.data;
   const deals = useMemo(() => data?.deals ?? [], [data]);
@@ -282,7 +286,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
     );
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-8">
+    <PresentationContext.Provider value={presenting}>
+    <div className="flex flex-col gap-4 p-4 md:p-8" data-presenting={presenting ? "" : undefined}>
       {deals.length === 0 ? (
         <FirstDeal adding={create.isPending} onAdd={canEdit ? () => setNewIn("Incoming") : undefined} />
       ) : (
@@ -311,6 +316,21 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               {serviceNames.length > 1 && (
                 <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} renderValue={allLabel(t("Service"), t("All services"))} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-foreground/30 text-foreground")} />
               )}
+              <button
+                type="button"
+                onClick={() => setPresenting((p) => !p)}
+                aria-pressed={presenting}
+                aria-label={t("Presentation mode")}
+                title={presenting ? t("Presentation mode is on: amounts are hidden. Click to show them.") : t("Presentation mode: hide every amount on screen")}
+                className={cn(
+                  control,
+                  "order-5 inline-flex w-11 shrink-0 items-center justify-center gap-1.5 font-medium pointer-coarse:w-11 xl:w-auto xl:px-3",
+                  presenting ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "hover:bg-muted",
+                )}
+              >
+                {presenting ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
+                <span className="hidden xl:inline">{t("Presentation mode")}</span>
+              </button>
               <button
                 type="button"
                 onClick={exportXlsx}
@@ -412,6 +432,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         onClose={() => setOpenId(null)}
       />
     </div>
+    </PresentationContext.Provider>
   );
 }
 

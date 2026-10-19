@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { PipelineSummary } from "@/lib/pipeline";
-import { fmtIdr, fmtIdrFull } from "./pipeline-ui";
+import { useMoneyFmt } from "./presentation";
 
 type Tile = { label: string; value: string; full?: string; sub: string; subFull?: string; warn?: string; zero: boolean; tone?: "bad" | "warn" | "good"; kind: "money" | "count" };
 
@@ -20,7 +20,10 @@ type Tile = { label: string; value: string; full?: string; sub: string; subFull?
  */
 export function PipelineKpis({ s }: { s: PipelineSummary }) {
   const { t, lang } = useLang();
-  const money = (n: number) => ({ value: fmtIdr(n, lang), full: fmtIdrFull(n, lang), zero: !n });
+  const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
+  // Presenting: every money tile reads "Rp ••••" in the same quiet tone, so neither a zero nor a red
+  // (negative / overdue) tile gives a figure away.
+  const money = (n: number) => ({ value: fmtIdr(n, lang), full: fmtIdrFull(n, lang), zero: hidden || !n });
   const tiles: Tile[] = [
     { kind: "money", label: t("Open pipeline"), ...money(s.openValue), sub: t("{n} open deals", { n: s.openCount }) },
     { kind: "money", label: t("Weighted forecast"), ...money(s.weightedValue), sub: t("Value × probability") },
@@ -44,6 +47,7 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
     { kind: "count", label: t("Ready to execute"), value: String(s.readyCount), zero: !s.readyCount, sub: t("{n} blocked", { n: s.blockedCount }), tone: s.blockedCount > 0 ? "warn" : s.readyCount > 0 ? "good" : undefined },
     { kind: "count", label: t("Deliverables on track"), value: String(s.deliverablesOnTrack), zero: !s.deliverablesOnTrack, sub: t("{n} completed", { n: s.deliverablesDone }) },
   ];
+  if (hidden) for (const tile of tiles) if (tile.kind === "money") { tile.tone = undefined; tile.warn = undefined; }
   return (
     <section data-pl="kpis" aria-label={t("Pipeline at a glance")} className="relative overflow-hidden rounded-xl border border-border bg-border">
       <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">

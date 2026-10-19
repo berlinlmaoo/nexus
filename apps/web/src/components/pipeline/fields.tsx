@@ -4,6 +4,7 @@ import { useLang } from "@/lib/lang";
 import { SelectPicker } from "@/components/SelectPicker";
 import { DateField as AppDateField } from "@/components/DateField";
 import { groupIdrDigits, normalizeNumberFieldValue } from "@/lib/custom-field-number";
+import { MONEY_MASK, usePresenting } from "./presentation";
 
 /**
  * The Pipeline Dashboard's edit-in-place controls (owner, 9 Oct 2026). Each one keeps its own draft while
@@ -85,6 +86,14 @@ export function MoneyField({
   useEffect(() => {
     if (!focused.current) setDraft(raw(value));
   }, [value]);
+  // Presentation mode: the amount is masked and locked. A half-typed edit is dropped (the masked box
+  // never blurs), and the field shows the saved value again once the mode is off.
+  const presenting = usePresenting();
+  const { t } = useLang();
+  useEffect(() => {
+    if (presenting) { focused.current = false; setDraft(raw(value)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenting]);
   const clean = (text: string) => {
     const neg = allowNegative && text.includes("-");
     const digits = text.replace(/\D+/g, "").replace(/^0+(?=\d)/, "");
@@ -105,6 +114,23 @@ export function MoneyField({
     setDraft(clean(allowNegative ? n : n.replace("-", "")));
   };
   const grouped = draft === "-" ? "-" : groupIdrDigits(draft);
+  if (presenting) {
+    return (
+      <div className={cn("relative", className)}>
+        <input
+          key="masked"
+          type="text"
+          aria-label={`${label}: ${t("hidden in presentation mode")}`}
+          title={t("Hidden in presentation mode")}
+          value={MONEY_MASK}
+          readOnly
+          disabled
+          data-money-mask=""
+          className={cn(cell ? CELL : FIELD, "tabular-nums tracking-wider text-muted-foreground", cell && "text-right")}
+        />
+      </div>
+    );
+  }
   return (
     <div className={cn("relative", className)}>
       <input

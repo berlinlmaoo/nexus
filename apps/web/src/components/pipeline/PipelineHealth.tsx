@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { daysBetween } from "@/lib/pipeline";
 import type { PipelineDeal } from "@/lib/pipeline-api";
-import { HEALTH_TEXT, HealthPill, dealPayment, fmtDay, fmtIdr, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { useMoneyFmt } from "./presentation";
+import { HEALTH_TEXT, HealthPill, dealPayment, fmtDay, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 import { bySeverity } from "./PipelineBoard";
 
 /**
@@ -15,6 +16,7 @@ import { bySeverity } from "./PipelineBoard";
  */
 export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]; today: string; onOpen: (id: string) => void }) {
   const { t, tn, lang, locale } = useLang();
+  const { fmtIdr } = useMoneyFmt();
   const reason = useReasonText();
   const labels = useVocabLabels();
   const live = deals.filter((d) => d.stageGroup !== "Lost" && d.stageGroup !== "Closed");
