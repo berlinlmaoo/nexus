@@ -26,8 +26,7 @@ import {
   shapeAroundPage,
   shapePage,
   SYSTEM_MESSAGE_REPLY,
-  SYSTEM_MESSAGE_REPLY_MESSAGE,
-} from "@/lib/chat-rules"
+  SYSTEM_MESSAGE_REPLY_MESSAGE, MESSAGE_MAX_CHARS, MESSAGE_TOO_LONG, messageLength, messageTooLongMessage } from "@/lib/chat-rules"
 
 const messageInclude = CHAT_MESSAGE_INCLUDE
 
@@ -178,6 +177,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       : null
     // A picture on its own is a message; text is only required when there is nothing else.
     if (!text && !attachment) return NextResponse.json({ error: "content required" }, { status: 400 })
+    // 4,000 characters per message (B-15). Before anything else is looked at or stored.
+    const length = messageLength(text)
+    if (length > MESSAGE_MAX_CHARS) {
+      return NextResponse.json({ error: messageTooLongMessage(length), code: MESSAGE_TOO_LONG, maxLength: MESSAGE_MAX_CHARS, length }, { status: 400 })
+    }
 
     // The file must be one the sender may load: they uploaded it, or it is already in a room they can
     // read (sent again). Otherwise posting someone else's picture URL into your own DM would make it a

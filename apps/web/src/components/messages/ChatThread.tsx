@@ -156,6 +156,9 @@ function fileProblemText(p: LocalFileProblem): string {
 
 /** The token being typed right after an "@", or null when the caret isn't in one. */
 const MENTION_TAIL = /(^|\s)@([\p{L}\p{N}._-]*)$/u;
+/** One message is at most 4,000 characters (B-15, 19 Oct 2026; the server refuses more with MESSAGE_TOO_LONG). */
+export const MESSAGE_MAX_CHARS = 4000;
+const charCount = (s: string) => Array.from(s).length;
 
 // ---------------------------------------------------------------------------------------------
 // Thread cache: ["messages", conversationId] holds every message fetched so far, merged by id.
@@ -811,7 +814,9 @@ export function ChatThread({
 
   const busy = !!uploading;
   // A picture on its own is a message, so an empty box is only a problem when nothing is attached.
-  const canSend = (input.trim().length > 0 || !!pending) && !busy;
+  const length = charCount(input.trim());
+  const tooLong = length > MESSAGE_MAX_CHARS;
+  const canSend = (input.trim().length > 0 || !!pending) && !busy && !tooLong;
   const submit = () => {
     if (!canSend) return;
     const content = input.trim();
@@ -1114,6 +1119,13 @@ export function ChatThread({
           );
         })()}
         {uploadError && <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
+        {length > MESSAGE_MAX_CHARS - 400 && (
+          <p role={tooLong ? "alert" : undefined} data-message-length="" className={cn("mb-2 text-xs tabular-nums", tooLong ? "font-semibold text-destructive" : "text-muted-foreground")}>
+            {tooLong
+              ? t("Too long: {n} / 4,000 characters. Shorten it or split it into several messages.", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })
+              : t("{n} / 4,000 characters", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })}
+          </p>
+        )}
 
         <div className="flex items-end gap-2">
           <input
