@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +45,7 @@ internal fun CalendarPrivacyTab() {
         item {
             Text(stringResource(R.string.calp_title), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.calp_help))
-            OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+            NxTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
         }
         if (data == null && error == null) item { CircularProgressIndicator() }
         error?.let { item { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = { retry++ }, enabled = busy == null) { Text(stringResource(R.string.try_again)) } } }

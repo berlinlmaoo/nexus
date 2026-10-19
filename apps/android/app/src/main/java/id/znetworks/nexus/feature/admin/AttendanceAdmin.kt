@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.ui.draw.clip
@@ -41,8 +45,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -143,7 +145,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
         AdminCard(stringResource(R.string.aa_public_holidays)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.aa_allowance), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                OutlinedTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(2) }, singleLine = true, modifier = Modifier.width(80.dp),
+                NxTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(2) }, singleLine = true, modifier = Modifier.width(80.dp),
                     keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number))
                 TextButton(onClick = { quotaDraft.toIntOrNull()?.takeIf { it in 0..31 }?.let { q -> run { api.setRedQuota(month.toString(), q) } } },
                     enabled = quotaDraft.toIntOrNull() != quota && quotaDraft.toIntOrNull() in 0..31) { Text(stringResource(R.string.save)) }
@@ -164,7 +166,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
                 }
             }
         }
-        OutlinedButton(onClick = onOpenOffices, modifier = Modifier.fillMaxWidth()) {
+        NxOutlinedButton(onClick = onOpenOffices, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.LocationOn, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.aa_offices))
         }
         AdminCard(stringResource(R.string.aa_members)) {
@@ -196,7 +198,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
         }, dismissButton = { TextButton(onClick = { adding = false }) { Text(stringResource(R.string.cancel)) } }) {
             Column {
                 DatePicker(st)
-                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.aa_holiday_name)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done)
+                NxTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.aa_holiday_name)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done)
             }
         }
     }
@@ -242,7 +244,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                 d?.let { x ->
                     Text(stringResource(R.string.aa_dayoff_line, x.used, x.quota) + if (x.quotaOverride != null) " · " + stringResource(R.string.aa_override) else "", fontSize = 13.sp, color = c.foreground)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(3) }, singleLine = true, placeholder = { Text("${x.defaultQuota}") },
+                        NxTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(3) }, singleLine = true, placeholder = { Text("${x.defaultQuota}") },
                             label = { Text(stringResource(R.string.aa_quota_override)) }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
                         TextButton(onClick = { run { api.setDayoffQuota(userId, quotaDraft.toIntOrNull()) } }) { Text(stringResource(if (quotaDraft.isBlank()) R.string.aa_reset else R.string.save)) }
                     }
@@ -268,7 +270,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                     }
                 }
             }
-            OutlinedButton(onClick = {
+            NxOutlinedButton(onClick = {
                 exporting = true
                 scope.launch {
                     try {
@@ -281,7 +283,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                     exporting = false
                 }
             }, enabled = !exporting, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.aa_export)) }
-            OutlinedButton(onClick = { onOpenReflections(userId) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.aa_reflections)) }
+            NxOutlinedButton(onClick = { onOpenReflections(userId) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.aa_reflections)) }
         }
     }
     if (granting) {
@@ -293,7 +295,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                 granting = false
             }) { Text(stringResource(R.string.aa_grant)) }
         }, dismissButton = { TextButton(onClick = { granting = false }) { Text(stringResource(R.string.cancel)) } }) {
-            Column { DatePicker(st); OutlinedTextField(reason, { reason = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_reason)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done) }
+            Column { DatePicker(st); NxTextField(reason, { reason = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_reason)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done) }
         }
     }
     val md = m; val wsid = ws
@@ -321,8 +323,8 @@ private fun DayShiftDialog(current: ShiftDay?, onDismiss: () -> Unit, onSave: (S
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { editing = "s" }, modifier = Modifier.weight(1f)) { Text(start) }
-                    OutlinedButton(onClick = { editing = "e" }, modifier = Modifier.weight(1f)) { Text(end) }
+                    NxOutlinedButton(onClick = { editing = "s" }, modifier = Modifier.weight(1f)) { Text(start) }
+                    NxOutlinedButton(onClick = { editing = "e" }, modifier = Modifier.weight(1f)) { Text(end) }
                 }
                 TextButton(onClick = { onSave(null, null) }) { Text(stringResource(R.string.aa_use_default)) }
             }
@@ -423,11 +425,11 @@ private fun OfficeDialog(o: Office?, onDismiss: () -> Unit, onDelete: (() -> Uni
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(if (o == null) R.string.aa_new_office else R.string.aa_edit_office)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(name, { name = it.take(120) }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, keyboardOptions = AdminKeyboard.Done)
-                OutlinedTextField(address, { address = it.take(300) }, label = { Text(stringResource(R.string.aa_address)) }, keyboardOptions = AdminKeyboard.Done)
+                NxTextField(name, { name = it.take(120) }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, keyboardOptions = AdminKeyboard.Done)
+                NxTextField(address, { address = it.take(300) }, label = { Text(stringResource(R.string.aa_address)) }, keyboardOptions = AdminKeyboard.Done)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(lat, { lat = it }, singleLine = true, label = { Text("Lat") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
-                    OutlinedTextField(lng, { lng = it }, singleLine = true, label = { Text("Lng") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(lat, { lat = it }, singleLine = true, label = { Text("Lat") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(lng, { lng = it }, singleLine = true, label = { Text("Lng") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                 }
                 TextButton(onClick = {
                     locating = true
@@ -437,8 +439,8 @@ private fun OfficeDialog(o: Office?, onDismiss: () -> Unit, onDelete: (() -> Uni
                     }
                 }, enabled = !locating) { Text(stringResource(if (locating) R.string.btn_locating else R.string.aa_use_my_location)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(radius, { radius = it.filter(Char::isDigit).take(4) }, singleLine = true, label = { Text(stringResource(R.string.aa_radius)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
-                    OutlinedTextField(grace, { grace = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text(stringResource(R.string.aa_late_grace)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(radius, { radius = it.filter(Char::isDigit).take(4) }, singleLine = true, label = { Text(stringResource(R.string.aa_radius)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(grace, { grace = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text(stringResource(R.string.aa_late_grace)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                 }
                 onDelete?.let { TextButton(onClick = it) { Text(stringResource(R.string.aa_archive), color = Nx.colors.danger) } }
             }

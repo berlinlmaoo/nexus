@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
@@ -50,8 +54,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -296,7 +298,7 @@ internal fun TextSave(label: String, value: String, big: Boolean = false, multil
     var t by remember(value) { mutableStateOf(value) }
     var focused by remember { mutableStateOf(false) }
     fun commit() { if (t != value) onSave(t) }
-    OutlinedTextField(t, { t = it }, label = { Text(label) }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
+    NxTextField(t, { t = it }, label = { Text(label) }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
         textStyle = androidx.compose.material3.LocalTextStyle.current.let { if (big) it.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp) else it },
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Text, imeAction = if (multiline) ImeAction.Default else ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -318,7 +320,7 @@ internal fun Pick(title: String, current: String, options: List<String>, label: 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         Box {
-            OutlinedButton(onClick = { open = true }) {
+            NxOutlinedButton(onClick = { open = true }) {
                 // An option this build doesn't know is shown as stored.
                 Text(if (current.isBlank()) "–" else label?.invoke(current) ?: current, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
                 Icon(Icons.Filled.KeyboardArrowDown, null)
@@ -337,7 +339,7 @@ internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { open = true }) {
+        NxOutlinedButton(onClick = { open = true }) {
             Text(iso?.let { runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
         }
     }
@@ -358,7 +360,7 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         Box {
-            OutlinedButton(onClick = { open = true }) {
+            NxOutlinedButton(onClick = { open = true }) {
                 // Set earlier, before the lead added them (or since removed): the server still keeps them.
                 val member = userId == null || people.isEmpty() || people.any { it.id == userId }
                 Text((shown ?: stringResource(R.string.pl_not_assigned)) + if (!member) " " + stringResource(R.string.pl_not_member) else "", maxLines = 1,
@@ -377,7 +379,7 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     if (typing) {
         var name by remember { mutableStateOf(if (userId == null) shown.orEmpty() else "") }
         AlertDialog(onDismissRequest = { typing = false }, title = { Text(stringResource(R.string.pl_name_of, label)) },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_their_name)) }, modifier = Modifier.fillMaxWidth()) },
+            text = { NxTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_their_name)) }, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { typing = false; save(JsonObject(mapOf("${role}UserId" to JsonNull, "${role}Name" to JsonPrimitive(name.trim())))) }, enabled = name.isNotBlank()) {
                 Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { typing = false }) { Text(stringResource(R.string.cancel)) } })

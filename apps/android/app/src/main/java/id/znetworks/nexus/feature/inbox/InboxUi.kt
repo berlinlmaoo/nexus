@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.inbox
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.material.icons.filled.Notifications
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Description
 import android.app.Application
@@ -400,7 +401,7 @@ fun AnnouncementDialog(host: AnnouncementHost) {
                 }
                 Text(a.body.orEmpty())
                 a.attachmentUrl?.let {
-                    OutlinedButton(onClick = { pdfOpen = true }, modifier = Modifier.fillMaxWidth(),
+                    NxOutlinedButton(onClick = { pdfOpen = true }, modifier = Modifier.fillMaxWidth(),
                         border = androidx.compose.foundation.BorderStroke(1.dp, c.danger.copy(alpha = 0.4f))) {
                         Icon(Icons.Filled.Description, null, tint = c.danger, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))

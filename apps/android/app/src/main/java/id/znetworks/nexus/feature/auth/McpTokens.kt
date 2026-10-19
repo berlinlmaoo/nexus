@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.PersistableBundle
@@ -65,8 +67,8 @@ internal fun McpTokensCard(){
         TextButton(onClick={name="";days="90";create=true},enabled=!busy&&tokens!=null&&tokens!!.size<10){Text(stringResource(R.string.mt_create))}
     }}
     if(create)AlertDialog(onDismissRequest={if(!busy)create=false},title={Text(stringResource(R.string.mt_create))},text={Column{
-        OutlinedTextField(name,{if(it.length<=80)name=it},label={Text(stringResource(R.string.ab_name))},enabled=!busy)
-        OutlinedTextField(days,{if(it.length<=3)days=it},label={Text(stringResource(R.string.mt_days))},enabled=!busy)
+        NxTextField(name,{if(it.length<=80)name=it},label={Text(stringResource(R.string.ab_name))},enabled=!busy)
+        NxTextField(days,{if(it.length<=3)days=it},label={Text(stringResource(R.string.mt_days))},enabled=!busy)
         Text(stringResource(R.string.mt_once))
         error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
     }},confirmButton={TextButton(onClick={busy=true;scope.launch{try{val result=api.create(name,days.toInt());val token=result.text("token");if(token.isBlank())throw ApiError.Decoding(IllegalStateException("Missing token"));secret=token.takeIf{lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)};create=false;tick++;error=null}catch(e:ApiError){error=e.describe(ctx.resources)}finally{busy=false}}},enabled=!busy&&name.trim().isNotEmpty()&&days.toIntOrNull() in 1..365){Text(stringResource(R.string.mt_create))}},dismissButton={TextButton(onClick={create=false},enabled=!busy){Text(stringResource(R.string.cancel))}})

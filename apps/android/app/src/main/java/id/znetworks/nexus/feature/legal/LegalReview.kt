@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,7 +59,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
@@ -172,7 +173,7 @@ private fun ParagraphRow(p: LgParagraph, editor: LgEditorModel, indentScale: Dou
             when {
                 editor.editing == p.index -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val runs = l.runs.orEmpty().filter { it.text.isNotBlank() }
-                    OutlinedTextField(text, { editor.edits[p.index] = it }, textStyle = typography.copy(
+                    NxTextField(text, { editor.edits[p.index] = it }, textStyle = typography.copy(
                         fontWeight = if (runs.isNotEmpty() && runs.all { it.b }) FontWeight.Bold else weight,
                         fontStyle = if (runs.isNotEmpty() && runs.all { it.i }) FontStyle.Italic else FontStyle.Normal,
                         textDecoration = if (runs.isNotEmpty() && runs.all { it.u }) TextDecoration.Underline else TextDecoration.None), modifier = Modifier.fillMaxWidth())

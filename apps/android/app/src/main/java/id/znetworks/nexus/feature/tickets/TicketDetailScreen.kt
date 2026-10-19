@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.tickets
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,8 +42,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -204,7 +206,7 @@ fun TicketDetailScreen(onBack: () -> Unit, vm: TicketDetailViewModel = viewModel
                 }
                 if (t.closed) Text(stringResource(R.string.tk_closed_no_replies), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(16.dp))
                 else if (t.canReply) Row(Modifier.fillMaxWidth().background(c.card).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(reply, { reply = it.take(TicketRules.BODY_MAX) }, placeholder = { Text(stringResource(R.string.td_write_comment)) }, maxLines = 5, modifier = Modifier.weight(1f))
+                    NxTextField(reply, { reply = it.take(TicketRules.BODY_MAX) }, placeholder = { Text(stringResource(R.string.td_write_comment)) }, maxLines = 5, modifier = Modifier.weight(1f))
                     IconButton(onClick = { vm.reply(reply) { reply = "" } }, enabled = reply.isNotBlank() && !s.busy) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.violetText) }
                 }
             }
@@ -243,10 +245,10 @@ private fun CorrectionsCard(t: Ticket, s: TicketDetailState, vm: TicketDetailVie
                 if (corr.status == "PENDING") {
                     if (s.corrections.canDecide) {
                         Text(stringResource(if (corr.kind == "PENALTY_CANCELLATION") R.string.tk_approve_penalty_note else R.string.tk_approve_time_note), fontSize = 11.sp, color = c.mutedFg)
-                        OutlinedTextField(note, { note = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_decision_note)) }, modifier = Modifier.fillMaxWidth())
+                        NxTextField(note, { note = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_decision_note)) }, modifier = Modifier.fillMaxWidth())
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { vm.decide(corr, false, note) }, enabled = !s.busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.tk_reject), color = c.danger) }
-                            OutlinedButton(onClick = { vm.decide(corr, true, note) }, enabled = !s.busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.tk_approve), color = c.success) }
+                            NxOutlinedButton(onClick = { vm.decide(corr, false, note) }, enabled = !s.busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.tk_reject), color = c.danger) }
+                            NxOutlinedButton(onClick = { vm.decide(corr, true, note) }, enabled = !s.busy, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.tk_approve), color = c.success) }
                         }
                     } else Text(stringResource(R.string.tk_waiting_bod), fontSize = 12.sp, color = c.warning)
                 }
@@ -254,7 +256,7 @@ private fun CorrectionsCard(t: Ticket, s: TicketDetailState, vm: TicketDetailVie
         }
         // One live proposal at a time (server rule): offered only when none is pending.
         if (!t.closed && s.corrections.corrections.none { it.status == "PENDING" })
-            OutlinedButton(onClick = onPropose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tk_propose)) }
+            NxOutlinedButton(onClick = onPropose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tk_propose)) }
     }
 }
 
@@ -291,16 +293,16 @@ private fun ProposeDialog(onDismiss: () -> Unit, onSend: (LocalDate, String?, St
                     FilterChip(kind == "PENALTY_CANCELLATION", { kind = "PENALTY_CANCELLATION" }, { Text(stringResource(R.string.tk_kind_penalty), fontSize = 12.sp) })
                 }
                 Label(stringResource(R.string.tk_date))
-                OutlinedButton(onClick = { picking = "date" }, modifier = Modifier.fillMaxWidth()) { Text(date.toString()) }
+                NxOutlinedButton(onClick = { picking = "date" }, modifier = Modifier.fillMaxWidth()) { Text(date.toString()) }
                 if (kind == "TIME_CORRECTION") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.tk_check_in)); OutlinedButton(onClick = { picking = "in" }, modifier = Modifier.fillMaxWidth()) { Text(checkIn ?: stringResource(R.string.tk_unchanged)) } }
-                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.tk_check_out)); OutlinedButton(onClick = { picking = "out" }, modifier = Modifier.fillMaxWidth()) { Text(checkOut ?: stringResource(R.string.tk_unchanged)) } }
+                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.tk_check_in)); NxOutlinedButton(onClick = { picking = "in" }, modifier = Modifier.fillMaxWidth()) { Text(checkIn ?: stringResource(R.string.tk_unchanged)) } }
+                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.tk_check_out)); NxOutlinedButton(onClick = { picking = "out" }, modifier = Modifier.fillMaxWidth()) { Text(checkOut ?: stringResource(R.string.tk_unchanged)) } }
                     }
                     if (checkIn != null || checkOut != null) TextButton(onClick = { checkIn = null; checkOut = null }) { Text(stringResource(R.string.tk_keep_times)) }
                 } else Text(stringResource(R.string.tk_penalty_cancel_desc), fontSize = 12.sp, color = c.mutedFg)
                 Label(stringResource(R.string.tk_reason))
-                OutlinedTextField(reason, { reason = it }, minLines = 2, placeholder = { Text(stringResource(R.string.tk_reason_ph)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(reason, { reason = it }, minLines = 2, placeholder = { Text(stringResource(R.string.tk_reason_ph)) }, modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = { TextButton(onClick = { onSend(date, checkIn, checkOut, reason, kind) }, enabled = reason.isNotBlank()) { Text(stringResource(R.string.tk_send_proposal)) } },

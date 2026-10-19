@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.vault
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.ui.components.PageHeader
 import id.znetworks.nexus.ui.components.HeaderIconButton
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -52,7 +54,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -373,7 +374,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     if (creating || naming != null) {
         var name by rememberSaveable { mutableStateOf(naming?.name.orEmpty()) }
         AlertDialog(onDismissRequest = { creating = false; naming = null }, title = { Text(stringResource(if (naming != null) R.string.vault_rename else R.string.vault_new_folder)) },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            text = { NxTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { naming?.let { vm.rename(it, name) } ?: vm.newFolder(name); creating = false; naming = null }, enabled = name.isNotBlank()) { Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { creating = false; naming = null }) { Text(stringResource(R.string.cancel)) } })
     }

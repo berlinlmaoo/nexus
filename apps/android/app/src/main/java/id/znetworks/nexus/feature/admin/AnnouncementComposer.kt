@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +37,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -137,10 +138,10 @@ fun AnnouncementComposer(api: AdminMoreApi, onDismiss: () -> Unit, onPosted: () 
             }
             Column(Modifier.fillMaxSize().dismissKeyboardOnTapOrDrag().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field(stringResource(R.string.an_f_title)) {
-                    OutlinedTextField(title, { title = it }, singleLine = true, placeholder = { Text(stringResource(R.string.an_title)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(title, { title = it }, singleLine = true, placeholder = { Text(stringResource(R.string.an_title)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                 }
                 Field(stringResource(R.string.an_f_body)) {
-                    OutlinedTextField(body, { body = it }, minLines = 3, maxLines = 8, placeholder = { Text(stringResource(R.string.an_body)) }, modifier = Modifier.fillMaxWidth())
+                    NxTextField(body, { body = it }, minLines = 3, maxLines = 8, placeholder = { Text(stringResource(R.string.an_body)) }, modifier = Modifier.fillMaxWidth())
                 }
                 Field(stringResource(R.string.an_f_audience)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -148,7 +149,7 @@ fun AnnouncementComposer(api: AdminMoreApi, onDismiss: () -> Unit, onPosted: () 
                         Chip(stringResource(R.string.an_selected), !everyone) { everyone = false }
                     }
                     if (!everyone) {
-                        OutlinedTextField(search, { search = it }, singleLine = true, placeholder = { Text(stringResource(R.string.an_search)) },
+                        NxTextField(search, { search = it }, singleLine = true, placeholder = { Text(stringResource(R.string.an_search)) },
                             modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                         if (picked.isNotEmpty()) Text(stringResource(R.string.an_n_selected, picked.size), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
                         val r = roster

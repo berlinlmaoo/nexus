@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +21,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -143,7 +144,7 @@ private fun MarkPaid(t: PipelineTerm, onDismiss: () -> Unit, onSave: (Double, St
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pl_t_mark_paid)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_total_received)) },
+                NxTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_total_received)) },
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 DateSave(stringResource(R.string.pl_t_paid_at), date) { it?.let { d -> date = d } }
@@ -165,9 +166,9 @@ private fun NewTerm(deal: PipelineDeal, vm: PipelineViewModel, onClose: () -> Un
     AlertDialog(onDismissRequest = onClose, title = { Text(stringResource(R.string.pl_t_new)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(label, { label = it }, singleLine = true, label = { Text(stringResource(R.string.pl_f_name)) },
+                NxTextField(label, { label = it }, singleLine = true, label = { Text(stringResource(R.string.pl_f_name)) },
                     placeholder = { Text(stringResource(R.string.pl_t_label_hint)) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_amount)) },
+                NxTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_amount)) },
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 DateSave(stringResource(R.string.pl_f_due_date), due) { due = it }

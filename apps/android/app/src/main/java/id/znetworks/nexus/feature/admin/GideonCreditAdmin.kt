@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -102,7 +104,7 @@ internal fun GideonCreditAdminTab() {
             } }, enabled = !busy && draft!!.objectAt("roles").all { (role, value) ->
                 (value as JsonObject).flag("unlimited") || listOf("daily", "monthly").all { CreditAdminDraft.limit(text["$role:$it"].orEmpty()) != null }
             }) { Text(stringResource(R.string.gca_save_defaults)) }
-            OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.crew_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+            NxTextField(query, { query = it }, label = { Text(stringResource(R.string.crew_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
         }
         data?.rows("people")?.filter { (it.text("name") + " " + it.text("email")).contains(query.trim(), true) }?.forEach { person ->
             item(key = "person:" + person.text("id")) {
@@ -177,7 +179,7 @@ internal fun GideonPersonCredits(userId: String, summary: GPersonOverview, saved
                     CreditNumber(daily, R.string.gca_daily, !busy && !loading) { daily = it }
                     CreditNumber(monthly, R.string.gca_period, !busy && !loading) { monthly = it }
                 }
-                OutlinedTextField(note, { if (it.length <= 300) note = it }, label = { Text(stringResource(R.string.gca_note)) }, enabled = !busy && !loading, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+                NxTextField(note, { if (it.length <= 300) note = it }, label = { Text(stringResource(R.string.gca_note)) }, enabled = !busy && !loading, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
             }
             Button(onClick = { scope.launch {
                 busy = true; error = null
@@ -189,7 +191,7 @@ internal fun GideonPersonCredits(userId: String, summary: GPersonOverview, saved
             Text(stringResource(R.string.gca_bonus), style = MaterialTheme.typography.titleMedium)
             Text(stringResource(R.string.gca_bonus_help))
             CreditNumber(bonus, R.string.gca_credits, !busy && !loading) { bonus = it }
-            OutlinedTextField(reason, { if (it.length <= 300) reason = it }, label = { Text(stringResource(R.string.gca_reason)) }, enabled = !busy && !loading, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+            NxTextField(reason, { if (it.length <= 300) reason = it }, label = { Text(stringResource(R.string.gca_reason)) }, enabled = !busy && !loading, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
             Button(onClick = { confirm = true }, enabled = !busy && !loading && bonus.toIntOrNull() in 1..100_000) { Text(stringResource(R.string.gca_grant)) }
             bonuses.forEach { b -> Text("+${b.number("credits")?.toInt() ?: 0} · ${b.text("reason")} · ${chatTime(b.text("createdAt"))}") }
         }
@@ -208,6 +210,6 @@ internal fun GideonPersonCredits(userId: String, summary: GPersonOverview, saved
 
 @Composable
 private fun CreditNumber(value: String, label: Int, enabled: Boolean, change: (String) -> Unit) {
-    OutlinedTextField(value, { if (it.isEmpty() || it.all(Char::isDigit)) change(it) }, label = { Text(stringResource(label)) },
+    NxTextField(value, { if (it.isEmpty() || it.all(Char::isDigit)) change(it) }, label = { Text(stringResource(label)) },
         enabled = enabled, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done), modifier = Modifier.fillMaxWidth())
 }

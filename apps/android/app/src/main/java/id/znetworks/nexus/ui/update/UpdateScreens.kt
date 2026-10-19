@@ -1,5 +1,7 @@
 package id.znetworks.nexus.ui.update
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.content.Context
@@ -26,7 +28,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -109,7 +110,7 @@ fun UpdateRequiredScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text(stringResource(R.string.update_download), fontFamily = DisplayFont, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.height(10.dp))
-            OutlinedButton(
+            NxOutlinedButton(
                 onClick = onCheckAgain, enabled = !state.checking,
                 shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {

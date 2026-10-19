@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.Warning
@@ -53,7 +55,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -396,7 +397,7 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
             val pms = d.deals.mapNotNull { x -> (x.pmUserId ?: x.pmShown)?.let { it to (x.pmShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
             val bds = d.deals.mapNotNull { x -> (x.bdUserId ?: x.bdShown)?.let { it to (x.bdShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.pl_search_hint), maxLines = 1) },
+                NxTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.pl_search_hint), maxLines = 1) },
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f))
                 // "Filter by service" only when the board uses more than one (§13.2).
                 val services = PipelineFilter.services(d.deals).takeIf { it.size > 1 }.orEmpty()

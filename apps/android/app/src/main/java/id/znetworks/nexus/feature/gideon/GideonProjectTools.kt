@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -137,10 +139,10 @@ private fun ScheduleEditor(row: JsonObject, busy: Boolean, error: String?, close
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             listOf(1,2,3,4,5,6,0).forEach { day -> Row { Checkbox(day in days,{ on -> days = if(on) days + day else days - day },enabled = !busy); Text(stringResource(listOf(R.string.au_d7,R.string.au_d1,R.string.au_d2,R.string.au_d3,R.string.au_d4,R.string.au_d5,R.string.au_d6)[day]),Modifier.padding(top=12.dp)) } }
-            OutlinedTextField(time,{ time=it },label={Text(stringResource(R.string.gpt_time))},enabled=!busy)
+            NxTextField(time,{ time=it },label={Text(stringResource(R.string.gpt_time))},enabled=!busy)
             BuilderPick(stringResource(R.string.gpt_timezone),zone,listOf("Asia/Jakarta","Asia/Makassar","Asia/Jayapura","Asia/Singapore","UTC").map{it to it},!busy){zone=it}
             BuilderPick(stringResource(R.string.gpt_language),language,listOf("en" to stringResource(R.string.gpt_language_en),"id" to stringResource(R.string.gpt_language_id)),!busy){language=it}
-            OutlinedTextField(instructions,{ if(it.length<=500) instructions=it },label={Text(stringResource(R.string.gpt_instructions))},enabled=!busy)
+            NxTextField(instructions,{ if(it.length<=500) instructions=it },label={Text(stringResource(R.string.gpt_instructions))},enabled=!busy)
         }
     },confirmButton={TextButton(onClick={save(buildJsonObject{put("weekdays",JsonArray(days.distinct().map{JsonPrimitive(it)}));put("time",time);put("timezone",zone);put("language",language);put("instructions",instructions.trim().takeIf{it.isNotEmpty()}?.let{JsonPrimitive(it)}?:JsonNull)})},enabled=!busy&&days.isNotEmpty()&&Regex("([01][0-9]|2[0-3]):[0-5][0-9]").matches(time)){Text(stringResource(R.string.save))}},dismissButton={TextButton(onClick={discard=true},enabled=!busy){Text(stringResource(R.string.cancel))}})
     if(discard) AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.ab_discard))},confirmButton={TextButton(onClick=close){Text(stringResource(R.string.ab_discard_action))}},dismissButton={TextButton(onClick={discard=false}){Text(stringResource(R.string.cancel))}})
@@ -156,7 +158,7 @@ private fun AutofillConfigCard(c: JsonObject, field: CustomFieldDef, manage: Boo
         listOf("enabled" to R.string.ab_enabled,"onCreate" to R.string.gpt_on_create,"onUpdate" to R.string.gpt_on_update).forEach{(key,label)->Row{Text(stringResource(label),Modifier.weight(1f));Switch(c.flag(key),{toggle(key,it)},enabled=manage)}}
         val modes=when(field.kind){"SELECT","DROPDOWN","MULTI_SELECT","STATUS"->listOf("classify");"TEXT"->listOf("summary","extract","classify");else->listOf("extract")}
         BuilderPick(stringResource(R.string.gpt_mode),c.text("mode"),modes.map{it to stringResource(when(it){"summary"->R.string.gpt_summary;"classify"->R.string.gpt_classify;else->R.string.gpt_extract})},manage){save(buildJsonObject{put("mode",it)})}
-        OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=manage,modifier=Modifier.fillMaxWidth())
+        NxTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=manage,modifier=Modifier.fillMaxWidth())
         TextButton(onClick={save(buildJsonObject{put("prompt",prompt)})},enabled=manage&&prompt!=c.text("prompt")){Text(stringResource(R.string.save))}
         Row{Text(stringResource(R.string.gpt_review),Modifier.weight(1f));Switch(c.text("approval")!="auto",{save(buildJsonObject{put("approval",if(it)"review" else "auto")})},enabled=manage)}
         if(c.text("approval")!="auto") TextButton(onClick=review,enabled=!busy){Text(stringResource(R.string.gpt_review_gideon))}

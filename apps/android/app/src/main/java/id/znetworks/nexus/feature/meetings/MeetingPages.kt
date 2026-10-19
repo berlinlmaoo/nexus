@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.meetings
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.Manifest
 import android.content.Context
 import android.media.MediaMetadataRetriever
@@ -200,7 +202,7 @@ import java.io.File
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!config.meetingNotesEnabled) { Text(stringResource(R.string.meet_not_available)); return@Column }
             if (uploadedId == null) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.ui_meeting_title)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                NxTextField(title, { title = it }, label = { Text(stringResource(R.string.ui_meeting_title)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 MeetingProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
                 MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.ui_meeting_auto) }, listOf("auto" to stringResource(R.string.ui_meeting_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }

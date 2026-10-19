@@ -82,6 +82,7 @@
     <string name="meet_saved_draft">Saved</string>
     <string name="meet_description">Details</string>
     <string name="meet_due">Due</string>
+    <string name="meet_add_date">Add date</string>
     <string name="meet_pic">PIC</string>
     <string name="meet_add">Add</string>
     <string name="meet_speaker">Speaker</string>

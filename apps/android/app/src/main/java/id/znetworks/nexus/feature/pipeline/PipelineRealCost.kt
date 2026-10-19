@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,8 +22,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -96,7 +98,7 @@ internal fun RealCost(deal: PipelineDeal, canEdit: Boolean, onEdit: ((List<Pipel
             }
         }
     }
-    if (canEdit) OutlinedButton(onClick = { onEdit { PipelineCosts.add(it) } }, enabled = costs.size < PipelineCosts.MAX_LINES) {
+    if (canEdit) NxOutlinedButton(onClick = { onEdit { PipelineCosts.add(it) } }, enabled = costs.size < PipelineCosts.MAX_LINES) {
         Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.pc_add))
     }
 }
@@ -117,7 +119,7 @@ private fun CostField(value: String, label: String, placeholder: String, money: 
     var t by remember(value) { mutableStateOf(value) }
     var focused by remember { mutableStateOf(false) }
     fun commit() { if (t != value) onSave(t) }
-    OutlinedTextField(t, { t = if (money) it else it.take(PipelineCosts.LABEL_MAX) }, label = { Text(label, maxLines = 1) }, placeholder = { Text(placeholder, maxLines = 1) },
+    NxTextField(t, { t = if (money) it else it.take(PipelineCosts.LABEL_MAX) }, label = { Text(label, maxLines = 1) }, placeholder = { Text(placeholder, maxLines = 1) },
         singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = if (money) KeyboardType.Number else KeyboardType.Text, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commit() }),
         modifier = modifier.onFocusChanged { f -> if (focused && !f.isFocused) commit(); focused = f.isFocused })

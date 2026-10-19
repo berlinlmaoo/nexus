@@ -1,0 +1,299 @@
+{
+  "shared": "ui/components/NxTextField.kt",
+  "files": 73,
+  "fields": 159,
+  "changes": [
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/vault/VaultZip.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/vault/VaultScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketsScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketDetailScreen.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/threads/ThreadsScreen.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tasks/TaskFields.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tasks/TaskDetailScreen.kt",
+      "fields": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/social/SocialEditors.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/sheets/SheetScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/search/SearchScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/reports/ReportsScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/AutomationBuilder.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectDetailScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectPage.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectOverview.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectSettingsScreen.kt",
+      "fields": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectSetup.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/TemplateGallery.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectsScreen.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/presence/PresenceUi.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/legal/LegalShared.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/legal/LegalReview.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineTermsSection.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineRealCost.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDocuments.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDealSheet.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormFillScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormBuilderScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/people/XpAdmin.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/people/PeopleScreens.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockWriting.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockFormat.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockEditorDialog.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletSettings.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletReportForm.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/Reminders.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonSaveDoc.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonProjectTools.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonMemoryUi.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonActionCards.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingPages.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingSpeakers.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/ChatInfoScreen.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/ChatThreadScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/MessagesScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/agenda/RoomBookingComposer.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/JoinWorkspace.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarFilters.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/WorkspaceMembers.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/UsersAdmin.kt",
+      "fields": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/Teams.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AuditAdmin.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AttendanceCrew.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AttendanceAdmin.kt",
+      "fields": 10
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AnnouncementComposer.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AdminMore.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GideonCreditAdmin.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/FakeGps.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/ExtraDayOff.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/CalendarPrivacy.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GideonPeople.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GoogleWorkspace.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/Offboard.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/AttendanceScreen.kt",
+      "fields": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/orgchart/OrgChartSheets.kt",
+      "fields": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/AccountScreen.kt",
+      "fields": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/LoginScreen.kt",
+      "fields": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/requests/RequestsUi.kt",
+      "fields": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/McpTokens.kt",
+      "fields": 2
+    }
+  ]
+}

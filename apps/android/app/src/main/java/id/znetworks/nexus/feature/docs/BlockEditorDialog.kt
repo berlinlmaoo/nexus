@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.docs
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -72,7 +74,7 @@ private fun BlockEditorDialog(kind:String,id:String,onSaved:()->Unit,close:()->U
                     Card{Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                         val label=when(type){"paragraph"->R.string.be_text;"heading"->R.string.be_heading;"codeBlock"->R.string.be_code;"detailsSummary"->R.string.be_toggle;else->R.string.be_kept}
                         Text(stringResource(label),style=MaterialTheme.typography.labelMedium)
-                        if(line.editable)OutlinedTextField(BlockTree.text(line.node),{text->edit(BlockTree.update(d,line.path){BlockTree.replaceText(it,text)})},enabled=canEdit&&!busy,modifier=Modifier.fillMaxWidth())
+                        if(line.editable)NxTextField(BlockTree.text(line.node),{text->edit(BlockTree.update(d,line.path){BlockTree.replaceText(it,text)})},enabled=canEdit&&!busy,modifier=Modifier.fillMaxWidth())
                         else Text(BlockTree.text(line.node).ifBlank{stringResource(R.string.be_kept_help)})
                         val taskPath=line.path.indices.map{line.path.take(it+1)}.firstOrNull{BlockTree.at(d,it).text("type")=="taskItem"}
                         if(taskPath!=null){val item=BlockTree.at(d,taskPath);Row{Checkbox(item.objectAt("attrs").flag("checked"),{on->edit(BlockTree.update(d,taskPath){JsonObject(it+("attrs" to JsonObject(it.objectAt("attrs")+("checked" to JsonPrimitive(on)))) )})},enabled=canEdit&&!busy);Text(stringResource(R.string.be_done),Modifier.padding(top=12.dp))}}

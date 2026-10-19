@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.DatePickerDialog
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -56,7 +58,7 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
     TextButton(onClick = { query = ""; open = true }, enabled = enabled, contentPadding = PaddingValues(0.dp)) { Text(value ?: label, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(label) }, text = {
         Column {
-            OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.gt_search)) }, singleLine = true)
+            NxTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.gt_search)) }, singleLine = true)
             Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState())) {
                 options.filter { it.second.contains(query, true) }.forEach { (id, name) ->
                     Text(name, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Nx.colors.foreground, modifier = Modifier.fillMaxWidth().clickable { open = false; onPick(id) }.padding(vertical = 15.dp))

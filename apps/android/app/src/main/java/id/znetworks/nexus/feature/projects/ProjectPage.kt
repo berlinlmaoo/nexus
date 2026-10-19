@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.ui.zIndex
 
 import androidx.compose.ui.layout.positionInParent
@@ -66,7 +68,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -767,7 +768,7 @@ fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false, request: Boole
         val focus = remember { androidx.compose.ui.focus.FocusRequester() }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
         Row(Modifier.fillMaxWidth().background(if (flat) Color.Transparent else c.card, RoundedCornerShape(10.dp)).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.pp_new_task)) }, singleLine = true,
+            NxTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.pp_new_task)) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (title.isNotBlank()) { onAdd(title.trim()); title = "" } else composing = false }),
                 modifier = Modifier.weight(1f).focusRequester(focus))
@@ -983,7 +984,7 @@ fun NewViewDialog(canShare: Boolean, onDismiss: () -> Unit, onCreate: (name: Str
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ViewsLogic.LAYOUTS.forEach { l -> TabChip(layoutIcon(l), stringResource(layoutTab(l).label), on = layout == l, onClick = { layout = l }) }
                 }
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.view_name)) },
+                NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.view_name)) },
                     placeholder = { Text(stringResource(layoutTab(layout).label)) }, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.view_who), fontSize = 13.sp, color = c.mutedFg)
                 Row(Modifier.fillMaxWidth().clickable { shared = false }, verticalAlignment = Alignment.CenterVertically) {
@@ -1023,7 +1024,7 @@ fun ViewMenuDialog(v: ProjectView, canEdit: Boolean, canDelete: Boolean, onDismi
 fun TextPromptDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf(initial) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) },
-        text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+        text = { NxTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }

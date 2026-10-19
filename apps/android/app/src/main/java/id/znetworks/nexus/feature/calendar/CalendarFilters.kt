@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +36,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -116,7 +117,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             }
             item(key = "peopleh") {
                 Header(stringResource(R.string.cal_people))
-                OutlinedTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
+                NxTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                 if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 else if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
@@ -131,7 +132,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             if (folders.isNotEmpty()) {
                 item(key = "folderh") {
                     Header(stringResource(R.string.cal_folders), f.folders.size)
-                    OutlinedTextField(qFolders, { qFolders = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_folders)) },
+                    NxTextField(qFolders, { qFolders = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_folders)) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                     if (matchingFolders.isEmpty()) Text(stringResource(R.string.cal_no_folder_matches), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 }
@@ -150,7 +151,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             }
             item(key = "projh") {
                 Header(stringResource(R.string.cal_projects))
-                OutlinedTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
+                NxTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                 if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 else if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))

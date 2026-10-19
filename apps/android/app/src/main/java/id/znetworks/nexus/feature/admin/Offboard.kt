@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,8 +23,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -166,18 +168,18 @@ fun OffboardDialog(name: String, joinedAt: String?, onDismiss: () -> Unit, onOpe
                                 modifier = Modifier.background(c.card, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) }
                         }
                         Text(stringResource(R.string.off_lost_approver_sub), fontSize = 11.sp, color = c.warningFg)
-                        OutlinedButton(onClick = onOpenChart) { Text(stringResource(R.string.off_open_chart)) }
+                        NxOutlinedButton(onClick = onOpenChart) { Text(stringResource(R.string.off_open_chart)) }
                     }
                     if (r.autoDeductionsCanceled > 0) Text(pluralStringResource(R.plurals.off_deductions_canceled, r.autoDeductionsCanceled, r.autoDeductionsCanceled), fontSize = 11.sp, color = c.mutedFg)
                 } else {
                     Text(stringResource(R.string.off_intro), fontSize = 12.sp, color = c.mutedFg)
                     Text(stringResource(R.string.off_last_day), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
-                    OutlinedButton(onClick = { picking = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(long(dayDate)) }
+                    NxOutlinedButton(onClick = { picking = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(long(dayDate)) }
                     Text(stringResource(R.string.off_reason), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Offboarding.REASONS.forEach { k -> FilterChip(reason == k, { reason = k }, { Text(stringResource(Offboarding.reasonLabel(k))) }, enabled = !busy) }
                     }
-                    OutlinedTextField(note, { if (it.length <= 500) note = it }, label = { Text(stringResource(R.string.off_note)) }, minLines = 2, maxLines = 4,
+                    NxTextField(note, { if (it.length <= 500) note = it }, label = { Text(stringResource(R.string.off_note)) }, minLines = 2, maxLines = 4,
                         enabled = !busy, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
                     Column(Modifier.fillMaxWidth().background(c.muted, RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(stringResource(R.string.off_what_happens).uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)

@@ -129,8 +129,7 @@ private fun AccessCard(draft: FormStudioDraft, projectName: String, onEdit: ((Fo
 private fun AccessOption(on: Boolean, icon: ImageVector, title: String, hint: String, onClick: () -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(10.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(if (on) c.muted.copy(alpha = 0.6f) else c.card)
-        .border(1.dp, if (on) c.foreground.copy(alpha = 0.6f) else c.border, shape)
+    Column(Modifier.fillMaxWidth().clip(shape).background(if (on) c.accentBg else c.muted)
         .clickable(role = Role.RadioButton, onClick = onClick).semantics { selected = on }.padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

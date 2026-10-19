@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.rememberScrollState
@@ -49,7 +51,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -414,8 +415,8 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         modifier = Modifier.weight(1f).fillMaxWidth().background(c.background).onGloballyPositioned { origin = it.positionInRoot() }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
-                OutlinedTextField(s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                    placeholder = { Text(stringResource(R.string.projects_search)) }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
+                NxTextField(s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    placeholder = { Text(stringResource(R.string.projects_search)) }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
             }
             s.savedAt?.let { item { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) } }
             when {
@@ -613,7 +614,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TemplateChosen(chosen, enabled = !busy) { pick = null }
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
                 // No icon or colour choice (PROJECT-ICON): every project shows the task icon; a photo is added in Settings.
                 if (folders.isNotEmpty()) {
                     var open by remember { mutableStateOf(false) }
@@ -680,7 +681,7 @@ private fun FolderDialog(editing: ProjectFolder?, parent: ProjectFolder? = null,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (editing == null && parent != null) Text(stringResource(R.string.folder_inside, parent.name), fontSize = 12.sp, color = Nx.colors.mutedFg)
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) }, modifier = Modifier.fillMaxWidth())
                 EmojiRow(FOLDER_ICONS, if (photo == null) icon else "") { icon = it; photo = null }
                 TextButton(onClick = pick) { Text(stringResource(if (photo != null) R.string.folder_photo_chosen else R.string.folder_photo)) }
                 if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = Nx.colors.danger)

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.outlet
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -82,7 +84,7 @@ private fun ConfigList(items: List<JsonObject>, communities: Boolean, usage: Jso
         val id = item.text("id")
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(item.text(nameKey), { text -> if (text.length <= 60) update(id) { JsonObject(it + (nameKey to JsonPrimitive(text))) } },
+                NxTextField(item.text(nameKey), { text -> if (text.length <= 60) update(id) { JsonObject(it + (nameKey to JsonPrimitive(text))) } },
                     enabled = enabled && !item.flag("archived"), label = { Text(stringResource(R.string.oc_label)) }, modifier = Modifier.fillMaxWidth())
                 Row {
                     if (item.flag("archived")) TextButton(onClick = { update(id) { JsonObject(it - "archived") } }, enabled = enabled) { Text(stringResource(R.string.sm_restore)) }

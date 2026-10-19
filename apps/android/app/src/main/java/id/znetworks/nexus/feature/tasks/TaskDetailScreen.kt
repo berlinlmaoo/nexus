@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.tasks
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.ui.input.pointer.pointerInput
@@ -70,7 +72,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -455,8 +456,8 @@ private fun QuestBanner(t: TaskDetail, isBoD: Boolean, vm: TaskDetailViewModel, 
             title = { Text(stringResource(R.string.td_make_quest)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.td_quest_title)) }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, label = { Text("XP") }, singleLine = true,
+                    NxTextField(title, { title = it }, label = { Text(stringResource(R.string.td_quest_title)) }, modifier = Modifier.fillMaxWidth())
+                    NxTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, label = { Text("XP") }, singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                     Text(stringResource(R.string.td_quest_help), fontSize = 12.sp, color = c.mutedFg)
                 }
@@ -534,7 +535,7 @@ private fun TaskTagsDialog(t: TaskDetail, vm: TaskDetailViewModel, onDismiss: ()
         var draft by remember { mutableStateOf(t.tags.joinToString(", ")) }
         val chosen = draft.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         AlertDialog(onDismissRequest = { onDismiss() }, title = { Text(stringResource(R.string.cp_tags)) },
-            text = { OutlinedTextField(draft, { draft = it }, supportingText = { Text(stringResource(R.string.r21_tags_help)) }) },
+            text = { NxTextField(draft, { draft = it }, supportingText = { Text(stringResource(R.string.r21_tags_help)) }) },
             confirmButton = { TextButton(enabled = chosen.size <= 20 && chosen.all { it.length <= 50 }, onClick = {
                 vm.setTags(chosen, base); onDismiss()
             }) { Text(stringResource(R.string.save)) } },
@@ -684,7 +685,7 @@ private fun DependenciesCard(s: TaskDetailState, vm: TaskDetailViewModel, onOpen
             title = { Text(stringResource(R.string.td_add_dependency)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    NxTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
                         placeholder = { Text(stringResource(R.string.td_search_tasks)) }, modifier = Modifier.fillMaxWidth())
                     if (s.projectTasks.isEmpty()) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     else if (options.isEmpty()) Muted(stringResource(R.string.td_no_other_tasks))
@@ -730,7 +731,7 @@ private fun TimeCard(s: TaskDetailState, vm: TaskDetailViewModel) {
     Card {
         CardHeader(if (total > 0) stringResource(R.string.td_time_total, minutesText(total)) else stringResource(R.string.td_time))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit).take(5) }, singleLine = true, placeholder = { Text(stringResource(R.string.td_minutes)) },
+            NxTextField(minutes, { minutes = it.filter(Char::isDigit).take(5) }, singleLine = true, placeholder = { Text(stringResource(R.string.td_minutes)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(10.dp), modifier = Modifier.width(120.dp))
             Spacer(Modifier.width(8.dp))
             val m = minutes.toIntOrNull() ?: 0

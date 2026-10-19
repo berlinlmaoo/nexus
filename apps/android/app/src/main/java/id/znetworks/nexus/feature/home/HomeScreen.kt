@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.home
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Storage
@@ -55,7 +57,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -808,7 +809,7 @@ private fun ProfileCard(name: String?, avatar: String?, g: Gamification?, onOpen
                 ProfileRow(stringResource(R.string.home_points_period), "%,d".format(Locale.getDefault(), g?.xp?.totalXp ?: 0))
             }
         }
-        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+        NxOutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
             Text(stringResource(R.string.home_settings), color = c.foreground, fontWeight = FontWeight.SemiBold)
         }
     }

@@ -1,0 +1,110 @@
+{
+  "files": 26,
+  "buttons": 59,
+  "changes": [
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/update/UpdateScreens.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/components/PageChrome.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/inbox/InboxUi.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/home/HomeScreen.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormFillScreen.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketsScreen.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketDetailScreen.kt",
+      "buttons": 6
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/LoginScreen.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/WorkflowBundle.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/TaskBulk.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectSettingsScreen.kt",
+      "buttons": 4
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectOverview.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectDetailScreen.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/AutomationsTab.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/AutomationBuilder.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/requests/RequestsUi.kt",
+      "buttons": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineRealCost.kt",
+      "buttons": 1
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDocuments.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDealSheet.kt",
+      "buttons": 3
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/history/BoardUi.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AdminMore.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AttendanceAdmin.kt",
+      "buttons": 5
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/UsersAdmin.kt",
+      "buttons": 6
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/Offboard.kt",
+      "buttons": 2
+    },
+    {
+      "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/FakeGps.kt",
+      "buttons": 3
+    }
+  ]
+}

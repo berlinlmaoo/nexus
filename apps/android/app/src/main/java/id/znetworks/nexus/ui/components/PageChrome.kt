@@ -29,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -148,7 +147,7 @@ fun NxButton(
         NxButtonKind.DESTRUCTIVE -> Button(onClick, modifier.then(min), enabled = enabled, shape = shape, contentPadding = pad,
             colors = ButtonDefaults.buttonColors(containerColor = c.dangerText, contentColor = c.onDanger,
                 disabledContainerColor = c.dangerText.copy(alpha = 0.5f), disabledContentColor = c.onDanger), content = content)
-        NxButtonKind.BORDERED -> OutlinedButton(onClick, modifier.then(min), enabled = enabled, shape = shape, contentPadding = pad,
+        NxButtonKind.BORDERED -> NxOutlinedButton(onClick, modifier.then(min), enabled = enabled, shape = shape, contentPadding = pad,
             border = BorderStroke(1.dp, c.border),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = c.card, contentColor = c.foreground,
                 disabledContentColor = c.foreground.copy(alpha = 0.5f)), content = content)

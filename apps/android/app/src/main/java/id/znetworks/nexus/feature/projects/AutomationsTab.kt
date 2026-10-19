@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.text.format.DateUtils
@@ -35,7 +37,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -331,8 +332,8 @@ private fun RunLog(automationId: String, api: ProjectsApi, refresh: Int) {
                 }
             }
             if (hasMore) item {
-                OutlinedButton(onClick = {
-                    val last = list.lastOrNull()?.createdAt ?: return@OutlinedButton
+                NxOutlinedButton(onClick = {
+                    val last = list.lastOrNull()?.createdAt ?: return@NxOutlinedButton
                     loadingMore = true
                     scope.launch {
                         try { val r = api.automationRuns(automationId, last); runs = list + r.runs; hasMore = r.hasMore }
@@ -367,7 +368,7 @@ private fun RunNowBar(a: Automation, lanes: List<Lane>, api: ProjectsApi, onRan:
                 tasks.forEach { t -> DropdownMenuItem(text = { Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { taskId = t.id; menu = false }) }
             }
         }
-        OutlinedButton(onClick = {
+        NxOutlinedButton(onClick = {
             busy = true
             scope.launch {
                 result = try {

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
@@ -36,7 +38,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -200,7 +201,7 @@ fun ExtraDayOffTab(isBoD: Boolean) {
             TextButton(onClick = { selected = selected + shown.map { it.userId } }, enabled = shown.isNotEmpty()) { Text(stringResource(R.string.xd_select_shown), fontSize = 12.sp) }
             TextButton(onClick = { selected = emptySet() }, enabled = selected.isNotEmpty()) { Text(stringResource(R.string.xd_clear), fontSize = 12.sp) }
         }
-        OutlinedTextField(search, { search = it }, singleLine = true, placeholder = { Text(stringResource(R.string.xd_search)) }, modifier = Modifier.fillMaxWidth(),
+        NxTextField(search, { search = it }, singleLine = true, placeholder = { Text(stringResource(R.string.xd_search)) }, modifier = Modifier.fillMaxWidth(),
             trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { search = "" }) { Icon(Icons.Filled.Close, stringResource(R.string.xd_clear)) } }, keyboardOptions = AdminKeyboard.Done)
         // The chosen people stay visible while the search narrows the list below.
         if (selected.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -234,7 +235,7 @@ fun ExtraDayOffTab(isBoD: Boolean) {
                 IconButton(onClick = { days++ }, enabled = days < 31) { Icon(Icons.Filled.Add, "+") }
             }
             Label(stringResource(R.string.xd_reason))
-            OutlinedTextField(reason, { reason = it.take(ExtraDayOffLogic.REASON_MAX) }, maxLines = 4, placeholder = { Text(stringResource(R.string.xd_reason_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+            NxTextField(reason, { reason = it.take(ExtraDayOffLogic.REASON_MAX) }, maxLines = 4, placeholder = { Text(stringResource(R.string.xd_reason_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
             Row {
                 if (reason.isNotEmpty() && reason.trim().length < 3) Text(stringResource(R.string.xd_min3), fontSize = 11.sp, color = c.warning)
                 Spacer(Modifier.weight(1f)); Text("${reason.length}/${ExtraDayOffLogic.REASON_MAX}", fontSize = 11.sp, color = c.mutedFg)

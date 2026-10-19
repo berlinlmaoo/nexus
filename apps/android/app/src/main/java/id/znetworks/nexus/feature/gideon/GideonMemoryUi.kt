@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -67,7 +69,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, if (profileField == null) draft else MemoryProfile.payload(profileField, draft)); editing = false } }
     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (editing) {
-            OutlinedTextField(draft, { draft = it.take(if (profileField == null) limit.coerceAtLeast(1) else MemoryProfile.limit(profileField, limit)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
+            NxTextField(draft, { draft = it.take(if (profileField == null) limit.coerceAtLeast(1) else MemoryProfile.limit(profileField, limit)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
                 if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = initialDraft; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
             }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }))
             Row { TextButton(onClick = { draft = initialDraft; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }

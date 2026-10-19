@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.attendance.requests
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.Manifest
@@ -53,8 +57,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -189,7 +191,7 @@ fun SubmissionsCard(vm: RequestsViewModel, onFiled: () -> Unit) {
             }
         }
         if (vm.canReview) {
-            OutlinedTextField(
+            NxTextField(
                 value = s.query, onValueChange = vm::setQuery, singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 placeholder = { Text(stringResource(R.string.req_search)) },
@@ -466,7 +468,7 @@ private fun RejectDialog(r: AttendanceRequest, busy: Boolean, error: String?, on
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.reject_help), fontSize = 13.sp)
-                OutlinedTextField(note, { note = it }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                NxTextField(note, { note = it }, minLines = 3, modifier = Modifier.fillMaxWidth())
                 error?.let { Text(it, color = Nx.colors.danger, fontSize = 12.sp) }
             }
         },
@@ -512,7 +514,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 if (cs.type == "LEAVE") {
                     // Annual leave is one range: first day, last day (owner 29 Sep, iOS ed7545e).
                     Label(stringResource(R.string.leave_dates))
-                    OutlinedButton(onClick = { pickingRange = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                    NxOutlinedButton(onClick = { pickingRange = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Filled.CalendarMonth, null, Modifier.size(18.dp))
                         Spacer(Modifier.size(8.dp))
                         val s0 = cs.leaveStart; val s1 = cs.leaveEnd
@@ -526,7 +528,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 } else {
                 // One date control, every other type (REQ-ATT-25).
                 Label(stringResource(R.string.req_date))
-                OutlinedButton(onClick = { pickingDate = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                NxOutlinedButton(onClick = { pickingDate = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                     Icon(Icons.Filled.CalendarMonth, null, Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text(DAY.format(cs.date), modifier = Modifier.weight(1f))
@@ -534,7 +536,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 }
 
                 Label(stringResource(R.string.req_reason))
-                OutlinedTextField(cs.reason, vm::setReason, minLines = 3, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                NxTextField(cs.reason, vm::setReason, minLines = 3, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                     placeholder = { Text(stringResource(R.string.req_reason_placeholder)) })
 
                 if (rules.showsAttachment(cs.type)) {
@@ -554,10 +556,10 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                     } else {
                         // Camera, gallery and files, as on iOS 0.1.6.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = camera, modifier = Modifier.weight(1f)) { Icon(Icons.Filled.CameraAlt, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.camera), fontSize = 12.sp) }
-                            OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            NxOutlinedButton(onClick = camera, modifier = Modifier.weight(1f)) { Icon(Icons.Filled.CameraAlt, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.camera), fontSize = 12.sp) }
+                            NxOutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 modifier = Modifier.weight(1f)) { Icon(Icons.Filled.Photo, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.gallery), fontSize = 12.sp) }
-                            OutlinedButton(onClick = { files.launch(arrayOf("image/*", "application/pdf")) },
+                            NxOutlinedButton(onClick = { files.launch(arrayOf("image/*", "application/pdf")) },
                                 modifier = Modifier.weight(1f)) { Icon(Icons.Filled.AttachFile, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.files), fontSize = 12.sp) }
                         }
                     }

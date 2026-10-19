@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import id.znetworks.nexus.ui.theme.NightHues
@@ -66,7 +68,6 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.LocalContentColor
@@ -655,7 +656,7 @@ private fun ScopeMenu(d: CalDerived, vm: CalendarViewModel) {
     var open by remember { mutableStateOf(false) }
     val names = listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division))
     Box {
-        OutlinedButton(onClick = { open = true }) { Text(names[d.s.filters.scope.ordinal], maxLines = 1); Icon(Icons.Filled.ExpandMore, null) }
+        NxOutlinedButton(onClick = { open = true }) { Text(names[d.s.filters.scope.ordinal], maxLines = 1); Icon(Icons.Filled.ExpandMore, null) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             names.forEachIndexed { i, n ->
                 DropdownMenuItem(text = { Text(n) }, onClick = { open = false; vm.setScope(CalendarCore.Scope.entries[i], inChart = d.index.inChart) },

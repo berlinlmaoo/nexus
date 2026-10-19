@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.ui.draw.clip
@@ -43,7 +45,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -268,8 +269,8 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
                     }
                     androidx.compose.material3.Switch(forced || makeGroup, { makeGroup = it }, enabled = !forced)
                 }
-                if (forced || makeGroup) OutlinedTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
+                if (forced || makeGroup) NxTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
                 if (s.roster.isEmpty()) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 LazyColumn(Modifier.heightIn(max = 320.dp)) {
                     items(people, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->

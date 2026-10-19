@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.sheets
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
@@ -43,7 +45,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -176,7 +177,7 @@ private fun SheetTabs(tabs: List<SheetTab>, current: String?, canEdit: Boolean, 
     renaming?.let { t ->
         var name by rememberSaveable { mutableStateOf(t.name) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text(stringResource(R.string.sh_rename_title)) },
-            text = { OutlinedTextField(name, { name = it.take(80) }, singleLine = true, label = { Text(stringResource(R.string.sh_sheet_name)) }) },
+            text = { NxTextField(name, { name = it.take(80) }, singleLine = true, label = { Text(stringResource(R.string.sh_sheet_name)) }) },
             confirmButton = { TextButton(onClick = { renaming = null; store.renameSheet(t, name) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.sh_save)) } },
             dismissButton = { TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.cancel)) } })
     }
@@ -421,7 +422,7 @@ private fun EditBar(d: SheetData, s: SheetUi, store: SheetStore) {
                 modifier = Modifier.width(52.dp).clip(RoundedCornerShape(6.dp)).background(c.muted).padding(vertical = 8.dp), textAlign = TextAlign.Center)
             Spacer(Modifier.width(6.dp))
             val shown = s.draft ?: SheetCells.editText(col.type, raw, d.shape, d.en)
-            OutlinedTextField(shown, { if (canEdit) { if (s.draft == null) store.startEdit(); store.setDraft(it) } }, singleLine = true, readOnly = !canEdit,
+            NxTextField(shown, { if (canEdit) { if (s.draft == null) store.startEdit(); store.setDraft(it) } }, singleLine = true, readOnly = !canEdit,
                 placeholder = { Text(stringResource(if (canEdit) R.string.sh_type_hint else R.string.sh_view_only)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { store.commit() }),
                 modifier = Modifier.weight(1f))

@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.feature.presence.PresenceLine
 
 import id.znetworks.nexus.ui.components.LeftTag
@@ -38,8 +42,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -147,7 +149,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 val stats = listOf(Triple("ALL", stringResource(R.string.audit_admin_total), totalUsers)) + Roles.ALL.map { Triple(it, if (it == "BOD") "Board" else Roles.label(it), r.members.count { m -> m.role == it }) }
                 stats.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { (key, label, count) ->
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(c.card).border(if (role == key) 2.dp else 1.dp, if (role == key) c.onyx else c.border, RoundedCornerShape(20.dp)).clickable { role = key }.padding(16.dp)) {
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(if (role == key) c.accentBg else c.muted).clickable { role = key }.padding(16.dp)) {
                             Text(count?.toString() ?: "—", fontSize = 26.sp, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, color = c.foreground)
                             Text(label, fontSize = 13.sp, color = c.mutedFg)
                         }
@@ -184,7 +186,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.ad_search)) },
+                    NxTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.ad_search)) },
                         shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                     if (isBoD) IconButton(onClick = { inviting = true }) { Icon(Icons.Filled.PersonAdd, stringResource(R.string.ad_invite), tint = c.violetText) }
                 }
@@ -212,7 +214,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Pill(if (m.role == "BOD") "Board" else Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
-                        androidx.compose.material3.OutlinedButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
+                        NxOutlinedButton(onClick = { onOpenUser(m.userId) }) { Text(stringResource(R.string.ad_details)) }
                     }
                 }
             }
@@ -259,7 +261,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
         AlertDialog(onDismissRequest = { inviting = false }, title = { Text(stringResource(R.string.ad_invite)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Roles.assignable(r.role).forEach { k -> FilterChip(newRole == k, { newRole = k }, { Text(Roles.label(k), fontSize = 12.sp) }) } }
                 }
             },
@@ -392,11 +394,11 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
             // Offboard (owner, 8 Oct): rare and heavy, so last; BoD/OAA on someone below them, never themselves.
             if (canEdit && viewer.isBoD && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.off_offboard)) {
                 Text(stringResource(R.string.off_intro), fontSize = 12.sp, color = c.mutedFg)
-                OutlinedButton(onClick = { offboarding = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.off_offboard_name_more, m.displayName), color = c.dangerText) }
+                NxOutlinedButton(onClick = { offboarding = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.off_offboard_name_more, m.displayName), color = c.dangerText) }
             }
             if (canEdit && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
-                OutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
-                if (viewer.isBoD) OutlinedButton(onClick = { confirm = "delete" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_delete_user), color = c.danger) }
+                NxOutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
+                if (viewer.isBoD) NxOutlinedButton(onClick = { confirm = "delete" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_delete_user), color = c.danger) }
             }
         }
     }
@@ -458,9 +460,9 @@ private fun AccountCard(m: WsMember, onPhoto: (ByteArray?) -> Unit, onSave: (Map
             Avatar(m.name, m.avatar, 56.dp, userId = m.userId); Spacer(Modifier.width(12.dp))
             TextButton(onClick = pick) { Text(stringResource(R.string.pf_change_photo)) }
         }
-        OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
-        OutlinedTextField(email, { email = it }, singleLine = true, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
-        OutlinedTextField(password, { password = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) }, textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+        NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+        NxTextField(email, { email = it }, singleLine = true, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+        NxTextField(password, { password = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) }, textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
             supportingText = { Text(stringResource(R.string.ad_password_hint)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
         // Only changed keys: re-sending an unchanged email can 409.
         val fields = buildMap<String, JsonElement> {
@@ -482,8 +484,8 @@ private fun HoursDialog(m: WsMember, onDismiss: () -> Unit, onSave: (String?, St
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { editing = "start" }, modifier = Modifier.weight(1f)) { Text(start) }
-                    OutlinedButton(onClick = { editing = "end" }, modifier = Modifier.weight(1f)) { Text(end) }
+                    NxOutlinedButton(onClick = { editing = "start" }, modifier = Modifier.weight(1f)) { Text(start) }
+                    NxOutlinedButton(onClick = { editing = "end" }, modifier = Modifier.weight(1f)) { Text(end) }
                 }
                 Text(stringResource(R.string.ad_hours_note), fontSize = 11.sp, color = Nx.colors.mutedFg)
                 TextButton(onClick = { onSave(null, null) }) { Text(stringResource(R.string.ad_follows_team)) }

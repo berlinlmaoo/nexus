@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,8 +42,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -144,13 +146,13 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
     }
     // One type for whatever is added next: a link, a file or a photo.
     Pick(stringResource(R.string.pl_link_type), type, types, label = { k -> PipelineText.link(k)?.let { stringResource(it) } ?: k }) { type = it }
-    OutlinedTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_doc_name_opt)) }, modifier = Modifier.fillMaxWidth())
+    NxTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_doc_name_opt)) }, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { pickFile.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.AttachFile, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.pl_doc_attach)) }
-        OutlinedButton(onClick = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) {
+        NxOutlinedButton(onClick = { pickFile.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.AttachFile, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.pl_doc_attach)) }
+        NxOutlinedButton(onClick = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) {
             Icon(Icons.Filled.PhotoLibrary, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.pl_doc_photo)) }
     }
-    OutlinedTextField(url, { url = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_paste_link)) }, modifier = Modifier.fillMaxWidth(),
+    NxTextField(url, { url = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_paste_link)) }, modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
     val ok = url.trim().let { it.startsWith("https://") || it.startsWith("http://") }
     TextButton(onClick = {
@@ -208,7 +210,7 @@ internal fun ServicesRow(deal: PipelineDeal, data: PipelineData, onSave: (List<S
                         Text(stringResource(R.string.pl_other_services), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 8.dp))
                         others.forEach { Option(it) }
                     }
-                    OutlinedTextField(typed, { typed = it.take(PipelineServices.MAX_LEN) }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_add_service)) },
+                    NxTextField(typed, { typed = it.take(PipelineServices.MAX_LEN) }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_add_service)) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { addTyped() }),
                         trailingIcon = { IconButton(onClick = { addTyped() }, enabled = typed.isNotBlank() && picked.size < PipelineServices.MAX) { Icon(Icons.Filled.Add, stringResource(R.string.pl_add_service)) } },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp))

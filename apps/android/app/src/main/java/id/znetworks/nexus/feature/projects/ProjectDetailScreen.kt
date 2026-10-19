@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.app.Application
@@ -48,8 +52,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -814,15 +816,15 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
         title = { Text(stringResource(R.string.task_new)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(title, { title = it }, label = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
                 Box {
-                    OutlinedButton(onClick = { laneMenu = true }) { Text(lanes.firstOrNull { it.id == lane }?.name ?: "—") }
+                    NxOutlinedButton(onClick = { laneMenu = true }) { Text(lanes.firstOrNull { it.id == lane }?.name ?: "—") }
                     DropdownMenu(laneMenu, { laneMenu = false }) { lanes.forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { lane = l.id; laneMenu = false }) } }
                 }
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TaskEnums.PRIORITIES.reversed().forEach { p -> FilterChip(prio == p, { prio = p }, { Text(priorityLabel(p), fontSize = 12.sp) }) }
                 }
-                OutlinedButton(onClick = { picking = true }) {
+                NxOutlinedButton(onClick = { picking = true }) {
                     Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
                 NewTaskFields(fields, values, projectId) { id, v -> values = values + (id to v) }

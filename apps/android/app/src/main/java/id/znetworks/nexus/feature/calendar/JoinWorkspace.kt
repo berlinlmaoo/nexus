@@ -1,11 +1,12 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +59,7 @@ fun JoinWorkspaceDialog(onDismiss: () -> Unit, onJoined: (String) -> Unit) {
                     Text(stringResource(R.string.ws_join_confirm_body), fontSize = 14.sp, color = c.foreground)
                 } else {
                     Text(stringResource(R.string.ws_join_hint), fontSize = 13.sp, color = c.mutedFg)
-                    OutlinedTextField(code, { code = it; error = null }, singleLine = true, label = { Text(stringResource(R.string.ws_join_field)) },
+                    NxTextField(code, { code = it; error = null }, singleLine = true, label = { Text(stringResource(R.string.ws_join_field)) },
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth())
                 }

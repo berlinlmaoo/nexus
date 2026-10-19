@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.content.Context
@@ -55,7 +57,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -366,7 +367,7 @@ fun LgTextField(
     label: String? = null,
 ) {
     val c = Nx.colors
-    OutlinedTextField(
+    NxTextField(
         value, onValueChange, modifier.fillMaxWidth(), enabled = enabled, singleLine = singleLine, minLines = minLines,
         maxLines = if (singleLine) 1 else 8, isError = invalid,
         textStyle = TextStyle(fontSize = 14.sp, color = c.foreground, fontFamily = if (mono) LgMono else null),
@@ -384,8 +385,8 @@ fun LgTextField(
 @Composable
 fun LgFieldBox(modifier: Modifier = Modifier, invalid: Boolean = false, enabled: Boolean = true, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
     val c = Nx.colors
-    Row(modifier.clip(RoundedCornerShape(10.dp)).background(c.background)
-        .border(1.dp, if (invalid) c.danger.copy(alpha = 0.7f) else c.border, RoundedCornerShape(10.dp))
+    Row(modifier.clip(RoundedCornerShape(10.dp)).background(c.muted)
+        .then(if (invalid) Modifier.border(1.dp, c.dangerText, RoundedCornerShape(10.dp)) else Modifier)
         .clickable(enabled = enabled, onClick = onClick).defaultMinSize(minHeight = 44.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }

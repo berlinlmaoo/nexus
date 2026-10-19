@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -56,8 +58,8 @@ internal fun XpAdjustButton(changed:()->Unit){
         if(people==null&&error==null||busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         BuilderPick(stringResource(R.string.xad_person),user,people.orEmpty().map{it.userId to "${it.name.orEmpty()} · ${it.totalXp} XP"},!busy){user=it}
         Row{FilterChip(negative,{negative=true},label={Text(stringResource(R.string.xpa_deducted))},enabled=!busy);FilterChip(!negative,{negative=false},label={Text(stringResource(R.string.xpa_added))},enabled=!busy)}
-        OutlinedTextField(magnitude,{if(it.length<=4&&it.all{c->c.isDigit()})magnitude=it},label={Text(stringResource(R.string.xad_amount))},enabled=!busy)
-        OutlinedTextField(note,{if(it.length<=120)note=it},label={Text(stringResource(R.string.xad_note))},enabled=!busy)
+        NxTextField(magnitude,{if(it.length<=4&&it.all{c->c.isDigit()})magnitude=it},label={Text(stringResource(R.string.xad_amount))},enabled=!busy)
+        NxTextField(note,{if(it.length<=120)note=it},label={Text(stringResource(R.string.xad_note))},enabled=!busy)
         error?.let{Text(it,color=MaterialTheme.colorScheme.error);TextButton(onClick={tick++},enabled=!busy){Text(stringResource(R.string.try_again))}}
     }},confirmButton={TextButton(onClick={confirm=true},enabled=!busy&&user.isNotBlank()&&kotlin.math.abs(amount) in 1..1000){Text(stringResource(R.string.xad_adjust))}},dismissButton={TextButton(onClick={open=false},enabled=!busy){Text(stringResource(R.string.cancel))}})
     if(confirm)AlertDialog(onDismissRequest={if(!busy)confirm=false},title={Text(stringResource(R.string.xad_confirm,amount,people?.find{it.userId==user}?.name.orEmpty()))},text={Text(note)},confirmButton={TextButton(onClick={busy=true;scope.launch{try{api.adjust(user,amount,note);confirm=false;open=false;changed()}catch(e:ApiError){error=e.describe(ctx.resources);confirm=false}finally{busy=false}}},enabled=!busy){Text(stringResource(R.string.confirm))}},dismissButton={TextButton(onClick={confirm=false},enabled=!busy){Text(stringResource(R.string.cancel))}})

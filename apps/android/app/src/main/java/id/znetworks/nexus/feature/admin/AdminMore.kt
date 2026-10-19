@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.material.icons.filled.PhoneIphone
@@ -41,8 +45,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -205,7 +207,7 @@ fun QuestsTab() {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(ws, tick) { if (ws != null) list = runCatching { api.quests(ws) }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(onClick = { creating = true }, enabled = ws != null, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qa_new)) }
+        NxOutlinedButton(onClick = { creating = true }, enabled = ws != null, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qa_new)) }
         val l = list
         if (l == null) CircularProgressIndicator(Modifier.size(20.dp))
         else if (l.isEmpty()) TabEmpty(Icons.Filled.EmojiEvents, stringResource(R.string.qa_empty))
@@ -234,12 +236,12 @@ fun QuestsTab() {
         AlertDialog(onDismissRequest = { creating = false }, title = { Text(stringResource(R.string.qa_new)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.qa_title)) }, placeholder = { Text(stringResource(R.string.qa_title_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+                    NxTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.qa_title)) }, placeholder = { Text(stringResource(R.string.qa_title_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Column { listOf("task_count", "overdue_cleared", "priority_done").forEach { t -> Row(verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(type == t, { type = t }, { Text(questType(t, null) ?: t, fontSize = 12.sp) }) } } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(count, { count = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text("N") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                        OutlinedTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, singleLine = true, label = { Text("XP (≤ 50)") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                        NxTextField(count, { count = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text("N") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                        NxTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, singleLine = true, label = { Text("XP (≤ 50)") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
                     }
                     TextButton(onClick = { pickDate = true }) { Text(deadline?.let { stringResource(R.string.qa_until, it) } ?: stringResource(R.string.qa_add_deadline)) }
                 }
@@ -287,7 +289,7 @@ fun AnnouncementsTab() {
     LaunchedEffect(tick) { list = runCatching { api.announcements() }.getOrDefault(emptyList()) }
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.an_new)) }
+        NxOutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.an_new)) }
         val l = list
         if (l == null) CircularProgressIndicator(Modifier.size(20.dp))
         else if (l.isEmpty()) TabEmpty(Icons.Filled.Campaign, stringResource(R.string.an_empty))

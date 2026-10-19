@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -49,8 +53,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -244,8 +246,8 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             Section(stringResource(R.string.ps_identity)) {
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
                 var desc by rememberSaveable(d.description) { mutableStateOf(d.description.orEmpty()) }
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(desc, { desc = it }, label = { Text(stringResource(R.string.ps_description)) }, maxLines = 4, modifier = Modifier.fillMaxWidth())
+                NxTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                NxTextField(desc, { desc = it }, label = { Text(stringResource(R.string.ps_description)) }, maxLines = 4, modifier = Modifier.fillMaxWidth())
                 // PROJECT-ICON (11 Oct): no emoji and no colour — the mark is the task icon, a photo the only custom icon.
                 // The photo saves on its own; the general save sends neither "icon" nor "color".
                 var unreadable by remember { mutableStateOf(false) }
@@ -253,12 +255,12 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 val hasPhoto = ProjectMarkLogic.isPhoto(d.icon)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProjectMark(d.icon, 48.dp, projectId = d.id)
-                    OutlinedButton(onClick = pick, enabled = !s.busy && !ro) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
+                    NxOutlinedButton(onClick = pick, enabled = !s.busy && !ro) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
                     if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy && !ro) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
                 }
                 if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = c.danger)
                 val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty()
-                OutlinedButton(onClick = {
+                NxOutlinedButton(onClick = {
                     vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()))
                 }, enabled = dirty && name.isNotBlank() && !s.busy && !ro, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ps_save_identity)) }
             }
@@ -348,10 +350,10 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             // Danger
             // Delete = Full access; Duplicate = BoD.
             if (!ro || s.isBoD) Section(stringResource(R.string.ps_danger)) {
-                if (s.isBoD) OutlinedButton(onClick = vm::duplicate, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
+                if (s.isBoD) NxOutlinedButton(onClick = vm::duplicate, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_duplicate))
                 }
-                if (!ro) OutlinedButton(onClick = { confirmDelete = true }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
+                if (!ro) NxOutlinedButton(onClick = { confirmDelete = true }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Delete, null, Modifier.size(16.dp), tint = c.danger); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_delete), color = c.danger)
                 }
             }
@@ -449,7 +451,7 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
         title = { Text(stringResource(R.string.ps_new_field)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_field_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                NxTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_field_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FIELD_TYPES.forEach { (k, l) -> FilterChip(type == k, { type = k }, { Text(stringResource(l), fontSize = 12.sp) }) }
                 }
@@ -457,7 +459,7 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         options.forEach { o -> FilterChip(true, { options = options - o }, { Text("$o ✕", fontSize = 12.sp) }) }
                     }
-                    OutlinedTextField(draft, { draft = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_add_option)) },
+                    NxTextField(draft, { draft = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_add_option)) },
                         trailingIcon = { IconButton(onClick = { if (draft.isNotBlank() && draft.trim() !in options) options = options + draft.trim(); draft = "" }) { Icon(Icons.Filled.Add, stringResource(R.string.ps_add_option)) } },
                         modifier = Modifier.fillMaxWidth())
                 }
@@ -521,7 +523,7 @@ private fun InviteDialog(onDismiss: () -> Unit, onInvite: (String, AccessLevel) 
         title = { Text(stringResource(R.string.acc_invite)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth())
+                NxTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.acc_they_get), fontSize = 13.sp, color = Nx.colors.mutedFg)
                 AccessText.LEVELS.forEach { l ->
                     Row(Modifier.fillMaxWidth().clickable { level = l }, verticalAlignment = Alignment.CenterVertically) {

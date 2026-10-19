@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.presence
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
@@ -141,7 +143,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                 TextButton(onClick = { submit(false) }, enabled = canSave) { Text(stringResource(R.string.gm_save), color = if (canSave) c.violetText else c.mutedFg) }
             }
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(text, { text = it.take(80); quickPicked = false }, placeholder = { Text(stringResource(R.string.ui_status_placeholder)) },
+                NxTextField(text, { text = it.take(80); quickPicked = false }, placeholder = { Text(stringResource(R.string.ui_status_placeholder)) },
                     leadingIcon = { Box {
                         TextButton(onClick = { emojiMenu = true }, enabled = !busy, modifier = Modifier.semantics { contentDescription = context.getString(R.string.ui_status_emoji) }) { Text(emoji.ifBlank { "☺" }, fontSize = 22.sp) }
                         DropdownMenu(emojiMenu, { emojiMenu = false }) {

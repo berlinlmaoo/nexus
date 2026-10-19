@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -64,8 +66,8 @@ private fun SaveAnswerDialog(markdown: String, project: Pair<String, String>?, c
     } }
     AlertDialog(onDismissRequest = { if (saving == null) close() }, title = { Text(stringResource(R.string.gsd_save)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(title, { if (it.length <= 200) title = it }, label = { Text(stringResource(R.string.gsd_title)) }, enabled = saving == null, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, enabled = saving == null, modifier = Modifier.fillMaxWidth())
+            NxTextField(title, { if (it.length <= 200) title = it }, label = { Text(stringResource(R.string.gsd_title)) }, enabled = saving == null, modifier = Modifier.fillMaxWidth())
+            NxTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, enabled = saving == null, modifier = Modifier.fillMaxWidth())
             error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = { retry++ }, enabled = saving == null) { Text(stringResource(R.string.try_again)) } }
             if (projects == null && error == null) CircularProgressIndicator()
             if (project != null && query.isBlank()) TextButton(onClick = { save(project.first) }, enabled = saving == null) { Text(stringResource(R.string.gsd_this_project, project.second)) }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -37,7 +39,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -569,7 +570,7 @@ private fun DuplicateDialog(name: String, load: suspend () -> List<Named>, onDis
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.fb_duplicate)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(n, { n = it }, singleLine = true, label = { Text(stringResource(R.string.fb_new_name)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(n, { n = it }, singleLine = true, label = { Text(stringResource(R.string.fb_new_name)) }, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.fb_target), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
                 when {
                     failed -> Text(stringResource(R.string.fb_projects_failed), fontSize = 12.sp, color = c.dangerText)

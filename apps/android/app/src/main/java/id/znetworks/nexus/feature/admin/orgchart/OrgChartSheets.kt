@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin.orgchart
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.R
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -49,7 +51,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -272,7 +273,7 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
         }
         Column {
             FieldLabel(stringResource(R.string.oc_name))
-            OutlinedTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done,
+            NxTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done,
                 placeholder = { Text(stringResource(when (kind) { "IP" -> R.string.oc_name_ph_ip; "GROUP" -> R.string.oc_name_ph_group; else -> R.string.oc_name_ph_div })) })
         }
         if (kind == "IP") Column {
@@ -384,7 +385,7 @@ private fun TitleRow(api: OrgChartApi, person: OrgPerson, unitId: String, leader
             Text(person.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(ROLE_SUB[person.role] ?: person.role, fontSize = 11.sp, color = c.mutedFg)
         }
-        OutlinedTextField(v, { v = it.take(40) }, singleLine = true, enabled = !saving, placeholder = { Text(stringResource(R.string.oc_job_title), fontSize = 12.sp) },
+        NxTextField(v, { v = it.take(40) }, singleLine = true, enabled = !saving, placeholder = { Text(stringResource(R.string.oc_job_title), fontSize = 12.sp) },
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { saveTitle() }),
             modifier = Modifier.width(110.dp).onFocusChanged { if (!it.isFocused) saveTitle() })
@@ -422,7 +423,7 @@ private fun ParentPicker(tree: OrgTree, value: String?, excluded: Set<String>, o
     val shown = if (needle.isEmpty()) rows else rows.filter { (u, _) -> tree.pathOf(u).lowercase().contains(needle) }
     SheetFrame(onClose, header = {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_units)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+            NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_units)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
             TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
         }
     }, footer = {}) {
@@ -489,7 +490,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
             }
             Text(stringResource(R.string.oc_person_hint), fontSize = 11.sp, color = c.mutedFg)
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_people)) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), keyboardOptions = AdminKeyboard.Done)
+            NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_people)) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), keyboardOptions = AdminKeyboard.Done)
         }
     }, footer = {
         Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.oc_done)) }
