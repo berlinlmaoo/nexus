@@ -25,6 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.work.WorkManager
 import androidx.work.WorkInfo
 import id.znetworks.nexus.NexusApplication
@@ -117,6 +120,7 @@ import java.io.File
     var discard by remember { mutableStateOf<String?>(null) }
     var uploadedId by rememberSaveable { mutableStateOf<String?>(null) }
     var uploaded by remember { mutableStateOf<Meeting?>(null) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val uploads = remember(context) { WorkManager.getInstance(context) }
     val uploadName = uploadedId?.let { "meeting-upload:${container.sessionStore.current?.userId}:$it" }
     val work by remember(uploadName) {
@@ -137,12 +141,14 @@ import java.io.File
     LaunchedEffect(recording.finished, recording.file) {
         if (recording.finished && recording.file != null) { localName = recording.file; fileName = title.ifBlank { context.getString(R.string.meet_recording_entry) } + ".m4a"; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt; introEndSec = recording.introEndSec }
     }
-    LaunchedEffect(uploadedId) {
+    LaunchedEffect(uploadedId, lifecycle) {
         val id = uploadedId ?: return@LaunchedEffect
-        while (isActive) {
-            try { uploaded = api.get(id) } catch (_: ApiError) { problem = R.string.meet_load_failed }
-            if (uploaded?.working == false) break
-            delay(2000)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (isActive) {
+                try { uploaded = api.get(id) } catch (_: ApiError) { problem = R.string.meet_load_failed }
+                if (uploaded?.working == false) break
+                delay(2000)
+            }
         }
     }
     fun pick(uri: Uri) {
