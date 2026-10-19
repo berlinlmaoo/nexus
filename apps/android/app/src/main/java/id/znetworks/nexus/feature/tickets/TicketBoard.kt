@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draganddrop.*
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +44,7 @@ internal fun TicketBoard(s: TicketsState, meId: String?, move: (Ticket, String) 
     val currentMove by rememberUpdatedState(move)
     val currentTickets by rememberUpdatedState(all)
     val moving by rememberUpdatedState(s.moving)
+    val context = LocalContext.current
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = 12.dp)) {
             TextButton(onClick = { menu = true }) { Text(if (category == "ALL") stringResource(R.string.ui_ticket_all_categories) else ticketCategoryLabel(category)); Icon(Icons.Filled.ExpandMore, null) }
@@ -64,12 +66,16 @@ internal fun TicketBoard(s: TicketsState, meId: String?, move: (Ticket, String) 
                         val data = event.toAndroidDragEvent().clipData ?: return false
                         if (data.description.label != "nexus-ticket") return false
                         val ticket = currentTickets.firstOrNull { it.id == data.getItemAt(0).text?.toString() } ?: return false
+                        if (column == "AWAITING_DECISION") {
+                            UiNotice.show(context.getString(R.string.ui_ticket_system_status))
+                            return false
+                        }
                         if (ticket.id in moving || TicketBoardRules.destination(ticket, column, reviewer) == null) return false
                         currentMove(ticket, column)
                         return true
                     }
                 } }
-                val drop = if (reviewer && column != "AWAITING_DECISION") Modifier.dragAndDropTarget(
+                val drop = if (reviewer) Modifier.dragAndDropTarget(
                     shouldStartDragAndDrop = { it.toAndroidDragEvent().clipDescription?.label == "nexus-ticket" }, target = target) else Modifier
                 BoardLane(modifier = drop.then(if (hovering) Modifier.border(2.dp, Nx.colors.violetText, RoundedCornerShape(12.dp)) else Modifier)) {
                     val tickets = shown.filter { TicketBoardRules.column(it.status) == column }
@@ -103,7 +109,7 @@ private fun TicketBoardCard(t: Ticket, moving: Boolean, modifier: Modifier, open
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(chatTime(t.lastMessageAt ?: t.createdAt), color = c.mutedFg, fontSize = 11.sp, modifier = Modifier.weight(1f))
             if (t.gideonReplied) { val label = stringResource(R.string.ui_ticket_gideon_replied); Box(Modifier.semantics { contentDescription = label }) { GideonMark(14.dp, c.violetText) } }
-            Text("💬 ${t.messageCount}", color = c.mutedFg, fontSize = 12.sp)
+            Text("💬 ${(t.messageCount - 1).coerceAtLeast(0)}", color = c.mutedFg, fontSize = 12.sp)
             if (moving) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
         }
     }

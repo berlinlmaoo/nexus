@@ -57,4 +57,5 @@
     <string name="ui_messages_projects_hint">Percakapan untuk proyekmu muncul di sini.</string>
     <plurals name="ui_vault_move_selected"><item quantity="other">Pindahkan %1$d item</item></plurals>
     <plurals name="ui_vault_moved"><item quantity="other">%1$d item dipindahkan ke %2$s</item></plurals>
+    <string name="ui_ticket_system_status">Status Menunggu keputusan diatur otomatis.</string>
 </resources>

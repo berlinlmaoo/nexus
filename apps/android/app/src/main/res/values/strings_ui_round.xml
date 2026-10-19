@@ -57,4 +57,5 @@
     <string name="ui_messages_projects_hint">Conversations for your projects appear here.</string>
     <plurals name="ui_vault_move_selected"><item quantity="one">Move %1$d item</item><item quantity="other">Move %1$d items</item></plurals>
     <plurals name="ui_vault_moved"><item quantity="one">%1$d item moved to %2$s</item><item quantity="other">%1$d items moved to %2$s</item></plurals>
+    <string name="ui_ticket_system_status">Awaiting decision is set automatically.</string>
 </resources>

@@ -212,7 +212,7 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
             when {
                 s.loading && s.list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.error != null && s.list == null -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                else -> TicketBoard(s, vm.meId, vm::move, onOpenTicket)
+                else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) { TicketBoard(s, vm.meId, vm::move, onOpenTicket) }
             }
         }
     }
