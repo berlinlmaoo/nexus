@@ -97,9 +97,7 @@ struct VaultView: View {
     @State private var showPhotos = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
 
-    /// Regular width (iPad, Mac): the dev web's page (vault.tsx, owner screenshots 276/277) — a page
-    /// header with a compact search field and Select · Trash · Folder · Upload, the usage bar, the path,
-    /// and the items as cards in a grid. The phone keeps its bar, its search drawer and its rows.
+    /// Regular width keeps the page header, compact search and file cards; the phone uses rows.
     private var webChrome: Bool { hSize == .regular }
 
     var body: some View {
@@ -201,8 +199,7 @@ struct VaultView: View {
         }
     }
 
-    /// The phone's take on the web header (UI tour 13 Oct 2026): the subtitle at the top level, and Trash,
-    /// Folder and Upload as visible buttons instead of only inside the ⋯ menu. Upload is the primary.
+    /// The top-level caption; creation and management actions live in the two toolbar menus.
     private var phoneHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             if folder == nil {
