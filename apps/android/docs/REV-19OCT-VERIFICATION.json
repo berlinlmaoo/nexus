@@ -1,0 +1,884 @@
+{
+  "at": "2026-10-19T12:20:00.696Z",
+  "branch": "feat/android-rev-19oct",
+  "base": "603f9dd7a198bcf7e58304f08e8e51ecc33a9137",
+  "sourceCommit": "998d7ac4fbbfa04789f3948f499e19783cf74c48",
+  "version": {
+    "name": "0.1.6",
+    "code": 13
+  },
+  "build": {
+    "tasks": [
+      "testDebugUnitTest",
+      "assembleDebug"
+    ],
+    "result": "PASS",
+    "tests": 931,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suites": 188,
+    "apkSha256": "1ccbf054fcfcf6288b7d40c520ffffcd055fcfe4122655fd58c0c166233c3094"
+  },
+  "device": {
+    "avd": "Pixel_7",
+    "serial": "emulator-5556",
+    "visibleWindow": true,
+    "gpu": "host",
+    "environment": "DEV",
+    "shutdown": {
+      "finalLocaleVerified": "Indonesian/dark",
+      "avd": "Pixel_7",
+      "otherEmulatorsUntouched": true,
+      "at": "2026-10-19T12:19:38.6494783Z",
+      "stopped": true,
+      "lingeringOwnedProcessForceStopped": false,
+      "baselinePreferenceBytesVerified": true,
+      "gracefulKillAcknowledged": true,
+      "serial": "emulator-5556"
+    }
+  },
+  "commits": [
+    "a1b84bb0 fix(android): show timeline names by default on phones",
+    "ea99b7f8 fix(android): soften the Memory summary composer",
+    "6580d95a fix(android): use inset Memory groups and separate profile fields",
+    "363dcc41 fix(android): simplify GIDEON performance summary and tier cards",
+    "02789481 fix(android): share one live meeting upload byte reading",
+    "483ed582 fix(android): keep meeting uploads and transcription in one progress flow",
+    "75f792d4 fix(android): support availability-only status and revised expiry choices",
+    "806f48a6 fix(android): keep missing daily errors unknown and GPU age inline",
+    "be306aea fix(android): retain completed upload bytes until the next server poll",
+    "91334506 fix(android): use the approved meeting queue copy",
+    "998d7ac4 fix(android): refresh meeting progress only while the page is resumed"
+  ],
+  "checks": {
+    "r7": [
+      "Names default visible including undated task",
+      "Names chip hides column"
+    ],
+    "memory": [
+      "Inline nickname native IME Done saved to DEV",
+      "Reopened field prefills saved value",
+      "Navigating to Memory summary blurs and saves edited nickname",
+      "Only this-run profile memory deleted; existing date memory preserved"
+    ],
+    "presence": [
+      "online native empty-text Save and server readback",
+      "away native empty-text Save and server readback",
+      "dnd native empty-text Save and server readback",
+      "Existing availability-only status prefills empty text and clears natively"
+    ],
+    "presenceRules": [
+      "Meeting quick pick supplies text",
+      "Availability selection clears quick-pick text",
+      "Typed text survives availability change",
+      "Clear-after menu includes 4h and This week",
+      "Draft cancelled; no server writes"
+    ],
+    "upload": {
+      "at": "2026-10-19T11:59:27.847Z",
+      "history": [
+        {
+          "at": "2026-10-19T11:59:15.909Z",
+          "received": 0,
+          "total": 32610714
+        },
+        {
+          "at": "2026-10-19T11:59:16.952Z",
+          "received": 0,
+          "total": 32610714
+        },
+        {
+          "at": "2026-10-19T11:59:17.998Z",
+          "received": 0,
+          "total": 32610714
+        },
+        {
+          "at": "2026-10-19T11:59:19.035Z",
+          "received": 8388608,
+          "total": 32610714
+        }
+      ],
+      "label": "8.0 MB of 31.1 MB · 26 %",
+      "checks": [
+        "Real 31.1 MB DEV upload advanced beyond zero",
+        "Native byte label and shared progress bar show acknowledged bytes",
+        "Native Cancel upload deleted only owned upload and closed screen"
+      ]
+    },
+    "meeting": {
+      "at": "2026-10-19T11:33:00.478Z",
+      "history": [
+        {
+          "at": "2026-10-19T11:32:43.178Z",
+          "status": "QUEUED",
+          "received": 558236
+        },
+        {
+          "at": "2026-10-19T11:32:46.980Z",
+          "status": "TRANSCRIBING",
+          "received": 558236
+        },
+        {
+          "at": "2026-10-19T11:32:50.757Z",
+          "status": "SUMMARIZING",
+          "received": 558236
+        },
+        {
+          "at": "2026-10-19T11:32:54.518Z",
+          "status": "SUMMARIZING",
+          "received": 558236
+        },
+        {
+          "at": "2026-10-19T11:32:58.268Z",
+          "status": "READY",
+          "received": 558236
+        }
+      ]
+    },
+    "meetingOpen": [
+      "Real DEV recording queued, transcribed, summarized and ready on one screen",
+      "Navbar Cancel absent after upload",
+      "Ready detail visible without navigation",
+      "Open meeting opens owned draft; no Apply"
+    ],
+    "meetingDone": {
+      "at": "2026-10-19T12:01:31.592Z",
+      "checks": [
+        "Native Done closes the real DEV progress screen"
+      ],
+      "statusAtClose": "READY"
+    },
+    "meetingResume": {
+      "at": "2026-10-19T12:07:34.857Z",
+      "checks": [
+        "Final build: upload/transcription continues while Activity is backgrounded",
+        "Returning to the same page refreshes READY automatically",
+        "Done closes after resume"
+      ],
+      "history": [
+        "QUEUED",
+        "QUEUED",
+        "QUEUED",
+        "TRANSCRIBING",
+        "TRANSCRIBING",
+        "TRANSCRIBING",
+        "SUMMARIZING",
+        "SUMMARIZING",
+        "SUMMARIZING",
+        "SUMMARIZING",
+        "SUMMARIZING",
+        "READY"
+      ]
+    }
+  },
+  "profile": {
+    "assigned-before": [
+      {
+        "run": 1,
+        "frames": 164,
+        "jank": "25 (15.24%)",
+        "p50Ms": 13,
+        "p95Ms": 29,
+        "sha256": "93abd62bef681079b235c8b704cff575b356e97dd93abd63f0b1cb70532e1e23"
+      },
+      {
+        "run": 2,
+        "frames": 168,
+        "jank": "23 (13.69%)",
+        "p50Ms": 13,
+        "p95Ms": 27,
+        "sha256": "40e516b54807fe99aa35b980a746b0d31074d487a7fc3d34df574379aa5c34e5"
+      },
+      {
+        "run": 3,
+        "frames": 169,
+        "jank": "24 (14.20%)",
+        "p50Ms": 13,
+        "p95Ms": 27,
+        "sha256": "1c20d7d602f79b6c72ac417c89c5832663f17312c719504b07e1a79b0082d80e"
+      }
+    ],
+    "final": [
+      {
+        "run": 1,
+        "frames": 167,
+        "jank": "29 (17.37%)",
+        "p50Ms": 13,
+        "p95Ms": 32,
+        "sha256": "f2e89de8fca0b6a302c934a3ac4943b492947471118ec543818e5f224742632b"
+      },
+      {
+        "run": 2,
+        "frames": 180,
+        "jank": "21 (11.67%)",
+        "p50Ms": 12,
+        "p95Ms": 25,
+        "sha256": "47f00765ad079f6f9b665575eff08deb3e704b25dc76042fd5ebb683c1913b75"
+      },
+      {
+        "run": 3,
+        "frames": 171,
+        "jank": "29 (16.96%)",
+        "p50Ms": 16,
+        "p95Ms": 30,
+        "sha256": "3de239dbfdb117cc38b3a5057267f281671e1624058652b25ca6bfdec97de8f4"
+      }
+    ],
+    "cpu": {
+      "recordSize": 14,
+      "mainThread": 3,
+      "top": [
+        {
+          "us": 215264,
+          "calls": 154,
+          "method": "android.os.MessageQueue nativePollOnce (JI)V MessageQueue.java"
+        },
+        {
+          "us": 56939,
+          "calls": 95,
+          "method": "android.graphics.HardwareRenderer nSyncAndDrawFrame (J[JI)I HardwareRenderer.java"
+        },
+        {
+          "us": 20981,
+          "calls": 1,
+          "method": "android.view.ContextThemeWrapper getResources ()Landroid/content/res/Resources; ContextThemeWrapper.java"
+        },
+        {
+          "us": 19472,
+          "calls": 11,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullParameter (Ljava/lang/Object;Ljava/lang/String;)V Intrinsics.java"
+        },
+        {
+          "us": 18533,
+          "calls": 10,
+          "method": "kotlin.time.MonotonicTimeSource read ()J MonoTimeSource.kt"
+        },
+        {
+          "us": 17507,
+          "calls": 9,
+          "method": "java.util.ArrayList get (I)Ljava/lang/Object; ArrayList.java"
+        },
+        {
+          "us": 15924,
+          "calls": 10,
+          "method": "androidx.compose.ui.Actual_jvmAndAndroidKt currentTimeMillis ()J Actual.jvmAndAndroid.kt"
+        },
+        {
+          "us": 11409,
+          "calls": 1,
+          "method": "androidx.compose.runtime.RecomposeScopeImpl getUsed ()Z RecomposeScopeImpl.kt"
+        },
+        {
+          "us": 10547,
+          "calls": 6,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNull (Ljava/lang/Object;Ljava/lang/String;)V Intrinsics.java"
+        },
+        {
+          "us": 10410,
+          "calls": 6,
+          "method": "androidx.compose.runtime.collection.MutableVector add (Ljava/lang/Object;)Z MutableVector.kt"
+        },
+        {
+          "us": 10135,
+          "calls": 8,
+          "method": "android.view.DisplayEventReceiver nativeScheduleVsync (J)V DisplayEventReceiver.java"
+        },
+        {
+          "us": 9796,
+          "calls": 5,
+          "method": "androidx.compose.runtime.composer.gapbuffer.SlotReader next ()Ljava/lang/Object; SlotTable.kt"
+        },
+        {
+          "us": 9496,
+          "calls": 5,
+          "method": "kotlin.time.TimeSource$Monotonic$ValueTimeMark constructor-impl (J)J TimeSource.kt"
+        },
+        {
+          "us": 8578,
+          "calls": 7,
+          "method": "android.os.Handler sendMessageAtTime (Landroid/os/Message;J)Z Handler.java"
+        },
+        {
+          "us": 8419,
+          "calls": 15,
+          "method": "androidx.compose.ui.spatial.RectManager dispatchCallbacks ()V RectManager.kt"
+        },
+        {
+          "us": 8381,
+          "calls": 5,
+          "method": "androidx.compose.ui.graphics.layer.GraphicsLayerV29 getShadowElevation ()F GraphicsLayerV29.android.kt"
+        },
+        {
+          "us": 8240,
+          "calls": 4,
+          "method": "androidx.compose.ui.Modifier$Node <init> ()V Modifier.kt"
+        },
+        {
+          "us": 8197,
+          "calls": 5,
+          "method": "androidx.compose.runtime.ComposerKt isTraceInProgress ()Z Composer.kt"
+        },
+        {
+          "us": 8004,
+          "calls": 2,
+          "method": "androidx.compose.ui.node.NodeCoordinator withinLayerBounds-k-4lQ0M (J)Z NodeCoordinator.kt"
+        },
+        {
+          "us": 7789,
+          "calls": 3,
+          "method": "java.lang.Thread currentThread ()Ljava/lang/Thread; Thread.java"
+        }
+      ],
+      "app": [
+        {
+          "us": 223154,
+          "calls": 34,
+          "method": "id.znetworks.nexus.feature.projects.ProjectPageKt access$TableRow-BDLfyrM (Lid/znetworks/nexus/feature/projects/BoardTask;Ljava/util/List;Ljava/util/List;Lid/znetworks/nexus/feature/projects/PropCtx;Ljava/util/List;ZLid/znetworks/nexus/feature/projects/ProjectAccess;Lid/znetworks/nexus/feature/projects/ProjectDetailViewModel;ZZFFLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ZLandroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V ProjectPage.kt"
+        },
+        {
+          "us": 223154,
+          "calls": 34,
+          "method": "id.znetworks.nexus.feature.projects.ProjectPageKt TableRow-BDLfyrM (Lid/znetworks/nexus/feature/projects/BoardTask;Ljava/util/List;Ljava/util/List;Lid/znetworks/nexus/feature/projects/PropCtx;Ljava/util/List;ZLid/znetworks/nexus/feature/projects/ProjectAccess;Lid/znetworks/nexus/feature/projects/ProjectDetailViewModel;ZZFFLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ZLandroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V ProjectPage.kt"
+        },
+        {
+          "us": 143020,
+          "calls": 36,
+          "method": "id.znetworks.nexus.feature.projects.ProjectPageKt $r8$lambda$qca4-sKAOuQdVc1t6wpq6Io2ayA (Lid/znetworks/nexus/feature/projects/CardProps$Item;Lid/znetworks/nexus/ui/theme/NxColors;Ljava/lang/String;Landroidx/compose/runtime/MutableState;Ljava/util/List;Lid/znetworks/nexus/feature/projects/BoardTask;Lid/znetworks/nexus/feature/projects/ProjectDetailViewModel;Ljava/util/List;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit; ProjectPage.kt"
+        },
+        {
+          "us": 143020,
+          "calls": 36,
+          "method": "id.znetworks.nexus.feature.projects.ProjectPageKt TableRow_BDLfyrM$lambda$2$3$7 (Lid/znetworks/nexus/feature/projects/CardProps$Item;Lid/znetworks/nexus/ui/theme/NxColors;Ljava/lang/String;Landroidx/compose/runtime/MutableState;Ljava/util/List;Lid/znetworks/nexus/feature/projects/BoardTask;Lid/znetworks/nexus/feature/projects/ProjectDetailViewModel;Ljava/util/List;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit; ProjectPage.kt"
+        },
+        {
+          "us": 43199,
+          "calls": 20,
+          "method": "id.znetworks.nexus.feature.projects.CardPropsKt PropValue (Lid/znetworks/nexus/feature/projects/CardProps$Item;Landroidx/compose/runtime/Composer;I)V CardProps.kt"
+        },
+        {
+          "us": 16483,
+          "calls": 7,
+          "method": "id.znetworks.nexus.feature.projects.CardPropsKt IconText-FNF3uiM (Landroidx/compose/ui/graphics/vector/ImageVector;Ljava/lang/String;JLandroidx/compose/ui/text/font/FontWeight;Landroidx/compose/runtime/Composer;I)V CardProps.kt"
+        },
+        {
+          "us": 12460,
+          "calls": 7,
+          "method": "id.znetworks.nexus.feature.projects.CardPropsKt PillText-3IgeMak (Ljava/lang/String;JLandroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V CardProps.kt"
+        },
+        {
+          "us": 2404,
+          "calls": 1,
+          "method": "id.znetworks.nexus.core.i18n.AppDateFormats ofPattern (Ljava/lang/String;Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter; AppDateFormats.kt"
+        },
+        {
+          "us": 1805,
+          "calls": 1,
+          "method": "id.znetworks.nexus.feature.projects.CardProps item (Lid/znetworks/nexus/feature/projects/BoardTask;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;Ljava/time/LocalDate;)Lid/znetworks/nexus/feature/projects/CardProps$Item; CardProps.kt"
+        },
+        {
+          "us": 1805,
+          "calls": 1,
+          "method": "id.znetworks.nexus.feature.projects.CardProps dateItem (Ljava/lang/String;Ljava/lang/String;ZLjava/time/LocalDate;)Lid/znetworks/nexus/feature/projects/CardProps$Item; CardProps.kt"
+        }
+      ]
+    },
+    "trace": {
+      "file": "C:/Users/Berlin/Documents/Dev/android-rev-table-assigned.trace",
+      "sha256": "56a5671f5c56bf4c482e753304ba9740e3b7954d10d2dbba89069cac228ee9f1"
+    },
+    "tableSourceChanged": false
+  },
+  "cleanup": {
+    "at": "2026-10-19T12:09:39.226Z",
+    "complete": true,
+    "checks": [
+      "Original empty manual status and existing memories/pause setting preserved",
+      "All owned meeting fixtures inaccessible after deletion; no minutes or tasks applied",
+      "Only the owned short GIDEON QA conversation soft-deleted",
+      "Owned private project, 15 tasks and project chat return 404",
+      "Original appearance/language/calendar/message preference bytes restored",
+      "Temporary native helper and owned device files removed; AVD network restored",
+      "Original ID/dark UI restored and session retained",
+      "Final cold-start Indonesian UI and dark theme verified; preference bytes still match baseline"
+    ],
+    "localeVerificationAt": "2026-10-19T12:18:12.888Z"
+  },
+  "gaps": [
+    "R-4: deployed /api/gideon/perf has failures15m but no daily error aggregate; Android supports nullable tiers[].failures24h and displays unknown until supplied.",
+    "R-9/R-10: no entries in the supplied revision brief at final read.",
+    "R-8: physical-device 60/120 fps acceptance cannot be established from this AVD debug run."
+  ],
+  "captures": [
+    {
+      "file": "en-light/r1-plain-tier-title.png",
+      "kind": "DEV UI",
+      "sha256": "a87ff92f74f16106d671321a85d9700fec9188136e96008501221c34ebae9774"
+    },
+    {
+      "file": "en-light/r1-tier-menu.png",
+      "kind": "DEV UI",
+      "sha256": "c809044ed04cc7de561dbf03fca159d76d951d75bcfa5e0e5d858749fb3a78ce"
+    },
+    {
+      "file": "en-light/r3-memory-grouped.png",
+      "kind": "DEV UI",
+      "sha256": "0ed06db1db03af7cae9e06b58154ae60e4611b791eb4d12b4c15ac86fb55b1f7"
+    },
+    {
+      "file": "en-light/r2-memory-composer-empty.png",
+      "kind": "DEV UI",
+      "sha256": "a861042a0ed71e4466f1a769873003466da70b5bc6c94ca931e3d2dceeb230e6"
+    },
+    {
+      "file": "en-light/r2-memory-composer-filled.png",
+      "kind": "DEV UI",
+      "sha256": "dc3b88a4aa8dd0acd926cc66e3ddb980b5423721b055d732c90ca58195932fe0"
+    },
+    {
+      "file": "en-light/r4-performance-summary.png",
+      "kind": "DEV UI",
+      "sha256": "e1551e7c7d93b6418dbe7d4c444e206b2d51905333bb8ac1e4a3fd4b566bf976"
+    },
+    {
+      "file": "en-light/r4-performance-metrics.png",
+      "kind": "DEV UI",
+      "sha256": "562ea7b7da05b1f0691c0b531f756d54aa0888e21311f0a22bd609b20aa2b5e3"
+    },
+    {
+      "file": "en-light/r7-timeline-names-default.png",
+      "kind": "DEV UI",
+      "sha256": "901b2d44d4d48c2e0ef2e624d65f47ae5866f8a44f7d466c6f20accb3cd44b04"
+    },
+    {
+      "file": "en-light/r7-timeline-names-hidden.png",
+      "kind": "DEV UI",
+      "sha256": "32fc4d418cd2b2e601416db8d1fe14df2db8c12b6704e42d10e3f0739913e11f"
+    },
+    {
+      "file": "en-light/r11-new-no-selection.png",
+      "kind": "DEV UI",
+      "sha256": "16acddd3ed23f6fcf221583099582f9b641e4321411edaf7cb47d05706c45977"
+    },
+    {
+      "file": "en-light/r11-availability-only.png",
+      "kind": "DEV UI",
+      "sha256": "91e2674d56e2d2dd0db9e99b0896d20391a01d5b040f48c713ca9629bd8ddea8"
+    },
+    {
+      "file": "en-light/r6-queued-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "922ad28c4f8cdb1a63bdfbe5e98f5df6b23504acb3824f962319c386a04251fb"
+    },
+    {
+      "file": "en-light/r6-upload-zero-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "6bc5f67a86bf138bc4dc08095ae3a6afbe061076f4f18e7ccabec74e8a870290"
+    },
+    {
+      "file": "en-light/r6-upload-forty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "a82345af9e69abc1d24c174840e25ffa0b353fd81a8fe9c1b3fe1fdf5c3208b5"
+    },
+    {
+      "file": "en-light/r6-upload-eighty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "67799f3ca1b95ac531429bc16372b589e180deb7a5e2c30dd53ff81b1589c922"
+    },
+    {
+      "file": "en-light/r6-transcribing-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "18a1669c69825e277f95802df6c73e282fc3409e6763c41aeed6d3ae06886625"
+    },
+    {
+      "file": "en-light/r6-ready-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "6464f7c52807c7b09d807306b1c25030e7f54620d3683a3c35e2e1b8c7b37ce0"
+    },
+    {
+      "file": "en-dark/r1-plain-tier-title.png",
+      "kind": "DEV UI",
+      "sha256": "4d0f8fa7e7e89fc0139a98699619f16a2b1ad96bf472083014edaf4643de9b2f"
+    },
+    {
+      "file": "en-dark/r1-tier-menu.png",
+      "kind": "DEV UI",
+      "sha256": "1c05067917228fb8c2eb0c5d9b96ee1d2dc18f4b2fe91993c020ac35f52a073c"
+    },
+    {
+      "file": "en-dark/r3-memory-grouped.png",
+      "kind": "DEV UI",
+      "sha256": "9c0f68a5589696508f292c4dfd703e1ae3ea6162f7363785b74fad6c63f1c268"
+    },
+    {
+      "file": "en-dark/r2-memory-composer-empty.png",
+      "kind": "DEV UI",
+      "sha256": "91e62647c6ba2c1321f66b8207bed512199b4214e45afc23a2edc418dcf1e343"
+    },
+    {
+      "file": "en-dark/r2-memory-composer-filled.png",
+      "kind": "DEV UI",
+      "sha256": "0444c3a4134e468bd4932c15098c089d2ac6cf39ba5d4e89c53260a1d84c9c65"
+    },
+    {
+      "file": "en-dark/r4-performance-summary.png",
+      "kind": "DEV UI",
+      "sha256": "c6ae3539d691d96dd37e5accb94bc939ca8d02db8e5a9fb6aae553d887ed0514"
+    },
+    {
+      "file": "en-dark/r4-performance-metrics.png",
+      "kind": "DEV UI",
+      "sha256": "a291eb24d773316c62579f90b6c8d3079370658a73252de751cac90a9c6cd81d"
+    },
+    {
+      "file": "en-dark/r7-timeline-names-default.png",
+      "kind": "DEV UI",
+      "sha256": "8329065c36051a609687cbfc9aeb733c7cbbeec8c97c72d033e5ce11953f5fb0"
+    },
+    {
+      "file": "en-dark/r7-timeline-names-hidden.png",
+      "kind": "DEV UI",
+      "sha256": "478238ceb5ceee3025d8b5f1345ece3262018943ed99b4f1427f05c2bb2d8981"
+    },
+    {
+      "file": "en-dark/r11-new-no-selection.png",
+      "kind": "DEV UI",
+      "sha256": "0c55b05457a6df61dee9a0218e97ef8517a3cc0f936a39a615333d5d22153d6a"
+    },
+    {
+      "file": "en-dark/r11-availability-only.png",
+      "kind": "DEV UI",
+      "sha256": "e3d740d8882d25cac44067bb455df1d5e7f1cd638b9ded053a964b6136f1846b"
+    },
+    {
+      "file": "en-dark/r6-upload-zero-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "83d5f53772f5811f304a5ceeafbd5e8943752963ae25b81cedc3ef34aeaecd4e"
+    },
+    {
+      "file": "en-dark/r6-upload-forty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "d70d6b226e367a71b8ae3987b48974b4e23dbf130b1ee6279839f7833756d32e"
+    },
+    {
+      "file": "en-dark/r6-upload-eighty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "1ead123acb9e6cd71350ddadbc1a1e0fdcdfe46af1b445761a3bfcf1e1d3d341"
+    },
+    {
+      "file": "en-dark/r6-queued-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "70f67f88404efe807b52cea9366d2a4c336f43b3518e87a8d8859578cac5bcaa"
+    },
+    {
+      "file": "en-dark/r6-transcribing-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "b4ae9f02c5f9e6b2ffda751f8e655532ff1d33efa8bbf1993251e6a00766380e"
+    },
+    {
+      "file": "en-dark/r6-ready-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "27304a17ead43bd5d3ee69b550d52aa4c0c60be9d0abec6661d72260a8fbd3d8"
+    },
+    {
+      "file": "id-light/r1-plain-tier-title.png",
+      "kind": "DEV UI",
+      "sha256": "47407f5ff5dc7ad6ad74aabbbce3577fa3a5eb243d00bed014c220e05ba9e286"
+    },
+    {
+      "file": "id-light/r1-tier-menu.png",
+      "kind": "DEV UI",
+      "sha256": "064d00deafa8d430c787a387754c389284b2c6aa410511bf0aac080233529b5b"
+    },
+    {
+      "file": "id-light/r3-memory-grouped.png",
+      "kind": "DEV UI",
+      "sha256": "baa5c952c2845e81215affd0670b193112e6377c763085c665ab4a4a7fd3631f"
+    },
+    {
+      "file": "id-light/r2-memory-composer-empty.png",
+      "kind": "DEV UI",
+      "sha256": "96465a3f469a4c39e866fbd49219c9ea0c7dab3a2ba28a743d56b7a4f1c6bfb4"
+    },
+    {
+      "file": "id-light/r2-memory-composer-filled.png",
+      "kind": "DEV UI",
+      "sha256": "7b7f8a0ba47de1c4c29351bee39797299b4dbc795b0c82f8c13814f6e61588e4"
+    },
+    {
+      "file": "id-light/r4-performance-summary.png",
+      "kind": "DEV UI",
+      "sha256": "844de509899d3d1dd1ef5f896c4c9b3f546f474d3e1e70c1a880890ac72a3a58"
+    },
+    {
+      "file": "id-light/r4-performance-metrics.png",
+      "kind": "DEV UI",
+      "sha256": "5a3330feaa0361439c9db608513915d8bef35dfec52a4797d50da1d1adc75b52"
+    },
+    {
+      "file": "id-light/r7-timeline-names-default.png",
+      "kind": "DEV UI",
+      "sha256": "c0cdc0221bff4ab3ada8a346786fca829256b201c88e5f1b444caca0dae3efff"
+    },
+    {
+      "file": "id-light/r7-timeline-names-hidden.png",
+      "kind": "DEV UI",
+      "sha256": "56f8524aeb97134801104e06b0571423f5210003610ed3af0053dec51f796d49"
+    },
+    {
+      "file": "id-light/r11-new-no-selection.png",
+      "kind": "DEV UI",
+      "sha256": "89ffd6f7de6c1430704336c8e4b88a610411fef3023fe12144b12852e7d6b0b3"
+    },
+    {
+      "file": "id-light/r11-availability-only.png",
+      "kind": "DEV UI",
+      "sha256": "7104b0f92069e88a169316e37e36ab4a1475025a707f1a08fb14c4fe3fe542b7"
+    },
+    {
+      "file": "id-light/r6-queued-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "2b10ac13b9c9c388512b3115e07d3a7dba1758066d3ee616e64c4617fcb9cc28"
+    },
+    {
+      "file": "id-light/r6-upload-zero-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "66ba799a3a57cf271c0021db30ad4c3b82f43ed06e3afc4dbf401b1abe9338ad"
+    },
+    {
+      "file": "id-light/r6-upload-forty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "4302af4121fe4ea2c9c972b399f82d211c8347aef0b8963df774bb4625dc61e4"
+    },
+    {
+      "file": "id-light/r6-upload-eighty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "bfa2e5791fe8b577614f3b7c7334e3d346cb378ef5553cd58edd739dbdd65378"
+    },
+    {
+      "file": "id-light/r6-transcribing-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "4eb0779038d024e4b6b13a7ff2dc832adc0fc0c6775f8377be58126789c918fd"
+    },
+    {
+      "file": "id-light/r6-ready-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "2f63e12c4c4bb5b9c9c864d3e489d5a107ee11c8e766356d65937ff994219ce6"
+    },
+    {
+      "file": "id-dark/r1-plain-tier-title.png",
+      "kind": "DEV UI",
+      "sha256": "1850792b1483ddeacf08763b82325931a81364308b6a725c7f652140a18c36bf"
+    },
+    {
+      "file": "id-dark/r1-tier-menu.png",
+      "kind": "DEV UI",
+      "sha256": "d927d81e76fbd54264f6a56aabd2e9406f60e34037c7f582c3221f1a9bc3f017"
+    },
+    {
+      "file": "id-dark/r3-memory-grouped.png",
+      "kind": "DEV UI",
+      "sha256": "8d1e6a859e0c42beafe8b749b50a44172b0139ae53ca7d1b7f288a7074c52cc3"
+    },
+    {
+      "file": "id-dark/r2-memory-composer-empty.png",
+      "kind": "DEV UI",
+      "sha256": "10fb2413ad2c18f30846c9796c2ff363b171cf01ad3aa4d48868bb4954329907"
+    },
+    {
+      "file": "id-dark/r2-memory-composer-filled.png",
+      "kind": "DEV UI",
+      "sha256": "6c6a6f7e361629c8fd032c297eb8e11370c1fa68675887d10a2a78eedeb0f7aa"
+    },
+    {
+      "file": "id-dark/r4-performance-summary.png",
+      "kind": "DEV UI",
+      "sha256": "23188054ff24f4f474d93aba6471763d8749a4c91c30b1172f0ae5a501bba822"
+    },
+    {
+      "file": "id-dark/r4-performance-metrics.png",
+      "kind": "DEV UI",
+      "sha256": "f9c3872c56d67f076e6d8a313d588bc5a42a38a6b084d94881cff8dd1ce47309"
+    },
+    {
+      "file": "id-dark/r7-timeline-names-default.png",
+      "kind": "DEV UI",
+      "sha256": "1a6ad3dac39ce26f948edf8b41179bb0d2d20fc2a7975af7c800fb4f43c39114"
+    },
+    {
+      "file": "id-dark/r7-timeline-names-hidden.png",
+      "kind": "DEV UI",
+      "sha256": "a474375b05718b875a39b4cca9aab7a55f4e89dceb721f51fc85a458fff0be83"
+    },
+    {
+      "file": "id-dark/r11-new-no-selection.png",
+      "kind": "DEV UI",
+      "sha256": "0075bd2e846d44c9955076aaca02852f479cccf591b81d458cbd62b2ded3f124"
+    },
+    {
+      "file": "id-dark/r11-availability-only.png",
+      "kind": "DEV UI",
+      "sha256": "066aadac9b8fe49846ed7c14bde6a28f1b187cbc6ea8b30c9a0ab2a5002be462"
+    },
+    {
+      "file": "id-dark/r6-upload-zero-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "897da369678826656555cc45eaa11e8f45cd13fa4c3d32d681befc7c83831a05"
+    },
+    {
+      "file": "id-dark/r6-upload-forty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "d13d073881cf124064ce1f6fa72e15c437752ea7ca03ec0aa870ad19bca2403b"
+    },
+    {
+      "file": "id-dark/r6-upload-eighty-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "c50121fd7096e441361014be22e8be303bf971e841dcb9505aa8a218550299de"
+    },
+    {
+      "file": "id-dark/r6-queued-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "7d1773dc49a96eb44c14e9daaaa6a8cca4623260cec0fac4a8c5a27111907e5e"
+    },
+    {
+      "file": "id-dark/r6-transcribing-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "7cfa1d63ea0328d4af5462093cc2316ef8899ff7f23a86acb61ef4780be16403"
+    },
+    {
+      "file": "id-dark/r6-ready-staged.png",
+      "kind": "Production composable with staged meeting data",
+      "sha256": "57c4ae5febb16d7e8746556c4b03c479ff9dd91985757108f8b22ece772efde0"
+    },
+    {
+      "file": "en-light/r11-online-only.png",
+      "kind": "DEV UI",
+      "sha256": "027601cb527d436998aba7e6466790aab5d5b9c918de0e7153fffcb7b30de0b5"
+    },
+    {
+      "file": "en-light/r11-away-only.png",
+      "kind": "DEV UI",
+      "sha256": "1df88a1499834c3603aaad89d7ddc0549f47fd953ec6eeb707fe062de2a7f7e2"
+    },
+    {
+      "file": "en-light/r11-dnd-only.png",
+      "kind": "DEV UI",
+      "sha256": "6d6c6431509c1388c829ce0c00f078a328905d88da336437a1a1ffa7948cf234"
+    },
+    {
+      "file": "en-light/r11-empty-status-prefill.png",
+      "kind": "DEV UI",
+      "sha256": "9f2011608fe73603d0e446d2e03404f6d35e72a928a47a02b4d5392108ee3bfe"
+    },
+    {
+      "file": "en-light/r11-quick-pick-away.png",
+      "kind": "DEV UI",
+      "sha256": "dfdacfebce5207e930b2758b256b25bfe8ad521928279b4f9c2ada3d019d06e6"
+    },
+    {
+      "file": "en-light/r11-quick-cleared-by-availability.png",
+      "kind": "DEV UI",
+      "sha256": "b0d8e82ee101241b97735039ad411423b54fbc1874f28e84e4a9865adb42255b"
+    },
+    {
+      "file": "en-light/r11-typed-text-retained.png",
+      "kind": "DEV UI",
+      "sha256": "5c821325a799a6f00766636532d053bcadb52cf77596577f204dd816eaf7c6c1"
+    },
+    {
+      "file": "en-light/r11-clear-after-menu.png",
+      "kind": "DEV UI",
+      "sha256": "2350a1b93003426313c358e1911bd79c823cb70474a64a1a7e5f85833f42fbf5"
+    },
+    {
+      "file": "en-light/r3-profile-submit-saved.png",
+      "kind": "DEV UI",
+      "sha256": "b63a4e3f0755749f469f201e3869c9d4256940b1e7ad1d714aebe7bb574712bd"
+    },
+    {
+      "file": "en-light/r3-profile-navigation-blur-saved.png",
+      "kind": "DEV UI",
+      "sha256": "a0dbad86e348250c893e433a61102f5664577c1fa066196315b18f6eaf37109a"
+    },
+    {
+      "file": "en-light/r6-live-progress-start.png",
+      "kind": "DEV UI",
+      "sha256": "0ad5a894ef818ea8cc2cd05c7f38c89df95d6db9268ab849f7198662a28debd9"
+    },
+    {
+      "file": "en-light/r6-live-queued.png",
+      "kind": "DEV UI",
+      "sha256": "ccfa3fed6f0efc8016d68b4fd4d1339c23ce3c87555e16d744d801d4e6692add"
+    },
+    {
+      "file": "en-light/r6-live-transcribing.png",
+      "kind": "DEV UI",
+      "sha256": "ccfa3fed6f0efc8016d68b4fd4d1339c23ce3c87555e16d744d801d4e6692add"
+    },
+    {
+      "file": "en-light/r6-live-summarizing.png",
+      "kind": "DEV UI",
+      "sha256": "53e8b66084ca611278456201782450c2642dd682520d608862f48956abb97d86"
+    },
+    {
+      "file": "en-light/r6-live-ready-settled.png",
+      "kind": "DEV UI",
+      "sha256": "b579d8ddcdcd62a9e65dba7fe664aa3be9945d4bbde71d0f8e5395b068c64c6b"
+    },
+    {
+      "file": "en-light/r6-live-open-meeting.png",
+      "kind": "DEV UI",
+      "sha256": "d5647b6ceea9409b4efd060a68bb2794c95440a8dbc405247e2ae90a16ae34d1"
+    },
+    {
+      "file": "en-light/r5-live-upload-zero.png",
+      "kind": "DEV UI",
+      "sha256": "2fca166d4f743a7835501a41ca062bdf637822a52bf5aa54a55eb67f9845d287"
+    },
+    {
+      "file": "en-light/r5-live-upload-bytes-advanced.png",
+      "kind": "DEV UI",
+      "sha256": "7b4a29d226582a4e301d6c7116d0e5279747485352806c6f5fb6eb3a65be2e0f"
+    },
+    {
+      "file": "en-light/r6-live-cancel-closed.png",
+      "kind": "DEV UI",
+      "sha256": "4f63f6e118ceb923c0548839b88c0dde930fec7942296b34632eaffbec832e42"
+    },
+    {
+      "file": "en-light/r6-live-before-done.png",
+      "kind": "DEV UI",
+      "sha256": "41357d13e9376110c3e0121e54b9305aa0f8de8d9612101e407b44ecc17a2537"
+    },
+    {
+      "file": "en-light/r6-live-done-closed.png",
+      "kind": "DEV UI",
+      "sha256": "3d28d3eb284b974fcc8074d36990b26cff4885cd23fef005dd534b485288a277"
+    },
+    {
+      "file": "en-light/r6-live-before-background.png",
+      "kind": "DEV UI",
+      "sha256": "0e77fc95ad3bb1abdbf56642890915beebcd244554e58cd14b9332fb3259013b"
+    },
+    {
+      "file": "en-light/r6-live-resumed-ready.png",
+      "kind": "DEV UI",
+      "sha256": "0effe75d5081e1b43a1ea7762c5c8902dc6de1500379c820b765f33d62607ce5"
+    },
+    {
+      "file": "en-light/r8-table-assigned-baseline.png",
+      "kind": "DEV UI",
+      "sha256": "a14770a5d53ccc2d76c1935c8b4f50960e2eed2fa9578f5df0878503dc83cb45"
+    },
+    {
+      "file": "en-light/r8-table-final.png",
+      "kind": "DEV UI",
+      "sha256": "a14770a5d53ccc2d76c1935c8b4f50960e2eed2fa9578f5df0878503dc83cb45"
+    },
+    {
+      "file": "restored/original-home.png",
+      "kind": "DEV UI",
+      "sha256": "1b7d31278388f032afd3bd57507562c3f98484a439b4b840e78759be20a810cf"
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 # NEXUS Android: status
 
+## Device revisions — 19 Oct 2026
+
+`feat/android-rev-19oct` starts from merged DEV `603f9dd7a`; final app source `998d7ac4`. R-2–R-7 and the appended R-11/N-1b native changes are implemented; R-1 was already correct, and R-8 was profiled without an unjustified Android scroll rewrite. **931 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** 94 curated EN/ID light/dark captures include real DEV upload/transcription, partial-upload cancellation, status-only save/readback, Memory submit/blur and background/resume checks. Owned fixtures are removed, original preferences restored, temporary helper uninstalled, and visible Pixel_7 / host GPU is stopped. Version stays 0.1.6 / 13; no push or publication. R-4's daily error total needs server data; R-9/R-10 are absent from the brief; physical frame-rate acceptance remains open. [Report](REV-19OCT.md) · [evidence](REV-19OCT-VERIFICATION.json). Bundle: `C:/Users/Berlin/android-rev.bundle`.
+
 ## Phase 2 decisions - 19 Oct 2026
 
 `feat/android-decisions-19oct` retains UI-round head febfa38f and the reviewed parity merge. A-4 corrected in bb7c1c38: VIEW hides the task comment composer and cannot invoke comment writes. N-1 corrected in f6e82c11 and 8e956320: availability labels wrap within the segments and the dots remain circular. Every other native Phase 2 contract was already implemented; retained commits are listed in [DECISIONS-19OCT.md](DECISIONS-19OCT.md). **920 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** 53 fresh DEV captures, temporary native permission-state checks, fixture cleanup and preference restoration completed. Visible Pixel_7 / emulator-5556 / host GPU is shut down. Bundle: `C:/Users/Berlin/android-decisions.bundle`; version remains 0.1.6 / 13. No push or publication. Coverage limits remain explicit in the report.
