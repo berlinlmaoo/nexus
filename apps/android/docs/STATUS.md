@@ -2,7 +2,7 @@
 
 ## UI round and owner QA decisions — 19 Oct 2026
 
-Branch `feat/ui-round-android-19oct` includes the reviewed final-QA fixes and latest local DEV 56b3e86c. U-1–U-13 + N-1 and the native QA-decision contracts are implemented. **920 JVM tests, zero failures/errors; testDebugUnitTest + assembleDebug PASS.** VersionCode remains 13; no push or publication. Four-variant native verification and exact-fixture cleanup are finishing. [UI matrix](UI-ROUND-19OCT.md) · [owner-decision matrix](QA-DECISIONS-19OCT.md).
+Branch `feat/ui-round-android-19oct` includes the reviewed final-QA fixes and latest local DEV 56b3e86c. U-1–U-13 + N-1 and the native QA-decision contracts are implemented. **920 JVM tests, zero failures/errors; testDebugUnitTest + assembleDebug PASS.** VersionCode remains 13; no push or publication. Four-variant UI verification and owned-fixture cleanup are complete; the owned Pixel_7 is stopped. 317 curated captures and explicit physical/role coverage limits are recorded. [UI matrix](UI-ROUND-19OCT.md) · [owner-decision matrix](QA-DECISIONS-19OCT.md).
 
 ## Final QA tour - 19 Oct 2026
 
