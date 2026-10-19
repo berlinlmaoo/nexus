@@ -105,9 +105,6 @@ targets:
         # It also dropped CFBundleDisplayName and the camera/location/photo usage strings, which
         # would have crashed attendance the first time it asked for the camera.
         INFOPLIST_FILE: Sources/Info.plist
-        # BRANCH dev ONLY — never merge this line to main. Turns on the Production / Dev server switch
-        # (Sources/Config.swift ServerEnvironment, Tuning Room → Server, long press on the login title).
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
         # The DEV server's address (Config.swift ServerEnvironment.dev), read from Info.plist key
         # NEXUSDevServerURL. Committed as a placeholder that resolves nowhere; the real address comes from
         # ~/.config/nexus/ios-dev-server-url on the building Mac (the "Dev server address" phase below,
@@ -146,6 +143,12 @@ targets:
         # rebuilding all of them - and universal also demands its own set of iPad screenshots if
         # this ever goes to the App Store. The app still installs on iPad, in an iPhone-sized window.
         TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        # Debug only: turns on the Production / Dev server switch (Sources/Config.swift ServerEnvironment,
+        # Tuning Room → Server, long press on the login title). It used to sit in `base`, so an Archive
+        # (Release) from branch dev would have shipped the switch to the App Store.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
 
   # Live Activities (Dynamic Island + Lock Screen). iOS only, by construction.
   NEXUSWidgets:
