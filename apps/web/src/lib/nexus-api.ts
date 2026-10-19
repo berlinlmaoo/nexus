@@ -2364,6 +2364,8 @@ export type NexusOffsiteCheckout = {
 
 export const nexusApi = {
   profile: () => apiFetch<{ user: NexusUser }>("/api/user/profile"),
+  /** Old ids (before the UUIDv7 conversion) → new ids; unknown ids are left out. */
+  legacyIds: (ids: string[]) => apiFetch<{ ids: Record<string, string> }>(`/api/legacy-ids?ids=${ids.map(encodeURIComponent).join(",")}`),
   dashboard: () => apiFetch<NexusDashboardResponse>("/api/dashboard"),
   projects: () => apiFetch<NexusProject[]>("/api/projects"),
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),

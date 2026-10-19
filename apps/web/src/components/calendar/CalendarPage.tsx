@@ -261,6 +261,27 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const nFilters = filterCount(filters);
   const folderList = useMemo(() => structure?.folders ?? [], [structure]);
   const folderById = useMemo(() => new Map(folderList.map((f) => [f.id, f])), [folderList]);
+  // A folder id from before the UUIDv7 conversion that is not cuid-shaped (a hand-made one such as
+  // "cm_jagain_folder") escapes the app-wide link swap (lib/legacy-link.ts): the server still filters by it,
+  // but the chip said "Folder" and the sidebar showed no folder (B-16, 19 Oct 2026). Once the folders are
+  // known, ids that are not among them are asked for once (GET /api/legacy-ids?ids=) and swapped in the address.
+  const unknownFolderIds = useMemo(
+    () => (structure ? list(search.folder).filter((id) => !folderById.has(id)) : []),
+    [structure, search.folder, folderById],
+  );
+  const askedFolderIds = useRef(new Set<string>());
+  useEffect(() => {
+    const ask = unknownFolderIds.filter((id) => !askedFolderIds.current.has(id));
+    if (ask.length === 0) return;
+    ask.forEach((id) => askedFolderIds.current.add(id));
+    let live = true;
+    void nexusApi.legacyIds(ask).then((r) => {
+      const map = r.ids ?? {};
+      if (!live || !ask.some((id) => typeof map[id] === "string" && map[id] !== id)) return;
+      setSearch({ folder: joined(list(search.folder).map((id) => map[id] ?? id)) });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [unknownFolderIds, search.folder, setSearch]);
 
   // filterItems reads the clock only for "Only overdue"; otherwise a tick must not re-filter everything.
   const filterNow = filters.overdueOnly ? nowMs : 0;
