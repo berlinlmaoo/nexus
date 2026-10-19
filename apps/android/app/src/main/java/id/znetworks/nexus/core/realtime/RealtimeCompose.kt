@@ -12,6 +12,7 @@ import id.znetworks.nexus.NexusApplication
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,7 +41,9 @@ fun RealtimeRoom(room: String?) {
  * A change of connection state restarts the wait, so a drop goes to the short pace at once.
  */
 @Composable
-fun LiveRefresh(key: Any?, liveMs: Long?, fallbackMs: Long?, matches: (RealtimeEvent) -> Boolean, refresh: suspend () -> Unit) {
+@OptIn(kotlinx.coroutines.FlowPreview::class)
+fun LiveRefresh(key: Any?, liveMs: Long?, fallbackMs: Long?, matches: (RealtimeEvent) -> Boolean,
+                refreshOnResume: Boolean = false, debounceMs: Long = 0, refresh: suspend () -> Unit) {
     val rt = rememberRealtime()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val match by rememberUpdatedState(matches)
@@ -48,8 +51,10 @@ fun LiveRefresh(key: Any?, liveMs: Long?, fallbackMs: Long?, matches: (RealtimeE
     LaunchedEffect(lifecycle, key) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             launch {
-                rt.events.filter { it.name == RealtimeEvents.RECONNECTED || match(it) }.conflate().collect { run(); delay(400) }
+                rt.events.filter { it.name == RealtimeEvents.RECONNECTED || match(it) }
+                    .debounce(debounceMs).conflate().collect { run(); delay(400) }
             }
+            if (refreshOnResume) run()
             while (true) {
                 val live = rt.connected
                 val wait = (if (live) liveMs else fallbackMs) ?: Long.MAX_VALUE
