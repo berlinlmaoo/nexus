@@ -104,7 +104,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
     return (
       <Dialog open={open} onOpenChange={close}>
         <DialogContent className="max-w-lg grid-cols-[minmax(0,1fr)]">
-          <DialogHeader>
+          <DialogHeader className="text-left">
             <DialogTitle className="flex items-center gap-2">{t("Meeting notes")}<BetaBadge /></DialogTitle>
             <DialogDescription className="truncate">{(sent?.title || title.trim() || file?.name) ?? ""}</DialogDescription>
           </DialogHeader>
