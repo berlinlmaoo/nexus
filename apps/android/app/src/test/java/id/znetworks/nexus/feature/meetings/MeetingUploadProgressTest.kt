@@ -4,6 +4,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MeetingUploadProgressTest {
+    @Test fun completedWorkerCannotResetTheBarWhileTheApiStillSaysUploading() {
+        val p = MeetingUploadProgress.resolve(MeetingAudio(bytes = 1000), completed = true)
+        assertEquals(1000L, p.received); assertEquals(1f, p.fraction); assertEquals(100, p.percent)
+    }
     @Test fun liveWorkerReadingWinsOverStaleApiBytes() {
         val p = MeetingUploadProgress.resolve(MeetingAudio(bytes = 1000, received = 0), 400, 1000)
         assertEquals(400L, p.received); assertEquals(.4f, p.fraction); assertEquals(40, p.percent)

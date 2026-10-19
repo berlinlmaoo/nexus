@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.nav.Target
@@ -245,7 +246,8 @@ import java.io.File
                 }, kind = NxButtonKind.PRIMARY, enabled = !busy && localName != null && !recording.recording)
             } else {
                 uploaded?.let { m ->
-                    val progress = MeetingUploadProgress.resolve(m.audio, uploadData?.getLong("received", -1), uploadData?.getLong("total", -1))
+                    val progress = MeetingUploadProgress.resolve(m.audio, uploadData?.getLong("received", -1), uploadData?.getLong("total", -1),
+                        completed = work.firstOrNull()?.state == WorkInfo.State.SUCCEEDED)
                     MeetingProgress(m, progress, busy,
                         onOpen = { onBack(); container.router.open(Target.Meeting(m.id)) }, onDone = onBack,
                         onCancel = {
