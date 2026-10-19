@@ -53,6 +53,7 @@ export function SelectPicker({
   searchPlaceholder,
   renderValue,
   id,
+  wrapLabels = false,
 }: {
   value: string | null | undefined;
   onChange: (value: string) => void;
@@ -75,6 +76,8 @@ export function SelectPicker({
   /** Custom trigger content for the chosen option. */
   renderValue?: (option: PickerOption | null) => ReactNode;
   id?: string;
+  /** Option labels wrap to two lines instead of one cut-off line (long project names that differ only at the end). */
+  wrapLabels?: boolean;
 }) {
   const { t } = useLang();
   const listId = useId();
@@ -249,7 +252,7 @@ export function SelectPicker({
                   ) : o.color ? (
                     <OptionChip label={o.label} color={o.color} />
                   ) : (
-                    <span className="flex min-w-0 items-center gap-2">{o.icon}<span className="truncate">{o.label}</span></span>
+                    <span className="flex min-w-0 items-center gap-2">{o.icon}<span className={wrapLabels ? "line-clamp-2 break-words" : "truncate"} title={wrapLabels ? o.label : undefined}>{o.label}</span></span>
                   )}
                   {o.hint && <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">{o.hint}</span>}
                   <Check className={cn("h-3.5 w-3.5 shrink-0", !o.hint && "ml-auto", selected ? "opacity-100" : "opacity-0")} aria-hidden />

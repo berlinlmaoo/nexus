@@ -4,16 +4,21 @@ import { NextRequest } from 'next/server'
 import sharp from 'sharp'
 import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { auth } from '@/lib/auth'
+import { getAppSetting } from '@/lib/app-setting'
 import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
 import { checkProjectAccess } from '@/lib/rbac'
 import {
-  approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
+  approvalPromptLine, finishRun, markRouterRetry, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
 import { datePromptLine } from '@/lib/gideon-dates'
 import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
+import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
+import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
+import { buildGideonPrompt, DEFAULT_HISTORY_MODE, HISTORY_MODES, type HistoryMode } from '@/lib/gideon-history'
+import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -27,26 +32,18 @@ import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimU
 // they kept a dependency alive that nothing used. GIDEON's tools are Hermes's, served by
 // /api/gideon/tools.
 
-function buildGideonPrompt(history: { role: string; content: string }[], who: { name: string; email: string }, extra = ''): string {
-  const recent = (history || []).filter((m) => m && typeof m.content === "string").slice(-8)
-  const last = recent[recent.length - 1]?.content?.trim() || ""
-  const name = who.name?.trim() || "anggota tim NEXUS"
-  const header =
-    `[IDENTITAS LAWAN BICARA — WAJIB DIPATUHI] Kamu (Gideon) lagi ngobrol di chatbox NEXUS dengan "${name}"` +
-    `${who.email ? ` (${who.email})` : ""}, anggota tim NEXUS. Ini SESI TERPISAH khusus dia. Sapa & rujuk dia ` +
-    `sebagai "${name}". JANGAN sekali-kali manggil/menganggap dia sebagai orang lain (operator, admin, atau ` +
-    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.\n\n` +
-    // Ditanya "lo pake LLM apa?" jawabannya sempat bocor separuh — menyebut framework dan angka versi
-    // model. Menyebut yang BUKAN dipakai sama bocornya, jadi keduanya dilarang sekalian.
-    `[SOAL DIRIMU SENDIRI] Kamu GIDEON, titik. Jangan pernah menyebut model, provider, vendor, framework, ` +
-    `atau tier yang kamu pakai — dan jangan menyebut yang TIDAK kamu pakai juga ("bukan Claude", "bukan GPT" ` +
-    `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
-    `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
-    `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.\n\n`
-  const head = extra ? `${header}${extra}\n\n` : header
-  if (recent.length <= 1) return `${head}Pesan dari ${name}: ${last}`
-  const ctx = recent.slice(0, -1).map((m) => `${m.role === "user" ? name : "Gideon"}: ${m.content}`).join("\n")
-  return `${head}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
+// The prompt builder (cache order, long-history compaction, the person's standing rules) is pure and lives in
+// src/lib/gideon-history.ts so it can be unit-tested; only the AppSetting lookup stays here.
+/**
+ * Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts.
+ * { standing: false } turns off the pinned block of the person's standing rules (kill switch; default on).
+ */
+async function historyOptions(): Promise<{ historyMode: HistoryMode; standingRules: boolean }> {
+  const v = await getAppSetting<{ mode?: string; standing?: boolean }>("gideon-history").catch(() => null)
+  return {
+    historyMode: v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE,
+    standingRules: v?.standing !== false,
+  }
 }
 
 // File types GIDEON can actually be asked about. This is not a wish list: Hermes reaches a document
@@ -289,6 +286,24 @@ export async function POST(req: NextRequest) {
       await writer.close().catch(() => {})
       return
     }
+    // GIDEON Model 0 away (18 Oct 2026): the office GPU is transcribing a meeting, or Model 0 is loading again. Refused
+    // at once with a reason (never a silent hang until the shim's 7-minute timeout); stream clients also get
+    // `tier_unavailable` so they can offer GIDEON Phaëthon. Nothing is sent to the model, nothing is billed.
+    if (tier === 'experimental') {
+      const exp = (await getTierStatus().catch(() => null))?.experimental
+      if (exp && !exp.available) {
+        const txt = tierUnavailableText(exp.reason)
+        if (streamClient) {
+          await sendEvent({ type: 'tier_unavailable', tier: 'experimental', reason: exp.reason, since: exp.since, fallback: 'luna', label: txt.label, message: txt.send })
+          await sendEvent({ type: 'error', content: txt.send[uiLang], code: 'model0_unavailable' })
+        } else {
+          await sendEvent({ type: 'text', content: txt.send[uiLang] })
+        }
+        await sendEvent({ type: 'done' })
+        await writer.close().catch(() => {})
+        return
+      }
+    }
     const fallbackNotice = decision.fallback ? creditNotice('fallback', decision.summary) : null
     if (fallbackNotice && streamClient) await sendEvent({ type: 'credits', summary: decision.summary, notice: { kind: 'fallback', ...fallbackNotice } })
     const runId = await startRun({
@@ -300,6 +315,8 @@ export async function POST(req: NextRequest) {
       projectId: ctx?.projectId ?? null,
       taskId: ctx?.taskId ?? null,
     })
+    // GIDEON Memory (19 Oct 2026): the tools route decides "did the PERSON ask to remember this?" from what they wrote.
+    parkRunQuestion(runId, asked, chat?.id ?? null)
     // Steps, sources, cards and proposals raised by /api/gideon/tools while this run is going.
     // Old clients get none of them (they would not know what to draw).
     const unsubscribe = runId && streamClient ? subscribeRun(runId, (ev: RunEvent) => { void sendEvent(ev as unknown as Record<string, unknown>).catch(() => {}) }) : () => {}
@@ -308,8 +325,18 @@ export async function POST(req: NextRequest) {
     let tokens: number | null = null
     // What the run cost, as the shim read it back from Hermes' state.db (GIDEON credits, 18 Oct 2026).
     let usage: ShimUsage | null = null
+    // Which shim URL this answer went to, and when (a broken connection is checked against its /health: restart or not).
+    let shimUrlUsed: string | null = null
+    let shimSince = 0
     try {
       if (runId) await sendEvent({ type: 'run', id: runId })
+      // No run = no approval mode the tools can check, and the tools then write with no card at all. Fail closed
+      // (19 Oct 2026 privacy gate): the person sends the message again.
+      if (!runId) {
+        failure = 'no run'
+        await sendEvent({ type: 'error', content: uiLang === 'en' ? 'GIDEON could not start this answer. Please send it again.' : 'GIDEON gagal memulai jawaban ini. Coba kirim lagi.' })
+        return
+      }
       const url = process.env.GIDEON_CHAT_URL
       if (!url) {
         failure = 'not configured'
@@ -339,13 +366,33 @@ export async function POST(req: NextRequest) {
       }
       // The pre-search hits are offered to the model; only the ones its answer actually names become Sources.
       let preSearch: { stepId: string | null; refs: GideonRef[] } | null = null
-      if (streamClient && wantsSearch !== false && asked && !documentBase64 && !imageBase64) {
+      // Not for small talk ("halo", "makasih"): eight search hits about nothing were the biggest part of its bill.
+      // Every word must be small talk ("halo gideon, apa kabar?"), so "halo, progress project X?" still searches.
+      const SMALL_TALK = new Set(['halo', 'hallo', 'hai', 'hi', 'hello', 'hey', 'pagi', 'siang', 'sore', 'malam', 'selamat', 'makasih', 'thanks', 'thank', 'you', 'terima', 'kasih', 'ok', 'oke', 'okay', 'sip', 'mantap', 'gideon', 'ya', 'yah', 'kak', 'bro', 'apa', 'kabar', 'gimana', 'baik', 'banyak', 'dong', 'deh', 'nih', 'good', 'morning', 'how', 'are', 'test', 'tes'])
+      const askedWords = asked.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean)
+      const smallTalk = askedWords.length > 0 && askedWords.length <= 6 && askedWords.every((w) => SMALL_TALK.has(w))
+      if (streamClient && wantsSearch !== false && asked && !smallTalk && !documentBase64 && !imageBase64) {
         const started = Date.now()
         try {
           const { hits } = await searchWorkspace(userId, asked, { limit: 8, ...(scopeProjectId ? { projectId: scopeProjectId } : {}) })
           if (hits.length) {
-            searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
-            hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''} — ${h.excerpt || '—'} (id ${h.id})`))
+            searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Excerpt hanya potongan pendek isi/deskripsi: untuk merangkum dokumen atau menjelaskan isi task, baca dulu lengkapnya (nexus_get_doc / nexus_get_task); jangan menyimpulkan PIC, status atau isi dari excerpt. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
+            // Task hits carry their status, PIC and due date (18 Oct 2026): a cheap tier answered "who has task X" from
+            // the description excerpt and named the description as the person.
+            const taskIds = hits.filter((h) => h.kind === 'task').map((h) => h.id)
+            const taskFacts = new Map<string, string>()
+            if (taskIds.length) {
+              const rows = await prisma.task.findMany({
+                where: { id: { in: taskIds } },
+                select: { id: true, status: true, dueDate: true, taskList: { select: { name: true } }, assignees: { select: { user: { select: { name: true } } } } },
+              }).catch(() => [])
+              for (const t of rows) {
+                const who = t.assignees.map((a) => a.user.name).filter(Boolean).join(', ')
+                const due = t.dueDate ? new Date(t.dueDate.getTime() + 7 * 3600e3).toISOString().slice(0, 10) : null
+                taskFacts.set(t.id, `status: ${t.taskList?.name || t.status}; PIC: ${who || 'belum ada'}${due ? `; tenggat ${due}` : ''}`)
+              }
+            }
+            hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''}${taskFacts.has(h.id) ? ` [${taskFacts.get(h.id)}]` : ''} — excerpt: ${h.excerpt || '—'} (id ${h.id})`))
             const refs: GideonRef[] = hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt || null }))
             if (runId && !scopeProjectId) {
               const stepId = `ws${Date.now().toString(36)}`
@@ -361,8 +408,27 @@ export async function POST(req: NextRequest) {
         }
       }
       const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
-      const extra = [
-        ...prefsLines,
+      // GIDEON Memory (owner, 19 Oct 2026): THIS person's own memories only, after who-is-asking (cached prefix).
+      // Kill switch (remote config flags.gideonMemory): off = no memory rules, nothing remembered is used.
+      const memoryOn = await memoryFeatureOn()
+      const memory = memoryOn
+        ? await memoryPromptLines(userId, session.user?.name || '', { tier }).catch(() => ({ personal: [] as string[], dynamic: [] as string[] }))
+        : { personal: [] as string[], dynamic: [] as string[] }
+      // Static first (same text for every person and turn of this client/language/mode), dynamic last: see buildGideonPrompt.
+      const rules = [
+        // Only for a client that renders Markdown; the released apps show the text as is.
+        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
+        rawUiLang === 'en'
+          ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
+          : rawUiLang === 'id'
+            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
+            : '',
+        approvalPromptLine(approvalMode),
+        memoryOn ? MEMORY_RULES : '',
+      ].filter(Boolean)
+      const dynamic = [
+        // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
+        datePromptLine(new Date(), rawUiLang === 'en' ? 'en' : 'id'),
         ...gathered.lines,
         ...scopeLines,
         ...searchLines,
@@ -373,18 +439,8 @@ export async function POST(req: NextRequest) {
           : scopeProjectId
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
-        approvalPromptLine(approvalMode),
-        // Today's date and the weekday rule ("due Friday" said on a Friday = next week's), 16 Oct 2026.
-        datePromptLine(new Date(), rawUiLang === 'en' ? 'en' : 'id'),
-        rawUiLang === 'en'
-          ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
-          : rawUiLang === 'id'
-            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
-            : '',
-        // Only for a client that renders Markdown; the released apps show the text as is.
-        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
-      ].filter(Boolean).join('\n\n')
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, extra)
+      ].filter(Boolean)
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], ...(await historyOptions()) })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({
@@ -404,12 +460,36 @@ export async function POST(req: NextRequest) {
         ...(documentBase64 ? { documentBase64, documentType, documentName } : {}),
       })
       const headers = { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' }
+      // The shim says Model 0 can't be reached (503 / "model0_unavailable", 18 Oct 2026): the GPU went to a meeting
+      // transcript between the tier check above and this call. Said plainly, with the switch offer, never "error 503".
+      const model0Refused = async () => {
+        const txt = tierUnavailableText('transcribing')
+        failure = 'model0_unavailable'
+        if (streamClient) {
+          await sendEvent({ type: 'tier_unavailable', tier: 'experimental', reason: null, since: null, fallback: 'luna', label: txt.label, message: txt.send })
+          await sendEvent({ type: 'error', content: txt.send[uiLang], code: 'model0_unavailable' })
+        } else {
+          await sendEvent({ type: 'text', content: txt.send[uiLang] })
+        }
+      }
+      // The shim restarted under this answer (18 Oct 2026, lib/gideon-shim-retry.ts): recorded as `shim_restart`, which
+      // the Performance panel does not count as a model error, and said as what it is.
+      const shimRestarted = async () => {
+        failure = SHIM_RESTART
+        await sendEvent({ type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART })
+      }
       const timeoutMs = tier === 'experimental' ? 440000 : 150000
       // Token-by-token when the shim offers it (GIDEON_STREAM_URL) and there is no document: the
       // streaming runner reads images but has no document reader.
       const streamUrl = process.env.GIDEON_STREAM_URL
       if (streamUrl && !documentBase64) {
-        const res = await fetch(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        shimUrlUsed = streamUrl
+        shimSince = Date.now()
+        // One quiet retry when the shim is restarting / unreachable before anything ran.
+        const shim = await fetchShim(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) }, { stream: true })
+        const res = shim.res
+        if (shim.restarting) { await shimRestarted(); return }
+        if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok || !res.body) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` })
@@ -444,6 +524,9 @@ export async function POST(req: NextRequest) {
             } else if (ev.t === 'final' && typeof ev.c === 'string') {
               reply = ev.c.trim()
               tokens = typeof ev.usage?.total_tokens === 'number' ? ev.usage.total_tokens : null
+            } else if (ev.t === 'router_miss') {
+              // The runner retried with every tool (18 Oct 2026): counted on Control Room › GIDEON › Performance.
+              void markRouterRetry(runId)
             } else if (ev.t === 'usage') {
               usage = parseShimUsage((ev as { usage?: unknown }).usage)
             } else if (ev.t === 'error') {
@@ -451,9 +534,17 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+        if (!reply && upstreamError === 'model0_unavailable') { await model0Refused(); return }
+        // The shim's drain cap stopped this run during a restart.
+        if (!reply && upstreamError === SHIM_RESTART) { await shimRestarted(); return }
         if (!reply && upstreamError) failure = upstreamError
       } else {
-        const res = await fetch(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        shimUrlUsed = url
+        shimSince = Date.now()
+        const shim = await fetchShim(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) }, { stream: false })
+        const res = shim.res
+        if (shim.restarting) { await shimRestarted(); return }
+        if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
         if (!res.ok) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: res.status === 415 ? 'Dokumen belum bisa dibaca GIDEON di server ini.' : `Gideon error (${res.status}).` })
@@ -463,6 +554,23 @@ export async function POST(req: NextRequest) {
         reply = (data.reply || '').trim()
         usage = parseShimUsage(data.usage)
       }
+      // Hermes gives up on a model call and hands back its own error text as the "answer" (seen on Model 0 after
+      // long tool rounds: "API call failed after 3 retries: HTTP 500: {…Jinja…}", QA final 19 Oct E-8). Never shown
+      // to the person or stored as a turn: it is an error, said plainly.
+      if (/^API call failed after \d+ retr/i.test(reply)) {
+        failure = `upstream: ${reply.slice(0, 200)}`
+        reply = ''
+        // What the model calls before the failure used is still billed, like any failed run below.
+        if (usage && runId) await recordGideonUsage({ userId, runId, trigger: 'CHAT', tier, requestedTier, fallback: decision.fallback, usage }).catch(() => null)
+        if (streamClient) await sendEvent({ type: 'reset' })
+        await sendEvent({
+          type: 'error',
+          content: tier === 'experimental'
+            ? (uiLang === 'en' ? "GIDEON Model 0 couldn't finish this answer. Try again, or switch to GIDEON Phaëthon." : 'GIDEON Model 0 tidak bisa menyelesaikan jawaban ini. Coba lagi, atau pakai GIDEON Phaëthon.')
+            : (uiLang === 'en' ? "GIDEON couldn't finish this answer. Try again." : 'GIDEON tidak bisa menyelesaikan jawaban ini. Coba lagi.'),
+        })
+        return
+      }
       if (!reply) failure = failure || 'empty reply'
       if (reply && preSearch && runId) {
         const used = citedRefs(reply, preSearch.refs)
@@ -470,6 +578,12 @@ export async function POST(req: NextRequest) {
           await sendEvent({ type: 'sources', sources: used })
           if (preSearch.stepId) await prisma.gideonRunStep.update({ where: { id: preSearch.stepId }, data: { refs: used as unknown as InputJsonValue } }).catch(() => {})
         }
+      }
+      // GIDEON Memory safety net (Model 0 rarely calls tools): a stated preference / "inget ya" with no memory tool call
+      // becomes a Save / Don't save suggestion from the person's own words. Before runMeta, so the turn stores it.
+      if (reply && runId && asked && tier === 'experimental' && memoryOn) {
+        const suggested = await suggestMemoryFromQuestion(userId, asked, runId, chat?.id ?? null).catch(() => null)
+        if (suggested && streamClient) await sendEvent({ type: 'memory', memory: suggested })
       }
       // What the run showed, with Sources cut down to what the reply cites (stored on the turn below too).
       const meta = reply && runId ? await runMeta(runId, { citedBy: reply }).catch(() => null) : null
@@ -553,17 +667,25 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('GIDEON API error:', error)
-      failure = failure || (error instanceof Error ? error.message : 'error')
-      await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
+      // A connection the shim broke by restarting (deploy, config change) is `shim_restart`, not a model error.
+      failure = failure || (shimUrlUsed ? await shimFailureKind(error, shimUrlUsed, shimSince).catch(() => (error instanceof Error ? error.message : 'error')) : (error instanceof Error ? error.message : 'error'))
+      await sendEvent(failure === SHIM_RESTART
+        ? { type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART }
+        : { type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
       unsubscribe()
+      dropRunQuestion(runId)
       await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens, usage })
       await sendEvent({ type: 'done' })
       await writer.close().catch(() => {})
     }
   })()
 
+  // No `Connection` header here: it is hop-by-hop and Node decides it. Forcing `keep-alive` overrode the
+  // `Connection: close` nginx sends upstream, Node kept the socket, nginx (1.31 pools upstream connections
+  // by default) reused it for the next request, and Node answered that one `400 Bad Request` ("data after
+  // Connection: close"). Seen 18 Oct 2026 as a 400 on the request right after every GIDEON answer.
   return new Response(stream.readable, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive' },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform' },
   })
 }

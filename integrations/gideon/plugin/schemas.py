@@ -15,6 +15,7 @@ PROJECT_STATUS = {"type": "string", "enum": ["ACTIVE", "ARCHIVED", "COMPLETED"]}
 TASK_STATUS = {"type": "string", "enum": ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]}
 TASK_PRIORITY = {"type": "string", "enum": ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]}
 LIMIT = {"type": "integer", "minimum": 1, "maximum": 100}
+OFFSET = {"type": "integer", "minimum": 0, "description": "Skip this many rows (paging; see `more` in the last result)."}
 CUSTOM_FIELD_UPDATES = {
     "type": "array",
     "description": "Custom field updates by fieldId/customFieldId or exact name. For Finance Harga, use name='Harga' and numeric rupiah value, e.g. 1500000.",
@@ -176,6 +177,7 @@ SCHEMAS = {
             "date": {"type": "string", "description": "One day only, YYYY-MM-DD (instead of from/to)."},
             "mine": {"type": "boolean", "description": "Only tasks the person is doing."},
             "projectId": {"type": "string"},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
             "projectName": {"type": "string"},
             "division": {"type": "string", "description": "A division or unit of the org chart, by name or id: its tasks and those of the units under it."},
         },
@@ -239,51 +241,109 @@ SCHEMAS = {
         {"bookingId": {"type": "string", "description": "The booking's id (from nexus_list_room_bookings)."}},
         ["bookingId"],
     ),
+    "nexus_delete_task": object_schema(
+        "Delete a NEXUS task for the person, as them, when they ask to delete / remove / hapus / buang a task. It never "
+        "deletes on its own: it ALWAYS puts a card in the chat showing the task (title, project, status, due, assignees) "
+        "with a Delete button, and nothing happens until they tap it. Only someone with Can edit in the task's project may "
+        "delete (the same rule as the Delete button); otherwise you get a refusal to relay. A deleted task can be restored "
+        "from the Audit. Find the task first (nexus_search_tasks / nexus_list_tasks, or the id from a task you just "
+        "created or updated). If several tasks match, ask which one. Never set it to Cancelled/Done instead unless asked.",
+        {"taskId": {"type": "string", "description": "The task's id (from nexus_search_tasks / nexus_list_tasks / nexus_get_task)."}},
+        ["taskId"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},
         required=["docId"],
     ),
     "nexus_list_projects": object_schema(
-        "List NEXUS projects visible to the GIDEON service actor.",
+        "List the projects the person can see: name, status, total and open task counts, member count. Pass `query` "
+        "(part of a name) to find one project. Paged: `total` and `more` say what is left.",
         {
-            "workspaceId": {"type": "string"},
+            "query": {"type": "string", "description": "Part of the project name."},
             "status": PROJECT_STATUS,
+            "limit": LIMIT,
+            "offset": OFFSET,
         },
     ),
     "nexus_list_members": object_schema(
-        "List NEXUS workspace or project members.",
+        "List the people of a project (name, role, user id) or, for a manager/BoD, of the company workspace.",
         {
-            "workspaceId": {"type": "string"},
             "projectId": {"type": "string"},
+            "project": {"type": "string", "description": "Project name, instead of projectId."},
+            "workspaceId": {"type": "string"},
         },
     ),
     "nexus_list_tasks": object_schema(
-        "List NEXUS tasks visible to the GIDEON service actor.",
+        "List tasks the person can see, filtered, as compact rows (title, column, progress, priority, due, overdue, "
+        "assignees, project, filled-in fields). Filter instead of listing everything: assignee='me' for the person's own "
+        "tasks or a name for someone else's; open=true for unfinished; overdue=true for unfinished and past due; "
+        "dueFrom/dueTo for a date range; project or projectId for one project. Paged (25 by default): `total` is the "
+        "real count and `more` says how to get the rest.",
         {
             "projectId": {"type": "string"},
+            "project": {"type": "string", "description": "Project name, instead of projectId."},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
+            "assignee": {"type": "string", "description": "'me' (the person asking) or a person's name."},
+            "assigneeId": {"type": "string"},
+            "open": {"type": "boolean", "description": "Only unfinished tasks (not Done / Cancelled)."},
+            "overdue": {"type": "boolean", "description": "Only unfinished tasks whose due date has passed."},
+            "dueFrom": {"type": "string", "description": "YYYY-MM-DD (WIB), inclusive."},
+            "dueTo": {"type": "string", "description": "YYYY-MM-DD (WIB), inclusive."},
             "status": TASK_STATUS,
             "priority": TASK_PRIORITY,
-            "assigneeId": {"type": "string"},
             "limit": LIMIT,
+            "offset": OFFSET,
         },
     ),
     "nexus_search_tasks": object_schema(
-        "Search NEXUS tasks by title or description.",
+        "Search tasks the person can see by words in the title or description. Same compact, paged rows and filters as "
+        "nexus_list_tasks.",
         {
             "query": {"type": "string"},
             "projectId": {"type": "string"},
+            "project": {"type": "string", "description": "Project name, instead of projectId."},
+            "folder": {"type": "string", "description": "A project folder name (e.g. THE Z CREATIVE): every project in it and its sub-folders, like the Folder view."},
+            "assignee": {"type": "string", "description": "'me' or a person's name."},
+            "open": {"type": "boolean"},
             "status": TASK_STATUS,
             "priority": TASK_PRIORITY,
-            "assigneeId": {"type": "string"},
             "limit": LIMIT,
+            "offset": OFFSET,
         },
         required=["query"],
     ),
     "nexus_get_project_summary": object_schema(
-        "Get a compact NEXUS project summary with task counts by status and priority.",
-        {"projectId": {"type": "string"}},
-        required=["projectId"],
+        "Read one project's progress in a single call: total / done / open / overdue task counts, progress percent, "
+        "counts per column, open tasks by priority, the members, and the most urgent open tasks. Use it for 'progress X', "
+        "'how is project X', 'what is most urgent in X'. Pass projectId or the project name.",
+        {
+            "projectId": {"type": "string"},
+            "project": {"type": "string", "description": "Project name, instead of projectId."},
+        },
+    ),
+    "nexus_search_deals": object_schema(
+        "Search the Pipeline (sales deals) the person can see: deal name, brand, code, stage, BD and PM (the deal's "
+        "people in charge / PIC), contract and net value in Rupiah, probability, contract / payment / deliverable status, "
+        "next action and blocker. Use it for any question about a deal, a client brand, a stage or who handles a deal.",
+        {
+            "query": {"type": "string", "description": "Deal name, brand, code, or a BD / PM name."},
+            "stage": {"type": "string", "description": "A stage, e.g. Incoming, Proposal / Quotation, Negotiation, Closing, Won – In Execution, Closed, Lost / Cancelled."},
+            "limit": LIMIT,
+            "offset": OFFSET,
+        },
+    ),
+    "nexus_search_legal_documents": object_schema(
+        "Search the Legal documents archive (contracts, NDAs, SPK, PKS, letters): number, title, type, status "
+        "(DRAFT / FINAL / SENT / SIGNED / VOID), counterparty, date, company. Legal is invitation only: someone without "
+        "access gets access:false — tell them so.",
+        {
+            "query": {"type": "string", "description": "Part of the number, title or counterparty."},
+            "docType": {"type": "string", "description": "Document type code, e.g. NDA, PKS, SPK, SK, PJM."},
+            "status": {"type": "string", "enum": ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"]},
+            "limit": LIMIT,
+            "offset": OFFSET,
+        },
     ),
     "nexus_list_custom_fields": object_schema(
         "List NEXUS custom fields for a project, including IDs, names, types, and options. Use before setting project-specific custom fields.",
@@ -292,6 +352,8 @@ SCHEMAS = {
     ),
     "nexus_create_task": object_schema(
         "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification. "
+        "When the person did not name a project, call it WITHOUT projectId (optionally project='<name>' if one was said): the "
+        "card then shows a project picker with only the projects they can edit — never ask which project in the chat. "
         "ONE call per task, complete: put the people it is for in assigneeIds and the deadline in dueDate here — never create "
         "first and assign or date it with nexus_update_task afterwards. When the answer is proposed:true, the returned "
         "proposalId is the task's only id until it is approved; nexus_update_task with taskId = that proposalId joins the same card.",
@@ -304,6 +366,7 @@ SCHEMAS = {
             "priority": TASK_PRIORITY,
             "dueDate": {"type": "string", "description": "YYYY-MM-DD or ISO datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00. A weekday name means the NEXT one, never today (said on a Friday, 'Friday' = next week's Friday); only 'today' is today. Say the resolved date in your reply."},
             "assigneeIds": {"type": "array", "items": {"type": "string"}, "description": "The people the task is for (user ids from nexus_list_members). Include them here, in this call."},
+            "calendar": {"type": "boolean", "description": "true when the person asks to put something on the calendar / schedule it (masukin ke kalender, jadwalin): the Calendar shows tasks, and only ones with a PIC and a date — dueDate is then required and the PIC defaults to the person (changeable on the card)."},
             "customFields": CUSTOM_FIELD_UPDATES,
         },
         required=["title"],

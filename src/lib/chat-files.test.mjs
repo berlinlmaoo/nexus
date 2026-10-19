@@ -132,4 +132,64 @@ test("old apps get a text line, not a broken photo", () => {
   assert.equal(reply.replyTo.content, "📎 Laporan.pdf · 1,2 MB")
 })
 
+// Who may load a chat file: conversationAccess's rule, judged from one query's row.
+const wide = (role) => role === "ONE_ABOVE_ALL" || role === "BOD"
+const row = (o) => ({
+  conversationId: "c1", attachmentName: null, type: "GROUP", projectId: null, roomWorkspaceId: "w1",
+  isMember: true, inRoomWorkspace: true, projectWorkspaceRole: null, isProjectMember: false, ...o,
+})
+
+test("group/DM: member row AND in the room's workspace", () => {
+  assert.equal(f.chatCarrierVerdict(row({}), wide), "allow")
+  assert.equal(f.chatCarrierVerdict(row({ type: "DM" }), wide), "allow")
+  assert.equal(f.chatCarrierVerdict(row({ isMember: false }), wide), "deny", "not in the group")
+  assert.equal(f.chatCarrierVerdict(row({ inRoomWorkspace: false }), wide), "deny", "offboarded: left the workspace")
+  assert.equal(f.chatCarrierVerdict(row({ isMember: false, inRoomWorkspace: false }), wide), "deny")
+})
+
+test("group/DM without a workspace: only the full check can tell", () => {
+  assert.equal(f.chatCarrierVerdict(row({ roomWorkspaceId: null, inRoomWorkspace: false }), wide), "ask")
+  assert.equal(f.chatCarrierVerdict(row({ roomWorkspaceId: null, isMember: false }), wide), "deny", "no member row is never asked")
+})
+
+test("project room: project access at any level, BoD/OAA everywhere in their workspace", () => {
+  const p = (o) => row({ type: "PROJECT", projectId: "p1", roomWorkspaceId: "w1", isMember: false, projectWorkspaceRole: "STAFF", ...o })
+  assert.equal(f.chatCarrierVerdict(p({ isProjectMember: true }), wide), "allow", "Can view member")
+  assert.equal(f.chatCarrierVerdict(p({}), wide), "deny", "staff not in the project")
+  assert.equal(f.chatCarrierVerdict(p({ isMember: true }), wide), "deny", "a stale room member row is not project access")
+  assert.equal(f.chatCarrierVerdict(p({ projectWorkspaceRole: "MANAGER" }), wide), "deny", "Manager must be invited")
+  assert.equal(f.chatCarrierVerdict(p({ projectWorkspaceRole: "BOD" }), wide), "allow")
+  assert.equal(f.chatCarrierVerdict(p({ projectWorkspaceRole: "ONE_ABOVE_ALL" }), wide), "allow")
+  assert.equal(f.chatCarrierVerdict(p({ projectWorkspaceRole: null, isProjectMember: true }), wide), "deny", "offboarded project member")
+  // A PROJECT row without a project falls back to the group rule, as conversationAccess does.
+  assert.equal(f.chatCarrierVerdict(row({ type: "PROJECT", projectId: null }), wide), "allow")
+})
+
+test("pickChatFileCarrier: any carrier is enough, first allow wins, asks only when nothing allows", () => {
+  const deny = row({ conversationId: "a", isMember: false })
+  const ask = row({ conversationId: "b", roomWorkspaceId: null, inRoomWorkspace: false })
+  const allow = row({ conversationId: "c", attachmentName: "x.pdf" })
+  assert.deepEqual(f.pickChatFileCarrier([], wide), { carrier: null, ask: [] }, "unsent / deleted: nothing carries it")
+  assert.deepEqual(f.pickChatFileCarrier([deny], wide), { carrier: null, ask: [] })
+  assert.equal(f.pickChatFileCarrier([deny, ask, allow], wide).carrier.conversationId, "c")
+  assert.deepEqual(f.pickChatFileCarrier([deny, ask, allow], wide).ask, [])
+  assert.deepEqual(f.pickChatFileCarrier([deny, ask], wide).ask.map((r) => r.conversationId), ["b"])
+})
+
+test("chat file validators: ETag from size+mtime, 304 rules", () => {
+  const mtime = new Date("2026-10-18T05:06:07.890Z")
+  const etag = f.chatFileEtag(12345, mtime.getTime())
+  assert.match(etag, /^W\/"[0-9a-z]+-[0-9a-z]+"$/)
+  assert.notEqual(etag, f.chatFileEtag(12346, mtime.getTime()))
+  assert.equal(f.chatNotModified(etag, null, etag, mtime), true)
+  assert.equal(f.chatNotModified(etag.slice(2), null, etag, mtime), true, "weak comparison")
+  assert.equal(f.chatNotModified(`"zzz", ${etag}`, null, etag, mtime), true, "list")
+  assert.equal(f.chatNotModified("*", null, etag, mtime), true)
+  assert.equal(f.chatNotModified('"other"', mtime.toUTCString(), etag, mtime), false, "If-None-Match decides over If-Modified-Since")
+  assert.equal(f.chatNotModified(null, mtime.toUTCString(), etag, mtime), true, "second precision")
+  assert.equal(f.chatNotModified(null, new Date(mtime.getTime() - 2000).toUTCString(), etag, mtime), false)
+  assert.equal(f.chatNotModified(null, "garbage", etag, mtime), false)
+  assert.equal(f.chatNotModified(null, null, etag, mtime), false)
+})
+
 console.log(`chat-files: ${passed} passed`)

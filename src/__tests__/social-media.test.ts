@@ -95,7 +95,7 @@ describe('the Overview, to date', () => {
     const days = buildSocialDays('2026-10', cfg, rows, [], monthly, [
       { date: '2026-10-03', platformId: 'instagram', engagementTarget: 400, postsTarget: null },
     ])
-    const o = summarizeSocial('2026-10', '2026-10-03', cfg, days)
+    const o = summarizeSocial('2026-10', '2026-10-03', cfg, days, monthly)
     expect(o.cutoff).toBe('2026-10-03')
     const ig = o.platforms.find((p) => p.platformId === 'instagram')!
     expect(ig.engagement).toBe(300) // 100 + 200, views apart
@@ -164,5 +164,23 @@ describe('platforms', () => {
     expect(mergeSocialConfig({ platforms: [{ id: 'instagram', name: 'Instagram', archived: true }] }, cfg, new Set()).ok).toBe(false)
     expect(mergeSocialConfig({ platforms: [{ name: '  ' }] }, cfg, new Set()).ok).toBe(false)
     expect(mergeSocialConfig({ platforms: [{ id: 'a', name: 'A' }, { id: 'a', name: 'B' }] }, cfg, new Set()).ok).toBe(false)
+  })
+})
+
+describe('month target of the overview', () => {
+  const cfg = { platforms: [{ id: 'instagram', name: 'Instagram' }] } as never
+  it('is the typed month target when no day has its own (no drift from rounded shares)', () => {
+    const monthly = [{ platformId: 'instagram', engagementTarget: 5000, postsTarget: 30 }]
+    const days = buildSocialDays('2026-10', cfg, [], [], monthly, [])
+    const ig = summarizeSocial('2026-10', '2026-10-19', cfg, days, monthly).platforms[0]
+    expect(ig.engagementTargetMonth).toBe(5000)
+    expect(ig.postsTargetMonth).toBe(30)
+  })
+  it('adds the own day targets to the share of the other days', () => {
+    const monthly = [{ platformId: 'instagram', engagementTarget: 3100, postsTarget: null }]
+    const days = buildSocialDays('2026-10', cfg, [], [], monthly, [{ date: '2026-10-03', platformId: 'instagram', engagementTarget: 400, postsTarget: null }])
+    const ig = summarizeSocial('2026-10', '2026-10-19', cfg, days, monthly).platforms[0]
+    expect(ig.engagementTargetMonth).toBe(3400)
+    expect(ig.postsTargetMonth).toBeNull()
   })
 })

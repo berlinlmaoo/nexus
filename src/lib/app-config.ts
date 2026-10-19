@@ -36,21 +36,63 @@ export type AppConfig = {
      *  refused. On = a person out of credits is answered by GIDEON Aphrodite (max 30 a day), then refused;
      *  GIDEON Model 0 stays free. BoD / One Above All are unlimited by default. */
     gideonCreditsEnforced: boolean
+    /** Meeting notes, Beta (owner, 18 Oct 2026): GIDEON turns a meeting recording into minutes and tasks. Off = the
+     *  entry points are hidden and new uploads are refused; meetings already made stay readable. */
+    meetingNotesEnabled: boolean
+    /** GIDEON Memory (owner, 19 Oct 2026): per-person memory. Off = an emergency kill switch: nothing is remembered or
+     *  used, the memory tools refuse, Settings › GIDEON Memory still lists and deletes what is there. */
+    gideonMemory: boolean
+    /** GIDEON tools package (owner, 18 Oct 2026), one flag per group (lib/gideon-tools/meta.ts EXTRA_TOOL_GROUP).
+     *  Off = those tools answer "not available yet" and their cards cannot be applied. */
+    gideonToolsInbox: boolean
+    gideonToolsChat: boolean
+    gideonToolsReminders: boolean
+    gideonToolsLeave: boolean
+    gideonToolsBulkTasks: boolean
+    gideonToolsPipeline: boolean
+    gideonToolsOutletSocial: boolean
+    gideonToolsLegal: boolean
+    gideonToolsVault: boolean
+    gideonToolsDocEdit: boolean
+    gideonToolsForms: boolean
+    gideonToolsPerformance: boolean
+    gideonToolsAnnouncement: boolean
+    gideonToolsSheets: boolean
+    gideonToolsImages: boolean
+    gideonToolsFiles: boolean
+    /** Presence status (owner, 19 Oct 2026): Online / Away / Sick / Leave / Not checked in / Offline on avatars, profiles,
+     *  DM headers, Control Room and GIDEON (get_person_status, set_my_status). Off = GET /api/presence answers
+     *  enabled:false with no statuses, setting is refused, no realtime events; the apps hide every status. */
+    presenceStatus: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
     outsideHourAlertMinutes: number
     /** How often an open Calendar screen asks again (ETag makes an unchanged answer a 304). */
     calendarPollSeconds: number
+    /** Meeting notes: days the audio is kept after the minutes are saved (or after they were ready, if never saved). */
+    meetingAudioRetentionDays: number
+    /** Meeting notes: longest recording, in minutes. */
+    meetingMaxMinutes: number
+    /** Meeting notes: largest file, in MB. */
+    meetingMaxMB: number
   }
   texts: Record<"en" | "id", Record<string, string>>
   /** One app-wide notice at the top of Home, or null. `id` changes → shown again to people who closed it. */
   banner: null | { id: string; tone: "info" | "warning" | "danger"; title: string; message: string; link?: string | null }
 }
 
+/** GIDEON tools groups (18 Oct 2026): on unless listed off here; prod opens the rest per runbook L.28. */
+const GIDEON_TOOL_FLAG_DEFAULTS = {
+  gideonToolsInbox: true, gideonToolsChat: true, gideonToolsReminders: true, gideonToolsLeave: true, gideonToolsBulkTasks: true,
+  gideonToolsPipeline: true, gideonToolsOutletSocial: true, gideonToolsLegal: true, gideonToolsVault: true, gideonToolsDocEdit: true,
+  gideonToolsForms: true, gideonToolsPerformance: true, gideonToolsAnnouncement: true, gideonToolsSheets: true, gideonToolsImages: true,
+  gideonToolsFiles: true,
+}
+
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false },
-  values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {
       "location.always.title": "Turn on location “Always”",

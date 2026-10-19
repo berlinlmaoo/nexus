@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 // (owner, 13 Oct 2026: Notion-style levels, Full access manages statuses/columns).
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const SECTION_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
 // A status option's colour (owner, 12 Oct 2026, Notion-style statuses): the web palette's keys
@@ -95,6 +96,8 @@ export async function POST(
       })
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id! })
     return NextResponse.json(section, { status: 201 })
   } catch (error) {
     console.error("Error creating section:", error)
@@ -161,11 +164,17 @@ export async function PATCH(
     })
     if (!section) return NextResponse.json({ error: "Section not found" }, { status: 404 })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id! })
     return NextResponse.json(section)
   } catch (error) {
     console.error("Error updating section:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+class SectionGoneError extends Error {
+  constructor(message: string, readonly status: 404 | 409) { super(message) }
 }
 
 export async function DELETE(
@@ -223,6 +232,11 @@ export async function DELETE(
       before: async (tx) => {
         // The sections lock (see PATCH), so the renumbering below works on the order as it is now.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sections:${projectId}`})::int8)`
+        // Read again under the lock: someone may have deleted this section, or the one its tasks go to,
+        // a moment ago (two people deleting A->B and B->A at once answered 500, QA final 19 Oct).
+        const still = await tx.taskList.findMany({ where: { id: { in: [id, firstRemaining.id] } }, select: { id: true } })
+        if (!still.some((s) => s.id === id)) throw new SectionGoneError("Section not found", 404)
+        if (!still.some((s) => s.id === firstRemaining.id)) throw new SectionGoneError("The section to move the tasks to was just deleted. Pick another one.", 409)
         const moved = await tx.task.findMany({ where: { taskListId: id }, select: { id: true } })
         await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id, ...(firstRemaining.taskStatus ? { status: firstRemaining.taskStatus } : {}) } })
         return moved.map((t) => ({ table: "Task", column: "taskListId", key: t.id, value: id, movedTo: firstRemaining.id }))
@@ -238,8 +252,11 @@ export async function DELETE(
       },
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged((await params).projectId, { actorId: session.user.id! })
     return NextResponse.json({ message: "Section deleted", movedTo: firstRemaining.id })
   } catch (error) {
+    if (error instanceof SectionGoneError) return NextResponse.json({ error: error.message, code: "SECTION_GONE" }, { status: error.status })
     console.error("Error deleting section:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

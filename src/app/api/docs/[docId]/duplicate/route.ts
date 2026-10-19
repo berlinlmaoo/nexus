@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth"
 import { docWriteRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
+import { nextDocPosition } from "@/lib/doc-position"
 
 export async function POST(
   req: NextRequest,
@@ -27,6 +29,8 @@ export async function POST(
 
     const duplicate = await prisma.doc.create({
       data: {
+        // The copy goes to the bottom of its siblings (A-26).
+        position: await nextDocPosition(original.projectId, original.parentId),
         title: `${original.title} (copy)`,
         content: original.content ?? undefined,
         projectId: original.projectId,
@@ -43,6 +47,8 @@ export async function POST(
 
     logAudit({ action: "create", entityType: "doc", entityId: duplicate.id, entityName: duplicate.title, userId: session.user.id, request: req, metadata: { duplicatedFrom: (await params).docId } })
 
+    // Realtime (QA final 19 Oct): the Pages list of every other open copy of this project refetches.
+    eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: original.projectId, docId: duplicate.id, actorId: session.user.id })
     return NextResponse.json({ doc: duplicate }, { status: 201 })
   } catch (error) {
     console.error("Error duplicating doc:", error)

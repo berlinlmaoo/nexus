@@ -19,7 +19,7 @@ import {
   phasesOf,
   pipelineToday,
   stageGroupOf,
-  termDaysOverdue,
+  termDaysOverdue, termOverpaid,
   termOutstanding,
   termStatusOf,
   termSummaryOf,
@@ -74,6 +74,8 @@ export function serializeTerm(t: TermRow, today: string) {
     status: termStatusOf(facts, today),
     outstanding: termOutstanding(facts),
     daysOverdue: termDaysOverdue(facts, today),
+    /** Received above the amount (0 when not): shown as "Overpaid by Rp x" (D-Q1, additive). */
+    overpaid: termOverpaid(facts),
   }
 }
 
@@ -533,14 +535,18 @@ export function defaultProbability(stage: string): number {
  * concurrent create that picked the same code fails on the ledger's key and takes the next one.
  * `projectId` is kept for the callers' signature; the series is the company's, not the board's.
  */
-export async function nextDealCode(_projectId?: string, now: Date = new Date()): Promise<string> {
+export async function nextDealCode(
+  _projectId?: string,
+  now: Date = new Date(),
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<string> {
   // The year of the company's day (WIB), so a deal added at 01:00 on 1 January is already "27…".
   const yy = pipelineToday(now).slice(2, 4)
   const head = `${DEAL_CODE_PREFIX}${yy}`
   const [issued, live, restorable] = await Promise.all([
-    prisma.pipelineDealCode.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
-    prisma.pipelineDeal.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
-    prisma.deletionSnapshot.findMany({
+    db.pipelineDealCode.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
+    db.pipelineDeal.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
+    db.deletionSnapshot.findMany({
       where: { entityType: "pipeline_deal", restoredAt: null },
       select: { data: true },
     }),
@@ -564,6 +570,13 @@ export async function nextDealCode(_projectId?: string, now: Date = new Date()):
  *  violation (P2002) when another create took it first. */
 export async function claimDealCode(tx: Prisma.TransactionClient, code: string, projectId: string): Promise<void> {
   await tx.pipelineDealCode.create({ data: { code, projectId } })
+}
+
+/** Serialises deal numbering across every board (QA 19 Oct 2026: 10 parallel creates left 6 with
+ *  "Could not number the deal" after the optimistic retries ran out). Take it first inside the create
+ *  transaction, then read the next code with that transaction (nextDealCode(…, tx)). */
+export async function lockDealCodes(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"pipeline-deal-code"})::int8)`
 }
 
 // ── Payment terms (owner, 9 Oct 2026: "perlu per termin") ─────────────────────────────────────────────

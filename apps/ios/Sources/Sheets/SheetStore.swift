@@ -32,6 +32,7 @@ final class SheetStore {
     var loading = true
     var loadError: String?
     /// Bumped on every change the grid has to redraw.
+    var structureVersion: Int?
     var version = 0
     /// Bumped when only the selection moved (the grid redraws its selection, not its cells).
     var selVersion = 0
@@ -317,6 +318,7 @@ final class SheetStore {
         UserDefaults.standard.set(id, forKey: "nexus.sheet.\(projectId)")
         selection = SheetSelection()
         rows = []
+        structureVersion = nil
         columns = []
         settings = [:]
         activeFilterView = nil
@@ -342,6 +344,7 @@ final class SheetStore {
     }
 
     private func apply(sheet o: SheetJSON) {
+        structureVersion = o["structureVersion"] as? Int
         name = o["name"] as? String ?? ""
         columns = (o["columns"] as? [SheetJSON]) ?? []
         settings = (o["settings"] as? SheetJSON) ?? [:]
@@ -870,7 +873,8 @@ final class SheetStore {
         }
         next.insert(contentsOf: fresh, at: min(max(0, index), next.count))
         do {
-            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next])
+            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next], structureVersion: structureVersion)
+            structureVersion = o["structureVersion"] as? Int
             guard sid == sheetId else { return }
             let saved = (o["columns"] as? [SheetJSON]) ?? next
             let known = Set(columns.compactMap { $0["id"] as? String })
@@ -936,7 +940,8 @@ final class SheetStore {
             restored.insert(g.col, at: min(g.index, restored.count))
         }
         do {
-            _ = try await APIClient.shared.patchSheet(sid, body: ["columns": restored])
+            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": restored], structureVersion: structureVersion)
+            structureVersion = o["structureVersion"] as? Int
             await reload()
             var edits: [SheetCellEdit] = []
             for row in rows {
@@ -970,7 +975,8 @@ final class SheetStore {
         var next = columns
         next[m]["name"] = newName.trimmingCharacters(in: .whitespaces)
         do {
-            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next])
+            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next], structureVersion: structureVersion)
+            structureVersion = o["structureVersion"] as? Int
             columns = (o["columns"] as? [SheetJSON]) ?? next
             rebuild()
         } catch {
@@ -1118,6 +1124,15 @@ final class SheetStore {
     }
 
     func fail(_ error: Error, _ fallback: String) {
+        if let sheetError = error as? SheetAPIError, case .structureChanged(let current) = sheetError {
+            columns = current["columns"] as? [SheetJSON] ?? columns
+            settings = current["settings"] as? SheetJSON ?? settings
+            structureVersion = current["structureVersion"] as? Int
+            rebuild()
+            notice = error.localizedDescription
+            Task { await reload() }
+            return
+        }
         if (error as? APIError)?.nobodyAnswered == true {
             notice = T("You're offline. Rows, columns and sheets can be changed once you're back online.")
             offline = true
@@ -1198,7 +1213,7 @@ struct SheetProtectPrompt: Identifiable {
 extension APIClient {
     /// POST rows with explicit cells / styles / positions (undo of a row delete).
     func patchSheetRowsInsert(_ sheetId: String, body: SheetJSON) async throws -> SheetJSON {
-        var req = makeRequest("/api/sheets/\(sheetId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? sheetId)/rows", method: "POST")
+        var req = makeRequest("/api/sheets/\(sheetId.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? sheetId)/rows", method: "POST")
         req.setValue(Self.sheetTabId, forHTTPHeaderField: "X-Nexus-Tab")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)

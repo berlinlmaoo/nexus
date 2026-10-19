@@ -63,7 +63,10 @@ struct PipelineDealView: View {
             }
             .keyboardDoneBar()
             .navigationDestination(item: $openProject) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
-            .navigationDestination(item: $openFolderId) { id in FolderByIdView(folderId: id) }
+            .onChange(of: openFolderId) { _, id in
+                guard let id else { return }; openFolderId = nil; dismiss()
+                Task { try? await Task.sleep(for: .milliseconds(350)); AppRouter.shared.open(.calendarLink("/calendar?folder=" + NativeAPI.escape(id))) }
+            }
         }
         // The only .sheet of this view: add, edit or mark paid a payment term.
         .sheet(item: $termRoute) { route in
@@ -231,7 +234,7 @@ struct PipelineDealView: View {
             // Links and attached files (owner, 9 Oct 2026). Its own view: it presents pickers and a confirm,
             // and this view already has its one .sheet and one .alert.
             PipelineDocumentsEditor(store: store, deal: deal, linkTypes: v.linkTypes) { links in
-                patch(["links": links.map(\.json)])
+                patch(["links": links.map(\.json), "linksBase": deal.links.map(\.json)])
             }
         }
     }
@@ -325,7 +328,7 @@ struct PipelineDealView: View {
         // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms.
         PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
             PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
-                patch(["costs": costs.map(\.json)])
+                patch(["costs": costs.map(\.json), "costsBase": deal.costs.map(\.json)])
             }
         }
 
@@ -535,7 +538,7 @@ struct PipelineDealView: View {
 
     private func historyRow(_ h: PipelineChange) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: h.user?.avatar, initial: h.user?.initial ?? "?", size: 26)
+            AvatarView(url: h.user?.avatar, initial: h.user?.initial ?? "?", size: 26, userId: h.user?.id, name: h.user?.name)
             VStack(alignment: .leading, spacing: 3) {
                 Text(historyTitle(h))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
@@ -1132,7 +1135,7 @@ struct PipelinePersonInput: View {
             } label: {
                 HStack(spacing: 8) {
                     if let shownName {
-                        AvatarView(url: person?.avatar, initial: String(shownName.first ?? "?").uppercased(), size: 22)
+                        AvatarView(url: person?.avatar, initial: String(shownName.first ?? "?").uppercased(), size: 22, userId: userId, name: shownName)
                         Text(shownName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                     } else {
                         Text(T("Not assigned")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
@@ -1305,6 +1308,7 @@ struct PipelineTermSheet: View {
     @State private var note = ""
     @State private var busy = false
     @State private var err: String?
+    @State private var clientRequestId = UUID().uuidString
     @State private var started = false
 
     private var term: PipelineTerm? {
@@ -1457,7 +1461,7 @@ struct PipelineTermSheet: View {
         busy = true; err = nil
         defer { busy = false }
         let ok: Bool
-        if let t = term { ok = await store.updateTerm(dealId, t.id, fields) } else { ok = await store.addTerm(dealId, fields) }
+        if let t = term { ok = await store.updateTerm(dealId, t.id, fields) } else { ok = await store.addTerm(dealId, fields.merging(["clientRequestId": clientRequestId]) { _, new in new }) }
         if ok {
             dismiss()
         } else {

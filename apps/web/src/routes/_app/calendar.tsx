@@ -21,7 +21,9 @@ function ids(v: unknown): string | undefined {
  * /calendar — the master calendar (replaces Team Calendar; /master-calendar redirects here). Everything
  * on screen is in the URL so it can be shared and survives a reload:
  * ?date=YYYY-MM-DD&view=people&lens=person&focus=<unit>&scope=me|division&unit=…&person=…&project=…
- * &prio=…&done=0&overdue=1&task=<id>. Unknown values are dropped; a broken date falls back to today.
+ * &folder=…&prio=…&done=0&overdue=1&task=<id>. Unknown values are dropped; a broken date falls back to today.
+ * `folder` (a folder = every project in it and its subfolders) is applied by the server. Folders open the
+ * Calendar with it: the folder pages' own calendar is gone (owner, 18 Oct 2026, one calendar).
  */
 export const Route = createFileRoute("/_app/calendar")({
   validateSearch: (s: Record<string, unknown>): CalSearch => {
@@ -38,6 +40,7 @@ export const Route = createFileRoute("/_app/calendar")({
       unit: ids(s.unit),
       person: ids(s.person),
       project: ids(s.project),
+      folder: ids(s.folder),
       prio: ids(s.prio),
       done: str(s.done) === "0" ? "0" : undefined,
       overdue: str(s.overdue) === "1" ? "1" : undefined,
@@ -49,15 +52,16 @@ export const Route = createFileRoute("/_app/calendar")({
   // queries pick these results up. Keys and options must match CalendarPage's useQuery calls. The grid
   // maths come in dynamically so the calendar's core stays out of the app's entry chunk (the API client
   // is in it already).
-  loaderDeps: ({ search }) => ({ date: search.date }),
+  loaderDeps: ({ search }) => ({ date: search.date, folder: search.folder }),
   loader: ({ context, deps }) => {
     const qc = context.queryClient;
     void import("@/lib/calendar/core").then(({ gridRange }) => {
       // Today in WIB (UTC+7), as components/calendar/bits.wibToday.
       const r = gridRange(deps.date ?? new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10));
       void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "structure"], queryFn: nexusApi.calendarStructure, staleTime: 5 * 60_000 });
-      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "items", r.from, r.to], queryFn: () => nexusApi.calendarItems(r.from, r.to), staleTime: 60_000 });
-      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "overdue"], queryFn: nexusApi.calendarOverdue, staleTime: 60_000 });
+      const f = deps.folder;
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "items", r.from, r.to, ...(f ? [f] : [])], queryFn: () => nexusApi.calendarItems(r.from, r.to, f), staleTime: 60_000 });
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "overdue", ...(f ? [f] : [])], queryFn: () => nexusApi.calendarOverdue(f), staleTime: 60_000 });
     }).catch(() => { /* the page fetches for itself */ });
   },
   component: CalendarRoute,

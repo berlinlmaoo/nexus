@@ -154,7 +154,10 @@ export async function ensureExecutionProject(
           workspaceId,
           folderId: folder.id,
           position,
-          members: { create: memberIds.map((userId) => ({ userId, role: userId === actorId ? ("LEAD" as const) : ("MEMBER" as const) })) },
+          // Who joins stays as decided (QA final 19 Oct 2026, D-Q2): the person who pressed the button (Owner) and the
+          // deal's BD/PM; BoD and One Above All have Full on every project of the workspace by role (lib/rbac.ts),
+          // so they need no row. The Owner's row says FULL too (it read EDIT next to role LEAD: same access, odd data).
+          members: { create: memberIds.map((userId) => (userId === actorId ? { userId, role: "LEAD" as const, accessLevel: "FULL" } : { userId, role: "MEMBER" as const })) },
           taskLists: { create: STANDARD_LISTS },
         },
         select: { id: true, name: true },

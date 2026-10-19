@@ -50,6 +50,8 @@ export async function ensurePrimaryTeam(db: DbClient) {
         mode: "insensitive",
       },
     },
+    // Oldest first: ids are time-ordered (cuid before 18 Oct 2026, UUIDv7 since; the conversion minted each
+    // UUIDv7 from the cuid's own timestamp, so the order survived it. UUID-MIGRATION.md).
     orderBy: { id: "asc" },
     select: {
       id: true,

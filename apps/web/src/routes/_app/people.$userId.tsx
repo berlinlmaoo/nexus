@@ -23,6 +23,8 @@ import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { attendanceReasonText, periodEndText, periodRangeText, xpEntryLabel } from "@/lib/server-text";
+import { PresenceChip } from "@/lib/presence";
+import { SetStatusDialog } from "@/components/SetStatusDialog";
 
 type RecordSearch = { period?: string };
 
@@ -158,6 +160,7 @@ function HeaderCard({ data }: { data: NexusMemberRecord }) {
   });
   // Someone who left can no longer sign in: no one to message.
   const canMessage = !p.isSelf && !leftAtOf(p);
+  const [statusOpen, setStatusOpen] = useState(false);
   const joined = new Date(p.joinedAt).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
   return (
     <section className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[24px] border border-border bg-card p-4 shadow-soft md:p-5">
@@ -174,8 +177,20 @@ function HeaderCard({ data }: { data: NexusMemberRecord }) {
             {p.email && <span className="inline-flex min-w-0 max-w-full items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate text-foreground">{p.email}</span></span>}
             <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0" /><span className="text-foreground">{t("Joined {date}", { date: joined })}</span></span>
           </div>
+          {/* Presence status (19 Oct 2026): what everyone sees, live; on one's own profile it can be set here. */}
+          {!leftAtOf(p) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <PresenceChip userId={p.id} />
+              {p.isSelf && (
+                <button type="button" onClick={() => setStatusOpen(true)} className="rounded-full px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                  {t("Set a status")}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      {p.isSelf && <SetStatusDialog open={statusOpen} onOpenChange={setStatusOpen} meId={p.id} />}
       {canMessage && (
         <button
           type="button"

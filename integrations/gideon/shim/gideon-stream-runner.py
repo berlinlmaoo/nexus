@@ -18,6 +18,30 @@ Usage (prompt on stdin, so it never shows up in `ps`):
 
 Runs with the Hermes venv's python (it imports Hermes). The toolsets are EXPLICIT: the caller decides
 what this agent may touch, not the profile's interactive defaults.
+
+Cost (owner, 18 Oct 2026 — "cheaper per answer, not dumber"):
+  - GIDEON_EAGER_TOOLS (comma list): plugin tools the model always sees with their full schema. Every other
+    plugin tool stays deferred behind Hermes' tool_search / tool_describe / tool_call bridge, whose
+    description lists each one by name, so the model can still load any of them mid-answer.
+  - GIDEON_CACHE_SCOPE: one prompt-cache scope for every run of this instance. Hermes derives the cache key
+    (and the Codex `session_id` header, which is what that backend actually routes its cache by) from the
+    session id, and a one-shot run is a new session every time, so the identical system prompt + tool
+    schemas never hit the provider cache across questions. Same scope = cached prefix (10% price).
+  - Router-miss safety net: an answer that says it cannot / has no tool, from a run that never loaded a
+    deferred tool, is retried ONCE with every tool loaded. The first attempt's text is withdrawn with a
+    `reset` line; a {"t":"router_miss"} line tells the shim to log it.
+
+Model 0 (owner, 18 Oct 2026; tier from GIDEON_TIER, set by the shim per run):
+  - GIDEON_EAGER_TOOLS_<TIER> (e.g. GIDEON_EAGER_TOOLS_EXPERIMENTAL) is ADDED to GIDEON_EAGER_TOOLS for that tier. The
+    local 9B almost never opens tool_search, so booking / deals / legal must be loaded up front; on a local model
+    the extra schema costs no credits, only prompt (still far below its 32k window).
+  - Announce safety net (GIDEON_ANNOUNCE_RETRY_TIERS, default "experimental"): an answer that only ANNOUNCES the
+    lookup or action ("gw cek dulu…", "sebentar", "let me check", a nexus_* name or call syntax in the text) is
+    retried ONCE with an instruction to call the tool now. Logged like a router miss, with kind "announce". Same for a
+    deal / legal / room question answered "not found" without that domain's own tool (kind "domain").
+  - GIDEON_SAMPLING_<TIER> (JSON: temperature, top_p, presence_penalty, frequency_penalty, seed) for that tier's
+    requests. Model 0 runs {"temperature":0.6,"top_p":0.95} (Qwen's thinking-mode values; Ollama's default 0.8 made
+    up words like "kerjem", "dikongkrongin").
 """
 from __future__ import annotations
 
@@ -25,6 +49,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import threading
 from contextlib import redirect_stderr, redirect_stdout
@@ -43,7 +68,262 @@ def emit(obj: dict) -> None:
             pass
 
 
-def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[str, dict]:
+# "I can't / there is no tool / no access" — the words of an answer given without the tool it needed.
+# Not "not found": an empty search is a real answer.
+_MISS = re.compile(
+    r"(tidak|nggak|gak|ga|belum) (bisa|dapat) (aku |gw |saya )?(proses|akses|mengakses|membaca|melihat|memesan|booking|membooking)"
+    r"|(tidak|nggak|gak|belum) (punya|ada) (akses|tool|alat|fitur)"
+    r"|(tool|alat|fitur)[^.\n]{0,60}(tidak|belum|nggak) (tersedia|menyediakan|ada|bisa)"
+    r"|tidak menyediakan"
+    r"|di luar kemampuan"
+    r"|(can't|cannot|can not|unable to) (access|book|read|see|check|process)"
+    r"|(don't|do not) have (access|a tool|the tool|tools)"
+    r"|(no|not an?) (tool|access) (for|to)"
+    r"|not available (in|to) (this|me)",
+    re.I,
+)
+_BRIDGE = {"tool_search", "tool_describe", "tool_call"}
+# A question about something only a DEFERRED tool can see (Pipeline, Legal, Room Booking) answered with
+# "not found" by a run that never opened the catalog is a miss too: the workspace search cannot see deals,
+# legal documents or bookings, so "not found" there means "did not look" (18 Oct 2026, Aphrodite on a deal).
+_DEFERRED_DOMAIN = re.compile(r"\b(deal|deals|pipeline|legal|kontrak|contract|nda|pks|spk|mou|ruang|ruangan|room|booking|book|meeting room)\b", re.I)
+_NOT_FOUND = re.compile(r"(belum|tidak|nggak|gak|ga) (bisa |dapat )?(memastikan|menemukan|ketemu|ditemukan|teridentifikasi|ada data)|not find|couldn't find|could not find|can't confirm|no (results|match)", re.I)
+
+
+# "I'll check / one moment / let me look" — an action announced in the answer instead of made (Model 0, 18 Oct
+# 2026: "Gw langsung aja nexus_book_room…", "Oke, gw cek task yang lagi open…" and the run ends).
+_ANNOUNCE_VERB = re.compile(
+    r"\b(gw|gue|gua|aku|saya|kami|kita)\s+(akan\s+|mau\s+|coba\s+|langsung\s+|bakal\s+|lagi\s+|perlu\s+|harus\s+)?(aja\s+)?"
+    r"(cek|ngecek|cekin|mengecek|periksa|memeriksa|cari|carikan|nyari|mencari|cariin|lihat|liat|ngeliat|melihat|lihatkan"
+    r"|ambil|ambilkan|ambilin|tarik|booking|bookingin|book|pesan|pesankan|pesenin|buat|buatkan|buatin|bikin|bikinin|panggil|jalankan)\b"
+    r"|\b(coba|mari|ayo)\s+(kita\s+|gw\s+|saya\s+|aku\s+)?(cek|lihat|liat|cari|periksa)\b"
+    r"|\b(tunggu\s+)?sebentar\b|\bbentar\s+ya\b|\bmohon\s+tunggu\b"
+    r"|\b(let me|i'll|i will|i'm going to|one moment|hold on|give me a (moment|sec))\b"
+    r"|\b(cek|ngecek|mengecek|cari|lihat)\s+(dulu|sekarang|langsung)\b",
+    re.I,
+)
+# A tool written out instead of called: a nexus_* name in prose, or call / tool-code syntax.
+_ANNOUNCE_TOOL = re.compile(r"\bnexus_[a-z_]{3,}|<tool_(code|call)>|\btool_call\b|```(tool|json)\s*\n\s*\{\s*\"(name|tool)\"", re.I)
+# "If you want, I can check…" is an offer, not an unkept promise.
+_OFFER = re.compile(r"\b(kalau|kalo|klo|jika|bila|apabila|if|mau\s+gw|mau\s+saya|mau\s+aku|perlu\s+gw|perlu\s+saya|bisa)\b", re.I)
+_PAST = re.compile(r"\b(yang|udah|sudah|telah|tadi|barusan|habis|setelah|sempat)\s+(\w+\s+)?$", re.I)
+# Any NEXUS tool that is not a read: create/update/send/book/remind/remember/… (a write tool or an approval card).
+_READ_ONLY = re.compile(r"^nexus_(search|list|get|read)_")
+
+
+def _is_write(name: str) -> bool:
+    name = name or ""
+    return (name.startswith("nexus_") and not _READ_ONLY.match(name)) or name == "tool_call"
+
+
+# "Done / waiting for your approval" — a write claimed in the answer (privacy suite 19 Oct 2026: Model 0 said "task sudah
+# dibuat", "reminder sudah dipasang buat QA Dev 6" with no tool call at all). Facts about existing data ("dibuat tanggal
+# 14 Okt") need a first-person subject or an approval-card phrase to count.
+_CLAIM = re.compile(
+    # first person: "gw udah bikin task…", "I've sent…" ("catat / simpan" left out: "catat ya" in a chat asks GIDEON
+    # to remember, and "udah gw catat" is the right answer to it, not a NEXUS write)
+    r"\b(gw|gue|gua|aku|saya|kami)\s+(udah|sudah|telah|barusan|berhasil)\s+(\w+\s+)?"
+    r"(bikin|bikinin|buat|buatin|buatkan|membuat|pasang|pasangin|memasang|kirim|kirimin|mengirim|ajukan|ajuin|mengajukan"
+    r"|booking|bookingin|book|tambah|tambahin|tambahkan|menambahkan|update|ubah|hapus|jadwalin|jadwalkan|setel|assign)\b"
+    r"|\bI(?:'ve| have)\s+(just\s+)?(created|made|set up|sent|booked|added|scheduled|submitted|posted|updated)\b"
+    # passive, about a thing GIDEON makes: "task sudah dibuat", "reminder udah dipasang", "message has been sent"
+    r"|\b(task|tugas|reminder|pengingat|pesan|message|booking|bookingan|pengumuman|announcement|draft|kartu|card|ruang\w*|room)\b"
+    r"[^.!?\n]{0,40}?\b(udah|sudah|telah|berhasil)\s+(gw\s+|gue\s+|saya\s+|aku\s+)?(dibuat|dibikin|dipasang|dikirim|diajukan"
+    r"|di-?booking|dibook|ditambahkan|ditambahin|dijadwalkan|diset|disubmit|di-submit)\b"
+    r"|\b(task|reminder|message|booking|announcement|draft)\b[^.!?\n]{0,40}?\bhas been (created|sent|booked|scheduled|added|set up|submitted)\b"
+    # the approval card itself
+    r"|(menunggu|nunggu) persetujuan\w*\s+(\w+\s+){0,2}(di|lewat|pada)\s+(kartu|card)|\bkartu (di )?bawah\b"
+    r"|\btap\s+[\"'“]?apply\b|\bcard below\b",
+    re.I,
+)
+# A sentence that only supposes, asks or reports someone else's record ("mungkin udah disubmit tapi…", "sudah diajukan
+# oleh Mey", "apakah sudah dibuat?") is not a claim of GIDEON's own write.
+_NOT_A_CLAIM = re.compile(r"\b(kalau|kalo|jika|bila|apakah|mungkin|kemungkinan|bisa jadi|belum|tidak|nggak|ngga|gak|atau|if|whether|maybe|or|oleh|by)\b"
+                          r"|\byang\s+(udah|sudah|telah)\b", re.I)
+_SUPPOSE = re.compile(r"\b(bisa jadi|kemungkinan|mungkin|possibly|maybe|could be)\b[^\n]{0,40}:\s*$", re.I)
+
+
+# The delivery promised as if it were set up (privacy M20 after the first fix: "Siap, gw bikin reminder buat QA Dev 6 …
+# Reminder itu akan muncul di notifikasi NEXUS"). "Gw bikin X" alone is an announcement (the announce net's job), and
+# offers ("kalau mau, reminder-nya bakal muncul…") are not claims.
+_CLAIM_NOW = re.compile(
+    r"\b(reminder|pengingat|pesan|message|pengumuman|announcement|notif\w*)\b[^.!?\n]{0,40}"
+    r"\b(akan|bakal|nanti|udah|sudah)\s+(muncul|dikirim|terkirim|nongol|masuk)\b"
+    r"|\b(reminder|message|announcement)\b[^.!?\n]{0,40}\bwill (show up|appear|be sent|go out)\b",
+    re.I,
+)
+_OFFER_NOW = re.compile(r"\b(mau|bisa|boleh|perlu|kalau|kalo|jika|bila|can|could|shall)\b", re.I)
+
+
+def _claims_unmade_write(response: str, tools_seen: list) -> bool:
+    """The answer says something was written / is waiting for approval, but the run called no write tool."""
+    text = response or ""
+    if any(_is_write(t) for t in tools_seen):
+        return False
+    for m in _CLAIM_NOW.finditer(text):
+        start = max(text.rfind(c, 0, m.start()) for c in ".!?\n") + 1
+        ends = [i for i in (text.find(c, m.end()) for c in ".!?\n") if i >= 0]
+        end = min(ends) if ends else len(text)
+        if text[end:end + 1] == "?" or _OFFER_NOW.search(text[start:m.start()]) or _NOT_A_CLAIM.search(text[start:end]):
+            continue
+        return True
+    for m in _CLAIM.finditer(text):
+        start = max(text.rfind(c, 0, m.start()) for c in ".!?\n") + 1
+        ends = [i for i in (text.find(c, m.end()) for c in ".!?\n") if i >= 0]
+        end = min(ends) if ends else len(text)
+        if text[end:end + 1] == "?" or _NOT_A_CLAIM.search(text[start:end]):
+            continue
+        # A bullet under "Bisa jadi:" / "Kemungkinan:" is a guess, not a report.
+        if _SUPPOSE.search(text[max(0, start - 200):start].rstrip("\n -*•")):
+            continue
+        return True
+    return False
+
+
+_ECHO = re.compile(r"\[(You are answering as|Today is|Language:|Model 0 rules|GIDEON runtime note)[^\]]*\]\s*", re.I)
+
+_ID_WORDS = re.compile(r"\b(gw|gue|lo|lu|aku|saya|kamu|yang|dan|ini|itu|buat|untuk|dong|ya|tolong|bikin|tambahin|pasang|kirim|besok|jam)\b", re.I)
+
+
+def _honest_no_write(question: str) -> str:
+    if len(_ID_WORDS.findall(question or "")) >= 1:
+        return ("Gw belum bikin atau ngirim apa-apa — belum ada kartu yang dibuat, jadi belum ada yang berubah di NEXUS. "
+                "Mau gw buatin kartunya sekarang? Lo tetap yang setujuin sebelum jalan.")
+    return ("I haven't created or sent anything yet — no card was made, so nothing changed in NEXUS. "
+            "Want me to prepare it now? You still approve it before it runs.")
+
+
+_CLAIM_NUDGE = (
+    "\n\n[GIDEON runtime note: your previous attempt said the action was done or waiting for approval "
+    "(\"{first}\"), but NO tool was called, so nothing happened and no card exists. Either call the right nexus_* "
+    "write tool now (it makes the approval card; it refuses what this person may not do), or say plainly that "
+    "nothing was created. Never claim a write you did not make.]"
+)
+
+
+def _announced_not_made(response: str, tools_seen: list) -> bool:
+    """True when the final answer reads like a promise to call a tool (rather than a result), Model 0's habit."""
+    text = (response or "").strip()
+    if not text:
+        return False
+    if any(_is_write(t) for t in tools_seen):
+        return False  # an action was already proposed; a retry could propose it twice
+    if _ANNOUNCE_TOOL.search(text):
+        return True
+    # Only the closing paragraph counts: "Gw cek task telat lo — hasilnya: …" opens with the words and then answers.
+    tail = re.split(r"\n\s*\n", text)[-1].strip()[-300:]
+    for m in _ANNOUNCE_VERB.finditer(tail):
+        start = max(tail.rfind(c, 0, m.start()) for c in ".!?:\n") + 1
+        end_candidates = [i for i in (tail.find(c, m.end()) for c in ".!?:\n") if i >= 0]
+        end = min(end_candidates) if end_candidates else len(tail)
+        sentence_head = tail[start:m.start()]
+        # An offer ("kalau mau, gw cek…?"), a lead-in to results ("gw cek: …") or past tense ("yang gw cek tadi").
+        if _OFFER.search(sentence_head) or tail[end:end + 1] in ("?", ":") or _PAST.search(sentence_head):
+            continue
+        return True
+    return False
+
+
+_ANNOUNCE_NUDGE = (
+    "\n\n[GIDEON runtime note: your previous attempt at this message only announced the lookup or action "
+    "(\"{first}\") and ended without calling any tool. Do it now: call the right nexus_* tool in this turn, then answer "
+    "from its result. Never write a tool name or call syntax in the reply, and never end with \"I'll check\".]"
+)
+
+
+# Model 0 with these tools loaded up front still answers "not found" from the workspace search alone (18 Oct 2026, L1:
+# nine search_workspace calls, never nexus_search_legal_documents). Deals, legal documents and bookings live ONLY
+# behind their own tool, so a "not found" without that tool is a miss.
+_DOMAIN_TOOLS = (
+    (re.compile(r"\b(deal|deals|pipeline)\b", re.I), ("nexus_search_deals",)),
+    (re.compile(r"(?<!project )(?<!proyek )\b(legal|kontrak|contract|nda|pks|spk|mou)\b", re.I), ("nexus_search_legal_documents",)),
+    (re.compile(r"\b(ruang|ruangan|room|booking|book|meeting room)\b", re.I), ("nexus_list_room_bookings", "nexus_book_room")),
+)
+
+
+_NONE_HERE = re.compile(r"\b(tidak|nggak|ngga|gak|ga|belum) (ada|ketemu|nemu|nemuin|muncul)\b|\bno (such|matching)\b|\bnothing (found|matches)\b", re.I)
+
+
+def _domain_tool_skipped(question: str, response: str, tools_seen: list):
+    """The tool a deal / legal / room question needed, when the run never called it and answered "not found"."""
+    if not (_NOT_FOUND.search(response or "") or _NONE_HERE.search(response or "")):
+        return None
+    for pattern, tools in _DOMAIN_TOOLS:
+        if pattern.search(question) and not (set(tools) & set(tools_seen)):
+            return tools[0]
+    return None
+
+
+_DOMAIN_NUDGE = (
+    "\n\n[GIDEON runtime note: your previous attempt answered \"not found\" without calling {tool}. That data is ONLY "
+    "reachable through {tool} (the workspace search cannot see it). Call {tool} now, then answer from its result.]"
+)
+
+
+def _question(prompt: str) -> str:
+    """The person's own message: what NEXUS puts after the last "Pesan terbaru dari <name>:" / "Pesan dari"."""
+    for marker in ("Pesan terbaru dari ", "Pesan dari "):
+        i = prompt.rfind(marker)
+        if i >= 0:
+            j = prompt.find(":", i)
+            return prompt[j + 1:] if j >= 0 else prompt[i:]
+    return prompt[-600:]
+
+
+def _patch_hermes(eager: set, cache_scope: str) -> None:
+    """Tool deferral and the prompt-cache scope, for this process only (Hermes itself is untouched)."""
+    import tools.tool_search as ts
+
+    original_core = ts._core_tool_names
+
+    def core_names():
+        names = original_core()
+        if _STATE.get("eager_all"):
+            # The retry: every plugin tool of this session counts as core, so nothing defers.
+            from tools.registry import registry
+            return names | frozenset(e.name for e in registry._snapshot_entries())
+        return names | frozenset(eager)
+
+    ts._core_tool_names = core_names
+    if cache_scope:
+        import agent.chat_completion_helpers as cch
+        cch._prompt_cache_scope_for_agent = lambda _agent: cache_scope
+        # The ChatGPT Codex backend routes its prompt cache by the `session_id` HEADER, not by prompt_cache_key
+        # (measured 18 Oct 2026: same key + per-run session_id = 0 cached; same session_id = 6272 of 6448 cached on
+        # the next run). Requests are store=false and carry their whole input, so the header only picks the cache.
+        import agent.transports.codex as cx
+        build = cx.ResponsesApiTransport.build_kwargs
+
+        def build_kwargs(self, *a, **k):
+            kw = build(self, *a, **k)
+            headers = kw.get("extra_headers")
+            if isinstance(headers, dict) and "session_id" in headers:
+                headers["session_id"] = cache_scope
+            return kw
+
+        cx.ResponsesApiTransport.build_kwargs = build_kwargs
+
+
+_STATE: dict = {}
+
+
+def _patch_sampling(sampling: dict) -> None:
+    """Per-tier sampling (GIDEON_SAMPLING_<TIER>, JSON, e.g. {"temperature":0.6,"top_p":0.95}) on every chat-completions
+    request of this process. Model 0 only (Ollama's OpenAI endpoint takes temperature/top_p/presence_penalty/
+    frequency_penalty/seed); the hosted tiers use another transport and never set it."""
+    import agent.transports.chat_completions as cc
+    build = cc.ChatCompletionsTransport.build_kwargs
+
+    def build_kwargs(self, *a, **k):
+        kw = build(self, *a, **k)
+        if isinstance(kw, dict):
+            kw.update(sampling)
+        return kw
+
+    cc.ChatCompletionsTransport.build_kwargs = build_kwargs
+
+
+def _run(prompt: str, model: str, provider: str, toolsets: list[str], tools_seen: list) -> tuple[str, dict]:
     # Imported here so HERMES_HOME (set by the caller) is in place before Hermes reads anything.
     from gateway.session_context import declare_stateless_channel
     from hermes_cli.config import load_config
@@ -78,6 +358,7 @@ def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[s
             emit({"t": "delta", "c": text})
 
     def on_tool_start(call_id=None, name=None, *_args, **_kw):
+        tools_seen.append(str(name or ""))
         emit({"t": "tool", "phase": "start", "id": str(call_id or ""), "name": str(name or "")})
 
     def on_tool_done(call_id=None, name=None, *_args, **_kw):
@@ -110,6 +391,9 @@ def _run(prompt: str, model: str, provider: str, toolsets: list[str]) -> tuple[s
         agent.tool_start_callback = on_tool_start
         agent.tool_complete_callback = on_tool_done
         result = agent.run_conversation(prompt)
+        # The session row this run wrote in state.db (credits, 18 Oct 2026): the shim reads its usage there.
+        if isinstance(result, dict) and not result.get("session_id"):
+            result["session_id"] = getattr(agent, "session_id", None)
         return (result.get("final_response") or "", result)
     finally:
         _close_agent(agent, session_db)
@@ -130,13 +414,73 @@ def main() -> int:
         emit({"t": "error", "c": "empty prompt"})
         return 2
     toolsets = [t.strip() for t in args.toolsets.split(",") if t.strip()]
+    eager = {t.strip() for t in os.getenv("GIDEON_EAGER_TOOLS", "").split(",") if t.strip()}
+    cache_scope = os.getenv("GIDEON_CACHE_SCOPE", "").strip()
+    retry_on_miss = os.getenv("GIDEON_ROUTER_RETRY", "1") != "0"
+    tier = os.getenv("GIDEON_TIER", "").strip().lower()
+    tier_eager = os.getenv(f"GIDEON_EAGER_TOOLS_{tier.upper()}") if re.fullmatch(r"[a-z0-9_]{1,20}", tier) else None
+    if tier_eager is not None:
+        # Added to the shared list, so a tool someone makes eager for every tier reaches this one too.
+        eager |= {t.strip() for t in tier_eager.split(",") if t.strip()}
+    announce_tiers = {t.strip() for t in os.getenv("GIDEON_ANNOUNCE_RETRY_TIERS", "experimental").split(",") if t.strip()}
+    # A retry runs the whole question again. After a slow first attempt (privacy suite, 19 Oct 2026: 5 min) it would
+    # hit the shim's kill timer and the person gets nothing, so past this budget there is no retry; a false write claim
+    # is then replaced by the honest line straight away.
+    retry_budget = float(os.getenv("GIDEON_RETRY_BUDGET_SEC", "150"))
+    import time
+    started = time.monotonic()
+    sampling = {}
+    if tier:
+        try:
+            raw = os.getenv(f"GIDEON_SAMPLING_{tier.upper()}", "") if re.fullmatch(r"[a-z0-9_]{1,20}", tier) else ""
+            allowed = {"temperature", "top_p", "presence_penalty", "frequency_penalty", "seed"}
+            sampling = {k: v for k, v in (json.loads(raw) if raw else {}).items() if k in allowed and isinstance(v, (int, float))}
+        except Exception:
+            sampling = {}
 
     logging.disable(logging.CRITICAL)
     failure = None
     response, result = "", {}
+    tools_seen: list = []
+    sessions: list = []
     with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull), redirect_stderr(devnull):
         try:
-            response, result = _run(prompt, args.model, args.provider, toolsets)
+            if eager or cache_scope:
+                _patch_hermes(eager, cache_scope)
+            if sampling:
+                _patch_sampling(sampling)
+            response, result = _run(prompt, args.model, args.provider, toolsets, tools_seen)
+            sessions.append(result.get("session_id"))
+            # Only when tools were deferred at all, the run never touched the bridge, and the answer reads as "can't".
+            missed = bool((response or "").strip()) and (
+                _MISS.search(response) or (_DEFERRED_DOMAIN.search(_question(prompt)) and _NOT_FOUND.search(response)))
+            if retry_on_miss and eager and missed and not (_BRIDGE & set(tools_seen)):
+                emit({"t": "router_miss", "first": response.strip()[:300], "tools": [t for t in tools_seen if t][:20]})
+                emit({"t": "reset"})
+                _STATE["eager_all"] = True
+                import model_tools
+                model_tools._clear_tool_defs_cache()
+                first_result = result
+                response, result = _run(prompt, args.model, args.provider, toolsets, tools_seen)
+                sessions.append(result.get("session_id"))
+                for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
+                    result[k] = (result.get(k) or 0) + (first_result.get(k) or 0)
+            elif tier in announce_tiers and time.monotonic() - started < retry_budget and (
+                    (claimed := _claims_unmade_write(response, tools_seen))
+                    or (skipped := _domain_tool_skipped(_question(prompt), response, tools_seen))
+                    or _announced_not_made(response, tools_seen)):
+                first = response.strip()
+                kind = "claim" if claimed else "domain" if skipped else "announce"
+                emit({"t": "router_miss", "kind": kind, "first": first[:300], "tools": [t for t in tools_seen if t][:20]})
+                emit({"t": "reset"})
+                first_result = result
+                snippet = re.sub(r"\s+", " ", first)[-160:].replace('"', "'")
+                nudge = (_CLAIM_NUDGE.format(first=snippet) if claimed else _DOMAIN_NUDGE.format(tool=skipped) if skipped
+                         else _ANNOUNCE_NUDGE.format(first=snippet))
+                response, result = _run(prompt + nudge, args.model, args.provider, toolsets, tools_seen)
+                sessions.append(result.get("session_id"))
+                for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
+                    result[k] = (result.get(k) or 0) + (first_result.get(k) or 0)
         except BaseException as exc:  # noqa: BLE001 - must reach the caller, never die silently
             failure = exc
     if failure is not None:
@@ -146,7 +490,22 @@ def main() -> int:
     if not response:
         emit({"t": "error", "c": "no final response was produced"})
         return 1
-    usage = {k: result.get(k) for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "model", "provider")}
+    # The shim's own bracketed lines echoed back (Model 0, privacy B18: the answer opened with "[You are answering as
+    # GIDEON Model 0 …] [Today is …]"). They are instructions, never part of an answer.
+    scrubbed = _ECHO.sub("", response).strip()
+    if scrubbed != response and scrubbed:
+        emit({"t": "reset"})
+        response = scrubbed
+    # Last guard (Model 0): still claiming a write that no tool made, after the retry → say so honestly instead.
+    if tier in announce_tiers and _claims_unmade_write(response, tools_seen):
+        emit({"t": "router_miss", "kind": "claim-replaced", "first": response[:300], "tools": [t for t in tools_seen if t][:20]})
+        emit({"t": "reset"})
+        response = _honest_no_write(_question(prompt))
+    # Additive (18 Oct 2026, GIDEON credits): the cache / reasoning buckets and the Hermes session id(s) — two when
+    # the router-miss retry ran; the shim bills both. Older NEXUS servers read only total_tokens from here.
+    usage = {k: result.get(k) for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls", "model", "provider",
+                                        "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "session_id")}
+    usage["session_ids"] = [s for s in sessions if s]
     emit({"t": "final", "c": response, "usage": usage})
     return 0
 

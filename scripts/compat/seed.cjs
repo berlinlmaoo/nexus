@@ -56,7 +56,7 @@ async function main() {
   const workspace = await prisma.workspace.create({
     // The company workspace id (lib/org.ts ORG_WORKSPACE_ID): company-level powers (XP adjust,
     // announcements, Control Room) come only from a role in it, so the fixtures must live in it.
-    data: fit("Workspace", { id: "cmmroq7dk0001vewe92nk1g0w", name: "Compat Workspace", slug: "compat-ws", joinCode: "COMPAT1" }),
+    data: fit("Workspace", { id: "019cf14d-ebd8-7000-b947-67d4138beaf3", name: "Compat Workspace", slug: "compat-ws", joinCode: "COMPAT1" }),
   })
   const office = await prisma.officeLocation.create({
     data: fit("OfficeLocation", {

@@ -331,3 +331,39 @@ The WebSocket server runs at `pages/api/socket.ts` (Next.js Pages API).
 | `comment-added` | Comment object | `project:{projectId}` |
 | `sprint-updated` | Sprint object | `project:{projectId}` |
 | `new-notification` | Notification object | `user:{userId}` |
+
+## Native client additions (19 October 2026)
+
+Native clients refresh `GET /user/profile` before restoring a saved session's shell; IDs are opaque, including UUIDv7. Credentials survive an ID migration. Document-capable chat clients send `X-Nexus-Caps: chat-files` and decode attachment name/size on messages, replies and Docs entries.
+
+| Method | Endpoint | Native use |
+|--------|----------|------------|
+| GET | `/calendar/structure` | Includes optional `folders`; old responses remain compatible. |
+| GET | `/calendar/items`, `/calendar/overdue` | Optional comma-separated `folder` filter, combined with other filters. Folder entries open the main Calendar. |
+| GET, PUT | `/gideon/prefs` | `reviewNotice`; dismiss with only `{reviewNoticeSeen:true}`. |
+| GET | `/gideon/people/:userId` | BoD/OAA person overview and credit period. |
+| GET | `/gideon/people/:userId/chats`, `/gideon/people/:userId/chats/:chatId` | OAA-only, paged read-only chat review; BoD gets 403. |
+| GET | `/gideon/perf`, `/gideon/tiers` | Performance telemetry and live tier availability. |
+| GET | `/gideon/task-targets?projectId=:id` | Editable project sections/members for a pending create-task card. |
+| POST | `/gideon/proposals/:id` | Apply/discard. Delete-task Apply echoes `confirm.taskId`; new tool writes echo `confirm.proposalId`; create-task picker sends `task` with project/section/PIC/date. |
+| GET | `/gideon/files/:id` | Owner-only PDF/DOCX/XLSX download (30 days); native cookie download preserves the server filename. |
+| GET, POST | `/reminders` | Upcoming/done lists (`done=1`), create text ≤280 and future `remindAt`; local picker uses WIB. |
+| DELETE | `/reminders/:id` | Cancel an own reminder. |
+| GET, POST | `/meetings` | Meeting notes (Beta); gated by `meetingNotesEnabled`, `meetingMaxMinutes` and `meetingMaxMB`. |
+| GET, PATCH, DELETE | `/meetings/:id` | Detail, versioned dirty-field autosave (`VERSION_CONFLICT` returns current meeting), delete audio immediately/retain restorable notes 90 days. |
+| PUT, POST | `/meetings/:id/audio?offset=:bytes`, `/meetings/:id/audio/complete` | Resumable background upload; server `audio.received` is authoritative on relaunch. |
+| POST | `/meetings/:id/apply`, `/meetings/:id/retry` | Flush draft before Apply; saved page/tasks are retained independently of meeting deletion. |
+
+Realtime: `meeting-changed`, `reminders-changed`, `gideon-tiers`, and `gideon-perf` (join `gideon:perf` only while foreground/visible). Notifications route meeting IDs to `/meetings/:id`, reminders to `/reminders`, and GIDEON alerts to `/admin?tab=gideon&gideon=performance`.
+
+### Native presence (DEV, 19 Oct 2026)
+
+`GET /api/presence` supplies workspace-visible statuses; `?userId=me` supplies the current person. Native draws `label.en/id`, `tone`, and `until` as returned, including unknown state/reason values. No presence coordinates, address or map are decoded or displayed. `flags.presenceStatus` defaults true; either the config flag or API `enabled:false` hides the feature.
+
+`PUT /api/presence/manual` sends `text`, nullable `startsAt`, `endsAt` (ISO instants) and, from N-1 (19 Oct 2026), optional `availability` = `online` | `away` | `dnd` (missing = `away`, which is what 0.1.6 and older send). Every status carries `availability` (the running manual status's value, else null) and `manual.availability`; a running Do not disturb status has `state` `dnd`, tone `red`, label "Do not disturb · <text>" / "Jangan diganggu · <text>". `DELETE /api/presence/manual?id=<displayed manual id>` protects a replacement set from another device; adopt the returned status even when `cleared:0`. Refusals display the server's `error`. Presence changes neither attendance nor notifications. The `presence-changed` socket event patches one shared session cache; reconnect and a fixed 60-second foreground fallback refetch the workspace list. GIDEON `set_my_status` uses the generic approval card with `confirm.proposalId`.
+
+### Native GIDEON Memory (DEV, 19 Oct 2026)
+
+`/api/gideon/memory` is always scoped to the current session, with no user selector. GET returns `{paused,max,textMax,memories}`; POST adds `{text,kind,date?}`, PATCH changes `{paused}`, DELETE forgets everything. PATCH `/:id` edits fields or saves a pending suggestion with `{status:"ACTIVE"}`; DELETE `/:id` forgets it (404 is already gone). Native uses an ephemeral session with no URL cache. Memory data is never sent to notifications, widgets, Live Activities, Spotlight or logs; logout and identity changes clear its in-memory store.
+
+The GIDEON SSE `memory` event and own history `meta.memories` render inline suggestion/saved/forgotten rows. OAA review explicitly excludes memory metadata and never mounts memory chips. ID refusal mapping covers `secret`, `paused`, and `full`; other errors retain the server sentence.

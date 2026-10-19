@@ -5,6 +5,13 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { taskWriteRefusal } from "@/lib/write-access"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
+import { emitCommentAdded } from "@/lib/socket-emitter"
+
+/** Realtime (QA final 19 Oct): the others' open task refetches its like count (comment-added = "refetch this task" on every client). */
+async function pingLikes(taskId: string) {
+  const t = await prisma.task.findUnique({ where: { id: taskId }, select: { taskList: { select: { projectId: true } } } })
+  if (t?.taskList?.projectId) emitCommentAdded(t.taskList.projectId, taskId, { taskId, change: "like" })
+}
 
 export async function GET(
   _request: NextRequest,
@@ -51,17 +58,22 @@ export async function POST(
 
     if (existing) {
       // Unlike
-      await prisma.taskLike.delete({
-        where: { taskId_userId: { taskId: (await params).taskId, userId: session.user.id } },
+      // deleteMany: a second tap racing this one may have removed the like already (delete would throw P2025 → 500).
+      await prisma.taskLike.deleteMany({
+        where: { taskId: (await params).taskId, userId: session.user.id },
       })
       const count = await prisma.taskLike.count({ where: { taskId: (await params).taskId } })
+      void pingLikes((await params).taskId).catch(() => {})
       return NextResponse.json({ liked: false, count })
     } else {
       // Like
-      await prisma.taskLike.create({
-        data: { taskId: (await params).taskId, userId: session.user.id },
+      // ON CONFLICT DO NOTHING: a concurrent tap that already added the like is not an error.
+      await prisma.taskLike.createMany({
+        data: [{ taskId: (await params).taskId, userId: session.user.id }],
+        skipDuplicates: true,
       })
       const count = await prisma.taskLike.count({ where: { taskId: (await params).taskId } })
+      void pingLikes((await params).taskId).catch(() => {})
       return NextResponse.json({ liked: true, count })
     }
   } catch (error) {
@@ -91,8 +103,9 @@ export async function DELETE(
     const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true } })
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
 
-    await prisma.taskLike.deleteMany({ where: { taskId, userId: session.user.id } })
+    const { count: removed } = await prisma.taskLike.deleteMany({ where: { taskId, userId: session.user.id } })
     const count = await prisma.taskLike.count({ where: { taskId } })
+    if (removed > 0) void pingLikes(taskId).catch(() => {})
     return NextResponse.json({ liked: false, count, likeCount: count })
   } catch (error) {
     console.error("Error removing task like:", error)

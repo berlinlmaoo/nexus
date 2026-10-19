@@ -204,6 +204,8 @@ export async function offboardUser(input: OffboardInput, tx: Prisma.TransactionC
   const apiTokens = await tx.apiToken.deleteMany({ where: { userId } })
   await tx.oAuthAuthCode.deleteMany({ where: { userId } })
   const devices = await tx.deviceInstallation.deleteMany({ where: { userId } })
+  // GIDEON Memory is the person's own (owner, 19 Oct 2026): it leaves with them, for good.
+  await tx.gideonMemory.deleteMany({ where: { userId } })
 
   // 5. Automatic deductions for days after they left are not theirs to carry: CANCELED, never deleted.
   //    The where clause is isAutoDeduction (lib/attendance-absence.ts) in SQL.

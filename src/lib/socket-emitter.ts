@@ -47,6 +47,14 @@ export function emitFormResponsesChanged(projectId: string, formId: string) {
   eventBus.emit(BUS_EVENTS.FORM_RESPONSES_CHANGED, { projectId, formId })
 }
 
+/**
+ * A form's questions/title/settings changed (live co-editing, 19 Oct 2026): the payload (lib/form-coedit-server.ts
+ * announceFormChange) goes to `form:<id>`, whose sockets were admitted with Can edit on the project.
+ */
+export function emitFormOps(projectId: string, formId: string, payload: Record<string, unknown>) {
+  eventBus.emit(BUS_EVENTS.FORM_OPS, { projectId, formId, payload })
+}
+
 /** Emit a notification to a specific user's room */
 export function emitNotification(userId: string, notification: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.NOTIFICATION, { userId, notification })
@@ -125,7 +133,7 @@ export function originTabOf(req: { headers: { get(name: string): string | null }
   return v && /^[A-Za-z0-9_-]{6,64}$/.test(v) ? v : null
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal" | "bookings"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
@@ -247,6 +255,26 @@ export function emitAutomationsChanged(projectId: string, automationId: string |
  */
 export function emitGideonCredits(userId: string, summary: unknown) {
   publishSafely(BUS_EVENTS.GIDEON_CREDITS, { userId, summary })
+}
+
+/** `reminders-changed` { id } to `user:<id>` (personal reminders, 18 Oct 2026): the Reminders page refetches. */
+export function emitRemindersChanged(userId: string, id: string) {
+  publishSafely(BUS_EVENTS.REMINDERS_CHANGED, { userId, id })
+}
+
+/**
+ * `attendance-changed` { kind, id } to each `user:<id>` (QA final 19 Oct 2026, C-17): the person just decided or
+ * changed something in attendance, so their other devices refetch the approval queue / board / today card.
+ * kind: "request" | "offsite" | "override" | "correction" | "dayoff_bonus" | "dayoff".
+ */
+export function emitAttendanceChanged(userIds: Array<string | null | undefined>, kind: string, id: string | null) {
+  const ids = [...new Set(userIds.filter((u): u is string => typeof u === "string" && u.length > 0))]
+  if (ids.length) publishSafely(BUS_EVENTS.ATTENDANCE_CHANGED, { userIds: ids, kind, id })
+}
+
+/** `xp-changed` { userIds } to `workspace:<id>` rooms (C-D2): open leaderboards refetch. Use lib/xp-realtime.ts noteXpChanged. */
+export function emitXpChanged(workspaceIds: string[], userIds: string[]) {
+  if (workspaceIds.length && userIds.length) publishSafely(BUS_EVENTS.XP_CHANGED, { workspaceIds, userIds })
 }
 
 function publishSafely(event: string, data: unknown) {

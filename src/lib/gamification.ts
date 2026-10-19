@@ -1,8 +1,9 @@
 import prisma from "@/lib/prisma"
 import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import type { Prisma } from "@/generated/prisma/client"
-import { randomUUID } from "crypto"
+import { uuidv7 } from "@/lib/uuid7"
 import { attendanceDayBlockedTx, attendanceDayOfReason, lockAttendanceDay, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
+import { noteXpChanged } from "@/lib/xp-realtime"
 
 // ===== Levels (mirror apps/web/src/lib/levels.ts) =====
 // Period-based scoring: every user starts each period at PERIOD_BASELINE_XP (1000 =
@@ -103,11 +104,12 @@ export async function applyXpDelta(tx: Prisma.TransactionClient, userId: string,
   // used when the row is new; any unique string is a valid UserXp id.
   await tx.$executeRaw`
     INSERT INTO "UserXp" ("id", "userId", "totalXp", "currentLevel", "updatedAt")
-    VALUES (${randomUUID()}, ${userId}, ${delta}, ${level}, NOW())
+    VALUES (${uuidv7()}, ${userId}, ${delta}, ${level}, NOW())
     ON CONFLICT ("userId") DO UPDATE
       SET "totalXp" = "UserXp"."totalXp" + EXCLUDED."totalXp",
           "currentLevel" = EXCLUDED."currentLevel",
           "updatedAt" = NOW()`
+  noteXpChanged(userId)
 }
 
 /** The period level of a user right now (what UserXp.currentLevel holds, recomputed: a new period resets it). */

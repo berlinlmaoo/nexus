@@ -26,6 +26,7 @@ struct OutletFormRequest: Equatable {
 /// What the report form holds while someone types: every answer as text (numbers as typed, grouped),
 /// next to what it was when opened, so a save sends only what changed.
 struct OutletDraft: Equatable {
+    var clientRequestId = UUID().uuidString
     var eventId: String?
     var date: String
     var values: [String: String]
@@ -279,7 +280,7 @@ final class OutletSalesStore {
             if let id = draft.eventId {
                 saved = try await APIClient.shared.outletUpdateEvent(projectId: projectId, eventId: id, fields: body)
             } else {
-                saved = try await APIClient.shared.outletCreateEvent(projectId: projectId, fields: body)
+                saved = try await APIClient.shared.outletCreateEvent(projectId: projectId, fields: body.merging(["clientRequestId": draft.clientRequestId]) { _, new in new })
             }
             loose[saved.id] = saved
             draft = .from(saved, config: config)

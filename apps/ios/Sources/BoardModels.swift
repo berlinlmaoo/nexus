@@ -107,6 +107,9 @@ struct TaskQuestRef: Decodable, Identifiable, Sendable {
 struct BoardParent: Sendable { let id: String; let title: String? }
 
 struct BoardTask: Decodable, Identifiable, Sendable {
+    var position: Int? = nil
+    var createdAt: String? = nil
+    var updatedAt: String? = nil
     let id: String
     let title: String
     let status: String?
@@ -144,7 +147,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
-        case parentId, taskListId, quests, completedAt, completedById
+        case parentId, taskListId, quests, completedAt, completedById, position, createdAt, updatedAt
         case count = "_count"
     }
 
@@ -160,16 +163,18 @@ struct BoardTask: Decodable, Identifiable, Sendable {
         return String(c).uppercased()
     }
     /// Up to 3 assignees (avatar URL + initial) for a small overlapping stack on the card.
-    var assigneeAvatars: [(id: String, initial: String, url: String?)] {
+    var assigneeAvatars: [(id: String, initial: String, url: String?, userId: String?, name: String)] {
         (assignees ?? []).prefix(3).enumerated().map { idx, a in
             let n = a.user?.name ?? "?"
-            return (id: a.user?.id ?? "a\(idx)", initial: String(n.first ?? "?").uppercased(), url: a.user?.avatar)
+            return (id: a.user?.id ?? "a\(idx)", initial: String(n.first ?? "?").uppercased(), url: a.user?.avatar, userId: a.user?.id, name: n)
         }
     }
 }
 
 /// GET /api/tasks/{id} — focused task-detail fields.
 struct TaskDetail: Decodable, Sendable {
+    var tags: [String]? = nil
+    var updatedAt: String? = nil
     let id: String
     let title: String
     let description: String?
@@ -197,7 +202,7 @@ struct TaskDetail: Decodable, Sendable {
         let createdAt: String?
         let user: UserRef?
         /// `avatar` tells the system user "Automation" apart (SystemUsers).
-        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String? }
+        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String?; var id: String? = nil }
     }
 
     struct TaskListInfo: Decodable, Sendable {
@@ -219,7 +224,7 @@ struct TaskDetail: Decodable, Sendable {
         let content: String?
         let createdAt: String?
         let user: UserRef?
-        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String? }
+        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String?; var id: String? = nil }
     }
     struct ParentRef: Decodable, Sendable { let id: String; let title: String? }
 

@@ -35,7 +35,7 @@ struct Complaint: Decodable, Identifiable, Sendable {
     /// How many messages the thread holds (the web table's Replies column). nil from an older server.
     let messageCount: Int?
 
-    struct Reporter: Decodable, Sendable { let name: String?; let avatar: String? }
+    struct Reporter: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     struct Attachment: Decodable, Sendable { let url: String? }
 
     var statusKey: String { (status ?? "OPEN").uppercased() }
@@ -502,7 +502,7 @@ struct TicketsView: View {
             if isBod {
                 HStack(spacing: 8) {
                     if let r = t.reporter {
-                        AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20)
+                        AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20, userId: r.id, name: r.name)
                     }
                     // No anonymous tickets (owner, 16 Oct 2026): a missing reporter is someone who left.
                     Text(t.reporter?.name ?? T("Former member")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
@@ -552,7 +552,7 @@ struct TicketsView: View {
                 // With the person's face, as the web's From column (UI tour run 15, Q-IB22).
                 if isBod, let r = t.reporter, let n = r.name, !n.isEmpty {
                     HStack(spacing: 5) {
-                        AvatarView(url: r.avatar, initial: String(n.prefix(1)).uppercased(), size: 16)
+                        AvatarView(url: r.avatar, initial: String(n.prefix(1)).uppercased(), size: 16, userId: r.id, name: r.name)
                         Text(String(format: T("from %@"), n)).lineLimit(1)
                     }
                 }
@@ -828,7 +828,7 @@ struct TicketDetailSheet: View {
                         if let n = ticket.reporter?.name, !n.isEmpty {
                             HStack(spacing: 8) {
                                 AvatarView(url: ticket.reporter?.avatar,
-                                           initial: String(n.first ?? "?").uppercased(), size: 30)
+                                           initial: String(n.first ?? "?").uppercased(), size: 30, userId: ticket.reporter?.id, name: n)
                                 Text(n).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                             }
                         }
@@ -973,7 +973,7 @@ struct TicketDetailSheet: View {
                 .overlay(Circle().strokeBorder(NX.border))
         } else {
             AvatarView(url: m.author?.avatar,
-                       initial: String((m.author?.name ?? "?").first ?? "?").uppercased(), size: 28)
+                       initial: String((m.author?.name ?? "?").first ?? "?").uppercased(), size: 28, userId: m.author?.id, name: m.author?.name)
         }
     }
 
@@ -1192,7 +1192,7 @@ struct AttendanceCorrectionCard: View {
             }
             if let by = c.proposedBy?.name, !by.isEmpty {
                 HStack(spacing: 6) {
-                    AvatarView(url: c.proposedBy?.avatar, initial: String(by.first ?? "?").uppercased(), size: 20)
+                    AvatarView(url: c.proposedBy?.avatar, initial: String(by.first ?? "?").uppercased(), size: 20, userId: c.proposedBy?.id, name: by)
                     Text("\(T("Proposed by")) \(by)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
             }

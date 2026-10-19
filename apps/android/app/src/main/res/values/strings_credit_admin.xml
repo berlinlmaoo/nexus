@@ -1,0 +1,18 @@
+<resources>
+    <string name="gca_role_default">Role default</string>
+    <string name="gca_daily">Daily limit</string>
+    <string name="gca_period">Period pool</string>
+    <string name="gca_note">Note</string>
+    <string name="gca_save_limits">Save limits</string>
+    <string name="gca_bonus">Bonus credits</string>
+    <string name="gca_bonus_help">Added to this person\'s pool for the current period. Unused bonus credits expire with the period.</string>
+    <string name="gca_credits">Credits</string>
+    <string name="gca_reason">Reason</string>
+    <string name="gca_grant">Grant bonus</string>
+    <string name="gca_confirm">Grant %1$s bonus credits?</string>
+    <string name="gca_role_defaults">Role defaults</string>
+    <string name="gca_save_defaults">Save role defaults</string>
+    <string name="gca_board">Board of Directors</string>
+    <string name="gca_manager">Manager</string>
+    <string name="gca_staff">Staff</string>
+</resources>

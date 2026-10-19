@@ -1,0 +1,7 @@
+<resources>
+    <string name="gsd_save">Save as page</string>
+    <string name="gsd_title">Page title</string>
+    <string name="gsd_search">Search projects</string>
+    <string name="gsd_this_project">This project: %1$s</string>
+    <string name="gsd_no_project">No matching projects.</string>
+</resources>

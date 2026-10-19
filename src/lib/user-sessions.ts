@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { getSessionCookieName } from "@/lib/session-cookie"
 import { createLogger } from "@/lib/logger"
 import { clientIpFromHeaders } from "@/lib/client-ip"
+import { normalizeTokenUserId } from '@/lib/legacy-ids'
 
 /**
  * The session list behind Settings → Security → Active sessions (12 Oct 2026).
@@ -216,7 +217,8 @@ export async function readSessionToken(req: { cookies: { get(name: string): { va
   const raw = req.cookies.get(cookieName)?.value
   if (!secret || !raw) return null
   try {
-    return ((await decode({ token: raw, secret, salt: cookieName })) as TokenLike | null) ?? null
+    const token = ((await decode({ token: raw, secret, salt: cookieName })) as TokenLike | null) ?? null
+    return token ? await normalizeTokenUserId(token as Record<string, unknown>) as TokenLike : null
   } catch {
     return null
   }

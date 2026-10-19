@@ -65,10 +65,10 @@ struct Project: Decodable, Identifiable, Sendable {
             return String(n.first ?? "?").uppercased()
         }
     }
-    var memberAvatars: [(id: Int, initial: String, url: String?)] {
+    var memberAvatars: [(id: Int, initial: String, url: String?, userId: String?, name: String)] {
         (members ?? []).prefix(4).enumerated().map { i, m in
             let n = m.user?.name ?? "?"
-            return (i, String(n.first ?? "?").uppercased(), m.user?.avatar)
+            return (i, String(n.first ?? "?").uppercased(), m.user?.avatar, m.user?.id, n)
         }
     }
 

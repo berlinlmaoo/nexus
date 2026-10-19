@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Check, ChevronRight, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
   FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, ListChecks, Loader2, Lock, Music,
-  MoreHorizontal, Pencil, RefreshCw, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload, X,
+  MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload, X, ArrowLeft,
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -130,6 +130,7 @@ function VaultPage() {
   const [replacing, setReplacing] = useState<VaultItem | null>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
   const [viewer, setViewer] = useState<{ items: VaultItem[]; index: number } | null>(null);
+  const [storageOpen, setStorageOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Multi-select. `selected`: ids, in no order (the page's order is `ordered` below). `anchor`: where a
@@ -724,23 +725,6 @@ function VaultPage() {
       item.kind === "FOLDER" && item.minWriteRole ? t("adding: {who}", { who: t(roleLabel(item.minWriteRole)) }) : null,
     ].filter(Boolean).join(" · ");
 
-  /** Share, on every card and tile — not only behind ⋮ (owner, 9 Oct 2026: nobody found it there). */
-  const shareButton = (item: VaultItem, size: "card" | "tile" = "card") =>
-    trash ? null : (
-      <button
-        type="button"
-        onClick={() => setSharing(item)}
-        className={cn(
-          "grid place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          "h-8 w-8",
-        )}
-        aria-label={t("Share {name}", { name: item.name })}
-        title={t("Share")}
-      >
-        <Share2 className="h-4 w-4" />
-      </button>
-    );
-
   /** Enter on a focused card opens it, as a click does; Space does too, or selects it while selecting.
    *  The menu key or Shift+F10 opens its right-click menu. */
   const activate = (item: VaultItem) => (e: ReactKeyboardEvent<HTMLElement>) => {
@@ -784,7 +768,8 @@ function VaultPage() {
         >
           <Icon className={cn("h-5 w-5 shrink-0", isFolder ? "text-primary" : "text-muted-foreground", !selecting && !trash && "pointer-fine:group-hover:opacity-0")} />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium">{item.name}</span>
+            {/* Two lines before the cut, full name on hover (B-D2, 19 Oct 2026: "Ringkasan Rapat…" at 1440). */}
+            <span className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]" title={item.name}>{item.name}</span>
             <span className="block truncate text-xs text-muted-foreground">
               {isFolder ? tn(item.childCount, "{n} item", "{n} items") : humanSize(item.size)}
               {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
@@ -804,7 +789,6 @@ function VaultPage() {
             <Lock className="h-3.5 w-3.5" aria-hidden />
           </span>
         )}
-        {shareButton(item)}
         {itemMenu(item)}
       </div>,
     );
@@ -845,7 +829,7 @@ function VaultPage() {
       </div>
       <div className="flex items-center gap-1 pl-2.5 pr-1 py-1.5">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium" title={item.name}>{item.name}</p>
+          <p className="line-clamp-2 text-xs font-medium [overflow-wrap:anywhere]" title={item.name}>{item.name}</p>
           <p className="truncate text-[11px] text-muted-foreground">
             {humanSize(item.size)}
             {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
@@ -859,7 +843,6 @@ function VaultPage() {
             <Lock className="h-3 w-3" aria-hidden />
           </span>
         )}
-        {shareButton(item, "tile")}
         {itemMenu(item, "tile")}
       </div>
     </div>,
@@ -888,34 +871,44 @@ function VaultPage() {
                 className="pl-8 w-48"
               />
             </div>
-            {!trash && items.length > 0 && (
-              // Touch has no Cmd or Ctrl to hold: this is how a phone selects several.
-              <Button
-                variant={selecting ? "default" : "outline"}
-                size="sm"
-                aria-pressed={selecting}
-                onClick={() => (selecting ? clearSelection() : setSelectMode(true))}
-              >
-                <ListChecks className="h-4 w-4 mr-1.5" />
-                {selecting ? t("Done") : t("Select")}
-              </Button>
+            {selecting && !trash && (
+              <Button size="sm" variant="default" onClick={clearSelection}>{t("Done")}</Button>
             )}
-            <Button variant={trash ? "default" : "outline"} size="sm" onClick={() => setTrash(!trash)}>
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              {t("Trash")}
-            </Button>
+            {/* UI round 19 Oct 2026 (U-5): one "+" for what adds, one "⋯" for the rest, instead of a row of four buttons. */}
             {!trash && data?.canWrite && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setNewFolder("")}>
-                  <FolderPlus className="h-4 w-4 mr-1.5" />
-                  {t("Folder")}
-                </Button>
-                <Button size="sm" onClick={() => fileInput.current?.click()}>
-                  <Upload className="h-4 w-4 mr-1.5" />
-                  {t("Upload")}
-                </Button>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" className="h-9 w-9" aria-label={t("Add to the vault")} title={t("Add to the vault")}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" lang={lang}>
+                  <DropdownMenuItem onSelect={() => fileInput.current?.click()}><Upload className="h-4 w-4 mr-2" /> {t("Upload file")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setNewFolder("")}><FolderPlus className="h-4 w-4 mr-2" /> {t("New folder")}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" className="h-9 w-9" aria-label={t("More actions")} title={t("More actions")}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" lang={lang} className="min-w-[11rem]">
+                {!trash && (
+                  // Touch has no Cmd or Ctrl to hold: this is how a phone selects several.
+                  <DropdownMenuItem disabled={!items.length} onSelect={() => (selecting ? clearSelection() : setSelectMode(true))}>
+                    <ListChecks className="h-4 w-4 mr-2" /> {selecting ? t("Done selecting") : t("Select")}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => setTrash(!trash)}>
+                  {trash ? <ArrowLeft className="h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} {trash ? t("Back to the vault") : t("Trash")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!data} onSelect={() => setStorageOpen(true)}>
+                  <HardDrive className="h-4 w-4 mr-2" /> {t("Storage")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
@@ -965,25 +958,8 @@ function VaultPage() {
           />
         </div>
 
-        {/* quota */}
-        {data && (
-          <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-1.5 w-40 min-w-0 shrink rounded-full bg-muted overflow-hidden">
-              <div
-                className={cn("h-full rounded-full", quotaPct > 90 ? "bg-destructive" : "bg-primary")}
-                // At least a visible sliver once anything is stored: 19 MB of 60 GB rounded to 0% and the meter read
-                // as empty or broken (UI tour run 20, R20-WB-13).
-                style={{ width: data.quota.usedBytes > 0 ? `max(4px, ${quotaPct}%)` : "0%" }}
-              />
-            </div>
-            <span className="shrink-0">
-              {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
-            </span>
-          </div>
-        )}
-
         {/* breadcrumb — every crumb is also a drop target: "Vault" is the top level */}
-        {browsing && (
+        {browsing && crumbs.length > 0 && (
           <nav aria-label={t("Folder path")} className="mb-3 flex items-center gap-1 text-sm flex-wrap">
             <button
               className={cn(
@@ -1018,6 +994,10 @@ function VaultPage() {
             <p className="text-sm text-muted-foreground">
               {t("Files in the trash still count against the quota. Emptying it frees the space; for 90 days an admin can still bring them back from Control Room → Audit.")}
             </p>
+            <div className="flex shrink-0 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setTrash(false)}>
+              <ArrowLeft className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">{t("Back to the vault")}</span>
+            </Button>
             <Button
               variant="destructive"
               size="sm"
@@ -1026,6 +1006,7 @@ function VaultPage() {
             >
               {emptyTrash.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Empty")}
             </Button>
+            </div>
           </div>
         )}
 
@@ -1070,6 +1051,24 @@ function VaultPage() {
             )}
           </div>
         )}
+
+        {/* storage: at the bottom of the list (U-5), and in ⋯ › Storage */}
+        {data && (
+          <div className="mt-6 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-1.5 w-40 min-w-0 shrink rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn("h-full rounded-full", quotaPct > 90 ? "bg-destructive" : "bg-primary")}
+                // At least a visible sliver once anything is stored: 19 MB of 60 GB rounded to 0% and the meter read
+                // as empty or broken (UI tour run 20, R20-WB-13).
+                style={{ width: data.quota.usedBytes > 0 ? `max(4px, ${quotaPct}%)` : "0%" }}
+              />
+            </div>
+            <span className="shrink-0">
+              {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
+            </span>
+          </div>
+        )}
+
       </div>
 
       {/* The selection's actions. On a phone at the top, clear of the tab bar, GIDEON and the upload
@@ -1161,6 +1160,33 @@ function VaultPage() {
       />
       <PreviewDialog item={preview} onClose={() => setPreview(null)} onShare={(i) => { setPreview(null); setSharing(i); }} />
       <VaultShareDialog item={sharing} onClose={() => setSharing(null)} />
+
+      <Dialog open={storageOpen} onOpenChange={setStorageOpen}>
+        <DialogContent lang={lang} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("Storage")}</DialogTitle>
+            <DialogDescription>{t("Shared by the whole office. Files in the trash still count until it is emptied.")}</DialogDescription>
+          </DialogHeader>
+          {data && (
+            <div className="space-y-2">
+              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full", quotaPct > 90 ? "bg-destructive" : "bg-primary")}
+                  style={{ width: data.quota.usedBytes > 0 ? `max(4px, ${quotaPct}%)` : "0%" }}
+                />
+              </div>
+              <p className="text-sm">
+                {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
+                <span className="text-muted-foreground"> · {quotaPct === 0 && data.quota.usedBytes > 0 ? "<1" : quotaPct}%</span>
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            {!trash && <Button variant="outline" onClick={() => { setStorageOpen(false); setTrash(true); }}>{t("Open the trash")}</Button>}
+            <Button onClick={() => setStorageOpen(false)}>{t("Close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={newFolder !== null} onOpenChange={(o) => !o && setNewFolder(null)}>
         <DialogContent lang={lang} className="max-w-sm">
@@ -1283,15 +1309,85 @@ function VaultPage() {
   );
 }
 
-// ── preview (PDFs, sound, everything that is not a picture or a film) ────────
+// ── preview (PDFs, sound, text, office files — everything that is not a picture or a film) ─────────
+// UI round 19 Oct 2026 (U-5): a .docx or .md opened as "can't be previewed" and read like a download.
+// Text is read and shown as text; office files are shown as the PDF the server makes of them
+// (`previewUrl`, /api/vault/items/<id>/preview); only what neither covers says "can't be previewed".
+
+const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|log|xml|ya?ml|ini|conf|srt|vtt)$/i;
+/** Read at most this much of a text file for the preview. */
+const TEXT_PREVIEW_BYTES = 512 * 1024;
+
+function isText(item: Pick<VaultItem, "mimeType" | "name">): boolean {
+  const m = (item.mimeType || "").toLowerCase();
+  return m.startsWith("text/") || m === "application/json" || TEXT_EXT.test(item.name);
+}
+
+function TextPreview({ item }: { item: VaultItem }) {
+  const { t } = useLang();
+  const tooBig = (item.size ?? 0) > TEXT_PREVIEW_BYTES;
+  const q = useQuery({
+    queryKey: ["vault-text", item.id, item.fileVersion ?? item.updatedAt],
+    enabled: !!item.url,
+    queryFn: async () => {
+      const r = await fetch(item.url!, { credentials: "same-origin", headers: tooBig ? { Range: `bytes=0-${TEXT_PREVIEW_BYTES - 1}` } : undefined });
+      if (!r.ok && r.status !== 206) throw new Error(String(r.status));
+      return r.text();
+    },
+    staleTime: 60_000,
+  });
+  if (q.isLoading) return <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  if (q.isError) return <div className="p-10 text-center text-sm text-muted-foreground">{t("Couldn't load the preview. Download it to open it.")}</div>;
+  const csv = /\.(csv|tsv)$/i.test(item.name) || /text\/(csv|tab-separated-values)/i.test(item.mimeType || "");
+  if (csv) {
+    const sep = /\.tsv$/i.test(item.name) ? "\t" : (q.data ?? "").split("\n", 1)[0].split(";").length > (q.data ?? "").split("\n", 1)[0].split(",").length ? ";" : ",";
+    const rows = (q.data ?? "").split(/\r?\n/).filter((l, i, a) => l.length || i < a.length - 1).slice(0, 500).map((l) => l.split(sep));
+    return (
+      <div className="overflow-auto">
+        <table className="text-xs border-collapse">
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className={i === 0 ? "font-semibold bg-muted/60" : undefined}>
+                {r.map((c, j) => <td key={j} className="border border-border px-2 py-1 whitespace-nowrap">{c.replace(/^"|"$/g, "")}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {tooBig && <p className="p-3 text-xs text-muted-foreground">{t("Only the beginning is shown. Download it for the whole file.")}</p>}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <pre className="whitespace-pre-wrap break-words p-4 text-[13px] leading-relaxed font-mono text-foreground">{q.data}</pre>
+      {tooBig && <p className="px-4 pb-3 text-xs text-muted-foreground">{t("Only the beginning is shown. Download it for the whole file.")}</p>}
+    </div>
+  );
+}
 
 function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onClose: () => void; onShare: (i: VaultItem) => void }) {
   const { t, lang } = useLang();
   const mime = item?.mimeType || "";
+  const [officeFailed, setOfficeFailed] = useState(false);
+  useEffect(() => { setOfficeFailed(false); }, [item?.id]);
+  // The converted PDF is checked first, so a refusal (too big, no converter) says so instead of an empty frame.
+  const office = useQuery({
+    queryKey: ["vault-preview", item?.previewUrl],
+    enabled: !!item?.previewUrl,
+    queryFn: async () => {
+      const r = await fetch(item!.previewUrl!, { method: "GET", headers: { Range: "bytes=0-0" }, credentials: "same-origin" });
+      if (!r.ok && r.status !== 206) throw new Error(String(r.status));
+      return true;
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const pdfUrl = item ? (isPdf(item) ? item.url : item.previewUrl && office.isSuccess ? item.previewUrl : null) : null;
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent lang={lang} className="max-w-3xl">
-        <DialogHeader><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
+      {/* One shrinkable column: a long file name (truncate = nowrap) used to widen the grid past a phone's screen. */}
+      <DialogContent lang={lang} className="max-w-3xl grid-cols-[minmax(0,1fr)]">
+        <DialogHeader className="min-w-0"><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
         {item && (
           <div className="max-h-[65vh] overflow-auto rounded-lg bg-muted/40">
             {mime.startsWith("image/") ? (
@@ -1303,6 +1399,17 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
               <audio src={item.url ?? ""} controls className="w-full p-4" />
             ) : isPdf(item) ? (
               <iframe src={item.url ?? ""} title={item.name} className="w-full h-[65vh]" />
+            ) : item.previewUrl && !officeFailed && !office.isError ? (
+              office.isSuccess ? (
+                <iframe src={item.previewUrl} title={item.name} className="w-full h-[65vh] bg-white" onError={() => setOfficeFailed(true)} />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {t("Preparing the preview…")}
+                </div>
+              )
+            ) : isText(item) ? (
+              <TextPreview item={item} />
             ) : (
               <div className="p-10 text-center text-sm text-muted-foreground">
                 {t("This kind of file can't be previewed. Download it to open it.")}
@@ -1315,10 +1422,10 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
             {humanSize(item?.size)}{item?.uploader ? ` · ${t("uploaded by {name}", { name: item.uploader.name })}` : ""}
           </span>
           <div className="flex flex-wrap gap-2 justify-end">
-            {item && isPdf(item) && item.url && (
+            {pdfUrl && (
               // An iframe shows only the first page on iPhone Safari: this opens the PDF itself.
               <Button variant="outline" asChild>
-                <a href={item.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> {t("Open PDF")}</a>
+                <a href={pdfUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> {isPdf(item!) ? t("Open PDF") : t("Open in a new tab")}</a>
               </Button>
             )}
             <Button variant="outline" onClick={() => item && onShare(item)}>

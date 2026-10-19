@@ -287,6 +287,7 @@ struct ViewFilterSheet: View {
     var startConfig: ProjectViewConfig? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @State private var seeded = false
     @State private var rules: [ViewFilterRule] = []
     @State private var sort: [ViewSort] = []
     @State private var groupBy = "section"
@@ -298,6 +299,46 @@ struct ViewFilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                NavigationLink { Form { filterSection }.navigationTitle(T("Filter")).toolbar { saveToolbar } } label: {
+                    Label(T("Filter"), systemImage: "line.3.horizontal.decrease")
+                }
+                NavigationLink { Form { sortSection }.navigationTitle(T("Sort")).toolbar { saveToolbar } } label: {
+                    Label(T("Sort"), systemImage: "arrow.up.arrow.down")
+                }
+                NavigationLink { Form { groupSection }.navigationTitle(T("Group by")).toolbar { saveToolbar } } label: {
+                    Label(T("Group by"), systemImage: "rectangle.3.group")
+                }
+                if let problem {
+                    Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                }
+                if onApplyLocal != nil {
+                    Text(T("Only on this screen. Saving a filter to the view needs Can edit access."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
+            }
+            .navigationTitle(view.title(fieldName: { id in fields.first { $0.id == id }?.name }))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { saveToolbar }
+            .onAppear {
+                guard !seeded else { return }
+                seeded = true
+                let start = startConfig ?? view.config
+                rules = start.simple
+                sort = start.sort
+                groupBy = start.groupBy ?? "section"
+            }
+        }
+    }
+
+    @ToolbarContentBuilder private var saveToolbar: some ToolbarContent {
+                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(onApplyLocal == nil ? T("Save") : T("Apply")).bold() } }
+                        .disabled(saving)
+                }
+    }
+
+    private var filterSection: some View {
                 Section(T("Show tasks where")) {
                     if view.config.advanced != nil {
                         // An and/or filter built on the web: kept as it is; the app does not edit it.
@@ -321,6 +362,9 @@ struct ViewFilterSheet: View {
                     } label: { Label(T("Add a filter"), systemImage: "plus") }
                     }
                 }
+    }
+
+    private var sortSection: some View {
                 Section(T("Sort")) {
                     Picker(T("Sort by"), selection: Binding(get: { sort.first?.prop ?? "" }, set: { p in
                         sort = p.isEmpty ? [] : [ViewSort(prop: p, dir: sort.first?.dir ?? "asc")]
@@ -341,6 +385,9 @@ struct ViewFilterSheet: View {
                         .pickerStyle(.segmented)
                     }
                 }
+    }
+
+    private var groupSection: some View {
                 Section(T("Group by")) {
                     Picker(T("Group by"), selection: $groupBy) {
                         Text(T("Status")).tag("section")
@@ -349,30 +396,6 @@ struct ViewFilterSheet: View {
                         ForEach(selectFields.filter { $0.type.uppercased() != "MULTI_SELECT" }) { f in Text(f.name).tag("cf:\(f.id)") }
                     }
                 }
-                if let problem {
-                    Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
-                }
-                if onApplyLocal != nil {
-                    Text(T("Only on this screen. Saving a filter to the view needs Can edit access."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                }
-            }
-            .navigationTitle(view.title(fieldName: { id in fields.first { $0.id == id }?.name }))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(onApplyLocal == nil ? T("Save") : T("Apply")).bold() } }
-                        .disabled(saving)
-                }
-            }
-            .onAppear {
-                let start = startConfig ?? view.config
-                rules = start.simple
-                sort = start.sort
-                groupBy = start.groupBy ?? "section"
-            }
-        }
     }
 
     private func ruleRow(_ rule: Binding<ViewFilterRule>) -> ViewFilterRuleRow {
@@ -477,11 +500,11 @@ enum BoardAlert: Identifiable {
     }
 }
 
-/// A manual reorder's previous column order, for Undo.
+/// The relative moves that put only this drag's cards back, for Undo.
 struct ReorderUndo: Identifiable {
     let id = UUID()
     let laneId: String
-    let order: [String]
+    let moves: [TaskReorderMove]
     let count: Int
 }
 

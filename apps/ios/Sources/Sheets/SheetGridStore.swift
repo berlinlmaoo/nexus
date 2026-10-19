@@ -209,7 +209,8 @@ extension SheetStore {
         columns = next
         rebuild()
         do {
-            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next])
+            let o = try await APIClient.shared.patchSheet(sid, body: ["columns": next], structureVersion: structureVersion)
+            structureVersion = o["structureVersion"] as? Int
             if sid == sheetId, let saved = o["columns"] as? [SheetJSON] { columns = saved; rebuild() }
             if record {
                 push(SheetUndoEntry(label: label,

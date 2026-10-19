@@ -91,8 +91,31 @@ export const BUS_EVENTS = {
   ACCESS_CHANGED: "access-changed",
   /** A form got a response (or lost one) → `project:<id>` ("form-responses-changed", ids only). */
   FORM_RESPONSES_CHANGED: "form-responses-changed",
+  /**
+   * A form's builder content changed (live co-editing, 19 Oct 2026): `form-ops` { formId, version, kind, ops, actor,
+   * originTab, form } → room `form:<id>` (Can edit and up). lib/form-coedit-server.ts.
+   */
+  FORM_OPS: "form-ops",
   /** A GIDEON answer was billed (or the person's credits changed) → `user:<id>` ("gideon-credits", their own summary). */
   GIDEON_CREDITS: "gideon-credits",
+  /** A personal reminder was made, cancelled or went off (18 Oct 2026): `reminders-changed` { id } to user:<id>. */
+  REMINDERS_CHANGED: "reminders-changed",
+  /** A GIDEON tier became unavailable or came back (Model 0 lends the GPU to the meeting transcriber) → every socket. */
+  GIDEON_TIERS: "gideon-tiers",
+  /** GIDEON performance panel (18 Oct 2026): a GPU sample { kind: "gpu", live }, or a ping { kind: "runs" | "alerts" } → room `gideon:perf` (BoD+). */
+  GIDEON_PERF: "gideon-perf",
+  /** A meeting recording moved (status/progress/edit/apply/delete) → its uploader's `user:<id>` + its `project:<id>`. Ids only. */
+  MEETING_CHANGED: "meeting-changed",
+  /** Someone's presence status changed (lib/presence.ts, 19 Oct 2026) → every `workspace:<id>` room they are in + their `user:<id>`. */
+  PRESENCE_CHANGED: "presence-changed",
+  /**
+   * An attendance write by this person (a request reviewed or cancelled, an offsite check-out reviewed, an override,
+   * a correction, a day-off grant) → `attendance-changed` { kind, id } to their own `user:<id>` room, so their OTHER
+   * devices/tabs drop the Approve/Reject they already used (QA final 19 Oct 2026, C-17). Ids only.
+   */
+  ATTENDANCE_CHANGED: "attendance-changed",
+  /** XP changed for these people (coalesced, lib/xp-realtime.ts) → `xp-changed` { userIds } to their `workspace:<id>` rooms (C-D2). */
+  XP_CHANGED: "xp-changed",
 } as const
 
 // Every named event crosses processes (lib/realtime-bridge.ts).

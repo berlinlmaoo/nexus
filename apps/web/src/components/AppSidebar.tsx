@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi } from "@/lib/nexus-api";
+import { PresenceDot, PresenceLine, usePresence } from "@/lib/presence";
+import { SetStatusDialog } from "@/components/SetStatusDialog";
 import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
@@ -47,6 +49,8 @@ export function AppSidebar() {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const profileQuery = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const me = profileQuery.data?.user;
+  const myStatus = usePresence(me?.id);
+  const [statusOpen, setStatusOpen] = useState(false);
   // Org role gates management-only nav (Control Room /admin + Crew Hub /teams):
   // visible to BoD/Manager, hidden from Staff (and while role is still unknown).
   const orgRoleQuery = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
@@ -141,12 +145,14 @@ export function AppSidebar() {
           section header can be drawn over it whole: "Projects" in the fade read as disabled (UI tour run 15,
           R15-WD-10). */}
       <SidebarContent ref={navRef} className={cn("[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
-        {visibleGroups.map((g) => (
-          <SidebarGroup key={g.label}>
+        {/* Collapsed to icons, the rail spreads its icons evenly over the full height (owner, 18 Oct 2026): each group
+            grows by its number of items, and the items share the group's height. */}
+        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")); return (
+          <SidebarGroup key={g.label} style={{ ["--n" as string]: items.length } as import("react").CSSProperties} className="group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:[flex:var(--n)_1_0px]">
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")).map((item) => (
+            <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-1">
+              <SidebarMenu className="group-data-[collapsible=icon]:flex-1 group-data-[collapsible=icon]:justify-around">
+                {items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={t(item.title)}>
                       <Link to={item.url} className="flex items-center gap-2">
@@ -162,9 +168,10 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ))}
+        ); })}
 
-        <SidebarProjectTree />
+        {/* Collapsed to icons the rail ends at Control Room: the project list is hidden (owner, 18 Oct 2026). */}
+        <div className="contents group-data-[collapsible=icon]:hidden"><SidebarProjectTree /></div>
         {navMore && <div aria-hidden className="pointer-events-none sticky bottom-0 z-[5] -mt-14 h-14 shrink-0 bg-[linear-gradient(to_top,var(--sidebar)_0.75rem,transparent)]" />}
       </SidebarContent>
 
@@ -172,19 +179,31 @@ export function AppSidebar() {
         {/* Who's signed in gets the whole row and the actions sit on their own row under it: on one row the
             four buttons left "QA D…" / "qa5@…" (UI tour run 10, WD-7). The full name and email are on hover. */}
         <div className="flex flex-col gap-1 overflow-hidden px-1 py-1">
-        <div className="flex min-w-0 items-center gap-2" title={[me?.name, me?.email].filter(Boolean).join("\n") || undefined}>
-          {me?.avatar ? (
-            <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
-          ) : (
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-sidebar-border">
-              {(me?.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}
-            </span>
-          )}
-          <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+        {/* The identity row sets one's presence status (19 Oct 2026); the status replaces the email line while the
+            feature is on (the email stays in the tooltip). */}
+        <button
+          type="button"
+          onClick={() => setStatusOpen(true)}
+          disabled={!myStatus}
+          className="flex min-w-0 items-center gap-2 rounded-md text-left transition-colors enabled:hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:cursor-default"
+          title={[me?.name, me?.email, myStatus ? t("Set a status") : null].filter(Boolean).join("\n") || undefined}
+        >
+          <span className="relative shrink-0">
+            {me?.avatar ? (
+              <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
+            ) : (
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-sidebar-border">
+                {(me?.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}
+              </span>
+            )}
+            {myStatus && <PresenceDot status={myStatus} size={9} className="absolute -bottom-px -right-px outline-sidebar" />}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
             <span className="truncate text-xs font-medium">{me?.name ?? "—"}</span>
-            <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>
-          </div>
-        </div>
+            {myStatus ? <PresenceLine userId={me?.id} showUntil={false} className="flex max-w-full text-[10px]" /> : <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>}
+          </span>
+        </button>
+        <SetStatusDialog open={statusOpen} onOpenChange={setStatusOpen} meId={me?.id} />
         <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
           <button
             onClick={toggleTheme}

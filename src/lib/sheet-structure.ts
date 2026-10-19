@@ -4,8 +4,8 @@
 // touches them. Deleting is the exception: a range whose CORNER row/column disappears would otherwise
 // turn #REF! as a whole, where Sheets just shrinks it. This rewrites those ranges, in the same
 // transaction as the delete, so every client (and the export) sees the shrunk formula.
-import { randomUUID } from "crypto"
 import prisma from "@/lib/prisma"
+import { uuidv7 } from "@/lib/uuid7"
 import type { Prisma } from "@/generated/prisma/client"
 import { ERR, isFormulaCell, rewriteForDeletion } from "@/lib/sheet-formula"
 import { readSheetSettings } from "@/lib/project-sheets"
@@ -108,7 +108,8 @@ export async function copySheet(
     orderBy: { position: "asc" },
     select: { id: true, position: true, cells: true, styles: true, height: true },
   })
-  const idMap = new Map(rows.map((r) => [r.id, `r${randomUUID().replace(/-/g, "").slice(0, 24)}`]))
+  // UUIDv7 like every other row id since 18 Oct 2026 (a copy used to mint "r<hex>" ids, QA final 19 Oct).
+  const idMap = new Map(rows.map((r) => [r.id, uuidv7()]))
   const remap = (f: string) => f.replace(/\{(\$?[^!}]+)!(\$?)([^}]+)\}/g, (whole, col: string, abs: string, row: string) => {
     const next = idMap.get(row)
     return next ? `{${col}!${abs}${next}}` : whole

@@ -1,5 +1,7 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
 import { GideonCreditsAdmin } from "@/components/gideon/GideonCreditsAdmin";
+import { GideonPersonReview } from "@/components/gideon/GideonPersonReview";
+import { GideonPerformance } from "@/components/gideon/GideonPerformance";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -7,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
+import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, ChevronRight, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
 import { OrgChart } from "@/components/OrgChart";
@@ -31,6 +33,7 @@ import { AuditLogView } from "@/components/audit/AuditLogView";
 import { SuspectAttendanceAdmin } from "@/components/attendance/SuspectAttendanceAdmin";
 import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdmin";
 import { useLang } from "@/lib/lang";
+import { PresenceLine } from "@/lib/presence";
 import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
@@ -42,8 +45,10 @@ import { monthTitle } from "@/lib/month-title";
 const ADMIN_TABS = ["users", "approval", "org", "extra-dayoff", "suspects", "audit", "quests", "announcements", "gideon", "app", "calendar"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 export const Route = createFileRoute("/_app/admin")({
-  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab } => ({
+  // ?gideon=performance opens Control Room › GIDEON › Performance (the link in a GIDEON alert, 18 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab; gideon?: "performance" } => ({
     tab: typeof s.tab === "string" && (ADMIN_TABS as readonly string[]).includes(s.tab) && s.tab !== "users" ? (s.tab as AdminTab) : undefined,
+    gideon: s.gideon === "performance" ? "performance" : undefined,
   }),
   component: Admin,
 });
@@ -733,6 +738,8 @@ function UserRow(props: UserRowProps) {
             <div className="min-w-0">
               <div className="truncate font-semibold">{user.name || t("Unnamed")}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+              {/* Presence status (19 Oct 2026), live. */}
+              <PresenceLine userId={user.id} className="mt-0.5 flex max-w-full text-[11px]" />
               {/* Approver absensi — hanya untuk STAFF. "Belum ditaruh" berwarna peringatan karena
                   request orang ini masih jatuh ke BoD; bukan galat, tapi pekerjaan yang belum selesai. */}
               {orgInfo && !orgInfo.hidden && (
@@ -2338,16 +2345,15 @@ function AnnouncementsAdmin() {
 }
 
 /**
- * Who uses GIDEON, and how much.
- *
- * Counts and dates only. What somebody asked an assistant is between them and it — a screen that
- * showed the questions would change how people use it, and the ones who most need the help would
- * stop asking.
+ * Who uses GIDEON, and how much: counts and dates for BoD and the One Above All. A row opens the person
+ * (GideonPersonReview); only the One Above All can read the chats themselves (owner, 18 Oct 2026, enforced
+ * server-side), and every user was told once in the GIDEON panel that chats can be reviewed.
  */
-/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only) and Credits (18 Oct 2026). */
+/** Control Room › GIDEON: Insights (every run, 12 Oct 2026), People (who uses it, counts only), Credits and Performance (18 Oct 2026). */
 function GideonAdmin() {
   const { t } = useLang();
-  const [tab, setTab] = useState<"insights" | "people" | "credits">("insights");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<"insights" | "people" | "credits" | "performance">(search.gideon === "performance" ? "performance" : "insights");
   const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
   return (
     <div className="space-y-4">
@@ -2355,8 +2361,9 @@ function GideonAdmin() {
         <button type="button" className={btn(tab === "insights")} onClick={() => setTab("insights")}>{t("Insights")}</button>
         <button type="button" className={btn(tab === "people")} onClick={() => setTab("people")}>{t("People")}</button>
         <button type="button" className={btn(tab === "credits")} onClick={() => setTab("credits")}>{t("Credits")}</button>
+        <button type="button" className={btn(tab === "performance")} onClick={() => setTab("performance")}>{t("Performance")}</button>
       </div>
-      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : <GideonCreditsAdmin />}
+      {tab === "insights" ? <GideonInsights /> : tab === "people" ? <GideonUsage /> : tab === "credits" ? <GideonCreditsAdmin /> : <GideonPerformance />}
     </div>
   );
 }
@@ -2364,6 +2371,8 @@ function GideonAdmin() {
 function GideonUsage() {
   const { t, locale } = useLang();
   const q = useQuery({ queryKey: ["nexus", "gideon-usage"], queryFn: nexusApi.gideonUsage, retry: false });
+  // A row opens the person (Overview · Chats · Credits, 18 Oct 2026). Chats are the One Above All's only.
+  const [person, setPerson] = useState<string | null>(null);
   const users = q.data?.users ?? [];
   const totals = q.data?.totals;
 
@@ -2395,25 +2404,33 @@ function GideonUsage() {
                 <th className="px-4 py-3 text-right font-semibold">{t("Tool calls")}</th>
                 <th className="px-4 py-3 font-semibold">{t("First")}</th>
                 <th className="px-4 py-3 font-semibold">{t("Last")}</th>
+                <th className="w-10 px-2 py-3" aria-label={t("Open")} />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-border/60 last:border-0">
+                <tr key={u.id} onClick={() => setPerson(u.id)} className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50">
                   <td className="px-4 py-3">
-                    <div className="font-semibold">{u.name}</div>
-                    {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setPerson(u.id); }} className="flex min-w-0 items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={28} />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{u.name}</span>
+                        {u.email && <span className="block text-xs text-muted-foreground">{u.email}</span>}
+                      </span>
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{u.asked}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{u.toolCalls}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.firstUsed)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.lastUsed)}</td>
+                  <td className="px-2 py-3 text-muted-foreground"><ChevronRight className="h-4 w-4" aria-hidden /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </HScroll>
       )}
+      {person && <GideonPersonReview userId={person} onClose={() => setPerson(null)} />}
     </div>
   );
 }

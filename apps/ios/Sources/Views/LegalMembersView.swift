@@ -124,7 +124,7 @@ private struct LegalMemberRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(url: m.avatar, initial: String((m.name.isEmpty ? m.email : m.name).first ?? "?").uppercased(), size: 34)
+            AvatarView(url: m.avatar, initial: String((m.name.isEmpty ? m.email : m.name).first ?? "?").uppercased(), size: 34, userId: m.userId, name: m.name)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(m.name.isEmpty ? m.email : m.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -182,7 +182,7 @@ private struct LegalInviteSheet: View {
 
     private func row(_ c: LegalCandidate) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: c.avatar, initial: String((c.name.isEmpty ? c.email : c.name).first ?? "?").uppercased(), size: 30)
+            AvatarView(url: c.avatar, initial: String((c.name.isEmpty ? c.email : c.name).first ?? "?").uppercased(), size: 30, userId: c.id, name: c.name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.name.isEmpty ? c.email : c.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text([LegalLabels.role(c.orgRole), c.email].compactMap { $0 }.joined(separator: " · "))

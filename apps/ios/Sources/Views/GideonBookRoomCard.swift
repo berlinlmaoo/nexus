@@ -8,6 +8,7 @@ import SwiftUI
 /// checks the room and slot again and, if taken meanwhile, keeps the card open with the reason.
 struct GideonBookRoomCard: View {
     let proposal: GideonProposal
+    let readOnly: Bool
     let booking: GideonBooking
     let onApply: (GideonBookingChoice) -> Void
     let onDiscard: () -> Void
@@ -19,7 +20,8 @@ struct GideonBookRoomCard: View {
     @State private var availability: GideonRoomAvailability?
     @State private var loadFailed = false
 
-    init(proposal: GideonProposal, booking: GideonBooking, onApply: @escaping (GideonBookingChoice) -> Void, onDiscard: @escaping () -> Void) {
+    init(proposal: GideonProposal, booking: GideonBooking, readOnly: Bool = false, onApply: @escaping (GideonBookingChoice) -> Void, onDiscard: @escaping () -> Void) {
+        self.readOnly = readOnly
         self.proposal = proposal
         self.booking = booking
         self.onApply = onApply
@@ -43,7 +45,7 @@ struct GideonBookRoomCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Label(whenText, systemImage: "calendar.badge.clock").font(NXFont.text(12, .medium)).foregroundStyle(NX.foreground)
-            if proposal.isPending {
+            if proposal.isPending && !readOnly {
                 if availability == nil && !loadFailed {
                     HStack(spacing: 6) { ProgressView().controlSize(.small); Text(T("Checking the rooms…")) }
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -71,7 +73,7 @@ struct GideonBookRoomCard: View {
                 if proposal.status == "APPLIED", let r = booking.room {
                     Text(RoomBooking.label(r)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 }
-                Text(statusText).font(NXFont.text(12, .semibold))
+                Text(readOnly ? gideonProposalState(proposal, readOnly: true) : statusText).font(NXFont.text(12, .semibold))
                     .foregroundStyle(proposal.status == "APPLIED" ? NX.success : (proposal.status == "FAILED" ? NX.danger : NX.mutedFg))
             }
         }
@@ -79,7 +81,7 @@ struct GideonBookRoomCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.3)))
-        .task(id: "\(startsAt)|\(endsAt)|\(proposal.error ?? "")") { if proposal.isPending { await load() } }
+        .task(id: "\(startsAt)|\(endsAt)|\(proposal.error ?? "")") { if proposal.isPending && !readOnly { await load() } }
     }
 
     /// Reads the rooms for the slot on the card, then preselects (until the person picks): the named room if it
@@ -138,7 +140,7 @@ struct GideonBookRoomCard: View {
 }
 
 /// Every room for one slot, as rows (the book_room card and the move card): free ones selectable, busy ones
-/// disabled with who holds them until when, the capacity when it is known.
+/// disabled with who holds them until when.
 struct GideonRoomRows: View {
     let rooms: [GideonRoomAvailability.Room]
     let selected: String?
@@ -159,7 +161,6 @@ struct GideonRoomRows: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(RoomBooking.label(r.room)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                        if let n = r.capacity { Text("· " + String(format: T("%d seats"), n)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                     }
                     if let busy = r.busy {
                         Text(String(format: T("Booked by %@ until %@"), busy.by ?? T("someone"), GideonSlotClock.clock(busy.endsAt)))

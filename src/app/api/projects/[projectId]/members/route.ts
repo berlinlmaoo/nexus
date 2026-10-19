@@ -121,6 +121,8 @@ export async function POST(
       } catch (e) {
         // Added by someone else a moment ago (unique userId+projectId): already in, not an error.
         if (bulk && (e as { code?: string })?.code === "P2002") { already.add(userId); continue }
+        // Single add racing another add of the same person: same answer as the pre-check above, not a 500.
+        if ((e as { code?: string })?.code === "P2002") return NextResponse.json({ error: "User is already a member" }, { status: 400 })
         throw e
       }
     }
@@ -185,34 +187,28 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden: you need Full access to the project to remove members", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
-    const existing = await prisma.projectMember.findUnique({
-      where: {
-        userId_projectId: {
-          userId,
-          projectId: (await params).projectId,
-        },
-      },
-    })
-
-    if (!existing) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 })
-    }
-    // Same rule as PATCH: removing the last Project Owner would leave nobody but the BoD to manage it (QA BoD R2 N01).
-    if (existing.role === "LEAD") {
-      const owners = await prisma.projectMember.count({ where: { projectId: (await params).projectId, role: "LEAD" } })
-      if (owners <= 1) {
-        return NextResponse.json({ error: "A project keeps at least one Project Owner. Give someone else Full access first.", code: "LAST_OWNER" }, { status: 409 })
+    const projectId = (await params).projectId
+    // Check and delete under one lock per project (QA final 19 Oct 2026: parallel removes of the same member
+    // answered 500 on P2025, and two owners removed at once could both pass the last-owner count).
+    const outcome = await prisma.$transaction(async (tx) => {
+      const found = await tx.projectMember.findUnique({ where: { userId_projectId: { userId, projectId } } })
+      if (!found) return { status: 404 as const }
+      await tx.$executeRaw`SELECT 1 FROM "Project" WHERE id = ${found.projectId} FOR UPDATE`
+      const row = await tx.projectMember.findUnique({ where: { id: found.id } })
+      if (!row) return { status: 404 as const }
+      // Same rule as PATCH: removing the last Project Owner would leave nobody but the BoD to manage it (QA BoD R2 N01).
+      if (row.role === "LEAD") {
+        const owners = await tx.projectMember.count({ where: { projectId: row.projectId, role: "LEAD" } })
+        if (owners <= 1) return { status: 409 as const }
       }
-    }
-
-    await prisma.projectMember.delete({
-      where: {
-        userId_projectId: {
-          userId,
-          projectId: (await params).projectId,
-        },
-      },
+      await tx.projectMember.delete({ where: { id: row.id } })
+      return { status: 200 as const, existing: row }
     })
+    if (outcome.status === 404) return NextResponse.json({ error: "Member not found" }, { status: 404 })
+    if (outcome.status === 409) {
+      return NextResponse.json({ error: "A project keeps at least one Project Owner. Give someone else Full access first.", code: "LAST_OWNER" }, { status: 409 })
+    }
+    const existing = outcome.existing
 
     // Out of the project's chat room: no more pushes, no more reading it (CHAT-CONTRACT security).
     await syncProjectRoomSafe((await params).projectId, "project-member-removed")

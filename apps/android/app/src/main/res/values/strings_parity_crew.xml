@@ -1,0 +1,26 @@
+<resources>
+    <string name="crew_employment">Employment start dates</string>
+    <string name="crew_deductions">XP and day-off deductions</string>
+    <string name="crew_all_people">All people</string>
+    <string name="crew_no_deductions">No deductions this period.</string>
+    <string name="crew_late">Late check-in</string>
+    <string name="crew_no_checkout">Missed check-out</string>
+    <string name="crew_absent">Absent</string>
+    <string name="crew_auto_dayoff">Automatic day-off deduction</string>
+    <string name="crew_days">days off</string>
+    <string name="crew_cleared">Cleared</string>
+    <string name="crew_clear">Remove deduction</string>
+    <string name="crew_search">Search people</string>
+    <string name="crew_no_start">No start date</string>
+    <string name="crew_eligible">Eligible for annual leave</string>
+    <string name="crew_eligible_from">Eligible from %1$s</string>
+    <string name="crew_ineligible">Cannot request leave yet</string>
+    <string name="crew_set_start">Set employment start date</string>
+    <string name="crew_remaining">Days off remaining: %1$d / %2$d</string>
+    <string name="crew_red_remaining">Public holidays remaining: %1$d</string>
+    <string name="crew_left">Left on %1$s</string>
+    <string name="crew_view_log">View deductions</string>
+    <string name="crew_clear_date">Clear date</string>
+    <string name="crew_clear_confirm">Remove all deductions on %1$s?</string>
+    <string name="crew_clear_help">The XP comes back and any day off taken automatically is restored. The attendance status does not change. All deductions on this date are removed together.</string>
+</resources>

@@ -12,6 +12,7 @@ struct ProjectDetailView: View {
     @State private var error: String?
     /// Set when the board was rebuilt from disk because the server could not be reached.
     @State private var cachedFrom: Date?
+    @State private var reloadEpoch = 0
     @State private var openTaskId: String?
     @State private var openProfile: ProfileTarget?
     @State private var tab: ProjectTab = .board
@@ -19,6 +20,7 @@ struct ProjectDetailView: View {
     /// "+" on the Forms tab (owner, 9 Oct 2026): a pushed form builder, not a third sheet here.
     @State private var newFormOpen = false
     @State private var showSettings = false
+    @State private var showMeetings = false
     /// ⌘N / ⌘, / ⌘[ / ⌘] / ⌘F do nothing while a sheet (the task popup, settings…) is up over the
     /// project: focus stays in the top-most sheet (QA BoD R2). SheetCover.swift.
     @State private var cover = SheetCover()
@@ -104,6 +106,8 @@ struct ProjectDetailView: View {
     /// counterpart yet).
     @State private var gideonOpen = false
     /// "Add task ▾" → a section: the composer starts there. nil = the first to-do section.
+    @State private var inlineLaneId: String?
+    @State private var inlineRequest: UUID?
     @State private var createLaneId: String?
     @Environment(AppRouter.self) private var router
 
@@ -115,7 +119,7 @@ struct ProjectDetailView: View {
     }
 
     private func open(_ id: String) {
-        if hSize == .regular { sheetTask = TaskSheetRef(id: id) } else { openTaskId = id }
+        sheetTask = TaskSheetRef(id: id)
     }
 
     private var viewContext: ViewContext { ViewContext(fields: allFields, meId: meId, today: Date()) }
@@ -435,12 +439,7 @@ struct ProjectDetailView: View {
     private func redesignChrome<Content: View>(_ content: Content) -> some View {
         content
             // iPad / Mac: a centred sheet (a form sheet on a wide screen), closed with its own button.
-            .sheet(item: $sheetTask, onDismiss: { Task { await reloadQuietly() } }) { ref in
-                NavigationStack {
-                    TaskDetailView(taskId: ref.id)
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil }.keyboardShortcut(.cancelAction) } }
-                }
-            }
+            .modifier(TaskPagePresentation(task: $sheetTask, onDismiss: { Task { await reloadQuietly() } }))
             .sheet(item: $filterView) { v in filterSheet(v) }
             .sheet(item: $bulkDue) { r in BulkDueSheet(count: r.taskIds.count) { day in bulkSetDue(r.taskIds, day) } }
             // A task deleted from its screen: Undo here for 10 s (own deletes, 30 min on the server).
@@ -528,6 +527,7 @@ struct ProjectDetailView: View {
             CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue,
                             initialLaneId: createLaneId ?? StatusOptions.defaultOption(detail?.taskLists ?? [])?.id) { await load() }
         }
+        .background { Color.clear.sheet(isPresented: $showMeetings) { NavigationStack { MeetingListView(projectId: projectId).toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { showMeetings = false } } } }.environment(auth).environment(router) } }
         .sheet(isPresented: $showSettings) {
             if let detail {
                 ProjectSettingsView(projectId: projectId, detail: detail, onChange: { await load() }, onDeleted: { dismiss() })
@@ -624,6 +624,15 @@ struct ProjectDetailView: View {
     /// The task composer, starting in `laneId` (nil = the first to-do section, web addTask()).
     private func newTask(in laneId: String?) {
         guard !cover.isCovered else { return }
+        if tab == .board || tab == .list {
+            let shown = displayLanes(tab == .board ? "board" : "list")
+            inlineLaneId = laneId ?? shown.first(where: { ViewEngine.groupTarget($0.id)?.prop != "assignee" })?.id
+            if inlineLaneId != nil { inlineRequest = UUID(); return }
+        }
+        detailedTask(in: laneId)
+    }
+
+    private func detailedTask(in laneId: String?) {
         prefillDue = nil
         createLaneId = laneId
         showCreate = true
@@ -680,7 +689,7 @@ struct ProjectDetailView: View {
             }
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
             // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
-            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+            Text(displayName).font(NXFont.display(wide && !isTypedDashboard && !isPipeline ? 32 : wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(wide && titleCap == nil ? 1 : 2).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: titleCap, alignment: .leading)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
@@ -698,6 +707,9 @@ struct ProjectDetailView: View {
         HStack(spacing: 10) {
             // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
             AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: labelled)
+            if RemoteConfig.shared.meetingNotesEnabled {
+                Menu { Button { showMeetings = true } label: { Label(T("Meeting notes") + " · " + T("Beta"), systemImage: "mic") } } label: { Image(systemName: "ellipsis").frame(width: 36, height: 36) }.accessibilityLabel(T("Project actions"))
+            }
             ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: labelled) { if !cover.isCovered { showSettings = true } }
                 .keyboardShortcut(",", modifiers: .command)
             // iPad / Mac: Add task lives on the tab row (split button), not in the header (web 267).
@@ -1179,7 +1191,7 @@ struct ProjectDetailView: View {
                                      count: "\(matchCount)/\(totalCount)")
             }
             if let v = toolView {
-                Menu { viewMenuItems(v) } label: {
+                Button { filterView = v } label: {
                     Image(systemName: "slider.horizontal.3").font(.system(size: 15, weight: .regular)).foregroundStyle(NX.mutedFg)
                         .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
                 }
@@ -1200,9 +1212,8 @@ struct ProjectDetailView: View {
                 Button { newFormOpen = true } label: { Label(T("New form"), systemImage: "plus") }
                     .buttonStyle(.nxPrimary)
             } else {
-                AddTaskSplitButton(sections: StatusOptions.ordered(detail?.taskLists ?? []), enabled: canCreate) { laneId in
-                    newTask(in: laneId)
-                }
+                AddTaskSplitButton(sections: StatusOptions.ordered(detail?.taskLists ?? []), enabled: canCreate,
+                    onAdd: { newTask(in: $0) }, onDetails: { detailedTask(in: nil) })
             }
         }
     }
@@ -1481,6 +1492,7 @@ struct ProjectDetailView: View {
             if !shown.isEmpty {
                 // Horizontal-only: each column is a full-height lane that scrolls its own cards
                 // vertically (see LaneColumn), so the board never pans in two directions at once.
+                ScrollViewReader { scroll in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 12) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
@@ -1556,6 +1568,10 @@ struct ProjectDetailView: View {
                 // Columns scrolled off to the left end at the board's edge: on the Mac they showed through
                 // the sidebar's material as blurred ghost cards (UI tour run 14, P-M30).
                 .clipShape(Rectangle())
+                .onChange(of: inlineRequest) { _, _ in
+                    if let id = inlineLaneId { withAnimation(.snappy) { scroll.scrollTo(id, anchor: .leading) } }
+                }
+                }
             } else {
                 EmptyState(icon: "square.stack.3d.up.slash", title: T("No sections yet"),
                            subtitle: T("This project has no sections yet. Add one from Project settings."),
@@ -1719,7 +1735,7 @@ struct ProjectDetailView: View {
             canAdd: addable && canEdit,
             canEdit: canEdit,
             fieldIds: projectFieldIds,
-            width: laneWidth(lane)
+            width: laneWidth(lane), composeRequest: inlineLaneId == lane.id ? inlineRequest : nil
         )
     }
 
@@ -1790,7 +1806,7 @@ struct ProjectDetailView: View {
                     statusOf: rowStatusLookup(),
                     onAddTask: (canEdit && canCreate) ? { (laneId: String, title: String) async -> String? in
                         await addTask(laneId: laneId, title: title)
-                    } : nil)
+                    } : nil, composeLaneId: inlineLaneId, composeRequest: inlineRequest)
         }
     }
 
@@ -1868,8 +1884,10 @@ struct ProjectDetailView: View {
     /// live a moment ago. A board that never loaded is left to its own retry button.
     private func reloadQuietly() async {
         guard detail != nil, !loading else { return }
+        reloadEpoch += 1
+        let epoch = reloadEpoch
         guard let d = try? await APIClient.shared.project(projectId),
-              let all = try? await APIClient.shared.projectTasks(projectId) else { return }
+              let all = try? await APIClient.shared.projectTasks(projectId), epoch == reloadEpoch else { return }
         detail = d
         lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
         if !visibleTabs.contains(tab) { tab = fallbackTab }
@@ -1956,7 +1974,7 @@ struct ProjectDetailView: View {
         do {
             let id = try await APIClient.shared.createTask(projectId: projectId, taskListId: section, title: t,
                                                            priority: priority, placement: "top")
-            if assignMe, let meId { try? await APIClient.shared.updateTask(id, ["assigneeIds": [meId]]) }
+            if assignMe, let meId { try? await APIClient.shared.updateTask(id, ["addAssigneeIds": [meId]]) }
             for (fid, v) in fieldValues { try? await APIClient.shared.setCustomFieldValue(fieldId: fid, taskId: id, value: v) }
             await reloadQuietly()
             return id
@@ -2038,8 +2056,8 @@ struct ProjectDetailView: View {
         arranged.append(contentsOf: subs.filter { s in !next.contains(s.parentId ?? "") })
         lanes = lanes.map { l -> ProjectDetail.Lane in l.id == laneId ? l.with(tasks: arranged) : l }
         do {
-            try await APIClient.shared.reorderTasks(taskListId: laneId, orderedIds: next, movedId: moved.first)
-            reorderUndo = ReorderUndo(laneId: laneId, order: order, count: moved.count)
+            try await APIClient.shared.reorderTasks(taskListId: laneId, movedIds: order.filter { set.contains($0) }, beforeId: beforeId)
+            reorderUndo = ReorderUndo(laneId: laneId, moves: TaskReorderMove.restoring(movedIds: set, in: order), count: moved.count)
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
             await reloadQuietly()
@@ -2107,7 +2125,13 @@ struct ProjectDetailView: View {
 
     private func undoReorder(_ r: ReorderUndo) async {
         reorderUndo = nil
-        try? await APIClient.shared.reorderTasks(taskListId: r.laneId, orderedIds: r.order, movedId: nil)
+        do {
+            for move in r.moves {
+                try await APIClient.shared.reorderTasks(taskListId: r.laneId, movedIds: move.movedIds, beforeId: move.beforeId)
+            }
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
+        }
         await reloadQuietly()
     }
 
@@ -2252,6 +2276,7 @@ struct LaneColumn: View {
     var fieldIds: Set<String>? = nil
     /// iPad / Mac: the board's whole-column width (`ProjectDetailView.wideLaneWidth`); nil = the default.
     var width: CGFloat? = nil
+    var composeRequest: UUID? = nil
     @State private var composing = false
     @Environment(\.horizontalSizeClass) private var hSize
     /// True while a card is hovering over this column, so the target is obvious before you let go.
@@ -2331,6 +2356,8 @@ struct LaneColumn: View {
         // An empty column is narrower on a phone, so the next one shows its whole header ("On Progress 12")
         // instead of a count cut to "1" (UI tour run 16, R16-I-05).
         .frame(width: width ?? (hSize == .compact && (lane.tasks ?? []).isEmpty && !composing ? 200 : 280))
+        .onChange(of: composeRequest) { _, request in if request != nil { composing = true } }
+        .id(lane.id)
         .frame(maxHeight: .infinity, alignment: .top)   // the column fills the board height so its scroll is bounded
     }
 
@@ -2533,9 +2560,7 @@ struct BoardCard: View {
             if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
-                // A done card is muted as a whole, as the web's: an outline check, faded chips (decision 23 of run 20,
-                // R20-B-09; it kept a solid green check and full-colour chips).
-                Image(systemName: task.isDone ? "checkmark.circle" : "circle")
+                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
                 Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
@@ -2549,7 +2574,6 @@ struct BoardCard: View {
             // The priority on the meta line with the values, as the web's card, not beside the title (R19-B-03).
             if hasMeta {
                 CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
-                    .opacity(task.isDone ? 0.55 : 1)
                 metaRow
             } else {
                 // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
@@ -2557,7 +2581,6 @@ struct BoardCard: View {
                 // R16-I-17: uneven empty bands under the chips).
                 HStack(alignment: .top, spacing: 8) {
                     CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
-                        .opacity(task.isDone ? 0.55 : 1)
                     if !task.assigneeAvatars.isEmpty {
                         Spacer(minLength: 0)
                         avatars
@@ -2572,7 +2595,7 @@ struct BoardCard: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(NX.card)
                 .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NX.border.opacity(0.55), lineWidth: 1))
         }
     }
 
@@ -2584,7 +2607,7 @@ struct BoardCard: View {
     private var avatars: some View {
         HStack(spacing: -7) {
             ForEach(task.assigneeAvatars, id: \.id) { a in
-                AvatarView(url: a.url, initial: a.initial, size: 22)
+                AvatarView(url: a.url, initial: a.initial, size: 22, userId: a.userId, name: a.name)
                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
             }
         }

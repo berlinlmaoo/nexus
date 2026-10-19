@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -9,8 +10,9 @@ import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 import { notifyAttendanceRequestReviewed } from "@/lib/attendance-review-notify"
 import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
+import { touchPresenceSoon } from "@/lib/presence"
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   { params }: { params: Promise<{ requestId: string }> }
 ) {
@@ -23,7 +25,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     }
 
-    const payload = await request.json()
+    const payload = await request.json().catch(() => null) // malformed body → 400 below, not a 500
     const validation = attendanceRequestPatchSchema.safeParse(payload)
     if (!validation.success) {
       const fieldErrors = validation.error.flatten().fieldErrors
@@ -122,6 +124,8 @@ export async function PATCH(
         },
       })
 
+      // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+      touchPresenceSoon(updated.userId)
       return NextResponse.json({ request: serializeAttendanceRequest(updated) })
     }
 
@@ -221,9 +225,14 @@ export async function PATCH(
       xpRefunded,
     }).catch((e) => console.error("notifyAttendanceRequestReviewed failed", e))
 
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(updated.userId)
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })
   } catch (error) {
     console.error("Error updating attendance request:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const PATCH = pingActorAfter("request", handlePATCH)

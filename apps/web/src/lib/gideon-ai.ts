@@ -23,11 +23,64 @@ export const listGideonChats = (q = "") => gjson<{ chats: GideonChatRow[] }>(`/a
 export const renameGideonChat = (id: string, title: string) => gjson<{ chat: { id: string; title: string } }>(`/api/gideon/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
 export const deleteGideonChat = (id: string) => gjson<{ ok: boolean }>(`/api/gideon/chats/${id}`, { method: "DELETE" });
 
+// ── Control Room review (One Above All only, 18 Oct 2026) ───────────────────────────────────────────────
+// Server: src/app/api/gideon/people/[userId]/… and src/lib/gideon-review.ts. Overview is BoD + OAA; chats and
+// transcripts are OAA only (403 code OAA_ONLY). Read-only; the person is not notified and nothing is logged.
+
+export type GideonReviewPerson = { id: string; name: string; email: string | null; avatar: string | null; role: string | null; offboarded: boolean };
+export type GideonPersonOverview = {
+  person: GideonReviewPerson;
+  viewer: { canReadChats: boolean };
+  stats: { questions: number; answers: number; toolCalls: number; chats: number; deletedChats: number | null; firstUsed: string | null; lastUsed: string | null };
+  credits: { periodKey: string; period: { startKey: string; endKey: string; resetsAt: string }; used: number; answers: number; todayUsed: number; tiers: { tier: string; credits: number; answers: number }[] };
+  topTier: { tier: string; answers: number } | null;
+};
+export type GideonReviewChat = {
+  id: string; title: string | null; createdAt: string; updatedAt: string; messages: number; questions: number;
+  tier: string | null; tiers: string[]; credits: number; deleted: boolean; deletedAt: string | null; match?: string | null;
+};
+export type GideonReviewMessage = import("@/lib/gideon").GideonTurn & { id: string; createdAt: string; tier: string | null; credits: number | null };
+
+export const fetchGideonPersonOverview = (userId: string) => gjson<GideonPersonOverview>(`/api/gideon/people/${encodeURIComponent(userId)}`);
+export const fetchGideonReviewChats = (userId: string, f: { q?: string; from?: string; to?: string; deleted?: "all" | "only" | "none"; cursor?: string | null; limit?: number }) => {
+  const sp = new URLSearchParams();
+  if (f.q?.trim()) sp.set("q", f.q.trim());
+  if (f.from) sp.set("from", f.from);
+  if (f.to) sp.set("to", f.to);
+  if (f.deleted && f.deleted !== "all") sp.set("deleted", f.deleted);
+  if (f.cursor) sp.set("cursor", f.cursor);
+  if (f.limit) sp.set("limit", String(f.limit));
+  const qs = sp.toString();
+  return gjson<{ chats: GideonReviewChat[]; nextCursor: string | null; total: number }>(`/api/gideon/people/${encodeURIComponent(userId)}/chats${qs ? `?${qs}` : ""}`);
+};
+export const fetchGideonReviewTranscript = (userId: string, chatId: string, before?: string | null) =>
+  gjson<{ person: GideonReviewPerson; chat: GideonReviewChat; messages: GideonReviewMessage[]; olderBefore: string | null }>(
+    `/api/gideon/people/${encodeURIComponent(userId)}/chats/${encodeURIComponent(chatId)}${before ? `?before=${encodeURIComponent(before)}` : ""}`,
+  );
+
+// ── GIDEON Memory (19 Oct 2026) ─────────────────────────────────────────────────────────────────────────
+// Only ever the signed-in person's own memories (server: src/app/api/gideon/memory, lib/gideon-memory.ts).
+
+/** The fixed fields of Settings › GIDEON Memory (U-2, 19 Oct 2026); null = not set. Older servers omit it. */
+export type GideonMemoryProfile = { nickname: string | null; role: string | null; about: string | null };
+export type GideonMemoryState = { paused: boolean; available?: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[]; profile?: GideonMemoryProfile; updatedAt?: string | null };
+export const GIDEON_MEMORY_KEY = ["gideon-memory"] as const;
+export const getGideonMemory = () => gjson<GideonMemoryState>("/api/gideon/memory");
+export const addGideonMemory = (p: { text: string; kind?: string; date?: string | null }) => gjson<{ memory: import("@/lib/gideon").GideonMemory; created?: boolean }>("/api/gideon/memory", { method: "POST", body: JSON.stringify(p) });
+export const setGideonMemoryPaused = (paused: boolean) => gjson<GideonMemoryState>("/api/gideon/memory", { method: "PATCH", body: JSON.stringify({ paused }) });
+/** Set / clear the fixed fields ("" clears; a missing key is left alone). Returns the whole state. */
+export const setGideonMemoryProfile = (p: Partial<Record<keyof GideonMemoryProfile, string>>) => gjson<GideonMemoryState>("/api/gideon/memory/profile", { method: "PUT", body: JSON.stringify(p) });
+export const forgetAllGideonMemory = () => gjson<{ deleted: number }>("/api/gideon/memory", { method: "DELETE" });
+export const updateGideonMemory = (id: string, p: { text?: string; kind?: string; date?: string | null; status?: "ACTIVE" }) =>
+  gjson<{ memory: import("@/lib/gideon").GideonMemory }>(`/api/gideon/memory/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(p) });
+export const deleteGideonMemory = (id: string) => gjson<{ deleted: boolean }>(`/api/gideon/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+
 // ── Personalize ────────────────────────────────────────────────────────────────────────────────────────
 
-export type GideonPrefs = { assistantName: string | null; instructions: string | null; updatedAt: string | null };
+/** reviewNotice: show the one-time "chats can be reviewed by the BoD" notice (until dismissed with reviewNoticeSeen). */
+export type GideonPrefs = { assistantName: string | null; instructions: string | null; updatedAt: string | null; reviewNotice?: boolean };
 export const getGideonPrefs = () => gjson<GideonPrefs>("/api/gideon/prefs");
-export const saveGideonPrefs = (p: { assistantName?: string | null; instructions?: string | null }) => gjson<GideonPrefs>("/api/gideon/prefs", { method: "PUT", body: JSON.stringify(p) });
+export const saveGideonPrefs = (p: { assistantName?: string | null; instructions?: string | null; reviewNoticeSeen?: boolean }) => gjson<GideonPrefs>("/api/gideon/prefs", { method: "PUT", body: JSON.stringify(p) });
 
 let prefsCache: GideonPrefs | null = null;
 const prefsListeners = new Set<() => void>();

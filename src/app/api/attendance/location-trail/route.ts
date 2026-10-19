@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { advanceOutsideClock, ingestTrailPoints } from "@/lib/attendance-location"
 import { MAX_POINTS_PER_REQUEST, parseTrailPoints } from "@/lib/attendance-outside"
+import { touchPresenceSoon } from "@/lib/presence"
 
 /**
  * The phone's location trail while checked in (app only; see lib/attendance-location.ts).
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
     // The same tick the per-minute cron runs — so a batch that proves 2 h 30 outside is answered with
     // the automatic check-out rather than a stage that is already out of date.
     const clock = await advanceOutsideClock(ingest.recordId, { now })
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(session.user.id)
     return NextResponse.json({
       ok: true,
       tracking: clock.stage !== "auto_checked_out" && clock.tracking,

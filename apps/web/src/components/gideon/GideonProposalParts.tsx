@@ -24,3 +24,16 @@ export function ProposalHead({ open, title, summary }: { open: boolean; title: s
     </div>
   );
 }
+
+/**
+ * A row's day in the reader's language ("Fri 23 Oct" / "Jum 23 Okt"), keeping the WIB time the server put after it;
+ * the server's English label when there is no day. (Same rule as the panel's change card.)
+ */
+export function diffDayText(label: string | null | undefined, day: string | null | undefined, locale: string): string | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return label ?? null;
+  const d = new Date(`${day}T12:00:00Z`);
+  const sameYear = day.slice(0, 4) === String(new Date().getFullYear());
+  const text = d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" }).replace(/,/g, "");
+  const time = label?.match(/\b\d{2}:\d{2}$/)?.[0];
+  return time ? `${text} ${time}` : text;
+}

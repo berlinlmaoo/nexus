@@ -31,6 +31,7 @@ struct ProjectSettingsView: View {
     @State private var savingTabs = false
     @State private var autoAssign = false
     @State private var autoIds: Set<String> = []
+    @State private var autoAssignExpanded = true
     @State private var viewerWsRole: String?
 
     // fields & members
@@ -122,13 +123,13 @@ struct ProjectSettingsView: View {
     // MARK: identity
 
     private var identityCard: some View {
-        card("Identitas") {
+        card("Identity") {
             field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
-            field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
+            field(T("Description")) { TextField(T("Short description"), text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
             // No emoji and no colour any more (owner, 11 Oct 2026): the project's photo, or the Tasks icon.
             field(T("Photo")) { photoRow }
             Button { Task { await saveIdentity() } } label: {
-                Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
+                Text(savingIdentity ? T("Saving…") : (identitySaved ? T("Saved") + " ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity || !canManage)
         }
         .disabled(!canManage)
@@ -186,19 +187,44 @@ struct ProjectSettingsView: View {
             }
             if autoAssign {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(T("Auto-assign to:")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    if !autoAssignExpanded && !autoIds.isEmpty {
+                        HStack(spacing: 10) {
+                            HStack(spacing: -6) {
+                                ForEach(Array(projectMembers.filter { autoIds.contains($0.uid) }.prefix(3))) { m in
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 22, userId: m.uid, name: m.displayName)
+                                        .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
+                                }
+                            }
+                            Text(projectMembers.filter { autoIds.contains($0.uid) }.map(\.displayName).joined(separator: ", "))
+                                .font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
+                            Spacer(minLength: 0)
+                            if canManage {
+                                Button(T("Change")) { autoAssignExpanded = true }
+                                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                    .accessibilityIdentifier("project.autoAssign.change")
+                            }
+                        }.accessibilityIdentifier("project.autoAssign.summary")
+                    } else {
+                    HStack {
+                        Text(String(format: T("Default assignees · %@"), AppNumber.int(autoIds.count)))
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                        Spacer()
+                        if !autoIds.isEmpty { Button(T("Done")) { autoAssignExpanded = false }.font(NXFont.text(12, .semibold)) }
+                    }
                     ForEach(projectMembers) { m in
                         Button {
                             if autoIds.contains(m.uid) { autoIds.remove(m.uid) } else { autoIds.insert(m.uid) }
+                            autoAssignExpanded = autoIds.isEmpty
                             Task { await patch(["autoAssignEnabled": true, "autoAssignAssigneeIds": Array(autoIds)]) }
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: autoIds.contains(m.uid) ? "checkmark.circle.fill" : "circle").foregroundStyle(autoIds.contains(m.uid) ? NX.violetText : NX.mutedFg)
-                                AvatarView(url: m.user?.avatar, initial: m.initial, size: 26)
+                                AvatarView(url: m.user?.avatar, initial: m.initial, size: 26, userId: m.uid, name: m.displayName)
                                 Text(m.displayName).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                                 Spacer()
                             }
                         }.buttonStyle(.plain)
+                    }
                     }
                 }
             }
@@ -263,7 +289,7 @@ struct ProjectSettingsView: View {
             }
             if canManage {
                 NavigationLink { CustomFieldEditor(projectId: projectId) { await reloadFields() } } label: {
-                    Label("Field baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                    Label(T("New field"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
                 }
             }
         }
@@ -297,7 +323,7 @@ struct ProjectSettingsView: View {
     /// Full access, plain text for everyone else (web settings drawer + header members popover).
     private func memberRow(_ m: ProjectDetail.ProjectMember) -> some View {
         HStack(spacing: 10) {
-            AvatarView(url: m.user?.avatar, initial: m.initial, size: 32)
+            AvatarView(url: m.user?.avatar, initial: m.initial, size: 32, userId: m.uid, name: m.displayName)
             VStack(alignment: .leading, spacing: 1) {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if m.isProjectOwner {
@@ -324,7 +350,7 @@ struct ProjectSettingsView: View {
             // Duplicate: BoD and above (it clones every task, assignee and member at once; web drawer).
             if isBoD {
                 Button { Task { await duplicate() } } label: {
-                    Label(busy ? "…" : "Duplikat project", systemImage: "doc.on.doc").font(NXFont.text(14, .bold)).foregroundStyle(NX.blue)
+                    Label(busy ? "…" : T("Duplicate project"), systemImage: "doc.on.doc").font(NXFont.text(14, .bold)).foregroundStyle(NX.blue)
                 }.disabled(busy)
             }
             if isBoD && canManage { Divider().overlay(NX.border) }
@@ -345,7 +371,7 @@ struct ProjectSettingsView: View {
 
     private func card<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(title)
+            SectionLabel(T(title))
             content()
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -361,7 +387,7 @@ struct ProjectSettingsView: View {
     private func flagToggle(_ title: String, _ sub: String, _ binding: Binding<Bool>, _ onSet: @escaping () async -> Void) -> some View {
         Toggle(isOn: Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; Task { await onSet() } })) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(T(title)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
         }.tint(NX.violetText)
@@ -421,6 +447,7 @@ struct ProjectSettingsView: View {
         hiddenTabs = detail.hiddenTabs ?? []
         autoAssign = detail.autoAssignEnabled ?? false
         autoIds = Set(detail.autoAssignAssigneeIds ?? [])
+        autoAssignExpanded = autoIds.isEmpty
         projectMembers = detail.members ?? []
     }
     private func load() async {
@@ -565,7 +592,7 @@ struct ProjectSettingsView: View {
     }
     private func duplicate() async {
         busy = true
-        if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show("Project diduplikat ✓") }
+        if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show(T("Project duplicated") + " ✓") }
         else { show(T("Couldn't duplicate.")) }
         busy = false
     }

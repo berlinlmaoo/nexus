@@ -41,14 +41,11 @@ extension AppLanguage {
         "Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.": "Hapus “{name}”? Kantor ini hilang dari daftar dan tidak bisa dipakai check-in lagi. Hari yang sudah tercatat di sana tetap memakai nama kantornya.",
         "Couldn't delete the office": "Kantor tidak bisa dihapus",
         // Home tiles
-        "No open tasks": "Tidak ada task terbuka",
         // Calendar view settings (fix20 API copy 5)
         "Show tasks by": "Tampilkan task berdasarkan",
         // Project tab row overflow (decision 5)
         "%d more": "%d lainnya",
         "More views": "View lainnya",
         // Home Quests tile without quests (fix20 API copy 6)
-        "No active quests": "Tidak ada quest aktif",
-        "How quests work": "Cara kerja quest",
     ]
 }

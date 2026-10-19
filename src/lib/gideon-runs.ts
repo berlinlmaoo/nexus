@@ -1,9 +1,16 @@
+import { EXTRA_WRITE_ACTIONS, extraNeedsApproval, extraStepLabel, isExtraAction } from "@/lib/gideon-tools/meta"
 import { EventEmitter } from "events"
 import { parseShimUsage, recordRunUsage } from "@/lib/gideon-credits"
 import prisma from "@/lib/prisma"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { createLogger } from "@/lib/logger"
 import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChangeView, type GideonBookingView } from "@/lib/gideon-book-room-plan"
 import { resolveRoomName } from "@/lib/room-booking-rooms"
+import { createTaskNeedsProject, type TaskTargetProject } from "@/lib/gideon-task-target"
+import { memoryView, type MemoryView } from "@/lib/gideon-memory"
+import { gideonSummaryPair, type SummaryLang } from "@/lib/gideon-summary-i18n"
+import { changedDiffRows } from "@/lib/gideon-diff-rows"
+import { langFromRequest, recipientLang } from "@/lib/notification-text"
 
 /**
  * GIDEON runs (owner, 12 Oct 2026 — "GIDEON replies like Notion's agent").
@@ -26,7 +33,7 @@ import { resolveRoomName } from "@/lib/room-booking-rooms"
 
 const log = createLogger("gideon-runs")
 
-export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | "WRITE" | "AUTOFILL"
+export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | "WRITE" | "AUTOFILL" | "MEETING"
 export type ApprovalMode = "always_ask" | "review" | "dont_ask"
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["always_ask", "review", "dont_ask"]
 
@@ -35,7 +42,7 @@ export function parseApprovalMode(value: unknown): ApprovalMode | null {
 }
 
 /** Tools that change something. Everything else is a read. */
-export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking"])
+export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_comment", "create_document", "book_room", "move_room_booking", "cancel_room_booking", "delete_task", ...EXTRA_WRITE_ACTIONS])
 
 /**
  * Which writes wait for the person (Notion's "Always ask / Review for me / Skip approvals").
@@ -51,9 +58,18 @@ export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_co
  * was named, because GIDEON never guesses a room: the person picks it on the card.
  * move_room_booking / cancel_room_booking (16 Oct 2026) likewise: a card in always_ask and review, direct only in
  * dont_ask — and a move whose named room could be more than one room is a card in every mode.
+ * create_task naming no project (owner, 18 Oct 2026): a card with a project picker in EVERY mode.
+ * delete_task (owner, 18 Oct 2026): a card in EVERY mode, "don't ask" included. A delete never runs without the
+ * person tapping the destructive button on the card (the apply route also wants the task id echoed back from it).
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
   if (!WRITE_ACTIONS.has(action)) return false
+  if (action === "delete_task") return true
+  // A new task with no project named (18 Oct 2026): a card with the project picker in every mode — GIDEON never
+  // guesses a project, the person picks it (preselected when the context makes it obvious).
+  if (action === "create_task" && createTaskNeedsProject(input)) return true
+  // The 18 Oct 2026 package (lib/gideon-tools/meta.ts): "always" = a card in every mode, "modes" = like create_task.
+  if (isExtraAction(action)) return extraNeedsApproval(action, mode)
   if (action === "book_room") return mode !== "dont_ask" || !resolveRoomName(input.room).room
   if (action === "move_room_booking") return mode !== "dont_ask" || moveNeedsPick(input)
   if (action === "cancel_room_booking") return mode !== "dont_ask"
@@ -109,15 +125,80 @@ export type GideonProposalView = {
    * card never sees this field and cannot apply the proposal (the apply route wants the booking id back).
    */
   bookingChange?: GideonBookingChangeView | null
+  /**
+   * delete_task only (18 Oct 2026): the task as it was when the card was made, for the destructive card. A client
+   * without that card draws the diff rows; the apply route refuses its Apply without `confirm: { taskId }`.
+   */
+  taskDelete?: GideonTaskDeleteView | null
+  /**
+   * create_task without a project (18 Oct 2026): the project picker. `projects` = only those the person can edit;
+   * sections and members of the picked one come from GET /api/gideon/task-targets?projectId=. A client without the
+   * picker never sees this field and cannot apply the proposal (the apply route wants `task: { projectId, … }`).
+   */
+  taskTarget?: GideonTaskTargetView | null
+  /**
+   * The 18 Oct 2026 package only (inbox/chat/reminders/leave/…, lib/gideon-tools/meta.ts): what its card draws beyond
+   * the rows — the long text in full (`preview`: a message, a doc section, an announcement) and, once applied, where
+   * the result is (`link`). A client without the card draws the diff rows; the apply route refuses its Apply
+   * without `confirm: { proposalId }` (released apps), so nothing outward-facing is ever applied from plain rows.
+   */
+  extra?: GideonExtraView | null
+  /**
+   * QA final 19 Oct 2026 (E-6): the card summary in both languages. `summary` itself is in the person's language
+   * (X-Nexus-Lang / web Accept-Language, else their stored uiLanguage, else English) so released apps that print
+   * it as is show it right; new clients pick `summaryId` / `summaryEn` by their own UI language.
+   */
+  summaryEn?: string
+  summaryId?: string
+  /**
+   * D-10: true when every "before → after" row of the card had before = after (those rows are left out of
+   * `diff`): Apply would change nothing. Clients show "No changes · Tidak ada perubahan". Absent = false.
+   */
+  noChange?: boolean
+}
+export type GideonTaskTargetView = {
+  title: string
+  projects: TaskTargetProject[]
+  /** Preselected (the project open / @-mentioned, a name the person said, or the only one); null = pick one. */
+  projectId: string | null
+  taskListId: string | null
+  status: string | null
+  assigneeIds: string[]
+  dueDay: string | null
+  /** Once applied: where it went. */
+  chosenProjectId: string | null
+}
+/** `note`: what an applied card adds (e.g. "Skipped: 2 tasks changed by someone meanwhile"). */
+export type GideonExtraView = {
+  preview: string | null; link: string | null; note: string | null
+  /** edit_sheet_cells only: the cells before → after and the rows added, as the card shows them. */
+  sheetEdit?: { sheet?: string; project?: string; cells?: { ref: string; from: string | null; to: string | null }[]; newRows?: unknown[] } | null
+}
+/** What a delete card shows. `deleted`: applied; it can be restored from Control Room → Audit (`auditLogId`). */
+export type GideonTaskDeleteView = {
+  taskId: string
+  title: string
+  projectId: string | null
+  projectName: string | null
+  /** The task's column (its status as the project names it) and the progress word behind it ("To do", "Done"…). */
+  status: string | null
+  progress: string | null
+  due: string | null
+  dueDay: string | null
+  assignees: string[]
+  deleted: boolean
+  auditLogId: string | null
 }
 export type GideonStepView = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null }
-export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[] }
+/** memories (19 Oct 2026): what this answer saved or suggested to GIDEON Memory (the Save / Don't save chip). Owner-only. */
+export type GideonRunMeta = { steps: GideonStepView[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposalView[]; memories?: MemoryView[] }
 
 export type RunEvent =
   | { type: "step"; step: GideonStepView }
   | { type: "sources"; sources: GideonRef[] }
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposalView }
+  | { type: "memory"; memory: MemoryView }
 
 // ── Bus ───────────────────────────────────────────────────────────────────────────────────────────────
 // globalThis, not a module variable: Next bundles each route separately, and the chat route and the tools
@@ -137,6 +218,17 @@ export function subscribeRun(runId: string, fn: (event: RunEvent) => void): () =
   const key = `run:${runId}`
   bus().on(key, fn)
   return () => bus().off(key, fn)
+}
+
+/** Control Room › GIDEON › Performance refetches when an answer starts or ends (pages/api/socket.ts folds bursts). */
+function perfPing() {
+  try { eventBus.emit(BUS_EVENTS.GIDEON_PERF, { kind: "runs" }) } catch { /* never fail an answer over the panel */ }
+}
+
+/** The shim runner retried this question with every tool (a router miss): counted on the performance panel. */
+export async function markRouterRetry(runId: string | null | undefined) {
+  if (!runId) return
+  await prisma.gideonRun.update({ where: { id: runId }, data: { routerRetry: true } }).catch(() => {})
 }
 
 // ── Run lifecycle ─────────────────────────────────────────────────────────────────────────────────────
@@ -165,6 +257,7 @@ export async function startRun(input: {
       },
       select: { id: true },
     })
+    perfPing()
     return run.id
   } catch (error) {
     // The log is a convenience: never fail the answer because it could not be written.
@@ -193,6 +286,7 @@ export async function finishRun(runId: string | null | undefined, outcome: { ok:
         durationMs: run ? now.getTime() - run.startedAt.getTime() : null,
       },
     })
+    perfPing()
   } catch (error) {
     log.error("finishRun failed", { runId, error: String(error) })
   }
@@ -243,7 +337,11 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "book_room": return a ? `Booking ${a}` : "Booking a room"
     case "move_room_booking": return a ? `Moving booking ${a}` : "Moving a booking"
     case "cancel_room_booking": return a ? `Cancelling booking ${a}` : "Cancelling a booking"
-    default: return tool.replace(/_/g, " ")
+    case "delete_task": return a ? `Deleting task ${a}` : "Deleting a task"
+    case "remember": return "Remembering"
+    case "forget": return "Forgetting"
+    case "list_my_memories": return "Checking GIDEON Memory"
+    default: return extraStepLabel(tool, a) ?? tool.replace(/_/g, " ")
   }
 }
 
@@ -267,6 +365,7 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
       }
       case "get_task":
       case "update_task":
+      case "delete_task":
       case "add_task_comment": {
         const id = str(input.taskId)
         if (!id) return null
@@ -318,7 +417,8 @@ const docUrl = (id: string) => `/docs/${id}`
 
 function taskRef(t: AnyObj): GideonRef | null {
   if (!t || typeof t.id !== "string" || typeof t.title !== "string") return null
-  const projectId = t.taskList?.projectId ?? t.project?.id ?? null
+  // Full rows carry taskList / project objects; the compact list rows (gideon-compact.ts) carry projectId.
+  const projectId = t.taskList?.projectId ?? t.project?.id ?? (typeof t.projectId === "string" ? t.projectId : null)
   return { kind: "task", id: t.id, title: t.title, projectId, url: taskUrl(t.id) }
 }
 
@@ -330,15 +430,19 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
   if (!d) return out
   switch (tool) {
     case "list_projects":
-      if (Array.isArray(d)) for (const p of d.slice(0, 8)) if (p?.id && p?.name) push({ kind: "project", id: p.id, title: p.name, url: projectUrl(p.id) })
+      for (const p of (Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []).slice(0, 8)) if (p?.id && p?.name) push({ kind: "project", id: p.id, title: p.name, url: projectUrl(p.id) })
       break
     case "get_project_summary":
       if (d.project?.id) push({ kind: "project", id: d.project.id, title: d.project.name, url: projectUrl(d.project.id) })
+      if (d.project?.id && Array.isArray(d.topOpenTasks)) for (const t of d.topOpenTasks.slice(0, 8)) push(taskRef({ ...t, projectId: d.project.id }))
       break
     case "list_tasks":
-    case "search_tasks":
-      if (Array.isArray(d)) for (const t of d.slice(0, 10)) push(taskRef(t))
+    case "search_tasks": {
+      // Paged compact rows since 18 Oct 2026 ({ items }); a list in one project names it once at the top.
+      const rows = Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []
+      for (const t of rows.slice(0, 10)) push(taskRef(typeof d.projectId === "string" && !t.projectId ? { ...t, projectId: d.projectId } : t))
       break
+    }
     case "get_task":
       push(taskRef(d))
       break
@@ -426,13 +530,25 @@ export async function recordStep(runId: string, step: { tool: string; arg?: stri
   }
 }
 
-export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null; input?: unknown }): GideonProposalView {
+/** The language a proposal's summary is shown in for this person: what this request says, else what they chose. */
+export async function proposalLang(userId: string, headers?: Headers | null): Promise<SummaryLang> {
+  const asked = headers ? langFromRequest(headers) : null
+  if (asked) return asked
+  return (await recipientLang(userId).catch(() => null)) === "id" ? "id" : "en"
+}
+
+export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null; input?: unknown }, lang?: SummaryLang): GideonProposalView {
   const result = p.result as AnyObj | null | undefined
+  // `lang` is typed, but `.map(proposalView)` would pass the index: anything but "id" is English.
+  const pair = gideonSummaryPair(p.summary)
+  const { rows, noChange } = changedDiffRows(Array.isArray(p.diff) ? (p.diff as GideonDiffRow[]) : [])
   return {
     id: p.id,
     action: p.action,
-    summary: p.summary,
-    diff: Array.isArray(p.diff) ? (p.diff as GideonDiffRow[]) : [],
+    summary: lang === "id" ? pair.summaryId : p.summary,
+    ...pair,
+    ...(noChange ? { noChange: true } : {}),
+    diff: rows,
     status: p.status,
     projectId: p.projectId,
     taskId: p.taskId,
@@ -441,6 +557,60 @@ export function proposalView(p: { id: string; action: string; summary: string; d
     error: p.error ?? null,
     ...(p.action === "book_room" ? { booking: bookingView(p.input, (result?.booking as AnyObj | undefined)?.id ?? null) } : {}),
     ...(p.action === "move_room_booking" || p.action === "cancel_room_booking" ? { bookingChange: bookingChangeView(p.action, p.input, result) } : {}),
+    ...(p.action === "delete_task" ? { taskDelete: taskDeleteView(p.input, result, p.status) } : {}),
+    ...(p.action === "create_task" && (p.input as AnyObj | null)?.pickProject === true ? { taskTarget: taskTargetView(p.input) } : {}),
+    ...(isExtraAction(p.action) ? { extra: extraView(p.input, result) } : {}),
+  }
+}
+
+function extraView(input: unknown, result: AnyObj | null | undefined): GideonExtraView {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  return {
+    preview: typeof i.preview === "string" && i.preview ? i.preview : null,
+    link: typeof result?.link === "string" && result.link ? result.link : null,
+    note: typeof result?.note === "string" && result.note ? result.note : null,
+    ...(i.sheetEdit && typeof i.sheetEdit === "object" ? { sheetEdit: i.sheetEdit as GideonExtraView["sheetEdit"] } : {}),
+  }
+}
+
+/** The create card's project picker, from what the proposal stored when it was made (tools route describeWrite). */
+export function taskTargetView(input: unknown): GideonTaskTargetView | null {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  const t = (i.taskTarget && typeof i.taskTarget === "object" ? i.taskTarget : null) as AnyObj | null
+  if (!t) return null
+  const s = (v: unknown) => (typeof v === "string" && v ? v : null)
+  const due = s(i.dueDate)
+  return {
+    title: s(i.title) ?? "",
+    projects: Array.isArray(t.projects) ? (t.projects as TaskTargetProject[]) : [],
+    projectId: s(t.preselectedProjectId),
+    taskListId: s(i.taskListId),
+    status: s(i.status),
+    assigneeIds: Array.isArray(i.assigneeIds) ? i.assigneeIds.filter((x: unknown): x is string => typeof x === "string") : [],
+    dueDay: s(t.dueDay) ?? (due && /^\d{4}-\d{2}-\d{2}/.test(due) ? due.slice(0, 10) : null),
+    chosenProjectId: s(i.projectId),
+  }
+}
+
+/** The delete card's task, from the snapshot the proposal stored when it was made (tools route describeWrite). */
+export function taskDeleteView(input: unknown, result: AnyObj | null | undefined, status: string): GideonTaskDeleteView | null {
+  const i = (input && typeof input === "object" ? input : {}) as AnyObj
+  const b = (i.before && typeof i.before === "object" ? i.before : null) as AnyObj | null
+  const taskId = typeof i.taskId === "string" ? i.taskId : null
+  if (!b || !taskId) return null
+  const s = (v: unknown) => (typeof v === "string" && v ? v : null)
+  return {
+    taskId,
+    title: s(b.title) ?? "",
+    projectId: s(b.projectId),
+    projectName: s(b.projectName),
+    status: s(b.status),
+    progress: s(b.progress),
+    due: s(b.due),
+    dueDay: s(b.dueDay),
+    assignees: Array.isArray(b.assignees) ? b.assignees.filter((x: unknown): x is string => typeof x === "string") : [],
+    deleted: status === "APPLIED",
+    auditLogId: s(result?.auditLogId),
   }
 }
 
@@ -468,9 +638,10 @@ export function citedRefs(reply: string, refs: GideonRef[]): GideonRef[] {
  * `citedBy` (the reply): keep only the sources it cites (citedRefs), before the cap of 20.
  */
 export async function runMeta(runId: string, opts: { citedBy?: string } = {}): Promise<GideonRunMeta> {
-  const [steps, proposals] = await Promise.all([
+  const [steps, proposals, memories] = await Promise.all([
     prisma.gideonRunStep.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
     prisma.gideonProposal.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
+    prisma.gideonMemory.findMany({ where: { sourceRunId: runId }, orderBy: { createdAt: "asc" } }).catch(() => []),
   ])
   const sources: GideonRef[] = []
   const cards: GideonCard[] = []
@@ -484,7 +655,8 @@ export async function runMeta(runId: string, opts: { citedBy?: string } = {}): P
     steps: steps.map((s) => ({ id: s.id, tool: s.tool, arg: s.arg, label: s.label, status: s.ok === false ? "error" : "done", error: s.error })),
     sources: (opts.citedBy !== undefined ? citedRefs(opts.citedBy, sources) : sources).slice(0, 20),
     cards,
-    proposals: proposals.map(proposalView),
+    proposals: proposals.map((p) => proposalView(p)),
+    ...(memories.length ? { memories: memories.map(memoryView) } : {}),
   }
 }
 

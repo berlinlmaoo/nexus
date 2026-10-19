@@ -180,7 +180,7 @@ struct ApprovalChartView: View {
                         ForEach(alone, id: \.idv) { p in
                             Button { tap(p) } label: {
                                 HStack(spacing: 6) {
-                                    AvatarView(url: p.avatarURL, initial: p.initial, size: 20)
+                                    AvatarView(url: p.avatarURL, initial: p.initial, size: 20, userId: p.userId, name: p.displayName)
                                     Text(p.displayName).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                     Text(orgRoleLabel(p.role)).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                                 }
@@ -320,7 +320,7 @@ private struct OrgPersonCard: View {
     var body: some View {
         Button { onTap(person) } label: {
             HStack(spacing: 8) {
-                AvatarView(url: person.avatarURL, initial: person.initial, size: 28)
+                AvatarView(url: person.avatarURL, initial: person.initial, size: 28, userId: person.userId, name: person.displayName)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(person.displayName).font(NXFont.text(12, .bold)).foregroundStyle(fg).lineLimit(1)
                     HStack(spacing: 4) {

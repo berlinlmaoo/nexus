@@ -10,6 +10,7 @@ import { sessionVersionRejects } from '@/lib/session-version'
 import { recordUserSession, sessionRejected } from '@/lib/user-sessions'
 import { SESSION_MAX_AGE_SECONDS } from '@/lib/session-issue'
 import { headers } from 'next/headers'
+import { normalizeTokenUserId } from '@/lib/legacy-ids'
 
 const log = createLogger('auth')
 
@@ -66,6 +67,9 @@ export const nexusNextAuthConfig = {
       if (!token.id && typeof token.sub === 'string') {
         token.id = token.sub
       }
+      // A token minted before the UUIDv7 conversion names the user by the old id; every check below
+      // (sessions ledger, revocation) and session.user.id must see the new one (lib/legacy-ids.ts).
+      await normalizeTokenUserId(token)
       if (token.id) {
         try {
           const dbUser = await prisma.user.findUnique({

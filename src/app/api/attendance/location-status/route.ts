@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { touchPresenceSoon } from "@/lib/presence"
 
 /**
  * The app reports whether it can track location for this check-in: { recordId, state: "on" | "denied" }.
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
         data: { locationTrackingState: state },
       })
     }
+    // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
+    touchPresenceSoon(session.user.id)
     return NextResponse.json({ ok: true, locationTrackingState: state, changed: record.locationTrackingState !== state })
   } catch (error) {
     console.error("Error storing location tracking state:", error)

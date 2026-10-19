@@ -81,6 +81,8 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     /// Set when the message carries a picture. Server-relative, e.g. "/api/files/chat/<uuid>.jpg".
     let attachmentUrl: String?
     let attachmentType: String?
+    let attachmentName: String?
+    let attachmentSize: Int?
     /// The message this one answers. Optional because every message sent before replies existed
     /// has none, and the server sends null rather than omitting the key.
     let replyTo: Quoted?
@@ -96,12 +98,14 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
         let id: String
         let content: String?
         let attachmentType: String?
+        let attachmentName: String?
+        let attachmentSize: Int?
         /// The quoted picture, when the server sends it. Today's server leaves it out; the thread
         /// then takes it from the quoted message itself if that one is loaded.
         let attachmentUrl: String?
         let user: UserRef?
 
-        private enum CodingKeys: String, CodingKey { case id, content, attachmentType, attachmentUrl, user }
+        private enum CodingKeys: String, CodingKey { case id, content, attachmentType, attachmentUrl, attachmentName, attachmentSize, user }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -109,14 +113,18 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
             content = try? c.decodeIfPresent(String.self, forKey: .content)
             attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
             attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+            attachmentName = try? c.decodeIfPresent(String.self, forKey: .attachmentName)
+            attachmentSize = try? c.decodeIfPresent(Int.self, forKey: .attachmentSize)
             user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
         }
 
-        init(id: String, content: String?, attachmentType: String?, attachmentUrl: String? = nil, user: UserRef?) {
+        init(id: String, content: String?, attachmentType: String?, attachmentUrl: String? = nil, attachmentName: String? = nil, attachmentSize: Int? = nil, user: UserRef?) {
             self.id = id
             self.content = content
             self.attachmentType = attachmentType
             self.attachmentUrl = attachmentUrl
+            self.attachmentName = attachmentName
+            self.attachmentSize = attachmentSize
             self.user = user
         }
     }
@@ -124,7 +132,7 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     var isSystem: Bool { kind == "SYSTEM" }
 
     private enum CodingKeys: String, CodingKey {
-        case id, userId, content, createdAt, user, attachmentUrl, attachmentType, replyTo, kind, event
+        case id, userId, content, createdAt, user, attachmentUrl, attachmentType, attachmentName, attachmentSize, replyTo, kind, event
     }
 
     /// Lenient past `id`: one row this build cannot fully read must not empty the whole page, and the
@@ -138,13 +146,15 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
         user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
         attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
         attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
+        attachmentName = try? c.decodeIfPresent(String.self, forKey: .attachmentName)
+        attachmentSize = try? c.decodeIfPresent(Int.self, forKey: .attachmentSize)
         replyTo = try? c.decodeIfPresent(Quoted.self, forKey: .replyTo)
         kind = try? c.decodeIfPresent(String.self, forKey: .kind)
         event = try? c.decodeIfPresent(ChatSystemEvent.self, forKey: .event)
     }
 }
 
-struct ChatUpload: Decodable, Sendable { let url: String; let type: String? }
+struct ChatUpload: Decodable, Sendable { let url: String; let type: String?; let kind: String?; let name: String?; let size: Int? }
 
 struct ConversationsResponse: Decodable, Sendable {
     let conversations: [Conversation]?
@@ -415,11 +425,13 @@ struct ChatMediaItem: Decodable, Sendable, Identifiable {
     let url: String
     let attachmentType: String?
     let title: String?
+    let name: String?
+    let size: Int?
 
     /// A message can carry several links, one item each: the id has to tell them apart.
     var id: String { messageId + "|" + url }
 
-    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, url, attachmentType, title }
+    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, url, attachmentType, title, name, size }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -429,6 +441,8 @@ struct ChatMediaItem: Decodable, Sendable, Identifiable {
         sender = try? c.decodeIfPresent(ChatPersonRef.self, forKey: .sender)
         attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
         title = try? c.decodeIfPresent(String.self, forKey: .title)
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        size = try? c.decodeIfPresent(Int.self, forKey: .size)
     }
 }
 

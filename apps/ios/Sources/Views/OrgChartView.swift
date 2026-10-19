@@ -196,7 +196,7 @@ struct AdminOrgChartSection: View {
                         ForEach(alone) { p in
                             Button { placing = p } label: {
                                 HStack(spacing: 6) {
-                                    AvatarView(url: p.avatar, initial: p.initial, size: 22)
+                                    AvatarView(url: p.avatar, initial: p.initial, size: 22, userId: p.userId, name: p.displayName)
                                     Text(p.displayName).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
@@ -590,7 +590,7 @@ private struct OrgUnitCard: View {
                     if !faces.isEmpty {
                         HStack(spacing: -6) {
                             ForEach(faces.prefix(4)) { p in
-                                AvatarView(url: p.avatar, initial: p.initial, size: 20)
+                                AvatarView(url: p.avatar, initial: p.initial, size: 20, userId: p.userId, name: p.displayName)
                                     .overlay(Circle().stroke(tone.fill, lineWidth: 2))
                             }
                             if faces.count > 4 {
@@ -652,7 +652,7 @@ private struct OrgPeopleBox: View {
     private func row(_ p: OrgPersonDTO) -> some View {
         Button { ctx.onPerson(p) } label: {
             HStack(spacing: 8) {
-                AvatarView(url: p.avatar, initial: p.initial, size: 26)
+                AvatarView(url: p.avatar, initial: p.initial, size: 26, userId: p.userId, name: p.displayName)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(p.displayName).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text(subline(p)).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -1123,7 +1123,7 @@ private struct OrgTitleRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                AvatarView(url: person.avatar, initial: person.initial, size: 28)
+                AvatarView(url: person.avatar, initial: person.initial, size: 28, userId: person.userId, name: person.displayName)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(person.displayName).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text(orgRoleLabel(person.role)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
@@ -1333,7 +1333,7 @@ private struct OrgPersonSheet: View {
                         let on = reportsTo[r.unit.id] == r.leader.userId
                         Button { Task { await place(r) } } label: {
                             HStack(spacing: 10) {
-                                AvatarView(url: r.leader.avatar, initial: r.leader.initial, size: 28)
+                                AvatarView(url: r.leader.avatar, initial: r.leader.initial, size: 28, userId: r.leader.userId, name: r.leader.displayName)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(r.leader.displayName + (r.leader.title(in: r.unit.id).map { " — \($0)" } ?? ""))
                                         .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)

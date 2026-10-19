@@ -1,0 +1,18 @@
+<resources>
+    <string name="oc_guests">Guests · %1$s</string>
+    <string name="oc_guests_empty">Fill a report to see the guest breakdown for this month.</string>
+    <string name="oc_settings">Report settings</string>
+    <string name="oc_communities">Communities</string>
+    <string name="oc_breakdown">Breakdown</string>
+    <string name="oc_hide_breakdown">Hide breakdown</string>
+    <string name="oc_day_target">Day target</string>
+    <string name="oc_set_day_target">Set/change day target</string>
+    <string name="oc_sales">Sales</string>
+    <string name="oc_pax">Pax</string>
+    <string name="oc_label">Name</string>
+    <string name="oc_remove">Remove</string>
+    <string name="oc_total_only">Total only</string>
+    <string name="oc_add_item">Add item</string>
+    <string name="oc_add_community">Add community</string>
+    <string name="oc_archive_confirm">Archive this item and keep its reports?</string>
+</resources>

@@ -28,6 +28,7 @@ import {
 } from "@/lib/deletion-entities"
 import { afterRestoreInTx, beforeRestoreInTx } from "@/lib/deletion-restore-rules"
 import { logAudit } from "@/lib/audit"
+import { isRecordNotFound } from "@/lib/prisma-errors"
 import { emitAuditChanged } from "@/lib/socket-emitter"
 import { deleteStoredFile } from "@/lib/vault"
 import { pipelineFilePath } from "@/lib/pipeline-documents"
@@ -166,9 +167,13 @@ export async function softDeleteKeepingSnapshot(
     const db = dbOf(tx)
     const schema = await schemaOf(db)
     const pk = schema.pk.get(table)?.[0] ?? "id"
-    const read = async () => {
+    // The first read locks the rows (FOR UPDATE): two revokes of the same row at once (double tap, two
+    // BoD) used to both read the row as "not revoked yet" and then, after the other one committed, see it
+    // revoked — a phantom change with its own copy (QA final 19 Oct C-15: 5 parallel revokes = 3 copies).
+    // Locked, the second one reads the committed state and finds nothing to change.
+    const read = async (lock = false) => {
       const rows = await db.query<{ r: Record<string, unknown> | string }>(
-        `select to_jsonb(t) as r from "${table}" t where t."${pk}"::text = any($1::text[])`,
+        `select to_jsonb(t) as r from "${table}" t where t."${pk}"::text = any($1::text[])${lock ? " for update of t" : ""}`,
         [ids],
       )
       const out = new Map<string, Record<string, unknown>>()
@@ -178,7 +183,7 @@ export async function softDeleteKeepingSnapshot(
       }
       return out
     }
-    const before = await read()
+    const before = await read(true)
     await input.apply(tx)
     const after = await read()
     const rows: SoftRow[] = []
@@ -265,8 +270,27 @@ export async function restorableDelete(
     request: input.request,
     metadata: input.metadata,
   })
-  const { rows } = await deleteKeepingSnapshot({ ...input, deletedById: input.userId, auditLogId })
-  return { auditLogId, rows }
+  try {
+    const { rows } = await deleteKeepingSnapshot({ ...input, deletedById: input.userId, auditLogId })
+    return { auditLogId, rows }
+  } catch (error) {
+    // Two deletes of the same row at once (double click, two people): the first one removed it, this
+    // one's remove() found nothing (P2025) and its copy rolled back. The row is gone either way, so this
+    // request ends like an idempotent delete instead of a 500 (QA final 19 Oct: 5 parallel deletes of a
+    // custom field = 1x 200 + 4x 500).
+    // Nothing was deleted by THIS request (its transaction rolled back), so its audit row, which has no
+    // copy behind it, would only show a delete that never happened.
+    if (auditLogId) await prisma.auditLog.deleteMany({ where: { id: auditLogId } }).catch(() => {})
+    if (!isRecordNotFound(error)) throw error
+    // Only when the row really is gone: a P2025 on some OTHER row (a section deleted while its tasks were
+    // being moved into it) stays an error rather than a false "deleted".
+    const table = rootTableOf(input.entityType)
+    const left = await prisma
+      .$queryRawUnsafe<{ n: number }[]>(`SELECT count(*)::int AS n FROM "${table}" WHERE id = ANY($1::text[])`, input.rootIds ?? [input.entityId])
+      .then((r) => r[0]?.n ?? 1, () => 1)
+    if (left > 0) throw error
+    return { auditLogId: null, rows: 0 }
+  }
 }
 
 /** restorableDelete for a soft delete. */
@@ -283,6 +307,12 @@ export async function restorableSoftDelete(
     metadata: input.metadata,
   })
   const { changed } = await softDeleteKeepingSnapshot({ ...input, deletedById: input.userId, auditLogId })
+  // Nothing changed (already revoked/trashed, or a parallel request got there first): the audit row
+  // would only show an action that never happened, with a Restore that has nothing to put back.
+  if (!changed) {
+    if (auditLogId) await prisma.auditLog.deleteMany({ where: { id: auditLogId } }).catch(() => {})
+    return { auditLogId: null, changed }
+  }
   return { auditLogId, changed }
 }
 

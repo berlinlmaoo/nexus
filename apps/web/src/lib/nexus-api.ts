@@ -35,6 +35,8 @@ export type VaultItem = {
   /** `/api/vault/items/<id>/thumb?v=…` for a picture the server can shrink; add `&w=`. Absent from
    *  servers before 9 Oct 2026, and null for everything that is not such a picture. */
   thumbUrl?: string | null;
+  /** An office file as a PDF to show inline (`/api/vault/items/<id>/preview?v=…`); null otherwise. Since 19 Oct 2026. */
+  previewUrl?: string | null;
   uploader: VaultPerson | null;
   owner: VaultPerson | null;
   childCount: number;
@@ -474,6 +476,8 @@ export type NexusAttendanceToday = {
   /** This period's allowance: base + extra days granted for it (servers from 28 Sep 2026). */
   dayOffQuota?: number;
   dayOffAllowance?: { period: string; base: number; bonus: number; grants: { days: number; reason: string }[] };
+  /** The following attendance period's day-off balance (additive, 19 Oct 2026). */
+  dayOffNextPeriod?: { period: string; quota: number; used: number; remaining: number };
   redDateUsedThisMonth?: number;
   redDateQuota?: number;
   myShift?: { startTime: string; endTime: string; source: string; flexi?: boolean } | null;
@@ -705,6 +709,11 @@ export type NexusConversation = {
   canManageMembers?: boolean;
   /** false = a project room you can read but not post in (Can view). Missing = allowed. */
   canPost?: boolean;
+  /**
+   * DM only, GET /api/conversations since 19 Oct 2026: the other person, or — when they are no longer
+   * in the room — the last one who wrote in it (`left: true`). null = nobody to name. Missing on older servers.
+   */
+  peer?: { id: string; name: string | null; avatar: string | null; left: boolean } | null;
   /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
   description?: string | null;
 };
@@ -1524,7 +1533,13 @@ export type NexusForm = {
   branding?: NexusFormBranding | null;
   settings?: NexusFormSettings | null;
   updatedAt?: string;
+  /** Live co-editing (server since 19 Oct 2026): +1 per write of the builder content. Absent on older servers. */
+  version?: number;
 };
+
+/** One builder edit, merged at field level by the server (PATCH /api/forms/:id { ops }, 19 Oct 2026). */
+export type NexusFormOp = import("@/components/forms/form-coedit").FormOp;
+export type NexusFormOpsResult = { form: NexusForm; version: number; applied: number; skipped: { index: number; op: string; reason: string }[] };
 
 export type NexusTeam = {
   id: string;
@@ -2349,6 +2364,8 @@ export type NexusOffsiteCheckout = {
 
 export const nexusApi = {
   profile: () => apiFetch<{ user: NexusUser }>("/api/user/profile"),
+  /** Old ids (before the UUIDv7 conversion) → new ids; unknown ids are left out. */
+  legacyIds: (ids: string[]) => apiFetch<{ ids: Record<string, string> }>(`/api/legacy-ids?ids=${ids.map(encodeURIComponent).join(",")}`),
   dashboard: () => apiFetch<NexusDashboardResponse>("/api/dashboard"),
   projects: () => apiFetch<NexusProject[]>("/api/projects"),
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
@@ -3095,6 +3112,10 @@ export const nexusApi = {
   /** The forms of many projects in one request (server since 12 Oct 2026; up to 300 ids; projects the caller can't open are skipped). */
   formsMany: (projectIds: string[]) => apiFetch<NexusForm[]>(`/api/forms?projectIds=${projectIds.map(encodeURIComponent).join(",")}`),
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
+  /** The builder's catch-up read: the form without its submissions (server since 19 Oct 2026). */
+  formLite: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}?lite=1`),
+  /** Live co-editing: apply these ops (only what this person changed) to the form as it is now. */
+  formOps: (formId: string, ops: NexusFormOp[], baseVersion?: number) => apiFetch<NexusFormOpsResult>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify({ ops, ...(baseVersion !== undefined ? { baseVersion } : {}) }) }),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null; /** The form's updatedAt this edit started from: 409 FORM_CHANGED when someone saved since (race audit H7). */ baseUpdatedAt?: string }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   /** The builder's Responses tab: submissions newest first with the task each one created (12 Oct 2026). */
@@ -3311,8 +3332,9 @@ export const nexusApi = {
   calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string, rooms: string[] = []) => apiFetch<{ tasks: CalendarTaskItem[]; bookings?: CalendarBookingItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rooms=${encodeURIComponent(rooms.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
   // --- Calendar (master calendar, /api/calendar/**; rules in lib/calendar/core.ts) ---
   calendarStructure: () => apiFetch<CalStructure>("/api/calendar/structure"),
-  calendarItems: (from: string, to: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
-  calendarOverdue: () => apiFetch<CalOverdueResponse>("/api/calendar/overdue"),
+  /** `folder`: the Folder filter (comma list of folder ids), applied by the server. */
+  calendarItems: (from: string, to: string, folder?: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${folder ? `&folder=${encodeURIComponent(folder)}` : ""}`),
+  calendarOverdue: (folder?: string) => apiFetch<CalOverdueResponse>(`/api/calendar/overdue${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
   /** How the Calendar may open one task it has not loaded (shared link, another month). */
   calendarTask: (id: string) => apiFetch<{ v: number; access: string; found: boolean; masked: boolean; canEdit: boolean; editProjectId: string | null; projectId: string | null }>(`/api/calendar/task?id=${encodeURIComponent(id)}`),
   /** The task read-only, for a calendar viewer outside its project (owner 13 Oct 2026). No file URLs. */
@@ -3320,7 +3342,7 @@ export const nexusApi = {
   calendarSettings: () => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings"),
   updateCalendarSettings: (body: Partial<CalendarSettings> | { projectId: string; private: boolean }) => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings", { method: "PATCH", body: JSON.stringify(body) }),
   // --- Room bookings ---
-  roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[] }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
+  roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[]; roomsAvailable?: boolean }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
   createRoomBooking: (payload: RoomBookingPayload) => apiFetch<{ booking: NexusRoomBooking }>("/api/room-bookings", { method: "POST", body: JSON.stringify(payload) }),
   updateRoomBooking: (bookingId: string, payload: Partial<RoomBookingPayload> & { status?: string }) => apiFetch<{ booking: NexusRoomBooking }>(`/api/room-bookings/${bookingId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteRoomBooking: (bookingId: string) => apiFetch<{ success?: boolean }>(`/api/room-bookings/${bookingId}`, { method: "DELETE" }),

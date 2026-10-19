@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { PageBody } from "@/components/PageLayout";
-import { Scale, AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock, CheckCircle2, CalendarCheck, Megaphone, LifeBuoy, FileText, Trophy, DoorOpen, Bell, type LucideIcon } from "lucide-react";
+import { Mic, Scale, AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock, CheckCircle2, CalendarCheck, Megaphone, LifeBuoy, FileText, Trophy, DoorOpen, Bell, type LucideIcon } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +34,9 @@ function notificationMark(type?: string | null): { Icon: LucideIcon; tone: strin
   const t = (type ?? "").toLowerCase();
   // Legal requests carry the Legal mark, as in the sidebar (UI tour run 13, W-B10: a generic bell).
   if (t.startsWith("legal")) return { Icon: Scale, tone: "bg-indigo-500/12 text-indigo-600 dark:text-indigo-400" };
+  // Meeting notes, Beta (18 Oct 2026): ready to review / failed.
+  if (t === "meeting_notes_failed") return { Icon: Mic, tone: "bg-destructive/10 text-destructive" };
+  if (t.startsWith("meeting_notes")) return { Icon: Mic, tone: "bg-accent text-sidebar-primary" };
   if (t.includes("mention")) return { Icon: AtSign, tone: "bg-sky-500/12 text-sky-600 dark:text-sky-400" };
   if (t === "task_assigned" || t === "project_invite" || t === "members_added") return { Icon: UserPlus, tone: "bg-primary/10 text-primary" };
   if (t === "task_completed") return { Icon: CheckCircle2, tone: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" };
@@ -71,9 +74,14 @@ function InboxPage() {
   return (
     <div>
       <PageHeader title={t("Notifications")} subtitle={t("Mentions, assignments, approvals and replies that need you.")} actions={
+        <div className="flex items-center gap-2">
+        <Link to="/reminders" className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98]">
+          <AlarmClock className="h-3.5 w-3.5" /> {t("Reminders")}
+        </Link>
         <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-60">
           {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Mark all as read")}
         </button>
+        </div>
       } tabs={!inbox.isLoading && !inbox.isError && notifications.length > 0
         ? <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} />
         : undefined} />

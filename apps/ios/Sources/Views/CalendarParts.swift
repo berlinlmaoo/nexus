@@ -447,7 +447,7 @@ struct CalPriorityChip: View {
         if priority == "URGENT" {
             CalChip(text: T("Urgent").uppercased(), tone: .danger)
         } else if priority == "HIGH" {
-            CalChip(text: T("High").uppercased(), tone: .high)
+            CalChip(text: T("High").uppercased(), tone: .orange)
         }
     }
 }
@@ -2072,7 +2072,7 @@ struct CalPeopleWeek: View {
     }
 
     /// A task in a day: its status mark and up to two lines of its title, on a quiet tile; overdue on a
-    /// red wash, done struck through without a tile, HIGH / URGENT flagged red.
+    /// red wash, done struck through without a tile, HIGH flagged orange, URGENT red.
     private func chip(_ item: CalItem) -> some View {
         let od = CalendarCore.overdueState(item, today: today, now: now, windowDays: windowDays)
         let quiet = item.done || item.noStatus
@@ -2091,9 +2091,7 @@ struct CalPeopleWeek: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if urgent {
-                    // Urgent red, High orange (decision 4 of run 17).
-                    Image(systemName: "flag.fill").font(NXFont.text(CalType.size(9), .bold))
-                        .foregroundStyle(item.priority == "URGENT" ? CalTone.overdue : NX.priorityHigh)
+                    Image(systemName: "flag.fill").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(TaskPriorityName.color(item.priority))
                         .padding(.top, 2)
                         .accessibilityLabel(item.priority == "URGENT" ? T("Urgent") : T("High"))
                 }
@@ -2147,6 +2145,7 @@ struct CalFilterSheet: View {
     let items: [CalItem]
     let people: CalPeople
     let myHomes: [String]
+    var folders: [CalFolder] = []
     /// Also offer Everyone / Mine / My division here, for a screen whose header does not show them.
     var showsScope = false
     @Environment(\.dismiss) private var dismiss
@@ -2196,6 +2195,9 @@ struct CalFilterSheet: View {
                     }
                     NavigationLink { peoplePage } label: {
                         linkLabel(T("People"), summary(filters.people) { people.name($0) })
+                    }
+                    if !folders.isEmpty {
+                        NavigationLink { folderPage } label: { linkLabel(T("Folders"), summary(filters.folders) { id in folders.first { $0.id == id }?.name }) }
                     }
                     NavigationLink { projectPage } label: {
                         linkLabel(T("Projects"), summary(filters.projects) { id in projects.first { $0.id == id }?.name })
@@ -2255,6 +2257,10 @@ struct CalFilterSheet: View {
         CalFilterPickList(title: T("People"), prompt: T("Search people…"), empty: T("Nobody has a task this month."),
                           options: personIds.map { id in CalFilterOption(id: id, name: people.name(id), mark: .avatar(people.avatar(id))) },
                           selection: $filters.people)
+    }
+
+    private var folderPage: some View {
+        CalFolderFilterPage(folders: folders, selection: $filters.folders)
     }
 
     private var projectPage: some View {
@@ -2388,3 +2394,26 @@ private struct CalFilterPickList: View {
 // MARK: - Read-only task preview
 // CalTaskReadOnly (CalendarTaskReadOnly.swift) since 13 Oct 2026: it reads the task through
 // GET /api/calendar/task?detail=1, because /api/tasks/:id is members-only.
+
+/// Server-ordered folder tree. Searching removes indentation, like the main web Calendar.
+private struct CalFolderFilterPage: View {
+    let folders: [CalFolder]
+    @Binding var selection: [String]
+    @State private var query = ""
+    @State private var showAll = false
+    private var matches: [CalFolder] { folders.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) } }
+    var body: some View {
+        List {
+            if matches.isEmpty { EmptyState(icon: "folder", title: T("No folder matches."), subtitle: T("Try other words.")) }
+            ForEach(query.isEmpty && !showAll ? Array(matches.prefix(8)) : matches) { folder in
+                CalCheckRow(on: selection.contains(folder.id), action: {
+                    if selection.contains(folder.id) { selection.removeAll { $0 == folder.id } } else { selection.append(folder.id) }
+                }, label: HStack { Image(systemName: "folder").foregroundStyle(NX.violetText); Text(folder.name).font(NXFont.text(CalType.size(15))); Spacer() }.padding(.leading, query.isEmpty ? CGFloat(folder.depth) * 12 : 0))
+            }
+            if query.isEmpty && !showAll && folders.count > 8 { Button(String(format: T("Show all (%@)"), AppNumber.int(folders.count))) { showAll = true } }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: T("Search folders…"))
+        .navigationTitle(T("Folders")).navigationBarTitleDisplayMode(.inline)
+        .toolbar { if !selection.isEmpty { ToolbarItem(placement: .topBarTrailing) { Button(T("Clear")) { selection = [] } } } }
+    }
+}

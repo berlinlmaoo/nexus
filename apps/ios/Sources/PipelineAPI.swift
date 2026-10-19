@@ -15,7 +15,7 @@ extension APIClient {
     }
 
     private static func pipelineEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     /// Deals with their server-computed health and phases, the KPI summary, and every option list.

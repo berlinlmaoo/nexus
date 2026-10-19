@@ -1,0 +1,11 @@
+<resources>
+    <string name="xpa_title">XP log</string>
+    <string name="xpa_description">Every XP change, added or deducted, for everyone</string>
+    <string name="xpa_all">All</string>
+    <string name="xpa_added">Added (+)</string>
+    <string name="xpa_deducted">Deducted (−)</string>
+    <string name="xpa_period">This period</string>
+    <string name="xpa_all_time">All time</string>
+    <string name="xpa_empty">No XP changes.</string>
+    <string name="xpa_more">Load more</string>
+</resources>

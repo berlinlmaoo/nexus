@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getAppConfig } from "@/lib/app-config"
+import { getTierStatus } from "@/lib/gideon-tier-status"
 
 /**
  * GET /api/app/config?platform=ios|android|web — public, no auth, exempt from the 426 gate (a
@@ -11,5 +12,8 @@ export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams.get("platform")
   const platform = p === "ios" || p === "android" || p === "web" ? p : null
   const cfg = await getAppConfig(platform)
-  return NextResponse.json(cfg, { headers: { "Cache-Control": "public, max-age=60" } })
+  // gideonTiers (18 Oct 2026): which GIDEON tiers can answer right now — live, not part of the stored config. The
+  // socket `gideon-tiers` moves it while an app is open; this is for an app that opens later.
+  const gideonTiers = await getTierStatus().catch(() => null)
+  return NextResponse.json({ ...cfg, gideonTiers }, { headers: { "Cache-Control": "public, max-age=15" } })
 }

@@ -395,7 +395,8 @@ async function notifyOutsideApprovers(
         userId,
         type: copy.type,
         ...bi([copyEn.title, copyEn.body], [copy.title, copy.body]),
-        link: "/attendance",
+        // C-7 (19 Oct 2026): straight to this person's trail. Apps that only read the path still land on /attendance.
+        link: `/attendance?trail=${encodeURIComponent(record.id)}&member=${encodeURIComponent(record.userId)}`,
         push: true,
         pushData: { ...pushData, staffUserId: record.userId },
       }).catch((error) => log.error("outside approver push failed", { recordId: record.id, approverId: userId, error: String(error) }))

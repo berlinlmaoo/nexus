@@ -567,7 +567,7 @@ struct SubmissionsView: View {
                 Spacer(minLength: 0)
                 HStack(spacing: -6) {
                     ForEach((s.handlers ?? []).prefix(3)) { p in
-                        AvatarView(url: p.avatar, initial: String((p.name ?? "?").prefix(1)).uppercased(), size: 20)
+                        AvatarView(url: p.avatar, initial: String((p.name ?? "?").prefix(1)).uppercased(), size: 20, userId: p.id, name: p.name)
                             .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                     }
                 }

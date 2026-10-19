@@ -3,6 +3,7 @@ import { EscClose } from "@/hooks/use-escape";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
+import { toolLabel } from "./GideonPanel";
 import { gideonRunDetail, gideonRuns, type GideonRunRow } from "@/lib/gideon";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -106,7 +107,7 @@ export function GideonRunList({ runs, compact }: { runs: GideonRunRow[]; compact
               <td className="whitespace-nowrap px-3 py-2"><span className="inline-flex items-center gap-1.5 text-xs font-semibold"><span className={cn("h-2 w-2 rounded-full", STATUS_TONE[r.status] ?? "bg-muted")} />{t(STATUS_LABEL[r.status] ?? r.status)}</span></td>
               <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fmt(r.startedAt, L)}</td>
               <td className="whitespace-nowrap px-3 py-2 text-xs"><span className="rounded bg-muted px-1.5 py-0.5 font-semibold text-muted-foreground">{t(TRIGGER_LABEL[r.trigger] ?? r.trigger)}</span></td>
-              <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted-foreground" title={r.toolsUsed.join(", ")}>{r.toolCalls}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted-foreground" title={r.toolsUsed.map((name) => toolLabel(name, t)).join(", ")}>{r.toolCalls}</td>
               <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">{dur(r.durationMs)}</td>
             </tr>
           ))}

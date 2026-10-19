@@ -144,10 +144,11 @@ export async function POST(
     logAudit({ action: "create", entityType: "comment", entityId: comment.id, entityName: task.title, userId: session.user.id!, request })
 
     // Auto-follow: commenter follows the task
-    await prisma.taskFollower.upsert({
-      where: { taskId_userId: { taskId: (await params).taskId, userId: session.user.id! } },
-      create: { taskId: (await params).taskId, userId: session.user.id! },
-      update: {},
+    // createMany + skipDuplicates = INSERT … ON CONFLICT DO NOTHING: two comments posted at the same moment by
+    // the same person no longer race the follower row into a unique violation (500 after the comment was saved).
+    await prisma.taskFollower.createMany({
+      data: [{ taskId: (await params).taskId, userId: session.user.id! }],
+      skipDuplicates: true,
     })
 
     // Notify mentioned users. Prefer the EXACT ids the client sent (from the @-autocomplete) so the right

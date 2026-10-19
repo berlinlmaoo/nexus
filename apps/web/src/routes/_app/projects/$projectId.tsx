@@ -19,6 +19,9 @@ import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtDate, isTransientError, memberLevelOf, nexusApi, retryTransient, statusLabel, type ProjectAccessLevel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
+import { BetaBadge } from "@/components/meetings/BetaBadge";
+import { useMeetingNotesEnabled } from "@/lib/meetings";
+import { Mic as MeetingMic } from "lucide-react";
 import { openGideon } from "@/lib/gideon";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import type { OutletView } from "@/components/outlet-sales/OutletSalesView";
@@ -131,6 +134,7 @@ const loadComposer = () => import("@/components/tasks/TaskComposer");
 const TaskDetailPanel = named(loadTaskPanel, "TaskDetailPanel");
 const TaskComposer = named(loadComposer, "TaskComposer");
 const ProjectSettingsDrawer = named(() => import("@/components/projects/ProjectSettingsDrawer"), "ProjectSettingsDrawer");
+const NewMeetingDialog = named(() => import("@/components/meetings/NewMeetingDialog"), "NewMeetingDialog");
 const AddProjectMembersDialog = named(() => import("@/components/projects/AddProjectMembersDialog"), "AddProjectMembersDialog");
 const AutomationsView = named(() => import("@/components/automations/AutomationsView"), "AutomationsView");
 const GideonProjectCard = named(() => import("@/components/gideon/GideonProjectCard"), "GideonProjectCard");
@@ -309,6 +313,10 @@ function ProjectDetail() {
   useRealtimeRoom(`project:${projectId}`);
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Meeting notes, Beta (18 Oct 2026): a recording → minutes + tasks in this project. Desktop header; on a phone it is
+  // in Ask GIDEON's + menu (the header row has room for icons only there).
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const meetingsOn = useMeetingNotesEnabled();
   const [autofillOpen, setAutofillOpen] = useState(false);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [specialView, setSpecialView] = useState<ViewId>("pipeline");
@@ -788,6 +796,7 @@ function ProjectDetail() {
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
             {data && <Button size="sm" variant="ghost" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
+            {data && meetingsOn && data.viewerAccessLevel !== "VIEW" && data.viewerAccessLevel !== "COMMENT" && <Button size="sm" variant="ghost" aria-label={`${tr("Meeting notes")} (${tr("Beta")})`} className="max-md:hidden" onPointerEnter={() => void import("@/components/meetings/NewMeetingDialog")} onClick={() => setMeetingOpen(true)}><MeetingMic className="h-3.5 w-3.5" />{tr("Meeting notes")}<BetaBadge /></Button>}
             {data && <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="ghost" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
             </motion.div>}
@@ -923,6 +932,7 @@ function ProjectDetail() {
       <Suspense fallback={null}>
       {openTaskId && <TaskDetailPanel key={openTaskId} taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
       {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
+      {meetingOpen && data && <NewMeetingDialog open={meetingOpen} onOpenChange={setMeetingOpen} projectId={data.id} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
       </Suspense>
@@ -1584,6 +1594,9 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const qc = useQueryClient();
   const { t } = useLang();
   const bulk = useTaskBulk();
+  // Can view / Can comment: no drag affordance (QA final 19 Oct: a viewer could pick a card up and got
+  // "Couldn't move the task" on the drop).
+  const canEditHere = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
@@ -1599,7 +1612,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
       <div
         role="button"
         tabIndex={0}
-        draggable={!linkedFrom && !draft}
+        draggable={!linkedFrom && !draft && canEditHere}
         onDragStart={(e) => onDrag(task, lane, row, e)}
         onDragEnd={onDragEnd}
         onClick={cardProps.onClick}
@@ -1623,7 +1636,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
-            disabled={draft}
+            disabled={draft || !canEditHere}
             className="mt-px grid shrink-0 place-items-center rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:size-11"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
@@ -1792,6 +1805,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   const tint = cardTint(task, cfg, defs, ctx);
   const filteredOut = useFilteredOut(task.id);
   const toggleDone = useDoneToggle(task, task.taskList?.projectId ?? undefined);
+  // Can view / Can comment: the circle shows the state but doesn't toggle (it answered 403, QA final 19 Oct).
+  const canEditRow = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const handle = dragGroup !== null && onDragTask ? (
     <DragHandle
@@ -1818,7 +1833,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         aria-label={done ? t("Mark as not done") : t("Mark as done")}
         title={done ? t("Mark as not done") : t("Mark as done")}
         tabIndex={-1}
-        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
+        aria-disabled={!canEditRow || undefined}
+        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft || !canEditRow) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
         className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:p-3.5"
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
@@ -1966,7 +1982,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     for (const k of fallbackKeys) { const d = parseDate(taskValues(task, k)[0]); if (d) return d; }
     return null;
   };
-  const movable = (task: NexusTask) => canDrag && !!ownDate(task);
+  const canEditDates = useProjectCanEdit();
+  const movable = (task: NexusTask) => canDrag && canEditDates && !!ownDate(task);
   const dated = tasks.filter((task) => dateOf(task));
   const undated = tasks.filter((task) => !dateOf(task));
   // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
@@ -2051,7 +2068,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <h3 className="mr-auto text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", ...(pickedDate.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }).format(pickedDate).replace(/\bSept\b/, "Sep")}</h3>
-        <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>
+        {canEditDates && <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>}
       </div>
       {pickedTasks.map((task) => {
         const done = isDone(task.status);
@@ -2169,7 +2186,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   className={cn("group/cal relative min-h-[7.5rem] border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth ? "bg-muted/40" : idx % 7 >= 5 && "bg-muted/20", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    {inMonth && canEditDates ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}
                         className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate() === 1 && !isToday ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</button>
@@ -2308,8 +2325,9 @@ const GANTT_BAR: Record<string, string> = {
   URGENT: "bg-rose-500",
   HIGH: "bg-orange-500",
   MEDIUM: "bg-sky-500",
-  LOW: "bg-violet-500",
-  NONE: "bg-teal-500",
+  // LOW green, No priority gray (owner, 18 Oct 2026), like the Calendar stripes (CAL_STRIPE).
+  LOW: "bg-emerald-500",
+  NONE: "bg-muted-foreground/40",
 };
 function tlInitials(name?: string | null) {
   if (!name) return "?";
@@ -2355,12 +2373,17 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   groups: TaskGroup[]; groupBy: string | null; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
   onSetDates: (task: NexusTask, changes: Record<string, string | null>) => void;
 }) {
+  const canEditBars = useProjectCanEdit();
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
-  // Phone: the frozen column is the title only, ~40% of the width, so the bars have room (Duration and
-  // Progress are hidden; the bar's tooltip and the task itself still say both). Audit 12 Oct 2026.
+  // Phone (UI round 19 Oct 2026, U-9, like Notion mobile): no frozen Name column by default — each bar carries its
+  // title — and a "Names" toggle shows a narrow one (120 px, title on 2 lines, no date line). Remembered on the device.
+  // Duration and Progress stay desktop-only (the bar's tooltip and the task itself still say both).
   const compact = useIsMobile();
-  const leftW = compact ? Math.round(Math.min(200, Math.max(120, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.4))) : GANTT_LEFT_W;
+  const [showNames, setShowNames] = useState(() => { try { return localStorage.getItem("nexus-tl-names") === "1"; } catch { return false; } });
+  const toggleNames = () => setShowNames((v) => { const n = !v; try { localStorage.setItem("nexus-tl-names", n ? "1" : "0"); } catch { /* not remembered */ } return n; });
+  const noNames = compact && !showNames;
+  const leftW = compact ? (showNames ? 120 : 0) : GANTT_LEFT_W;
   // A task with neither of the view's dates but with a date field the List shows (a request's usage date) is a
   // one-day marker on that day, as a due-only task is, instead of "No date" beside a date the List and Board
   // show (UI tour run 16, R16-WB-2). Read-only: a drag would write the view's own dates.
@@ -2515,6 +2538,14 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // height, so on a phone the page scrolled and left the banner half under the pinned tab strip.
   return (
     <div className="flex max-h-[max(22rem,calc(100dvh-10.5rem))] flex-col nx-gx py-3 max-md:max-h-[max(18rem,calc(100dvh-var(--tabbar-room)-7.5rem))]">
+      {compact && (
+        <div className="mb-2 flex shrink-0 justify-end">
+          <button type="button" onClick={toggleNames} aria-pressed={showNames}
+            className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors", showNames ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-accent")}>
+            {t("Names")}
+          </button>
+        </div>
+      )}
       {port && inView === 0 && firstWin && (
         <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           <GanttChart className="h-4 w-4 shrink-0" aria-hidden />
@@ -2546,11 +2577,11 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
         <div style={{ width: leftW + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
-            <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: leftW }}>
+            {!noNames && <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: leftW }}>
               <div className={cn("flex flex-1 items-end pb-2 pt-6 text-xs text-muted-foreground", compact ? "px-3" : "px-4")}>{t("Name")}</div>
               {!compact && <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-xs text-muted-foreground">{t("Duration")}</div>}
               {!compact && <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-xs text-muted-foreground">{t("Progress")}</div>}
-            </div>
+            </div>}
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
                 {months.map((m, i) => (
@@ -2594,6 +2625,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
                   {!single && <div className="flex snap-start border-b border-border bg-muted/40">
+                    {noNames ? (
+                      // No Name column: the group's toggle rides at the left edge, over its track.
+                      <div className="sticky left-0 z-10 w-0 shrink-0 overflow-visible">
+                        <button onClick={() => toggle(g.list.id)} className="relative flex max-w-[70vw] items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-left">
+                          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
+                          <span className="truncate text-sm font-bold tracking-tight">{g.list.name}</span>
+                        </button>
+                      </div>
+                    ) : (
                     <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted" style={{ width: leftW }}>
                       <button onClick={() => toggle(g.list.id)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
@@ -2604,14 +2644,17 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                         <TlProgressCell pct={gPct} />
                       </div>}
                     </div>
+                    )}
                     <div className="relative" style={{ width: timelineW }}>
-                      {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
+                      {gStart && !noNames && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
                     </div>
                   </div>}
                   {/* An empty group says so, as an empty Board column does (UI tour run 16, R16-WB-3). */}
                   {!isCollapsed && !single && g.tasks.length === 0 && (
                     <div className="flex snap-start border-b border-border/50">
-                      <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>
+                      {noNames
+                        ? <div className="sticky left-0 z-10 w-0 shrink-0 overflow-visible"><span className="block whitespace-nowrap px-3 py-2.5 pl-9 text-sm text-muted-foreground">{t("No tasks")}</span></div>
+                        : <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>}
                       <div style={{ width: timelineW }} />
                     </div>
                   )}
@@ -2629,29 +2672,26 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
                     const dragging = drag?.id === task.id && drag.moved;
-                    const canMove = (startW || endW) && !marker && !task.id.startsWith("draft-");
+                    const canMove = canEditBars && (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
-                        <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
-                          <button {...cp} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
+                        {!noNames && <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
+                          <button {...cp} className={cn("flex min-w-0 flex-1 items-center gap-2 text-left", compact ? "px-2 py-2" : "px-3 py-2.5")}>
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                             {/* Two lines, so names that start alike ("REIMBURSE Q…") stay told apart (W-M17; desktop too
                                 since UI tour run 14, WD-8). Phone: the hidden Duration and Progress columns are a small
                                 line under the name (WM-10). */}
                             <span className="min-w-0" title={task.title}>
                               <span className={cn("line-clamp-2 break-words text-sm font-medium leading-snug", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
-                              {compact && (win || pct !== null) && (
-                                <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{[win ? tn(dur, "{n} day", "{n} days") : null, pct !== null ? `${pct}%` : null].filter(Boolean).join(" · ")}</span>
-                              )}
                             </span>
                           </button>
                           {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{win ? tn(dur, "{n} day", "{n} days") : t("No date")}</div>}
                           {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                             <TlProgressCell pct={pct} />
                           </div>}
-                        </div>
+                        </div>}
                         <div
-                          className="relative py-2"
+                          className={cn("relative py-2", noNames && "min-h-11")}
                           style={{ width: timelineW }}
                           onPointerMove={(e) => {
                             if (win || !endW) return;
@@ -2671,8 +2711,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                           {/* Phone: the Duration column (which says "No date") is hidden, so an undated row says it
                               in its track, beside today's line where the view opens, as the iPhone app does (UI tour
                               run 7, 14 Oct 2026). */}
-                          {compact && !win && ghost?.id !== task.id && (
+                          {compact && !win && ghost?.id !== task.id && !noNames && (
                             <span aria-hidden className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" style={{ left: xOf(today) + GANTT_DAY_W }}>{t("No date")}</span>
+                          )}
+                          {/* No Name column: an undated row still says which task it is, at the left edge of what shows. */}
+                          {noNames && !win && (
+                            <button type="button" {...cp} className="sticky left-2 z-[6] my-0.5 inline-flex max-w-[80vw] items-center gap-1.5 whitespace-nowrap rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                              <span className={cn("truncate font-medium text-foreground", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
+                              <span className="shrink-0">· {t("No date")}</span>
+                            </button>
                           )}
                           {win && port && (xOf(win.end) + GANTT_DAY_W <= port.left || xOf(win.start) >= port.left + port.width) && (() => {
                             const before = xOf(win.end) + GANTT_DAY_W <= port.left;
@@ -2683,7 +2730,10 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                                 // Above today's line, which used to run through "4 May" (UI tour run 15, R15-WM-4).
                                 className="absolute top-1/2 z-[6] inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground ring-2 ring-card transition-colors hover:bg-accent hover:text-foreground"
                                 style={before ? { left: port.left + 6 } : { left: port.left + port.width - 6, transform: "translate(-100%, -50%)" }}>
-                                {before && <ChevronLeft className="h-3 w-3" aria-hidden />}{when}{!before && <ChevronRight className="h-3 w-3" aria-hidden />}
+                                {before && <ChevronLeft className="h-3 w-3" aria-hidden />}
+                                {/* No Name column on a phone: the chip names its task, or the row says nothing (U-9 fix). */}
+                                {noNames && <span className={cn("max-w-[52vw] truncate text-[11px] font-medium text-foreground", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>}
+                                {noNames ? <span className="shrink-0">· {when}</span> : when}{!before && <ChevronRight className="h-3 w-3" aria-hidden />}
                               </button>
                             );
                           })()}

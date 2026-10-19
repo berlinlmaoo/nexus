@@ -65,10 +65,22 @@ export const Route = createFileRoute("/_app/attendance")({
   // is settled, scrolled into view and highlighted, so the tap lands on THE request and not on the
   // page. iOS reads the same two keys (AttendanceRequestsCard).
   // `?view=log` keeps the Board/Log choice across a reload / Back (QA 13 Oct 2026).
-  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string; view?: "log" } => ({
+  // `?permit=today` (outside-radius reminder/warning) opens the Permit form for today and `?absent=<YYYY-MM-DD>`
+  // (TK recorded) lands the board on that day — the same links iOS (AppRouter) and Android (Links.parse) follow
+  // (QA final 19 Oct 2026, C-6).
+  // C-7 (19 Oct 2026): `?trail=<recordId>` (an approver's "X is away from the office") opens that record's location
+  // trail; `?date=YYYY-MM-DD` (a BoD changed your day) opens that day's period; `?bonus=<grantId>` (extra day off)
+  // opens the day-off log.
+  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string; view?: "log"; permit?: "today"; absent?: string; trail?: string; member?: string; date?: string; bonus?: string } => ({
     request: typeof s.request === "string" ? s.request : undefined,
     offsite: typeof s.offsite === "string" ? s.offsite : undefined,
     view: s.view === "log" ? "log" : undefined,
+    permit: s.permit === "today" ? "today" : undefined,
+    absent: typeof s.absent === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.absent) ? s.absent : undefined,
+    trail: typeof s.trail === "string" && s.trail ? s.trail : undefined,
+    member: typeof s.member === "string" && s.member ? s.member : undefined,
+    date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
+    bonus: typeof s.bonus === "string" && s.bonus ? s.bonus : undefined,
   }),
 });
 
@@ -226,9 +238,15 @@ function Attendance() {
   const [correctOrigin, setCorrectOrigin] = useState<MorphOrigin | undefined>(undefined);
   // Audit board state: which month to inspect + per-staff search.
   // Default to the CURRENT payroll period (cut-off 28th → 27th): past the 27th, roll to next month.
-  const [monthKey, setMonthKey] = useState(() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > 27 ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; });
-  const [memberQuery, setMemberQuery] = useState("");
   const attSearch = Route.useSearch();
+  // A TK notification (`?absent=<date>`) opens the period holding that day.
+  const [monthKey, setMonthKey] = useState(() => {
+    const abs = attSearch.absent?.split("-").map(Number);
+    const d = abs ? new Date(abs[0], abs[1] - 1, abs[2]) : new Date();
+    const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > 27 ? 1 : 0), 1);
+    return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [memberQuery, setMemberQuery] = useState("");
   const attNavigate = Route.useNavigate();
   const viewMode: "grid" | "log" = attSearch.view === "log" ? "log" : "grid";
   const setViewMode = (v: "grid" | "log") => { void attNavigate({ search: (prev) => ({ ...prev, view: v === "log" ? "log" : undefined }), replace: true }); };
@@ -296,10 +314,31 @@ function Attendance() {
   };
   const [correctRecord, setCorrectRecord] = useState<HistRow | null>(null);
   // The viewer's own trail for today, opened from the office card.
-  const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+  const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string; memberId?: string } | null>(null);
+  // C-7: a notification's deep link, handled once and then dropped from the address (Back doesn't reopen it).
+  useEffect(() => {
+    const { trail, date, bonus } = attSearch;
+    if (!trail && !date && !bonus) return;
+    if (trail) {
+      // The title names the person once the board or the member list has loaded (trailTitle below).
+      setTrailFor({ id: trail, title: tr("Location trail"), subtitle: tr("Today"), memberId: attSearch.member });
+    }
+    if (date) {
+      // The payroll period that holds the day (28th → 27th is named after the month it ends in).
+      const [y, m, d] = date.split("-").map(Number);
+      const a = new Date(y, m - 1 + (d > 27 ? 1 : 0), 1);
+      setMonthKey(`${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`);
+    }
+    if (bonus) setLogKind({ kind: "DAY_OFF" });
+    void attNavigate({ search: (prev) => ({ ...prev, trail: undefined, member: undefined, date: undefined, bonus: undefined }), replace: true });
+    // rows: only to name the person when the board is already loaded; the dialog loads the trail itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attSearch.trail, attSearch.date, attSearch.bonus]);
   // Today's place: the office, or the check-in address when it was made away from the office.
   const todayPlace = recordPlace(today.data?.today);
   const todayKey = today.data?.attendanceDateKey?.slice(0, 10) || jakartaDateKey();
+  // The day the board lands on: a TK notification's day (`?absent=`), else today.
+  const landKey = attSearch.absent ?? todayKey;
   const [leaveDetail, setLeaveDetail] = useState<HistRow | null>(null);
   // BoD: override a member-day that has NO record/request yet (empty board cell → set status).
   const [overrideTarget, setOverrideTarget] = useState<{ userId: string; name: string | null; dateKey: string } | null>(null);
@@ -308,6 +347,17 @@ function Attendance() {
   // Rows plus the server's roster: everyone on the board even before they have a single day in the
   // period (the first day of a period used to list only whoever had already checked in).
   const roster = (history.data?.roster ?? []) as Array<NonNullable<(typeof rows)[number]["user"]>>;
+  // C-7: a trail opened from an approver's notification (`?trail=&member=`) is titled with that person's name: from the
+  // board row of the record, the board roster, or the workspace member list (fetched only for such a link).
+  const trailMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 300_000, enabled: Boolean(trailFor?.memberId) });
+  const trailTitle = (t: { id: string; title: string; memberId?: string }) => {
+    if (!t.memberId) return t.title;
+    const who = rows.find((r) => r.id === t.id)?.user?.name
+      ?? roster.find((u) => u.id === t.memberId)?.name
+      ?? trailMembers.data?.members?.find((m) => m.userId === t.memberId)?.name
+      ?? null;
+    return who ? tr("{name}'s location trail", { name: who }) : t.title;
+  };
   const allMembers = [...rows.map((row) => row.user), ...roster]
     .filter((user, index, arr): user is NonNullable<typeof user> => Boolean(user?.id) && arr.findIndex((other) => other?.id === user?.id) === index)
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
@@ -370,7 +420,7 @@ function Attendance() {
     if (landedPeriod.current !== monthKey) boardTouched.current = false;
     const land = () => {
       if (boardTouched.current) return;
-      const cell = box.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
+      const cell = box.querySelector<HTMLElement>(`th[data-day="${landKey}"]`);
       if (!cell) return;
       const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
       // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
@@ -408,7 +458,7 @@ function Attendance() {
       box.removeEventListener("wheel", touched);
       box.removeEventListener("keydown", touched);
     };
-  }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
+  }, [viewMode, history.isLoading, monthKey, landKey, periodDays.length]);
   // The day header stays in view while the PAGE scrolls too (UI tour run 14, R14-WM-16: scrolling the page past
   // the board's top took MON 12…FRI 16 away and the dots lost their dates). The header row is sticky inside the
   // board's own scroll box; once the box's top has gone under the page's sticky header, the row is pushed down
@@ -679,7 +729,7 @@ function Attendance() {
                 <tr>
                   <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border),0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-[''] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-[''] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-[''] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary", attSearch.absent && pd.key === attSearch.absent && "rounded-t-lg text-destructive ring-2 ring-inset ring-destructive/60")}>
                       {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
                           size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
                       <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -924,7 +974,7 @@ function Attendance() {
           </div>
         )}
       </AnimatePresence>
-      {trailFor && <LocationTrailDialog recordId={trailFor.id} title={trailFor.title} subtitle={trailFor.subtitle} onClose={() => setTrailFor(null)} />}
+      {trailFor && <LocationTrailDialog recordId={trailFor.id} title={trailTitle(trailFor)} subtitle={trailFor.subtitle} onClose={() => setTrailFor(null)} />}
       <AnimatePresence>
         {logKind && <DayOffLogModal key={logKind.kind} kind={logKind.kind} origin={logKind.origin} onClose={() => setLogKind(null)} />}
       </AnimatePresence>
@@ -1533,6 +1583,16 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   // the highlight is state rather than a CSS animation so it survives a re-render mid-scroll.
   const search = Route.useSearch();
   const focusKey = search.request ? `req-${search.request}` : search.offsite ? `offsite-${search.offsite}` : null;
+  // `?permit=today`: the outside-radius notification opens the Permit form for today, once — the key is
+  // dropped from the address so closing the form (or a reload) does not open it again (C-6).
+  const navigate = Route.useNavigate();
+  const [composerType, setComposerType] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (search.permit !== "today") return;
+    setComposerType("PERMIT");
+    setComposerOpen(true);
+    void navigate({ search: (prev) => ({ ...prev, permit: undefined }), replace: true });
+  }, [search.permit]); // eslint-disable-line react-hooks/exhaustive-deps
   const [highlighted, setHighlighted] = useState<string | null>(null);
   // Rejecting is a two-step: click Reject → a reason box opens on that row → Confirm. The server
   // refuses a reason-less rejection, so we collect it before the request is ever sent.
@@ -1647,7 +1707,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     return (
       <div key={`offsite-${it.id}`} id={`focus-offsite-${it.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`offsite-${it.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-48">
           {/* The kind badge is what keeps the merged queue readable: these rows sit shoulder to
               shoulder with leave/permit requests, and a reviewer has to see at a glance that this one
               is a check-out from outside the geofence, judged on distance and not on a date range. */}
@@ -1685,7 +1745,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     return (
       <div key={r.id} id={`focus-req-${r.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`req-${r.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-48">
           <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ? tr(REQ_LABEL[typeKey]) : statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
           <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${attendanceReasonText(r.reason)}` : ""}</div>
           {/* Permit evidence, right under the reason — this is what separates a real errand from a
@@ -1891,7 +1951,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         {shown.map(renderEntry)}
       </div>
       {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground dark:text-warning">{tr("{n} waiting for review", { n: pendingTotal })}</div>}
-      {composerOpen && <RequestComposer viewerId={viewerId} onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
+      {composerOpen && <RequestComposer viewerId={viewerId} initialType={composerType} onClose={() => { setComposerOpen(false); setComposerType(undefined); }} onCreated={invalidate} />}
     </section>
   );
 }
@@ -1906,7 +1966,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
  */
 const ALL_REQUEST_TYPES = ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"];
 
-function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void; onCreated: () => void; viewerId: string | null }) {
+function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClose: () => void; onCreated: () => void; viewerId: string | null; initialType?: string }) {
   // Today on the Jakarta calendar. toISOString() is UTC, so before 07:00 WIB it still said
   // yesterday — and a permit could be backdated a day through the date picker's own minimum.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
@@ -1914,7 +1974,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   // two different rulebooks, so they are two explicit modes rather than a type that happens to
   // reveal a "grant to" picker.
   const [mode, setMode] = useState<"self" | "grant">("self");
-  const [type, setType] = useState("DAY_OFF");
+  const [type, setType] = useState(initialType ?? "DAY_OFF");
   // Every request is ONE day, for everyone — the grant mode included. The server still takes a
   // startDate/endDate pair; both are this date.
   const [date, setDate] = useState(today);
@@ -1948,13 +2008,27 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
       ];
   useEffect(() => { if (!TYPES.includes(type)) setType("DAY_OFF"); }, [TYPES.join(","), type]); // eslint-disable-line react-hooks/exhaustive-deps
   const leaveBlocked = !granting && type === "LEAVE" && !leaveUsable;
+  // A day off is counted in the period (28th → 27th) of the day asked for: next period's numbers come from
+  // dayOffNextPeriod (C-D4); a period further out is only checked by the server on submit.
+  const periodIndex = (k: string) => { const [y, m, d] = k.split("-").map(Number); return y * 12 + m + (d >= 28 ? 1 : 0); };
+  const periodAhead = type === "DAY_OFF" && date ? periodIndex(date) - periodIndex(today) : 0;
+  const nextPeriod = todayQ.data?.dayOffNextPeriod ?? null;
+  const dayOffQuotaShown = periodAhead === 1 && nextPeriod ? nextPeriod.quota : (todayQ.data?.dayOffQuota ?? 0);
   const remainingDays =
-    type === "DAY_OFF" ? Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
+    type === "DAY_OFF"
+      ? periodAhead === 1 && nextPeriod ? Math.max(0, nextPeriod.remaining)
+        : periodAhead > 1 ? null
+        : Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
     : type === "RED_DATE" ? redLeft
     : type === "LEAVE" ? (leave?.remaining ?? null)
     : null;
   // Said before the submit, not after: a day asked for with none left is caught here.
-  const quotaProblem = !granting && remainingDays != null && remainingDays < 1
+  // The day-off numbers above are this attendance period's (28th → 27th). A date in a later period has
+  // its own allowance, which the server checks on submit: with this period used up, a staff could not
+  // file a day off for the 29th at all — the button stayed disabled although the server would accept it.
+  // A period with no numbers from the server (two or more ahead) is left to the server's check on submit.
+  const otherPeriod = type === "DAY_OFF" && periodAhead !== 0 && !(periodAhead === 1 && nextPeriod);
+  const quotaProblem = !granting && !otherPeriod && remainingDays != null && remainingDays < 1
     ? tr("You have no {type} days left.", { type: tr(REQ_LABEL[type] ?? "days").toLowerCase() })
     : null;
   const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };
@@ -1963,7 +2037,11 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     : type === "LEAVE" ? (!leave ? tr("Uses one day of your annual leave.") : !leave.eligible ? (leave.reason ?? tr("Annual leave needs 12 months of service.")) : tr("Annual leave: {left} of {quota} days left this year.", { left: leave.remaining, quota: leave.quota }))
     : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a board member.")
     : type === "PERMIT" ? tr("Today or later, with a photo and your location.")
-    : type === "DAY_OFF" ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: todayQ.data?.dayOffQuota ?? 0 })
+    : type === "DAY_OFF" ? (periodAhead === 0
+        ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: dayOffQuotaShown })
+        : remainingDays != null
+          ? tr("Day off: {left} of {quota} left in the period of that date.", { left: remainingDays, quota: dayOffQuotaShown })
+          : tr("That date is in a later period — its day-off allowance is checked when you submit."))
     : tr("Public holiday: {left} of {quota} left this month.", { left: remainingDays ?? 0, quota: redQuota });
   const pickType = (t: string) => {
     setType(t);

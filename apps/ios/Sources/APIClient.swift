@@ -164,6 +164,7 @@ struct APIClient {
         // (13 Oct 2026: English unless the person chose Indonesian). Read from defaults, not from
         // AppLanguage, so building a request never touches observable UI state off the main thread.
         req.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
+        req.setValue("chat-files", forHTTPHeaderField: "X-Nexus-Caps")
         if authed, let session = Keychain.load() {
             // Written onto the request itself, so the session travels with whichever host was picked.
             // Nothing here consults a cookie store, so no domain rule can quietly withhold it — and
@@ -707,14 +708,19 @@ struct APIClient {
     func project(_ id: String) async throws -> ProjectDetail {
         let d = try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
         let icon = d.icon, kind = d.type
-        await MainActor.run { ProjectIconStore.shared.set(id, icon); ProjectIconStore.shared.recordTypes([(id, kind)]) }
+        await MainActor.run {
+            ProjectIconStore.shared.set(id, icon); ProjectIconStore.shared.recordTypes([(id, kind)])
+            RealtimeClient.shared.rememberTasks((d.taskLists ?? []).flatMap { $0.tasks ?? [] })
+        }
         return d
     }
 
     /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
     /// `parentId`/`taskListId`/`quests` → board & list merge subtasks into their lane + show "+N XP".
     func projectTasks(_ projectId: String) async throws -> [BoardTask] {
-        try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self, cache: "project-tasks-\(projectId)")
+        let tasks = try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self, cache: "project-tasks-\(projectId)")
+        await MainActor.run { RealtimeClient.shared.rememberTasks(tasks) }
+        return tasks
     }
 
     func workspaceInfo() async throws -> WorkspaceInfo {
@@ -783,15 +789,6 @@ struct APIClient {
         _ = try await run(makeRequest("/api/project-folders/\(folderId)", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
-    /// Curated project subset for a folder's aggregate view (empty = all projects in the folder).
-    @discardableResult
-    func setFolderAggregate(folderId: String, projectIds: [String]) async throws -> Bool {
-        var req = makeRequest("/api/project-folders/\(folderId)", method: "PATCH")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["aggregateProjectIds": projectIds])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
-    }
     /// Tasks across a set of projects (the folder aggregate calendar). projectIds joined by comma.
     func folderTasks(projectIds: [String]) async throws -> [FolderTask] {
         guard !projectIds.isEmpty else { return [] }
@@ -824,7 +821,7 @@ struct APIClient {
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"projectId\"\r\n\r\n\(projectId)\r\n")
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -842,7 +839,7 @@ struct APIClient {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -857,7 +854,7 @@ struct APIClient {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -959,7 +956,9 @@ struct APIClient {
     }
 
     func taskDetail(_ id: String) async throws -> TaskDetail {
-        try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
+        let task = try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
+        await MainActor.run { RealtimeClient.shared.rememberTask(id, updatedAt: task.updatedAt) }
+        return task
     }
 
     // MARK: - Project status updates (the Overview's last card, owner 11 Oct 2026)
@@ -1001,8 +1000,10 @@ struct APIClient {
 
     // MARK: - Dashboard
 
-    func profile() async throws -> ProfileResponse {
-        try await run(makeRequest("/api/user/profile"), decode: ProfileResponse.self, cache: "profile")
+    func profile(fresh: Bool = false) async throws -> ProfileResponse {
+        var request = makeRequest("/api/user/profile")
+        if fresh { request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = 10 }
+        return try await run(request, decode: ProfileResponse.self, cache: fresh ? nil : "profile")
     }
 
     func gamification() async throws -> Gamification {
@@ -2125,13 +2126,14 @@ struct APIClient {
     /// message was still delivered.
     @discardableResult
     func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = [],
-                     attachmentUrl: String? = nil, attachmentType: String? = nil,
+                     attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil,
                      replyToId: String? = nil) async throws -> ChatMessage? {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload: [String: Any] = ["content": content, "mentionedUserIds": mentionedUserIds]
         if let attachmentUrl { payload["attachmentUrl"] = attachmentUrl }
         if let attachmentType { payload["attachmentType"] = attachmentType }
+        if let attachmentName { payload["attachmentName"] = attachmentName }
         if let replyToId { payload["replyToId"] = replyToId }
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         return try await run(req, decode: SentMessageResponse.self).message
@@ -2147,7 +2149,7 @@ struct APIClient {
         var body = Data()
         func add(_ s: String) { body.append(s.data(using: .utf8)!) }
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"conversationId\"\r\n\r\n\(conversationId)\r\n")
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_"))\"\r\nContent-Type: \(mime)\r\n\r\n")
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
@@ -2278,6 +2280,16 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    @discardableResult
+    func changeCustomFieldValues(fieldId: String, taskId: String, add: [String], remove: [String]) async throws -> Bool {
+        var req = makeRequest("/api/custom-fields", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject:
+            ["id": fieldId, "taskId": taskId, "addValues": add, "removeValues": remove])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     func taskCustomFields(projectId: String, taskId: String) async throws -> [CustomField] {
         (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))&taskId=\(enc(taskId))"), decode: CustomFieldsResponse.self)).fields ?? []
     }
@@ -3171,6 +3183,7 @@ extension APIClient {
         // (REPORT_NOT_OPEN, a night after today): the app's language picks one.
         let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
         let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
+        if let code = obj["code"] as? String, let message = NativeRefusal.message(code, maxBytes: obj["maxBytes"] as? Int) { return message }
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
         // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).
         if let readable = AccessRefusal.readable(code: obj["code"] as? String, message: text) { return readable }

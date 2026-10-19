@@ -1,3 +1,5 @@
+import { fetchShim, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
+
 /**
  * One streamed GIDEON answer from the shim (GIDEON_STREAM_URL, NDJSON `delta` / `reset` / `final` / `error`),
  * falling back to the one-shot GIDEON_CHAT_URL. Used by the editor's "Ask AI" (/api/gideon/write) — the
@@ -13,15 +15,32 @@ export async function streamShim(
   if (!url) return { reply: "", error: "not configured", tokens: null }
   const headers = { "Content-Type": "application/json", "x-oracle-secret": process.env.ORACLE_LLM_SECRET || "" }
   const body = JSON.stringify(payload)
+  // A restarting shim gets one quiet retry and is reported as `shim_restart` (lib/gideon-shim-retry.ts).
   if (!streamUrl) {
-    const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs) })
+    const since = Date.now()
+    let shim: Awaited<ReturnType<typeof fetchShim>>
+    try {
+      shim = await fetchShim(url, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs) }, { stream: false })
+    } catch (error) {
+      return { reply: "", error: await shimFailureKind(error, url, since), tokens: null }
+    }
+    if (shim.restarting) return { reply: "", error: SHIM_RESTART, tokens: null }
+    const res = shim.res
     if (!res.ok) return { reply: "", error: `shim ${res.status}`, tokens: null }
     const data = (await res.json()) as { reply?: string; usage?: unknown }
     const reply = (data.reply || "").trim()
     if (reply) await handlers.onDelta?.(reply)
     return { reply, error: reply ? null : "empty reply", tokens: null, usage: data.usage }
   }
-  const res = await fetch(streamUrl, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs) })
+  const since = Date.now()
+  let shim: Awaited<ReturnType<typeof fetchShim>>
+  try {
+    shim = await fetchShim(streamUrl, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs) }, { stream: true })
+  } catch (error) {
+    return { reply: "", error: await shimFailureKind(error, streamUrl, since), tokens: null }
+  }
+  if (shim.restarting) return { reply: "", error: SHIM_RESTART, tokens: null }
+  const res = shim.res
   if (!res.ok || !res.body) return { reply: "", error: `shim ${res.status}`, tokens: null }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -33,7 +52,14 @@ export async function streamShim(
   // The shim's last line (18 Oct 2026): what the run cost, for GIDEON credits. Older shims never send it.
   let usage: unknown = undefined
   for (;;) {
-    const { done, value } = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch (error) {
+      // The connection broke mid-answer: a restart is `shim_restart`, anything else keeps its message.
+      return { reply: "", error: await shimFailureKind(error, streamUrl, since), tokens, usage }
+    }
+    const { done, value } = chunk
     if (done) break
     pending += decoder.decode(value, { stream: true })
     let nl: number

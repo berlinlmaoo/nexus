@@ -210,6 +210,18 @@ struct StatusPill: View {
 /// A task priority in the app's language (the copy sweep: never the raw enum, e.g. "Urgent" in Bahasa).
 enum TaskPriorityName {
     static let all = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
+    static func color(_ priority: String?) -> Color {
+        switch (priority ?? "").uppercased() {
+        case "URGENT": return Color(hex: "#ef4444")
+        case "HIGH": return Color(hex: "#f97316")
+        case "MEDIUM": return Color(hex: "#3b82f6")
+        case "LOW": return Color(hex: "#22c55e")
+        default: return Color(hex: "#9ca3af")
+        }
+    }
+    static func tone(_ priority: String) -> ChipTone {
+        switch priority.uppercased() { case "URGENT": return .danger; case "HIGH": return .orange; case "MEDIUM": return .info; case "LOW": return .success; default: return .neutral }
+    }
     static func label(_ p: String?) -> String {
         switch (p ?? "").uppercased() {
         case "URGENT": return T("Urgent")

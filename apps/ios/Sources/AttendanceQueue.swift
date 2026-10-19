@@ -278,6 +278,13 @@ final class AttendanceQueue {
         for entry in foreign { remove(entry.id) }
     }
 
+    /// The same authenticated account got a new canonical ID; preserve its queued taps and selfies.
+    func rebindIdentity(from old: String, to new: String) {
+        guard old != new else { return }
+        for i in pending.indices where pending[i].ownerId == old { pending[i].ownerId = new }
+        save()
+    }
+
     /// "09:04" in office time, for the one sentence that names a refused tap.
     private static func clock(_ date: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; f.timeZone = TimeZone(identifier: "Asia/Jakarta")

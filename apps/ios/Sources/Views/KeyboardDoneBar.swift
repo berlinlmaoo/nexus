@@ -20,6 +20,7 @@ private struct KeyboardDoneBar: ViewModifier {
                                 .padding(.horizontal, 18).padding(.vertical, 10)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("keyboard.dismiss")
                     }
                     .background(NX.card)
                     .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 0.5) }

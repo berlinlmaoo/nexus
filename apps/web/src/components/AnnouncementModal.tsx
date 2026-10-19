@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { EscClose } from "@/hooks/use-escape";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { useModalTurn } from "@/lib/modal-queue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Info, Megaphone, X } from "lucide-react";
@@ -51,7 +52,9 @@ export function AnnouncementModal() {
     },
   });
 
-  if (typeof document === "undefined" || !current) return null;
+  // Waits its turn behind the XP alert (C-D1, lib/modal-queue).
+  const turn = useModalTurn("announcement", q.isLoading || (Boolean(focusId) && focusQ.isLoading) ? "pending" : current ? "want" : "idle");
+  if (typeof document === "undefined" || !current || !turn) return null;
   const kind = current.kind ?? "announcement";
   const tone = kind === "sp" ? SP_TONE : kind === "warning" ? TONE.warning : (TONE[current.tone] ?? TONE.info);
   const Icon = tone.icon;

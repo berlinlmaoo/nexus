@@ -187,9 +187,12 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   // Run 19 (R19-WM-4, Notion): the Name column is the widest on a phone too, about 55% of the screen, so two-line
   // names read whole; the next column still peeks in and the rest scroll sideways.
   const isPhone = useIsMobile();
-  const nameW = isPhone ? Math.round(Math.min(260, Math.max(200, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.56))) : 280;
+  // UI round 19 Oct 2026 (U-9, like Notion mobile): on a phone the Name column is frozen and narrow (120 px, title on
+  // two lines with an ellipsis), so the other columns scroll under it and more of them show. Desktop unchanged.
+  const nameW = isPhone ? 120 : 280;
+  const frozen = isPhone ? "sticky left-0 z-[1] border-r border-border bg-card" : "";
   const colMin = (k: string) => colW[k] ?? Math.min(280, Math.max(160, Math.ceil(64 + propLabel(propDef(defs, k)).length * 6.8)));
-  const gridTemplate = `minmax(${nameW}px,2fr) ${columns.map((k) => (colW[k] ? `${colW[k]}px` : `minmax(${colMin(k)}px,1fr)`)).join(" ")} 40px`;
+  const gridTemplate = `${isPhone ? `${nameW}px` : `minmax(${nameW}px,2fr)`} ${columns.map((k) => (colW[k] ? `${colW[k]}px` : `minmax(${colMin(k)}px,1fr)`)).join(" ")} 40px`;
   const rowIn = (gKey: string | null, subKey: string | null) => (task: NexusTask) => row(task, mover.enabled && gKey !== null && canDragTask(task, projectId)
     ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
     : null);
@@ -198,7 +201,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     // never grows the row. From md a denser 36px row with the name on one line, as Notion (UI tour run 20, R20-WD-7:
     // rows were ~48px); a phone keeps two lines of name.
     <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 md:h-9 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
-      <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
+      <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} className={cn(frozen, isPhone && bulk.isSelected(task.id) && "bg-accent")} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center overflow-hidden border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
           {key.startsWith("cf:") && ai.isMarked(key.slice(3), task.id) && <Sparkles aria-label={t("Filled by GIDEON")} className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-primary/70" />}
@@ -226,7 +229,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   // around the table, 16 Oct 2026 pass).
   const headerRow = (hk: string) => (
           <div key={`head-${hk}`} className={cn("sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-sm text-muted-foreground", hk !== "all" && "border-t")} style={{ gridTemplateColumns: gridTemplate }}>
-            <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
+            <div className={cn("flex items-center gap-1.5 py-2", isPhone ? "z-[2] px-2" : "px-3", frozen)}><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);
               return (
@@ -308,7 +311,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           {/* Footer: a calculation per column (Notion's "Calculate"). Sum, Average… keep the number's format. */}
           {/* A short fade above it, so a row cut by the footer fades out instead of ending in half a line (R15-WM-3). */}
           <div className="sticky bottom-0 z-[1] grid items-stretch border-t border-border bg-card text-xs text-muted-foreground before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-card before:to-transparent before:content-['']" style={{ gridTemplateColumns: gridTemplate }}>
-            <div />
+            <div className={frozen} />
             {columns.map((key) => (
               <FooterCalc key={key} def={propDef(defs, key)} tasks={viewTasks} calc={cfg.columnCalcs?.[key]} readOnly={!onCalcsChange || !canEditColumns}
                 onPick={(c) => {
@@ -339,7 +342,7 @@ function questXp(task: NexusTask): number {
   return (task.quests ?? []).reduce((s, q) => s + (q.xpReward ?? 0), 0);
 }
 
-function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?: ReactNode; onRename: (title: string) => void; onOpen: () => void }) {
+function NameCell({ task, handle, onRename, onOpen, className }: { task: NexusTask; handle?: ReactNode; onRename: (title: string) => void; onOpen: () => void; className?: string }) {
   const { t } = useLang();
   const [title, setTitle] = useState(task.title);
   const [editing, setEditing] = useState(false);
@@ -347,7 +350,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
   const xp = questXp(task);
   const filteredOut = useFilteredOut(task.id);
   return (
-    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1", handle && "gap-1 pl-0.5")}>
+    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1 max-md:px-1", handle && "gap-1 pl-0.5", className)}>
       {handle}
       {editing ? (
         <input
@@ -368,7 +371,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>

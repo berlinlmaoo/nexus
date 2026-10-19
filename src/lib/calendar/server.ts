@@ -6,8 +6,9 @@ import { auth } from "@/lib/auth"
 import { getAppSetting } from "@/lib/app-setting"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { hasProjectWideAccess } from "@/lib/rbac"
+import { resolveLegacyIds } from "@/lib/legacy-ids"
 import {
-  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings,
+  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings, privacyOf,
   type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type TaskRow,
 } from "@/lib/calendar/core"
 
@@ -159,11 +160,13 @@ function toRow(t: TaskSelected, dueDate: Date): TaskRow {
  * 12 Oct 2026; filtered here too so it never takes a place under the row cap). One query; the
  * assignees come in the order they were assigned. `open` = still to do: not done.
  */
-export async function loadTaskRows(dueDate: Prisma.TaskWhereInput["dueDate"], opts: { open?: boolean; take?: number; order?: "asc" | "desc" } = {}): Promise<{ rows: TaskRow[]; truncated: boolean }> {
+export async function loadTaskRows(dueDate: Prisma.TaskWhereInput["dueDate"], opts: { open?: boolean; take?: number; order?: "asc" | "desc"; projectIds?: string[] } = {}): Promise<{ rows: TaskRow[]; truncated: boolean }> {
   const take = opts.take ?? ROW_CAP
   const found = await prisma.task.findMany({
     where: {
       dueDate,
+      // The Folder filter: home project or a linked one among these (the same match as the Project filter).
+      ...(opts.projectIds ? { OR: [{ taskList: { projectId: { in: opts.projectIds } } }, { taskProjects: { some: { projectId: { in: opts.projectIds } } } }] } : {}),
       assignees: { some: {} },
       status: opts.open ? { notIn: ["DONE", "CANCELLED"] } : { not: "CANCELLED" },
       taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } } },
@@ -240,6 +243,103 @@ export async function holidaysBetween(from: string, to: string): Promise<{ day: 
     orderBy: { date: "asc" },
   })
   return rows.map((h) => ({ day: h.date.toISOString().slice(0, 10), name: h.name }))
+}
+
+// ── Folders (the Folder filter) ───────────────────────────────────────────────────────────────────────
+
+const FOLDER_ID = /^[\w-]{1,64}$/
+/** Most folders one request may filter by. */
+const MAX_FOLDERS = 50
+
+/** `?folder=a,b` → the ids (cleaned, at most 50), or null when the parameter is absent or holds no id. */
+export function folderParam(sp: URLSearchParams): string[] | null {
+  const raw = sp.get("folder")
+  if (!raw) return null
+  const ids = Array.from(new Set(raw.split(",").map((x) => x.trim()).filter((x) => FOLDER_ID.test(x)))).slice(0, MAX_FOLDERS)
+  return ids.length ? ids : null
+}
+
+type FolderRow = { id: string; name: string; icon: string; color: string; parentFolderId: string | null }
+
+async function companyFolderTree() {
+  const [folders, projects] = await Promise.all([
+    prisma.projectFolder.findMany({
+      where: { workspaceId: ORG_WORKSPACE_ID },
+      select: { id: true, name: true, icon: true, color: true, parentFolderId: true },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+    }),
+    prisma.project.findMany({
+      where: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" }, folderId: { not: null } },
+      select: { id: true, name: true, folderId: true },
+    }),
+  ])
+  const ids = new Set(folders.map((f) => f.id))
+  const children = new Map<string | null, FolderRow[]>()
+  for (const f of folders) {
+    // A parent outside the workspace (should not happen) is read as the root.
+    const parent = f.parentFolderId && ids.has(f.parentFolderId) ? f.parentFolderId : null
+    children.set(parent, [...(children.get(parent) ?? []), f])
+  }
+  return { folders, projects, children }
+}
+
+/** A folder and every folder under it (cycle-safe). */
+function subtreeOf(rootIds: string[], children: Map<string | null, FolderRow[]>): Set<string> {
+  const out = new Set<string>()
+  const stack = [...rootIds]
+  while (stack.length) {
+    const id = stack.pop()!
+    if (out.has(id)) continue
+    out.add(id)
+    for (const c of children.get(id) ?? []) stack.push(c.id)
+  }
+  return out
+}
+
+/**
+ * The projects of the company workspace (not archived) inside these folders or any folder under them.
+ * Who may see their tasks is decided afterwards, per task, by the usual rules (buildItems).
+ */
+export async function folderProjectIds(folderIds: string[]): Promise<string[]> {
+  // An app or a link may still hold a pre-UUIDv7 folder id (lib/legacy-ids; compared in memory here, so
+  // the Prisma extension does not see it).
+  const [{ folders, projects, children }, legacy] = await Promise.all([companyFolderTree(), resolveLegacyIds(folderIds)])
+  const known = folderIds.map((id) => legacy.get(id) ?? id).filter((id) => folders.some((f) => f.id === id))
+  if (known.length === 0) return []
+  const sub = subtreeOf(known, children)
+  return projects.filter((p) => p.folderId && sub.has(p.folderId)).map((p) => p.id)
+}
+
+/** What the Folder filter needs: a folder plus its depth, in tree order (position, then name). */
+export type CalFolder = { id: string; name: string; icon: string; color: string; parentId: string | null; depth: number }
+
+/**
+ * The folders the caller can filter by: those holding (in them or below) at least one project whose tasks
+ * the caller sees in full — every project for BoD / One Above All and in "all"; their own projects, plus
+ * the non-private ones in "all_except_private"; only their own otherwise. Ancestors come along.
+ */
+export async function calendarFolders(caller: Extract<CalendarCaller, { kind: "ok" }>): Promise<CalFolder[]> {
+  const { projects, children } = await companyFolderTree()
+  const mode = effectiveVisibility(caller.settings)
+  const seen = (p: { id: string; name: string }) =>
+    caller.viewer.full || caller.viewer.memberProjectIds.has(p.id) || mode === "all"
+    || (mode === "all_except_private" && privacyOf(caller.settings, p) === null)
+  const withProject = new Set(projects.filter(seen).map((p) => p.folderId!))
+  const out: CalFolder[] = []
+  const walk = (parent: string | null, depth: number, path: Set<string>): boolean => {
+    let any = false
+    for (const f of children.get(parent) ?? []) {
+      if (path.has(f.id)) continue
+      const at = out.length
+      out.push({ id: f.id, name: f.name, icon: f.icon, color: f.color, parentId: parent, depth })
+      const below = walk(f.id, depth + 1, new Set([...path, f.id]))
+      if (below || withProject.has(f.id)) any = true
+      else out.length = at // nothing to see in it: drop it (and the empty folders under it)
+    }
+    return any
+  }
+  walk(null, 0, new Set())
+  return out
 }
 
 // ── Responses ──────────────────────────────────────────────────────────────────────────────────────

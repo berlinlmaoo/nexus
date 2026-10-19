@@ -585,7 +585,7 @@ struct LegalFieldEditorList: View {
         Toggle(isOn: Binding(get: { f.required }, set: { v in onChange(p) { $0.required = v } })) {
             Text(T("Required")).font(NXFont.text(14)).foregroundStyle(NX.foreground)
         }
-        .tint(NX.violetText)
+        .tint(NX.violet)
         .disabled(locked)
     }
 }

@@ -104,6 +104,9 @@ struct GideonPanel: View {
     /// GIDEON's own page in the iPad / Mac sidebar (or pushed in More on a phone): no Close button (it is
     /// not a sheet), and — like the web's /gideon — a new chat with no page context when it opens.
     var embedded = false
+    /// OAA transcripts reuse the same turn renderer without touching the signed-in chat store.
+    var reviewTurns: [GideonTurn]? = nil
+    @Environment(AppRouter.self) private var router
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -124,6 +127,8 @@ struct GideonPanel: View {
     @FocusState private var composerFocused: Bool
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
+    @State private var showReviewNotice = false
+    @State private var tierStatus = GideonTierStatus.shared
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
     /// "Review before writing ▾" in the composer (web gideon-approval), remembered on the device.
     @AppStorage("gideon.approval") private var approvalRaw = GideonApprovalMode.fallback.rawValue
@@ -133,6 +138,7 @@ struct GideonPanel: View {
     /// Apply / Discard asks first, in a centred alert (house rule).
     @State private var decision: GideonDecision?
     @State private var showPersonalize = false
+    @State private var showMemory = false
     @State private var saveRequest: GideonSaveRequest?
     @State private var savedDocId: String?
     @State private var confirmDeleteChat = false
@@ -195,6 +201,19 @@ struct GideonPanel: View {
     }
 
     var body: some View {
+        if let reviewTurns {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(reviewTurns) { turn in bubble(turn) }
+                }.padding(.vertical, 12)
+            }
+            .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
+            .navigationDestination(item: $openRef) { ref in refDestination(ref) }
+        } else { interactiveBody }
+    }
+
+    private var interactiveBody: some View {
         stackIfNeeded {
             screen
                 .navigationDestination(item: $openRef) { ref in refDestination(ref) }
@@ -209,6 +228,7 @@ struct GideonPanel: View {
                 .background { Color.clear.sheet(isPresented: $showPersonalize) {
                     GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
                 } }
+                .background { Color.clear.sheet(isPresented: $showMemory) { GideonMemorySheet().environment(auth) } }
                 .sheet(item: $saveRequest) { r in
                     GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: saveProjectId,
                                        contextProjectName: chat.context.projectName) { id in savedDocId = id }
@@ -221,21 +241,27 @@ struct GideonPanel: View {
                     GideonChatsSheet { id in Task { await chat.openChat(id) } }
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                    Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
-                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking) }
+                    Button(d.buttonLabel, role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
+                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
                     }
                     Button(T("Cancel"), role: .cancel) {}
                 } message: { d in Text(d.message) }
                 .background { Color.clear.alert(T("Delete this chat?"), isPresented: $confirmDeleteChat) {
                     Button(T("Delete"), role: .destructive) { Task { await chat.deleteCurrent() } }
                     Button(T("Cancel"), role: .cancel) {}
-                } message: { Text(T("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")) } }
+                } message: { Text(T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")) } }
                 .background { Color.clear.alert(T("Clear every GIDEON chat?"), isPresented: $confirmClearAll) {
                     Button(T("Clear history"), role: .destructive) { Task { await chat.clearAll() } }
                     Button(T("Cancel"), role: .cancel) {}
-                } message: { Text(T("Every conversation, message and attached file is deleted for good. Tasks and docs GIDEON made stay.")) } }
+                } message: { Text(T("Removed from your chats. They're kept for 90 days for review by the Board of Directors, then deleted.")) } }
         }
-        .task { if let p = try? await GideonClient.prefs() { assistantName = p.assistantName ?? "" } }
+        .task {
+            await tierStatus.refresh(force: true)
+            if let p = try? await GideonClient.prefs() {
+                assistantName = p.assistantName ?? ""
+                showReviewNotice = p.reviewNotice
+            }
+        }
         .onAppear { openOnce() }
         // GIDEON answered a 401 while the panel was closed, or answers one now. The store has no
         // AuthStore and deliberately does not go looking for one — this is where the two meet, and
@@ -356,6 +382,7 @@ struct GideonPanel: View {
                         .accessibilityLabel(T("New chat"))
                     Menu {
                         Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
+                        if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
                         Divider()
                         moreDestructiveItems
                     } label: {
@@ -408,7 +435,12 @@ struct GideonPanel: View {
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(displayName).font(NXFont.text(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Button { showChats = true } label: {
+                        HStack(spacing: 5) {
+                            Text(displayName).font(NXFont.text(16, .bold)).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.system(size: 10))
+                        }.foregroundStyle(NX.foreground)
+                    }.buttonStyle(.plain).accessibilityLabel(T("Chat history"))
                     Text(chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you"))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
@@ -418,6 +450,7 @@ struct GideonPanel: View {
                 tierChip
                 Menu {
                     Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle") }
+                    if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
                     Divider()
                     moreDestructiveItems
                 } label: {
@@ -436,34 +469,61 @@ struct GideonPanel: View {
         .background(NX.card)
     }
 
-    /// "Luna ▾" (web SelectPicker): the tier, with each one's blurb in the menu.
+    /// Tier names with their Default / Experimental badges; live availability is owned by the server.
+    @State private var showTierPicker = false
     private var tierChip: some View {
-        Menu {
-            Picker(T("GIDEON tier"), selection: $tierRaw) {
-                ForEach(GideonTier.allCases) { option in
-                    Text(option.label).tag(option.rawValue)
-                }
-            }
-            .pickerStyle(.inline)
-            Text(tier.blurb)
-        } label: {
+        Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
-                Text(tier.label).font(NXFont.text(13, .semibold))
+                Text(tier.label).font(NXFont.text(13, .semibold)).lineLimit(1)
+                if tier == .luna { tierBadge("Default", experimental: false) }
+                if tier == .experimental { tierBadge("Experimental", experimental: true) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(NX.mutedFg)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
             .contentShape(Rectangle())
         }
-        .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .disabled(chat.sending)
         .accessibilityLabel(T("GIDEON tier"))
+        .accessibilityIdentifier("gideon.tier")
+        .popover(isPresented: $showTierPicker, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(GideonTier.allCases) { option in
+                    let status = tierStatus.state(option)
+                    Button { tierRaw = option.rawValue; showTierPicker = false } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 8) {
+                                Text(option.label).font(NXFont.text(14, .semibold)).foregroundStyle(status.available ? NX.foreground : NX.mutedFg)
+                                if option == .luna { tierBadge("Default", experimental: false) }
+                                if option == .experimental { tierBadge("Experimental", experimental: true) }
+                                Spacer(minLength: 8)
+                                if option == tier { Image(systemName: "checkmark").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText) }
+                            }
+                            if !status.available {
+                                Text(T("Unavailable right now")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                                Text(status.reasonText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(option == tier ? NX.accentBg : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                            .contentShape(Rectangle())
+                    }.buttonStyle(.plain).disabled(!status.available).accessibilityIdentifier("gideon.tier." + option.rawValue)
+                }
+                Divider().padding(.vertical, 4)
+                Text(tier.blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 12).padding(.bottom, 8)
+            }.padding(8).frame(width: 320).background(NX.card)
+                .presentationCompactAdaptation(.popover)
+        }
     }
-
-    // MARK: - title (compact)
+    private func tierBadge(_ title: String, experimental: Bool) -> some View {
+        Text(T(title)).font(NXFont.text(10, .semibold))
+            .foregroundStyle(experimental ? ChipTone.warning.fg : NX.violetText)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(experimental ? ChipTone.warning.bg : NX.accentBg, in: Capsule())
+    }
 
     /// "GIDEON" over "Acts in NEXUS as you" (or the chat's title), as web's header (UI tour run 9, I9). The
     /// tier is its own "Luna ▾" chip beside it, so the title's width no longer changes with the tier (the
@@ -472,7 +532,12 @@ struct GideonPanel: View {
 
     private var title: some View {
         VStack(spacing: 0) {
-            Text(displayName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Button { showChats = true } label: {
+                HStack(spacing: 5) {
+                    Text(displayName).font(NXFont.display(15, .bold)).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 9))
+                }.foregroundStyle(NX.foreground)
+            }.buttonStyle(.plain).accessibilityLabel(T("Chat history"))
             Text(subtitleText)
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
@@ -593,41 +658,38 @@ struct GideonPanel: View {
                 Text(turn.content)
                     .font(NXFont.text(15))
                     .lineSpacing(2)
-                    .foregroundStyle(NX.card)
+                    .foregroundStyle(NX.foreground)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(NX.violet.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
     /// The answer (web AssistantTurn): what GIDEON did, the answer as Markdown on a soft panel, the
     /// changes waiting for Apply, what it made, the sources, then Copy · Save as doc.
     private func assistantTurn(_ turn: GideonTurn) -> some View {
-        let live = chat.answeringId == turn.id
+        let live = reviewTurns == nil && chat.answeringId == turn.id
         return VStack(alignment: .leading, spacing: 8) {
             GideonStepsLine(steps: turn.steps, streaming: live)
             if !turn.content.isEmpty {
                 GideonMarkdownView(text: turn.content, size: 15) { ref in openRef = ref }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .transition(.opacity)
             } else if live && turn.steps.isEmpty {
-                // The dots claim only that the request is still open, and they are replaced the instant
-                // the first words land. A typewriter here would be inventing progress.
-                GideonTypingDots()
-                    .accessibilityLabel(T("GIDEON is typing…"))
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .transition(.opacity)
+                Text(T("Thinking…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .modifier(GideonThinkingShimmer())
             }
+            if turn.stopped { Text(T("Stopped")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+            if let notice = turn.creditNotice {
+                Text(notice.text).font(NXFont.text(12)).foregroundStyle(NX.warning)
+            }
+            if reviewTurns == nil { ForEach(turn.memories) { memory in GideonMemoryChip(memory: memory) } }
             ForEach(turn.proposals) { p in proposalCard(p) }
             ForEach(turn.cards) { card in cardRow(card) }
             if !turn.sources.isEmpty && !live { sourcesBlock(turn.sources) }
-            if !turn.content.isEmpty && !live { answerActions(turn) }
+            if !turn.content.isEmpty && !live && reviewTurns == nil { answerActions(turn) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, wide ? 0 : 24)
@@ -750,14 +812,26 @@ struct GideonPanel: View {
     /// A room booking has its own card with the room picker (GideonBookRoomCard), and so does moving or cancelling
     /// one (GideonBookingChangeCard, 16 Oct 2026); every other change is a diff.
     @ViewBuilder private func proposalCard(_ p: GideonProposal) -> some View {
-        if p.action == "book_room", let b = p.booking {
-            GideonBookRoomCard(proposal: p, booking: b,
+        if p.action == "delete_task", let task = p.taskDelete {
+            GideonDeleteTaskCard(proposal: p, task: task, readOnly: reviewTurns != nil,
+                                onApply: { decision = GideonDecision(proposal: p, apply: true) },
+                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if p.action == "create_task", let target = p.taskTarget, p.isPending, reviewTurns == nil {
+            GideonCreateTaskCard(proposal: p, target: target,
+                                 onApply: { choice in decision = GideonDecision(proposal: p, apply: true, task: choice) },
+                                 onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if p.action == "book_room", let b = p.booking {
+            GideonBookRoomCard(proposal: p, booking: b, readOnly: reviewTurns != nil,
                                onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else if p.action == "move_room_booking" || p.action == "cancel_room_booking", let c = p.bookingChange {
-            GideonBookingChangeCard(proposal: p, change: c,
+            GideonBookingChangeCard(proposal: p, change: c, readOnly: reviewTurns != nil,
                                     onApply: { choice in decision = GideonDecision(proposal: p, apply: true, booking: choice) },
                                     onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
+        } else if let action = GideonToolAction.get(p.action) {
+            GideonActionCard(proposal: p, action: action, readOnly: reviewTurns != nil,
+                             onOpen: { openRef = $0 }, onApply: { decision = GideonDecision(proposal: p, apply: true) },
+                             onDiscard: { decision = GideonDecision(proposal: p, apply: false) })
         } else {
             changeProposalCard(p)
         }
@@ -772,24 +846,25 @@ struct GideonPanel: View {
             }
             ForEach(Array((p.diff ?? []).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.field ?? "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                    Text(T(row.field ?? "")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.danger) }
                     Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(NX.mutedFg)
-                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
                 }
             }
-            if p.isPending {
+            if p.isPending && reviewTurns == nil {
+                Text(T("Waiting for your approval")).font(NXFont.text(12, .medium)).foregroundStyle(NX.warning)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
                     Button(T("Discard")) { decision = GideonDecision(proposal: p, apply: false) }
-                        .buttonStyle(.nxBordered)
+                        .buttonStyle(.plain).foregroundStyle(NX.mutedFg)
                     Button { decision = GideonDecision(proposal: p, apply: true) } label: {
                         Label(T("Apply"), systemImage: "checkmark")
                     }
                     .buttonStyle(.nxPrimary)
                 }
             } else {
-                Text(proposalStatus(p)).font(NXFont.text(12, .semibold))
+                Text(reviewTurns != nil ? gideonProposalState(p, readOnly: true) : proposalStatus(p)).font(NXFont.text(12, .semibold))
                     .foregroundStyle(p.status == "APPLIED" ? NX.success : (p.status == "FAILED" ? NX.danger : NX.mutedFg))
             }
         }
@@ -925,10 +1000,8 @@ struct GideonPanel: View {
     private func attachmentChip(art: GideonChipArt, label: String,
                                 onBubble: Bool = false,
                                 remove: (() -> Void)?) -> some View {
-        // In a bubble the chip sits on the near-black question, where the muted grey it wears under the
-        // composer is nearly gone: the bubble's own text colour, softened.
-        let tone: Color = onBubble ? NX.card.opacity(0.85) : NX.mutedFg
-        let plate: Color = onBubble ? NX.card.opacity(0.18) : NX.muted.opacity(0.6)
+        let tone: Color = onBubble ? NX.foreground.opacity(0.85) : NX.mutedFg
+        let plate: Color = onBubble ? NX.violet.opacity(0.08) : NX.muted.opacity(0.6)
         return HStack(spacing: 10) {
             switch art {
             case .local(let image):
@@ -970,9 +1043,44 @@ struct GideonPanel: View {
     /// what is attached, and + · "Review before writing ▾" · send.
     private var composerArea: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if !tierStatus.state(tier).available {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text((tier == .experimental ? T("GIDEON Model 0 is unavailable right now.") : tier.label + " · " + T("Unavailable right now")) + " " + tierStatus.state(tier).reasonText)
+                        .font(NXFont.text(12)).foregroundStyle(NX.warning)
+                    Button(T("Use GIDEON Phaëthon")) { tierRaw = "luna" }.buttonStyle(.nxBordered)
+                }.padding(10).background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("gideon.tierUnavailable")
+            }
+            if showReviewNotice {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle").foregroundStyle(NX.violetText)
+                    Text(T("GIDEON chats can be reviewed by the Board of Directors for work purposes."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button(T("Got it")) {
+                        showReviewNotice = false
+                        Task {
+                            do { _ = try await GideonClient.acknowledgeReviewNotice() }
+                            catch { showReviewNotice = true; chat.error = error.localizedDescription }
+                        }
+                    }.buttonStyle(.plain).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                        .accessibilityIdentifier("gideon.reviewNotice.gotIt")
+                }
+                .padding(12)
+                .background(NX.violet.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                .accessibilityIdentifier("gideon.reviewNotice")
+            }
             mentionPicker
-            contextChips
+            GideonCreditMeter().padding(.horizontal, 4).padding(.bottom, 4)
             composer
+            Text(T("GIDEON is AI and can make mistakes."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .accessibilityIdentifier("gideon.disclaimer")
         }
     }
 
@@ -982,7 +1090,10 @@ struct GideonPanel: View {
         // is the only member that writes through it.
         @Bindable var chat = chat
         return VStack(alignment: .leading, spacing: 0) {
+            contextChips.padding(.horizontal, 12)
             TextField(T("Ask anything. Type @ to add a page"), text: $chat.draft, axis: .vertical)
+                .accessibilityLabel(T("Ask anything. Type @ to add a page"))
+                .accessibilityIdentifier("gideon.composer")
                 .font(NXFont.text(15))
                 .lineLimit(wide ? 3...10 : 2...6)
                 .textFieldStyle(.plain)
@@ -1001,6 +1112,13 @@ struct GideonPanel: View {
                 plusMenu
                 approvalMenu
                 Spacer(minLength: 8)
+                if chat.sending {
+                    Button { chat.stop() } label: {
+                        Image(systemName: "stop.fill").font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(NX.card).frame(width: 34, height: 34)
+                            .background(NX.onyx, in: Circle()).frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel(T("Stop"))
+                } else {
                 Button {
                     submit()
                 } label: {
@@ -1015,6 +1133,7 @@ struct GideonPanel: View {
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel(T("Send"))
+                }
             }
             .padding(.horizontal, 4)
         }
@@ -1025,8 +1144,15 @@ struct GideonPanel: View {
 
     /// One menu rather than three icons (web "+"). A PhotosPicker nested in a Menu draws its row but never
     /// opens, so the menu only flips flags and the pickers themselves hang off the panel.
+    @State private var showNewMeeting = false
+
     private var plusMenu: some View {
         Menu {
+            if RemoteConfig.shared.meetingNotesEnabled {
+                Button { showNewMeeting = true } label: {
+                    Label { Text(T("Meeting recording") + " · " + T("Beta")); Text(T("Minutes and tasks from a recording")) } icon: { Image(systemName: "mic") }
+                }
+            }
             Button { showPhotoPicker = true } label: { Label(T("Add a photo"), systemImage: "photo") }
             Button { showCamera = true } label: { Label(T("Camera"), systemImage: "camera") }
             Button { showFilePicker = true } label: { Label(T("Add a file (PDF, Word, Excel, text…)"), systemImage: "paperclip") }
@@ -1041,6 +1167,7 @@ struct GideonPanel: View {
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .accessibilityLabel(T("Add photos, files or pages"))
+        .sheet(isPresented: $showNewMeeting) { NewMeetingSheet(projectId: openContext?.projectId ?? chat.context.projectId).environment(auth).environment(router) }
     }
 
     /// "Review before writing ▾" (web): what has to wait for Apply before GIDEON changes something.
@@ -1069,13 +1196,14 @@ struct GideonPanel: View {
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .accessibilityIdentifier("gideon.approvalMode")
         .help(approvalMode.blurb)
     }
 
     /// Deliberately does not consult `sending`. The composer stays live while GIDEON is thinking;
     /// what a mid-flight tap does is the store's problem, not the button's.
     private var canSend: Bool {
-        !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        tierStatus.state(tier).available && !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - attachments
@@ -1198,6 +1326,10 @@ struct GideonPanel: View {
     /// screen: the decode is done in a tap that is already paying for a layout pass, so the bubble's
     /// first draw and every redraw an arriving answer forces are cache reads and nothing more.
     private func submit() {
+        guard tierStatus.state(tier).available else {
+            chat.error = T("GIDEON Model 0 is unavailable right now.") + " " + tierStatus.state(tier).reasonText
+            return
+        }
         guard let turn = chat.submit(tier: tier, approvalMode: approvalMode) else { return }
         guard let index = turn.attachments.firstIndex(where: { $0.kind == .image }),
               let bytes = turn.attachments[index].bytes else { return }
@@ -1332,8 +1464,15 @@ struct GideonDecision: Identifiable {
     let apply: Bool
     /// book_room / move_room_booking: the room and slot picked on the card; cancel_room_booking: the booking id.
     var booking: GideonBookingChoice? = nil
+    var task: GideonTaskChoice? = nil
     var id: String { proposal.id + (apply ? "-apply" : "-discard") }
     var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
+    var buttonLabel: String {
+        guard apply else { return T("Discard") }
+        if proposal.action == "delete_task" { return T("Delete task") }
+        if let action = GideonToolAction.get(proposal.action) { return AppLanguage.shared.gideonActionApply(action) }
+        return T("Apply")
+    }
     /// The picked room for a booking (the server's summary was written before the room was chosen).
     var message: String {
         if let booking, !booking.room.isEmpty {
@@ -1406,7 +1545,7 @@ struct GideonChatsSheet: View {
                     }
                 }
                 Button(T("Cancel"), role: .cancel) {}
-            } message: { _ in Text(T("Its messages are deleted for you on every device.")) }
+            } message: { _ in Text(T("Removed from your chats. It's kept for 90 days for review by the Board of Directors, then deleted.")) }
             .alert(T("Couldn't delete the chat"), isPresented: Binding(get: { deleteFailure != nil }, set: { if !$0 { deleteFailure = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(deleteFailure ?? "") }
@@ -1478,6 +1617,7 @@ struct AskGideonButton: View {
 /// needs the room, and the iPhone showed no title at all (UI tour runs 9–10); the system title is kept.
 /// Earlier systems keep the principal item, which they do not drop.
 struct GideonSystemTitle: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var hSize
     let title: String
     let subtitle: String
 
@@ -1488,9 +1628,21 @@ struct GideonSystemTitle: ViewModifier {
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.navigationTitle(title).navigationSubtitle(subtitle)
+            // Compact already draws title/subtitle above the conversation. Duplicating them in
+            // the system bar squeezes the selected tier name down to a chevron.
+            content.navigationTitle(hSize == .compact ? "" : title).navigationSubtitle(hSize == .compact ? "" : subtitle)
         } else {
             content
         }
+    }
+}
+
+private struct GideonThinkingShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bright = false
+    func body(content: Content) -> some View {
+        content.opacity(reduceMotion ? 1 : (bright ? 1 : 0.4))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: bright)
+            .onAppear { bright = true }
     }
 }

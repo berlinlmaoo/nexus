@@ -42,7 +42,7 @@ const overdue = (day: string | null, stage: RequestStage) =>
 function Card({ r, onOpen }: { r: MyLegalRequest; onOpen: () => void }) {
   const { t, lang } = useLang();
   return (
-    <div className="flex flex-col rounded-lg border border-border bg-card p-3 shadow-sm">
+    <div className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 shadow-sm">
       <button type="button" onClick={onOpen} className="text-left">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -82,7 +82,7 @@ export function MyLegalRequestsSection({ requests, onOpen }: { requests: MyLegal
   return (
     <section className="mb-6">
       <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Scale className="h-4 w-4 text-muted-foreground" />{t("Legal requests")}<span className="text-xs font-normal text-muted-foreground">{requests.length}</span></h2>
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {requests.map((r) => <Card key={r.id} r={r} onOpen={() => onOpen(r.id)} />)}
       </div>
     </section>

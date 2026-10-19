@@ -1,7 +1,22 @@
 import os
 
+from .humanize import humanize_json
 from .client import call_nexus, check_available
 from .schemas import SCHEMAS
+from .schemas_extra import EXTRA_SCHEMAS
+from .schemas_g67 import G67_SCHEMAS
+from .schemas_g8_10_14 import G8_10_14_SCHEMAS
+from .schemas_sheets import SHEET_SCHEMAS
+from .schemas_g11_13 import G11_13_SCHEMAS
+from .schemas_presence import PRESENCE_SCHEMAS
+from .images import read_nexus_image_handler
+from .schemas_memory import MEMORY_SCHEMAS
+
+# The 18 Oct 2026 package (inbox, chat, reminders, …): schemas_extra.py.
+# GIDEON Memory (19 Oct 2026): nexus_remember / nexus_forget / nexus_list_my_memories -> remember / forget / list_my_memories.
+_PACKAGE = {**EXTRA_SCHEMAS, **G67_SCHEMAS, **G8_10_14_SCHEMAS, **SHEET_SCHEMAS, **G11_13_SCHEMAS, **MEMORY_SCHEMAS, **PRESENCE_SCHEMAS}
+SCHEMAS = {**SCHEMAS, **_PACKAGE}
+EXTRA_ACTIONS = {name: name[len("nexus_"):] for name in _PACKAGE}
 
 _ACTION_BY_TOOL = {
     "nexus_list_projects": "list_projects",
@@ -30,6 +45,12 @@ _ACTION_BY_TOOL = {
     "nexus_move_room_booking": "move_room_booking",
     "nexus_cancel_room_booking": "cancel_room_booking",
     "nexus_create_document": "create_document",
+    # Deleting a task (18 Oct 2026): ALWAYS a card the person confirms, in every approval mode; the web Delete
+    # button's own rule (Can edit) and path (restorable from the Audit). The model can never delete directly.
+    "nexus_delete_task": "delete_task",
+    # Pipeline deals and Legal documents (18 Oct 2026): read only.
+    "nexus_search_deals": "search_deals",
+    "nexus_search_legal_documents": "search_legal_documents",
     "nexus_get_attendance_day": "get_attendance_day",
     # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both
     # at POST /api/complaints/[id]/correction, and that is the only place attendance or XP moves.
@@ -38,6 +59,7 @@ _ACTION_BY_TOOL = {
     # Menutup tiket yang sudah tidak menyisakan apa pun. Server yang memverifikasi (ledger kosong,
     # jatah day-off utuh, tidak ada usulan menunggu) dan menolak kalau tidak; ini bukan hak model.
     "nexus_resolve_ticket": "resolve_ticket",
+    **EXTRA_ACTIONS,
 }
 
 
@@ -54,9 +76,19 @@ _ATTENDANCE_TOOLS = {
 }
 
 
+def _function_schema(name, schema):
+    """Hermes wants an OpenAI function schema ({name, description, parameters}). SCHEMAS holds plain JSON
+    schemas with the description on top; handed over as they were (until 18 Oct 2026) the model saw every
+    NEXUS tool with NO parameters at all — it called nexus_list_tasks with {} and got every task it could see,
+    and never knew projectId / assigneeId / limit existed."""
+    params = {k: v for k, v in schema.items() if k != "description"}
+    return {"name": name, "description": schema.get("description", ""), "parameters": params}
+
+
 def _make_handler(action):
     def _handler(args=None, **_kwargs):
-        return call_nexus(action, args or {})
+        # Enums -> human labels before the model sees them (see humanize.py).
+        return humanize_json(call_nexus(action, args or {}))
 
     return _handler
 
@@ -69,8 +101,9 @@ def register(ctx) -> None:
         ctx.register_tool(
             name=tool_name,
             toolset="nexus",
-            schema=SCHEMAS[tool_name],
-            handler=_make_handler(action),
+            schema=_function_schema(tool_name, SCHEMAS[tool_name]),
+            # A NEXUS picture is written to the work dir and opened with vision_analyze (images.py), never as text.
+            handler=read_nexus_image_handler if tool_name == "nexus_read_nexus_image" else _make_handler(action),
             check_fn=check_available,
             requires_env=["NEXUS_BASE_URL", "NEXUS_SERVICE_TOKEN"],
             emoji="🧭",

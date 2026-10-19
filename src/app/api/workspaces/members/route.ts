@@ -555,24 +555,48 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    const updated = await prisma.workspaceMember.update({
-      where: { id: memberId },
-      data: {
-        ...(role !== undefined ? { role } : {}),
-        ...(attendanceRole !== undefined ? { attendanceRole } : {}),
-        ...(shiftStart !== undefined ? { attendanceShiftStartTime: shiftStart } : {}),
-        ...(shiftEnd !== undefined ? { attendanceShiftEndTime: shiftEnd } : {}),
-        ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
-        ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
-        ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
-        ...(restDaysClean !== undefined ? { restDays: restDaysClean } : {}),
-        ...(approverId !== undefined ? { approverId } : {}),
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },
-        approver: { select: { id: true, name: true, avatar: true } },
-      },
-    })
+    // Bagan Approval edits are serialised per workspace and the loop walk runs again inside, against
+    // committed rows: two edits at once (A → B and B → A — two BoD, or a double drag) each passed the walk
+    // above on its own and together closed a loop, so a request of either reached nobody.
+    const CYCLE = Symbol("approval-cycle")
+    const updated = await prisma.$transaction(async (tx) => {
+      if (approverId !== undefined && approverId !== null) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`approval-chart|${currentMember.workspaceId}`})::int8)`
+        let cursor: string | null = (await tx.workspaceMember.findUnique({
+          where: { userId_workspaceId: { userId: approverId, workspaceId: currentMember.workspaceId } },
+          select: { approverId: true },
+        }))?.approverId ?? null
+        for (let i = 0; cursor && i < 64; i++) {
+          if (cursor === targetMember.userId) throw CYCLE
+          const up: { approverId: string | null } | null = await tx.workspaceMember.findUnique({
+            where: { userId_workspaceId: { userId: cursor, workspaceId: currentMember.workspaceId } },
+            select: { approverId: true },
+          })
+          cursor = up?.approverId ?? null
+        }
+      }
+      return tx.workspaceMember.update({
+        where: { id: memberId },
+        data: {
+          ...(role !== undefined ? { role } : {}),
+          ...(attendanceRole !== undefined ? { attendanceRole } : {}),
+          ...(shiftStart !== undefined ? { attendanceShiftStartTime: shiftStart } : {}),
+          ...(shiftEnd !== undefined ? { attendanceShiftEndTime: shiftEnd } : {}),
+          ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
+          ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
+          ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
+          ...(restDaysClean !== undefined ? { restDays: restDaysClean } : {}),
+          ...(approverId !== undefined ? { approverId } : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },
+          approver: { select: { id: true, name: true, avatar: true } },
+        },
+      })
+    }).catch((e: unknown) => { if (e === CYCLE) return null; throw e })
+    if (!updated) {
+      return NextResponse.json({ error: 'Itu bikin lingkaran: orang itu (atau atasannya) sudah lapor ke orang ini.' }, { status: 400 })
+    }
 
     // Old → new for exactly the fields this request touched (targetMember is the full row read above,
     // so no extra query). The old metadata logged only new values and, for anything but role/shift/

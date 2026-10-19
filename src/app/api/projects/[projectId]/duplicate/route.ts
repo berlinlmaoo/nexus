@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { ensureSheetFormattingColumns } from "@/lib/project-sheets"
 import { copySheet } from "@/lib/sheet-structure"
+import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
@@ -138,6 +139,10 @@ export async function POST(
     }
 
     const sectionIdMap = new Map<string, string>()
+    // Old task id -> copy id, so subtasks stay subtasks of the copied parent (QA final 19 Oct: every
+    // subtask came across as a top-level task because parentId was not copied).
+    const taskIdMap = new Map<string, string>()
+    const childParents: Array<{ oldId: string; parentId: string }> = []
     for (const taskList of original.taskLists) {
       const newTaskList = await prisma.taskList.create({
         data: { name: taskList.name, position: taskList.position, taskStatus: taskList.taskStatus, projectId: newProject.id },
@@ -164,6 +169,8 @@ export async function POST(
           },
           select: { id: true },
         })
+        taskIdMap.set(task.id, newTask.id)
+        if (task.parentId) childParents.push({ oldId: task.id, parentId: task.parentId })
 
         // The block-editor body comes along (its text is the description copied above).
         const body = await prisma.taskBody.findUnique({ where: { taskId: task.id }, select: { doc: true } })
@@ -185,6 +192,14 @@ export async function POST(
       }
     }
 
+    // Re-link subtasks once every copy exists (a parent may sit in a later section). A parent outside
+    // this project did not come across: that subtask stays top-level rather than pointing at the original.
+    for (const { oldId, parentId } of childParents) {
+      const newId = taskIdMap.get(oldId)
+      const newParent = taskIdMap.get(parentId)
+      if (newId && newParent) await prisma.task.update({ where: { id: newId }, data: { parentId: newParent }, select: { id: true } })
+    }
+
     // Saved views (owner, 12 Oct 2026): the SHARED ones come along (personal views stay with their owner's
     // copy of the original). Their config names custom fields ("cf:<id>") and sections by id, so every old
     // id is swapped for the copy's; a rule naming something that did not come across just stops matching.
@@ -201,6 +216,74 @@ export async function POST(
       })
     }
 
+    // Pages and Forms come along too (A-3, owner 19 Oct 2026 — as Notion copies sub-pages). Pages keep
+    // their hierarchy, order, icon, cover and content; Forms keep their questions and settings with the
+    // custom-field and section ids swapped for the copy's (a form routes answers into them). Form
+    // submissions, and the tasks they made, are the original's history and stay behind.
+    const idSwaps = [...fieldIdMap, ...sectionIdMap]
+    const swapIds = <T,>(json: T): T => {
+      if (json == null) return json
+      let text = JSON.stringify(json)
+      for (const [from, to] of idSwaps) text = text.split(from).join(to)
+      return JSON.parse(text) as T
+    }
+    const docs = await prisma.doc.findMany({
+      where: { projectId },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      select: { id: true, title: true, content: true, contentText: true, parentId: true, position: true, icon: true, coverImage: true, fullWidth: true, verificationStatus: true },
+    })
+    const docIdMap = new Map<string, string>()
+    // Parents before children: copy in rounds, each round taking the pages whose parent is already copied
+    // (or is not a page of this project — that one becomes a top-level page of the copy).
+    const docIds = new Set(docs.map((d) => d.id))
+    let pending = docs
+    while (pending.length) {
+      const ready = pending.filter((d) => !d.parentId || !docIds.has(d.parentId) || docIdMap.has(d.parentId))
+      if (!ready.length) break // a parent cycle: impossible through the API; stop rather than loop
+      for (const d of ready) {
+        const created = await prisma.doc.create({
+          data: {
+            title: d.title,
+            content: (d.content ?? undefined) as InputJsonValue | undefined,
+            contentText: d.contentText,
+            parentId: d.parentId ? docIdMap.get(d.parentId) ?? null : null,
+            position: d.position,
+            icon: d.icon,
+            coverImage: d.coverImage,
+            fullWidth: d.fullWidth,
+            verificationStatus: d.verificationStatus,
+            projectId: newProject.id,
+            authorId: me,
+            ownerId: me,
+          },
+          select: { id: true },
+        })
+        docIdMap.set(d.id, created.id)
+      }
+      const done = new Set(ready.map((d) => d.id))
+      pending = pending.filter((d) => !done.has(d.id))
+    }
+
+    const forms = await prisma.form.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } })
+    for (const f of forms) {
+      await prisma.form.create({
+        data: {
+          name: f.name,
+          // Slugs are public links and unique: the copy gets its own.
+          slug: await generateUniqueFormSlug(prisma, f.name),
+          description: f.description,
+          fields: swapIds(f.fields) as InputJsonValue,
+          branding: (f.branding ?? undefined) as InputJsonValue | undefined,
+          accessSchedule: (f.accessSchedule ?? undefined) as InputJsonValue | undefined,
+          settings: (swapIds(f.settings) ?? undefined) as InputJsonValue | undefined,
+          isPublic: f.isPublic,
+          requireAuth: f.requireAuth,
+          projectId: newProject.id,
+        },
+        select: { id: true },
+      })
+    }
+
     logAudit({
       action: "create",
       entityType: "project",
@@ -208,7 +291,7 @@ export async function POST(
       entityName: newProject.name,
       userId: me,
       request,
-      metadata: { duplicatedFrom: projectId },
+      metadata: { duplicatedFrom: projectId, pages: docIdMap.size, forms: forms.length },
     })
 
     // The copy, complete with its tasks, appears live beside the original for the workspace and its members.

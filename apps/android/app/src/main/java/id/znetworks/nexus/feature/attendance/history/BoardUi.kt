@@ -316,6 +316,8 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val roster = if (s.rowsPeriod == period) s.roster else emptyList()
     val members = remember(rows, roster) { BoardModel.members(rows, vm.today?.viewerId ?: session?.userId, session?.userName.orEmpty(), roster) }
     var full by remember { mutableStateOf(false) }
+    var crewTool by remember { mutableStateOf<Boolean?>(null) }
+    val crewApi = remember { id.znetworks.nexus.feature.admin.AttendanceAdminApi((context.applicationContext as NexusApplication).container.api) }
 
     Column(
         Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(16.dp),
@@ -333,6 +335,10 @@ fun CrewBoardCard(vm: BoardViewModel) {
             IconButton(onClick = { vm.shift(1) }, enabled = s.offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }
             if (members.size > 1) IconButton(onClick = { full = true }) { Icon(Icons.Filled.GridView, stringResource(R.string.board_full)) }
             if (vm.wide) IconButton(onClick = { vm.export { shareFile(context, it) } }, enabled = !s.busy) { Icon(Icons.Filled.Download, stringResource(R.string.board_export)) }
+        }
+        if (vm.canManage) {
+            TextButton(onClick = { crewTool = true }) { Text(stringResource(R.string.crew_employment)) }
+            TextButton(onClick = { crewTool = false }) { Text(stringResource(R.string.crew_deductions)) }
         }
         when {
             s.loading && rows.isEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
@@ -361,6 +367,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
         }
     }
     BoardDaySheets(vm)
+    crewTool?.let { employment -> id.znetworks.nexus.feature.admin.AttendanceCrew(crewApi, period, employment, members.associate { it.id to it.name }) { crewTool = null; vm.load() } }
 }
 
 /** The day sheet, its trail and notices: the board's, reused by the member record (audit S6). */

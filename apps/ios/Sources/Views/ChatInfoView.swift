@@ -340,6 +340,7 @@ struct ChatInfoView: View {
             .buttonStyle(.plain)
             .disabled(!canEdit)
             .accessibilityHint(canEdit ? T("Edit the group's name and description") : "")
+            if isDM { Text(T("Direct message")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg); PresenceChip(userId: dmPartner?.userId) }
             if !isDM {
                 Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }
@@ -356,7 +357,7 @@ struct ChatInfoView: View {
                     route = .profile(ProfileTarget(userId: p.userId, name: p.name, avatar: p.avatar))
                 }
             } label: {
-                AvatarView(url: dmPartner?.avatar, initial: String(groupName.first ?? "?").uppercased(), size: 88)
+                AvatarView(url: dmPartner?.avatar, initial: String(groupName.first ?? "?").uppercased(), size: 88, userId: dmPartner?.userId, name: groupName)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("View profile"))
@@ -508,7 +509,7 @@ struct ChatInfoView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                AvatarView(url: m.avatar, initial: m.initial, size: 36)
+                AvatarView(url: m.avatar, initial: m.initial, size: 36, userId: m.userId, name: m.name)
                 HStack(spacing: 6) {
                     Text(me ? T("You") : m.displayName)
                         .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -1279,6 +1280,7 @@ private struct ChatMediaList: View {
     }
 
     private func fileName(_ item: ChatMediaItem) -> String {
+        if let name = item.name, !name.isEmpty { return name }
         if let title = item.title, !title.isEmpty { return title }
         let last = item.url.split(separator: "/").last.map(String.init) ?? item.url
         return last.split(separator: "?").first.map(String.init) ?? last
@@ -1293,7 +1295,7 @@ private struct ChatMediaList: View {
     }
 
     private func secondary(_ item: ChatMediaItem) -> String {
-        [item.sender?.name, ChatMute.dateText(item.createdAt)].compactMap { $0 }.joined(separator: " · ")
+        [item.size.map { AppNumber.bytes(Double($0)) }, item.sender?.name, ChatMute.dateText(item.createdAt)].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func open(_ item: ChatMediaItem) async {

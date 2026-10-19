@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { chatRaceResponse } from "@/lib/chat-order"
+import { resolveLegacyId, resolveLegacyIds } from "@/lib/legacy-ids"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, groupRoomAllowsUser, memberManagerContext } from "@/lib/chat-access"
@@ -82,9 +84,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     if (!manages) return managerRequired()
 
     const body = await req.json().catch(() => null)
-    const requested: string[] = Array.isArray(body?.userIds)
+    const asked: string[] = Array.isArray(body?.userIds)
       ? body.userIds.filter((u: unknown): u is string => typeof u === "string" && u.length > 0)
       : []
+    // Ids from before the UUIDv7 conversion (released apps' caches) are compared in JS below: resolve them first.
+    const legacy = await resolveLegacyIds(asked)
+    const requested = asked.map((u) => legacy.get(u) ?? u)
     if (requested.length === 0) return NextResponse.json({ error: "userIds required" }, { status: 400 })
 
     const reachable = await reachableUserIds(userId, convo.workspaceId)
@@ -125,6 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       added: added.length,
     })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation members POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -142,7 +149,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     const convo = loaded.convo!
 
     const body = await req.json().catch(() => null)
-    const target = typeof body?.userId === "string" ? body.userId : null
+    const target = typeof body?.userId === "string" && body.userId ? await resolveLegacyId(body.userId) : null
     if (!target) return NextResponse.json({ error: "userId required" }, { status: 400 })
 
     // Removing someone else is a Manager-and-above act (owner, 8 Oct 2026); leaving is anyone's.
@@ -159,6 +166,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
 
     // The removal and its log line ("Budi removed Mira" / "Mira left") together, or neither.
     const system = await prisma.$transaction(async (tx) => {
+      // The count above was read before this transaction: everyone leaving at the same moment all passed it and
+      // left a group with no members (QA final 19 Oct 2026). One member change per group at a time, then count again.
+      await tx.$executeRaw`SELECT 1 FROM "Conversation" WHERE id = ${convo.id} FOR UPDATE`
+      if ((await tx.conversationMember.count({ where: { conversationId: convo.id } })) <= 1) return LAST_MEMBER
       const { count } = await tx.conversationMember.deleteMany({ where: { conversationId, userId: target } })
       if (count === 0) return null
       const leaving = target === userId
@@ -171,6 +182,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
           : { type: "member_removed", actor, targets: [removed] },
       })
     })
+    if (system === LAST_MEMBER) return NextResponse.json({ error: LAST_MEMBER_MESSAGE, code: LAST_MEMBER }, { status: 400 })
     if (system) {
       // Out of the room's socket at once; the line reaches who is still in it, and every member's
       // list (the one who left included) refreshes.
@@ -189,6 +201,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     })
     return NextResponse.json({ conversation: conversation ? { ...conversation, canManageMembers: manages } : conversation })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation members DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

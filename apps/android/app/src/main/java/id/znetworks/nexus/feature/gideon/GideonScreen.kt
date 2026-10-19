@@ -303,6 +303,7 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                     if (expanded) m.steps.forEach { st -> StepLine(st) }
                 }
                 if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
+                if (!readOnly && !s.thinking && m.content.isNotBlank()) SaveAnswerButton(m.content, s.project)
                 MemoryRules.chatMemories(m, readOnly).forEach { memory -> GideonMemoryChip(memory) }
                 // Review before writing: the changes waiting for Apply, then what GIDEON made directly.
                 m.proposals.forEach { p ->

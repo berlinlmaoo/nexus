@@ -485,6 +485,21 @@ export function canReplyTo(m: { kind?: string | null } | null | undefined): bool
 }
 
 /** The 400 `code` when replyToId points at a SYSTEM row, and the sentence older apps show as it is. */
+/**
+ * One chat message is at most 4,000 characters (owner, 19 Oct 2026, QA B-15): a 100,000-character message used
+ * to be accepted and pushed to every member. Counted in characters as people see them (code points, so an
+ * emoji is one). Refused with a plain 400 and an `error` sentence, which every released app already shows
+ * as it is when a send fails; the app keeps the draft.
+ */
+export const MESSAGE_MAX_CHARS = 4000
+export const MESSAGE_TOO_LONG = "MESSAGE_TOO_LONG"
+export function messageLength(text: string): number {
+  return Array.from(text).length
+}
+export function messageTooLongMessage(length: number): string {
+  return `Pesan terlalu panjang: maksimal 4.000 karakter (sekarang ${length.toLocaleString("id-ID")}). Pecah jadi beberapa pesan.`
+}
+
 export const SYSTEM_MESSAGE_REPLY = "SYSTEM_MESSAGE_REPLY"
 export const SYSTEM_MESSAGE_REPLY_MESSAGE = "Pesan sistem tidak bisa dibalas."
 

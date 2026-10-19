@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
@@ -15,6 +16,7 @@ import {
 } from "@/lib/attendance"
 import { cancelAttendancePenaltiesForDate, isAutoDeduction, lockAttendanceRequests } from "@/lib/attendance-absence"
 import { notifyAttendanceOverride } from "@/lib/attendance-review-notify"
+import { touchPresenceSoon } from "@/lib/presence"
 
 type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
 const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "PERMIT", "CLEAR_PENALTY"])
@@ -23,7 +25,7 @@ const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", 
 // Cuti / Sakit / Day off — refunding every attendance XP penalty + restoring an auto-cut day-off
 // for that day — or just CLEAR_PENALTY (remove the punishment, change nothing else).
 // All actions are idempotent and audit-logged.
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -88,6 +90,7 @@ export async function POST(req: NextRequest) {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded })
     }
 
@@ -166,6 +169,7 @@ export async function POST(req: NextRequest) {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, canceledRequests: singleDay.length })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "PRESENT", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (present) failed", e))
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, canceledRequests: singleDay.length, multiDayRequestsLeft: multiDay })
     }
 
@@ -241,6 +245,7 @@ export async function POST(req: NextRequest) {
     const { closed } = outcome
     if (outcome.kind === "already") {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, alreadyCovered: true, closedAttendance: closed.count })
+      touchPresenceSoon(targetUserId)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, alreadyCovered: true, closedAttendance: closed.count })
     }
     const { conflicting } = outcome
@@ -248,6 +253,7 @@ export async function POST(req: NextRequest) {
     await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
     notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })
       .catch((e) => console.error("notifyAttendanceOverride (status) failed", e))
+    touchPresenceSoon(targetUserId)
     return NextResponse.json({ ok: true, action, date: dateKey, refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
   } catch (error) {
     console.error("attendance override error:", error)
@@ -274,3 +280,6 @@ async function logOverride(
     metadata: { workspaceId, targetUserId, date: dateKey, override: action, ...metadata },
   })
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const POST = pingActorAfter("override", handlePOST)

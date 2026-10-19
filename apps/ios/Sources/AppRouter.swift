@@ -59,6 +59,8 @@ struct NXDetailRequest: Identifiable, Hashable {
     let target: NotificationTarget
     var id: String {
         switch target {
+        case .reminders: return "reminders"
+        case .meeting(let id):    return "meeting-" + id
         case .task(let id):       return "task-" + id
         case .project(let id):    return "project-" + id
         case .submission(let id): return "submission-" + id
@@ -91,7 +93,7 @@ struct NXProjectLink: Equatable {
         let value = { (k: String) -> String? in
             query.first { $0.name == k }?.value.flatMap { $0.isEmpty ? nil : $0 }
         }
-        let view = value("view")?.lowercased(), event = value("event"), date = value("date"), form = value("form")
+        let view = (value("view") ?? value("v"))?.lowercased(), event = value("event"), date = value("date"), form = value("form")
         guard view != nil || event != nil || date != nil || form != nil else { return nil }
         self.projectId = projectId
         self.view = view
@@ -194,6 +196,7 @@ final class AppRouter {
     /// tapped on a cold start arrives before any screen exists, and one tapped while signed out
     /// must survive the login it caused.
     var focus: NotificationTarget?
+    var gideonAdminTab: String?
 
     /// A task, project or submission opened from a notification, drawn as a sheet above either
     /// shape. These three are not screens in the More launcher and have no tab of their own, so
@@ -231,6 +234,7 @@ final class AppRouter {
     /// notification, or `nexus://calendar?date=…`. CalendarView reads it, jumps to that day and
     /// clears it. Held rather than fired, for the same reasons as `focus`: a link tapped on a cold
     /// start arrives before the screen exists, and the screen may already be on top when it does.
+    var calendarLink: String?
     var calendarDate: String?
     /// The CalendarView instance on screen right now (it writes this in onAppear / onDisappear), so a
     /// date link makes the open Calendar jump instead of pushing a second one that opens on today.
@@ -255,11 +259,16 @@ final class AppRouter {
     var calendarLeftAt: Date?
 
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
+    var meetingFile: URL?
+
     func open(_ target: NotificationTarget) {
         switch target {
+        case .gideonPerformance:
+            gideonAdminTab = "performance"
+            go(.admin)
         case .screen(let screen):
             go(screen)
-        case .task, .project, .submission, .legalRequest:
+        case .reminders, .meeting, .task, .project, .submission, .legalRequest:
             detail = NXDetailRequest(target: target)
         case .legalBoard:
             focus = target
@@ -267,6 +276,9 @@ final class AppRouter {
         case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }
+        case .calendarLink(let path):
+            calendarLink = path
+            if calendarOnScreen == nil { go(.teamCalendar) }
         case .calendarDay(let day):
             calendarDate = day
             if calendarOnScreen == nil { go(.teamCalendar) }
@@ -277,6 +289,8 @@ final class AppRouter {
     /// `taskId`, `projectId` (src/lib/apns.ts) — plus the two the app schedules itself.
     func openNotification(_ info: [String: String]) {
         let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
+        if let id = value("meetingId") { open(.meeting(id)); return }
+        if value("type") == "GIDEON_ALERT" { open(.gideonPerformance); return }
         if let id = value("taskId") { open(.task(id)); return }
         // A link into a project's tab (an outlet's report form) keeps its view, event and day.
         if let link = value("link").flatMap(NXProjectLink.init(path:)) {
@@ -380,6 +394,8 @@ final class AppRouter {
         // Coalesced rather than switched as an Optional, and lowercased because a scheme is
         // case-insensitive by spec while a Swift string literal is not.
         switch (url.scheme ?? "").lowercased() {
+        case "file":
+            if MeetingUploads.extensions.contains(url.pathExtension.lowercased()) { meetingFile = url }
         case "nexus": openScheme(url)
         case "https": openWeb(url)
         default:      break
@@ -391,6 +407,9 @@ final class AppRouter {
     private func openScheme(_ url: URL) {
         let name = url.host ?? url.pathComponents.first { $0 != "/" } ?? ""
         // Not a screen: there is nothing behind the login screen to navigate to while signed out.
+        if name.lowercased() == "reminders" { open(.reminders); return }
+        if name.lowercased() == "meetings", let id = url.pathComponents.first(where: { $0 != "/" }) { open(.meeting(id)); return }
+        if name.lowercased() == "admin", URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "gideon" && $0.value == "performance" }) == true { open(.gideonPerformance); return }
         if name.lowercased() == "register" { requestSignup(from: url); return }
         if name.lowercased() == "forgot-password" { requestPasswordReset(from: url); return }
         // `nexus://attendance?permit=today` — the Live Activity's "File a permit" while outside the
@@ -405,7 +424,9 @@ final class AppRouter {
         // and a calendar widget's row a task as well: `&task=<id>` (an undated task: `?task=` alone).
         // A widget link also says whose tasks it showed: `&scope=me|division|all`; anything else is
         // ignored, so an older or hand-written link opens the Calendar as it was left.
+        if name.lowercased() == "folders", let id = url.pathComponents.first(where: { $0 != "/" }) { open(.calendarLink("/calendar?folder=" + NativeAPI.escape(id))); return }
         if name.lowercased() == "calendar" || name.lowercased() == "teamcalendar" {
+            if let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery, query.contains("folder=") { open(.calendarLink("/calendar?" + query)); return }
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
             let date = query?.first { $0.name == "date" }?.value
             if let task = query?.first(where: { $0.name == "task" })?.value, !task.isEmpty { calendarTaskId = task }

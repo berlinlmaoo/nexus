@@ -5,8 +5,10 @@ import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { isRecordNotFound } from "@/lib/prisma-errors"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 
 /**
  * Room Booking — the one path that makes a booking (POST /api/room-bookings and GIDEON book_room), the one
@@ -20,6 +22,22 @@ import { restorableDelete } from "@/lib/deletion-snapshot"
  * refuses the second of two requests that passed that check at the same moment. Both end as the same
  * 409 ROOM_TAKEN.
  */
+
+/**
+ * The rooms (Studio, Ruang Meeting, VIP) are the company's office: they belong ONLY to the company workspace
+ * (owner, 19 Oct 2026, QA B-6). A personal or demo workspace never sees, books, moves or deletes a room
+ * booking, and every booking lands in the company workspace. This is the one scope every room path reads:
+ * [company workspace] for its members, [] for anyone else.
+ */
+export async function roomWorkspaceIds(userId: string): Promise<string[]> {
+  return (await orgRoleOf(userId)) ? [ORG_WORKSPACE_ID] : []
+}
+
+/** The refusal for somebody outside the company workspace (POST / PATCH / DELETE). */
+export const ROOMS_NOT_AVAILABLE = {
+  error: "Room booking is only available in the Z Networks workspace.",
+  code: "ROOMS_NOT_AVAILABLE",
+} as const
 
 export const bookingInclude = {
   createdBy: { select: { id: true, name: true, email: true, avatar: true } },
@@ -52,6 +70,10 @@ export function isRoomOverlapViolation(err: unknown): boolean {
     seen.add(v)
     const o = v as Record<string, unknown>
     if (o.code === "23P01" || o.originalCode === "23P01") return true
+    // Two bookings moved into the same slot at once can each wait on the other's exclusion check; Postgres then
+    // kills one with a deadlock instead of 23P01 (QA final 19 Oct 2026: 1 of 2 runs answered 500). Same outcome.
+    if (o.code === "40P01" || o.originalCode === "40P01") return true
+    if (typeof o.message === "string" && /deadlock detected/.test(o.message)) return true
     if (typeof o.message === "string" && /RoomBooking_no_overlap|violates exclusion constraint/.test(o.message)) return true
     return ["cause", "meta", "driverAdapterError", "error"].some((k) => walk(o[k], depth + 1))
   }
@@ -194,7 +216,9 @@ export async function createRoomBooking(input: {
   end: Date
 }): Promise<CreateBookingResult> {
   const { userId, workspaceId, room, start, end } = input
-  const scope = input.scopeWorkspaceIds.includes(workspaceId) ? input.scopeWorkspaceIds : [workspaceId, ...input.scopeWorkspaceIds]
+  // Rooms belong to the company workspace only (B-6): a booking anywhere else is refused, whoever asks.
+  if (workspaceId !== ORG_WORKSPACE_ID) return { ok: false, status: 403, body: { ...ROOMS_NOT_AVAILABLE } }
+  const scope = [ORG_WORKSPACE_ID]
   const title = input.title.trim()
   if (!BOOKING_ROOMS.includes(room)) return { ok: false, status: 400, body: { error: "Unknown room", code: "UNKNOWN_ROOM" } }
   if (!title) return { ok: false, status: 400, body: { error: "Title is required" } }
@@ -225,10 +249,12 @@ export async function createRoomBooking(input: {
       [`Room booked: ${roomName(room, "en")}`, `${title} · ${formatBookingSlot(start, end, "en")}. A reminder comes before it starts.`],
       [`Ruangan dibooking: ${room}`, `${title} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`]
     ),
-    link: "/room-booking",
+    link: `/room-booking?booking=${encodeURIComponent(booking.id)}`,
     push: true,
   }).catch(() => null)
 
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(booking.workspaceId, { kind: "bookings", actorId: input.userId })
   return { ok: true, booking }
 }
 
@@ -257,7 +283,8 @@ export type ManageableBooking = { ok: true; booking: BookingWithCreator; workspa
  * (canManageBooking). 404 when it is not in their workspaces, 403 when it is not theirs to change.
  */
 export async function findManageableBooking(userId: string, bookingId: string, verb: keyof typeof NOT_YOURS = "change"): Promise<ManageableBooking | BookingRefusal> {
-  const workspaceIds = await getUserWorkspaceIds(userId)
+  const workspaceIds = await roomWorkspaceIds(userId)
+  if (workspaceIds.length === 0) return { ok: false, status: 403, body: { ...ROOMS_NOT_AVAILABLE } }
   const booking = await prisma.roomBooking.findFirst({
     where: { id: bookingId, workspaceId: { in: workspaceIds } },
     include: bookingInclude,
@@ -341,10 +368,12 @@ export async function updateRoomBooking(input: { userId: string; bookingId: stri
           ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
           : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`]
       ),
-      link: "/room-booking",
+      link: cancelled ? "/room-booking" : `/room-booking?booking=${encodeURIComponent(booking.id)}`,
       push: true,
     }).catch(() => null)
   }
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(booking.workspaceId, { kind: "bookings", actorId: input.userId })
   return { ok: true, booking, before: existing }
 }
 
@@ -373,13 +402,21 @@ export async function deleteRoomBooking(input: { userId: string; bookingId: stri
       push: true,
     }).catch(() => null)
   }
-  await restorableDelete({
-    entityType: "room_booking", entityId: bookingId,
-    entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
-    workspaceId: existing.workspaceId, userId, request: input.request,
-    metadata: { room: existing.room, createdById: existing.createdById, ...(input.via ? { via: input.via } : {}) },
-    meta: { open: { type: "room_booking", id: bookingId } },
-    remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
-  })
+  try {
+    await restorableDelete({
+      entityType: "room_booking", entityId: bookingId,
+      entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
+      workspaceId: existing.workspaceId, userId, request: input.request,
+      metadata: { room: existing.room, createdById: existing.createdById, ...(input.via ? { via: input.via } : {}) },
+      meta: { open: { type: "room_booking", id: bookingId } },
+      remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
+    })
+  } catch (err) {
+    // Two deletes at once (two managers, a double tap): the second finds the row gone — a 404, not a 500.
+    if (isRecordNotFound(err)) return { ok: false, status: 404, body: { error: "Booking not found" } }
+    throw err
+  }
+  // Live (QA final 19 Oct 2026): every open Room Booking page refetches; it used to show a taken slot as free.
+  emitWorkspaceChanged(existing.workspaceId, { kind: "bookings", actorId: userId })
   return { ok: true, before: existing }
 }

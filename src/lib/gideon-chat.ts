@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { finishRun, startRun, type ApprovalMode, type GideonTrigger } from "@/lib/gideon-runs"
+import { fetchShim, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
 
 /**
  * One door to GIDEON for server-side jobs: the Hermes shim behind GIDEON_CHAT_URL.
@@ -14,7 +15,7 @@ export async function askGideon(input: {
   user?: string
   /** GIDEON acts with this person's visibility, never more. */
   actorEmail?: string
-  model?: "luna" | "experimental"
+  model?: "luna" | "terra" | "experimental"
   timeoutMs?: number
   /** Appears in the log line when the shim refuses or answers empty. */
   tag?: string
@@ -35,6 +36,12 @@ export async function askGideon(input: {
   touchesAttendance?: boolean
   /** Receives the run id as soon as it exists (callers that link the reply to the run). */
   onRun?: (runId: string | null) => void
+  /**
+   * Ask the shim to delete this run's Hermes session once it has read the usage (owner, 19 Oct 2026: privacy).
+   * For prompts carrying content NEXUS keeps itself (a meeting transcript). Context is unaffected: GIDEON never
+   * reads old Hermes sessions, NEXUS sends what it needs. An older shim ignores the field (90-day retention).
+   */
+  forgetSession?: boolean
 }): Promise<string | null> {
   const url = process.env.GIDEON_CHAT_URL
   const secret = process.env.ORACLE_LLM_SECRET || ""
@@ -60,8 +67,10 @@ export async function askGideon(input: {
     scheduleId: input.scheduleId ?? null,
   })
   input.onRun?.(runId)
+  const since = Date.now()
   try {
-    const res = await fetch(url, {
+    // One quiet retry when the shim is restarting (lib/gideon-shim-retry.ts); a run lost to a restart is `shim_restart`.
+    const shim = await fetchShim(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-oracle-secret": secret },
       body: JSON.stringify({
@@ -70,9 +79,16 @@ export async function askGideon(input: {
         user: input.user ?? "",
         actorEmail: input.actorEmail ?? "",
         ...(runId ? { runId } : {}),
+        ...(input.forgetSession ? { forgetSession: true } : {}),
       }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 240_000),
-    })
+    }, { stream: false })
+    const res = shim.res
+    if (shim.restarting) {
+      console.error(`gideon-chat: shim restarting (${input.tag ?? "untagged"})`)
+      await finishRun(runId, { ok: false, error: SHIM_RESTART })
+      return null
+    }
     if (!res.ok) {
       console.error(`gideon-chat: shim refused (${input.tag ?? "untagged"})`, { status: res.status })
       await finishRun(runId, { ok: false, error: `shim ${res.status}` })
@@ -89,7 +105,7 @@ export async function askGideon(input: {
     await finishRun(runId, { ok: true, replyChars: reply.length, usage: data.usage })
     return reply
   } catch (error) {
-    await finishRun(runId, { ok: false, error: error instanceof Error ? error.message : "error" })
+    await finishRun(runId, { ok: false, error: await shimFailureKind(error, url, since).catch(() => (error instanceof Error ? error.message : "error")) })
     throw error
   }
 }

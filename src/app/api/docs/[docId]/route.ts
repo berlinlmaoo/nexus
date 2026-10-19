@@ -84,7 +84,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
       data.content = null
       data.contentText = null
     }
-    if (body.parentId !== undefined) data.parentId = body.parentId
+    // Moving under another page is written below, under the project's page-tree lock; to the top level here.
+    if (body.parentId === null) data.parentId = null
     if (body.position !== undefined) data.position = body.position
     if (body.icon !== undefined) data.icon = body.icon ? String(body.icon).slice(0, 64) : null
     if (body.coverImage !== undefined) data.coverImage = typeof body.coverImage === 'string' && /^(\/|https:\/\/|gradient:)/.test(body.coverImage) ? body.coverImage.slice(0, 1000) : null
@@ -92,6 +93,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
     if (body.verificationStatus !== undefined) data.verificationStatus = body.verificationStatus
     if (body.verifiedAt !== undefined) data.verifiedAt = new Date(body.verifiedAt)
     if (body.ownerId !== undefined) data.ownerId = body.ownerId
+
+    // A page can't go under itself or one of its own sub-pages (QA final 19 Oct: a -> under its grandchild c
+    // was accepted, and two people moving pages into each other at once both landed: a loop a->c->b->a that
+    // drops all three out of the page tree). Checked and written under a per-project lock, so two moves
+    // racing each other see each other's result.
+    if (body.parentId) {
+      const parentId = String(body.parentId)
+      const moved = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`doc-tree:${target.projectId}`})::int8)`
+        const loop = await tx.$queryRaw<{ n: number }[]>`
+          WITH RECURSIVE up AS (
+            SELECT id, "parentId", 0 AS depth FROM "Doc" WHERE id = ${parentId}
+            UNION ALL
+            SELECT d.id, d."parentId", up.depth + 1 FROM "Doc" d JOIN up ON d.id = up."parentId" WHERE up.depth < 500
+          ) SELECT count(*)::int AS n FROM up WHERE id = ${docId}`
+        if ((loop[0]?.n ?? 0) > 0) return false
+        await tx.doc.update({ where: { id: docId }, data: { parentId }, select: { id: true } })
+        return true
+      })
+      if (!moved) return NextResponse.json({ error: "A page can't be moved into one of its own sub-pages.", code: 'DOC_PARENT_CYCLE' }, { status: 400 })
+    }
 
     let replacedLive: string | null = null
     if (nextContent) {
@@ -144,6 +166,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ d
       meta: { open: { type: "doc", id: docId, projectId: existing.projectId }, projectId: existing.projectId },
       remove: (tx) => tx.doc.delete({ where: { id: docId } }),
     })
+    // Realtime (QA final 19 Oct): the Pages list of every other open copy of this project refetches.
+    eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: existing.projectId, docId, actorId: session.user.id })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting doc:', error)

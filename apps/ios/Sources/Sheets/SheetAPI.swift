@@ -26,8 +26,15 @@ struct SheetTabInfo: Identifiable, Equatable {
     }
 }
 
-enum SheetAPIError: Error {
+enum SheetAPIError: LocalizedError {
     case refused(Int, String?)
+    case structureChanged(SheetJSON)
+    var errorDescription: String? {
+        switch self {
+        case .refused(_, let message): return message
+        case .structureChanged: return T("The sheet columns changed. The latest version is shown; try your change again.")
+        }
+    }
 }
 
 extension APIClient {
@@ -36,7 +43,7 @@ extension APIClient {
     static let sheetTabId: String = "ios-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
 
     private static func sheetEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     private func sheetRequest(_ path: String, method: String = "GET", body: Any? = nil) throws -> URLRequest {
@@ -55,6 +62,11 @@ extension APIClient {
         do { (data, response) = try await perform(req) } catch { throw APIError.nothingAnswered(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
+        if http.statusCode == 409,
+           let obj = (try? JSONSerialization.jsonObject(with: data)) as? SheetJSON,
+           obj["code"] as? String == "SHEET_STRUCTURE_CHANGED" {
+            throw SheetAPIError.structureChanged(obj["current"] as? SheetJSON ?? [:])
+        }
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode, Self.serverMessage(data)) }
         if data.isEmpty { return [:] }
         return ((try? JSONSerialization.jsonObject(with: data)) as? SheetJSON) ?? [:]
@@ -89,8 +101,13 @@ extension APIClient {
 
     /// Name, columns (the full list; a column without id is new) or settings (merged; null removes a key).
     @discardableResult
-    func patchSheet(_ sheetId: String, body: SheetJSON) async throws -> SheetJSON {
-        try await sheetRun(try sheetRequest("/api/sheets/\(Self.sheetEnc(sheetId))", method: "PATCH", body: body))
+    func patchSheet(_ sheetId: String, body: SheetJSON, structureVersion: Int? = nil) async throws -> SheetJSON {
+        var patch = body
+        if body["columns"] != nil {
+            guard let structureVersion else { throw APIError.transport(T("Reload the sheet before changing its columns.")) }
+            patch["structureVersion"] = structureVersion
+        }
+        return try await sheetRun(try sheetRequest("/api/sheets/\(Self.sheetEnc(sheetId))", method: "PATCH", body: patch))
     }
 
     /// Values and/or formats; answers the rows as the server now has them.

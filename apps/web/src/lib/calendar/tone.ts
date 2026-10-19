@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 
 // ── Priority ───────────────────────────────────────────────────────────────────────────────────────
 
-export type PriorityLevel = "urgent" | "high" | "medium" | "low";
+export type PriorityLevel = "urgent" | "high" | "medium" | "low" | "none";
 
 /**
  * URGENT red, HIGH orange (#f97316 family, so it is not a second red), MEDIUM blue, LOW / none quiet. HIGH is
@@ -22,16 +22,20 @@ const PRIORITY_CHIP: Record<PriorityLevel, string> = {
   urgent: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
   high: "bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300",
   medium: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  low: "bg-muted text-muted-foreground",
+  // LOW green, No priority gray (owner, 18 Oct 2026: the web picker's palette on every surface). LOW was
+  // the same muted gray as "no priority" here, so a Low chip on the board read as no priority.
+  low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  none: "bg-muted text-muted-foreground",
 };
 
-/** URGENT / HIGH / MEDIUM / anything else, from whatever casing or label the API sends. */
+/** URGENT / HIGH / MEDIUM / LOW / anything else (none), from whatever casing or label the API sends. */
 export function priorityLevel(priority?: string | null): PriorityLevel {
   const p = (priority ?? "").toUpperCase();
   if (p.includes("URGENT")) return "urgent";
   if (p.includes("HIGH")) return "high";
   if (p.includes("MEDIUM")) return "medium";
-  return "low";
+  if (p.includes("LOW")) return "low";
+  return "none";
 }
 
 /** Background + text classes for a priority chip. */

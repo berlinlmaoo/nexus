@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
         await tx.notificationPreference.deleteMany({ where: { userId } })
         const gideonRows = await tx.gideonMessage.findMany({ where: { userId }, select: { attachments: true } })
         await tx.gideonMessage.deleteMany({ where: { userId } })
+        await tx.gideonMemory.deleteMany({ where: { userId } })
 
         await tx.user.update({
           where: { id: userId },

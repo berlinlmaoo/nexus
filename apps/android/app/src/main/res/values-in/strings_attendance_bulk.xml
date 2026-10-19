@@ -1,0 +1,14 @@
+<resources>
+    <string name="bulk_absences">Proses potongan ketidakhadiran</string>
+    <string name="bulk_outage">Kembalikan potongan hari gangguan</string>
+    <string name="bulk_absences_confirm">Proses potongan ketidakhadiran sekarang?</string>
+    <string name="bulk_absences_help">Terapkan potongan ketidakhadiran yang belum diproses sesuai aturan dan rentang tanggal server. Potongan yang sudah ada dilewati.</string>
+    <string name="bulk_absences_done">Dibuat: %1$d · Dilewati: %2$d</string>
+    <string name="bulk_run">Proses</string>
+    <string name="bulk_preview">Pratinjau pengembalian</string>
+    <string name="bulk_outage_confirm">Kembalikan potongan pada %1$s?</string>
+    <string name="bulk_outage_help">Kembalikan XP absensi dan day off yang dipotong otomatis pada hari gangguan ini. Orang yang memang cuti atau day off dikecualikan. Status absensi tidak berubah.</string>
+    <string name="bulk_preview_totals">Orang: %1$d · XP: %2$d · Day off: %3$d</string>
+    <string name="bulk_applied">Dikembalikan: %1$d · Gagal: %2$d</string>
+    <string name="bulk_refund">Terapkan pengembalian</string>
+</resources>

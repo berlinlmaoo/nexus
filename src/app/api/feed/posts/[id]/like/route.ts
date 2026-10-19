@@ -23,6 +23,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     if (!post) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
 
     const result = await prisma.$transaction(async (tx) => {
+      // One like toggle per post at a time (QA final 19 Oct 2026: 12 parallel taps -> 8 x 500, and five people
+      // liking at once left likeCount=1 for 5 rows). The row lock makes each toggle see the previous one's
+      // result, so no P2002 can abort the transaction and the recount below is never stale.
+      await tx.$executeRaw`SELECT 1 FROM "Post" WHERE id = ${post.id} FOR UPDATE`
       const existing = await tx.postLike.findUnique({ where: { postId_userId: { postId: id, userId: me } }, select: { id: true } })
       let liked: boolean
       // Only a like THIS request created tells the author; a double-tap's losing twin does not.
@@ -31,15 +35,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         await tx.postLike.delete({ where: { postId_userId: { postId: id, userId: me } } })
         liked = false
       } else {
-        try {
-          await tx.postLike.create({ data: { postId: id, userId: me } })
-          liked = true
-          created = true
-        } catch (e) {
-          // Concurrent double-tap hit the unique constraint → already liked.
-          if ((e as { code?: string }).code === "P2002") liked = true
-          else throw e
-        }
+        await tx.postLike.create({ data: { postId: id, userId: me } })
+        liked = true
+        created = true
       }
       // Recompute from the source-of-truth rows so the denormalized counter can't drift under races.
       const likeCount = await tx.postLike.count({ where: { postId: id } })

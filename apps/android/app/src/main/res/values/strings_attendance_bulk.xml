@@ -1,0 +1,14 @@
+<resources>
+    <string name="bulk_absences">Process absence deductions</string>
+    <string name="bulk_outage">Refund an outage day</string>
+    <string name="bulk_absences_confirm">Process absence deductions now?</string>
+    <string name="bulk_absences_help">Apply missing absence deductions using the server\'s rules and date range. Existing deductions are skipped.</string>
+    <string name="bulk_absences_done">Created: %1$d · Skipped: %2$d</string>
+    <string name="bulk_run">Process</string>
+    <string name="bulk_preview">Preview refund</string>
+    <string name="bulk_outage_confirm">Refund deductions on %1$s?</string>
+    <string name="bulk_outage_help">Return attendance XP and automatically deducted days off for this outage day. People with real leave or a day off are excluded. Attendance status stays unchanged.</string>
+    <string name="bulk_preview_totals">People: %1$d · XP: %2$d · Days off: %3$d</string>
+    <string name="bulk_applied">Refunded: %1$d · Failed: %2$d</string>
+    <string name="bulk_refund">Apply refund</string>
+</resources>

@@ -65,6 +65,11 @@ export type GideonProposal = {
   id: string;
   action: "create_task" | "update_task" | "add_task_comment" | "create_document" | string;
   summary: string;
+  /** QA final 19 Oct 2026 (E-6): the summary in each language; `summary` is the server's pick. */
+  summaryEn?: string;
+  summaryId?: string;
+  /** D-10: every before → after row had before = after (left out of `diff`): Apply changes nothing. */
+  noChange?: boolean;
   diff: GideonDiffRow[];
   status: "PENDING" | "APPLYING" | "APPLIED" | "DISCARDED" | "FAILED" | string;
   projectId?: string | null;
@@ -76,6 +81,48 @@ export type GideonProposal = {
   booking?: GideonBookingView | null;
   /** move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. */
   bookingChange?: GideonBookingChangeView | null;
+  /** delete_task only (18 Oct 2026): the task as the card shows it; `deleted` once applied (restorable from the Audit). */
+  taskDelete?: GideonTaskDeleteView | null;
+  /** create_task without a project (18 Oct 2026): the project picker (projects the person can edit). */
+  taskTarget?: GideonTaskTargetView | null;
+  /**
+   * The 18 Oct 2026 package only (send_message, create_reminder, submit_leave_request, …): the long text in full and,
+   * once applied, where the result is. Present (even null) only on those actions; their card is GideonActionCard.
+   */
+  extra?: { preview: string | null; link: string | null; note?: string | null; sheetEdit?: { sheet?: string; project?: string; cells?: { ref: string; from: string | null; to: string | null }[]; newRows?: unknown[] } | null } | null;
+};
+export type GideonTaskTargetProject = { id: string; name: string; icon: string | null; color: string | null };
+/** Server gideon-runs.ts GideonTaskTargetView. */
+export type GideonTaskTargetView = {
+  title: string;
+  projects: GideonTaskTargetProject[];
+  projectId: string | null;
+  taskListId: string | null;
+  status: string | null;
+  assigneeIds: string[];
+  dueDay: string | null;
+  chosenProjectId: string | null;
+};
+export type GideonTaskTargetOptions = {
+  sections: { id: string; name: string; taskStatus: string | null; color: string | null }[];
+  members: { id: string; name: string; avatar: string | null }[];
+};
+/** The picked project's columns and members (PIC = project members only). 403 = can't add tasks there. */
+export const gideonTaskTargetOptions = (projectId: string) => gjson<GideonTaskTargetOptions>(`/api/gideon/task-targets?projectId=${encodeURIComponent(projectId)}`);
+export type GideonTaskChoice = { projectId: string; taskListId?: string | null; assigneeIds: string[]; dueDate: string | null };
+/** Server gideon-runs.ts GideonTaskDeleteView. */
+export type GideonTaskDeleteView = {
+  taskId: string;
+  title: string;
+  projectId: string | null;
+  projectName: string | null;
+  status: string | null;
+  progress: string | null;
+  due: string | null;
+  dueDay: string | null;
+  assignees: string[];
+  deleted: boolean;
+  auditLogId: string | null;
 };
 type GideonBookingSlot = { room: string; day: string; dayLabel: string; start: string; end: string; startsAt: string; endsAt: string };
 /** Server gideon-book-room-plan.ts GideonBookingChangeView. A move's `after.room` is null when it is picked on the card. */
@@ -108,7 +155,9 @@ export type RoomAvailability = {
   freeSlots: { startsAt: string; endsAt: string; rooms: string[] }[];
 };
 export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };
-export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[] };
+/** GIDEON Memory (19 Oct 2026): one thing GIDEON remembers about the signed-in person (only ever their own). */
+export type GideonMemory = { id: string; kind: "PREFERENCE" | "FACT" | "PERSON" | "DATE"; text: string; monthDay: string | null; status: "ACTIVE" | "PENDING" | "DELETED"; source: string; createdAt: string; updatedAt: string };
+export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[]; memories?: GideonMemory[] };
 
 /** History sends `attachments` on every message, always an array, empty where nothing was attached. */
 export type GideonTurn = GideonMessage & { tools?: string[]; attachments?: GideonAttachment[]; runId?: string | null; meta?: GideonRunMeta | null };
@@ -127,10 +176,14 @@ export type GideonEvent =
   | { type: "cited"; sources: GideonRef[] }
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposal }
+  /** GIDEON Memory (19 Oct 2026): saved, or suggested with Save / Don't save. */
+  | { type: "memory"; memory: GideonMemory }
   | { type: "done" }
   /** GIDEON credits (18 Oct 2026): the person's balance after this answer; `notice` when phase 2 changed the tier or refused. */
   | { type: "credits"; summary?: import("@/lib/gideon-credits").CreditSummary | null; credits?: number; notice?: import("@/lib/gideon-credits").CreditNotice }
-  | { type: "error"; content?: string; code?: string };
+  | { type: "error"; content?: string; code?: string }
+  /** The chosen tier can't answer now (Model 0 lends the GPU to a meeting transcript, 18 Oct 2026). An `error` follows. */
+  | { type: "tier_unavailable"; tier: string; reason: string | null; fallback: string };
 
 /** Which writes wait for the person. Same names as the server (gideon-runs.ts needsApproval). */
 export const GIDEON_APPROVAL_MODES = [
@@ -348,9 +401,11 @@ export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] 
  * and slot picked on a book_room card (required to apply one); on a move card the same plus `bookingId`, on a
  * cancel card `{ bookingId }` alone (required to apply those).
  */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }): Promise<GideonProposal> {
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }, extra?: { confirm?: { taskId?: string; proposalId?: string }; task?: GideonTaskChoice }): Promise<GideonProposal> {
   try {
-    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}) }) });
+    // `confirm`: a delete_task card sends the task id back; `task`: a create card's picked project, column, PIC, due
+    // (each required to apply that kind).
+    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}), ...(extra?.confirm ? { confirm: extra.confirm } : {}), ...(extra?.task ? { task: extra.task } : {}) }) });
     return r.proposal;
   } catch (e) {
     const p = (e as { body?: { proposal?: GideonProposal } }).body?.proposal;
@@ -442,4 +497,9 @@ export function useGideonLauncher(): LauncherState {
     () => launcher,
     () => launcher,
   );
+}
+
+/** A card's summary line in the interface language (E-6); older servers only send `summary`. */
+export function proposalSummary(p: Pick<GideonProposal, "summary" | "summaryEn" | "summaryId">, lang: string): string {
+  return (lang === "id" ? p.summaryId : p.summaryEn) || p.summary;
 }

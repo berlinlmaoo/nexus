@@ -152,11 +152,6 @@ struct CFChipView: View {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .foregroundStyle(sw.fg).background(sw.bg, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-        } else if chip.number != nil {
-            // Money and other numbers as plain text on the meta line, no grey chip, as the web card (UI tour run 20,
-            // R20-B-12, decision 22).
-            Text(chip.label).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
-                .padding(.vertical, 2)
         } else {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)

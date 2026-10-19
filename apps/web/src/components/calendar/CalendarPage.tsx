@@ -4,7 +4,7 @@ import {
 } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Focus, Globe2, Keyboard, Lock, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Focus, Folder, Globe2, Keyboard, Lock, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDocumentLang, useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
@@ -50,6 +50,8 @@ export type CalSearch = {
   unit?: string
   person?: string
   project?: string
+  /** Folder filter: comma list of folder ids, applied by the server. */
+  folder?: string
   prio?: string
   done?: "0"
   overdue?: "1"
@@ -198,14 +200,17 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   // ── Data ──
   // Same keys and options as the route's loader (routes/_app/calendar.tsx), which starts these requests early.
   const structureQ = useQuery({ queryKey: ["nexus", "calendar-tasks", "structure"], queryFn: nexusApi.calendarStructure, staleTime: 5 * 60_000, retry: 1 });
-  const overdueQ = useQuery({ queryKey: ["nexus", "calendar-tasks", "overdue"], queryFn: nexusApi.calendarOverdue, staleTime: 60_000, refetchInterval: POLL_MS, retry: 1 });
+  // The Folder filter is applied by the server (actor-scoped), so it is part of the items and overdue keys.
+  const folderParam = search.folder;
+  const fk = folderParam ? [folderParam] : [];
+  const overdueQ = useQuery({ queryKey: ["nexus", "calendar-tasks", "overdue", ...fk], queryFn: () => nexusApi.calendarOverdue(folderParam), staleTime: 60_000, refetchInterval: POLL_MS, placeholderData: keepPreviousData, retry: 1 });
   const dateParam = search.date;
   // The clock below reads the items, so the items query cannot wait for its `today`: it takes the URL
   // date or the device's WIB day right now (the clock ticks at WIB midnight, so the two agree).
   const range = gridRange(dateParam ?? wibToday());
   const itemsQ = useQuery({
-    queryKey: ["nexus", "calendar-tasks", "items", range.from, range.to],
-    queryFn: () => nexusApi.calendarItems(range.from, range.to),
+    queryKey: ["nexus", "calendar-tasks", "items", range.from, range.to, ...fk],
+    queryFn: () => nexusApi.calendarItems(range.from, range.to, folderParam),
     staleTime: 60_000, refetchInterval: POLL_MS, placeholderData: keepPreviousData, retry: 1,
   });
   const items = itemsQ.data?.items;
@@ -217,9 +222,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   useEffect(() => {
     for (const n of [-1, 1]) {
       const r = gridRange(shiftMonth(`${month}-01`, n));
-      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "items", r.from, r.to], queryFn: () => nexusApi.calendarItems(r.from, r.to), staleTime: 60_000 });
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "items", r.from, r.to, ...(folderParam ? [folderParam] : [])], queryFn: () => nexusApi.calendarItems(r.from, r.to, folderParam), staleTime: 60_000 });
     }
-  }, [month, qc]);
+  }, [month, qc, folderParam]);
   // A changed Bagan (structureVersion) → fetch the structure again.
   const sv = itemsQ.data?.structureVersion;
   useEffect(() => {
@@ -250,10 +255,33 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const scope: CalScope = askedScope === "division" && divisionOff ? "me" : askedScope;
   const filters: CalFilters = useMemo(() => ({
     scope,
-    units: list(search.unit), people: list(search.person), projects: list(search.project), priorities: list(search.prio),
+    units: list(search.unit), people: list(search.person), projects: list(search.project), folders: list(search.folder), priorities: list(search.prio),
     hideDone: search.done === "0", overdueOnly: search.overdue === "1",
-  }), [scope, search.unit, search.person, search.project, search.prio, search.done, search.overdue]);
+  }), [scope, search.unit, search.person, search.project, search.folder, search.prio, search.done, search.overdue]);
   const nFilters = filterCount(filters);
+  const folderList = useMemo(() => structure?.folders ?? [], [structure]);
+  const folderById = useMemo(() => new Map(folderList.map((f) => [f.id, f])), [folderList]);
+  // A folder id from before the UUIDv7 conversion that is not cuid-shaped (a hand-made one such as
+  // "cm_jagain_folder") escapes the app-wide link swap (lib/legacy-link.ts): the server still filters by it,
+  // but the chip said "Folder" and the sidebar showed no folder (B-16, 19 Oct 2026). Once the folders are
+  // known, ids that are not among them are asked for once (GET /api/legacy-ids?ids=) and swapped in the address.
+  const unknownFolderIds = useMemo(
+    () => (structure ? list(search.folder).filter((id) => !folderById.has(id)) : []),
+    [structure, search.folder, folderById],
+  );
+  const askedFolderIds = useRef(new Set<string>());
+  useEffect(() => {
+    const ask = unknownFolderIds.filter((id) => !askedFolderIds.current.has(id));
+    if (ask.length === 0) return;
+    ask.forEach((id) => askedFolderIds.current.add(id));
+    let live = true;
+    void nexusApi.legacyIds(ask).then((r) => {
+      const map = r.ids ?? {};
+      if (!live || !ask.some((id) => typeof map[id] === "string" && map[id] !== id)) return;
+      setSearch({ folder: joined(list(search.folder).map((id) => map[id] ?? id)) });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [unknownFolderIds, search.folder, setSearch]);
 
   // filterItems reads the clock only for "Only overdue"; otherwise a tick must not re-filter everything.
   const filterNow = filters.overdueOnly ? nowMs : 0;
@@ -330,7 +358,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const step = (n: number) => go(stepDate(n));
   const setFilters = useCallback((f: CalFilters) => setSearch({
     scope: f.scope === "all" ? undefined : f.scope, unit: joined(f.units), person: joined(f.people), project: joined(f.projects),
-    prio: joined(f.priorities), done: f.hideDone ? "0" : undefined, overdue: f.overdueOnly ? "1" : undefined,
+    folder: joined(f.folders), prio: joined(f.priorities), done: f.hideDone ? "0" : undefined, overdue: f.overdueOnly ? "1" : undefined,
   }), [setSearch]);
   const resetFilters = useCallback(() => setFilters(clearFilters(filters)), [setFilters, filters]);
   const showEveryone = useCallback(() => setFilters({ ...filters, scope: "all" }), [setFilters, filters]);
@@ -551,7 +579,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
         {/* The drawer body is the one scroller; the panel's Reset / Done footer sticks to its bottom, and
             a row the keyboard brings into view stays above it (--cal-foot-room, styles.css). */}
         <div data-cal-foot-room="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 [--cal-foot-room:calc(5rem+env(safe-area-inset-bottom,0px))]">
-          <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} onDone={closeFilters} ix={ix} items={items ?? []} people={people} />
+          <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} onDone={closeFilters} ix={ix} items={items ?? []} people={people} folders={folderList} />
         </div>
       </DrawerContent>
     </Drawer>
@@ -560,7 +588,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       <PopoverTrigger asChild><FilterButton count={nFilters} /></PopoverTrigger>
       {/* --cal-foot-room: a row the keyboard brings into view stays above the sticky Reset footer (styles.css). */}
       <PopoverContent lang={lang} data-cal-surface="" data-cal-foot-room="" aria-label={t("Filters")} align="end" className="max-h-[78vh] w-90 overflow-y-auto overscroll-contain rounded-2xl p-4 [--cal-foot-room:5rem]">
-        <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} ix={ix} items={items ?? []} people={people} />
+        <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} ix={ix} items={items ?? []} people={people} folders={folderList} />
       </PopoverContent>
     </Popover>
   );
@@ -629,6 +657,21 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
               })}
             </nav>
           )}
+          {/* The Folder filter, shown while it is on (a folder's Calendar link lands here with it): one chip
+              per folder, tapping it takes the folder off. */}
+          {filters.folders.map((id) => {
+            const name = folderById.get(id)?.name ?? t("Folder");
+            return (
+              <button key={`folder:${id}`} type="button" data-cal-folder={id}
+                onClick={() => setFilters({ ...filters, folders: filters.folders.filter((x) => x !== id) })}
+                aria-label={t("Remove the folder filter {folder}", { folder: name })} title={t("Remove the folder filter {folder}", { folder: name })}
+                className={cn("inline-flex h-7 shrink-0 snap-start items-center gap-1.5 rounded-full border border-cal-accent bg-cal-accent-soft px-2.5 text-xs font-semibold transition-colors", coarseText, FOCUS_PILL)}>
+                <Folder aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="max-w-48 truncate">{name}</span>
+                <X aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
+            );
+          })}
           {legendRows.map((l) => {
             const u = ix.byId.get(l.unitId);
             const name = l.unitId === "other" ? t("No division") : (u?.name ?? "");
@@ -674,13 +717,13 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
     // Why the month is empty. The header's Reset is on screen whenever a filter is on, so the banner
     // only says it; the scope has its own switch right there too.
     const banner = view !== "month" ? null
-      : allMonthCount === 0 ? <Banner text={t("Nothing has a due date in {month} yet.", { month: monthName })} action={month !== today.slice(0, 7) ? { label: t("Go to this month"), onClick: goToday } : undefined} />
+      : allMonthCount === 0 && filters.folders.length === 0 ? <Banner text={t("Nothing has a due date in {month} yet.", { month: monthName })} action={month !== today.slice(0, 7) ? { label: t("Go to this month"), onClick: goToday } : undefined} />
       : monthItems.length === 0 && nFilters > 0 ? <Banner text={t("Nothing matches the filters this month.")} />
       : monthItems.length === 0 && filters.scope === "me" ? <Banner text={t("You have nothing due in {month}.", { month: monthName })} />
       : monthItems.length === 0 && filters.scope === "division" ? <Banner text={t("Your division has nothing due in {month}.", { month: monthName })} />
       : null;
     const truncated = itemsQ.data?.truncated ? <Banner text={t("This month has more tasks than the calendar can show at once.")} /> : null;
-    const legendKey = <Legend holiday={lay.gridCompact && monthHasHoliday} />;
+    const legendKey = <Legend holiday={lay.gridCompact && monthHasHoliday} count={!lay.gridCompact} />;
     const panel = (
       <DayPanel day={date} today={today} nowMs={nowMs} windowDays={windowDays} holiday={holidays.get(date) ?? null} tree={tree} rail={rail} ix={ix}
         lens={lens} onLens={setLens} meId={meId} scope={filters.scope} onShowEveryone={showEveryone}
@@ -763,7 +806,7 @@ function FilterButton({ count, className, iconOnly, ...rest }: { count: number; 
  * What the month's marks mean, under the grid on every screen size: the phone has the same dots, bar
  * and chips. A compact grid has no room for a holiday's name, so its dotted day number is explained too.
  */
-function Legend({ holiday }: { holiday: boolean }) {
+function Legend({ holiday, count }: { holiday: boolean; count: boolean }) {
   const { t } = useLang();
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
@@ -772,6 +815,9 @@ function Legend({ holiday }: { holiday: boolean }) {
       <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-[2px] w-4 rounded-full bg-cal-overdue" />{t("overdue")}</span>
       {holiday && (
         <span className="inline-flex items-center gap-1.5"><span aria-hidden className={cn("font-semibold tabular-nums text-cal-holiday", HOLIDAY_CUE)}>1</span>{t("public holiday")}</span>
+      )}
+      {count && (
+        <span className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1.5 text-2xs font-semibold leading-none tabular-nums">3</span>{t("number = tasks that day")}</span>
       )}
       <span>{t("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.")}</span>
     </div>

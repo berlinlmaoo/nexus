@@ -17,6 +17,7 @@ import UIKit
 ///   TOUR_PROJECT_ID / TOUR_FORM_ID   optional: replace the project / form in the list
 ///   TOUR_SERVER                 optional: "dev" (default) or "production"
 ///   TOUR_LANG                   optional: "en" (default) or "id"
+///   TOUR_THEME                  optional: "light" (default) or "dark"
 ///   TOUR_WEB_BASE               required for the Safari tour: the dev web it opens (ui-tour.sh passes it)
 ///   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form to show
 ///   TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID   optional: the Outlet Sales / Social Media Report project
@@ -53,11 +54,19 @@ final class NEXUSUITour: XCTestCase {
         let appTab: String?
         /// "legalDoc": tap the row of the looked-up Legal document.
         let appOpen: String?
+        let appOrigin: String?
         /// Buttons the app tour presses in order once the screen is up ("A|B", "?A": see the header).
         let appTaps: [String]?
+        /// Targeted interaction checks after opening the page; used by fix-round QA configs.
+        let appActions: [AppAction]?
+        struct AppAction: Decodable {
+            let kind: String
+            let label: String
+            let text: String?
+        }
         /// The same for the web in Safari.
         let webTaps: [String]?
-        /// The app tour's page cap for this screen, over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
+        /// One captures a still frame; larger values extend this screen's cap over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
         /// leaderboard's ranks 8-43 and the Mac Legal settings' last company never got a page).
         let pages: Int?
         /// How many sideways shots (half a view each) a board or table gets; 1 by default (run 17, T-2: the
@@ -93,6 +102,30 @@ final class NEXUSUITour: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = true
+    }
+
+    /// Runs before the normal tour's sign-out, preserving a real pre-migration Keychain session.
+    @MainActor
+    func testRestoredIdentity() throws {
+        app = XCUIApplication()
+        let expected = setting("TOUR_EXPECTED_USER_ID") ?? ""
+        XCTAssertFalse(expected.isEmpty, "Set the canonical profile ID for this DEV check")
+        if let restored = setting("TOUR_RESTORED_SESSION_JSON") {
+            launch(step: "restore-session", extraEnvironment: ["NEXUS_TOUR_RESTORED_SESSION": restored])
+            XCTAssertEqual(waitForMarker(timeout: 30) { $0.hasPrefix("session-restored") }, "session-restored")
+        }
+        launch(step: "screen", screen: "identity-restored", route: "nexus://dashboard")
+        let result = waitForMarker(timeout: 45) { $0.hasPrefix("ready:") || $0.hasPrefix("no-session:") }
+        XCTAssertTrue(result.hasPrefix("ready:"), result)
+        let marker = app.staticTexts["nexus.tour.identity"]
+        XCTAssertTrue(marker.waitForExistence(timeout: 15))
+        let identity = marker.label
+        XCTAssertTrue(identity.contains("current=" + expected), identity)
+        XCTAssertTrue(identity.contains("sameCredentials=true"), identity)
+        if let old = setting("TOUR_EXPECTED_OLD_ID") { XCTAssertTrue(identity.contains("restored=" + old + ";"), identity) }
+        pause(2)
+        snap("identity-restored")
+        persist(Data(identity.utf8), "tour-identity-proof.txt")
     }
 
     @MainActor
@@ -142,7 +175,9 @@ final class NEXUSUITour: XCTestCase {
         }
 
         // 3. Every screen, each on a fresh launch.
+        var sessionLost = false
         for screen in config.screens {
+            if sessionLost { break }
             guard screen.account == nil, let route = screen.app, wanted(screen.id) else { continue }
             var resolved = route
                 .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
@@ -169,10 +204,10 @@ final class NEXUSUITour: XCTestCase {
             case .success(let filled):
                 resolved = filled
             }
-            guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") else { continue }
+            guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") || resolved.hasPrefix("file://") else { continue }
             XCTContext.runActivity(named: "Screen \(screen.id)") { _ in
                 let started = Date()
-                launch(step: "screen", screen: screen.id, route: resolved)
+                launch(step: "screen", screen: screen.id, route: resolved, origin: screen.appOrigin)
                 var status = waitForMarker(timeout: 60) {
                     $0.hasPrefix("ready:") || $0.hasPrefix("no-session") || $0.hasPrefix("wrong-screen")
                 }
@@ -182,7 +217,8 @@ final class NEXUSUITour: XCTestCase {
                 }
                 // A route that did not land (TourDriver checks the project / tab / form actually on screen)
                 // is a failure of that screen, not a picture of whatever happened to be there.
-                if status.hasPrefix("wrong-screen") || status.hasPrefix("timeout") {
+                if status.hasPrefix("no-session") { sessionLost = true }
+                if sessionLost || status.hasPrefix("wrong-screen") || status.hasPrefix("timeout") {
                     XCTFail("\(screen.id): \(status)")
                 }
                 if status.hasPrefix("skipped") {
@@ -191,14 +227,15 @@ final class NEXUSUITour: XCTestCase {
                     return
                 }
                 dismissSystemAlerts()
-                let settled = waitForSpinnersToStop(timeout: 25)
+                let validScreen = status == "ready:\(screen.id)"
+                let settled = validScreen && waitForSpinnersToStop(timeout: 25)
                 pause(1.5)
                 dismissSystemAlerts()
                 windowBehind = false
                 let first = snap(screen.id)
-                var more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
-                                         pages: screen.pages, sideways: screen.sideways)
-                if screen.pane == "trailing", let main = scrollTarget(in: app, web: false),
+                var more = validScreen ? snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
+                                         pages: screen.pages, sideways: screen.sideways) : 0
+                if validScreen, screen.pane == "trailing", let main = scrollTarget(in: app, web: false),
                    let pane = scrollTarget(in: app, web: false, rightOf: main.visible) {
                     more += snapMorePages(screen.id, prefix: "tour-", first: takeShot(app), in: app, web: false,
                                           pages: screen.pages, sideways: 0, target: pane, pageOffset: 1 + more)
@@ -213,6 +250,7 @@ final class NEXUSUITour: XCTestCase {
                 #endif
                 outcomes.append(outcome)
             }
+            if let data = try? JSONEncoder().encode(outcomes) { persist(data, "tour-results.json") }
         }
 
         // 4. Sign the tour account out again, so nothing of it is left in the app.
@@ -523,6 +561,11 @@ final class NEXUSUITour: XCTestCase {
                 guard button.waitForExistence(timeout: 15) else {
                     return "wrong-screen: \(screen.id) (no \"\(Self.labels(step)[0])\" button found)"
                 }
+                #if targetEnvironment(macCatalyst)
+                _ = bringToFront(app)
+                #endif
+                revealNativeTab(button)
+                guard app.windows.firstMatch.frame.intersects(button.frame), button.isHittable else { return "wrong-screen: \(screen.id) (button is offscreen: \(Self.labels(step)[0]))" }
                 // A sheet over it (the button is no longer hittable), a chip now selected, or a new picture.
                 guard tapUntil(button, landed: { !button.exists || !button.isHittable || button.isSelected }) else {
                     return "wrong-screen: \(screen.id) (tapped \"\(Self.labels(step)[0])\", nothing opened)"
@@ -535,7 +578,10 @@ final class NEXUSUITour: XCTestCase {
                                            docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
             // The row is a button whose label holds the document's title; [TEST] when only the id was given.
             let title = legal.docTitle ?? "[TEST]"
-            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+            // Archive titles contain invisible wrapping controls; match their visible characters.
+            let controls = "[\u{200B}\u{2060}]*"
+            let visibleTitle = title.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: controls)
+            let row = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "(?s).*" + visibleTitle + ".*")).firstMatch
             if !row.waitForExistence(timeout: 20) {
                 // Not on the first page of the archive: search for it, as a person would (typing saves nothing).
                 let search = app.textFields.firstMatch
@@ -554,7 +600,243 @@ final class NEXUSUITour: XCTestCase {
             }
             pause(2.0)
         }
+        for action in screen.appActions ?? [] {
+            let match = NSPredicate(format: "label CONTAINS %@ OR identifier == %@", action.label, action.label)
+            let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@ OR identifier == %@", action.label, action.label, action.label)
+            switch action.kind {
+            case "tap":
+                let button = app.buttons.matching(match).firstMatch
+                let popup = app.popUpButtons.matching(match).firstMatch
+                let field = app.textViews.matching(textMatch).firstMatch
+                let text = app.staticTexts.matching(match).firstMatch
+                // Catalyst menus may expose a native pop-up control rather than a Button.
+                let other = app.descendants(matching: .any).matching(match).firstMatch
+                #if targetEnvironment(macCatalyst)
+                // Native menu items expose their title rather than a label. The indexed query
+                // matches that title as well as explicit accessibility identifiers.
+                let menuItem = app.menuItems[action.label]
+                let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : menuItem.exists ? menuItem : other
+                #else
+                let target = button.exists ? button : popup.exists ? popup : field.exists ? field : text.exists ? text : other
+                #endif
+                let exists = target.waitForExistence(timeout: 15)
+                if exists && target.elementType == .button { revealNativeTab(target) }
+                let targetFrame = exists ? target.frame : .zero
+                var usable = exists && !targetFrame.isEmpty && !targetFrame.isInfinite
+                    && targetFrame.minY >= app.windows.firstMatch.frame.minY && targetFrame.maxY <= app.windows.firstMatch.frame.maxY && target.isHittable
+                #if targetEnvironment(macCatalyst)
+                // Catalyst can report a visible native menu as non-hittable, or return an
+                // infinite activation point. Its on-screen frame still gives a real mouse point.
+                if exists, target.elementType == .popUpButton {
+                    let frame = target.frame
+                    usable = !frame.isEmpty && !frame.isInfinite && app.windows.firstMatch.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+                }
+                #endif
+                guard usable else {
+                    persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-missing-target.txt")
+                    return "wrong-screen: missing interaction target \(action.label)"
+                }
+                press(target)
+                pause(1)
+            case "type", "replace":
+                let field = app.textFields.matching(textMatch).firstMatch
+                let search = app.searchFields.matching(textMatch).firstMatch
+                let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else { return "wrong-screen: missing or disabled input \(action.label)" }
+                press(target)
+                dismissKeyboardIntroduction()
+                if action.kind == "replace" {
+                    #if targetEnvironment(macCatalyst)
+                    app.typeKey("a", modifierFlags: .command)
+                    target.typeText(action.text ?? "")
+                    #else
+                    // iOS multiline fields can ignore the synthetic Command-A. Put the cursor
+                    // at the last line's end and replace in one uninterrupted key sequence.
+                    let value = target.value as? String ?? ""
+                    let existing = value == target.placeholderValue ? "" : value
+                    press(target.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)))
+                    target.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count) + (action.text ?? ""))
+                    #endif
+                } else { target.typeText(action.text ?? "") }
+                pause(0.5)
+                if action.kind == "replace", (target.value as? String ?? "") != (action.text ?? "") {
+                    return "wrong-screen: replacement did not match in \(action.label)"
+                }
+            case "dismissKeyboard":
+                let done = app.buttons["keyboard.dismiss"]
+                if done.exists && done.isHittable { press(done); pause(1) }
+                else if app.keyboards.firstMatch.exists {
+                    // A screen-level identifier on older forms can override the inset's id.
+                    let buttons = app.buttons.matching(NSPredicate(format: "label == 'Done' OR label == 'Selesai'")).allElementsBoundByIndex
+                    if let legacy = buttons.first(where: { $0.isHittable && $0.frame.midY > app.windows.firstMatch.frame.midY }) { press(legacy); pause(1) }
+                }
+            case "reveal":
+                for _ in 0..<10 {
+                    let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                    let window = app.windows.firstMatch
+                    // isHittable can be true for a field with only its first pixels visible,
+                    // including under a pinned Apply bar. Bring its centre clear of that chrome.
+                    let panes = app.scrollViews.allElementsBoundByIndex.filter {
+                        $0.isHittable && $0.frame.width > 100 && $0.frame.height > 160
+                    }
+                    let containing = panes.last {
+                        $0.descendants(matching: .any).matching(textMatch).firstMatch.exists
+                    }
+                    let candidate = (containing ?? panes.last)?.frame.intersection(window.frame) ?? window.frame
+                    let region = candidate.isNull || candidate.height < 160 ? window.frame : candidate
+                    var visible = region.insetBy(dx: 12, dy: min(90, region.height * 0.15))
+                    let keyboard = app.keyboards.firstMatch
+                    if keyboard.exists { visible.size.height = max(80, min(visible.maxY, keyboard.frame.minY - 90) - visible.minY) }
+                    let frame = target.exists ? target.frame : .zero
+                    let half = min(frame.height / 2, visible.height * 0.35)
+                    let clear = frame.midY - half >= visible.minY && frame.midY + half <= visible.maxY
+                    if target.exists && target.isHittable && !frame.isEmpty && clear { break }
+                    let upward = target.exists && !frame.isEmpty && frame.midY < visible.midY
+                    // Scroll inside the target's pane (Messages list, centred sheet or page).
+                    // The window centre can belong to a different scroll view on iPad/Mac.
+                    let targetX = target.exists && !frame.isEmpty && !frame.isInfinite ? frame.midX : region.midX
+                    let x = (min(region.maxX - 20, max(region.minX + 20, targetX)) - window.frame.minX) / window.frame.width
+                    let startY = (region.minY + region.height * (upward ? 0.35 : 0.75) - window.frame.minY) / window.frame.height
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: startY))
+                    #if targetEnvironment(macCatalyst)
+                    start.scroll(byDeltaX: 0, deltaY: (upward ? 1 : -1) * macWheelSign * region.height * 0.4)
+                    #else
+                    let endY = (region.minY + region.height * (upward ? 0.75 : 0.35) - window.frame.minY) / window.frame.height
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: endY))
+                    start.press(forDuration: 0.05, thenDragTo: end)
+                    #endif
+                    pause(0.5)
+                }
+                let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                guard target.exists && target.isHittable else { return "wrong-screen: couldn't reveal \(action.label)" }
+            case "scroll":
+                let window = app.windows.firstMatch
+                let amount = min(0.55, max(0.1, Double(action.text ?? "0.33") ?? 0.33))
+                let x: CGFloat = action.label == "sidebar" ? 0.1 : 0.5
+                let start = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.78))
+                #if targetEnvironment(macCatalyst)
+                start.scroll(byDeltaX: 0, deltaY: -macWheelSign * CGFloat(amount) * window.frame.height)
+                #else
+                let end = window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.78 - amount))
+                start.press(forDuration: 0.05, thenDragTo: end)
+                #endif
+                pause(1)
+            case "longPress":
+                let target = app.descendants(matching: .any).matching(textMatch).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isHittable else { return "wrong-screen: missing long-press target \(action.label)" }
+                target.press(forDuration: 1)
+                pause(1)
+            case "hover":
+                let target = app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing hover target \(action.label)" }
+                target.hover()
+                pause(1.5)
+            case "editorState":
+                let field = app.textFields["memory.edit.text"]
+                let state = field.exists ? field.label : "closed"
+                guard state == "closed" || state.hasPrefix("Memory editor debug ") else { return "wrong-screen: editor diagnostic unavailable" }
+                persist(Data(state.utf8), "tour-\(screen.id)-\(action.label)-state.txt")
+            case "key":
+                var modifiers: XCUIElement.KeyModifierFlags = []
+                for modifier in (action.text ?? "").split(separator: ",") {
+                    switch modifier {
+                    case "command": modifiers.insert(.command)
+                    case "shift": modifiers.insert(.shift)
+                    case "option": modifiers.insert(.option)
+                    case "control": modifiers.insert(.control)
+                    default: break
+                    }
+                }
+                let key = action.label == "return" ? XCUIKeyboardKey.return.rawValue
+                    : (action.label == "escape" || action.label == "\u{001B}") ? XCUIKeyboardKey.escape.rawValue : action.label
+                app.typeKey(key, modifierFlags: modifiers)
+                pause(1)
+            case "typeFocused":
+                dismissKeyboardIntroduction()
+                app.typeText(action.text ?? "")
+                pause(1)
+            case "background":
+                #if targetEnvironment(macCatalyst)
+                app.typeKey("h", modifierFlags: .command)
+                #else
+                XCUIDevice.shared.press(.home)
+                #endif
+                pause(Double(action.text ?? "3") ?? 3)
+                app.activate()
+                pause(2)
+            case "orientation":
+                XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
+                pause(2)
+            case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
+            case "tree": persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-\(action.label).txt")
+            case "checkValue":
+                let target = app.textViews.matching(identifier: action.label).firstMatch
+                guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
+                    return "wrong-screen: missing expected text in \(action.label)"
+                }
+            case "checkFrame":
+                let target = app.textViews.matching(identifier: action.label).firstMatch
+                let limits = (action.text ?? "").split(separator: ",").compactMap { Double($0) }
+                guard target.waitForExistence(timeout: 10), limits.count == 2,
+                      target.frame.width >= CGFloat(limits[0]), target.frame.height <= CGFloat(limits[1]) else {
+                    return "wrong-screen: unexpected frame for \(action.label): \(target.exists ? target.frame.debugDescription : "missing")"
+                }
+            case "checkRow":
+                var frames: [CGRect] = []
+                let window = app.windows.firstMatch.frame
+                for suffix in (action.text ?? "").split(separator: ",") {
+                    let id = action.label + String(suffix)
+                    let target = app.descendants(matching: .any).matching(identifier: id).firstMatch
+                    guard target.exists, target.isHittable else { return "wrong-screen: unavailable control \(id)" }
+                    let frame = target.frame
+                    guard !frame.isEmpty, window.contains(CGPoint(x: frame.midX, y: frame.midY)),
+                          !frames.contains(where: { abs($0.midX - frame.midX) < 8 && abs($0.midY - frame.midY) < 8 }) else {
+                        return "wrong-screen: overlapping controls in \(action.label)"
+                    }
+                    frames.append(frame)
+                }
+            case "wait": pause(Double(action.text ?? "2") ?? 2)
+            case "absent":
+                let target = app.descendants(matching: .any).matching(match).firstMatch
+                guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
+            case "enabled":
+                let target = app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isEnabled == (action.text == "true") else {
+                    return "wrong-screen: unexpected enabled state for \(action.label)"
+                }
+            case "check":
+                #if targetEnvironment(macCatalyst)
+                let labelled = app.descendants(matching: .any).matching(match).firstMatch
+                let menuItem = app.menuItems[action.label]
+                let target = labelled.exists ? labelled : menuItem.exists ? menuItem : labelled
+                #else
+                let target = app.descendants(matching: .any).matching(match).firstMatch
+                #endif
+                guard target.waitForExistence(timeout: min(300, Double(action.text ?? "20") ?? 20)) else { return "wrong-screen: missing expected content \(action.label)" }
+            default: return "wrong-screen: unknown QA action \(action.kind)"
+            }
+        }
         return nil
+    }
+
+    /// Native tab strips can expose an offscreen button to accessibility without an activation point.
+    @MainActor
+    private func revealNativeTab(_ button: XCUIElement) {
+        for _ in 0..<8 {
+            guard button.exists else { return }
+            let frame = button.frame
+            let window = app.windows.firstMatch.frame
+            guard frame.maxX > window.maxX || frame.minX < window.minX else { return }
+            guard frame.midY > window.minY, frame.midY < window.maxY else { return }
+            // SwiftUI does not always expose the horizontal strip as an accessibility ScrollView.
+            // Drag the visible row at the tab's y coordinate, just as a finger would.
+            let right = frame.maxX > window.maxX
+            let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: right ? window.width - 24 : 24, dy: frame.midY - window.minY))
+            let end = origin.withOffset(CGVector(dx: right ? 24 : window.width - 24, dy: frame.midY - window.minY))
+            start.press(forDuration: 0.05, thenDragTo: end)
+            pause(0.4)
+        }
     }
 
     /// The labels of one `appTaps` / `webTaps` step: "?Add|Tambah" → ["Add", "Tambah"].
@@ -638,7 +920,11 @@ final class NEXUSUITour: XCTestCase {
     @MainActor
     private func press(_ element: XCUIElement) {
         #if targetEnvironment(macCatalyst)
-        element.click()
+        if element.elementType == .popUpButton {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        } else {
+            element.click()
+        }
         #else
         element.tap()
         #endif
@@ -674,7 +960,7 @@ final class NEXUSUITour: XCTestCase {
     }
 
     @MainActor
-    private func launch(step: String, screen: String? = nil, route: String? = nil,
+    private func launch(step: String, screen: String? = nil, route: String? = nil, origin: String? = nil,
                         extraEnvironment: [String: String] = [:]) {
         if app.state != .notRunning { app.terminate() }
         var args = [
@@ -683,10 +969,11 @@ final class NEXUSUITour: XCTestCase {
             "-nexusTourStep", step,
             // UserDefaults' argument domain: read by the app for this launch, never saved.
             "-nexus.language", setting("TOUR_LANG") ?? "en",
-            "-nexus.theme", "light",
+            "-nexus.theme", setting("TOUR_THEME") == "dark" ? "dark" : "light",
         ]
         if let screen { args += ["-nexusTourScreen", screen] }
         if let route { args += ["-nexusTourRoute", route] }
+        if let origin { args += ["-nexusTourOrigin", origin] }
         if let window = env["TOUR_MAC_WINDOW"], !window.isEmpty { args += ["-nexusTourWindow", window] }
         app.launchArguments = args
         app.launchEnvironment = extraEnvironment
@@ -716,7 +1003,14 @@ final class NEXUSUITour: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         var quietSince: Date?
         while Date() < deadline {
-            if app.activityIndicators.count > 0 {
+            // Retained/offscreen tabs can own indicators that never become visible on this page.
+            if app.activityIndicators.allElementsBoundByIndex.contains(where: { indicator in
+                guard indicator.isHittable else { return false }
+                // SwiftUI also exposes determinate usage bars as activity indicators.
+                if let value = indicator.value as? String, value.contains("%") || Double(value) != nil { return false }
+                if indicator.value is NSNumber { return false }
+                return true
+            }) {
                 quietSince = nil
             } else if let since = quietSince {
                 if Date().timeIntervalSince(since) >= 1.0 { return true }
@@ -731,7 +1025,21 @@ final class NEXUSUITour: XCTestCase {
     /// Location, camera, photos, notifications: the first time a screen asks, iOS puts an alert over
     /// it. Allowed, so the screen is photographed the way somebody who said yes sees it.
     @MainActor
+    private func dismissKeyboardIntroduction() {
+        #if !targetEnvironment(macCatalyst)
+        for context in [app!, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
+            let intro = context.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Speed up your typing")).firstMatch
+            if intro.exists {
+                let button = context.buttons["Continue"]
+                if button.exists && button.isHittable { press(button); pause(0.5) }
+            }
+        }
+        #endif
+    }
+
+    @MainActor
     private func dismissSystemAlerts() {
+        dismissKeyboardIntroduction()
         #if !targetEnvironment(macCatalyst)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for _ in 0..<3 {
@@ -819,6 +1127,8 @@ final class NEXUSUITour: XCTestCase {
     private func snapMorePages(_ id: String, prefix: String, first: XCUIScreenshot,
                                in root: XCUIApplication, web: Bool, pages: Int? = nil, sideways: Int? = nil,
                                target chosen: ScrollTarget? = nil, pageOffset: Int = 0) -> Int {
+        // Menus and previews are transient: a drag can dismiss them and invalidate their hierarchy.
+        if pages == 1 { return 0 }
         let globalMax = Int(env["TOUR_MAX_PAGES"] ?? "") ?? 6
         // `pageOffset`: pages already taken of this screen (a second pane continues their numbering).
         let maxPages = max(globalMax, pages ?? 0) + pageOffset

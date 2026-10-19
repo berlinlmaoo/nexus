@@ -42,6 +42,9 @@ export const ID_GIDEON: Record<string, string> = {
   "1 step": "1 langkah",
   "{n} steps": "{n} langkah",
   "1 failed": "1 gagal",
+  "1 restart": "1 kali restart",
+  "{n} restarts": "{n} kali restart",
+  "Restarts aren't counted as errors.": "Restart tidak dihitung sebagai error.",
 
   // Approval mode
   "Before GIDEON changes something": "Sebelum GIDEON mengubah sesuatu",
@@ -54,6 +57,7 @@ export const ID_GIDEON: Record<string, string> = {
   "1 change is waiting for your approval": "1 perubahan menunggu persetujuanmu",
   "{n} changes are waiting for your approval": "{n} perubahan menunggu persetujuanmu",
   "Waiting for your approval": "Menunggu persetujuanmu",
+  "No changes: everything is already like this": "Tidak ada perubahan: semuanya sudah seperti ini",
   "Create a task": "Buat task",
   "Change a task": "Ubah task",
   "Post a comment": "Kirim komentar",

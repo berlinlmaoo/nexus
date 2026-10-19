@@ -17,7 +17,7 @@ extension APIClient {
     }
 
     private static func outletEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
     }
 
     /// One month: its events, its target, the server's totals and statuses, the forgotten reports of

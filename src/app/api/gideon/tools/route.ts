@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { nextDocPosition } from "@/lib/doc-position"
 import { sectionForStatus } from '@/lib/status-sections'
 import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { isCheckInAway, placeLabel } from '@/lib/attendance-place'
@@ -25,6 +26,8 @@ import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
+import { deleteTaskAs, TaskDeleteRefusal } from '@/lib/task-delete'
+import { createTaskNeedsProject, editableTaskProjects } from '@/lib/gideon-task-target'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
 import {
@@ -32,9 +35,16 @@ import {
   gideonCancelRoomBooking, gideonMoveRoomBooking } from '@/lib/gideon-book-room'
 import { humanDay, parseDueInput, todayWib } from '@/lib/gideon-dates'
 import { wibDay, wibTime } from '@/lib/calendar/core'
+import { TASK_PAGE, TASK_PAGE_MAX, compactProject, compactTask, page, urgencyOrder, wibDayKey } from '@/lib/gideon-compact'
+import { legalActor } from '@/lib/legal/access'
+import { ORG_WORKSPACE_ID } from '@/lib/org'
+import { listDocuments } from '@/lib/legal/archive'
 import {
-  cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
-  resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
+  cardFromResult, needsApproval, parseApprovalMode, proposalLang, proposalView, publishRunEvent, recordStep, refsFromResult,
+  resolveRunForToolCall, stepArg, stepLabel, WRITE_ACTIONS, type GideonDiffRow } from '@/lib/gideon-runs'
+import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
+import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
+import { MEMORY_ACTIONS, MemoryRefusal, runMemoryTool } from '@/lib/gideon-memory'
 
 type GideonAction =
   | 'list_projects'
@@ -60,6 +70,9 @@ type GideonAction =
   | 'book_room'
   | 'move_room_booking'
   | 'cancel_room_booking'
+  | 'search_deals'
+  | 'search_legal_documents'
+  | 'delete_task'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -140,12 +153,26 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   const projectId = asString(input.projectId)
   const status = asString(input.status) as TaskStatus | undefined
   const priority = asString(input.priority) as TaskPriority | undefined
-  const assigneeId = asString(input.assigneeId)
+  const rawAssignee = asString(input.assigneeId)
+  const assigneeId = rawAssignee === 'me' ? actor.id : rawAssignee
 
   if (projectId) taskListWhere.projectId = projectId
+  // A folder (18 Oct 2026): every project of the folder and its sub-folders this person can see (normalizeToolInput).
+  else if (Array.isArray(input.projectIds)) taskListWhere.projectId = { in: input.projectIds.filter((x): x is string => typeof x === 'string') }
   if (status) where.status = status
   if (priority) where.priority = priority
   if (assigneeId) where.assignees = { some: { userId: assigneeId } }
+  // Filters added 18 Oct 2026 so "my overdue tasks" is one small call instead of every task the person can see.
+  const open = input.open === true || input.open === 'true' || input.overdue === true || input.overdue === 'true'
+  if (open && !status) where.status = { notIn: ['DONE', 'CANCELLED'] }
+  const today = todayWib()
+  const dueFrom = typeof input.dueFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.dueFrom) ? input.dueFrom : null
+  const dueTo = typeof input.dueTo === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.dueTo) ? input.dueTo : null
+  const due: Prisma.DateTimeNullableFilter = {}
+  if (input.overdue === true || input.overdue === 'true') due.lt = new Date(`${today}T00:00:00+07:00`)
+  if (dueFrom) due.gte = new Date(`${dueFrom}T00:00:00+07:00`)
+  if (dueTo) due.lt = new Date(new Date(`${dueTo}T00:00:00+07:00`).getTime() + 86400e3)
+  if (Object.keys(due).length) where.dueDate = due
 
   taskListWhere.project = {
     OR: [
@@ -157,21 +184,6 @@ function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unk
   if (Object.keys(taskListWhere).length > 0) where.taskList = taskListWhere
 
   return where
-}
-
-const projectInclude = {
-  workspace: { select: { id: true, name: true, slug: true } },
-  members: {
-    select: {
-      role: true,
-      user: { select: { id: true, name: true, email: true, avatar: true } },
-    },
-    orderBy: { joinedAt: 'asc' as const },
-  },
-  taskLists: {
-    select: { id: true, name: true, position: true, _count: { select: { tasks: true } } },
-    orderBy: { position: 'asc' as const },
-  },
 }
 
 const taskInclude = {
@@ -196,28 +208,6 @@ const taskInclude = {
     },
     orderBy: { customField: { position: 'asc' as const } },
   },
-}
-
-function serializeProject(project: any) {
-  const taskLists = project.taskLists.map((list: any) => ({
-    id: list.id,
-    name: list.name,
-    position: list.position,
-    taskCount: list._count.tasks,
-  }))
-
-  return {
-    id: project.id,
-    name: project.name,
-    description: project.description,
-    status: project.status,
-    color: project.color,
-    icon: project.icon,
-    workspace: project.workspace,
-    members: project.members,
-    taskLists,
-    taskCount: taskLists.reduce((sum: number, list: { taskCount: number }) => sum + list.taskCount, 0),
-  }
 }
 
 function serializeTask(task: any) {
@@ -245,14 +235,35 @@ function serializeTask(task: any) {
 }
 
 async function listProjects(actor: User, input: Record<string, unknown>) {
-  const projects = await prisma.project.findMany({
-    where: actorScopedProjectWhere(actor, input),
-    include: projectInclude,
-    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-    take: MAX_LIMIT,
-  })
-
-  return projects.map(serializeProject)
+  // Compact rows (18 Oct 2026): a name, status and task counts per project. The member roster with emails and
+  // avatars made this 140 KB for a BoD; get_project_summary / list_members give a project's people.
+  const where = actorScopedProjectWhere(actor, input)
+  const query = asString(input.query) || asString(input.name)
+  if (query) where.name = { contains: query, mode: 'insensitive' }
+  const limit = Math.max(1, Math.min(MAX_LIMIT, typeof input.limit === 'number' ? Math.floor(input.limit) : MAX_LIMIT))
+  const offset = typeof input.offset === 'number' && input.offset > 0 ? Math.floor(input.offset) : 0
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      select: { id: true, name: true, status: true, type: true, _count: { select: { members: true } }, taskLists: { select: { id: true, _count: { select: { tasks: true } } } } },
+      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      take: limit,
+      skip: offset,
+    }),
+    prisma.project.count({ where }),
+  ])
+  const listIds = projects.flatMap((p) => p.taskLists.map((l) => l.id))
+  const openRows = listIds.length
+    ? await prisma.task.groupBy({ by: ['taskListId'], where: { taskListId: { in: listIds }, status: { notIn: ['DONE', 'CANCELLED'] } }, _count: { _all: true } })
+    : []
+  const openByList = new Map(openRows.map((r) => [r.taskListId, r._count._all]))
+  const items = projects.map((p) => compactProject(p, p.taskLists.reduce((s, l) => s + (openByList.get(l.id) ?? 0), 0)))
+  // Say whose list this is: for a Manager / Staff it IS "the projects I am in"; a BoD sees every project.
+  const bodPlus = await prisma.workspaceMember.count({ where: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } })
+  return {
+    scope: bodPlus ? 'Every project of the company (BoD / One Above All see all of them), not only the ones this person is a member of.' : 'Exactly the projects this person is a member of.',
+    ...page(items, total, offset, limit, 'pass query (part of the project name)'),
+  }
 }
 
 async function listMembers(actor: User, input: Record<string, unknown>) {
@@ -272,11 +283,11 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
               },
             }),
       },
-      select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
+      select: { role: true, user: { select: { id: true, name: true } } },
       orderBy: { joinedAt: 'asc' },
       take: MAX_LIMIT,
     })
-    return members
+    return members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role }))
   }
 
   const members = await prisma.workspaceMember.findMany({
@@ -284,22 +295,42 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
       ...(workspaceId ? { workspaceId } : {}),
       workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } },
     },
-    select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } }, workspace: { select: { id: true, name: true, slug: true } } },
+    select: { role: true, user: { select: { id: true, name: true } }, workspace: { select: { name: true } } },
     orderBy: { joinedAt: 'asc' },
     take: MAX_LIMIT,
   })
-  return members
+  return members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role, workspace: m.workspace.name }))
 }
 
-async function listTasks(actor: User, input: Record<string, unknown>) {
-  const tasks = await prisma.task.findMany({
-    where: actorScopedTaskWhere(actor, input),
-    include: taskInclude,
-    orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
-    take: asLimit(input.limit),
-  })
+function taskPaging(input: Record<string, unknown>) {
+  const limit = typeof input.limit === 'number' && Number.isFinite(input.limit) ? Math.max(1, Math.min(TASK_PAGE_MAX, Math.floor(input.limit))) : TASK_PAGE
+  const offset = typeof input.offset === 'number' && input.offset > 0 ? Math.floor(input.offset) : 0
+  return { limit, offset }
+}
 
-  return tasks.map(serializeTask)
+/** The rows a task list needs for compactTask (no emails, avatars, option lists or creator). */
+const compactTaskSelect = {
+  id: true, title: true, description: true, status: true, priority: true, dueDate: true,
+  taskList: { select: { name: true, projectId: true, project: { select: { id: true, name: true } } } },
+  assignees: { select: { user: { select: { name: true } } } },
+  customFieldValues: { select: { value: true, customField: { select: { name: true, type: true } } }, orderBy: { customField: { position: 'asc' as const } } },
+} satisfies Prisma.TaskSelect
+
+async function listTasks(actor: User, input: Record<string, unknown>) {
+  // Compact and paged (18 Oct 2026): 25 rows by default with the total and how to get the rest.
+  const where = actorScopedTaskWhere(actor, input)
+  const { limit, offset } = taskPaging(input)
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({ where, select: compactTaskSelect, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { updatedAt: 'desc' }], take: limit, skip: offset }),
+    prisma.task.count({ where }),
+  ])
+  const today = todayWib()
+  const oneProject = Boolean(asString(input.projectId))
+  const items = tasks.map((t) => compactTask(t, today, !oneProject))
+  return {
+    ...(oneProject && tasks[0]?.taskList?.project ? { project: tasks[0].taskList.project.name, projectId: tasks[0].taskList.project.id } : {}),
+    ...page(items, total, offset, limit, 'narrow with status / open / overdue / assigneeId / dueFrom-dueTo / projectId'),
+  }
 }
 
 async function searchTasks(actor: User, input: Record<string, unknown>) {
@@ -307,20 +338,20 @@ async function searchTasks(actor: User, input: Record<string, unknown>) {
   if (!query) throw new Error('query is required')
 
   const baseWhere = actorScopedTaskWhere(actor, input)
-  const tasks = await prisma.task.findMany({
-    where: {
-      ...baseWhere,
-      OR: [
-        { title: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } },
-      ],
-    },
-    include: taskInclude,
-    orderBy: [{ updatedAt: 'desc' }],
-    take: asLimit(input.limit),
-  })
-
-  return tasks.map(serializeTask)
+  const where: Prisma.TaskWhereInput = {
+    ...baseWhere,
+    OR: [
+      { title: { contains: query, mode: 'insensitive' } },
+      { description: { contains: query, mode: 'insensitive' } },
+    ],
+  }
+  const { limit, offset } = taskPaging(input)
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({ where, select: compactTaskSelect, orderBy: [{ updatedAt: 'desc' }], take: limit, skip: offset }),
+    prisma.task.count({ where }),
+  ])
+  const today = todayWib()
+  return page(tasks.map((t) => compactTask(t, today, true)), total, offset, limit, 'add projectId / status / open')
 }
 
 async function getProjectSummary(actor: User, input: Record<string, unknown>) {
@@ -341,31 +372,54 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
       id: true,
       name: true,
       status: true,
-      workspace: { select: { id: true, name: true, slug: true } },
-      members: { select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } } },
+      type: true,
+      workspace: { select: { name: true } },
+      members: { select: { role: true, user: { select: { id: true, name: true } } }, orderBy: { joinedAt: 'asc' }, take: 40 },
+      _count: { select: { members: true } },
     },
   })
 
   if (!project) throw new Error('Project not found or not accessible')
 
   const taskWhere = { taskList: { projectId } }
-  const [totalTasks, completedTasks, byStatusRows, byPriorityRows] = await Promise.all([
+  const openWhere: Prisma.TaskWhereInput = { ...taskWhere, status: { notIn: ['DONE', 'CANCELLED'] } }
+  const today = todayWib()
+  const [totalTasks, completedTasks, byStatusRows, byPriorityRows, lists, byListRows, openByListRows, overdueOpen, openRows] = await Promise.all([
     prisma.task.count({ where: taskWhere }),
     prisma.task.count({ where: { ...taskWhere, status: 'DONE' } }),
     prisma.task.groupBy({ by: ['status'], where: taskWhere, _count: { _all: true } }),
-    prisma.task.groupBy({ by: ['priority'], where: taskWhere, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ['priority'], where: openWhere, _count: { _all: true } }),
+    prisma.taskList.findMany({ where: { projectId }, select: { id: true, name: true }, orderBy: { position: 'asc' } }),
+    prisma.task.groupBy({ by: ['taskListId'], where: taskWhere, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ['taskListId'], where: openWhere, _count: { _all: true } }),
+    prisma.task.count({ where: { ...openWhere, dueDate: { lt: new Date(`${today}T00:00:00+07:00`) } } }),
+    // The open tasks that matter most (urgent / high first, then the earliest due): enough to say what is going on
+    // without a second call. The full list stays one nexus_list_tasks away.
+    prisma.task.findMany({ where: openWhere, select: compactTaskSelect, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }], take: 200 }),
   ])
 
   const byStatus = Object.fromEntries(byStatusRows.map((row) => [row.status, row._count._all]))
   const byPriority = Object.fromEntries(byPriorityRows.map((row) => [row.priority, row._count._all]))
+  const totalByList = new Map(byListRows.map((r) => [r.taskListId, r._count._all]))
+  const openByList = new Map(openByListRows.map((r) => [r.taskListId, r._count._all]))
+  const openTasks = totalTasks - completedTasks - (byStatus.CANCELLED ?? 0)
+  const top = [...openRows].sort(urgencyOrder).slice(0, 8).map((t) => compactTask(t, today, false))
 
   return {
-    project,
+    project: { id: project.id, name: project.name, status: project.status, ...(project.type !== 'TASK' ? { type: project.type } : {}), workspace: project.workspace.name },
     totalTasks,
     completedTasks,
+    openTasks,
+    overdueOpenTasks: overdueOpen,
     progressPercent: totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0,
     byStatus,
-    byPriority,
+    openByPriority: byPriority,
+    // Columns (sections) as the board shows them: total and still open per column.
+    byColumn: lists.map((l) => ({ column: l.name, total: totalByList.get(l.id) ?? 0, open: openByList.get(l.id) ?? 0 })).filter((c) => c.total > 0),
+    members: project.members.map((m) => ({ id: m.user.id, name: m.user.name, role: m.role })),
+    ...(project._count.members > project.members.length ? { moreMembers: project._count.members - project.members.length } : {}),
+    topOpenTasks: top,
+    ...(openTasks > top.length ? { moreOpen: `${openTasks - top.length} more open tasks — nexus_list_tasks with projectId and open=true (paged).` } : {}),
   }
 }
 
@@ -418,6 +472,8 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
       authorId: await getGideonUserId(),
       ownerId: actor.id,
       parentId: typeof input.parentId === 'string' && input.parentId ? input.parentId : null,
+      // New pages go to the bottom of their siblings (A-26).
+      position: await nextDocPosition(projectId, typeof input.parentId === 'string' && input.parentId ? input.parentId : null),
     },
     select: { id: true, title: true, createdAt: true },
   })
@@ -1263,7 +1319,7 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
     const q = asString(input.q) || asString(input.text) || asString(input.search) || asString(input.question) || asString(input.keyword) || asString(input.keywords)
     if (q) input.query = q
   }
-  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks' || action === 'get_calendar'
+  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks' || action === 'search_tasks' || action === 'get_calendar' || action === 'list_members'
   if (wantsProject && !asString(input.projectId)) {
     const name = asString(input.project) || asString(input.projectName) || (action === 'get_project_summary' ? asString(input.name) || asString(input.query) : '')
     if (name) {
@@ -1276,14 +1332,64 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
         orderBy: { updatedAt: 'desc' },
       })
       if (match) input.projectId = match.id
+      // A project name that matches nothing this person can see is an answer, not a reason to list everything.
+      else if (action === 'list_tasks' || action === 'search_tasks' || action === 'get_project_summary') throw new Error(`No project this person can see is named like "${name}".`)
+    }
+  }
+  // folder (18 Oct 2026, the Folder view: Board + Calendar of every project in a folder and its sub-folders): a
+  // folder name or id → the ids of those projects this person can see, for list_tasks / search_tasks / get_calendar.
+  if ((action === 'list_tasks' || action === 'search_tasks' || action === 'get_calendar') && !asString(input.projectId)) {
+    const folder = asString(input.folder) ?? asString(input.folderId) ?? asString(input.folderName)
+    if (folder) {
+      const f = await folderProjectIds(actor, folder)
+      input.projectIds = f.projectIds
+      input.folderName = f.name
+      if (!f.projectIds.length) throw new Error(`The folder "${f.name}" has no project this person can see.`)
+    }
+  }
+  // "Put it on the calendar" (owner, 18 Oct 2026): the Calendar shows TASKS, and only ones with a PIC and a date
+  // (Master Calendar rule). A create_task with calendar=true must have a date; with nobody named the PIC is the
+  // person themselves (changeable on the card).
+  if (action === 'create_task') applyCalendarDefaults(actor, input)
+  // assignee (18 Oct 2026): "me" or a person's name → assigneeId, for list_tasks / search_tasks.
+  if ((action === 'list_tasks' || action === 'search_tasks') && !asString(input.assigneeId)) {
+    const who = asString(input.assignee) || asString(input.assigneeName) || asString(input.person)
+    if (who && /^(me|saya|aku|gw|gue)$/i.test(who)) input.assigneeId = actor.id
+    else if (who) {
+      const people = await prisma.user.findMany({
+        where: { name: { contains: who, mode: 'insensitive' }, deactivatedAt: null, workspaceMembers: { some: { workspaceId: ORG_WORKSPACE_ID } } },
+        select: { id: true, name: true },
+        take: 6,
+      })
+      const exact = people.filter((p) => p.name?.toLowerCase() === who.toLowerCase())
+      const pick = exact.length === 1 ? exact : people
+      if (pick.length === 1) input.assigneeId = pick[0].id
+      else if (!pick.length) throw new Error(`Nobody in the company is named like "${who}".`)
+      else throw new Error(`Several people match "${who}": ${pick.map((p) => p.name).join(', ')}. Ask which one, or pass assignee with the full name.`)
     }
   }
   return input
 }
 
-async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>): Promise<unknown> {
+/** create_task calendar=true: a date is required and the PIC defaults to the person (both the card and a direct create). */
+function applyCalendarDefaults(actor: Pick<User, 'id'>, input: Record<string, unknown>) {
+  if (input.calendar !== true && input.calendar !== 'true') return
+  if (!parseDueInput(input.dueDate ?? input.due_date)) throw new Error('A task on the calendar needs a date. Ask which day (and time, if any).')
+  if (input.dueDate === undefined && input.due_date !== undefined) input.dueDate = input.due_date
+  const ids = asStringArray(input.assigneeIds ?? input.assignee_ids) ?? []
+  if (!ids.length) input.assigneeIds = [actor.id]
+}
+
+/**
+ * `approved`: this call is the Apply of a proposal the person approved (x-gideon-approved). delete_task runs ONLY
+ * then — never straight from the model, whatever the approval mode (owner, 18 Oct 2026).
+ */
+async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>, approved = false): Promise<unknown> {
   const input = await normalizeToolInput(actor, action, rawInput)
   switch (action) {
+    case 'delete_task':
+      if (!approved) throw new Error('Deleting a task always waits for the person to confirm it on a card in the NEXUS GIDEON chat. Nothing was deleted.')
+      return applyDeleteTask(actor, input)
     case 'list_projects':
       return listProjects(actor, input)
     case 'list_members':
@@ -1317,6 +1423,11 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return gideonMoveRoomBooking(actor.id, input)
     case 'cancel_room_booking':
       return gideonCancelRoomBooking(actor.id, input)
+    // Pipeline deals and Legal documents (18 Oct 2026): read only, loaded on demand by the model.
+    case 'search_deals':
+      return searchDeals(actor, input)
+    case 'search_legal_documents':
+      return searchLegalDocuments(actor, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':
@@ -1340,6 +1451,9 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
     case 'resolve_ticket':
       return resolveTicketByGideon(actor, input)
     default:
+      // The 18 Oct 2026 package (inbox, chat, reminders, …): lib/gideon-tools. A write there runs only as an Apply
+      // or, for approval "modes", straight from the model when no card is needed (needsApproval said so).
+      if (extraTool(action)) return runExtraTool(actor, action, input, { approved, direct: !approved })
       throw new UnknownActionError(`Unknown GIDEON tool action: ${action}`)
   }
 }
@@ -1373,8 +1487,12 @@ export async function POST(req: Request) {
     const proposal = await prisma.gideonProposal.findUnique({ where: { id: approvedId } })
     if (!proposal || proposal.status !== 'APPLYING' || proposal.userId !== auth.actor.id) return error('Proposal is not being applied', 409)
     try {
-      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}))
+      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}, true))
     } catch (err) {
+      // A delete refused at Apply (gone, changed, no longer Can edit): the card says why, in both languages.
+      if (err instanceof TaskDeleteRefusal) {
+        return NextResponse.json({ ok: false, error: DELETE_REFUSAL_TEXT[err.code], code: err.code }, { status: err.status })
+      }
       // The apply route keeps a booking card open when its slot was taken meanwhile (code ROOM_TAKEN).
       if (err instanceof BookRoomRefusal) {
         return NextResponse.json({ ok: false, error: err.message, code: err.code, ...err.detail }, { status: err.code === 'ROOM_TAKEN' ? 409 : 400 })
@@ -1385,7 +1503,39 @@ export async function POST(req: Request) {
 
   // Which conversation this call belongs to (steps, sources, cards, approval). No run = exactly the
   // behaviour every caller had before 12 Oct 2026.
-  const run = await resolveRunForToolCall(req.headers.get('x-gideon-run'), auth.actor.id).catch(() => null)
+  const headerRun = req.headers.get('x-gideon-run')
+  const run = await resolveRunForToolCall(headerRun, auth.actor.id).catch(() => null)
+  // GIDEON Memory (19 Oct 2026): the asking person's OWN memories only (actor-scoped); writes only inside their own
+  // CHAT run, where the chat route parked what they actually wrote. Never a proposal card: the chip is the consent.
+  if (MEMORY_ACTIONS.has(action)) {
+    const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+    const label = stepLabel(action, null)
+    if (run) publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: 'running' } })
+    const started = Date.now()
+    try {
+      const out = await runMemoryTool(auth.actor.id, action, input, run ? { id: run.id, trigger: run.trigger } : null)
+      if (run) {
+        publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: 'done' } })
+        for (const m of out.memories) publishRunEvent(run.id, { type: 'memory', memory: m })
+        await recordStep(run.id, { tool: action, arg: null, ok: true, durationMs: Date.now() - started })
+      }
+      return ok(out.data)
+    } catch (err) {
+      // A refusal is an answer for the model (say it, do not retry), not a failed step the person sees in red.
+      const message = err instanceof Error ? err.message : 'GIDEON Memory failed'
+      const refusal = err instanceof MemoryRefusal
+      if (run) {
+        publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg: null, label, status: refusal ? 'done' : 'error', ...(refusal ? {} : { error: message.slice(0, 200) }) } })
+        await recordStep(run.id, { tool: action, arg: null, ok: refusal, error: refusal ? null : message, durationMs: Date.now() - started })
+      }
+      return refusal ? ok({ saved: false, refused: err.code, note: message }) : error(message, 400)
+    }
+  }
+  // A chat names its run; when that run is gone, finished, stale or someone else's, its approval mode can no longer
+  // be honoured, so a WRITE is refused instead of running with no card at all (19 Oct 2026 privacy gate). Reads go on.
+  if (!run && headerRun && WRITE_ACTIONS.has(action)) {
+    return error('This chat run is no longer active, so nothing can be changed from it. Ask the person to send the message again.', 409)
+  }
   if (!run) {
     try {
       return ok(await dispatch(auth.actor, action, input))
@@ -1395,7 +1545,8 @@ export async function POST(req: Request) {
     }
   }
 
-  const arg = await stepArg(action, input)
+  const extraArg = extraTool(action)?.stepArg
+  const arg = extraArg ? await Promise.resolve(extraArg(input)).catch(() => null) : await stepArg(action, input)
   const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
   const label = stepLabel(action, arg)
   publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'running' } })
@@ -1406,7 +1557,7 @@ export async function POST(req: Request) {
     const merged = action === 'update_task' ? await mergeIntoCreateProposal(auth.actor, run.id, input) : null
     if (merged) {
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
-      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(merged.proposal) })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(merged.proposal, await proposalLang(auth.actor.id, req.headers)) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
       return ok({
         proposed: true,
@@ -1420,9 +1571,11 @@ export async function POST(req: Request) {
     }
 
     if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
-      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input)
+      const { proposal, due, note: extraNote } = await proposeWrite(auth.actor, run.id, action, input, { contextProjectId: run.projectId ?? null })
+      const picker = action === 'create_task' && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true
+      const pre = picker ? ((proposal.input as { taskTarget?: { preselectedProjectName?: string | null } }).taskTarget?.preselectedProjectName ?? null) : null
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
-      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal, await proposalLang(auth.actor.id, req.headers)) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
       return ok({
         proposed: true,
@@ -1431,12 +1584,18 @@ export async function POST(req: Request) {
         summary: proposal.summary,
         // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
         ...(due ? { due } : {}),
-        note: action === 'move_room_booking'
+        note: extraNote
+          ? extraNote
+          : action === 'move_room_booking'
           ? 'NOT moved yet. It is waiting for the person on the card below, which shows the booking before and after (and every room with whether it is free then) and where they tap Apply; tell them so, do not say it is moved.'
           : action === 'cancel_room_booking'
           ? 'NOT cancelled yet. It is waiting for the person to confirm it on the card below; tell them so, do not say it is cancelled.'
           : action === 'book_room'
           ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
+          : action === 'delete_task'
+          ? 'NOT deleted yet. It is waiting for the person to confirm it on the card below, which shows the task and a Delete button; tell them so in one short sentence, never say it is deleted. Do not offer to set it to Cancelled or Done instead. After they confirm it can still be restored from the Audit.'
+          : picker
+          ? `NOT created yet. The card below has a project picker${pre ? `, preselected to ${pre}` : ''} (only projects this person can edit), plus section, PIC and due date; they ${pre ? 'confirm or change it' : 'pick the project'} there and tap Apply. Tell them so in one short sentence; do NOT ask which project in the chat.${due ? ` Say the due date as "${due}".` : ''}`
           : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
           : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
@@ -1578,14 +1737,14 @@ async function userNames(ids: string[]): Promise<string> {
 }
 
 /** `store`: facts resolved when describing that the proposal keeps in its input (a booking's "before"). */
-type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown> }
+type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown>; note?: string }
 
 /**
  * Check the write exactly as far as it can be checked without making it (access, the task and list it
  * names) and describe it as a diff. Applying it later re-runs the real action as the same person, so a
  * permission lost in between still refuses.
  */
-async function describeWrite(actor: User, action: string, input: Record<string, unknown>): Promise<WriteDescription> {
+async function describeWrite(actor: User, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}): Promise<WriteDescription> {
   let summary = ''
   const diff: GideonDiffRow[] = []
   let projectId: string | null = null
@@ -1593,7 +1752,49 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   let dueText: string | null | undefined
   let store: Record<string, unknown> | undefined
 
-  if (action === 'create_task') {
+  // The 18 Oct 2026 package describes its own writes (lib/gideon-tools); `preview` (a long text shown in full on
+  // the card) travels in the stored input.
+  if (action === 'create_task') applyCalendarDefaults(actor, input)
+  const extra = extraTool(action)
+  if (extra?.describe) {
+    if (!(await extraToolEnabled(action))) throw new Error(EXTRA_DISABLED_TEXT)
+    const d = await extra.describe(actor, input)
+    return {
+      summary: d.summary,
+      diff: d.diff,
+      projectId: d.projectId ?? null,
+      taskId: d.taskId ?? null,
+      store: { ...(d.store ?? {}), ...(d.preview ? { preview: d.preview.slice(0, 8000) } : {}) },
+      note: d.note,
+    }
+  }
+
+  if (action === 'create_task' && createTaskNeedsProject(input)) {
+    // No project named (owner, 18 Oct 2026): the card gets a project picker — only projects this person can edit —
+    // instead of a "which project?" in the chat. Preselected when it is obvious: a project name the model passed,
+    // the project the chat is about (open page / @-mention), or the only one there is. Checked again on Apply.
+    const title = asString(input.title)
+    if (!title) throw new Error('title is required')
+    const status = asTaskStatus(input.status) || 'TODO'
+    const projects = await editableTaskProjects(actor.id)
+    if (!projects.length) throw new Error('This person cannot add tasks to any project (it needs Can edit access in one). Tell them so.')
+    const hint = (asString(input.project) ?? asString(input.projectName) ?? asString(input.project_name) ?? '').toLowerCase()
+    const byName = hint ? (projects.find((p) => p.name.toLowerCase() === hint) ?? (projects.filter((p) => p.name.toLowerCase().includes(hint)).length === 1 ? projects.find((p) => p.name.toLowerCase().includes(hint)) : undefined)) : undefined
+    const pre = byName ?? projects.find((p) => p.id === ctx.contextProjectId) ?? (projects.length === 1 ? projects[0] : undefined)
+    projectId = pre?.id ?? null
+    summary = pre ? `Create task “${title}” in ${pre.name}` : `Create task “${title}”`
+    const due = parseDueInput(input.dueDate)
+    dueText = dueLabel(due)
+    const assignees = asStringArray(input.assigneeIds) ?? []
+    diff.push(
+      { field: 'Title', to: title },
+      { field: 'Project', to: pre?.name ?? '—' },
+      { field: 'Status', to: STATUS_WORD[status] ?? status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(due) },
+      { field: 'Assignees', to: await userNames(assignees) },
+    )
+    store = { pickProject: true, taskTarget: { projects, preselectedProjectId: pre?.id ?? null, preselectedProjectName: pre?.name ?? null, dueDay: dueDay(due) } }
+  } else if (action === 'create_task') {
     const title = asString(input.title)
     if (!title) throw new Error('title is required')
     const status = asTaskStatus(input.status) || 'TODO'
@@ -1673,6 +1874,36 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     summary = change.summary
     diff.push(...change.diff)
     store = change.store
+  } else if (action === 'delete_task') {
+    const id = asString(input.taskId) ?? asString(input.task_id)
+    if (!id) throw new Error('taskId is required (find the task first with nexus_search_tasks or nexus_list_tasks)')
+    const existing = await getAccessibleTask(actor, id)
+    // The Delete button's own rule (DELETE /api/tasks/:id, lib/task-delete.ts): Can edit in the task's project.
+    // Checked again when the person taps Apply.
+    const { allowed } = await checkProjectAccess(actor.id, existing.taskList.projectId, ['MEMBER'])
+    if (!allowed) throw new Error(`This person cannot delete tasks in ${existing.taskList.project?.name ?? 'this project'}: deleting needs Can edit access there. Tell them so; do not propose anything else instead.`)
+    projectId = existing.taskList.projectId
+    taskId = existing.id
+    summary = `Delete task “${existing.title}”`
+    const assignees = existing.assignees.map((a: { user: { name: string | null } }) => a.user.name ?? '?')
+    const projectName = existing.taskList.project?.name ?? null
+    dueText = dueLabel(existing.dueDate)
+    diff.push(
+      { field: 'Task', to: existing.title },
+      { field: 'Project', to: projectName ?? '—' },
+      { field: 'Status', to: existing.taskList.name ?? STATUS_WORD[existing.status] ?? existing.status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(existing.dueDate) },
+      { field: 'Assignees', to: assignees.length ? assignees.join(', ') : '—' },
+    )
+    // What the card shows, kept as it was now; Apply deletes only this version of the task (updatedAt).
+    store = {
+      taskId: existing.id,
+      before: {
+        title: existing.title, projectId, projectName, status: existing.taskList.name ?? null,
+        progress: STATUS_WORD[existing.status] ?? existing.status, due: dueText ?? null, dueDay: dueDay(existing.dueDate),
+        assignees, updatedAt: existing.updatedAt.toISOString(),
+      },
+    }
   } else if (action === 'create_document') {
     const pid = String(input.projectId ?? '').trim()
     const title = String(input.title ?? '').trim()
@@ -1688,12 +1919,40 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   } else {
     throw new Error(`${action} cannot be proposed`)
   }
-  return { summary, diff, projectId, taskId, due: dueText, store }
+  // On the calendar (create_task calendar=true): say where it will show, on the card and in the reply.
+  let note: string | undefined
+  if (action === 'create_task' && (input.calendar === true || input.calendar === 'true')) {
+    diff.push({ field: 'Calendar', to: 'Shows on the calendar (it has a PIC and a date)' })
+    note = `NOT created yet: it waits on the card below.${dueText ? ` Say the date as "${dueText}".` : ''} Once applied it appears on the Calendar on that day, because it has a PIC (${await userNames(asStringArray(input.assigneeIds) ?? [])}) and a date; the PIC can be changed on the card.`
+  }
+  return { summary, diff, projectId, taskId, due: dueText, store, note }
+}
+
+const DELETE_REFUSAL_TEXT: Record<'NOT_FOUND' | 'NEEDS_EDIT_ACCESS' | 'CHANGED', string> = {
+  NOT_FOUND: 'This task is already gone (someone deleted it). Nothing else was deleted · Task ini sudah tidak ada (sudah dihapus orang lain).',
+  NEEDS_EDIT_ACCESS: 'You no longer have Can edit access in this project, so the task was not deleted · Kamu tidak punya akses Can edit di project ini, jadi task tidak dihapus.',
+  CHANGED: 'This task changed after the card was made, so nothing was deleted. Check it and ask GIDEON again · Task ini berubah setelah kartu dibuat, jadi tidak dihapus. Cek lagi lalu minta GIDEON ulang.',
+}
+
+/**
+ * The approved delete (owner, 18 Oct 2026): the web Delete button's own path (lib/task-delete.ts) as the person —
+ * Can edit re-checked now, the copy for Control Room → Audit, the realtime ping — and only the task as the card
+ * showed it (updatedAt), so a task edited in between is not deleted on an old approval.
+ */
+async function applyDeleteTask(actor: User, input: Record<string, unknown>) {
+  const taskId = asString(input.taskId)
+  if (!taskId) throw new Error('taskId is required')
+  const before = (input.before && typeof input.before === 'object' ? input.before : {}) as { updatedAt?: unknown }
+  const { auditLogId, task } = await deleteTaskAs(actor.id, taskId, {
+    expectedUpdatedAt: typeof before.updatedAt === 'string' ? before.updatedAt : null,
+    via: 'GIDEON',
+  })
+  return { deleted: true, taskId: task.id, title: task.title, project: task.projectName, auditLogId, restore: 'It can be restored from Control Room → Audit.' }
 }
 
 /** Describe the write and store it as a proposal for the person to approve. */
-async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
-  const d = await describeWrite(actor, action, input)
+async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>, ctx: { contextProjectId?: string | null } = {}) {
+  const d = await describeWrite(actor, action, input, ctx)
   const proposal = await prisma.gideonProposal.create({
     data: {
       runId,
@@ -1706,7 +1965,7 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
       taskId: d.taskId,
     },
   })
-  return { proposal, due: d.due ?? null }
+  return { proposal, due: d.due ?? null, note: d.note ?? null }
 }
 
 /** The fields of an update_task that a task not created yet can take into its create proposal. */
@@ -1725,11 +1984,13 @@ async function mergeIntoCreateProposal(actor: User, runId: string, input: Record
   if (!target) return null
   const merged: Record<string, unknown> = { ...((target.input as Record<string, unknown>) ?? {}) }
   for (const key of MERGEABLE_FIELDS) if (input[key] !== undefined) merged[key] = input[key]
-  const d = await describeWrite(actor, 'create_task', merged)
+  const d = await describeWrite(actor, 'create_task', merged, { contextProjectId: asString((target.input as Record<string, unknown> | null)?.taskTarget && ((target.input as { taskTarget?: { preselectedProjectId?: unknown } }).taskTarget?.preselectedProjectId)) ?? null })
+  // A picker card that now names its project becomes an ordinary create card (and the other way round).
+  const nextInput = { ...merged, ...(d.store ?? { pickProject: false, taskTarget: null }) }
   // Conditional, like the Apply claim: a proposal decided in the meantime is not changed under the person.
   const changed = await prisma.gideonProposal.updateMany({
     where: { id: target.id, status: 'PENDING' },
-    data: { input: merged as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
+    data: { input: nextInput as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
   })
   if (changed.count === 0) throw new Error('That task proposal was already decided; ask again.')
   const proposal = await prisma.gideonProposal.findUnique({ where: { id: target.id } })
@@ -1789,4 +2050,112 @@ async function resolveTicketByGideon(actor: { id: string }, input: Record<string
   })
   await notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId, status: 'RESOLVED', detail: note.slice(0, 160) }).catch(() => {})
   return { resolved: true, complaintId, date: dateKey, verified: { xpRemaining: remaining, autoDayOffs: pen.autoDayOffs, pendingProposals: 0 } }
+}
+
+// ── Pipeline deals and Legal documents (18 Oct 2026) ──────────────────────────────────────────────────────
+// Read only. Deferred tools: the model loads them when a question is about a deal or a legal document.
+
+const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`
+
+/**
+ * Deals on the Pipeline boards this person can open (a board is an ordinary project for access: member, or BoD /
+ * One Above All). Matches the deal name, brand, code, BD or PM; filters by stage. Compact rows.
+ */
+async function searchDeals(actor: User, input: Record<string, unknown>) {
+  const query = asString(input.query)
+  const stage = asString(input.stage)
+  const boardWhere: Prisma.ProjectWhereInput = { ...actorScopedProjectWhere(actor, {}), type: 'PIPELINE' }
+  const projectId = asString(input.projectId)
+  if (projectId) boardWhere.id = projectId
+  const where: Prisma.PipelineDealWhereInput = { project: boardWhere }
+  const and: Prisma.PipelineDealWhereInput[] = []
+  if (query) {
+    and.push({
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { brand: { contains: query, mode: 'insensitive' } },
+        { code: { contains: query, mode: 'insensitive' } },
+        { bdName: { contains: query, mode: 'insensitive' } },
+        { pmName: { contains: query, mode: 'insensitive' } },
+        { bd: { name: { contains: query, mode: 'insensitive' } } },
+        { pm: { name: { contains: query, mode: 'insensitive' } } },
+      ],
+    })
+  }
+  if (stage) and.push({ stage: { contains: stage, mode: 'insensitive' } })
+  if (and.length) where.AND = and
+  const { limit, offset } = taskPaging(input)
+  const [deals, total] = await Promise.all([
+    prisma.pipelineDeal.findMany({
+      where,
+      select: {
+        id: true, code: true, name: true, brand: true, stage: true, probability: true, contractValue: true, netValue: true,
+        services: true, service: true, contractStatus: true, paymentStatus: true, outstandingReceivable: true, deliverableStatus: true,
+        deliverableRisk: true, closingStatus: true, mainDate: true, nextAction: true, nextActionDate: true, blocker: true,
+        bdName: true, pmName: true, bd: { select: { name: true } }, pm: { select: { name: true } }, project: { select: { name: true } },
+      },
+      orderBy: [{ contractValue: 'desc' }, { updatedAt: 'desc' }],
+      take: limit,
+      skip: offset,
+    }),
+    prisma.pipelineDeal.count({ where }),
+  ])
+  const items = deals.map((d) => {
+    const row: Record<string, unknown> = {
+      code: d.code, name: d.name, board: d.project.name, stage: d.stage,
+      bd: d.bd?.name ?? d.bdName ?? null, pm: d.pm?.name ?? d.pmName ?? null,
+      contractValue: rupiah(d.contractValue),
+    }
+    if (d.brand) row.brand = d.brand
+    if (d.netValue) row.netValue = rupiah(d.netValue)
+    row.probability = `${Math.round(d.probability * 100)}%`
+    const services = d.services.length ? d.services : d.service ? [d.service] : []
+    if (services.length) row.services = services.join(', ')
+    for (const [k, v, skip] of [
+      ['contract', d.contractStatus, 'Not Started'], ['payment', d.paymentStatus, 'Not Yet'], ['deliverable', d.deliverableStatus, 'Not Started'],
+      ['risk', d.deliverableRisk, 'Aman'], ['closing', d.closingStatus, 'Not Ready'],
+    ] as const) if (v && v !== skip) row[k] = v
+    if (d.outstandingReceivable) row.outstanding = rupiah(d.outstandingReceivable)
+    if (d.mainDate) row.mainDate = wibDayKey(d.mainDate)
+    if (d.nextAction) row.nextAction = `${d.nextAction}${d.nextActionDate ? ` (${wibDayKey(d.nextActionDate)})` : ''}`
+    if (d.blocker) row.blocker = d.blocker.slice(0, 160)
+    return row
+  })
+  return {
+    ...page(items, total, offset, limit, 'pass query (deal, brand, code, BD or PM) or stage'),
+    ...(total ? {} : { note: 'No deal on a Pipeline board this person can open matches. Say so; do not guess.' }),
+  }
+}
+
+/**
+ * Legal documents: invitation only (the Legal page's own rule, lib/legal/access.ts). Someone without Legal access gets
+ * a plain refusal the model can relay — never a list.
+ */
+async function searchLegalDocuments(actor: User, input: Record<string, unknown>) {
+  const legal = await legalActor(actor.id)
+  if (!legal) return { access: false, note: 'This person has no access to Legal (it is by invitation only). Tell them so; do not guess any document.' }
+  const sp = new URLSearchParams()
+  const query = asString(input.query)
+  if (query) sp.set('q', query)
+  const docType = asString(input.docType)
+  if (docType) sp.set('docType', docType.toUpperCase())
+  const status = asString(input.status)
+  if (status) sp.set('status', status.toUpperCase())
+  const { limit, offset } = taskPaging(input)
+  sp.set('limit', String(limit))
+  sp.set('page', String(Math.floor(offset / limit) + 1))
+  const { documents, total } = await listDocuments(legal, sp)
+  const items = documents.map((d) => ({
+    number: d.number || null,
+    title: d.title,
+    type: d.docType,
+    status: d.status,
+    ...(d.counterparty ? { counterparty: d.counterparty } : {}),
+    ...(d.docDate ? { date: d.docDate } : {}),
+    company: (d.company as { name?: string } | null)?.name ?? null,
+    ...((d.project as { name?: string } | null)?.name ? { project: (d.project as { name: string }).name } : {}),
+    ...((d.deal as { name?: string } | null)?.name ? { deal: (d.deal as { name: string }).name } : {}),
+    ...(d.signedAt ? { signedAt: wibDayKey(d.signedAt) } : {}),
+  }))
+  return page(items, total, offset, limit, 'pass query (number, title or counterparty), docType or status')
 }

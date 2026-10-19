@@ -52,7 +52,9 @@ struct InboxView: View {
         .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Mentions, assignments, approvals and replies that need you.")) { pageHeader }
         .navigationDestination(item: $openTarget) { target in
             switch target {
-            case .task(let id):    TaskDetailView(taskId: id)
+            case .reminders: RemindersView()
+            case .meeting(let id): MeetingDetailView(id: id)
+                case .task(let id):    TaskDetailView(taskId: id)
             // A notification carries the project's id and no name; the board fills its own
             // header in once it loads.
             case .project(let id): ProjectDetailView(projectId: id, projectName: "")
@@ -67,6 +69,9 @@ struct InboxView: View {
         // drew an empty band that covered the filter tabs: only their underline showed (UI tour 13 Oct 2026).
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { openTarget = .reminders } label: { Label(T("Reminders"), systemImage: "alarm") }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
                     .disabled(unread == 0)
@@ -83,6 +88,7 @@ struct InboxView: View {
     private var pageHeader: some View {
         VStack(spacing: 0) {
             NXPageHeader(title: T("Notifications"), subtitle: T("Mentions, assignments, approvals and replies that need you.")) {
+                Button { openTarget = .reminders } label: { Label(T("Reminders"), systemImage: "alarm") }.buttonStyle(.nxBordered)
                 Button { Task { await markAll() } } label: { Label(T("Mark all as read"), systemImage: "checkmark") }
                     .buttonStyle(.nxBordered)
                     .disabled(unread == 0)
@@ -226,7 +232,7 @@ struct InboxView: View {
         // opened here instead — same destination, one step.
         if case .submission(let id) = target { openSubmission = SubmissionRef(id: id); return }
         switch target {
-        case .task, .project: openTarget = target
+        case .meeting, .task, .project: openTarget = target
         // A record on another screen: the router walks there and hands the id over, exactly as a
         // tapped push does. One path, so the Inbox row and the lock screen cannot drift apart.
         default: router.open(target)
@@ -324,7 +330,7 @@ struct NotificationRow: View {
     /// signals and rows from before the server kept the sender show the kind's mark instead.
     @ViewBuilder private var mark: some View {
         if let actor = Self.actor(of: notification, roster: roster), !NotificationMark.isLegal(notification.type) {
-            AvatarView(url: actor.avatar, initial: actor.initial, size: 38)
+            AvatarView(url: actor.avatar, initial: actor.initial, size: 38, userId: actor.id, name: actor.name)
                 .overlay(alignment: .bottomTrailing) {
                     kindMark(size: 18)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))

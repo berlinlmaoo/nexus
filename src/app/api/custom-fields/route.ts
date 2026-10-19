@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
+import { checkProjectAccess, checkWorkspaceRoutingAccess, hasProjectLevel } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
   coerceCustomFieldValueForType,
@@ -25,6 +25,7 @@ import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { numberFieldFormat } from "@/lib/custom-field-number"
 import { runAutomations } from "@/lib/automation-engine"
 import { emitTaskUpdated } from "@/lib/socket-emitter"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 /** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
 function auditDisplayValue(type: SupportedCustomFieldType, options: unknown, raw: string | null | undefined): string | null {
@@ -63,8 +64,9 @@ async function canAccessTaskCustomFields(
   projectId: string,
   taskId?: string | null
 ): Promise<boolean> {
-  const directAccess = await requireProjectMember(userId, projectId)
-  if (directAccess.allowed) return true
+  // Reading needs only Can view (QA final 19 Oct 2026: a Can view / Can comment member got 403 on the project's
+  // fields, so their table and board showed no custom field columns). Writes still need Can edit.
+  if (await hasProjectLevel(userId, projectId, "VIEW")) return true
   if (!taskId) return false
 
   const project = await getProjectWorkspace(projectId)
@@ -364,6 +366,8 @@ export async function POST(req: NextRequest) {
       metadata: { projectId, type: normalizedType, libraryId: linkedLibraryId },
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(projectId, { actorId: session.user.id })
     return NextResponse.json(
       {
         field: {
@@ -470,15 +474,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Unsupported custom field type" }, { status: 400 })
     }
 
-    if (taskId) {
-      const allowed = await canAccessTaskCustomFields(session.user.id, existingField.projectId, taskId)
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
-    } else {
+    // Writing a value is an edit (Can edit, lib/rbac.ts) like every other task edit. The workspace-wide
+    // fallback of canAccessTaskCustomFields is for READING only: it let any workspace member (a Staff outside
+    // the project, a Can view or Can comment member) overwrite the field values of a task (QA final 19 Oct).
+    {
       const { allowed } = await requireProjectMember(session.user.id, existingField.projectId)
       if (!allowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
       }
     }
 
@@ -761,6 +763,8 @@ export async function PATCH(req: NextRequest) {
     })
 
     const updatedFieldType = normalizeCustomFieldType(updatedField?.type) || normalizedType
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(existingField.projectId, { actorId: session.user.id })
 
     return NextResponse.json({
       field: {
@@ -820,6 +824,8 @@ export async function DELETE(req: NextRequest) {
       remove: (tx) => tx.customField.delete({ where: { id } }),
     })
 
+    // Realtime (QA final 19 Oct): the other open boards/tables of this project refetch it (workspace-changed).
+    void emitProjectChanged(existingField.projectId, { actorId: session.user.id })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting custom field:", error)

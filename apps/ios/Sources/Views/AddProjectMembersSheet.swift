@@ -148,7 +148,7 @@ struct AddProjectMembersSheet: View {
             error = nil
         } label: {
             HStack(spacing: 10) {
-                AvatarView(url: m.avatarURL, initial: m.initial, size: 34)
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 34, userId: m.userId, name: m.displayName)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(display).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let email = m.emailText, !email.isEmpty, email != display {

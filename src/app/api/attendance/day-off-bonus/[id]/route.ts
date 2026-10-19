@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -17,7 +18,7 @@ import { DAY_OFF_BONUS_SELECT, serializeDayOffBonus } from "@/lib/day-off-bonus-
  * Days already taken on the strength of the grant are not undone; the balance just shows 0 left
  * (the display caps, as it does for anyone over quota).
  */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function handleDELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
@@ -71,3 +72,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const DELETE = pingActorAfter("dayoff_bonus", handleDELETE)

@@ -89,13 +89,16 @@ object FieldValues {
 
 /** The New task form's custom fields: every type but the read-only CREATED, held until the task exists. */
 @Composable
-fun NewTaskFields(fields: List<CustomFieldDef>, values: Map<String, JsonElement>, onChange: (String, JsonElement) -> Unit) {
-    fields.filter { it.kind != "CREATED" }.forEach { f -> FieldRow(f.copy(value = values[f.id])) { onChange(f.id, it) } }
+fun NewTaskFields(fields: List<CustomFieldDef>, values: Map<String, JsonElement>, projectId: String? = null, onChange: (String, JsonElement) -> Unit) {
+    fields.filter { it.kind != "CREATED" }.forEach { f ->
+        if (f.kind == "FILE") CustomFileField(projectId, f.name, values[f.id]) { onChange(f.id, it) }
+        else FieldRow(f.copy(value = values[f.id])) { onChange(f.id, it) }
+    }
 }
 
 /** View and edit the project's custom fields on one task (iOS TaskCustomFieldsCard). Hidden when there are none. */
 @Composable
-fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit, canManage: Boolean = false) {
+fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit, canManage: Boolean = false, canEdit: Boolean = true) {
     val c = Nx.colors
     val api = ProjectsApi((LocalContext.current.applicationContext as NexusApplication).container.api)
     val res = LocalContext.current.resources
@@ -118,7 +121,13 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit,
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        fields.forEach { f -> FieldRow(f) { commit(f, it) } }
+        fields.forEach { f ->
+            when {
+                f.kind == "FILE" -> CustomFileField(projectId, f.name, f.value, canEdit) { commit(f, it) }
+                canEdit -> FieldRow(f) { commit(f, it) }
+                else -> Text(f.name + ": " + (valueText(f.value) ?: "—"), color = c.foreground)
+            }
+        }
         if (canManage) TextButton(onClick = { adding = true }) { Text(stringResource(R.string.r21_add_property), color = c.mutedFg) }
     }
     if (adding) {

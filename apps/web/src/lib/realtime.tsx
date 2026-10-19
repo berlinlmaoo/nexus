@@ -4,6 +4,7 @@ import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews, patchProjectIcon } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
+import { bindPresenceSocket } from "@/lib/presence";
 import { applyRemoteTask, applyRemoteTaskDeleted, taskWriteInFlight, type RemoteApplyResult } from "./task-cache";
 
 // SOCKET event names → query invalidation.
@@ -25,6 +26,11 @@ const REALTIME_EVENTS = [
   // the nav badge and the tab title move for chats that aren't open. Older servers never send it;
   // the "new-notification" fallback below and the list's own poll cover them.
   "conversation-updated",
+  // Server since 19 Oct 2026 (C-17): to the actor's own user:<id> after they review/cancel/override in attendance,
+  // so this tab drops an Approve/Reject they already used on another device. Ids only.
+  "attendance-changed",
+  // Server since 19 Oct 2026 (C-D2): XP moved for these people (coalesced ~1.5 s) → workspace rooms. Ids only.
+  "xp-changed",
 ] as const;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
@@ -35,6 +41,8 @@ const INVALIDATION: Record<string, string[]> = {
   "sprint-updated": ["sprint", "dashboard"],
   "message-created": ["messages", "conversation"],
   "conversation-updated": ["conversation"],
+  "attendance-changed": ["attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff", "attendance-deductions"],
+  "xp-changed": ["leaderboard"],
 };
 
 /**
@@ -98,13 +106,13 @@ const PING_MAX_WAIT_MS = 2_000;
 
 /**
  * Task lists OTHER than a project's own payload that a task event can change: My Tasks, the dashboard, the
- * Master Calendar, folder task lists. Refetched only if on screen (an invalidation refetches active queries
+ * Master Calendar (a Folder filter included). Refetched only if on screen (an invalidation refetches active queries
  * only; the rest just goes stale). The project list, folders, pins, views and custom fields are never
  * touched by a task event any more.
  */
 function isOtherTaskList(key: readonly unknown[]): boolean {
   if (key[0] === "dashboard") return true;
-  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks" || key[1] === "folder-tasks");
+  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks");
 }
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {
@@ -182,7 +190,7 @@ export function RealtimeProvider({
           );
         };
         // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
-        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, projectIds: new Set<string>() };
+        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, bookings: false, projectIds: new Set<string>() };
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let burstStartedAt = 0;
         const flushPings = () => {
@@ -198,6 +206,8 @@ export function RealtimeProvider({
           if (pending.submissions) { queryClient.invalidateQueries({ queryKey: ["my-submissions"] }); queryClient.invalidateQueries({ queryKey: ["submission-detail"] }); queryClient.invalidateQueries({ queryKey: ["legal-requests-mine"] }); }
           // The Legal request board (14 Oct 2026; only Legal members' rooms get it): the board, an open request.
           if (pending.legal) { queryClient.invalidateQueries({ queryKey: ["legal", "requests"] }); queryClient.invalidateQueries({ queryKey: ["legal", "request"] }); }
+          if (pending.bookings) queryClient.invalidateQueries({ queryKey: ["room-bookings"] });
+          pending.bookings = false;
           pending.submissions = false;
           pending.legal = false;
           pending.tree = false;
@@ -225,6 +235,9 @@ export function RealtimeProvider({
             pending.submissions = true;
           } else if (data.kind === "legal") {
             pending.legal = true;
+          } else if (data.kind === "bookings") {
+            // Server since 19 Oct 2026: a room booking was made, moved or deleted — the Room Booking page refetches.
+            pending.bookings = true;
           } else if (data.kind === "vault") {
             // Server since 9 Oct 2026: a file or folder in Z Vault was added, moved, renamed, trashed,
             // restored or locked. Nothing about projects moved, so the project tree stays as it is.
@@ -261,6 +274,7 @@ export function RealtimeProvider({
             pending.submissions = true;
             pending.legal = true;
             flushPings();
+            refetchCalendar();
           }
           connectedBefore = true;
         };
@@ -277,6 +291,18 @@ export function RealtimeProvider({
         socket.on("connect_error", onConnectError);
         socket.on("workspace-changed", onWorkspaceChanged);
         socket.on("audit-changed", onAuditChanged);
+        // The Calendar (B-12, server since 19 Oct 2026): `calendar-changed` { kinds, actorId } to the company
+        // workspace room, already folded per burst on the server. Its items, overdue list and glance refetch
+        // (the structure has its own version check). Older servers never send it; the 60 s poll covers them.
+        const calendarBurst = { timer: null as ReturnType<typeof setTimeout> | null };
+        const refetchCalendar = () => {
+          queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "nexus" && q.queryKey[1] === "calendar-tasks" && q.queryKey[2] !== "structure" });
+        };
+        const onCalendarChanged = () => {
+          if (calendarBurst.timer) return;
+          calendarBurst.timer = setTimeout(() => { calendarBurst.timer = null; refetchCalendar(); }, 300);
+        };
+        socket.on("calendar-changed", onCalendarChanged);
         // A doc/page changed (block editor, server since 12 Oct 2026): `{ projectId, docId, actorId }` to the
         // project room. Lists and the open page header refetch, folded per burst (a live editing session
         // saves every second or two). The body itself syncs through its own live room.
@@ -430,6 +456,18 @@ export function RealtimeProvider({
             if (evt === "new-notification" && typeof data.type === "string" && data.type.startsWith("MESSAGE")) {
               terms.push("conversation");
             }
+            // An attendance signal (a request or offsite check-out filed, reviewed, handled by another
+            // approver, escalated; an override; a day-off grant): the approval queue, the board and today's
+            // card move with it. Nothing else pings these lists, so an approver's open /attendance stayed
+            // frozen until a reload and offered Approve on requests someone else had already decided.
+            if (evt === "new-notification" && typeof data.type === "string" && /^(attendance|offsite|dayoff)/i.test(data.type)) {
+              terms.push("attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history");
+            }
+            // My own XP moved (C-D2): the level/XP card and my profile too, not only the board.
+            if (evt === "xp-changed" && Array.isArray((payload as { userIds?: unknown } | undefined)?.userIds) && ((payload as { userIds: unknown[] }).userIds).includes(userId)) {
+              void queryClient.invalidateQueries({ queryKey: ["gamification", "me"] });
+              void queryClient.invalidateQueries({ queryKey: ["profile"] });
+            }
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) });
             // A deleted group (server since 9 Oct 2026): out of every list at once, its cached thread and
             // info dropped. An open thread closes itself (routes/_app/messages.tsx).
@@ -464,6 +502,8 @@ export function RealtimeProvider({
 
         // "… is typing" (chat-typing.ts): its own store, read by the thread, its header and the list.
         cleanups.push(bindTypingSocket(socket, userId));
+        // Presence status (lib/presence.tsx, 19 Oct 2026): `presence-changed` patches the shared status list.
+        cleanups.push(bindPresenceSocket(socket, queryClient));
 
         cleanups.push(() => {
           socket.off("connect", onConnect);
@@ -471,6 +511,8 @@ export function RealtimeProvider({
           socket.off("connect_error", onConnectError);
           socket.off("workspace-changed", onWorkspaceChanged);
           socket.off("audit-changed", onAuditChanged);
+          socket.off("calendar-changed", onCalendarChanged);
+          if (calendarBurst.timer) clearTimeout(calendarBurst.timer);
           if (flushTimer) clearTimeout(flushTimer);
           eventHandlers.forEach((off) => off());
         });

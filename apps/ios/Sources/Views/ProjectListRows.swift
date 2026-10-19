@@ -34,7 +34,7 @@ struct ListGroupHeader: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
+                Image(systemName: "play.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(NX.mutedFg)
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
@@ -137,8 +137,6 @@ struct ListPropLine: View {
                 chips
             }
         }
-        // A done row's values faded, as the web mutes the whole row (decision 23 of run 20, R20-B-09).
-        .opacity(task.isDone ? 0.55 : 1)
     }
 
     /// Fixed slots, always in this order: the fields, due date, priority, status, people. A slot with no
@@ -269,7 +267,7 @@ struct ListPropLine: View {
         if !avatars.isEmpty {
             HStack(spacing: -6) {
                 ForEach(avatars, id: \.id) { a in
-                    AvatarView(url: a.url, initial: a.initial, size: 20)
+                    AvatarView(url: a.url, initial: a.initial, size: 20, userId: a.userId, name: a.name)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                 }
             }
@@ -324,9 +322,6 @@ struct ListTaskRow: View {
     let task: BoardTask
     let status: RowStatus?
     let wide: Bool
-    /// The List is at least 760 pt wide (a default Mac window, an iPad in landscape): one line per row, always
-    /// (decision 6 of run 20, R20-B-02). Narrower, a row that does not fit takes two lines.
-    var oneLine = false
     /// Wide: the columns every row of this List draws (same order, same width).
     var columnLayout = ListColumns.Layout()
     /// Grouped by priority: the row leaves the priority pill out.
@@ -351,9 +346,9 @@ struct ListTaskRow: View {
             if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             content
-                .padding(.horizontal, 8).padding(.vertical, wide ? 10 : 8)
+                .padding(.horizontal, 8).padding(.vertical, wide ? 6 : 8)
                 .padding(.leading, task.isSubtask ? 20 : 0)
-                .frame(maxWidth: .infinity, minHeight: wide ? 46 : 38, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: wide ? 32 : 38, alignment: .leading)
                 .background(selecting && selected ? NX.violet.opacity(0.10) : Color.clear)
                 .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
                 .contentShape(Rectangle())
@@ -373,18 +368,10 @@ struct ListTaskRow: View {
             // iPad left only Kategori, so the amount and the date vanished from the rows while the web and
             // the Mac show them (UI tour run 14, P-I1), and the title was cut short beside empty slots
             // (P-I10). The two-line row gives the title the whole width and lists every value under it.
-            // Run 20 (decision 6, R20-B-02): a List at least 760 pt wide keeps one line per row, as the web: the
-            // columns as wide as their widest value (shared by every row, so they still line up) before the title
-            // gives way; there the two-line row left ~380 pt blank right of the status on a Mac.
             ViewThatFits(in: .horizontal) {
                 wideRow(columnLayout)
                 if columnLayout.withoutText != columnLayout { wideRow(columnLayout.withoutText) }
-                if oneLine {
-                    wideRow(columnLayout.withoutText, measured: true)
-                    wideRow(columnLayout.withoutText, measured: true, titleMin: 120)
-                } else {
-                    compactRow
-                }
+                compactRow
             }
         } else {
             compactRow
@@ -430,8 +417,7 @@ struct ListTaskRow: View {
 
     @ViewBuilder private var leading: some View {
         if selecting { TaskSelectionMark(selected: selected) }
-        // Done: an outline check, as the web (decision 23 of run 20, R20-B-09).
-        Image(systemName: task.isDone ? "checkmark.circle" : "circle")
+        Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
             .font(.system(size: wide ? 17 : 15))
             .foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.55))
     }
@@ -460,6 +446,7 @@ struct ListTaskRow: View {
 /// "+ New task" at the end of a List group (web ListView): tap, type a title, Return adds it and keeps the
 /// field open for the next one (UI tour run 14, P-I10: the iPad List had no way to add in a group).
 struct ListNewTaskRow: View {
+    var composeRequest: UUID? = nil
     /// Creates the task; answers its id (nil = failed, the board says why and keeps the title).
     let onAdd: (String) async -> String?
     @State private var editing = false
@@ -501,6 +488,10 @@ struct ListNewTaskRow: View {
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
             }
+        }
+        .onAppear { if composeRequest != nil { editing = true; focused = true } }
+        .onChange(of: composeRequest) { _, request in
+            if request != nil { editing = true; focused = true }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
     }

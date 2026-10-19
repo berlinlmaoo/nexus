@@ -152,7 +152,8 @@ final class SheetPivotModel {
             var cols = store.columns
             if width > cols.count {
                 let more: [SheetJSON] = (0..<(width - cols.count)).map { _ in ["name": "", "type": "text"] }
-                let o = try await APIClient.shared.patchSheet(sid, body: ["columns": cols + more])
+                let o = try await APIClient.shared.patchSheet(sid, body: ["columns": cols + more], structureVersion: store.structureVersion)
+                store.structureVersion = o["structureVersion"] as? Int
                 cols = (o["columns"] as? [SheetJSON]) ?? cols
             }
             var rowIds = store.rows.map { $0.id }
@@ -199,6 +200,9 @@ final class SheetPivotModel {
             await store.reload()
         } catch {
             self.error = SheetPanelAPI.message(error, T("Couldn't update the pivot table."))
+            if let refusal = error as? SheetAPIError, case .structureChanged = refusal {
+                store.fail(error, T("Couldn't update the pivot table."))
+            }
         }
     }
 }

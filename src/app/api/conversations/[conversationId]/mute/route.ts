@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { chatRaceResponse } from "@/lib/chat-order"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { conversationMemberAccess } from "@/lib/chat-access"
@@ -49,6 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
 
     return NextResponse.json({ mutedUntil })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation mute error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

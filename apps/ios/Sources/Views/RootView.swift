@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
+    @Environment(\.scenePhase) private var scenePhase
     @State private var appearance = AppAppearance.shared
     @StateObject private var sync = OfflineSync.shared
     /// Covers the app while the cache is read and the warm-up runs.
@@ -22,10 +23,26 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var router = router
-        if auth.isAuthenticated {
+        if auth.isAuthenticated && !auth.identityReady {
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task { await auth.refreshIdentity() }
+        } else if auth.isAuthenticated {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
+                .id(auth.session?.userId)
                 .preferredColorScheme(appearance.theme.colorScheme)
+                .task(id: (auth.readySession?.userId ?? "") + (LiveRefresh.inFront(scenePhase) ? ":front" : ":back")) {
+                    guard LiveRefresh.inFront(scenePhase) else { return }
+                    // Presence expiry is driven by the server minute clock. Keep a fixed 60 s
+                    // fallback; the general live-refresh multiplier may stretch other screens.
+                    await PresenceStore.shared.refresh()
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(60))
+                        if !Task.isCancelled { await PresenceStore.shared.refresh() }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .nexusRealtimeConnected)) { _ in Task { await PresenceStore.shared.refresh() } }
+                .onChange(of: RemoteConfig.shared.presenceStatus) { _, on in if on { Task { await PresenceStore.shared.refresh() } } }
                 .task(id: auth.session?.userId) {
                     guard let userId = auth.session?.userId, warmedUserId != userId else { return }
                     warmedUserId = userId
@@ -142,10 +159,13 @@ struct RootView: View {
                 // A task, project or submission a notification pointed at. A sheet for the same
                 // reason the form is one: it arrives from outside, it has no list behind it, and it
                 // has to work under the tab bar and the sidebar alike.
+                .background { Color.clear.sheet(isPresented: Binding(get: { router.meetingFile != nil && RemoteConfig.shared.meetingNotesEnabled }, set: { if !$0 { router.meetingFile = nil } })) { NewMeetingSheet(initialFile: router.meetingFile).environment(auth).environment(router) } }
                 .sheet(item: $router.detail) { request in
                     NavigationStack {
                         Group {
                             switch request.target {
+                            case .reminders: RemindersView()
+                            case .meeting(let id): MeetingDetailView(id: id)
                             case .task(let id):       TaskDetailView(taskId: id)
                             case .project(let id):    ProjectDetailView(projectId: id, projectName: "")
                             case .submission(let id): SubmissionDetailSheet(submissionId: id)
@@ -207,6 +227,7 @@ struct MoreView: View {
                                         InboxView(providesOwnStack: false)
                                     }
                                 }
+                                if RemoteConfig.shared.meetingNotesEnabled { MoreTile(T("Meeting notes") + " · " + T("Beta"), "mic", NX.violetText) { MeetingListView() } }
                                 MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
@@ -245,6 +266,7 @@ struct MoreView: View {
                             }
                         }
 
+                        if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
                         AccountFooter { router.morePush = .settings }
                     }
                     .padding(16)
@@ -356,7 +378,7 @@ struct AccountFooter: View {
                 let name = s.userName.isEmpty ? s.userEmail : s.userName
                 Button(action: onOpenProfile) {
                     HStack(spacing: 12) {
-                        AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 46)
+                        AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 46, userId: Keychain.load()?.userId, name: name)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                             Text(s.userEmail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
