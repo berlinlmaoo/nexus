@@ -61,10 +61,13 @@ export async function POST(
     } catch (e) {
       // A concurrent toggle (double tap) added the same reaction a moment ago: it is there, not a 500.
       if (!isUniqueViolation(e)) throw e
-      reaction = await prisma.commentReaction.findUniqueOrThrow({
+      // A third concurrent toggle may already have removed it again: then this tap ends as "removed"
+      // (findUniqueOrThrow here answered 500 under 10 parallel taps, QA final 19 Oct).
+      reaction = await prisma.commentReaction.findUnique({
         where: { commentId_userId_emoji: { commentId: (await params).commentId, userId: session.user.id, emoji } },
         include: { user: { select: { id: true, name: true } } },
       })
+      if (!reaction) return NextResponse.json({ toggled: "removed" })
     }
 
     return NextResponse.json({ toggled: "added", reaction }, { status: 201 })

@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
+import { checkProjectAccess, checkWorkspaceRoutingAccess, hasProjectLevel } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
   coerceCustomFieldValueForType,
@@ -64,8 +64,9 @@ async function canAccessTaskCustomFields(
   projectId: string,
   taskId?: string | null
 ): Promise<boolean> {
-  const directAccess = await requireProjectMember(userId, projectId)
-  if (directAccess.allowed) return true
+  // Reading needs only Can view (QA final 19 Oct 2026: a Can view / Can comment member got 403 on the project's
+  // fields, so their table and board showed no custom field columns). Writes still need Can edit.
+  if (await hasProjectLevel(userId, projectId, "VIEW")) return true
   if (!taskId) return false
 
   const project = await getProjectWorkspace(projectId)

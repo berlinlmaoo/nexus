@@ -138,6 +138,10 @@ export async function POST(
     }
 
     const sectionIdMap = new Map<string, string>()
+    // Old task id -> copy id, so subtasks stay subtasks of the copied parent (QA final 19 Oct: every
+    // subtask came across as a top-level task because parentId was not copied).
+    const taskIdMap = new Map<string, string>()
+    const childParents: Array<{ oldId: string; parentId: string }> = []
     for (const taskList of original.taskLists) {
       const newTaskList = await prisma.taskList.create({
         data: { name: taskList.name, position: taskList.position, taskStatus: taskList.taskStatus, projectId: newProject.id },
@@ -164,6 +168,8 @@ export async function POST(
           },
           select: { id: true },
         })
+        taskIdMap.set(task.id, newTask.id)
+        if (task.parentId) childParents.push({ oldId: task.id, parentId: task.parentId })
 
         // The block-editor body comes along (its text is the description copied above).
         const body = await prisma.taskBody.findUnique({ where: { taskId: task.id }, select: { doc: true } })
@@ -183,6 +189,14 @@ export async function POST(
           .filter((v): v is { customFieldId: string; taskId: string; value: string } => Boolean(v.customFieldId))
         if (values.length) await prisma.customFieldValue.createMany({ data: values, skipDuplicates: true })
       }
+    }
+
+    // Re-link subtasks once every copy exists (a parent may sit in a later section). A parent outside
+    // this project did not come across: that subtask stays top-level rather than pointing at the original.
+    for (const { oldId, parentId } of childParents) {
+      const newId = taskIdMap.get(oldId)
+      const newParent = taskIdMap.get(parentId)
+      if (newId && newParent) await prisma.task.update({ where: { id: newId }, data: { parentId: newParent }, select: { id: true } })
     }
 
     // Saved views (owner, 12 Oct 2026): the SHARED ones come along (personal views stay with their owner's

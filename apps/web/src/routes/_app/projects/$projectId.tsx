@@ -2318,8 +2318,9 @@ const GANTT_BAR: Record<string, string> = {
   URGENT: "bg-rose-500",
   HIGH: "bg-orange-500",
   MEDIUM: "bg-sky-500",
-  LOW: "bg-violet-500",
-  NONE: "bg-teal-500",
+  // LOW green, No priority gray (owner, 18 Oct 2026), like the Calendar stripes (CAL_STRIPE).
+  LOW: "bg-emerald-500",
+  NONE: "bg-muted-foreground/40",
 };
 function tlInitials(name?: string | null) {
   if (!name) return "?";
