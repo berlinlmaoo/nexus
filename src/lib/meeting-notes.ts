@@ -21,7 +21,7 @@ import { logAudit } from "@/lib/audit"
 import { docToText, sanitizeDoc } from "@/lib/blockdoc"
 import {
   buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanMom, cleanProposals, cleanSegments, cleanSpeakers, clock, compactNotes, draftToProposals,
-  introNames, mergeNotesPrompt, mergeSpeakers, minutesPrompt, parseMinutes, transcriptLines, type MeetingPromptMeta, type MemberLite, type Mom,
+  autoMatchCandidates, introNames, mergeNotesPrompt, mergeSpeakers, minutesPrompt, parseMinutes, transcriptLines, type MeetingPromptMeta, type MemberLite, type Mom,
   type NameCandidate, type TaskProposal, type TranscriptSegment,
 } from "@/lib/meeting-notes-core"
 
@@ -497,7 +497,7 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
   const segments = cleanSegments(job.segments)
   // Names for the voices from the introductions; a name someone set by hand stays (mergeSpeakers).
   const speakers = segments.some((s) => s.speaker)
-    ? mergeSpeakers(row.speakers, introNames(segments, row.introEndSec, await speakerCandidates(row).catch(() => [])))
+    ? mergeSpeakers(row.speakers, introNames(segments, row.introEndSec, autoMatchCandidates(await speakerCandidates(row).catch(() => []), row.createdById, Boolean(row.projectId))))
     : cleanSpeakers(row.speakers)
   if (!segments.length) {
     await patchMeeting(row.id, { status: "FAILED", errorCode: "no_speech", error: "No speech was found in the recording.", durationSec: job.durationSec ?? undefined, lockedUntil: null }, { status: "TRANSCRIBING" })

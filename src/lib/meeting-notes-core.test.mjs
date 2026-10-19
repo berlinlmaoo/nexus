@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import {
   audioBytesMatch, buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanProposals, cleanSegments, clock, compactNotes, draftToProposals,
-  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines, introNames, matchHeardName, mergeSpeakers, cleanSpeakers, cleanMom,
+  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines, introNames, matchHeardName, autoMatchCandidates, mergeSpeakers, cleanSpeakers, cleanMom,
 } from "./meeting-notes-core.ts"
 
 const bytes = (s, pad = 16) => { const b = new Uint8Array(Math.max(pad, s.length)); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b }
@@ -127,3 +127,13 @@ console.log("speakers ok")
 }
 assert.deepEqual(cleanMom({ attendees: ["Galang", "Speaker 4", "pembicara 2"] }).attendees, ["Galang"])
 console.log("mom attendees ok")
+
+// D-Q3 (QA final 19 Oct 2026): introductions name only the project's members automatically
+{
+  const cands = [{ id: "m1", name: "Berlin", inProject: true }, { id: "w1", name: "Dimas Damarjati" }, { id: "up", name: "Sinta" }]
+  assert.deepEqual(autoMatchCandidates(cands, "up", true).map((c) => c.id), ["m1"])
+  assert.deepEqual(autoMatchCandidates(cands, "up", false).map((c) => c.id), ["up"])
+  const segs = cleanSegments([{ start: 1, end: 2, text: "Saya Dimas.", speaker: "Speaker 1" }])
+  const map = introNames(segs, 10, autoMatchCandidates(cands, "up", true))
+  assert.equal(map["Speaker 1"]?.userId ?? null, null)
+}

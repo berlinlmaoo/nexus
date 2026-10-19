@@ -107,6 +107,16 @@ export type SpeakerEntry = { name: string; userId: string | null; auto?: boolean
 export type SpeakerMap = Record<string, SpeakerEntry>
 export type NameCandidate = { id: string; name: string; inProject?: boolean }
 
+/**
+ * The people a voice is named after AUTOMATICALLY (QA final 19 Oct 2026, D-Q3): the project's members only, so a
+ * heard "Dimas" never becomes a real colleague who was not in the meeting's project; another name stays plain
+ * text ("Dimas", no person). A meeting outside any project matches only its uploader. Naming a voice by hand still
+ * offers the whole workspace (speakerCandidates).
+ */
+export function autoMatchCandidates(candidates: NameCandidate[], uploaderId: string, hasProject: boolean): NameCandidate[] {
+  return candidates.filter((c) => (hasProject ? c.inProject === true : c.id === uploaderId))
+}
+
 /** Without the record screen's marker, introductions are looked for in the first two minutes only. */
 export const INTRO_DEFAULT_SEC = 120
 
