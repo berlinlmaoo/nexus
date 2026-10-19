@@ -8,7 +8,8 @@ import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
 import { sanitizeDoc } from '@/lib/blockdoc'
-import { BodyConflictError, contentForClient, loadBody, saveBody } from '@/lib/block-bodies'
+import { BodyConflictError, contentForClient, docReadFormatOf, loadBody, saveBody } from '@/lib/block-bodies'
+import { hasProjectLevel } from '@/lib/rbac'
 import { flushLiveRoom } from '@/lib/collab-rooms'
 import { eventBus, BUS_EVENTS } from '@/lib/event-bus'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
@@ -31,6 +32,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
       },
     })
     if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // Opt-in canonical read (Android G5): the lossless body plus what an editor needs to send edits —
+    // `doc.content` is the `base` for POST /api/collab/edit, `canEdit` its permission (bodyAccess's write rule),
+    // `updatedAt` the PATCH `baseUpdatedAt`. Without the opt-in the response is exactly as before.
+    if (docReadFormatOf(req) === 'canonical') {
+      const canEdit = await hasProjectLevel(session.user.id, doc.projectId, 'EDIT')
+      return NextResponse.json({ doc: contentForClient(req, doc), format: 'canonical', canEdit, updatedAt: doc.updatedAt.toISOString() })
+    }
     return NextResponse.json({ doc: contentForClient(req, doc) })
   } catch (error) {
     console.error('Error fetching doc:', error)
