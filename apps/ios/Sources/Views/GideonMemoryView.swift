@@ -25,7 +25,7 @@ private enum MemoryProfileField: String, CaseIterable, Identifiable {
     var maxLength: Int { self == .nickname ? 60 : self == .occupation ? 120 : 170 }
     var key: String { self == .occupation ? "role" : rawValue }
     var source: String { self == .nickname ? "PROFILE_NICKNAME" : self == .occupation ? "PROFILE_ROLE" : "PROFILE_ABOUT" }
-    var prefix: String { self == .nickname ? "Nickname: " : self == .occupation ? "Role / occupation: " : "About me: " }
+    var prefix: String { self == .nickname ? "Nickname: " : self == .occupation ? "Role / occupation: " : "More about me: " }
     func memory(in items: [GideonMemory]) -> GideonMemory? { items.first { $0.status == "ACTIVE" && $0.source == source } }
     func value(in items: [GideonMemory]) -> String {
         guard let memory = memory(in: items) else { return "" }
@@ -125,7 +125,7 @@ private struct GideonMemorySummaryView: View {
     @State private var confirmAll = false
     @State private var revealed = false
     @State private var updated = Date()
-    private var sections: [(kind: String, title: String)] { [("PREFERENCE", "Preferences"), ("FACT", "About you"), ("PERSON", "People"), ("DATE", "Dates")] }
+    private var sections: [(kind: String, title: String)] { [("PREFERENCE", "Preferences"), ("PERSON", "About you"), ("DATE", "Dates"), ("FACT", "Notes")] }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
