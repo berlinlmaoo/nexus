@@ -225,6 +225,7 @@ final class SheetGridCell: UICollectionViewCell {
     private var borders = SheetGridStyle.Borders()
     private var extent = SheetSpill.Extent()
     private var hideRightLine = false
+    private var metricScale: CGFloat = 1
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -261,7 +262,10 @@ final class SheetGridCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// `extent`: how far the text runs over neighbours; `frozen`: drawn opaque over the scrolled cells.
-    func show(_ d: SheetCellDisplay, gridColor: UIColor, extent: SheetSpill.Extent, hideRightLine: Bool, frozen: Bool) {
+    func show(_ d: SheetCellDisplay, gridColor: UIColor, extent: SheetSpill.Extent, hideRightLine: Bool, frozen: Bool, zoom: CGFloat) {
+        metricScale = zoom
+        chip.font = .systemFont(ofSize: 12 * zoom, weight: .medium)
+        chip.layer.cornerRadius = 9 * zoom
         backgroundColor = frozen ? UIColor(NX.card) : nil
         contentView.backgroundColor = d.fill
         let size = d.fontSize ?? 13
@@ -275,6 +279,7 @@ final class SheetGridCell: UICollectionViewCell {
         horizontalAlign = d.alignment
         // Stacked text: one character per line (web writing-mode vertical, upright letters).
         let shown = d.rotation.vertical ? d.text.filter { $0 != "\n" }.map { String($0) }.joined(separator: "\n") : d.text
+        label.font = font
         label.attributedText = NSAttributedString(string: shown, attributes: attrs)
         label.textAlignment = d.rotation.vertical ? .center : d.alignment
         label.numberOfLines = d.wrap || d.rotation.vertical ? 0 : 1
@@ -326,7 +331,7 @@ final class SheetGridCell: UICollectionViewCell {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        var b = contentView.bounds.insetBy(dx: 5, dy: 2)
+        var b = contentView.bounds.insetBy(dx: 5 * metricScale, dy: 2 * metricScale)
         if !funnel.isHidden { b.size.width = max(0, b.width - 20) }
         // Overflowing text: the label runs over the empty neighbours (their lines are hidden by the host).
         let lx = b.minX - CGFloat(extent.left)
@@ -346,10 +351,11 @@ final class SheetGridCell: UICollectionViewCell {
         } else {
             label.frame = b
         }
-        let chipSize = chip.sizeThatFits(CGSize(width: b.width, height: 18))
-        chip.frame = CGRect(x: b.minX, y: b.midY - 9, width: min(b.width, chipSize.width), height: 18)
-        check.frame = CGRect(x: contentView.bounds.midX - 8, y: contentView.bounds.midY - 8, width: 16, height: 16)
-        funnel.frame = CGRect(x: bounds.width - 21, y: bounds.midY - 8, width: 16, height: 16)
+        let chipH = 18 * metricScale, icon = 16 * metricScale
+        let chipSize = chip.sizeThatFits(CGSize(width: b.width, height: chipH))
+        chip.frame = CGRect(x: b.minX, y: b.midY - chipH / 2, width: min(b.width, chipSize.width), height: chipH)
+        check.frame = CGRect(x: contentView.bounds.midX - icon / 2, y: contentView.bounds.midY - icon / 2, width: icon, height: icon)
+        funnel.frame = CGRect(x: bounds.width - 21 * metricScale, y: bounds.midY - icon / 2, width: icon, height: icon)
         let w = bounds.width, h = bounds.height
         let path = UIBezierPath()
         if hideRightLine {
@@ -449,6 +455,7 @@ final class SheetHeaderStrip: UIView, UIGestureRecognizerDelegate {
     var highlighted: ClosedRange<Int>?
     /// Visible indices with hidden rows / columns just before them (count = after the last).
     var markers: Set<Int> = []
+    var metricScale: CGFloat = 1
     var resizable = false
     /// Whole columns / rows selected: a touch handle sits on the edge of the last one.
     var handleRange: ClosedRange<Int>?
@@ -565,7 +572,7 @@ final class SheetHeaderStrip: UIView, UIGestureRecognizerDelegate {
             resizeOrigin = along(g.location(in: self))
             resizeStart = starts[i + 1] - starts[i]
         case .changed, .ended:
-            let size = max(axis == .columns ? 30 : 20, min(axis == .columns ? 600 : 400, resizeStart + along(g.location(in: self)) - resizeOrigin))
+            let size = max((axis == .columns ? 30 : 20) * metricScale, min((axis == .columns ? 600 : 400) * metricScale, resizeStart + along(g.location(in: self)) - resizeOrigin))
             onResize?(i, size, g.state == .ended)
             if g.state == .ended { resizeIndex = nil }
         default:
@@ -578,7 +585,7 @@ final class SheetHeaderStrip: UIView, UIGestureRecognizerDelegate {
         guard let ctx = UIGraphicsGetCurrentContext(), starts.count > 1 else { return }
         let line = UIColor(NX.border)
         let fg = UIColor(NX.mutedFg)
-        let font = UIFont.systemFont(ofSize: 11, weight: .medium)
+        let font = UIFont.systemFont(ofSize: 11 * metricScale, weight: .medium)
         let para = NSMutableParagraphStyle()
         para.alignment = .center
         ctx.setLineWidth(1 / max(1, traitCollection.displayScale))
@@ -789,6 +796,16 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     private var menuPos: SheetPos?
     private var dragMoved = false
 
+    private var zoom: CGFloat = 1
+    private var pinchStartZoom: CGFloat = 1
+    private var pinchStartPoint = CGPoint.zero
+    private var pinchStartOffset = CGPoint.zero
+    private var pinchFrozenX = false
+    private var pinchFrozenY = false
+    private var scrollingBeforePinch = true
+    private var zoomKey: String?
+    private lazy var pinchZoom = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+    private lazy var resetZoom = UITapGestureRecognizer(target: self, action: #selector(resetZoomTapped(_:)))
     private var input = SheetGridInput()
     private var selection = SheetSelection()
     private var gridColor = UIColor(NX.border)
@@ -805,8 +822,10 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor(NX.card)
+        accessibilityIdentifier = "sheet.grid.host"
         let cv = SheetCollectionView(frame: .zero, collectionViewLayout: layout)
         collection = cv
+        collection.accessibilityIdentifier = "sheet.grid"
         collection.backgroundColor = UIColor(NX.card)
         collection.dataSource = self
         collection.delegate = self
@@ -824,6 +843,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         collection.panGestureRecognizer.allowedTouchTypes = []
         #else
         collection.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        collection.panGestureRecognizer.maximumNumberOfTouches = 1
         #endif
         addSubview(collection)
         addSubview(columnStrip)
@@ -879,6 +899,15 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         double.numberOfTapsRequired = 2
         double.delegate = self
         collection.addGestureRecognizer(double)
+        pinchZoom.delegate = self
+        pinchZoom.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        collection.addGestureRecognizer(pinchZoom)
+        resetZoom.numberOfTapsRequired = 2
+        resetZoom.numberOfTouchesRequired = 2
+        resetZoom.delegate = self
+        collection.addGestureRecognizer(resetZoom)
+        tap.require(toFail: resetZoom)
+        double.require(toFail: resetZoom)
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
         hold.delegate = self
         hold.minimumPressDuration = 0.4
@@ -906,11 +935,69 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    // Only the scalar zoom is stored on device; sheet contents stay in the authenticated store.
+    @discardableResult func useZoomPreference(sheetId: String?) -> Bool {
+        let next: String?
+        if let id = sheetId, let uid = Keychain.load()?.userId { next = "sheets.zoom." + uid + "." + id }
+        else { next = nil }
+        guard next != zoomKey else { return false }
+        zoomKey = next
+        let saved = next.flatMap { UserDefaults.standard.object(forKey: $0) as? Double }
+        zoom = SheetGridZoom.clamped(CGFloat(saved ?? (traitCollection.userInterfaceIdiom == .phone ? 0.8 : 1)))
+        return true
+    }
+    @objc private func pinched(_ recognizer: UIPinchGestureRecognizer) {
+        let point = recognizer.location(in: collection)
+        let viewport = CGPoint(x: point.x - collection.bounds.minX, y: point.y - collection.bounds.minY)
+        if recognizer.state == .began {
+            pinchStartZoom = zoom; pinchStartOffset = collection.contentOffset; pinchStartPoint = viewport
+            pinchFrozenX = viewport.x < layout.frozenWidth; pinchFrozenY = viewport.y < layout.frozenHeight
+            scrollingBeforePinch = collection.isScrollEnabled
+            // The native pan/deceleration must not move the viewport while grid metrics change.
+            collection.isScrollEnabled = false
+        }
+        if [.began, .changed, .ended].contains(recognizer.state) {
+            setZoom(pinchStartZoom * recognizer.scale, anchor: viewport, fromPinch: true)
+        }
+        if [.ended, .cancelled, .failed].contains(recognizer.state) {
+            collection.isScrollEnabled = scrollingBeforePinch
+            rememberZoom()
+        }
+    }
+    @objc private func resetZoomTapped(_ recognizer: UITapGestureRecognizer) {
+        let point = recognizer.location(in: collection)
+        setZoom(1, anchor: CGPoint(x: point.x - collection.bounds.minX, y: point.y - collection.bounds.minY))
+        rememberZoom()
+    }
+    private func rememberZoom() { if let zoomKey { UserDefaults.standard.set(Double(zoom), forKey: zoomKey) } }
+    private func setZoom(_ value: CGFloat, anchor: CGPoint, fromPinch: Bool = false) {
+        let next = SheetGridZoom.clamped(value)
+        guard abs(next - zoom) > 0.0001 else { return }
+        let old = zoom, offset = collection.contentOffset
+        let inFrozenX = fromPinch ? pinchFrozenX : anchor.x < layout.frozenWidth
+        let inFrozenY = fromPinch ? pinchFrozenY : anchor.y < layout.frozenHeight
+        let baseZoom = fromPinch ? pinchStartZoom : old
+        let baseOffset = fromPinch ? pinchStartOffset : offset
+        let basePoint = fromPinch ? pinchStartPoint : anchor
+        zoom = next; rowDisplays = [:]; rowSpills = [:]
+        applyGeometry()
+        collection.layoutIfNeeded()
+        let size = layout.collectionViewContentSize
+        let target = CGPoint(
+            x: inFrozenX ? baseOffset.x : SheetGridZoom.anchoredOffset(baseOffset.x, point: basePoint.x, from: baseZoom, to: next, currentPoint: anchor.x),
+            y: inFrozenY ? baseOffset.y : SheetGridZoom.anchoredOffset(baseOffset.y, point: basePoint.y, from: baseZoom, to: next, currentPoint: anchor.y))
+        collection.setContentOffset(CGPoint(x: min(max(0, target.x), max(0, size.width - collection.bounds.width)),
+                                          y: min(max(0, target.y), max(0, size.height - collection.bounds.height))), animated: false)
+        refreshVisibleCells(); drawSelection(); syncStrips(); updatePanes(); layoutCharts()
+        collection.accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
+    }
+
     // MARK: data
 
     /// Everything from the store: sizes, frozen panes, merges, contents and the selection.
     func reload(_ next: SheetGridInput, selection: SheetSelection) {
         input = next
+        collection.accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
         gridColor = next.showGrid ? UIColor(NX.border) : .clear
         rowDisplays = [:]
         rowSpills = [:]
@@ -935,7 +1022,8 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         for (i, w) in widthOverride where widths.indices.contains(i) { widths[i] = w }
         var heights = input.heights
         for (i, h) in heightOverride where heights.indices.contains(i) { heights[i] = h }
-        layout.configure(widths: widths, heights: heights, frozenRows: input.frozenRows, frozenCols: input.frozenCols, merges: input.merges)
+        layout.configure(widths: widths.map { $0 * zoom }, heights: heights.map { $0 * zoom }, frozenRows: input.frozenRows, frozenCols: input.frozenCols, merges: input.merges)
+        columnStrip.metricScale = zoom; rowStrip.metricScale = zoom
         columnStrip.starts = layout.colX
         rowStrip.starts = layout.rowY
         columnStrip.frozen = layout.frozenCols
@@ -1041,7 +1129,11 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         if let d = rowDisplays[r] { return d }
         var list: [SheetCellDisplay] = []
         list.reserveCapacity(input.cols)
-        for c in 0..<input.cols { list.append(delegate?.gridDisplay(SheetPos(r: r, c: c)) ?? SheetCellDisplay()) }
+        for c in 0..<input.cols {
+            var display = delegate?.gridDisplay(SheetPos(r: r, c: c)) ?? SheetCellDisplay()
+            display.fontSize = (display.fontSize ?? 13) * zoom
+            list.append(display)
+        }
         rowDisplays[r] = list
         return list
     }
@@ -1085,6 +1177,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     }
 
     private func configure(_ cell: SheetGridCell, _ p: SheetPos) {
+        cell.accessibilityIdentifier = "sheet.cell.\(p.r).\(p.c)"
         let s = spill(row: p.r)
         var ext = SheetSpill.Extent()
         var hide = false
@@ -1095,7 +1188,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
             hide = s.hide.indices.contains(lastCol) ? s.hide[lastCol] : false
         }
         cell.show(cellDisplay(p), gridColor: gridColor, extent: ext, hideRightLine: hide,
-                  frozen: p.r < layout.frozenRows || p.c < layout.frozenCols)
+                  frozen: p.r < layout.frozenRows || p.c < layout.frozenCols, zoom: zoom)
     }
 
     // MARK: layout
@@ -1131,23 +1224,23 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     private func resizeColumn(_ i: Int, _ size: CGFloat, _ done: Bool) {
         // Several whole columns selected and this is one of them: they all take the new width.
         let group: [Int] = columnStrip.handleRange.map { $0.contains(i) ? Array($0) : [i] } ?? [i]
-        for c in group { widthOverride[c] = size }
+        for c in group { widthOverride[c] = size / zoom }
         applyGeometry()
         drawSelection()
         if done {
             widthOverride = [:]
-            delegate?.gridResizeColumns(group, width: size)
+            delegate?.gridResizeColumns(group, width: size / zoom)
         }
     }
 
     private func resizeRow(_ i: Int, _ size: CGFloat, _ done: Bool) {
         let group: [Int] = rowStrip.handleRange.map { $0.contains(i) ? Array($0) : [i] } ?? [i]
-        for r in group { heightOverride[r] = size }
+        for r in group { heightOverride[r] = size / zoom }
         applyGeometry()
         drawSelection()
         if done {
             heightOverride = [:]
-            delegate?.gridResizeRows(group, height: size)
+            delegate?.gridResizeRows(group, height: size / zoom)
         }
     }
 
@@ -1155,6 +1248,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
 
     /// Taps, holds and drags on a chart belong to the chart, not to the cells under it.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if g === pinchZoom || g === resetZoom { return true }
         var v: UIView? = touch.view
         while let cur = v, cur !== collection {
             if cur is SheetChartObjectView { return false }
@@ -1210,9 +1304,9 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         guard ch.row >= 0, ch.row < layout.rows, layout.cols > 0 else { return nil }
         let x = ch.col < layout.cols ? layout.colX[max(0, ch.col)] : (layout.colX.last ?? 0)
         let y = layout.rowY[ch.row]
-        if ch.slicer { return CGRect(x: x + ch.dx, y: y + ch.dy, width: max(80, ch.w), height: ch.h) }
+        if ch.slicer { return CGRect(x: x + ch.dx * zoom, y: y + ch.dy * zoom, width: max(80, ch.w) * zoom, height: ch.h * zoom) }
         let w = max(CGFloat(SheetChartPlace.minWidth), ch.w), h = max(CGFloat(SheetChartPlace.minHeight), ch.h)
-        return CGRect(x: x + ch.dx, y: y + ch.dy, width: w, height: h)
+        return CGRect(x: x + ch.dx * zoom, y: y + ch.dy * zoom, width: w * zoom, height: h * zoom)
     }
 
     /// Charts scroll with the cells (like the web). One anchored in a frozen row / column is drawn above the
@@ -1270,7 +1364,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         }
         let a = SheetChartPlace.anchor(x: Double(frame.minX), y: Double(frame.minY),
                                        colStarts: layout.colX.map { Double($0) }, rowStarts: layout.rowY.map { Double($0) })
-        delegate?.gridPlaceChart(id, row: a.r, col: a.c, dx: CGFloat(a.dx), dy: CGFloat(a.dy), size: frame.size, resized: resized)
+        delegate?.gridPlaceChart(id, row: a.r, col: a.c, dx: CGFloat(a.dx) / zoom, dy: CGFloat(a.dy) / zoom, size: CGSize(width: frame.width / zoom, height: frame.height / zoom), resized: resized)
     }
 
     /// Moved or resized by a point or more.
@@ -1570,7 +1664,8 @@ struct SheetGridView: UIViewRepresentable {
         let version = store.version
         let editing = store.editing
         let selVersion = store.selVersion
-        if version != c.lastVersion {
+        let sheetChanged = host.useZoomPreference(sheetId: store.sheetId)
+        if sheetChanged || version != c.lastVersion {
             c.lastVersion = version
             c.lastSelVersion = selVersion
             host.reload(Self.input(store), selection: store.selection)

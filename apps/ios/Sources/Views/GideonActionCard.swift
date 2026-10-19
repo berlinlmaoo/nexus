@@ -13,7 +13,8 @@ struct GideonActionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(T(action.title), systemImage: action.icon).font(NXFont.text(14, .semibold))
-            if let summary = proposal.summary { Text(summary).font(NXFont.text(13)).textSelection(.enabled) }
+            if let summary = proposal.localizedSummary { Text(summary).font(NXFont.text(13)).textSelection(.enabled) }
+            if proposal.noChange == true { Text(T("No changes: everything is already like this")).font(NXFont.text(12)).foregroundStyle(NX.warning) }
             if pending { Label(T("Waiting for your approval"), systemImage: "circle.fill").font(NXFont.text(12)).foregroundStyle(NX.warning) }
             ForEach(Array((proposal.diff ?? []).enumerated()), id: \.offset) { _, row in
                 if row.to?.text != proposal.extra?.preview || proposal.extra?.preview == nil {
@@ -40,7 +41,9 @@ struct GideonActionCard: View {
                 HStack {
                     Spacer()
                     Button(T("Discard"), action: onDiscard).buttonStyle(.nxBordered)
-                    Button(applyLabel, action: onApply).buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
+                    Button(action: onApply) {
+                        Text(applyLabel).foregroundStyle(action.destructive ? Color.white : NX.background)
+                    }.buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
                 }
             } else {
                 Text(proposal.status == "APPLIED" && !readOnly ? T(action.done) : gideonProposalState(proposal, readOnly: readOnly))

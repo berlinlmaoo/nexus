@@ -783,6 +783,9 @@ private struct CalMonthGridBody: View {
                         .font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit()
                         .foregroundStyle(NX.mutedFg)
                         .lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(NX.muted, in: Capsule())
+                        .accessibilityLabel(CalFormat.tasks(cell.count))
                         .padding(.top, 4).padding(.trailing, 2)
                 }
             }
@@ -832,15 +835,10 @@ private struct CalMonthGridBody: View {
         // Top-left like every month grid on every platform, the web phone's included (UI tour run 15, decision
         // on one month-grid style: R15-WB-3).
         VStack(alignment: .leading, spacing: 2) {
-            // The day's task count at the top right, as the web's grid ("2", "14"; UI tour run 19, R19-I-08).
+            // Compact cells use the dots and +N; a bare count can read as the next date.
             HStack(alignment: .top, spacing: 0) {
                 number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
                 Spacer(minLength: 0)
-                if let n = grid.cells[day]?.count, n > 0 {
-                    Text(AppNumber.int(n)).font(NXFont.text(CalType.size(10), .medium)).monospacedDigit()
-                        .foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.7)
-                        .padding(.top, 2)
-                }
             }
             // The web's mark on every width (mobile web and desktop MonthGrid): a short red dash under
             // the date, not a red count badge (UI tour run 3: desktop web is the reference).

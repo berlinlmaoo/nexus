@@ -68,6 +68,18 @@ func payload(_ title: String, _ version: Int) -> Data { Data(base.replacingOccur
     await store.event(#"{"meetingId":"meeting","deleted":true}"#)
     expect(store.deleted, "Deleted event closes this meeting")
     expect(MeetingUploads.shared.removed == ["meeting"], "Deletion cancels and removes only this meeting's pending audio")
+    var working = try! JSONDecoder().decode(MeetingEnvelope.self, from: payload("Progress",6)).meeting
+    working.status = "TRANSCRIBING"; working.progress = 10; working.queue = nil
+    store.meeting = working
+    await store.event(#"{"meetingId":"meeting","version":6,"status":"TRANSCRIBING","progress":24}"#)
+    expect(store.meeting?.progress == 24, "Same-version transcriber progress is accepted")
+    NativeAPI.replies = [.init(data: payload("Queue refreshed",6))]
+    await store.event(#"{"meetingId":"meeting","version":6,"status":"TRANSCRIBING","progress":0}"#)
+    expect(store.meeting?.title == "Queue refreshed", "Zero progress refetches queue metadata at the same version")
+    NativeAPI.replies = [.init(data: Data(), status:404)]
+    await store.load()
+    expect(store.deleted && store.meeting == nil && store.failure == nil, "404 becomes a terminal deleted state without retry")
+
 }
 let current = URL(fileURLWithPath: "/new-container/Library/Application Support/MeetingUploads")
 expect(MeetingStorage.resolve("uuid/meeting.wav", in: current)?.path == current.path + "/uuid/meeting.wav", "Relative audio survives container relocation")

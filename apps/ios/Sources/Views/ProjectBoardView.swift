@@ -2240,6 +2240,21 @@ struct ProjectDetailView: View {
 
 }
 
+/// Shared native board-column shell: project tasks and tickets use the same insets, corners and drop ring.
+struct BoardColumnStyle: ViewModifier {
+    let fill: Color
+    var border: Color = NX.border
+    var dashed = false
+    var targeted = false
+    func body(content: Content) -> some View {
+        content.padding(10).frame(maxHeight: .infinity, alignment: .top)
+            .background(fill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(targeted ? NX.violet : border,
+                              style: StrokeStyle(lineWidth: targeted ? 2 : 1, dash: dashed ? [5, 4] : [])))
+    }
+}
+
 struct LaneColumn: View {
     let lane: ProjectDetail.Lane
     let allLanes: [ProjectDetail.Lane]
@@ -2336,14 +2351,9 @@ struct LaneColumn: View {
                     }
                 }
             }
-            .padding(10)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .background(linked ? Color.clear : (statusStyle ? lane.swatch.lane : NX.card.opacity(0.6)), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(dropTargeted ? NX.violet : (statusStyle && !linked ? Color.clear : NX.border),
-                                  style: StrokeStyle(lineWidth: dropTargeted ? 2 : 1, dash: linked ? [5, 4] : []))
-            )
+            .modifier(BoardColumnStyle(fill: linked ? Color.clear : (statusStyle ? lane.swatch.lane : NX.card.opacity(0.6)),
+                                       border: statusStyle && !linked ? Color.clear : NX.border,
+                                       dashed: linked, targeted: dropTargeted))
             // The whole column is the target, not just the gap under the last card.
             .dropDestination(for: String.self) { ids, _ in
                 guard canEdit, !ids.isEmpty else { return false }

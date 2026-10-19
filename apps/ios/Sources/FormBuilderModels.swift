@@ -71,6 +71,7 @@ struct BuilderForm: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
     let description: String?
+    var version: Int? = nil
     var updatedAt: String? = nil
     let slug: String?
     let isPublic: Bool?
@@ -86,7 +87,7 @@ struct BuilderForm: Decodable, Identifiable, Sendable {
     struct Count: Decodable, Sendable { let submissions: Int? }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, updatedAt, slug, isPublic, requireAuth, projectId, fields, accessSchedule, branding, settings
+        case id, name, description, version, updatedAt, slug, isPublic, requireAuth, projectId, fields, accessSchedule, branding, settings
         case count = "_count"
     }
 

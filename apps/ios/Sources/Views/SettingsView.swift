@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(\.horizontalSizeClass) private var hSize
     /// Pushed (Home's avatar on the iPad) rather than the sidebar's own root: the bar then keeps Back.
     @Environment(\.isPresented) private var isPresented
+    @State private var showPresence = false
     @State private var name = ""
     /// The profile's phone number, saved with the name (web ProfileSection). Loaded separately: the
     /// shared AppUser does not carry it.
@@ -56,6 +57,7 @@ struct SettingsView: View {
         .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
             Button("OK") { saveError = nil }
         } message: { Text(saveError ?? "") }
+        .background { Color.clear.sheet(isPresented: $showPresence) { SetPresenceSheet() } }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet().environment(auth) }
         .navigationTitle(webChrome ? "" : T("Settings"))
         .navigationBarTitleDisplayMode(.inline)
@@ -206,7 +208,7 @@ struct SettingsView: View {
     @ViewBuilder private var webTabContent: some View {
         if tab == .profile {
             webProfileCard
-            if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
+            if PresenceStore.shared.enabled { SetPresenceRow(onOpen: { showPresence = true }).nexusCard() }
             JoinWorkspaceCard()
             // The danger zone last (decision 26 of run 20, Mac R20-M-08): Sign out, then Delete account.
             webLogoutCard
@@ -225,7 +227,7 @@ struct SettingsView: View {
             NavigationLink { GideonMemoryView() } label: {
                 HStack { Label(T("GIDEON Memory"), systemImage: "brain"); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg) }.font(NXFont.text(14)).foregroundStyle(NX.foreground).frame(minHeight: 44)
             }.accessibilityIdentifier("memory.entry").nexusCard()
-            if PresenceStore.shared.enabled { SetPresenceRow().nexusCard() }
+            if PresenceStore.shared.enabled { SetPresenceRow(onOpen: { showPresence = true }).nexusCard() }
             JoinWorkspaceCard()
             // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
             accountSection

@@ -214,6 +214,7 @@ private struct SheetScreen: View {
     private var formulaBar: some View {
         HStack(spacing: 8) {
             Text(store.nameBox.isEmpty ? "—" : store.nameBox)
+                .accessibilityIdentifier("sheet.activeCell")
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(NX.mutedFg)
                 .lineLimit(1)
@@ -227,7 +228,7 @@ private struct SheetScreen: View {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: 34, height: 34)
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel(T("Cancel"))
+                .accessibilityLabel(T("Cancel")).accessibilityIdentifier("sheet.formula.cancel")
                 Button { store.commitEdit(move: nil) } label: {
                     Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).frame(width: 34, height: 34)
                 }
@@ -257,6 +258,7 @@ private struct SheetScreen: View {
             .buttonStyle(.plain)
         } else if store.editing {
             TextField(T("Type a value or a formula…"), text: $store.draft)
+                .accessibilityIdentifier("sheet.formula.edit")
                 .focused($barFocused)
                 .font(.system(size: 14, design: store.draft.hasPrefix("=") ? .monospaced : .default))
                 .textInputAutocapitalization(.never)
@@ -283,7 +285,7 @@ private struct SheetScreen: View {
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).accessibilityIdentifier("sheet.formula.begin")
             .accessibilityLabel(T("Cell content"))
         }
     }

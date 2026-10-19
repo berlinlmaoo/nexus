@@ -101,6 +101,7 @@ struct AttendanceAdminSection: View {
             }
         }
         .task { await load() }
+        .liveRefresh(every: 60, on: [.nexusAttendanceChanged, .nexusRealtimeConnected]) { await load() }
     }
 
     private var monthBar: some View {
@@ -202,6 +203,7 @@ struct RedDateCard: View {
         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
         .task(id: month) { await load() }
+        .liveRefresh(every: 60, on: [.nexusAttendanceChanged, .nexusRealtimeConnected]) { await load() }
     }
 
     private var quotaRow: some View {

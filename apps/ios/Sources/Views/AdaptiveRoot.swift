@@ -454,7 +454,7 @@ struct SidebarRoot: View {
         // A group left with no rows goes with its header: no bare "Team" over nothing (owner, 16 Oct 2026).
         return NXScreen.groups.map { g in
             (g.title, g.screens.filter {
-                (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
+                (($0 != .vault && $0 != .threads && $0 != .roomBooking) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
                     && ($0 != .meetingNotes || RemoteConfig.shared.meetingNotesEnabled)
                     && ($0 != .legal || viewer.canAccessLegal) && ($0 != .admin || viewer.canAdminister)
             })

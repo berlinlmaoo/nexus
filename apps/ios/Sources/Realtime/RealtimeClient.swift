@@ -40,6 +40,7 @@ final class RealtimeClient {
     /// Who is signed in, so their own typing on another device is not shown back to them.
     @ObservationIgnored private var meId: String?
     @ObservationIgnored private var chatFlush: Task<Void, Never>?
+    @ObservationIgnored private var calendarFlush: Task<Void, Never>?
 
     private init() {
         engine = RealtimeEngine()
@@ -115,6 +116,7 @@ final class RealtimeClient {
         meId = nil
         engine.stop()
         engine.clearRefusal()
+        calendarFlush?.cancel(); calendarFlush = nil
         chatFlush?.cancel()
         chatFlush = nil
         chatNews.removeAll()
@@ -135,6 +137,10 @@ final class RealtimeClient {
     @discardableResult
     func sendTyping(conversationId: String, typing: Bool) -> Bool {
         engine.emit("typing", .fields(["conversationId": .string(conversationId), "typing": .bool(typing)]))
+    }
+
+    func formFocus(formId: String, questionId: String?) {
+        engine.emit("form-focus", .fields(["formId": .string(formId), "questionId": questionId.map(SIOJSON.string) ?? .null]))
     }
 
     // MARK: the connection
@@ -177,6 +183,10 @@ final class RealtimeClient {
         let center = NotificationCenter.default
         center.post(name: .nexusWorkspaceChanged, object: nil)
         center.post(name: .nexusAuditChanged, object: nil)
+        center.post(name: .nexusAttendanceChanged, object: nil)
+        center.post(name: .nexusCalendarChanged, object: nil)
+        center.post(name: .nexusXPChanged, object: nil)
+        center.post(name: .nexusOwnXPChanged, object: nil)
         center.post(name: .nexusProjectTasksChanged, object: nil)
         center.post(name: .nexusInboxChanged, object: nil)
         center.post(name: .nexusPipelineChanged, object: nil)
@@ -185,6 +195,7 @@ final class RealtimeClient {
         center.post(name: .nexusDocChanged, object: nil)
         center.post(name: .nexusSheetStructure, object: nil, userInfo: [RealtimeKey.json: "{}"])
         center.post(name: .nexusFormResponsesChanged, object: nil)
+        Task { await CalendarWidgetPresence.refresh(force: true) }
         SheetOutbox.shared.flushAll()
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
@@ -216,6 +227,9 @@ final class RealtimeClient {
             center.post(name: .nexusWorkspaceChanged, object: nil, userInfo: info)
         case "audit-changed":
             center.post(name: .nexusAuditChanged, object: nil)
+        center.post(name: .nexusAttendanceChanged, object: nil)
+        center.post(name: .nexusCalendarChanged, object: nil)
+        center.post(name: .nexusXPChanged, object: nil)
         case "message-created", "conversation-updated":
             // `message-created` reaches the room of a thread that is open; `conversation-updated`
             // reaches every member's own room on a message, a read, a mute or a membership change.
@@ -250,6 +264,23 @@ final class RealtimeClient {
             center.post(name: .nexusGideonPerf, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
         case "reminders-changed":
             center.post(name: .nexusRemindersChanged, object: nil)
+        case "calendar-changed":
+            calendarFlush?.cancel()
+            calendarFlush = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                NotificationCenter.default.post(name: .nexusCalendarChanged, object: nil)
+                await CalendarWidgetPresence.refresh(force: true)
+            }
+        case "attendance-changed":
+            center.post(name: .nexusAttendanceChanged, object: nil)
+        case "xp-changed":
+            center.post(name: .nexusXPChanged, object: nil)
+            if let meId, payload?["userIds"]?.array?.contains(where: { $0.string == meId }) == true {
+                center.post(name: .nexusOwnXPChanged, object: nil)
+            }
+        case "form-ops", "form-presence":
+            center.post(name: name == "form-ops" ? .nexusFormOps : .nexusFormPresence, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
         case "meeting-changed":
             center.post(name: .nexusMeetingChanged, object: nil, userInfo: [RealtimeKey.json: payload?.serialized ?? "{}"])
         case "task-created", "task-updated":

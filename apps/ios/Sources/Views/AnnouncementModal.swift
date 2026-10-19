@@ -28,7 +28,7 @@ struct AnnouncementModal: View {
 
     var body: some View {
         ZStack {
-            if let current {
+            if let current, StartupModalQueue.shared.owner == .announcement {
                 Color.black.opacity(0.55)
                     .ignoresSafeArea()
                     // Tapping the backdrop does NOT dismiss. An announcement is the one thing in the
@@ -44,6 +44,7 @@ struct AnnouncementModal: View {
             Button("OK") { focusFailure = nil }
         } message: { Text(focusFailureMessage) }
         .task { await load() }
+        .onChange(of: current?.id) { _, _ in StartupModalQueue.shared.update(.announcement, pending: current != nil) }
         .onChange(of: router.focus) { _, _ in Task { await load() } }
         .onChange(of: scenePhase) { _, phase in
             // Coming back to the app is the moment a new announcement should appear — the same
@@ -154,7 +155,9 @@ struct AnnouncementModal: View {
     // MARK: - work
 
     private func load() async {
-        guard auth.isAuthenticated else { return }
+        guard auth.isAuthenticated else { StartupModalQueue.shared.update(.announcement, pending: false); return }
+        StartupModalQueue.shared.update(.announcement, pending: current != nil, loading: true)
+        defer { StartupModalQueue.shared.update(.announcement, pending: current != nil) }
         if case .announcement(let id) = router.focus {
             router.focus = nil
             do {

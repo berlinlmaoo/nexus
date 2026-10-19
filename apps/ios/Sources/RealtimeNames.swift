@@ -15,6 +15,11 @@ extension Notification.Name {
     static let nexusGideonPerf = Notification.Name("nexus.gideon-perf")
     static let nexusGideonPerfDenied = Notification.Name("nexus.gideon-perf-denied")
     static let nexusRealtimeConnected = Notification.Name("nexus.realtime-connected")
+    static let nexusCalendarChanged = Notification.Name("nexus.calendar-changed")
+    static let nexusOwnXPChanged = Notification.Name("nexus.own-xp-changed")
+    static let nexusXPChanged = Notification.Name("nexus.xp-changed")
+    static let nexusFormOps = Notification.Name("nexus.form-ops")
+    static let nexusFormPresence = Notification.Name("nexus.form-presence")
     static let nexusMeetingChanged = Notification.Name("nexus.meeting-changed")
     /// Control Room → Audit: the log gained an entry, or an entry changed (a delete was restored).
     /// userInfo, optional: `RealtimeKey.auditId` — the entry that changed.

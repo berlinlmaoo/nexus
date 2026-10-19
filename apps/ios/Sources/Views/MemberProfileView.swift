@@ -45,7 +45,6 @@ struct MemberProfileView: View {
     /// viewer but not the one `/api/workspaces/members` answers for — the header still draws.
     @State private var member: WorkspaceRoster.Member?
     /// The attendance strip's room and the day at its leading edge (whole days only).
-    @State private var stripRoom: CGFloat = 0
     @State private var stripLead: String?
     /// PROJECTS lists eight until asked for all.
     @State private var allProjects = false
@@ -530,7 +529,8 @@ struct MemberProfileView: View {
             SectionLabel(T("Attendance board"))
             // Whole days only: the strip is as wide as the days that fit and rests on a day's edge, opening with
             // today in it; it cut TUE 20 at the card's edge (UI tour run 17, iPhone R17-I-13).
-            let fit = max(1, Int((stripRoom + 4) / 34))
+            GeometryReader { geometry in
+                let fit = max(1, Int((geometry.size.width + 4) / 34))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(days) { day in dayCell(day, r).id(day.date) }
@@ -540,16 +540,16 @@ struct MemberProfileView: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $stripLead, anchor: .leading)
-            .frame(width: stripRoom > 0 && days.count > fit ? CGFloat(fit) * 34 - 4 : nil, alignment: .leading)
+            .frame(width: days.count > fit ? CGFloat(fit) * 34 - 4 : geometry.size.width, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { w in
-                stripRoom = w
                 if let i = days.firstIndex(where: { $0.isToday == true }) {
                     let f = max(1, Int((w + 4) / 34))
                     let lead = min(max(0, i - f / 2), max(0, days.count - f))
                     stripLead = days[lead].date
                 }
             }
+            }.frame(height: 64)
             // The tiles are coloured by the day's status (red = absent); the small dot on a tile is the XP
             // deduction. The old line only named the dot, so red tiles read as deductions (F-11).
             Text(PlatformWording.tapOrClick(tap: "Tap a day for its detail. The colour is the day's status; a small red dot means XP was deducted for that day.", click: "Click a day for its detail. The colour is the day's status; a small red dot means XP was deducted for that day."))

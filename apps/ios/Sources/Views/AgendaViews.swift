@@ -22,6 +22,7 @@ struct RoomBookingView: View {
     /// The composer: a new booking (nil booking) or one to edit (web BookingComposer, QA 13 Oct 2026).
     @State private var composing: ComposerTarget?
     @State private var viewer = Viewer.shared
+    @State private var roomsUnavailable = false
 
     struct ComposerTarget: Identifiable {
         let id = UUID()
@@ -72,6 +73,14 @@ struct RoomBookingView: View {
     }
 
     var body: some View {
+        Group {
+            if roomsUnavailable {
+                EmptyState(icon: "door.left.hand.closed", title: T("Room booking is for the Z Networks office"), subtitle: NativeRefusal.message("ROOMS_NOT_AVAILABLE") ?? "")
+                    .padding(24)
+            } else { bookingContent }
+        }
+    }
+    private var bookingContent: some View {
         AgendaScaffold(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when."),
                        loading: loading, error: error, isEmpty: byDay.isEmpty,
                        emptyIcon: "calendar",
@@ -112,6 +121,17 @@ struct RoomBookingView: View {
         }
         .task(id: month) { showEarlier = false; await load() }
         .task { await viewer.loadIfNeeded() }
+        .task(id: router.bookingFocusId) {
+            guard let id = router.bookingFocusId else { return }
+            defer { if router.bookingFocusId == id { router.bookingFocusId = nil } }
+            do {
+                let all = try await APIClient.shared.roomBookings(start: "1970-01-01T00:00:00Z", end: "2100-01-01T00:00:00Z")
+                if let booking = all.first(where: { $0.id == id }) {
+                    if let date = TaskDates.parse(booking.startsAt) { month = Self.monthStart(date) }
+                    composing = ComposerTarget(booking: booking)
+                } else { error = T("This booking was deleted or canceled.") }
+            } catch { self.error = error.localizedDescription }
+        }
         .sheet(item: $composing) { target in
             RoomBookingComposer(booking: target.booking) { await load() }
         }
@@ -195,6 +215,7 @@ struct RoomBookingView: View {
         let f = ISO8601DateFormatter()
         do { bookings = try await APIClient.shared.roomBookings(start: f.string(from: start), end: f.string(from: next.addingTimeInterval(-1))) }
         catch APIError.unauthorized { auth.logout() }
+        catch APIError.http(403, _) { roomsUnavailable = true; bookings = [] }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load bookings.") }
         loading = false
     }

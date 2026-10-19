@@ -840,7 +840,7 @@ private struct OverviewTeamCard: View {
                                 if p.isLead { ownerChip }
                             }
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                                Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                                 if p.isLead { ownerChip }
                             }
                         }
@@ -878,7 +878,7 @@ private struct OverviewTeamCard: View {
                     Circle().strokeBorder(NX.border, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
                         .frame(width: 28, height: 28)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(T("Unassigned")).font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Text(T("Unassigned")).font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         OverviewStyle.bar(Double(stats.unassigned) / Double(maxOpen), color: NX.mutedFg.opacity(0.4), height: 4)
                             .frame(maxWidth: 160)
                     }

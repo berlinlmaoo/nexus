@@ -17,6 +17,7 @@ struct CalendarView: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     @State private var structure: CalStructure?
+    @State private var resolvedFolderAttempts: Set<String> = []
     /// The Bagan indexed once per structure, not on every read.
     @State private var ix = CalIndex(units: [], people: [])
     @State private var items: CalItemsResponse?
@@ -463,7 +464,11 @@ struct CalendarView: View {
         .task { await firstLoad() }
         .task(id: rangeKey) { await loadItems(silent: items != nil) }
         .task(id: folderQuery) { await loadOverdue() }
+        .task(id: "\(uid)|\(folderQuery ?? "")|\(structure != nil)") { await resolveLegacyFolderFilters() }
         .task { await pollLoop() }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusCalendarChanged)) { _ in
+            if active { Task { await backgroundRefresh() } }
+        }
         .onChange(of: scenePhase) { _, phase in
             active = phase == .active
             if phase == .active { now = Date(); Task { await backgroundRefresh() } }
@@ -1282,6 +1287,12 @@ struct CalendarView: View {
         // The web's key, in its order: ● has tasks to do, ✓ done or no status, — overdue (phone too).
         legendKey(filled: true, T("has tasks to do"))
         legendKey(filled: false, T("done or no status"))
+        if wideCells {
+            HStack(spacing: 5) {
+                keyBadge("2", fill: NX.muted, fg: NX.mutedFg)
+                Text(T("number = tasks that day"))
+            }
+        }
         HStack(spacing: 5) {
             Capsule().fill(CalTone.overdue).frame(width: 16, height: 2).accessibilityHidden(true)
             Text(T("overdue"))
@@ -1975,6 +1986,27 @@ struct CalendarView: View {
     }
 
     // MARK: Loading
+
+    private func resolveLegacyFolderFilters() async {
+        guard let structure else { return }
+        let user = uid
+        let known = Set((structure.folders ?? []).map(\.id))
+        let missing = filters.folders.filter { !known.contains($0) && !resolvedFolderAttempts.contains(user + "|" + $0) }
+        guard !missing.isEmpty else { return }
+        resolvedFolderAttempts.formUnion(missing.map { user + "|" + $0 })
+        defer {
+            if Task.isCancelled { resolvedFolderAttempts.subtract(missing.map { user + "|" + $0 }) }
+        }
+        do {
+            let mapping = try await APIClient.shared.calendarLegacyFolderIds(missing)
+            guard !Task.isCancelled, user == uid else { return }
+            var next = filters
+            next.folders = Array(Set(next.folders.map { mapping[$0] ?? $0 })).sorted()
+            if next.folders != filters.folders { filtersBinding.wrappedValue = next }
+        } catch {
+            // The server still accepts old ids; retain the filter when offline or unknown.
+        }
+    }
 
     /// The saved copies first, read and decoded off the main actor (CalCachedRead): the screen used to
     /// stop while the Bagan, the month and the overdue list were read from disk and decoded on it

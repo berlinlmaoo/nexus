@@ -83,7 +83,8 @@ struct GideonCreateTaskCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(T("Create a task"), systemImage: "checklist").font(NXFont.text(14, .bold))
-            if let summary = proposal.summary { Text(summary).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+            if let summary = proposal.localizedSummary { Text(summary).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+            if proposal.noChange == true { Text(T("No changes: everything is already like this")).font(NXFont.text(12)).foregroundStyle(NX.warning) }
             property("Title") { Text(target.title) }
             property("Project") {
                 Button { chooseProject = true } label: {
@@ -145,7 +146,7 @@ struct GideonCreateTaskCard: View {
                     let matches = target.projects.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
                     if matches.isEmpty { EmptyState(icon: "folder", title: T("No projects found"), subtitle: T("Try a different search.")) }
                     ForEach(matches) { project in
-                        Button(project.name) { choice.projectId = project.id; chooseProject = false }
+                        Button { choice.projectId = project.id; chooseProject = false } label: { Text(project.name).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
                     }
                 }.searchable(text: $search, prompt: T("Search projects"))
                     .navigationTitle(T("Choose a project"))

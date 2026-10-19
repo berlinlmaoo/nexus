@@ -134,6 +134,8 @@ struct AttendanceView: View {
     @State private var pageTopInset: CGFloat = 0
     /// The Days off / Public holidays card's log, open (web DayOffLogModal).
     @State private var allowanceLog: AttendanceAllowanceLogSheet.Kind?
+    private struct LinkedTrail: Identifiable { let id: String }
+    @State private var linkedTrail: LinkedTrail?
 
     /// Web attendance.tsx PageHeader; the subtitle follows whether this person sees the crew board.
     private var pageHeader: some View {
@@ -261,7 +263,16 @@ struct AttendanceView: View {
             if phase == .active { locationOff = loc.isDenied }
             #endif
         }
+        .onChange(of: router.attendanceRecordLink, initial: true) { _, link in
+            guard let link else { return }
+            let items = URLComponents(string: "https://nexus" + link)?.queryItems ?? []
+            if items.contains(where: { $0.name == "bonus" }) { allowanceLog = .dayOff }
+            if let record = items.first(where: { $0.name == "trail" })?.value { linkedTrail = LinkedTrail(id: record) }
+            router.attendanceRecordLink = nil
+        }
+        .background { Color.clear.sheet(item: $linkedTrail) { record in NavigationStack { LocationTrailView(recordId: record.id) } } }
         .permissionAlert($deniedPermission)
+        .liveRefresh(every: 60, on: [.nexusAttendanceChanged, .nexusRealtimeConnected]) { await load() }
         .refreshable { await load() }
         .fullScreenCover(isPresented: $showCamera) {
             // Not the stock camera any more: a face check (straight, side, other side, blink) that
@@ -2040,6 +2051,12 @@ struct StreakBoardCard: View {
         .nexusCard()
         // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
         // fetched with `scope=me` before canManage flipped stayed that way until the month changed.
+        .onChange(of: router.attendanceFocusDate, initial: true) { _, value in
+            guard let key = value, let date = ProjDate.fmt("yyyy-MM-dd").date(from: key) else { return }
+            let c = ProjDate.cal
+            func period(_ d: Date) -> Date { let x = c.component(.day, from: d) >= 28 ? c.date(byAdding: .month, value: 1, to: d) ?? d : d; return c.date(from: c.dateComponents([.year, .month], from: x)) ?? x }
+            monthOffset = c.dateComponents([.month], from: period(Date()), to: period(date)).month ?? 0
+        }
         .task(id: "\(monthOffset)|\(wide)|\(ready)") {
             guard ready else { return }
             let days = buildPeriodDays()
@@ -2099,7 +2116,7 @@ struct StreakBoardCard: View {
     /// 27th. Pure arithmetic on what is already known, so it holds on the first frame. A past period
     /// opens on its first day.
     private var daysAnchor: UnitPoint {
-        guard let t = todayKey, periodDays.count > 1,
+        guard let t = router.attendanceFocusDate ?? todayKey, periodDays.count > 1,
               let i = periodDays.firstIndex(where: { $0.key == t }) else { return .leading }
         return UnitPoint(x: CGFloat(i) / CGFloat(periodDays.count - 1), y: 0.5)
     }
@@ -2119,7 +2136,7 @@ struct StreakBoardCard: View {
         // iOS 18: WholeDayStrip places the strip by its offset (see `grid`).
         if #available(iOS 18.0, *) { return }
         guard !periodDays.isEmpty else { return }
-        let key = todayKey.flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
+        let key = (router.attendanceFocusDate ?? todayKey).flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
         guard let key else { return }
         if leadDay != "day-\(key)" { leadDay = "day-\(key)" }
         proxy?.scrollTo("day-\(key)", anchor: .leading)
@@ -2128,7 +2145,7 @@ struct StreakBoardCard: View {
     private func scrollToToday(_ proxy: ScrollViewProxy) {
         if #available(iOS 18.0, *) { return }
         alignLeadDay(proxy)
-        guard let t = todayKey else { return }
+        guard let t = router.attendanceFocusDate ?? todayKey else { return }
         Task { @MainActor in
             // A last try once the members, the pills column and the day width have settled.
             for delay in [0, 150, 500, 1200] {
@@ -2144,7 +2161,7 @@ struct StreakBoardCard: View {
 
     /// The index of `leadingDayKey`: the day WholeDayStrip puts flush with the left edge (iOS 18).
     private var leadIndex: Int? {
-        guard let t = todayKey, let key = leadingDayKey(today: t) else { return nil }
+        guard let t = router.attendanceFocusDate ?? todayKey, let key = leadingDayKey(today: t) else { return nil }
         return periodDays.firstIndex { $0.key == key }
     }
 
@@ -2416,6 +2433,7 @@ struct StreakBoardCard: View {
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
                 .frame(width: cellW, height: headerH)
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(router.attendanceFocusDate == pd.key ? NX.danger : Color.clear, lineWidth: 2))
                 .id("day-\(pd.key)")
                 // Where the month turns over, so 31 followed by 1 reads as a new
                 // month rather than as a gap.

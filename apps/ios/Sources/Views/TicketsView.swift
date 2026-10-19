@@ -262,6 +262,9 @@ struct TicketsView: View {
     /// Why the list didn't load (LoadErrorView: offline / no access / server; web LoadError, QA 13 Oct 2026).
     @State private var failure: Error?
     @State private var filter = "ALL"
+    @State private var category = "ALL"
+    @State private var movingTicket = false
+    @State private var boardFailure: String?
     @State private var selected: Complaint?
     @State private var showCreate = false
     /// The ticket a notification pointed at (`AppRouter.focus`): opened as soon as the list is in.
@@ -328,7 +331,7 @@ struct TicketsView: View {
                     .buttonStyle(.nxPrimary)
             }
             if !loading, failure == nil {
-                NXPageTabsRow(items: tabItems, selection: $filter, accessibilityName: T("Ticket queues"))
+                categoryBar
             }
         }
     }
@@ -360,63 +363,51 @@ struct TicketsView: View {
         // Reloads rather than splicing the new ticket in: the server decides the status, the
         // reporter shown (only to the board and the reporter) and the ordering, so a locally-invented row
         // would differ from the one everybody else sees.
-        .sheet(isPresented: $showCreate) { NewTicketSheet { await load() }.environment(auth).environment(router) }
+        .background { Color.clear.sheet(isPresented: $showCreate) { NewTicketSheet { await load() }.environment(auth).environment(router) } }
     }
 
+    private var categoryBar: some View {
+        HStack {
+            Picker(T("Category"), selection: $category) {
+                Text(T("All categories")).tag("ALL")
+                ForEach(Array(Set(items.compactMap(\.category))).sorted(), id: \.self) { value in Text(ticketCategoryName(value)).tag(value) }
+            }.pickerStyle(.menu).accessibilityIdentifier("tickets.category")
+            Spacer()
+            if movingTicket { ProgressView() }
+        }.padding(.horizontal, NXSidebarPage.gutter(isRoot)).padding(.vertical, 8)
+    }
     @ViewBuilder private var content: some View {
-        if loading {
-            SkeletonList()
-        } else if let failure {
+        if loading { SkeletonList() }
+        else if let failure {
             LoadErrorView(error: failure, what: T("the tickets"), retry: { Task { loading = true; await load(); claimFocus() } })
         } else {
-            VStack(spacing: 0) {
-                // On the iPad / Mac page the queues sit in the header.
-                if !isRoot { filterBar }
-                if filtered.isEmpty {
-                    if filter == "ALL" {
-                        EmptyState(icon: "ticket", title: T("No tickets yet"),
-                                   subtitle: T("A ticket is how you raise something with the board — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the board decides, and it stays between you and them."),
-                                   actionTitle: T("New ticket"), actionIcon: "square.and.pencil") { showCreate = true }
-                    } else if isBod && filter == "OPEN" {
-                        EmptyState(icon: "tray", title: T("Inbox is clear"),
-                                   subtitle: T("Every new ticket has been picked up. New ones from staff land here first."),
-                                   actionTitle: count("ALL") > 0 ? T("Show all tickets") : nil, actionIcon: nil) { filter = "ALL" }
-                    } else {
-                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No tickets in this filter"),
-                                   subtitle: T("Only tickets with this status are shown here. The rest are still under All."),
-                                   actionTitle: T("Show all"), actionIcon: nil) { filter = "ALL" }
-                    }
-                } else if isRoot {
-                    // iPad / Mac page: the web's list (complaints.tsx) — one bordered card of rows, a
-                    // table with Subject · From · Category · Status · Replies · Last activity once the
-                    // page is wide enough, two-line rows below that. It was a grid of cards
-                    // (UI tour run 4).
-                    ScrollView {
-                        ViewThatFits(in: .horizontal) {
-                            ticketTable(wide: true).frame(minWidth: 820, idealWidth: 820, maxWidth: .infinity)
-                            ticketTable(wide: false)
+            VStack(alignment: .leading, spacing: 8) {
+                if !isRoot { categoryBar }
+                if let boardFailure { Text(boardFailure).font(NXFont.text(12)).foregroundStyle(NX.danger).padding(.horizontal, 16) }
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(["OPEN", "AWAITING_DECISION", "IN_REVIEW", "DONE"], id: \.self) { status in
+                            TicketBoardLane(status: status,
+                                            items: items.filter { (category == "ALL" || $0.category == category) && (status == "DONE" ? ["RESOLVED", "CLOSED"].contains($0.statusKey) : $0.statusKey == status) },
+                                            canManage: isBod && !movingTicket, onOpen: { selected = $0 },
+                                            onMove: { id, target in Task { await moveTicket(id, to: target) } })
                         }
-                        .padding(.horizontal, NXSidebarPage.gutter(isRoot))
-                        .padding(.vertical, 24)
-                    }
-                    .modifier(PageTopInsetReader(inset: $pageTop))
-                    .environment(\.pageScrollTopInset, pageTop)
-                    .refreshable { await load() }
-                } else {
-                    ScrollView {
-                        NXCardGrid(spacing: 10) {
-                            ForEach(filtered) { t in
-                                Button { selected = t } label: { row(t) }.buttonStyle(.plain)
-                                    .hoverEffect(.highlight)
-                            }
-                        }
-                        .padding(.horizontal, NXSidebarPage.gutter(isRoot))
-                        .padding(.vertical, 16)
-                    }
-                    .refreshable { await load() }
-                }
+                    }.scrollTargetLayout().padding(.horizontal, NXSidebarPage.gutter(isRoot)).padding(.bottom, 16)
+                }.scrollTargetBehavior(.viewAligned).refreshable { await load() }.accessibilityIdentifier("tickets.board")
             }
         }
+    }
+    private func moveTicket(_ id: String, to status: String) async {
+        guard isBod, !movingTicket, let item = items.first(where: { $0.id == id }), item.statusKey != status else { return }
+        guard status != "AWAITING_DECISION" else {
+            boardFailure = T("Only the system can move a ticket to Awaiting decision.")
+            return
+        }
+        movingTicket = true; boardFailure = nil
+        defer { movingTicket = false }
+        do { _ = try await APIClient.shared.updateComplaintStatus(id, status: status); await load() }
+        catch APIError.unauthorized { auth.logout() }
+        catch { boardFailure = error.localizedDescription }
     }
 
     // MARK: table (iPad / Mac page)
@@ -685,6 +676,66 @@ struct TicketsView: View {
 }
 
 // MARK: - detail
+
+private struct TicketBoardLane: View {
+    let status: String
+    let items: [Complaint]
+    let canManage: Bool
+    let onOpen: (Complaint) -> Void
+    let onMove: (String, String) -> Void
+    @State private var targeted = false
+    @Environment(\.horizontalSizeClass) private var hSize
+    private var label: String { status == "OPEN" ? T("New") : status == "DONE" ? T("Done") : ticketStatusLabel(status) }
+    private var target: String { status == "DONE" ? "RESOLVED" : status }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack { Text(label).font(NXFont.text(14, .semibold)); Spacer(); Text(AppNumber.int(items.count)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 10) {
+                    if items.isEmpty { EmptyState(icon: "ticket", title: T("No tickets yet"), subtitle: "").padding(.vertical, 12) }
+                    ForEach(items) { item in
+                        if canManage { card(item).draggable(item.id) }
+                        else { card(item) }
+                    }
+                }.padding(.bottom, 8)
+            }
+        }.modifier(BoardColumnStyle(fill: NX.card.opacity(0.6), targeted: targeted))
+            .frame(width: hSize == .compact && items.isEmpty ? 200 : 280)
+            .dropDestination(for: String.self) { ids, _ in
+                guard canManage, let id = ids.first, ids.count == 1 else { return false }
+                onMove(id, target)
+                return target != "AWAITING_DECISION"
+            } isTargeted: { targeted = canManage && target != "AWAITING_DECISION" && $0 }
+            .accessibilityIdentifier("tickets.lane." + status)
+    }
+    private func card(_ item: Complaint) -> some View {
+        Button { onOpen(item) } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                Text(item.title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).multilineTextAlignment(.leading).lineLimit(3)
+                HStack {
+                    Text(ticketCategoryName(item.category ?? "OTHER"))
+                    Spacer()
+                    if item.hasGideonReply { Image(systemName: "sparkles").foregroundStyle(NX.violetText).accessibilityLabel(T("GIDEON replied")) }
+                    if item.showsDecisionMarker { Image(systemName: "clock.badge.exclamationmark").accessibilityLabel(T("Awaiting decision")) }
+                }.font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                if let reporter = item.reporter?.name { Text(reporter).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                HStack {
+                    Label(AppNumber.int(max(0, (item.messageCount ?? 1) - 1)), systemImage: "bubble.right")
+                    Spacer()
+                    if let date = ProjDate.parse(item.lastMessageAt ?? item.createdAt) { Text(ProjDate.dayLabel(date)) }
+                }.font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                if status == "DONE" { NexusChip(text: item.statusLabel, tone: .neutral) }
+            }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(NX.card, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+        }.buttonStyle(.plain).contextMenu {
+            if canManage {
+                ForEach(["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"], id: \.self) { status in
+                    Button(ticketStatusLabel(status)) { onMove(item.id, status) }.disabled(item.statusKey == status)
+                }
+            }
+        }
+    }
+}
 
 struct TicketDetailSheet: View {
     let ticket: Complaint

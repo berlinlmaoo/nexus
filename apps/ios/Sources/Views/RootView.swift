@@ -228,7 +228,7 @@ struct MoreView: View {
                                     }
                                 }
                                 if RemoteConfig.shared.meetingNotesEnabled { MoreTile(T("Meeting notes") + " · " + T("Beta"), "mic", NX.violetText) { MeetingListView() } }
-                                MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
+                                if viewer.isCompanyMember { MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() } }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
                                 }

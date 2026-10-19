@@ -11,10 +11,12 @@ import CoreImage.CIFilterBuiltins
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum FormStudioTab: String, CaseIterable, Identifiable, Hashable {
-    case questions, settings, share, responses
+    case questions, settings, share, responses, preview
+    static let editableTabs: [Self] = [.questions, .settings, .share, .responses]
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .preview: return T("Preview")
         case .questions: return T("Questions")
         case .settings: return T("Settings")
         case .share: return T("Share")
@@ -38,10 +40,11 @@ enum FormSaveState: Equatable {
 struct FormStudioTabBar: View {
     @Binding var selection: FormStudioTab
     let responseCount: Int
+    var canEdit = true
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(FormStudioTab.allCases) { t in
+            ForEach(canEdit ? FormStudioTab.editableTabs : [.preview, .responses]) { t in
                 tabButton(t)
             }
         }
@@ -188,12 +191,12 @@ struct FormStudioHead: View {
             .padding(.top, branding.icon.isEmpty ? (hasCover ? 20 : (large ? 48 : 24)) : 8)
             .padding(.leading, -8)
 
-            TextField(T("Untitled form"), text: titleBinding, axis: .vertical)
+            TextField(T("Untitled form"), text: titleBinding, axis: .vertical).accessibilityIdentifier("form.title")
                 .font(NXFont.display(large ? 34 : 28, .bold))
                 .foregroundStyle(NX.foreground)
                 .padding(.top, 8)
                 .accessibilityLabel(T("Form title"))
-            TextField(T("Add a description"), text: $description, axis: .vertical)
+            TextField(T("Add a description"), text: $description, axis: .vertical).accessibilityIdentifier("form.description")
                 .font(NXFont.text(16))
                 .foregroundStyle(NX.mutedFg)
                 .padding(.top, 8)
@@ -416,7 +419,7 @@ struct FormQuestionCard: View {
                     // The "*" right after the title's last word, as the web's "Harga *" (UI tour run 15, Q-IA32 /
                     // Q-M18): the same text, clear, then the star, laid over the field with the same font, so
                     // the star follows the typed text wherever it wraps.
-                    TextField(T("Question"), text: nameBinding, axis: .vertical)
+                    TextField(T("Question"), text: nameBinding, axis: .vertical).accessibilityIdentifier("form.question." + field.id)
                         .font(NXFont.text(16, .semibold))
                         .foregroundStyle(NX.foreground)
                         .accessibilityLabel(String(format: T("Question %d title"), index + 1))

@@ -246,6 +246,13 @@ struct DashboardView: View {
                 await refreshPasskeyNudge()
             }
             .task { await viewer.loadIfNeeded() }
+            .modifier(HomeRealtimeRefresh(onXP: {
+                if let fresh = try? await APIClient.shared.gamification() { game = fresh; GlancePresence.refresh(tasks: tasksList, unread: unread, game: game) }
+            }, onCalendar: {
+                if let me = auth.session?.userId, let tasks = try? await APIClient.shared.myTasks(assigneeId: me) { tasksList = tasks }
+            }, onAttendance: {
+                if let today = try? await APIClient.shared.attendanceToday() { attToday = today }
+            }))
             .refreshable { await load() }
             // Home telling the app it is the thing on screen, so the floating GIDEON launcher —
             // drawn above the whole app, outside this stack — can be Home-only rather than
@@ -1217,7 +1224,7 @@ struct DashboardView: View {
             }
             quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
-            quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
+            if viewer.isCompanyMember { quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() } }
             quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
             quickTile(T("Tickets"), "ticket.fill", NX.blue) { TicketsView() }
         }

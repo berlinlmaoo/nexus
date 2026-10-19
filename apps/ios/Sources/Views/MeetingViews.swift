@@ -105,7 +105,7 @@ struct MeetingDetailView: View {
     init(id: String) { self.id = id; _store = State(initialValue: MeetingStore(id: id)) }
     var body: some View {
         Group {
-            if store.deleted { EmptyState(icon: "trash", title: T("This meeting was deleted"), subtitle: T("A saved minutes page and its tasks stay in the project."), actionTitle: T("Close"), action: { dismiss() }) }
+            if store.deleted { EmptyState(icon: "trash", title: T("This meeting note was deleted"), subtitle: T("It was deleted, or you no longer have access to it."), actionTitle: T("All meeting notes"), action: { dismiss() }) }
             else if !RemoteConfig.shared.meetingNotesEnabled { EmptyState(icon: "mic.slash", title: T("Meeting notes is unavailable right now."), subtitle: T("Try again later.")) }
             else if let meeting = store.meeting { content(meeting) }
             else if let failure = store.failure { EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load meeting notes."), subtitle: failure, actionTitle: T("Try again"), action: { Task { await store.load() } }) }
@@ -137,7 +137,6 @@ struct MeetingDetailView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .nexusMeetingChanged)) { note in Task { await store.event(note.userInfo?[RealtimeKey.json] as? String ?? "{}") } }
         .onReceive(NotificationCenter.default.publisher(for: .nexusRealtimeConnected)) { _ in Task { await store.load() } }
-        .onChange(of: store.deleted) { _, deleted in if deleted { dismiss() } }
         .onDisappear { player?.pause(); Task { _ = await store.flush() } }
         .onChange(of: phase) { _, phase in if phase == .background { Task { _ = await store.flush() } } }
         .keyboardDoneBar()

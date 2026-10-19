@@ -183,6 +183,7 @@ struct GideonEmptyPrompt: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 420)
                 .padding(.top, 6)
+                .accessibilityIdentifier("gideon.empty.privacy")
             VStack(spacing: 6) {
                 ForEach(Array(Self.suggestions(for: page).enumerated()), id: \.offset) { index, s in
                     Button { onAsk(s) } label: {
@@ -208,6 +209,7 @@ struct GideonEmptyPrompt: View {
             }
             .frame(maxWidth: 520)
             .padding(.top, 20)
+            .accessibilityIdentifier("gideon.empty.suggestions")
         }
         .frame(maxWidth: .infinity)
         .padding(.top, wide ? 96 : 32)
@@ -253,6 +255,7 @@ struct GideonChatListColumn: View {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
                     TextField(T("Search chats"), text: $query)
+                        .accessibilityIdentifier("gideon.history.search").accessibilityLabel(T("Search chats"))
                         .font(NXFont.text(15))
                         .textFieldStyle(.plain)
                         .submitLabel(.search)
@@ -426,5 +429,20 @@ struct GideonChatListColumn: View {
             actionFailure = T("Couldn't delete this chat.")
         }
         tick += 1
+    }
+}
+
+/// The inbox of pending changes uses the same cards and explicit centered confirmations.
+struct GideonWaitingSection<Card: View>: View {
+    let proposals: [GideonProposal]
+    @Binding var expanded: Bool
+    let card: (GideonProposal) -> Card
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(spacing: 10) { ForEach(proposals) { proposal in card(proposal) } }.padding(.top, 8)
+        } label: {
+            Text(String(format: T("%@ changes waiting for your approval"), AppNumber.int(proposals.count)))
+                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.warning)
+        }.accessibilityIdentifier("gideon.waiting")
     }
 }
