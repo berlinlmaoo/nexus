@@ -582,6 +582,18 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope, 
         loadChats()
     }
 
+    fun clearHistory(onFinished: (Boolean) -> Unit) = scope.launch {
+        val owner = memoryOwner()
+        val gen = generation
+        try {
+            api.send(Request.Builder().url(api.url("/api/gideon/history")).delete().build(), JsonObject.serializer())
+            if (owner != memoryOwner()) return@launch
+            if (gen == generation) startNew()
+            _state.update { it.copy(chats = emptyList(), chatsError = null, query = "") }
+            onFinished(true)
+        } catch (_: ApiError) { if (owner == memoryOwner()) onFinished(false) }
+    }
+
     /** Logout: the next person never sees this transcript. */
     fun reset() { generation++; answerJob?.cancel(); answerJob = null; failed = null; _state.value = State() }
 }

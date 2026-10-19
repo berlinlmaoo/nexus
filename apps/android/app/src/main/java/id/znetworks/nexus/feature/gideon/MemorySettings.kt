@@ -41,7 +41,7 @@ import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@Composable fun GideonMemoryScreen(onBack: () -> Unit) {
+@Composable fun GideonMemoryScreen(initialSummary: Boolean = false, onBack: () -> Unit) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     val store = container.gideonMemories
@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
     val data = snapshot.data
     val c = Nx.colors
     val id = ConfigBody.lang(LocalConfiguration.current.locales[0]) == "id"
-    var summary by rememberSaveable { mutableStateOf(false) }
+    var summary by rememberSaveable { mutableStateOf(initialSummary) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf(false) }

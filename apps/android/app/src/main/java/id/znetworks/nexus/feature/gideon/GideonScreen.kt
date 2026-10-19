@@ -117,9 +117,11 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val indonesian = id.znetworks.nexus.core.config.ConfigBody.lang(LocalConfiguration.current.locales[0]) == "id"
     var draft by rememberSaveable { mutableStateOf("") }
     var upload by remember { mutableStateOf<GUpload?>(null) }
-    var tierMenu by remember { mutableStateOf(false) }
     var attachMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var deleteHistory by remember { mutableStateOf(false) }
+    var deleteCurrent by remember { mutableStateOf(false) }
+    var clearingHistory by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var showChats by rememberSaveable { mutableStateOf(false) }
     // A fresh chat on every open (never the last one); a rotation keeps the one on screen.
@@ -146,15 +148,17 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         val title = if (showChats) stringResource(R.string.gx_chats)
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
-        PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
+        GideonToolbar(title, s.tier, tiers, back, { showChats = !showChats; if (showChats) chat.loadChats() },
+            { showChats = false; chat.startNew(); draft = ""; upload = null }, chat::setTier, clearingHistory) {
             Box {
-                HeaderIconButton(Icons.Outlined.MoreVert, stringResource(R.string.more), { moreMenu = true })
+                IconButton(onClick = { moreMenu = true }, enabled = !clearingHistory) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.more), tint = c.foreground) }
                 DropdownMenu(moreMenu, { moreMenu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.gm_title)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemory) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.ui_gideon_personalize)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemory) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.gm_title)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemorySummary) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.ui_gideon_delete_chat)) }, enabled = s.chatId != null && !s.thinking, onClick = { moreMenu = false; deleteCurrent = true })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.ui_gideon_clear_history)) }, enabled = !s.thinking, onClick = { moreMenu = false; deleteHistory = true })
                 }
             }
-            HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
-            HeaderIconButton(Icons.Outlined.EditNote, stringResource(R.string.gx_new_chat), { showChats = false; chat.startNew(); draft = ""; upload = null }, primary = true)
         }
         if (showChats) {
             ChatList(s, indonesian, onPick = { id -> showChats = false; chat.open(id) }, onNew = { showChats = false; chat.startNew() },
@@ -219,27 +223,6 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                         }
                     }
                     Box(Modifier.weight(1f)) { ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() } }
-                    Box {
-                TextButton(onClick = { tierMenu = true }) { Text(s.tier.label + " ⌄", fontSize = 12.sp, color = c.foreground) }
-                DropdownMenu(tierMenu, { tierMenu = false }, shape = RoundedCornerShape(16.dp), containerColor = c.card, border = androidx.compose.foundation.BorderStroke(1.dp, c.border)) {
-                    GideonTier.entries.forEach { t ->
-                        DropdownMenuItem(modifier = Modifier.heightIn(min = 72.dp), enabled = tiers.available(t), text = { Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(t.label, fontWeight = FontWeight.SemiBold)
-                                if (t == GideonTier.LUNA || t == GideonTier.EXPERIMENTAL) Text(stringResource(if (t == GideonTier.LUNA) R.string.g19_default else R.string.g19_experimental), fontSize = 10.sp,
-                                    color = if (t == GideonTier.EXPERIMENTAL) c.warningFg else c.mutedFg,
-                                    modifier = Modifier.background(if (t == GideonTier.EXPERIMENTAL) c.warning.copy(alpha = 0.12f) else c.muted, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
-                            }
-                            if (!tiers.available(t)) {
-                                Text(stringResource(R.string.g19_unavailable), fontSize = 12.sp, color = c.mutedFg)
-                                Text(stringResource(when (tiers.tiers[t.key]?.reason) { "transcribing" -> R.string.g19_transcribing; "loading" -> R.string.g19_loading; else -> R.string.g19_down }), fontSize = 11.sp, color = c.mutedFg)
-                            }
-                        } },
-                            leadingIcon = { if (t == s.tier) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) }, onClick = { tierMenu = false; chat.setTier(t) })
-                    }
-                }
-            }
-
                     if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
                     else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) {
                         Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.background else c.mutedFg)
@@ -251,6 +234,15 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))
     }
+    if (deleteCurrent || deleteHistory) AlertDialog(onDismissRequest = { deleteCurrent = false; deleteHistory = false },
+        title = { Text(stringResource(if (deleteHistory) R.string.ui_gideon_clear_history else R.string.ui_gideon_delete_chat)) },
+        text = { Text(stringResource(if (deleteHistory) R.string.ui_gideon_clear_confirm else R.string.ui_gideon_delete_confirm)) },
+        confirmButton = { TextButton(onClick = {
+            if (deleteHistory) { clearingHistory = true; chat.clearHistory { ok -> clearingHistory = false; if (!ok) note = res.getString(R.string.gx_delete_failed) else { showChats = false; draft = ""; upload = null } } }
+            else s.chatId?.let { chat.deleteChat(it) { note = res.getString(R.string.gx_delete_failed) } }
+            deleteCurrent = false; deleteHistory = false
+        }) { Text(stringResource(R.string.delete), color = c.dangerText) } },
+        dismissButton = { TextButton(onClick = { deleteCurrent = false; deleteHistory = false }) { Text(stringResource(R.string.cancel)) } })
     if (showReviewNotice) AlertDialog(onDismissRequest = {
         prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false
     }, text = { Text(stringResource(R.string.gc_review_notice)) }, confirmButton = {

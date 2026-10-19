@@ -12,6 +12,7 @@ import java.net.URLDecoder
 sealed interface Target {
     data object Gideon : Target
     data object GideonMemory : Target
+    data object GideonMemorySummary : Target
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
     data object Inbox : Target
