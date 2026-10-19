@@ -138,12 +138,16 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // Material measures the label with the whole segment width; reserve its icon and padding.
                     val labelWidth = (maxWidth / 3 - 16.dp - SegmentedButtonDefaults.IconSize - 8.dp).coerceAtLeast(1.dp)
+                    val labelHeight = with(androidx.compose.ui.platform.LocalDensity.current) { 32.sp.toDp() }
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
                             SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
                                 modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.requiredSize(7.dp).background(dotColor(tone), CircleShape)) }) {
-                                Text(stringResource(label), Modifier.widthIn(max = labelWidth), maxLines = 2, softWrap = true, fontSize = 12.sp, lineHeight = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                // Its intrinsic-height layout otherwise reserves only the first wrapped line.
+                                Box(Modifier.widthIn(max = labelWidth).height(labelHeight), contentAlignment = Alignment.Center) {
+                                    Text(stringResource(label), maxLines = 2, softWrap = true, fontSize = 12.sp, lineHeight = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
                             }
                         }
                     }
