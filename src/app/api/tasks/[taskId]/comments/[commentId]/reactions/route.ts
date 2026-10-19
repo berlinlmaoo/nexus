@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { isUniqueViolation } from "@/lib/prisma-errors"
+import { emitCommentAdded } from "@/lib/socket-emitter"
 
 export async function POST(
   request: NextRequest,
@@ -45,6 +46,7 @@ export async function POST(
     if (existing) {
       // deleteMany: a concurrent toggle may have removed it already (delete would throw P2025 → 500).
       await prisma.commentReaction.deleteMany({ where: { id: existing.id } })
+      emitCommentAdded(commentRef.task.taskList.projectId, commentRef.taskId, { id: (await params).commentId, taskId: commentRef.taskId, change: "reaction" })
       return NextResponse.json({ toggled: "removed" })
     }
 
@@ -61,12 +63,17 @@ export async function POST(
     } catch (e) {
       // A concurrent toggle (double tap) added the same reaction a moment ago: it is there, not a 500.
       if (!isUniqueViolation(e)) throw e
-      reaction = await prisma.commentReaction.findUniqueOrThrow({
+      // A third concurrent toggle may already have removed it again: then this tap ends as "removed"
+      // (findUniqueOrThrow here answered 500 under 10 parallel taps, QA final 19 Oct).
+      reaction = await prisma.commentReaction.findUnique({
         where: { commentId_userId_emoji: { commentId: (await params).commentId, userId: session.user.id, emoji } },
         include: { user: { select: { id: true, name: true } } },
       })
+      if (!reaction) return NextResponse.json({ toggled: "removed" })
     }
 
+    // Realtime (QA final 19 Oct): the others' open thread shows the reaction (comment-added = refetch the thread).
+    emitCommentAdded(commentRef.task.taskList.projectId, commentRef.taskId, { id: (await params).commentId, taskId: commentRef.taskId, change: "reaction" })
     return NextResponse.json({ toggled: "added", reaction }, { status: 201 })
   } catch (error) {
     console.error("Error toggling reaction:", error)
@@ -103,6 +110,10 @@ export async function DELETE(
     const { count } = await prisma.commentReaction.deleteMany({
       where: { commentId, userId: session.user.id, emoji },
     })
+    if (count > 0) {
+      const ref = await prisma.comment.findUnique({ where: { id: commentId }, select: { taskId: true, task: { select: { taskList: { select: { projectId: true } } } } } })
+      if (ref) emitCommentAdded(ref.task.taskList.projectId, ref.taskId, { id: commentId, taskId: ref.taskId, change: "reaction" })
+    }
     return NextResponse.json({ toggled: "removed", removed: count, success: true })
   } catch (error) {
     console.error("Error removing reaction:", error)
