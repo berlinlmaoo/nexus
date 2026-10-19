@@ -18,6 +18,8 @@ import {
   resolveShiftWindowAt,
 } from "@/lib/attendance"
 import {
+  availabilityFromDb,
+  availabilityToDb,
   checkManualStatus,
   decidePresence,
   nextClockEdge,
@@ -35,7 +37,7 @@ export * from "@/lib/presence-core"
  *
  * READ-ONLY on attendance: nothing here writes a record, a request or a point, and nothing here sends a
  * notification or a push (owner: status changes are never announced). The only table it writes is its own
- * PresenceManualStatus (the manual "Away · <text>").
+ * PresenceManualStatus (the manual "<Online | Away | Do not disturb> · <text>").
  *
  * Whose workspace: a person's presence is computed in their attendance workspace — the membership with the oldest
  * joinedAt, the same one check-in uses (getAttendanceWorkspaceContext). Anyone sharing ANY workspace with them may
@@ -235,7 +237,7 @@ async function computePresence(userIds: string[] | null, now = new Date()): Prom
     const facts: PresenceFacts = {
       userId,
       now,
-      manual: mr ? { id: mr.id, text: mr.text, startsAt: mr.startsAt, endsAt: mr.endsAt } : null,
+      manual: mr ? { id: mr.id, text: mr.text, startsAt: mr.startsAt, endsAt: mr.endsAt, availability: availabilityFromDb(mr.availability) } : null,
       open,
       checkedOutAt: !open && todayRec?.checkOutAt ? todayRec.checkOutAt : null,
       request: req ? { type: req.type, endDay: req.endDate.toISOString().slice(0, 10) } : null,
@@ -329,14 +331,17 @@ export function touchPresenceSoon(...userIds: Array<string | null | undefined>):
 /**
  * Set the person's manual status (replaces any earlier one: one per person). Race-safe: a single upsert on the
  * unique userId, so two devices setting at once end with exactly one row (the later write), never two.
+ * `availability` (N-1): online | away | dnd; missing = Away — a released app that never sends it replaces the
+ * status as Away, exactly as before the column existed.
  */
-export async function setManualStatus(userId: string, input: { text: unknown; startsAt: Date | null; endsAt: Date | null; source: string }, now = new Date()) {
+export async function setManualStatus(userId: string, input: { text: unknown; startsAt: Date | null; endsAt: Date | null; availability?: unknown; source: string }, now = new Date()) {
   const ok = checkManualStatus(input, now)
   const source = ["web", "ios", "android", "gideon"].includes(input.source) ? input.source : "web"
+  const availability = availabilityToDb(ok.availability)
   const row = await prisma.presenceManualStatus.upsert({
     where: { userId },
-    create: { userId, text: ok.text, startsAt: ok.startsAt, endsAt: ok.endsAt, source },
-    update: { text: ok.text, startsAt: ok.startsAt, endsAt: ok.endsAt, source },
+    create: { userId, text: ok.text, startsAt: ok.startsAt, endsAt: ok.endsAt, availability, source },
+    update: { text: ok.text, startsAt: ok.startsAt, endsAt: ok.endsAt, availability, source },
   })
   await touchPresence([userId])
   return row

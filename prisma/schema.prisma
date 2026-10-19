@@ -4531,7 +4531,7 @@ model LegacyIdMap {
   @@map("legacy_id_map")
 }
 
-/// Presence status (owner, 19 Oct 2026): a person's manual "Away · <text>" with a start and an end ("Potong rambut",
+/// Presence status (owner, 19 Oct 2026): a person's manual "<availability> · <text>" with a start and an end ("Potong rambut",
 /// 20 Oct 18:00–20:00 WIB), set on the web, in the apps or through a GIDEON card. One per person (userId UNIQUE):
 /// setting replaces it, clearing deletes it, and the leader slot's minute ticker deletes it once endsAt has passed.
 /// Everything else about presence is computed (lib/presence.ts) — this is the only thing it stores. No FK to User,
@@ -4542,6 +4542,10 @@ model PresenceManualStatus {
   text      String
   startsAt  DateTime
   endsAt    DateTime
+  /// N-1 (owner, 19 Oct 2026): ONLINE | AWAY | DND — what the status shows (Online · / Away · / Do not disturb ·).
+  /// AWAY by default so rows and clients from before the column behave exactly as before. SQL:
+  /// prisma/sql/2026-10-19-presence-availability.sql (CHECK constraint there).
+  availability String @default("AWAY")
   /// web | ios | android | gideon
   source    String   @default("web")
   createdAt DateTime @default(now())
