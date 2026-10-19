@@ -14,6 +14,7 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "XP cut by admin": "XP dipotong admin",
   "XP cut by admin · {note}": "XP dipotong admin · {note}",
   "XP lost": "XP berkurang",
+  "No rankings yet.": "Belum ada peringkat.",
   "on time": "tepat waktu",
   "In since {time}": "Masuk sejak {time}",
   "Your request covers today — no check-in needed.": "Pengajuanmu mencakup hari ini — tidak perlu check-in.",
