@@ -161,7 +161,7 @@ internal fun SocialSettingsDialog(d: SocialMonth, vm: SocialViewModel, busy: Boo
                     NumberBox(targetDraft["$id:$k"].orEmpty(), metricLabel(k), !busy, if (k == "postsTarget") 1_000_000 else 2_000_000_000) { targetDraft["$id:$k"] = it; dirty = true }
                 }
                 Row {
-                    TextButton(onClick = { update(id) { JsonObject(it + ("archived" to JsonPrimitive(!p.flag("archived")))) } }, enabled = !busy && p.flag("archived")) { Text(stringResource(R.string.sm_restore)) }
+                    if (p.flag("archived")) TextButton(onClick = { update(id) { JsonObject(it + ("archived" to JsonPrimitive(false))) } }, enabled = !busy) { Text(stringResource(R.string.sm_restore)) }
                     if (!p.flag("archived")) TextButton(onClick = {
                         if ((usage.number(id) ?: 0.0) > 0) archive = id else update(id) { JsonObject(it + ("archived" to JsonPrimitive(true))) }
                     }, enabled = !busy && config!!.count { !it.flag("archived") } > 1) { Text(stringResource(R.string.sm_archive)) }
