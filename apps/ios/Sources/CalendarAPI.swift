@@ -11,6 +11,13 @@ import Foundation
 
 extension APIClient {
 
+    /// Resolve pre-UUID links without changing unknown or inaccessible ids.
+    func calendarLegacyFolderIds(_ ids: [String]) async throws -> [String: String] {
+        struct Reply: Decodable { let ids: [String: String] }
+        let safe = ids.joined(separator: ",").addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return try await calRun("/api/legacy-ids?ids=\(safe)", as: Reply.self, cache: nil).ids
+    }
+
     func calendarStructure(userId: String) async throws -> CalStructure {
         try await calRun("/api/calendar/structure", as: CalStructure.self, cache: Self.calStructureKey(userId))
     }
