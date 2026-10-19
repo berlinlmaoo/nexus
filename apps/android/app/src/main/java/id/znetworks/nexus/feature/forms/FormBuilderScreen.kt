@@ -395,7 +395,7 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
                     modifier = Modifier.semantics { heading() })
                 if (!s.loading && s.error == null) { if (s.canEdit) FormSaveIndicator(save, s.formId != null, vm::retry) else Text(stringResource(R.string.acc_view_only), color = c.mutedFg, fontSize = 12.sp) }
             }
-            if (!s.loading && s.error == null) {
+            if (!s.loading && s.error == null && s.canEdit) {
                 HeaderIconButton(Icons.Filled.Visibility, stringResource(R.string.fb_preview), { vm.openSaved(onOpenForm) })
                 Spacer(Modifier.width(6.dp))
                 if (s.canEdit) MoreMenu(hasId = s.formId != null, busy = s.busy, onOpenPage = { vm.openSaved(onOpenForm) }, onDuplicate = { duplicating = true }, onDelete = vm::askDelete)
