@@ -148,6 +148,19 @@ class ProjectsApi(private val api: ApiClient) {
     /** The project's rules and whether the caller may toggle / run them (DEV-REDESIGN §2). */
     suspend fun automations(projectId: String) = api.get("/api/automations?projectId=$projectId", AutomationsResponse.serializer())
 
+    suspend fun saveAutomation(projectId: String, id: String?, name: String, enabled: Boolean, trigger: Rule, actions: List<Rule>, conditions: Conditions): JsonObject {
+        val body = buildJsonObject {
+            put("projectId", projectId); id?.let { put("id", it) }; put("name", name.trim()); put("enabled", enabled)
+            put("trigger", api.json.encodeToJsonElement(Rule.serializer(), trigger))
+            put("actions", api.json.encodeToJsonElement(ListSerializer(Rule.serializer()), actions))
+            put("conditions", api.json.encodeToJsonElement(Conditions.serializer(), conditions))
+        }
+        return if (id == null) post("/api/automations", body) else patch("/api/automations", body)
+    }
+
+    suspend fun deleteAutomation(id: String) = delete("/api/automations?id=" + URLEncoder.encode(id, "UTF-8"))
+    suspend fun automationSuggestions(projectId: String) = api.get("/api/automations/suggestions?projectId=$projectId", AutomationSuggestions.serializer())
+
     suspend fun setAutomation(id: String, enabled: Boolean) = patch("/api/automations", buildJsonObject { put("id", id); put("enabled", enabled) })
 
     /** One rule's run log, newest first; [before] = the oldest run shown (Load older). */

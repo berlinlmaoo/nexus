@@ -298,3 +298,11 @@ All commits below have author and committer Berlin &lt;bagasputro.bp@gmail.com&g
 | 5263296d | Report presentation, localization, stale loads and unsaved-sheet dismissal guards |
 
 Remaining estimates are engineering time, not promises that those items were QA-verified or will fit the release cutoff. The separate UI-round checkout/branch was not modified. No screenshots are claimed for this pass.
+
+## Round 2 progress (19 October)
+
+Baseline: fetched owner bundle and fast-forward merged hub/dev at 5e989d35. Round-2 bundle range is hub/dev..feat/android-parity-19oct.
+
+Round-1 device QA is **in progress**. Installed the DEV-configured build on emulator-5556 during an idle window. EN/light screenshots under C:/Users/Berlin/Documents/Dev/nexus-shots/parity2 show Social overview, platform targets and day editor, Outlet overview/settings/form, and leaderboard XP entry. Isolated owned fixtures read back Social engagement 865 and Outlet sales 6,000,000/pax 45 with RSVP 40. Active Social platforms now hide the inapplicable Restore control. Crew/credits navigation needs a corrected pass. The UI-round session reinstalled its build during the ID/dark pass; those captures are invalid for parity and are not counted. Requested a reserved emulator window; remaining EN/ID/light/dark, G7 and mutation QA remains outstanding. No shared crew, attendance or credit policy records were changed. Restored the previous UI APK after the first collision; later UI install is left in place.
+
+G13: native create/edit/delete builder, searchable type/field/value selectors, optional all/any conditions, ordered actions (up to ten), scheduling, notification recipients and suggestions. Full-access server capability gates editing. Drafts survive failed saves; dismissal and deletion require confirmation. Untouched config survives editing. Existing run log and Run now remain. DEV isolated disabled-rule create/edit/readback, suggestions GET and cleanup DELETE all passed. No rule was executed. Remaining refinement: richer typed custom-field/form selectors and full device QA.

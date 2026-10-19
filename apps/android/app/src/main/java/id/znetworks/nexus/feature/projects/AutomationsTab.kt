@@ -107,6 +107,10 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
     val api = ProjectsApi((ctx.applicationContext as NexusApplication).container.api)
     val say = rememberSay()
     val scope = rememberCoroutineScope()
+    var builder by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Automation?>(null) }
+    var suggestions by remember { mutableStateOf<List<AutomationSuggestion>?>(null) }
+    var suggesting by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
     var data by remember(projectId) { mutableStateOf<AutomationsResponse?>(null) }
     var loadError by remember(projectId) { mutableStateOf<String?>(null) }
@@ -133,6 +137,18 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Text(stringResource(R.string.au_intro), fontSize = 13.sp, color = c.mutedFg)
+                if (d.canEdit) Row {
+                    TextButton(onClick = { editing = null; builder = true }) { Text(stringResource(R.string.ab_new)) }
+                    TextButton(onClick = { suggesting = true; scope.launch {
+                        try { suggestions = api.automationSuggestions(projectId).suggestions }
+                        catch (e: ApiError) { error = e.describe(ctx.resources) }
+                        finally { suggesting = false }
+                    } }, enabled = !suggesting) { Text(stringResource(R.string.ab_suggestions)) }
+                }
+                suggestions?.let { list ->
+                    if (list.isEmpty()) Text(stringResource(R.string.ab_no_suggestions))
+                    list.forEach { sg -> TextButton(onClick = { editing = Automation("", sg.name, true, sg.trigger, actions = listOf(sg.action)); builder = true }) { Text(sg.name) } }
+                }
             }
             if (d.automations.isEmpty()) item {
                 Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -140,7 +156,7 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
                     Icon(Icons.Filled.Bolt, null, tint = c.mutedFg.copy(alpha = 0.5f), modifier = Modifier.size(28.dp))
                     Text(stringResource(R.string.au_empty_title), fontWeight = FontWeight.SemiBold, color = c.foreground)
                     Text(stringResource(if (d.canEdit) R.string.au_empty_lead else R.string.au_empty_member), fontSize = 12.sp, color = c.mutedFg, textAlign = TextAlign.Center)
-                    if (d.canEdit) TextButton(onClick = { id.znetworks.nexus.ui.shell.openWeb(ctx, "/projects/$projectId?v=automations") }) { Text(stringResource(R.string.open_on_web)) }
+                    
                 }
             }
             items(d.automations, key = { it.id }) { a ->
@@ -156,8 +172,9 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
             }
         }
     }
+    if (builder && d?.canEdit == true) AutomationBuilder(projectId, editing, names, lanes, api, { tick++ }, { builder = false })
     val current = open?.let { (id, _) -> d?.automations?.firstOrNull { it.id == id } }
-    if (current != null) AutomationDialog(current, d!!.canEdit, open!!.second, names, lanes, runsTick, api, onChanged = { tick++ }) { open = null }
+    if (current != null) AutomationDialog(current, d!!.canEdit, open!!.second, names, lanes, runsTick, api, onChanged = { tick++ }, onEdit = { editing = current; open = null; builder = true }) { open = null }
     error?.let { AlertDialog(onDismissRequest = { error = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } }) }
 }
 
@@ -194,7 +211,7 @@ private fun AutomationRow(a: Automation, canEdit: Boolean, names: AutomationName
 /** Full screen: the rule in plain words (When / If / Do) and its run log; Run now for leads. */
 @Composable
 private fun AutomationDialog(a: Automation, canEdit: Boolean, initialTab: Int, names: AutomationNames, lanes: List<Lane>, runsTick: Int, api: ProjectsApi,
-                             onChanged: () -> Unit, onDismiss: () -> Unit) {
+                             onChanged: () -> Unit, onEdit: () -> Unit, onDismiss: () -> Unit) {
     val c = Nx.colors
     val say = rememberSay()
     var tab by remember { mutableIntStateOf(initialTab) }
@@ -214,6 +231,7 @@ private fun AutomationDialog(a: Automation, canEdit: Boolean, initialTab: Int, n
             Box(Modifier.weight(1f)) {
                 if (tab == 0) RuleView(a, names, say) else RunLog(a.id, api, runsTick + localTick)
             }
+            if (canEdit) TextButton(onClick = onEdit) { Text(stringResource(R.string.ab_edit)) }
             if (canEdit) RunNowBar(a, lanes, api) { localTick++; onChanged(); tab = 1 }
         }
     }
@@ -228,7 +246,7 @@ private fun RuleView(a: Automation, names: AutomationNames, say: Say) {
         if (conds.isNotEmpty()) RuleSection(stringResource(if (a.conditions?.match == "any") R.string.au_if_any else R.string.au_if_all),
             conds.map { AutomationText.condition(it, names, say) })
         RuleSection(stringResource(R.string.au_do_caps), a.steps.mapIndexed { i, s -> "${i + 1}. " + AutomationText.action(s, names, say) })
-        Text(stringResource(R.string.au_edit_on_web), fontSize = 12.sp, color = c.mutedFg)
+
     }
 }
 

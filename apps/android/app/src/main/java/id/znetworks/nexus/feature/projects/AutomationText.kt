@@ -252,3 +252,8 @@ object SystemActors {
 @androidx.compose.runtime.Composable
 fun authorName(u: UserRef?): String =
     if (SystemActors.isAutomation(u)) androidx.compose.ui.res.stringResource(R.string.au_actor_name) else u?.name ?: u?.email ?: "—"
+
+@Serializable
+data class AutomationSuggestion(val name: String = "", val trigger: Rule, val action: Rule, val confidence: Double = 0.0)
+@Serializable
+data class AutomationSuggestions(val suggestions: List<AutomationSuggestion> = emptyList())
