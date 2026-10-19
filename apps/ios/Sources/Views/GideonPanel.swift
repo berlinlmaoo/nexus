@@ -230,7 +230,8 @@ struct GideonPanel: View {
                 .background { Color.clear.sheet(isPresented: $showPersonalize) {
                     GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
                 } }
-                .background { Color.clear.sheet(isPresented: $showMemory) { GideonMemorySheet().environment(auth) } }
+                // Pushed, as Settings does: a back chevron rather than a second sheet with Close (R-3).
+                .navigationDestination(isPresented: $showMemory) { GideonMemoryView() }
                 .sheet(item: $saveRequest) { r in
                     GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: saveProjectId,
                                        contextProjectName: chat.context.projectName) { id in savedDocId = id }
