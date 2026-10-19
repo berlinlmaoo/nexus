@@ -279,6 +279,7 @@ final class SheetGridCell: UICollectionViewCell {
         horizontalAlign = d.alignment
         // Stacked text: one character per line (web writing-mode vertical, upright letters).
         let shown = d.rotation.vertical ? d.text.filter { $0 != "\n" }.map { String($0) }.joined(separator: "\n") : d.text
+        label.font = font
         label.attributedText = NSAttributedString(string: shown, attributes: attrs)
         label.textAlignment = d.rotation.vertical ? .center : d.alignment
         label.numberOfLines = d.wrap || d.rotation.vertical ? 0 : 1
