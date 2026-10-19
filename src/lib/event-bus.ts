@@ -114,6 +114,12 @@ export const BUS_EVENTS = {
    * devices/tabs drop the Approve/Reject they already used (QA final 19 Oct 2026, C-17). Ids only.
    */
   ATTENDANCE_CHANGED: "attendance-changed",
+  /**
+   * Someone's attendance moved (check-in/out, auto check-out, an edit, a decision, a day-off/deduction write) →
+   * `attendance-board-changed` { userIds, dates } to the `user:<id>` room of each person who may SEE it (BoD/OAA,
+   * their approver; lib/attendance-broadcast.ts), folded per viewer to <= 1/s. Ids only.
+   */
+  ATTENDANCE_BOARD_CHANGED: "attendance-board-changed",
   /** XP changed for these people (coalesced, lib/xp-realtime.ts) → `xp-changed` { userIds } to their `workspace:<id>` rooms (C-D2). */
   XP_CHANGED: "xp-changed",
 } as const

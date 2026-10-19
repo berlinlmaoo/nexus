@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -224,6 +225,7 @@ async function handlePOST(req: NextRequest) {
     const notified = sent.filter((r) => r.status === "fulfilled").length
     if (notified < fresh.length) console.error("[day-off-bonus] notify failed for", fresh.length - notified, "people")
 
+    for (const g of created) noteAttendanceChanged(g.userId, "dayoff_bonus", g.id, null)
     return NextResponse.json({ ...periodInfo(periodKey), days, notified, grants: created.map(serializeDayOffBonus) }, { status: 201 })
   } catch (error) {
     console.error("Error granting day-off bonus:", error)

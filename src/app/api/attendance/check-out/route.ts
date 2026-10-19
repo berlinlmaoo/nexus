@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { mkdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
@@ -410,6 +411,8 @@ export async function POST(request: NextRequest) {
 
     // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
     touchPresenceSoon(session.user.id)
+    // Attendance realtime (lib/attendance-broadcast.ts): their other devices + whoever may see their attendance.
+    noteAttendanceChanged(session.user.id, "check_out", record.id, record.attendanceDate)
     return NextResponse.json({ record: serializeAttendanceRecord(record), pendingApproval: isOffsite })
   } catch (error) {
     console.error("Error checking out attendance:", error)

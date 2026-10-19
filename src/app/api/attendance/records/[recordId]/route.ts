@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -227,6 +228,7 @@ async function handlePATCH(
       })
     }
 
+    noteAttendanceChanged(updatedRecord.userId, "record", updatedRecord.id, updatedRecord.attendanceDate)
     return NextResponse.json({ record: serializeAttendanceRecord(updatedRecord) })
   } catch (error) {
     console.error("Error correcting attendance record:", error)
@@ -307,6 +309,7 @@ async function handleDELETE(
         request,
         metadata: { part: "checkout", reason },
       })
+      noteAttendanceChanged(updated.userId, "record", updated.id, updated.attendanceDate)
       return NextResponse.json({ record: serializeAttendanceRecord(updated) })
     }
 
@@ -330,6 +333,7 @@ async function handleDELETE(
     } catch (err) {
       console.error("DELETE attendance record: penalty cleanup failed:", err)
     }
+    noteAttendanceChanged(record.userId, "record", record.id, dateKey)
     return NextResponse.json({ deleted: true, date: dateKey })
   } catch (error) {
     console.error("Error deleting attendance record:", error)

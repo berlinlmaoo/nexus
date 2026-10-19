@@ -31,7 +31,20 @@ const REALTIME_EVENTS = [
   "attendance-changed",
   // Server since 19 Oct 2026 (C-D2): XP moved for these people (coalesced ~1.5 s) → workspace rooms. Ids only.
   "xp-changed",
+  // Server since 19 Oct 2026 (attendance realtime): someone whose attendance this user may see checked in/out, was
+  // auto-checked-out, edited, decided, granted or cut a day off → user:<me>, folded to ≤ 1/s. { userIds, dates }.
+  "attendance-board-changed",
 ] as const;
+
+// Every attendance surface (attendance realtime, 19 Oct 2026): the today card, the board and history (who's in, per
+// person), requests/offsite queues, day-off summary/bonuses, deductions, Control Room → Attendance monitor (suspects),
+// and Reports per crew (roster + person). Debounced (ATTENDANCE_DEBOUNCE_MS); the screens' own refetches stay as fallback.
+const ATTENDANCE_TERMS = [
+  "attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff",
+  "attendance-deductions", "attendance-suspects", "dayoffs", "day-off-bonus", "reports",
+];
+const ATTENDANCE_EVENTS = new Set<string>(["attendance-changed", "attendance-board-changed"]);
+const ATTENDANCE_DEBOUNCE_MS = 400;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
 // Task events are NOT here any more (realtime bug 5, 13 Oct 2026): they patch the cache from their payload
@@ -41,7 +54,8 @@ const INVALIDATION: Record<string, string[]> = {
   "sprint-updated": ["sprint", "dashboard"],
   "message-created": ["messages", "conversation"],
   "conversation-updated": ["conversation"],
-  "attendance-changed": ["attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff", "attendance-deductions"],
+  "attendance-changed": ATTENDANCE_TERMS,
+  "attendance-board-changed": ATTENDANCE_TERMS,
   "xp-changed": ["leaderboard"],
 };
 
@@ -50,7 +64,7 @@ const INVALIDATION: Record<string, string[]> = {
  * conversation list and its badge, the bell). Events emitted while the socket was down are gone
  * for good, so without this an open chat would stay frozen at the moment the connection dropped.
  */
-const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info"];
+const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info", "attendance-today", "attendance-history", "attendance-suspects"];
 
 /**
  * Realtime diagnostics: every event received is logged with console.debug in dev builds, or anywhere
@@ -435,9 +449,25 @@ export function RealtimeProvider({
         socket.on("join-denied", onJoinDenied);
         cleanups.push(() => socket.off("join-denied", onJoinDenied));
 
+        // Attendance pings arrive in bursts (a check-in pings the person and, a moment later, the board): one refetch.
+        let attendanceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleAttendanceRefetch = () => {
+          if (attendanceTimer) return;
+          attendanceTimer = setTimeout(() => {
+            attendanceTimer = null;
+            void queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, ATTENDANCE_TERMS) });
+          }, ATTENDANCE_DEBOUNCE_MS);
+        };
+        cleanups.push(() => { if (attendanceTimer) clearTimeout(attendanceTimer); });
+
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
           const handler = (payload?: unknown) => {
             const terms = [...(INVALIDATION[evt] ?? [])];
+            if (ATTENDANCE_EVENTS.has(evt)) {
+              if (debug) console.debug("[realtime]", evt, { kind: (payload as { kind?: unknown } | undefined)?.kind });
+              scheduleAttendanceRefetch();
+              return;
+            }
             if (TASK_EVENTS.has(evt)) {
               if (debug) console.debug("[realtime]", evt);
               onTaskEvent(evt, payload);
