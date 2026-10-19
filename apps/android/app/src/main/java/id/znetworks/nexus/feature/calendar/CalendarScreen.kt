@@ -843,7 +843,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
     val description = parts.joinToString(", ")
     val showLabel = stringResource(R.string.cal_show_tasks)
     Column(Modifier.weight(1f).heightIn(min = if (titles) 76.dp else cellMin)
-        .then(if (selected) Modifier.border(1.5.dp, c.navy, RoundedCornerShape(6.dp)) else Modifier)
+        .then(if (selected) Modifier.background(c.accentBg, RoundedCornerShape(10.dp)) else Modifier)
         .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected }
         .clickable(onClickLabel = showLabel, role = Role.Button) { onPick(day) }.padding(vertical = 5.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
