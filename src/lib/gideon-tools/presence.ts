@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma"
 import type { User } from "@/generated/prisma/client"
 import { SYSTEM_USER_EMAILS } from "@/lib/system-users"
 import {
+  availabilityFromDb,
   checkManualStatus,
   clearManualStatus,
   getManualStatus,
@@ -10,6 +11,7 @@ import {
   presenceEnabled,
   setManualStatus,
   visibleUserIds,
+  type PresenceAvailability,
   type PresenceStatus,
 } from "@/lib/presence"
 import { wibDay } from "@/lib/calendar/core"
@@ -49,13 +51,15 @@ function view(name: string | null, s: PresenceStatus) {
     state: s.state,
     reason: s.reason,
     ...(s.text ? { customText: s.text } : {}),
+    ...(s.availability ? { availability: s.availability } : {}),
+    ...(s.state === "dnd" ? { doNotDisturb: true } : {}),
     ...(s.until ? { until: s.until.length === 10 ? dayLabel(s.until) : `${whenWib(s.until)} WIB` } : {}),
     ...(s.since && (s.state === "online" || s.state === "away") ? { since: `${whenWib(s.since)} WIB` } : {}),
     ...(s.manual && s.reason !== "custom" ? { scheduledStatus: `${s.manual.text} (${whenWib(s.manual.startsAt)}–${whenWib(s.manual.endsAt)} WIB)` } : {}),
   }
 }
 
-const NOTE = "Answer with the status as given (e.g. “Away · Out of the office”). Location is only in / out of the office: never guess where they are. Times are WIB."
+const NOTE = "Answer with the status as given (e.g. “Away · Out of the office”). Location is only in / out of the office: never guess where they are. Times are WIB. Do not disturb (doNotDisturb) = they asked not to be interrupted until the end time: say “Do not disturb” / “Jangan diganggu” and suggest a message they can read later rather than a call or a meeting now."
 
 function rangeOf(input: Input): { startsAt: Date | null; endsAt: Date | null } {
   const day = str(input.date) ?? null
@@ -65,6 +69,17 @@ function rangeOf(input: Input): { startsAt: Date | null; endsAt: Date | null } {
 }
 const textOf = (input: Input) => str(input.text) ?? str(input.status) ?? str(input.what)
 const wantsClear = (input: Input) => input.clear === true || input.clear === "true"
+
+/** N-1: the model's words for the availability → online | away | dnd (missing = away; unknown = refused by the core). */
+function availabilityOf(input: Input): unknown {
+  const v = str(input.availability)?.trim().toLowerCase()
+  if (!v) return undefined
+  if (/^(dnd|do[ _-]?not[ _-]?disturb|jangan[ _-]?diganggu|busy|sibuk|focus|fokus)$/.test(v)) return "dnd"
+  if (/^(online|available|tersedia|ada)$/.test(v)) return "online"
+  if (/^(away|pergi|keluar|lagi keluar)$/.test(v)) return "away"
+  return v
+}
+const AVAIL_WORD: Record<PresenceAvailability, string> = { online: "Online", away: "Away", dnd: "Do not disturb" }
 
 export const presenceTools: Record<string, ExtraTool> = {
   get_person_status: {
@@ -108,17 +123,18 @@ export const presenceTools: Record<string, ExtraTool> = {
         }
       }
       const r = rangeOf(input)
-      const ok = checkManualStatus({ text: textOf(input), ...r })
+      const ok = checkManualStatus({ text: textOf(input), ...r, availability: availabilityOf(input) })
       const from = whenWib(ok.startsAt) ?? ok.startsAt.toISOString()
       const to = whenWib(ok.endsAt) ?? ok.endsAt.toISOString()
+      const word = AVAIL_WORD[ok.availability]
       return {
-        summary: `Set your status “Away · ${ok.text}” ${from}–${to} WIB`.slice(0, 300),
+        summary: `Set your status “${word} · ${ok.text}” ${from}–${to} WIB`.slice(0, 300),
         diff: [
-          { field: "Status", to: `Away · ${ok.text}` },
+          { field: "Status", to: `${word} · ${ok.text}` },
           { field: "From", to: `${from} WIB`, toDay: wibDay(ok.startsAt) },
           { field: "Until", to: `${to} WIB`, toDay: wibDay(ok.endsAt) },
         ],
-        store: { text: ok.text, startsAt: ok.startsAt.toISOString(), endsAt: ok.endsAt.toISOString() },
+        store: { text: ok.text, startsAt: ok.startsAt.toISOString(), endsAt: ok.endsAt.toISOString(), availability: ok.availability },
         note: "NOT set yet: it waits on the card below for the person to confirm. Say the times you resolved (day, HH:MM WIB). Everyone in the workspace will see it; nobody is notified.",
       }
     },
@@ -129,8 +145,8 @@ export const presenceTools: Record<string, ExtraTool> = {
         return { cleared: n > 0, note: n > 0 ? "Status cleared." : "It was already gone (ended, or changed on another device)." }
       }
       const r = rangeOf(input)
-      const row = await setManualStatus(actor.id, { text: textOf(input), ...r, source: "gideon" })
-      return { set: true, status: `Away · ${row.text}`, from: `${whenWib(row.startsAt)} WIB`, until: `${whenWib(row.endsAt)} WIB`, note: "Shown to everyone in the workspace until the end time, then it clears by itself." }
+      const row = await setManualStatus(actor.id, { text: textOf(input), ...r, availability: availabilityOf(input), source: "gideon" })
+      return { set: true, status: `${AVAIL_WORD[availabilityFromDb(row.availability)]} · ${row.text}`, from: `${whenWib(row.startsAt)} WIB`, until: `${whenWib(row.endsAt)} WIB`, note: "Shown to everyone in the workspace until the end time, then it clears by itself." }
     },
     stepArg: (i) => (wantsClear(i) ? "clear" : textOf(i) ?? null),
   },

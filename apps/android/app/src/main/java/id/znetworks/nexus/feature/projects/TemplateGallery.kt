@@ -153,7 +153,7 @@ fun TemplateGalleryDialog(pipelineAccess: Boolean, onDismiss: () -> Unit, onPick
     val showBlank = category == "all" && (q.isEmpty() || listOf("blank", blankTitle, blankBody).any { it.lowercase().contains(q) })
     val ctx = LocalContext.current
     val shownDashboards = dashboards.filter { d ->
-        (category == "all" || category == "dashboards") && (q.isEmpty() || listOf(d.title, ctx.getString(d.description)).any { it.lowercase().contains(q) })
+        (category == "all" || category == "dashboards") && (q.isEmpty() || listOf(d.title, ctx.getString(d.description), if (d == ProjectType.SOCIAL_MEDIA_REPORT) ctx.getString(R.string.sm_title) else "").any { it.lowercase().contains(q) })
     }
     val nothing = !loading && !showBlank && shown.isEmpty() && shownDashboards.isEmpty()
     val wide = LocalConfiguration.current.screenWidthDp >= 600
@@ -192,7 +192,7 @@ fun TemplateGalleryDialog(pipelineAccess: Boolean, onDismiss: () -> Unit, onPick
                         { onPick(GalleryPick.Template(t)) }) { TemplatePreview(t, lang) }
                 }
                 items(shownDashboards, key = { it.code }) { d ->
-                    GalleryCard(dashboardIcon(d), c.violet, d.title, stringResource(d.description), { onPick(GalleryPick.Dashboard(d)) }) { DashboardPreview(d) }
+                    GalleryCard(dashboardIcon(d), c.violet, (if (d == ProjectType.SOCIAL_MEDIA_REPORT) stringResource(R.string.sm_title) else d.title), stringResource(d.description), { onPick(GalleryPick.Dashboard(d)) }) { DashboardPreview(d) }
                 }
                 if (failed) item(key = "failed", span = { GridItemSpan(maxLineSpan) }) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -390,7 +390,7 @@ fun TemplateChosen(pick: GalleryPick, enabled: Boolean, onChange: () -> Unit) {
     val lang = templateLang()
     val (icon, title) = when (pick) {
         is GalleryPick.Template -> templateIcon(pick.template.icon) to TemplateLogic.say(pick.template.name, lang)
-        is GalleryPick.Dashboard -> dashboardIcon(pick.type) to pick.type.title
+        is GalleryPick.Dashboard -> dashboardIcon(pick.type) to (if (pick.type == ProjectType.SOCIAL_MEDIA_REPORT) stringResource(R.string.sm_title) else pick.type.title)
         GalleryPick.Blank -> Icons.Filled.Add to stringResource(R.string.tg_blank)
     }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.violet.copy(alpha = 0.06f)).padding(start = 12.dp, top = 4.dp, bottom = 8.dp, end = 4.dp)) {

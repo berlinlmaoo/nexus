@@ -76,6 +76,7 @@ object RealtimeEvents {
     const val PIPELINE_CHANGED = "pipeline-changed"
     /** An outlet's event or month target changed (project room; OUTLET-SALES §9): a ping, refetch the month shown. */
     const val OUTLET_SALES_CHANGED = "outlet-sales-changed"
+    const val SOCIAL_MEDIA_CHANGED = "social-media-changed"
     /** A project's automation was made, changed, toggled, deleted or ran (project room; DEV-REDESIGN §2): refetch the list / run log. */
     const val AUTOMATIONS_CHANGED = "automations-changed"
     /** Taken out of a room (server 13 Oct): `{ room, reason }`; reason "revoked" = access to that project ended. */
@@ -84,7 +85,7 @@ object RealtimeEvents {
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
+        OUTLET_SALES_CHANGED, SOCIAL_MEDIA_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and

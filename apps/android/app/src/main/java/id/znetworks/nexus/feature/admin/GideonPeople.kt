@@ -107,7 +107,8 @@ fun GideonPersonSheet(userId: String, name: String?, onDismiss: () -> Unit) {
                         if (chat == null) PersonChats(api, userId) { selectedChat = it }
                         else PersonTranscript(api, userId, chat) { selectedChat = null }
                     }
-                    else -> PersonOverview(overview!!, limits, tab == "credits", error)
+                    tab == "credits" -> GideonPersonCredits(userId, overview!!) { retry++ }
+                    else -> PersonOverview(overview!!, limits, false, error)
                 }
             }
         }

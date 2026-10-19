@@ -3,7 +3,6 @@ package id.znetworks.nexus.feature.projects
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -209,7 +208,7 @@ fun PropLine(items: List<CardProps.Item>, modifier: Modifier = Modifier) {
 @Composable
 fun PropValue(item: CardProps.Item) {
     val c = Nx.colors
-    val dark = isSystemInDarkTheme() || c.background.let { 0.2126f * it.red + 0.7152f * it.green + 0.0722f * it.blue } < 0.3f
+    val dark = Nx.isDark
     when (item) {
         is CardProps.Item.Section -> if (item.colorKey != null) {
             val tone = StatusOptions.tone(item.colorKey, dark)

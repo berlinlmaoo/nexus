@@ -4,15 +4,15 @@ import { ChevronDown, Clock, Loader2, Smile, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
-import { patchPresence, presenceApi, presenceText, usePresence } from "@/lib/presence";
+import { patchPresence, presenceApi, presenceText, usePresence, type PresenceAvailability } from "@/lib/presence";
 
 /**
  * Set / clear one's own manual status from a start to an end (owner, 19 Oct 2026; layout of the UI round of the same
  * day, U-1: Slack-like). Top bar Cancel · Status · Save, one text field with an emoji button, quick picks as a list,
  * "Recently used" (this browser's own last statuses, only when there are any), then Clear after / Starts and one
  * summary line. Times are WIB (the company's clock), whatever the browser's zone. Everyone in the workspace sees it;
- * nobody is notified; it ends by itself. A manual status always shows as Away (the server has no other availability
- * for it). The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
+ * nobody is notified; it ends by itself. Availability (N-1, owner 19 Oct 2026) is a segmented choice Online · Away ·
+ * Do not disturb (green / amber / red, the same dots as everywhere); Away is the default, as before. The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
  * The emoji is stored as the start of the text ("🗓️ Meeting") — the API has one text field.
  */
 
@@ -27,6 +27,13 @@ const QUICK: ReadonlyArray<{ emoji: string; text: string; end: EndChoice }> = [
   { emoji: "🍽️", text: "Lunch", end: "1h" },
   { emoji: "🎬", text: "Out for a shoot", end: "3h" },
   { emoji: "🚗", text: "On the road", end: "1h" },
+];
+
+/** Availability choices. Labels match the server's status words in both languages (presence-core.ts STATE_WORD). */
+const AVAIL: ReadonlyArray<{ value: PresenceAvailability; en: string; id: string; dot: string }> = [
+  { value: "online", en: "Online", id: "Online", dot: "bg-emerald-500" },
+  { value: "away", en: "Away", id: "Away", dot: "bg-amber-400" },
+  { value: "dnd", en: "Do not disturb", id: "Jangan diganggu", dot: "bg-rose-500" },
 ];
 
 const EMOJIS = ["🗓️", "🍽️", "🎬", "🚗", "💬", "🎧", "📞", "✈️", "🏃", "☕", "📍", "🎯"] as const;
@@ -74,6 +81,7 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
 
   const [emoji, setEmoji] = useState("");
   const [text, setText] = useState("");
+  const [availability, setAvailability] = useState<PresenceAvailability>("away");
   const [pickEmoji, setPickEmoji] = useState(false);
   const [later, setLater] = useState(false);
   const [startDay, setStartDay] = useState("");
@@ -93,6 +101,7 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
     const cur = splitEmoji(manual?.text ?? "");
     setEmoji(cur.emoji);
     setText(cur.text);
+    setAvailability(manual?.availability ?? "away");
     setPickEmoji(false);
     setLater(false);
     setStartDay(nowP.day);
@@ -119,6 +128,7 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
       text: full,
       startsAt: startAt ? startAt.toISOString() : null,
       endsAt: endAt ? endAt.toISOString() : "",
+      availability,
     }),
     onSuccess: (r) => {
       patchPresence(qc, r.status);
@@ -215,12 +225,31 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
             )}
           </div>
 
-          {/* Availability: its own line, not a prefix in the field. A manual status always shows as Away. */}
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
-            <span className="text-sm font-medium">{t("Availability")}</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-semibold">
-              <span aria-hidden className="h-2 w-2 rounded-full bg-amber-400" /> Away
-            </span>
+          {/* Availability: its own line, not a prefix in the field. Segmented Online · Away · Do not disturb. */}
+          <div className="space-y-2">
+            <div id="presence-availability" className="text-sm font-medium">{t("Availability")}</div>
+            <div role="radiogroup" aria-labelledby="presence-availability" className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1">
+              {AVAIL.map((a) => {
+                const on = availability === a.value;
+                return (
+                  <button
+                    key={a.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => { setAvailability(a.value); setError(null); }}
+                    className={cn(
+                      "inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1.5 py-1.5 text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      on ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", a.dot)} />
+                    {/* Wraps instead of truncating: "Jangan diganggu" does not fit one line on a 390 px phone. */}
+                    <span className="min-w-0 text-center [overflow-wrap:anywhere]">{lang === "id" ? a.id : a.en}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {manual && current && (

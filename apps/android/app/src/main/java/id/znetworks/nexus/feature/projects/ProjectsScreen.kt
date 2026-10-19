@@ -652,7 +652,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
         confirmButton = {
             TextButton(onClick = { onCreate(name, folder, type, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId), template, lang, starter, memberLevel)) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
+                else Text(stringResource(if (type == ProjectType.OUTLET_SALES || type == ProjectType.SOCIAL_MEDIA_REPORT) R.string.pt_outlet_create else R.string.project_launch))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } },

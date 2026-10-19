@@ -106,6 +106,7 @@ import java.util.Locale
 /** The web's project tabs, same order. [searches]: the tab draws tasks, so the search box filters it. */
 enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     /** A Pipeline Dashboard's deals (type PIPELINE, 9 Oct): first and where it opens; never on a task project. */
+    SOCIAL_OVERVIEW(R.string.ptab_overview), SOCIAL_CALENDAR(R.string.ptab_calendar),
     PIPELINE(R.string.pl_tab),
     /** An Outlet Sales Dashboard (type OUTLET_SALES, OUTLET-SALES §1): these four, then Chat; never on a task project. */
     OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
@@ -156,7 +157,7 @@ data class ProjectDetailState(
 ) {
     val access: ProjectAccess get() = ProjectAccess.of(detail)
     /** A plain task project (not a Pipeline / Outlet board): the one with views. */
-    val taskProject: Boolean get() = detail?.type != "PIPELINE" && detail?.type != "OUTLET_SALES"
+    val taskProject: Boolean get() = detail?.type != "PIPELINE" && detail?.type != "OUTLET_SALES" && detail?.type != "SOCIAL_MEDIA_REPORT"
     /** The view tabs: the project's own, else built-in fallbacks of its visible layouts. */
     val shownViews: List<ProjectView> get() {
         val hidden = ProjectTabsLogic.hidden(detail?.hiddenTabs)
@@ -167,7 +168,7 @@ data class ProjectDetailState(
 
     /** The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out. No Finance / P&L (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct). */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
-        isPipeline = detail?.type == "PIPELINE", isOutlet = detail?.type == "OUTLET_SALES")
+        isPipeline = detail?.type == "PIPELINE", isOutlet = detail?.type == "OUTLET_SALES", isSocial = detail?.type == "SOCIAL_MEDIA_REPORT")
 }
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -560,6 +561,9 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
         if (linkApplied || s.detail == null || (s.taskProject && s.views == null)) return@LaunchedEffect
         linkApplied = true; templateOpenedGuard = true
         val want = initialView!!.lowercase()
+        if (s.detail?.type == "SOCIAL_MEDIA_REPORT") {
+            tab = when (want) { "calendar" -> ProjectTab.SOCIAL_CALENDAR; "chat" -> ProjectTab.CHAT; else -> ProjectTab.SOCIAL_OVERVIEW }; return@LaunchedEffect
+        }
         if (s.detail?.type == "OUTLET_SALES") {
             ProjectTabsLogic.outletLink(want)?.takeIf { it in tabs }?.let { tab = it }
             return@LaunchedEffect
@@ -675,6 +679,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             total == 0 && tab == ProjectTab.TABLE && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
                                 stringResource(R.string.pp_no_tasks_sub), stringResource(R.string.pp_add_task), { createDue = null; creating = true }, Modifier.fillMaxSize())
                             else -> when (tab) {
+                                ProjectTab.SOCIAL_OVERVIEW, ProjectTab.SOCIAL_CALENDAR -> id.znetworks.nexus.feature.social.SocialTab(tab == ProjectTab.SOCIAL_CALENDAR, initialDate)
                                 ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,
                                     onDrill = { d -> vm.setDrill(d); views.firstOrNull { it.layout == "board" || it.layout == "list" }?.let { select(PageTabItem.View(it)) } },
                                     onEditBrief = onOpenSettings,
@@ -820,7 +825,7 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
                 OutlinedButton(onClick = { picking = true }) {
                     Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
-                NewTaskFields(fields, values) { id, v -> values = values + (id to v) }
+                NewTaskFields(fields, values, projectId) { id, v -> values = values + (id to v) }
             }
         },
         confirmButton = {

@@ -72,6 +72,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -310,7 +311,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(i.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(listOfNotNull(if (i.isFolder) stringResource(R.string.vault_items_n, i.childCount ?: 0) else sizeText(i.size),
+                                Text(listOfNotNull(if (i.isFolder) pluralStringResource(R.plurals.vault_items_n, i.childCount ?: 0, i.childCount ?: 0) else sizeText(i.size),
                                     chatTime(i.deletedAt ?: i.updatedAt).takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
                             }
                             if ((i.shareCount ?: 0) > 0) { Pill("🔗 ${i.shareCount}", c.blue); Spacer(Modifier.width(4.dp)) }

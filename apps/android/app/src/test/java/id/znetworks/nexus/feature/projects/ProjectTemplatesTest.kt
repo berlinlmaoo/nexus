@@ -37,8 +37,8 @@ class ProjectTemplatesTest {
         assertEquals(listOf("content-plan", "social-media"), TemplateLogic.shown(templates, "marketing", "").map { it.id })
         assertTrue(TemplateLogic.shown(templates, "all", "zzz").isEmpty())
         assertEquals(listOf("marketing", "projects", "docs", "planning", "operations", "dashboards"), TemplateLogic.categories(templates, true))
-        assertEquals(listOf(ProjectType.OUTLET_SALES), TemplateLogic.dashboards(pipelineAccess = false))
-        assertEquals(listOf(ProjectType.OUTLET_SALES, ProjectType.PIPELINE), TemplateLogic.dashboards(pipelineAccess = true))
+        assertEquals(listOf(ProjectType.OUTLET_SALES, ProjectType.SOCIAL_MEDIA_REPORT), TemplateLogic.dashboards(pipelineAccess = false))
+        assertEquals(listOf(ProjectType.OUTLET_SALES, ProjectType.SOCIAL_MEDIA_REPORT, ProjectType.PIPELINE), TemplateLogic.dashboards(pipelineAccess = true))
     }
 
     @Test fun tabsTheTemplateOpensOn() {

@@ -1,0 +1,8 @@
+<resources>
+    <string name="cff_limit">Choose a non-empty file up to 250 MB.</string>
+    <string name="cff_no_viewer">No app can open this file.</string>
+    <string name="cff_remove">Remove</string>
+    <string name="cff_empty">No files yet.</string>
+    <string name="cff_add">Add files</string>
+    <string name="cff_confirm">Remove “%1$s” from this field?</string>
+</resources>

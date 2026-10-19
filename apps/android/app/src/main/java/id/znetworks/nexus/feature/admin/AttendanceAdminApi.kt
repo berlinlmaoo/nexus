@@ -45,6 +45,20 @@ class AttendanceAdminApi(private val api: ApiClient) {
     private suspend fun send(method: String, path: String, body: JsonObject?): JsonObject =
         api.send(Request.Builder().url(api.url(path)).method(method, body?.toString()?.toJsonBody()).build(), JsonObject.serializer())
 
+    suspend fun employment() = api.get("/api/attendance/employment-start", JsonObject.serializer())
+    suspend fun setEmployment(userId: String, date: String?) = send("PATCH", "/api/attendance/employment-start", buildJsonObject {
+        put("userId", userId); put("date", date?.let(::JsonPrimitive) ?: JsonNull)
+    })
+    suspend fun deductions(month: String, userId: String? = null) = api.get("/api/attendance/deductions?month=${enc(month)}" +
+        (userId?.let { "&userId=${enc(it)}" } ?: ""), JsonObject.serializer())
+    suspend fun clearDeduction(userId: String, date: String) = send("POST", "/api/attendance/override", buildJsonObject {
+        put("userId", userId); put("date", date); put("action", "CLEAR_PENALTY")
+    })
+    suspend fun deductAbsences() = send("POST", "/api/attendance/deduct-absences", buildJsonObject { })
+    suspend fun outageRefund(date: String, dryRun: Boolean) = send("POST", "/api/attendance/outage-refund", buildJsonObject {
+        put("date", date); put("dryRun", dryRun)
+    })
+
     suspend fun holidays(month: String) = api.get("/api/attendance/holidays?month=$month", Holidays.serializer())
     suspend fun addHoliday(date: String, name: String) = send("POST", "/api/attendance/holidays", buildJsonObject { put("date", date); put("name", name.trim()) })
     suspend fun deleteHoliday(id: String) = send("DELETE", "/api/attendance/holidays?id=${enc(id)}", null)

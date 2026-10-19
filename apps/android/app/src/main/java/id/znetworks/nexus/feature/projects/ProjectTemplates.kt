@@ -75,7 +75,7 @@ object TemplateLogic {
 
     /** The project types offered as dashboards (Content Planner is gone: the Content Plan template replaced it). */
     fun dashboards(pipelineAccess: Boolean): List<ProjectType> =
-        listOf(ProjectType.OUTLET_SALES, ProjectType.PIPELINE).filter { it != ProjectType.PIPELINE || pipelineAccess }
+        listOf(ProjectType.OUTLET_SALES, ProjectType.SOCIAL_MEDIA_REPORT, ProjectType.PIPELINE).filter { it != ProjectType.PIPELINE || pipelineAccess }
 
     /** The reader's language; Indonesian falls back to English when a text has none. */
     fun say(t: TemplateText, lang: String): String = if (lang == "en") t.en else t.id.ifBlank { t.en }

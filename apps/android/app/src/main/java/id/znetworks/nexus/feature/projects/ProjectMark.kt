@@ -64,8 +64,7 @@ fun ProjectMark(icon: String?, size: Dp, modifier: Modifier = Modifier, projectI
 
 @Composable
 private fun ProjectMarkFor(icon: String?, size: Dp, modifier: Modifier) {
-    val dark = androidx.compose.foundation.isSystemInDarkTheme() ||
-        id.znetworks.nexus.ui.theme.Nx.colors.background.let { 0.2126f * it.red + 0.7152f * it.green + 0.0722f * it.blue } < 0.3f
+    val dark = id.znetworks.nexus.ui.theme.Nx.isDark
     val tone = Color(if (dark) ProjectMarkLogic.DARK else ProjectMarkLogic.LIGHT)
     val default: @Composable () -> Unit = { Canvas(Modifier.size(size)) { pageIcon(tone) } }
     if (ProjectMarkLogic.isPhoto(icon)) {
