@@ -1,4 +1,9 @@
 <resources>
+    <string name="qa_meeting_deleted">Catatan meeting ini sudah dihapus</string>
+    <string name="qa_meeting_deleted_body">Sudah dihapus, atau kamu tidak punya akses lagi.</string>
+    <string name="qa_all_meetings">Semua catatan meeting</string>
+    <string name="qa_meeting_speakers_locked">Terkunci: notulen ini sudah diterapkan ke project, jadi nama tetap seperti ini.</string>
+    <string name="qa_meeting_speakers_applied">Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.</string>
     <plurals name="qa_gideon_waiting_count"><item quantity="other">%1$d perubahan menunggu persetujuanmu</item></plurals>
     <string name="qa_gideon_no_change">Tidak ada perubahan: semuanya sudah seperti ini</string>
     <string name="qa_gideon_waiting">%1$d perubahan menunggu persetujuanmu</string>

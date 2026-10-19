@@ -591,7 +591,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("gideon-memory") { GideonMemoryScreen { nav.popBackStack() } }
             composable("meetings?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> MeetingsScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
             composable("meeting-new?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> NewMeetingScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
-            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onAllMeetings = { nav.navigate("meetings") { popUpTo("meeting/{id}") { inclusive = true }; launchSingleTop = true } }) }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })

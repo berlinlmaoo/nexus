@@ -1,4 +1,9 @@
 <resources>
+    <string name="qa_meeting_deleted">This meeting note was deleted</string>
+    <string name="qa_meeting_deleted_body">It was deleted, or you no longer have access to it.</string>
+    <string name="qa_all_meetings">All meeting notes</string>
+    <string name="qa_meeting_speakers_locked">Locked: these minutes were saved to the project, so the names stay as they are.</string>
+    <string name="qa_meeting_speakers_applied">These minutes were already saved, so the speaker names can\'t change anymore.</string>
     <plurals name="qa_gideon_waiting_count"><item quantity="one">%1$d change waiting for your approval</item><item quantity="other">%1$d changes waiting for your approval</item></plurals>
     <string name="qa_gideon_no_change">No changes: everything is already like this</string>
     <string name="qa_gideon_waiting">%1$d changes waiting for your approval</string>
