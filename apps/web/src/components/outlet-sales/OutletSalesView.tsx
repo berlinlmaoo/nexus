@@ -122,10 +122,13 @@ export function OutletSalesView({
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
+            aria-label={t("Report settings")}
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
           >
             <Settings2 aria-hidden className="h-4 w-4" />
-            {t("Report settings")}
+            {/* Phone: the short label, so it stays on one line next to "Copy form link" (QA final 19 Oct, D-8). */}
+            <span className="sm:hidden">{t("Settings")}</span>
+            <span className="max-sm:hidden">{t("Report settings")}</span>
           </button>
         )}
         <button

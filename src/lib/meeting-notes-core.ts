@@ -107,6 +107,16 @@ export type SpeakerEntry = { name: string; userId: string | null; auto?: boolean
 export type SpeakerMap = Record<string, SpeakerEntry>
 export type NameCandidate = { id: string; name: string; inProject?: boolean }
 
+/**
+ * The people a voice is named after AUTOMATICALLY (QA final 19 Oct 2026, D-Q3): the project's members only, so a
+ * heard "Dimas" never becomes a real colleague who was not in the meeting's project; another name stays plain
+ * text ("Dimas", no person). A meeting outside any project matches only its uploader. Naming a voice by hand still
+ * offers the whole workspace (speakerCandidates).
+ */
+export function autoMatchCandidates(candidates: NameCandidate[], uploaderId: string, hasProject: boolean): NameCandidate[] {
+  return candidates.filter((c) => (hasProject ? c.inProject === true : c.id === uploaderId))
+}
+
 /** Without the record screen's marker, introductions are looked for in the first two minutes only. */
 export const INTRO_DEFAULT_SEC = 120
 
@@ -249,6 +259,13 @@ export function cleanSpeakers(raw: unknown): SpeakerMap {
     out[k] = { name, userId: typeof o.userId === "string" && o.userId ? o.userId.slice(0, 40) : null, ...(o.auto === true ? { auto: true } : {}) }
   }
   return out
+}
+
+/** Two speaker maps name the same voices the same way (name + person; the auto flag does not count). */
+export function sameSpeakers(a: SpeakerMap, b: SpeakerMap): boolean {
+  const ka = Object.keys(a).sort(), kb = Object.keys(b).sort()
+  if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) return false
+  return ka.every((k) => a[k].name === b[k].name && (a[k].userId ?? null) === (b[k].userId ?? null))
 }
 
 /** Lines grouped into chunks of at most `maxChars` (a single over-long line is cut). */

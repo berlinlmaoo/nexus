@@ -19,7 +19,7 @@ import {
   phasesOf,
   pipelineToday,
   stageGroupOf,
-  termDaysOverdue,
+  termDaysOverdue, termOverpaid,
   termOutstanding,
   termStatusOf,
   termSummaryOf,
@@ -74,6 +74,8 @@ export function serializeTerm(t: TermRow, today: string) {
     status: termStatusOf(facts, today),
     outstanding: termOutstanding(facts),
     daysOverdue: termDaysOverdue(facts, today),
+    /** Received above the amount (0 when not): shown as "Overpaid by Rp x" (D-Q1, additive). */
+    overpaid: termOverpaid(facts),
   }
 }
 

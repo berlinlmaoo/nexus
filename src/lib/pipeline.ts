@@ -183,6 +183,14 @@ export function termOutstanding(t: PaymentTermFacts): number {
   return isTermPaid(t) ? 0 : Math.max(0, (t.amount || 0) - (t.paidAmount || 0))
 }
 
+/**
+ * How much more than the term's amount was received (QA final 19 Oct 2026, D-Q1): an overpayment is allowed (it
+ * happens: a client rounds up, or pays two terms at once) but the apps show it as a warning, never silently.
+ */
+export function termOverpaid(t: PaymentTermFacts): number {
+  return Math.max(0, (t.paidAmount || 0) - (t.amount || 0))
+}
+
 /** Days past the due date of a term not yet paid in full; 0 when paid, undated or not yet due. */
 export function termDaysOverdue(t: PaymentTermFacts, today: string): number {
   if (isTermPaid(t) || !t.dueDate) return 0
