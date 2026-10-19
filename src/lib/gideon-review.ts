@@ -164,7 +164,7 @@ export async function transcript(chatId: string, before: Date | null, limit = TR
   const metaOf = (row: { runId: string | null; meta: unknown }) => {
     if (!row.meta || typeof row.meta !== "object") return null
     const meta = row.meta as GideonRunMeta
-    const mine = proposals.filter((p) => p.runId === row.runId).map(proposalView)
+    const mine = proposals.filter((p) => p.runId === row.runId).map((p) => proposalView(p))
     // GIDEON Memory chips are the person's own (owner, 19 Oct 2026): the OAA review shows the chat, never them.
     const { memories: _ownerOnly, ...shared } = meta
     void _ownerOnly

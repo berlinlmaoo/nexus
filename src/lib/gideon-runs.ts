@@ -8,6 +8,9 @@ import { bookingChangeView, bookingView, moveNeedsPick, type GideonBookingChange
 import { resolveRoomName } from "@/lib/room-booking-rooms"
 import { createTaskNeedsProject, type TaskTargetProject } from "@/lib/gideon-task-target"
 import { memoryView, type MemoryView } from "@/lib/gideon-memory"
+import { gideonSummaryPair, type SummaryLang } from "@/lib/gideon-summary-i18n"
+import { changedDiffRows } from "@/lib/gideon-diff-rows"
+import { langFromRequest, recipientLang } from "@/lib/notification-text"
 
 /**
  * GIDEON runs (owner, 12 Oct 2026 — "GIDEON replies like Notion's agent").
@@ -140,6 +143,18 @@ export type GideonProposalView = {
    * without `confirm: { proposalId }` (released apps), so nothing outward-facing is ever applied from plain rows.
    */
   extra?: GideonExtraView | null
+  /**
+   * QA final 19 Oct 2026 (E-6): the card summary in both languages. `summary` itself is in the person's language
+   * (X-Nexus-Lang / web Accept-Language, else their stored uiLanguage, else English) so released apps that print
+   * it as is show it right; new clients pick `summaryId` / `summaryEn` by their own UI language.
+   */
+  summaryEn?: string
+  summaryId?: string
+  /**
+   * D-10: true when every "before → after" row of the card had before = after (those rows are left out of
+   * `diff`): Apply would change nothing. Clients show "No changes · Tidak ada perubahan". Absent = false.
+   */
+  noChange?: boolean
 }
 export type GideonTaskTargetView = {
   title: string
@@ -515,13 +530,25 @@ export async function recordStep(runId: string, step: { tool: string; arg?: stri
   }
 }
 
-export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null; input?: unknown }): GideonProposalView {
+/** The language a proposal's summary is shown in for this person: what this request says, else what they chose. */
+export async function proposalLang(userId: string, headers?: Headers | null): Promise<SummaryLang> {
+  const asked = headers ? langFromRequest(headers) : null
+  if (asked) return asked
+  return (await recipientLang(userId).catch(() => null)) === "id" ? "id" : "en"
+}
+
+export function proposalView(p: { id: string; action: string; summary: string; diff: unknown; status: string; projectId: string | null; taskId: string | null; createdAt: Date; result?: unknown; error?: string | null; input?: unknown }, lang?: SummaryLang): GideonProposalView {
   const result = p.result as AnyObj | null | undefined
+  // `lang` is typed, but `.map(proposalView)` would pass the index: anything but "id" is English.
+  const pair = gideonSummaryPair(p.summary)
+  const { rows, noChange } = changedDiffRows(Array.isArray(p.diff) ? (p.diff as GideonDiffRow[]) : [])
   return {
     id: p.id,
     action: p.action,
-    summary: p.summary,
-    diff: Array.isArray(p.diff) ? (p.diff as GideonDiffRow[]) : [],
+    summary: lang === "id" ? pair.summaryId : p.summary,
+    ...pair,
+    ...(noChange ? { noChange: true } : {}),
+    diff: rows,
     status: p.status,
     projectId: p.projectId,
     taskId: p.taskId,
@@ -628,7 +655,7 @@ export async function runMeta(runId: string, opts: { citedBy?: string } = {}): P
     steps: steps.map((s) => ({ id: s.id, tool: s.tool, arg: s.arg, label: s.label, status: s.ok === false ? "error" : "done", error: s.error })),
     sources: (opts.citedBy !== undefined ? citedRefs(opts.citedBy, sources) : sources).slice(0, 20),
     cards,
-    proposals: proposals.map(proposalView),
+    proposals: proposals.map((p) => proposalView(p)),
     ...(memories.length ? { memories: memories.map(memoryView) } : {}),
   }
 }

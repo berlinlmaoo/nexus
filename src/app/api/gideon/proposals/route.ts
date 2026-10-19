@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { proposalView } from "@/lib/gideon-runs"
+import { proposalLang, proposalView } from "@/lib/gideon-runs"
 
 /**
  * GET /api/gideon/proposals — the writes GIDEON is holding for the signed-in person (approval mode,
@@ -19,5 +19,6 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     take: 30,
   })
-  return NextResponse.json({ proposals: rows.map(proposalView) })
+  const lang = await proposalLang(session.user.id, req.headers)
+  return NextResponse.json({ proposals: rows.map((p) => proposalView(p, lang)) })
 }
