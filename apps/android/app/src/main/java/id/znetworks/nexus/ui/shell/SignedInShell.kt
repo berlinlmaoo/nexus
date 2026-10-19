@@ -349,21 +349,28 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         }
     }
 
-    // The location disclosure can come due from any screen (a queued check-in landing, a refresh).
-    TrailConsentHost(container.workTrail)
+    var startupModal by rememberSaveable { mutableStateOf<StartupModal?>(null) }
+    var trailModalBusy by remember { mutableStateOf(false) }
+    val disclosure by container.workTrail.disclosureFor.collectAsStateWithLifecycle()
+    val announcementQueue by container.announcements.queue.collectAsStateWithLifecycle()
+    val announcementsLoading by container.announcements.loading.collectAsStateWithLifecycle()
+    TrailConsentHost(container.workTrail, enabled = startupModal == StartupModal.LOCATION_CONSENT, onBusyChanged = { trailModalBusy = it })
     // Taken away in the middle of a workday: asked again on every return to the app (iOS 77818ba).
     var alwaysAgain by rememberSaveable { mutableStateOf(false) }
     androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
-        if (container.remoteConfig.current.requireAlwaysLocation && container.workdayOpen() &&
-            id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null) alwaysAgain = true
+        alwaysAgain = container.remoteConfig.current.requireAlwaysLocation && container.workdayOpen() &&
+            id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null
         onPauseOrDispose { }
     }
-    if (alwaysAgain) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { alwaysAgain = false }) { alwaysAgain = false }
-    AnnouncementDialog(container.announcements)
+    if (startupModal == StartupModal.ALWAYS_LOCATION) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { alwaysAgain = false }) { alwaysAgain = false }
+    if (startupModal == StartupModal.ANNOUNCEMENT) AnnouncementDialog(container.announcements)
     // Once per version, after the location disclosure and announcements have had their turn.
     val version = container.identity.versionName
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version) && !id.znetworks.nexus.core.tour.TourMode.active) }
-    if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
+    LaunchedEffect(announcementQueue, announcementsLoading, disclosure, trailModalBusy, alwaysAgain, whatsNew) {
+        startupModal = StartupModals.next(startupModal, announcementsLoading, announcementQueue.isNotEmpty(), disclosure != null || trailModalBusy, alwaysAgain, whatsNew)
+    }
+    if (startupModal == StartupModal.PROMO) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
     // web's sidebar with every destination instead (dev web AppSidebar).

@@ -36,21 +36,24 @@ import id.znetworks.nexus.R
  * with a real choice. Then the OEM battery guide, once (REQ-ATT-38).
  */
 @Composable
-fun TrailConsentHost(trail: WorkTrail) {
+fun TrailConsentHost(trail: WorkTrail, enabled: Boolean = true, onBusyChanged: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val recordId by trail.disclosureFor.collectAsStateWithLifecycle()
     var showBattery by rememberSaveable { mutableStateOf(false) }
     var askBackground by rememberSaveable { mutableStateOf(false) }
+    var permissionPending by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(recordId, showBattery, askBackground, permissionPending) { onBusyChanged(recordId != null || showBattery || askBackground || permissionPending) }
 
-    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { showBattery = BatteryGuide.due(context) }
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionPending = false; showBattery = BatteryGuide.due(context) }
     val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        permissionPending = false
         val id = recordId ?: return@rememberLauncherForActivityResult
         val ok = result[Manifest.permission.ACCESS_FINE_LOCATION] == true || hasFine(context)
         trail.consentGiven(id, ok)
         if (ok) askBackground = needsBackground(context) else showBattery = false
     }
 
-    recordId?.let { id ->
+    recordId?.takeIf { enabled && !permissionPending }?.let { id ->
         AlertDialog(
             onDismissRequest = {},
             title = { Text(stringResource(R.string.trail_disclosure_title)) },
@@ -61,7 +64,7 @@ fun TrailConsentHost(trail: WorkTrail) {
                         trail.consentGiven(id, true)
                         if (needsBackground(context)) askBackground = true else showBattery = BatteryGuide.due(context)
                     } else {
-                        fine.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                        permissionPending = true; fine.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
                 }) { Text(stringResource(R.string.trail_agree), fontWeight = FontWeight.Bold) }
             },
@@ -69,7 +72,7 @@ fun TrailConsentHost(trail: WorkTrail) {
         )
     }
 
-    if (askBackground) {
+    if (askBackground && enabled && !permissionPending) {
         // "Allow all the time" lets the session resume after a restart. On Android 11+ this is a
         // trip to Settings, and the dialog says so.
         AlertDialog(
@@ -79,14 +82,14 @@ fun TrailConsentHost(trail: WorkTrail) {
             confirmButton = {
                 TextButton(onClick = {
                     askBackground = false
-                    if (Build.VERSION.SDK_INT >= 29) background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    if (Build.VERSION.SDK_INT >= 29) { permissionPending = true; background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }
                 }) { Text(stringResource(R.string.trail_always_go)) }
             },
             dismissButton = { TextButton(onClick = { askBackground = false; showBattery = BatteryGuide.due(context) }) { Text(stringResource(R.string.not_now)) } },
         )
     }
 
-    if (showBattery) {
+    if (showBattery && enabled && !permissionPending) {
         AlertDialog(
             onDismissRequest = { showBattery = false; BatteryGuide.markShown(context) },
             title = { Text(stringResource(R.string.battery_title)) },
