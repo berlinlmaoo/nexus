@@ -355,7 +355,8 @@ struct TimelineTab: View {
     var dateFieldIds: [String] = []
 
     @Environment(\.horizontalSizeClass) private var hSize
-    @State private var showNames = false
+    /// Phone: names shown by default — a task without dates has no bar and is invisible without its name (R-7).
+    @State private var showNames = true
     @State private var collapsed: Set<String> = []
     @State private var shown: [String: Int] = [:]
     /// The chart's horizontal scroll (iOS 18): drives the sticky day header above it.

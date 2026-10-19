@@ -43,15 +43,8 @@ struct GideonPerformanceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let data = store.data {
-                    TimelineView(.periodic(from: .now, by: 5)) { tick in
-                        Label(T(data.telemetryStale(at: tick.date) ? "GPU readings stopped" : "Live data"), systemImage: data.telemetryStale(at: tick.date) ? "wifi.exclamationmark" : "circle.fill")
-                            .font(NXFont.text(12)).foregroundStyle(data.telemetryStale(at: tick.date) ? NX.warning : NX.success)
-                        if let at = NativeDate.parse(data.telemetry.lastAt) {
-                            Text(String(format: T("GPU updated %@ s ago"), AppNumber.int(max(0, Int(tick.date.timeIntervalSince(at)))))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                        }
-                    }
-                    Text(T("Answers: last 15 min · Charts: last 24 h")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    LazyVGrid(columns: columns, spacing: 12) { ForEach(data.tiers) { tierCard($0) } }
+                    GideonPerfSummaryStrip(data: data)
+                    LazyVGrid(columns: columns, spacing: 12) { ForEach(data.tiers) { GideonPerfTierCard(tier: $0) } }
                     gpuCard(data)
                     charts(data)
                     quality(data)
@@ -79,23 +72,6 @@ struct GideonPerformanceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .nexusGideonPerfDenied)) { _ in onDenied() }
         .onChange(of: store.denied) { _, denied in if denied { onDenied() } }
         .refreshable { await store.load() }
-    }
-    private func tierCard(_ tier: GideonPerformanceData.Tier) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("GIDEON " + (GideonTier(rawValue: tier.id)?.label ?? tier.id))
-                .font(NXFont.display(18, .bold)).fixedSize(horizontal: false, vertical: true)
-            Text(T(["online":"Online", "busy":"Busy", "loading":"Loading", "unavailable":"Unavailable"][tier.status] ?? "Unavailable"))
-                .font(NXFont.text(12, .semibold)).foregroundStyle(tier.status == "online" ? NX.success : NX.warning)
-            if let reason = tier.reason { Text(reasonText(reason)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-            metric("Typical answer time (p50)", seconds(tier.p50Ms))
-            metric("Slowest 5% (p95)", seconds(tier.p95Ms))
-            metric("Error rate", tier.errorRate.map { AppNumber.decimal($0 * 100) + "%" } ?? "—")
-            metric("Answering now", AppNumber.int(tier.inFlight))
-            metric("Credits per answer", tier.id == "experimental" ? T("Free") : (tier.avgCredits15m ?? tier.avgCredits24h).map { AppNumber.decimal($0) } ?? "—")
-            if tier.avgCredits15m == nil, let avg = tier.avgCredits24h, tier.id != "experimental" { Text(String(format: T("Avg %@ over 24 h"), AppNumber.decimal(avg))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-            Text(String(format: T("%@ answers in 15 min · %@ in 24 h"), AppNumber.int(tier.answers15m), AppNumber.int(tier.answers24h)))
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-        }.frame(maxWidth: .infinity, alignment: .leading).nexusCard()
     }
     private func gpuCard(_ data: GideonPerformanceData) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -210,5 +186,95 @@ struct GideonPerformanceView: View {
     private func seconds(_ milliseconds: Double?) -> String { milliseconds.map { AppNumber.decimal($0 / 1000) + " s" } ?? "—" }
     private func percent(_ value: Double?) -> String { value.map { AppNumber.decimal($0) + "%" } ?? "—" }
     private func clock(_ value: String) -> String { NativeDate.parse(value).map { AppDateLocale.formatter("HH:mm", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: $0) } ?? "—" }
+}
+
+/// One line above the tiers (R-4): answers and errors over 24 h, the GPU's live dot with its age, then what
+/// window the numbers below cover.
+private struct GideonPerfSummaryStrip: View {
+    let data: GideonPerformanceData
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                GideonPerfFigure(value: AppNumber.int(data.tiers.reduce(0) { $0 + $1.answers24h }), label: T("Answers 24 h"))
+                GideonPerfFigure(value: AppNumber.int(errors), label: T(dayErrors ? "Errors 24 h" : "Errors (15 min)"))
+                Spacer(minLength: 0)
+            }
+            TimelineView(.periodic(from: .now, by: 5)) { tick in
+                let stale = data.telemetryStale(at: tick.date)
+                HStack(spacing: 6) {
+                    Circle().fill(stale ? NX.warning : NX.success).frame(width: 7, height: 7)
+                    if !stale, let at = NativeDate.parse(data.telemetry.lastAt) {
+                        Text(String(format: T("GPU updated %@ s ago"), AppNumber.int(max(0, Int(tick.date.timeIntervalSince(at))))))
+                    } else { Text(T("GPU readings stopped")) }
+                }.font(NXFont.text(12)).foregroundStyle(stale ? NX.warning : NX.mutedFg).lineLimit(1)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        Text(T("Answers: last 15 min · Charts: last 24 h")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.horizontal, 4).padding(.top, -10)
+    }
+    private var dayErrors: Bool { data.tiers.allSatisfy { $0.failures24h != nil } }
+    private var errors: Int { data.tiers.reduce(0) { $0 + (dayErrors ? $1.failures24h ?? 0 : $1.failures15m) } }
+}
+
+/// A tier: name and status pill, then the metrics as tiles. With no answer in 15 min the timing tiles say so
+/// once instead of a dash each.
+private struct GideonPerfTierCard: View {
+    let tier: GideonPerformanceData.Tier
+    /// Two columns; three in a row when only the three live tiles are left (no answer in 15 min).
+    private let tiles = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(GideonTier(rawValue: tier.id)?.label ?? tier.id).font(NXFont.display(18, .bold)).lineLimit(1)
+                Spacer(minLength: 8)
+                NexusChip(text: T(statusLabel), tone: statusTone)
+            }
+            if let reason = tier.reason { Text(reasonText(reason)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true) }
+            if quiet { Text(T("No answers in 15 min")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            LazyVGrid(columns: quiet ? tiles + [GridItem(.flexible(), spacing: 8)] : tiles, alignment: .leading, spacing: 8) {
+                if !quiet {
+                    GideonPerfTile(value: seconds(tier.p50Ms), label: T("Typical time (p50)"))
+                    GideonPerfTile(value: seconds(tier.p95Ms), label: T("Slowest 5% (p95)"))
+                    GideonPerfTile(value: tier.errorRate.map { AppNumber.decimal($0 * 100) + "%" } ?? "—", label: T("Error rate"))
+                }
+                GideonPerfTile(value: AppNumber.int(tier.inFlight), label: T("Answering now"))
+                if let credits { GideonPerfTile(value: credits, label: T("Credits / answer")) }
+                GideonPerfTile(value: AppNumber.int(tier.answers24h), label: T("Answers 24 h"))
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+    }
+    private var quiet: Bool { tier.answers15m == 0 }
+    private var credits: String? {
+        if tier.id == "experimental" { return T("Free") }
+        return (tier.avgCredits15m ?? tier.avgCredits24h).map { AppNumber.decimal($0) } ?? (quiet ? nil : "—")
+    }
+    private var statusLabel: String { ["online": "Online", "busy": "Busy", "loading": "Loading"][tier.status] ?? "Offline" }
+    private var statusTone: ChipTone { tier.status == "online" ? .success : tier.status == "unavailable" ? .danger : .warning }
+    private func seconds(_ milliseconds: Double?) -> String { milliseconds.map { AppNumber.decimal($0 / 1000) + " s" } ?? "—" }
     private func reasonText(_ reason: String) -> String { T(["transcribing":"The GPU is transcribing a meeting.","loading":"Loading the model into the GPU.","down":"The local engine isn't responding.","failing":"The last 3 answers failed."][reason] ?? "Unavailable") }
+}
+
+private struct GideonPerfFigure: View {
+    let value: String
+    let label: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(NXFont.display(24, .bold)).monospacedDigit().lineLimit(1)
+            Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        }.frame(minWidth: 96, alignment: .leading).accessibilityElement(children: .combine)
+    }
+}
+
+private struct GideonPerfTile: View {
+    let value: String
+    let label: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value).font(NXFont.display(20, .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
+        .padding(10)
+        .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
 }

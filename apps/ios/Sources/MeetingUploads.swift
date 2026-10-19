@@ -73,10 +73,17 @@ final class MeetingUploads {
         }
         for job in jobs.values where isCurrent(job) && !running.contains(job.id) && !active.contains(job.id) { await schedule(job.id, reconcile: true) }
     }
-    func cancelAndRemove(_ id: String) {
+    /// `keepRecording`: the person cancelled the upload, so a recording made here stays for another try.
+    func cancelAndRemove(_ id: String, keepRecording: Bool = false) {
         guard let job = jobs[id], isCurrent(job) else { return }
         session.getAllTasks { tasks in for task in tasks where task.taskDescription?.hasPrefix(id + ":") == true { task.cancel() } }
-        finish(id); completed[id] = nil; fractions[id] = nil
+        finish(id, keepRecording: keepRecording); completed[id] = nil; fractions[id] = nil
+    }
+    /// Bytes on the server plus the running chunk's bytes sent: the same source as the progress bar.
+    func sentBytes(_ id: String) -> Int? {
+        guard let job = jobs[id] else { return nil }
+        guard let fraction = fractions[id] else { return job.received }
+        return min(job.bytes, max(job.received, Int((fraction * Double(job.bytes)).rounded())))
     }
     func retry(_ id: String) async { failures[id] = nil; await schedule(id, reconcile: true) }
     func isCurrent(_ job: Job) -> Bool { job.ownerId == Keychain.load()?.userId && job.server == ServerEnvironment.current.rawValue }
@@ -152,10 +159,10 @@ final class MeetingUploads {
         } else if refusal.code == "NOT_UPLOADING" { await schedule(id, reconcile: true) }
         else { failures[id] = status == 401 ? T("Session expired — please log in again.") : refusal.localizedDescription; save() }
     }
-    private func finish(_ id: String) {
+    private func finish(_ id: String, keepRecording: Bool = false) {
         if let job = jobs.removeValue(forKey: id) {
             if let source = MeetingStorage.resolve(job.source, in: folder) { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
-            if let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
+            if !keepRecording, let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
         }
         active.remove(id); fractions[id] = 1; failures[id] = nil; save()
     }
@@ -189,10 +196,26 @@ struct MeetingUploadStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let job = uploads.jobs[meetingId], uploads.isCurrent(job) {
-                ProgressView(value: uploads.fractions[meetingId] ?? Double(job.received) / Double(max(1, job.bytes))).tint(NX.violet)
-                Text(AppNumber.bytes(job.received) + " / " + AppNumber.bytes(job.bytes)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                // Bar and label read the same live byte count (R-5: the label stayed at 0 B while the bar moved).
+                MeetingUploadBytes(sent: uploads.sentBytes(meetingId) ?? job.received, total: job.bytes)
             }
             if let failure = uploads.failures[meetingId] { Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger); Button(T("Resume upload")) { Task { await uploads.retry(meetingId) } }.buttonStyle(.nxBordered) }
+        }
+    }
+}
+
+/// The upload bar and "12.4 MB of 31.1 MB · 40 %", drawn from one byte count.
+struct MeetingUploadBytes: View {
+    let sent: Int
+    let total: Int
+    var body: some View {
+        let fraction = Double(sent) / Double(max(1, total))
+        // Nearest whole percent, but never "100 %" before the last byte is in.
+        let percent = sent >= total ? 100 : min(99, Int((fraction * 100).rounded()))
+        VStack(alignment: .leading, spacing: 6) {
+            ProgressView(value: fraction).tint(NX.violet)
+            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(percent) + " %"))
+                .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
         }
     }
 }

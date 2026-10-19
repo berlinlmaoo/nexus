@@ -320,43 +320,24 @@ struct MessagesView: View {
             else if let error { ErrorState(message: error, icon: "bubble.left.and.bubble.right") { Task { await load() } } }
             else {
                 TabView(selection: $category) {
-                    ForEach(MessageCategory.allCases) { tab in categoryPage(tab).tag(tab) }
+                    // Each page is equal to itself across a swipe: settling on a tab changes `category`
+                    // only, so the pages beside it are not rebuilt (R-10).
+                    ForEach(MessageCategory.allCases) { tab in
+                        MessagesCategoryPage(tab: tab, rows: items(tab), meId: meId, isSplit: isSplit,
+                                             selectedId: selected?.id, projectIcons: projectIcons,
+                                             open: { open($0) }, startChat: { showNewChat = true }, reload: { await load() })
+                            .equatable()
+                            .tag(tab)
+                    }
                 }.tabViewStyle(.page(indexDisplayMode: .never))
             }
         }
     }
-    @ViewBuilder private func categoryPage(_ tab: MessageCategory) -> some View {
-        let rows = items(tab)
-        if rows.isEmpty {
-            EmptyState(icon: "bubble.left.and.bubble.right", title: String(format: T("No %@ chats yet"), T(tab.rawValue)),
-                       subtitle: T("Chat with your team and in project rooms."),
-                       actionTitle: tab == .projects ? nil : T("Start a chat"), actionIcon: "square.and.pencil") { showNewChat = true }
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(rows) { c in
-                        if c.id != rows.first?.id { Divider().overlay(NX.border) }
-                        conversationRow(c)
-                    }
-                }.padding(isSplit ? 8 : 16)
-            }.refreshable { await load() }
-                .accessibilityIdentifier("messages.page." + tab.type)
-        }
-    }
-    @ViewBuilder private func conversationRow(_ c: Conversation) -> some View {
-        if isSplit {
-            Button { unavailableChat = nil; selected = c } label: {
-                ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
-            }.buttonStyle(.plain).hoverEffect(.highlight)
-                .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
-        } else {
-            NavigationLink {
-                ChatThreadView(conversationId: c.id, title: c.title(meId: meId), members: c.members ?? [], projectId: c.projectId,
-                               type: c.type, canManageMembers: c.canManageMembers, canPost: c.canPost != false)
-            } label: {
-                ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
-            }.buttonStyle(.plain).hoverEffect(.highlight)
-        }
+    /// A row tapped: the thread beside the list on iPad / Mac, pushed by value on the phone. A value push
+    /// builds the thread only when it opens; a NavigationLink built one (with its location manager) for every
+    /// row on every list redraw (R-10).
+    private func open(_ c: Conversation) {
+        if isSplit { unavailableChat = nil; selected = c } else { pushedConvo = FocusedConversation(id: c.id) }
     }
 
     private func load() async {
@@ -405,6 +386,52 @@ struct MessagesView: View {
             catch APIError.unauthorized { auth.logout(); return }
             catch {}
         } while refreshAgain
+    }
+}
+
+/// One tab of the Messages pager. Equatable on what its rows show (R-10).
+private struct MessagesCategoryPage: View, Equatable {
+    let tab: MessageCategory
+    let rows: [Conversation]
+    let meId: String?
+    let isSplit: Bool
+    let selectedId: String?
+    let projectIcons: [String: String]
+    let open: (Conversation) -> Void
+    let startChat: () -> Void
+    let reload: () async -> Void
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.tab == b.tab && a.meId == b.meId && a.isSplit == b.isSplit && a.selectedId == b.selectedId
+            && a.projectIcons == b.projectIcons && a.rows.map(signature) == b.rows.map(signature)
+    }
+    /// What a row draws from its conversation; muting and typing are observed by the row itself.
+    private static func signature(_ c: Conversation) -> String {
+        [c.id, c.name ?? "", c.type ?? "", c.projectId ?? "", String(c.unreadCount ?? 0), c.mutedUntil ?? "",
+         c.lastMessage?.id ?? "", c.lastMessage?.content ?? "", c.lastMessage?.attachmentUrl ?? "",
+         (c.members ?? []).map { ($0.userId ?? $0.user?.id ?? "") + ($0.user?.name ?? "") + ($0.user?.avatar ?? "") }.joined(separator: ",")]
+            .joined(separator: "|")
+    }
+
+    var body: some View {
+        if rows.isEmpty {
+            EmptyState(icon: "bubble.left.and.bubble.right", title: String(format: T("No %@ chats yet"), T(tab.rawValue)),
+                       subtitle: T("Chat with your team and in project rooms."),
+                       actionTitle: tab == .projects ? nil : T("Start a chat"), actionIcon: "square.and.pencil") { startChat() }
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(rows) { c in
+                        if c.id != rows.first?.id { Divider().overlay(NX.border) }
+                        Button { open(c) } label: {
+                            ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
+                        }.buttonStyle(.plain).hoverEffect(.highlight)
+                            .background(isSplit && selectedId == c.id ? NX.violet.opacity(0.10) : .clear)
+                    }
+                }.padding(isSplit ? 8 : 16)
+            }.refreshable { await reload() }
+                .accessibilityIdentifier("messages.page." + tab.type)
+        }
     }
 }
 

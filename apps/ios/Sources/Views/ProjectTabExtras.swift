@@ -155,26 +155,10 @@ struct ProjectTableTab: View {
     @State private var draftLane: String?
     @State private var draftTitle = ""
     @FocusState private var draftFocused: Bool
-    /// How far the columns are scrolled sideways: the Name column and the group titles move back by it,
-    /// so they stay at the leading edge (UI tour run 13, F-05 / I-7 / M-6: scrolled right, the rows had no
-    /// name and the group headers were blank bands). iOS 18+; earlier systems scroll the column away.
-    @State private var stickyX: CGFloat = 0
-    /// Where every resting place of the vertical scroll starts (group headers, rows, "Show more", "+ New task"),
-    /// the rows' height and the scroll's own: for `endRoom`.
-    @State private var rowTops: [String: CGFloat] = [:]
-    @State private var rowsHeight: CGFloat = 0
-    @State private var rowsViewport: CGFloat = 0
-
-    /// The room after the last row: 24 pt, plus what makes the scroll's END a row start too. At the end the scroll
-    /// cannot snap, so the last pages began with the bottom of the row before (its hairline ~3 pt under the
-    /// header: a doubled rule; UI tour run 20, R20-I-06). With the end on a row start every resting offset is a row
-    /// boundary, and the header's own rule is the only line at the top.
-    private var endRoom: CGFloat {
-        let base: CGFloat = 24
-        let maxOff = rowsHeight + base - rowsViewport
-        guard rowsViewport > 0, maxOff > 0, let next = rowTops.values.filter({ $0 >= maxOff - 0.5 }).min() else { return base }
-        return base + (next - maxOff)
-    }
+    /// The sideways offset and the resting places, which change while the table scrolls. Never read in this
+    /// body: a scroll redraws only the "›" cue and the end spacer, not the rows (R-8). The Name column and the
+    /// group titles stay at the leading edge through TableStickyLeading, applied when drawing.
+    @State private var scroll = TableScrollModel()
 
     private var compact: Bool { hSize != .regular }
     /// Date fields that hold names ("Request by" from a Notion import): the text glyph, not a calendar (and not a
@@ -207,13 +191,15 @@ struct ProjectTableTab: View {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(lanes) { lane in group(lane, cols) }
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(lanes) { lane in group(lane, cols) }
+                        }
+                        .coordinateSpace(.named(TableRowTop.space))
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { [scroll] h in if scroll.rowsHeight != h { scroll.rowsHeight = h } }
+                        TableEndRoom(scroll: scroll)
                     }
-                    .coordinateSpace(.named(TableRowTop.space))
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
-                    .padding(.bottom, endRoom)
                 }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsViewport = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { [scroll] h in if scroll.rowsViewport != h { scroll.rowsViewport = h } }
                 // Rows come to rest whole under the header, never half cut under it (UI tour run 16,
                 // R16-I-07; the web's WB-1). Each group's rows are the resting places (group(_:_:)).
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
@@ -222,39 +208,12 @@ struct ProjectTableTab: View {
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .scrollTargetBehavior(TableColumnSnap(starts: cols.columnStarts, pageWidth: visibleWidth - cols.name))
-        .modifier(HorizontalOffsetTracker(offsetX: $stickyX))
+        .modifier(TableScrollTracker(scroll: scroll))
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         // More columns to the right: a "›" in the header row (UI tour run 9, I5; run 17, R17-I-02 / R17-B-09).
-        .overlay(alignment: .topTrailing) {
-            // Whole columns only, so the cue for more is a "›" in the header row.
-            if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > stickyX + 1 {
-                // iPad / Mac: the "›" heads a plain strip as tall as the table that covers whatever part of the
-                // next column the viewport cuts, so no sliver of digits ("4", "1(9)") or a cut "On F" status
-                // shows at the right edge, on the first page or after a swipe (UI tour run 19, Mac R19-M-02).
-                let cut = compact ? 22 : partialWidth(cols, visibleWidth: visibleWidth)
-                VStack(spacing: 0) {
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
-                        .frame(width: max(22, cut), height: 40)
-                    if !compact { Spacer(minLength: 0) }
-                }
-                .frame(width: max(22, cut))
-                .frame(maxHeight: compact ? 40 : .infinity, alignment: .top)
-                .background(NX.card.opacity(compact ? 0.9 : 1))
-                .overlay(alignment: .leading) { if !compact { Rectangle().fill(NX.border).frame(width: 1) } }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-        }
+        .overlay(alignment: .topTrailing) { TableMoreCue(scroll: scroll, cols: cols, visibleWidth: visibleWidth, compact: compact) }
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
-    }
-
-    /// How much of the viewport's right edge shows a column only in part (at least the 22 pt of the "›").
-    private func partialWidth(_ cols: TableColumns, visibleWidth: CGFloat) -> CGFloat {
-        let right = stickyX + visibleWidth
-        let ends = cols.columnStarts.map { cols.name + $0 }
-        let lastWhole = ends.last { $0 <= right - 22 + 0.5 } ?? (right - 22)
-        return max(22, right - lastWhole)
     }
 
     // MARK: groups
@@ -265,13 +224,13 @@ struct ProjectTableTab: View {
         let limit = shown[lane.id] ?? 40
         return VStack(alignment: .leading, spacing: 0) {
             groupHeader(lane, count: tasks.count, collapsed: isCollapsed)
-                .modifier(TableRowTop(key: "g:\(lane.id)", tops: $rowTops))
+                .modifier(TableRowTop(key: "g:\(lane.id)", scroll: scroll))
             if !isCollapsed {
-                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
+                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields)
                 let order: () -> [String] = { tasks.map(\.id) }
                 ForEach(Array(tasks.prefix(limit))) { t in
                     row(t, laneId: lane.id, cols: cols, order: order)
-                        .modifier(TableRowTop(key: "t:\(t.id)", tops: $rowTops))
+                        .modifier(TableRowTop(key: "t:\(t.id)", scroll: scroll))
                 }
                 if tasks.count > limit {
                     let more = min(25, tasks.count - limit)
@@ -279,16 +238,16 @@ struct ProjectTableTab: View {
                         Text(String(format: T("Show %d more"), more))
                             .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
                             .padding(.horizontal, 14)
-                            .offset(x: stickyX)
+                            .modifier(TableStickyLeading())
                             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
                     .overlay(alignment: .bottom) { TableHairline() }
-                    .modifier(TableRowTop(key: "m:\(lane.id)", tops: $rowTops))
+                    .modifier(TableRowTop(key: "m:\(lane.id)", scroll: scroll))
                 }
-                if onAddTask != nil { newTaskRow(lane.id).modifier(TableRowTop(key: "n:\(lane.id)", tops: $rowTops)) }
+                if onAddTask != nil { newTaskRow(lane.id).modifier(TableRowTop(key: "n:\(lane.id)", scroll: scroll)) }
             }
         }
         // The header and every row are resting places for the vertical scroll (viewAligned above).
@@ -322,7 +281,7 @@ struct ProjectTableTab: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .offset(x: stickyX)
+            .modifier(TableStickyLeading())
             .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -338,7 +297,7 @@ struct ProjectTableTab: View {
             ? allLanes.first { $0.id == laneId }.map { RowStatus(name: $0.name, colorKey: $0.colorKey) }
             : nil
         return ProjectTableRow(
-            task: t, laneId: laneId, cols: cols, fields: fields, stickyX: stickyX,
+            task: t, laneId: laneId, cols: cols, fields: fields,
             status: statusOf?(t) ?? laneStatus ?? RowStatus.plain(t), statusOptions: statusOptions,
             allLanes: allLanes, members: members, selection: selection, order: order,
             onOpen: onOpen, onDrop: onDrop, onMoveTo: onMoveTo, onSetStatus: onSetStatus,
@@ -364,7 +323,7 @@ struct ProjectTableTab: View {
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: 640, minHeight: 42, alignment: .leading)
-            .offset(x: stickyX)
+            .modifier(TableStickyLeading())
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .bottom) { TableHairline() }
         } else {
@@ -379,7 +338,7 @@ struct ProjectTableTab: View {
                 }
                 .foregroundStyle(NX.mutedFg)
                 .padding(.horizontal, 14)
-                .offset(x: stickyX)
+                .modifier(TableStickyLeading())
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -400,13 +359,65 @@ struct ProjectTableTab: View {
     }
 }
 
-/// Reports a horizontal ScrollView's offset, never below 0 (iOS 18; a no-op before).
-struct HorizontalOffsetTracker: ViewModifier {
-    @Binding var offsetX: CGFloat
+/// The frozen Name column's edge while the other columns scroll under it: a hairline, and a soft fade beside
+/// it once the columns are scrolled (`restX`: the edge's place at rest). A gradient, not a shadow: no offscreen
+/// pass per row while scrolling (R-8).
+struct StickyColumnEdge: View {
+    let restX: CGFloat
+    var body: some View {
+        Rectangle().fill(NX.border).frame(width: 1)
+            .background(alignment: .leading) {
+                LinearGradient(colors: [.black.opacity(0.08), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 5).offset(x: 1)
+                    .visualEffect { effect, proxy in
+                        effect.opacity(proxy.frame(in: .scrollView(axis: .horizontal)).minX < restX - 0.5 ? 1 : 0)
+                    }
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+/// Keeps a view at the table's leading edge while the columns scroll sideways. The shift is applied when
+/// drawing (visualEffect), so a sideways scroll never re-runs a row's body (R-8: before, every row redrew on
+/// every scroll update).
+struct TableStickyLeading: ViewModifier {
+    func body(content: Content) -> some View {
+        content.visualEffect { effect, proxy in
+            effect.offset(x: max(0, -proxy.frame(in: .scrollView(axis: .horizontal)).minX))
+        }
+    }
+}
+
+/// What changes while the Table scrolls, kept by reference so only the views that read it redraw.
+@MainActor @Observable
+final class TableScrollModel {
+    /// The sideways offset (iOS 18 scroll geometry; 0 before): the "›" cue only.
+    var x: CGFloat = 0
+    /// Where every resting place of the vertical scroll starts (group headers, rows, "Show more", "+ New task"),
+    /// the rows' height and the scroll's own: for `endRoom`.
+    var tops: [String: CGFloat] = [:]
+    var rowsHeight: CGFloat = 0
+    var rowsViewport: CGFloat = 0
+
+    /// The room after the last row: 24 pt, plus what makes the scroll's END a row start too. At the end the scroll
+    /// cannot snap, so the last pages began with the bottom of the row before (its hairline ~3 pt under the
+    /// header: a doubled rule; UI tour run 20, R20-I-06). With the end on a row start every resting offset is a row
+    /// boundary, and the header's own rule is the only line at the top.
+    var endRoom: CGFloat {
+        let base: CGFloat = 24
+        let maxOff = rowsHeight + base - rowsViewport
+        guard rowsViewport > 0, maxOff > 0, let next = tops.values.filter({ $0 >= maxOff - 0.5 }).min() else { return base }
+        return base + (next - maxOff)
+    }
+}
+
+/// Reports the Table's sideways offset into its model, never below 0 (iOS 18; a no-op before).
+struct TableScrollTracker: ViewModifier {
+    let scroll: TableScrollModel
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentOffset.x) } action: { _, x in
-                if abs(x - offsetX) > 0.5 { offsetX = x }
+                if abs(x - scroll.x) > 0.5 { scroll.x = x }
             }
         } else {
             content
@@ -414,12 +425,44 @@ struct HorizontalOffsetTracker: ViewModifier {
     }
 }
 
-/// The frozen Name column's edge while the other columns scroll under it.
-struct StickyColumnEdge: View {
-    let active: Bool
+/// The room after the last row (TableScrollModel.endRoom), the one view that redraws when it changes.
+struct TableEndRoom: View {
+    let scroll: TableScrollModel
+    var body: some View { Color.clear.frame(height: scroll.endRoom) }
+}
+
+/// More columns to the right: a "›" in the header row. iPad / Mac: the "›" heads a plain strip as tall as the
+/// table that covers whatever part of the next column the viewport cuts, so no sliver of digits ("4", "1(9)")
+/// or a cut "On F" status shows at the right edge, on the first page or after a swipe (UI tour run 19, Mac
+/// R19-M-02). Reads the sideways offset itself, so a scroll redraws only this cue.
+struct TableMoreCue: View {
+    let scroll: TableScrollModel
+    let cols: TableColumns
+    let visibleWidth: CGFloat
+    let compact: Bool
     var body: some View {
-        Rectangle().fill(NX.border).frame(width: 1)
-            .shadow(color: .black.opacity(active ? 0.08 : 0), radius: 3, x: 2)
+        // Whole columns only, so the cue for more is a "›" in the header row.
+        if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > scroll.x + 1 {
+            let cut = compact ? 22 : partialWidth
+            VStack(spacing: 0) {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: max(22, cut), height: 40)
+                if !compact { Spacer(minLength: 0) }
+            }
+            .frame(width: max(22, cut))
+            .frame(maxHeight: compact ? 40 : .infinity, alignment: .top)
+            .background(NX.card.opacity(compact ? 0.9 : 1))
+            .overlay(alignment: .leading) { if !compact { Rectangle().fill(NX.border).frame(width: 1) } }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+    /// How much of the viewport's right edge shows a column only in part (at least the 22 pt of the "›").
+    private var partialWidth: CGFloat {
+        let right = scroll.x + visibleWidth
+        let ends = cols.columnStarts.map { cols.name + $0 }
+        let lastWhole = ends.last { $0 <= right - 22 + 0.5 } ?? (right - 22)
+        return max(22, right - lastWhole)
     }
 }
 
@@ -429,13 +472,13 @@ struct StickyColumnEdge: View {
 struct TableRowTop: ViewModifier {
     static let space = "tableRows"
     let key: String
-    @Binding var tops: [String: CGFloat]
+    let scroll: TableScrollModel
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minY } action: { y in
-                if abs((tops[key] ?? -1) - y) > 0.5 { tops[key] = y }
+                if abs((scroll.tops[key] ?? -1) - y) > 0.5 { scroll.tops[key] = y }
             }
-            .onDisappear { tops[key] = nil }
+            .onDisappear { scroll.tops[key] = nil }
     }
 }
 
@@ -449,8 +492,6 @@ struct TableHeaderRow: View {
     let fields: [CustomField]
     /// Date fields holding names (cfFieldHoldsNames).
     var nameFields: Set<String> = []
-    /// The horizontal scroll: the Name header stays at the leading edge.
-    var stickyX: CGFloat = 0
 
     var body: some View {
         HStack(spacing: 0) {
@@ -459,8 +500,8 @@ struct TableHeaderRow: View {
             cell(T("Name"), icon: TextPropertyGlyph.symbol, width: cols.name, first: true)
                 .accessibilityElement(children: .ignore).accessibilityLabel(T("Name")).accessibilityIdentifier("table.name.header")
                 .background(NX.card)
-                .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
-                .offset(x: stickyX)
+                .overlay(alignment: .trailing) { StickyColumnEdge(restX: cols.name - 1) }
+                .modifier(TableStickyLeading())
                 .zIndex(1)
             cell(T("Assignee"), icon: "person", width: cols.assignee)
             cell(T("Due date"), icon: "calendar", width: cols.due)
@@ -517,8 +558,6 @@ struct ProjectTableRow: View {
     let laneId: String
     let cols: TableColumns
     let fields: [CustomField]
-    /// The horizontal scroll: the name cell stays at the leading edge (F-05).
-    var stickyX: CGFloat = 0
     let status: RowStatus
     let statusOptions: Bool
     let allLanes: [ProjectDetail.Lane]
@@ -545,8 +584,8 @@ struct ProjectTableRow: View {
                         if selecting && selected { NX.violet.opacity(0.10) }
                     }
                 }
-                .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
-                .offset(x: stickyX)
+                .overlay(alignment: .trailing) { StickyColumnEdge(restX: cols.name - 1) }
+                .modifier(TableStickyLeading())
                 .zIndex(1)
             assigneeCell.modifier(TableCell(width: cols.assignee, height: rowH))
             dueCell.modifier(TableCell(width: cols.due, height: rowH))

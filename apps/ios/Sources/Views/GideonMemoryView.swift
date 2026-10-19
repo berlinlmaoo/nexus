@@ -48,73 +48,134 @@ struct GideonMemoryView: View {
             else { ScrollView { pageContent } }
         }.background(NX.background)
             .navigationTitle(embedded ? "" : T("GIDEON Memory")).navigationBarTitleDisplayMode(.inline)
-            .accessibilityElement(children: .contain).accessibilityIdentifier("memory.settings")
+            .accessibilityElement(children: .contain).accessibilityIdentifier("memory.settings").keyboardDoneBar()
             .task { await store.refresh() }
             .liveRefresh(every: 60, on: [.nexusRealtimeConnected], refreshOnReturn: true) { await store.refresh() }
             .onChange(of: store.sessionExpired) { _, expired in if expired { auth.logout() } }
     }
+    /// Inset-grouped as ChatGPT's Memory screen (R-3): the purpose as the page subtitle, rounded groups without
+    /// shadows, each caption below its group, and the profile fields edited in place (saved on Return or on
+    /// leaving the field) instead of rows that push an editor.
     private var pageContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if embedded { Text(T("GIDEON Memory")).font(NXFont.display(26, .bold)) }
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 6) {
+                if embedded { Text(T("GIDEON Memory")).font(NXFont.display(26, .bold)) }
+                Text(T("What GIDEON remembers about you, so its answers fit you. Only you can see this.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.padding(.horizontal, embedded ? 0 : 4)
+            MemoryGroup(caption: T(store.paused ? "Off: GIDEON doesn't remember anything new and doesn't use what's here." : "GIDEON uses what it remembers to personalize your answers.")) {
                 Toggle(T("Use GIDEON Memory"), isOn: Binding(get: { !store.paused && store.available }, set: { on in Task { await store.setPaused(!on) } }))
                     .tint(NX.violet).disabled(store.busy || !store.loaded || !store.available).accessibilityIdentifier("memory.enabled")
-                Text(T(store.paused ? "Off: GIDEON doesn't remember anything new and doesn't use what's here." : "GIDEON uses what it remembers to personalize your answers.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-            }.padding(16).background(NX.card, in: RoundedRectangle(cornerRadius: 14))
-            VStack(alignment: .leading, spacing: 8) {
-                NavigationLink { GideonMemorySummaryView() } label: {
-                    HStack { Text(T("Memory summary")).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").foregroundStyle(NX.mutedFg) }.frame(minHeight: 32)
-                }.accessibilityIdentifier("memory.summary")
-                Text(T("See what GIDEON has learned about you. Add things here or tell it in a chat.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-            }.padding(16).background(NX.card, in: RoundedRectangle(cornerRadius: 14))
-            VStack(spacing: 0) {
-                ForEach(MemoryProfileField.allCases) { field in
-                    if field != .nickname { Divider() }
-                    NavigationLink { MemoryProfileEditor(field: field) } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack { Text(field.label).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").foregroundStyle(NX.mutedFg) }
-                            let value = field.value(in: store.memories, profile: store.profile)
-                            Text(value.isEmpty ? T("Not set") : value).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
-                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    }.disabled(!store.loaded || store.paused || !store.available || !store.profileAvailable).accessibilityIdentifier("memory.profile." + field.rawValue)
-                }
-            }.background(NX.card, in: RoundedRectangle(cornerRadius: 14))
-            if store.loaded && !store.profileAvailable {
-                Text(T("Profile fields aren't available on this server yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 16).frame(minHeight: 50)
             }
-            if !store.available { Text(T("GIDEON Memory is not available right now.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-            Text(T("What GIDEON remembers about you, so its answers fit you. Only you can see this.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            MemoryGroup(caption: T("See what GIDEON has learned about you. Add things here or tell it in a chat.")) {
+                NavigationLink { GideonMemorySummaryView() } label: {
+                    HStack { Text(T("Memory summary")).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg) }
+                        .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("memory.summary")
+            }
+            ForEach(MemoryProfileField.allCases) { field in
+                MemoryGroup(header: field.label, caption: field == .about ? T("Saved directly as a private memory. Only you can see this.") : nil) {
+                    MemoryProfileInlineField(field: field, enabled: profileEditable)
+                }
+            }
+            if store.loaded && !store.profileAvailable { MemoryCaption(text: T("Profile fields aren't available on this server yet.")) }
+            if !store.available { MemoryCaption(text: T("GIDEON Memory is not available right now.")) }
             if store.loading && !store.loaded { ProgressView(T("Loading…")) }
             if let failure = store.failure {
                 Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger)
                 Button(T("Retry")) { Task { await store.refresh() } }.buttonStyle(.nxBordered)
             }
-        }.font(NXFont.text(14)).padding(embedded ? 0 : 20).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
+        }.font(NXFont.text(15)).padding(embedded ? 0 : 16).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
+    }
+    private var profileEditable: Bool { store.loaded && !store.paused && store.available && store.profileAvailable }
+}
+
+/// One inset group: an optional header above the rounded card, an optional caption below it.
+private struct MemoryGroup<Content: View>: View {
+    var header: String? = nil
+    var caption: String? = nil
+    @ViewBuilder let content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if let header { Text(header).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg).padding(.horizontal, 16) }
+            VStack(spacing: 0) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            if let caption { MemoryCaption(text: caption) }
+        }
     }
 }
 
-private struct MemoryProfileEditor: View {
+private struct MemoryCaption: View {
+    let text: String
+    var body: some View {
+        Text(text).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 16)
+    }
+}
+
+/// A profile field edited in place: saved on Return (single-line fields) or when focus leaves it.
+private struct MemoryProfileInlineField: View {
     let field: MemoryProfileField
-    @Environment(\.dismiss) private var dismiss
+    let enabled: Bool
     @State private var store = GideonMemoryStore.shared
     @State private var value = ""
-    @State private var original: GideonMemory?
+    @State private var saved = ""
+    @State private var saving = false
+    @State private var justSaved = false
+    @FocusState private var focused: Bool
+    private var limit: Int { max(1, min(field.maxLength, store.textMax - field.prefix.utf16.count)) }
     var body: some View {
-        Form {
-            Section(field.label) {
-                TextField(field.label, text: $value, axis: .vertical).lineLimit(3...8).accessibilityIdentifier("memory.profile.text")
-                    .onChange(of: value) { _, _ in while value.utf16.count > min(field.maxLength, store.textMax - field.prefix.utf16.count) && !value.isEmpty { value.removeLast() } }
-            }
-            Section { Text(T("Saved directly as a private memory. Only you can see this.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-            if let failure = store.failure { Text(failure).foregroundStyle(NX.danger) }
-            if store.full && original == nil { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))) }
-        }.navigationTitle(field.label).navigationBarTitleDisplayMode(.inline).keyboardDoneBar()
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(T("Save")) { Task { await save() } }.disabled(store.busy || store.paused || !store.available || !store.profileAvailable || (store.full && original == nil) || (!store.loaded)).accessibilityIdentifier("memory.profile.save") } }
-            .onAppear { original = field.memory(in: store.memories); value = field.value(in: store.memories, profile: store.profile) }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            input
+            if saving { ProgressView().controlSize(.small) }
+            else if justSaved { Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("Saved")) }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 13)
+        .contentShape(Rectangle()).onTapGesture { if enabled { focused = true } }
+        .onAppear { load() }
+        .onChange(of: field.value(in: store.memories, profile: store.profile)) { _, _ in if !focused && !saving { load() } }
+        .onChange(of: focused) { _, now in if !now { commit() } }
+        .onChange(of: value) { _, _ in while value.utf16.count > limit && !value.isEmpty { value.removeLast() } }
     }
-    private func save() async {
+    @ViewBuilder private var input: some View {
+        if field == .about {
+            TextField(field.label, text: $value, prompt: Text(T(placeholder)), axis: .vertical)
+                .lineLimit(2...6).modifier(MemoryFieldStyle(enabled: enabled, field: field)).focused($focused)
+        } else {
+            TextField(field.label, text: $value, prompt: Text(T(placeholder)))
+                .submitLabel(.done).onSubmit { focused = false }
+                .modifier(MemoryFieldStyle(enabled: enabled, field: field)).focused($focused)
+        }
+    }
+    private var placeholder: String {
+        field == .nickname ? "What should GIDEON call you?" : field == .occupation ? "e.g. Finance manager" : "Interests, values or preferences to keep in mind"
+    }
+    private func load() {
+        value = field.value(in: store.memories, profile: store.profile); saved = value
+    }
+    private func commit() {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if await store.setProfile(field: field.key, value: text) { dismiss() }
+        guard enabled, text != saved.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+        saving = true
+        Task {
+            let ok = await store.setProfile(field: field.key, value: text)
+            saving = false
+            if ok {
+                saved = text; value = text; justSaved = true
+                try? await Task.sleep(for: .seconds(2)); justSaved = false
+            }
+        }
+    }
+}
+
+private struct MemoryFieldStyle: ViewModifier {
+    let enabled: Bool
+    let field: MemoryProfileField
+    func body(content: Content) -> some View {
+        content.textFieldStyle(.plain).font(NXFont.text(15)).foregroundStyle(NX.foreground)
+            .disabled(!enabled).accessibilityIdentifier("memory.profile." + field.rawValue)
     }
 }
 
@@ -191,16 +252,15 @@ private struct GideonMemorySummaryView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .bottom) {
-                TextField(T("Add or update…"), text: $text, axis: .vertical).lineLimit(1...4).textFieldStyle(.roundedBorder).accessibilityIdentifier("memory.text")
-                    .onChange(of: text) { _, _ in while text.utf16.count > store.textMax { text.removeLast() } }
-                Button { Task { if await store.add(text: text.trimmingCharacters(in: .whitespacesAndNewlines), kind: "FACT", date: "") { text = ""; updated = Date() } } } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
-                    .buttonStyle(.nxPrimary).accessibilityLabel(T("Add")).accessibilityIdentifier("memory.add")
-                    .disabled(store.busy || store.paused || !store.available || store.full || !store.loaded || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            MemoryComposerField(text: $text, textMax: store.textMax, canSend: canAdd) {
+                Task { if await store.add(text: text.trimmingCharacters(in: .whitespacesAndNewlines), kind: "FACT", date: "") { text = ""; updated = Date() } }
             }
-            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-        }.padding(16).background(NX.background)
+            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.horizontal, 14) }
+            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.horizontal, 14) }
+        }.padding(.horizontal, 16).padding(.vertical, 10).background(NX.background)
+    }
+    private var canAdd: Bool {
+        !(store.busy || store.paused || !store.available || store.full || !store.loaded || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
     @ViewBuilder private func row(_ memory: GideonMemory) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -239,6 +299,36 @@ private struct GideonMemorySummaryView: View {
         guard let value else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
         return f.date(from: "2024-" + value).map { AppDateLocale.formatter("d MMM", timeZone: TimeZone(secondsFromGMT: 0)).string(from: $0) }
+    }
+}
+
+/// One rounded capsule as the GIDEON chat composer: soft fill, no outline, the round send button inside it
+/// (accent with text, grey while it can't send).
+private struct MemoryComposerField: View {
+    @Binding var text: String
+    let textMax: Int
+    let canSend: Bool
+    let send: () -> Void
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField(T("Add or update…"), text: $text, axis: .vertical)
+                .lineLimit(1...4).textFieldStyle(.plain).font(NXFont.text(15))
+                .padding(.leading, 16).padding(.vertical, 11)
+                .accessibilityIdentifier("memory.text")
+                .onChange(of: text) { _, _ in while text.utf16.count > textMax { text.removeLast() } }
+            Button(action: send) {
+                Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(canSend ? NX.violet : NX.mutedFg.opacity(0.35), in: Circle())
+                    .frame(width: 40, height: 40).contentShape(Circle())
+            }
+            .buttonStyle(NXPlainPressStyle()).disabled(!canSend)
+            .padding(.trailing, 2).padding(.bottom, 1)
+            .accessibilityLabel(T("Add")).accessibilityIdentifier("memory.add")
+        }
+        .background(NX.muted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .animation(.easeOut(duration: 0.15), value: canSend)
     }
 }
 
