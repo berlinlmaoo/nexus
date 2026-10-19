@@ -210,9 +210,11 @@ struct MeetingUploadBytes: View {
     let total: Int
     var body: some View {
         let fraction = Double(sent) / Double(max(1, total))
+        // Nearest whole percent, but never "100 %" before the last byte is in.
+        let percent = sent >= total ? 100 : min(99, Int((fraction * 100).rounded()))
         VStack(alignment: .leading, spacing: 6) {
             ProgressView(value: fraction).tint(NX.violet)
-            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(Int((fraction * 100).rounded(.down))) + " %"))
+            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(percent) + " %"))
                 .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
         }
     }
