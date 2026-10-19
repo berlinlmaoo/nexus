@@ -695,9 +695,8 @@ private struct TicketBoardLane: View {
                     }
                 }.padding(.bottom, 8)
             }
-        }.padding(10).frame(width: hSize == .compact && items.isEmpty ? 200 : 280).frame(maxHeight: .infinity, alignment: .top)
-            .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(targeted ? NX.violet : NX.border, lineWidth: targeted ? 2 : 1))
+        }.modifier(BoardColumnStyle(fill: NX.card.opacity(0.6), targeted: targeted))
+            .frame(width: hSize == .compact && items.isEmpty ? 200 : 280)
             .dropDestination(for: String.self) { ids, _ in
                 guard canManage, target != "AWAITING_DECISION", let id = ids.first, ids.count == 1 else { return false }
                 onMove(id, target); return true
@@ -718,7 +717,7 @@ private struct TicketBoardLane: View {
                 HStack {
                     Label(AppNumber.int(max(0, (item.messageCount ?? 1) - 1)), systemImage: "bubble.right")
                     Spacer()
-                    if let date = ProjDate.parse(item.createdAt) { Text(ProjDate.dayLabel(date)) }
+                    if let date = ProjDate.parse(item.lastMessageAt ?? item.createdAt) { Text(ProjDate.dayLabel(date)) }
                 }.font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 if status == "DONE" { NexusChip(text: item.statusLabel, tone: .neutral) }
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(NX.card, in: RoundedRectangle(cornerRadius: 12))
