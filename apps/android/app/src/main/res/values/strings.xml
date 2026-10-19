@@ -3331,7 +3331,10 @@
     <string name="gm_empty_hint">Tell GIDEON in a chat, e.g. “remember that I prefer short answers”, or add something here.</string>
     <string name="gm_forget_all">Forget everything</string>
     <string name="gm_forget_title">Forget everything?</string>
-    <string name="gm_forget_body">GIDEON stops using the %1$s things it remembers about you. They\'re deleted for good after 30 days.</string>
+    <plurals name="gm_forget_body">
+        <item quantity="one">GIDEON stops using the %1$d thing it remembers about you. It\'s deleted for good after 30 days.</item>
+        <item quantity="other">GIDEON stops using the %1$d things it remembers about you. They\'re deleted for good after 30 days.</item>
+    </plurals>
     <string name="gm_remember">Remember this?</string>
     <string name="gm_dont">Don\'t save</string>
     <string name="gm_saved">Saved to GIDEON Memory: %1$s</string>

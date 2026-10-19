@@ -3280,7 +3280,9 @@
     <string name="gm_empty_hint">Bilang ke GIDEON di chat, mis. “ingat ya, aku lebih suka jawaban singkat”, atau tambahkan di sini.</string>
     <string name="gm_forget_all">Lupakan semua</string>
     <string name="gm_forget_title">Lupakan semua?</string>
-    <string name="gm_forget_body">GIDEON berhenti memakai %1$s hal yang ia ingat tentang kamu. Semuanya dihapus permanen setelah 30 hari.</string>
+    <plurals name="gm_forget_body">
+        <item quantity="other">GIDEON berhenti memakai %1$d hal yang ia ingat tentang kamu. Semuanya dihapus permanen setelah 30 hari.</item>
+    </plurals>
     <string name="gm_remember">Ingat ini?</string>
     <string name="gm_dont">Jangan</string>
     <string name="gm_saved">Disimpan ke Memori GIDEON: %1$s</string>

@@ -17,6 +17,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -115,7 +116,7 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
             if (data.memories.isNotEmpty()) item { TextButton(onClick = { confirm = true }, enabled = !busy) { Text(stringResource(R.string.gm_forget_all), color = c.dangerText) } }
         }
     }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.gm_forget_title)) }, text = { Text(stringResource(R.string.gm_forget_body, data.memories.size.toString())) },
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.gm_forget_title)) }, text = { Text(pluralStringResource(R.plurals.gm_forget_body, data.memories.size, data.memories.size)) },
         confirmButton = { TextButton(onClick = { confirm = false; act { store.forgetAll(); UiNotice.show(context.getString(R.string.gm_forgotten)) } }) { Text(stringResource(R.string.gm_forget_all), color = c.dangerText) } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
 }
