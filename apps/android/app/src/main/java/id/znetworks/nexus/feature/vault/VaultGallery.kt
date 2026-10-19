@@ -153,11 +153,11 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, items: List<VaultItem> = lis
                 // The path, to walk up: Vault › LOGO › …
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(root, fontSize = 12.sp, color = if (at == null) c.foreground else c.violetText, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(enabled = at != null) { at = null })
+                        modifier = Modifier.clickable(enabled = at != null && firstMoved == null) { at = null })
                     list?.breadcrumb?.forEach { b ->
                         Text(" › ", fontSize = 12.sp, color = c.mutedFg)
                         Text(b.name, fontSize = 12.sp, color = if (b.id == at) c.foreground else c.violetText, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable(enabled = b.id != at) { at = b.id })
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable(enabled = b.id != at && firstMoved == null) { at = b.id })
                     }
                 }
                 val folders = list?.items?.filter { it.isFolder && items.none { selected -> selected.id == it.id } }.orEmpty()
@@ -166,7 +166,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, items: List<VaultItem> = lis
                     list != null && folders.isEmpty() -> Text(stringResource(R.string.vm_no_folders), fontSize = 13.sp, color = c.mutedFg)
                     else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(VaultRules.sorted(folders), key = { it.id }) { f ->
-                            Row(Modifier.fillMaxWidth().clickable { at = f.id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().clickable(enabled = firstMoved == null) { at = f.id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Folder, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
                                 Text(f.name, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
