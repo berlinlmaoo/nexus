@@ -129,4 +129,28 @@ t("N-1 availability: Online / Do not disturb manual statuses", () => {
   assert.ok(!samePresence(decidePresence({ ...base, manual: at("away") }), decidePresence({ ...base, manual: at("dnd") })))
   assert.ok(!samePresence(decidePresence({ ...base, manual: later, windows: [win] }), decidePresence({ ...base, manual: { ...later, availability: "online" }, windows: [win] })))
 })
+
+t("N-1b availability-only status: empty text allowed only with an explicit availability", () => {
+  const end = new Date("2026-10-20T13:00:00Z")
+  for (const a of ["online", "away", "dnd", "DND"]) {
+    const ok = checkManualStatus({ text: "", startsAt: null, endsAt: end, availability: a }, now)
+    assert.equal(ok.text, ""); assert.equal(ok.availability, a.toLowerCase())
+    assert.equal(checkManualStatus({ text: "   ", startsAt: null, endsAt: end, availability: a }, now).text, "")
+    assert.equal(checkManualStatus({ text: undefined, startsAt: null, endsAt: end, availability: a }, now).text, "")
+  }
+  // released apps send no availability → an empty text is still refused (code TEXT)
+  for (const a of [undefined, null, ""]) assert.throws(() => checkManualStatus({ text: "", startsAt: null, endsAt: end, availability: a }, now), (e) => e.code === "TEXT")
+  // the other checks still apply
+  assert.throws(() => checkManualStatus({ text: "", startsAt: null, endsAt: null, availability: "dnd" }, now), (e) => e.code === "END")
+  assert.throws(() => checkManualStatus({ text: "", startsAt: null, endsAt: end, availability: "busy" }, now), (e) => e.code === "AVAILABILITY")
+  const at = (availability) => ({ id: "m1", text: "", startsAt: new Date("2026-10-20T04:00:00Z"), endsAt: new Date("2026-10-20T06:00:00Z"), availability })
+  const exp = { online: ["Online", "Online"], away: ["Away", "Away"], dnd: ["Do not disturb", "Jangan diganggu"] }
+  for (const a of ["online", "away", "dnd"]) {
+    const s = decidePresence({ ...base, manual: at(a) })
+    assert.equal(s.state, a); assert.equal(s.reason, "custom"); assert.equal(s.text, null); assert.equal(s.availability, a)
+    assert.deepEqual(s.label, { en: exp[a][0], id: exp[a][1] })
+    assert.equal(s.manual.text, ""); assert.equal(s.manual.availability, a)
+  }
+  assert.equal(m.manualWords("dnd", ""), "Do not disturb"); assert.equal(m.manualWords("online", "Meeting"), "Online · Meeting")
+})
 console.log(`presence-core: ${n} passed`)

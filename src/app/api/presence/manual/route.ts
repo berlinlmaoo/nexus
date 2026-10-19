@@ -9,6 +9,7 @@ import { PresenceRefusal, availabilityFromDb, clearManualStatus, getPresence, pa
  *   PUT    /api/presence/manual { text, startsAt?, endsAt, availability? }   startsAt default now; times = ISO
  *          instant, or "YYYY-MM-DD HH:MM" / "YYYY-MM-DDTHH:MM" read as WIB; availability (N-1) = online | away | dnd
  *          (any case), missing/null = away (iOS/Android 0.1.6 and older send none) → 200 { manual, status }
+ *          text may be "" only when availability is sent (N-1b, availability-only status: "Do not disturb" alone)
  *   DELETE /api/presence/manual[?id=<manual id>]              with id: only that one (another device may have set a
  *          newer one in between) → 200 { cleared: n, status }
  * Refusals: 400 { error, code } (AVAILABILITY | TEXT | END | END_PAST | END_BEFORE_START | START_FAR | TOO_LONG); 403 PRESENCE_OFF

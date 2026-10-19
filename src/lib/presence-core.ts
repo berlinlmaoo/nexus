@@ -133,11 +133,25 @@ export function availabilityFromDb(v: string | null | undefined): PresenceAvaila
 }
 export const availabilityToDb = (a: PresenceAvailability): "ONLINE" | "AWAY" | "DND" => (a === "online" ? "ONLINE" : a === "dnd" ? "DND" : "AWAY")
 
+/** Whether the client explicitly chose an availability (not missing / null / ""). */
+export function availabilitySent(v: unknown): boolean {
+  return !(v == null || v === "")
+}
+
+/** "Do not disturb · Meeting", or just "Do not disturb" for an availability-only status (N-1b). English, for GIDEON. */
+export function manualWords(availability: PresenceAvailability, text: string | null | undefined): string {
+  const w = STATE_WORD[availability].en
+  return text ? `${w} · ${text}` : w
+}
+
 /** The manual status exactly as setting it would store it, or a refusal the person can act on. */
 export function checkManualStatus(input: { text: unknown; startsAt: Date | null; endsAt: Date | null; availability?: unknown }, now: Date = new Date()): { text: string; startsAt: Date; endsAt: Date; availability: PresenceAvailability } {
   const availability = parseAvailability(input.availability)
   const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : ""
-  if (!text) throw new PresenceRefusal("Write the status, e.g. “Meeting with a client”.", "TEXT")
+  // N-1b (owner 19 Oct 2026): an availability-only status ("Do not disturb" with no text) is fine, but only when the
+  // client sent the availability itself. Released apps (0.1.6 and older) never send it, so for them an empty text
+  // stays refused exactly as before.
+  if (!text && !availabilitySent(input.availability)) throw new PresenceRefusal("Write the status, e.g. “Meeting with a client”.", "TEXT")
   if ([...text].length > MANUAL_TEXT_MAX) throw new PresenceRefusal(`A status is at most ${MANUAL_TEXT_MAX} characters.`, "TEXT")
   const startsAt = input.startsAt && !Number.isNaN(input.startsAt.getTime()) ? input.startsAt : now
   const endsAt = input.endsAt
@@ -216,7 +230,7 @@ export function decidePresence(f: PresenceFacts): PresenceStatus {
 
   if (manual && manual.startsAt.getTime() <= t) {
     const availability = manual.availability ?? DEFAULT_AVAILABILITY
-    return out(availability, "custom", { text: manual.text, until: manual.endsAt.toISOString(), since: manual.startsAt, availability })
+    return out(availability, "custom", { text: manual.text || null, until: manual.endsAt.toISOString(), since: manual.startsAt, availability })
   }
   if (f.open) {
     if (f.open.outsideSince) return out("away", "out_of_office", { since: f.open.outsideSince })
