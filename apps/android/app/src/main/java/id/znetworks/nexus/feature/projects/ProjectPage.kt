@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.ui.zIndex
+
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.background
@@ -793,13 +795,14 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
               vm: ProjectDetailViewModel, selected: Set<String>, onOpenTask: (String) -> Unit, onPickDue: (BoardTask) -> Unit) {
     val c = Nx.colors
     val h = rememberScrollState()
-    val nameW = 200.dp; val colW = 132.dp
+    val compact = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600
+    val nameW = if (compact) 120.dp else 200.dp; val colW = 132.dp
     val usesStatus = StatusOptions.inUse(lanes)
     val cols = props.keys
     val totalW = nameW + colW * cols.size
     val shown = remember(groups) { mutableStateOf(mapOf<String, Int>()) }
     @Composable
-    fun headerCell(text: String, w: Dp) = Box(Modifier.width(w).height(36.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
+    fun headerCell(text: String, w: Dp, modifier: Modifier = Modifier) = Box(modifier.width(w).height(36.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
         Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     val stick = Modifier.offset { androidx.compose.ui.unit.IntOffset(h.value, 0) }
@@ -811,14 +814,14 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
                 item(key = "h-" + g.key) {
                     Box(stick.padding(start = 10.dp, top = 12.dp, bottom = 6.dp)) { GroupPill(g, groupLabel(g, cfg.groupBy), "${g.tasks.size}") }
                     Row(Modifier.background(c.background)) {
-                        headerCell(stringResource(R.string.pp_col_name), nameW)
+                        headerCell(stringResource(R.string.pp_col_name), nameW, if (compact) stick.then(Modifier.zIndex(1f)).background(c.background) else Modifier)
                         cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
                     }
                     HorizontalDivider(Modifier.width(totalW), color = c.border)
                 }
                 val limit = shown.value[g.key] ?: PAGE
                 items(g.tasks.take(limit), key = { g.key + "/" + it.id }) { t ->
-                    TableRow(t, lanes, cols, props, members, usesStatus, access, vm, t.id in selected, selected.isNotEmpty(), nameW, colW, onOpenTask, onPickDue)
+                    TableRow(t, lanes, cols, props, members, usesStatus, access, vm, t.id in selected, selected.isNotEmpty(), nameW, colW, onOpenTask, onPickDue, compact, if (compact) stick else Modifier)
                 }
                 if (g.tasks.size > limit) item(key = "m-" + g.key) {
                     TextButton(onClick = { shown.value = shown.value + (g.key to limit + 25) }, modifier = stick) {
@@ -836,16 +839,17 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun TableRow(t: BoardTask, lanes: List<Lane>, cols: List<String>, props: PropCtx, members: List<ProjectMemberRef>, usesStatus: Boolean, access: ProjectAccess,
-                     vm: ProjectDetailViewModel, isSelected: Boolean, selecting: Boolean, nameW: Dp, colW: Dp, onOpenTask: (String) -> Unit, onPickDue: (BoardTask) -> Unit) {
+                     vm: ProjectDetailViewModel, isSelected: Boolean, selecting: Boolean, nameW: Dp, colW: Dp, onOpenTask: (String) -> Unit, onPickDue: (BoardTask) -> Unit, compact: Boolean, frozenName: Modifier) {
     val c = Nx.colors
     val edit = access.canEdit && !selecting
     Row(Modifier.background(if (isSelected) c.accentBg else Color.Transparent)
         .combinedClickable(onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) }, onLongClick = { if (access.canEdit) vm.toggleSelect(t.id) }),
         verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.width(nameW).height(44.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(frozenName.zIndex(1f).width(nameW).height(44.dp).background(if (isSelected) c.accentBg else c.background)
+            .combinedClickable(onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) }, onLongClick = { if (access.canEdit) vm.toggleSelect(t.id) }).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.5f), modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))
-            Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, lineHeight = 17.sp, maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis,
                 color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
         }
         cols.forEach { key ->
