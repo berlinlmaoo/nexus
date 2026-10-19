@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,18 +70,29 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     }
 }
 /** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
-@Composable fun SetStatusEntry(card: Boolean = false) {
+@Composable fun SetStatusEntry(card: Boolean = false, home: Boolean = false) {
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val snapshot by container.presenceStatuses.state.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
     if (!snapshot.enabled) return
-    val shape = RoundedCornerShape(12.dp)
-    val frame = if (card) Modifier.fillMaxWidth().clip(shape).background(Nx.colors.card).border(1.dp, Nx.colors.border, shape).clickable { open = true }
-        .defaultMinSize(minHeight = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp)
+    val status = snapshot.statuses[container.sessionStore.current?.userId]
+    val shape = RoundedCornerShape(if (home) 18.dp else 12.dp)
+    val frame = if (card || home) Modifier.fillMaxWidth().clip(shape).background(Nx.colors.card).border(1.dp, Nx.colors.border, shape).clickable { open = true }
+        .defaultMinSize(minHeight = if (home) 72.dp else 52.dp).padding(horizontal = if (home) 14.dp else 12.dp, vertical = 8.dp)
     else Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 12.dp)
     Row(frame, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(Icons.Outlined.Circle, null, tint = Nx.colors.warning)
-        Column(Modifier.weight(1f)) { Text(stringResource(R.string.prs_set), color = Nx.colors.foreground); PresenceLine(container.sessionStore.current?.userId) }
+        Box(Modifier.then(if (home) Modifier.size(44.dp).background(dotColor(status?.tone ?: "grey").copy(alpha = .14f), RoundedCornerShape(14.dp)) else Modifier.size(24.dp)), contentAlignment = Alignment.Center) {
+            if (status != null) PresenceDot(status, 12.dp)
+            else Icon(Icons.Outlined.Circle, null, tint = Nx.colors.mutedFg)
+        }
+        Text(stringResource(R.string.prs_set), Modifier.weight(1f), color = Nx.colors.foreground)
+        status?.let {
+            Text(it.label(ConfigBody.lang(LocalConfiguration.current.locales[0])), Modifier.weight(1f),
+                color = Nx.colors.mutedFg, fontSize = 12.sp, maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Nx.colors.mutedFg, modifier = Modifier.size(18.dp))
     }
     if (open) SetStatusDialog { open = false }
 }

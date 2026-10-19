@@ -270,6 +270,7 @@ fun HomeScreen(
         Column(Modifier.fillMaxSize().scrollEdges(homeScroll, c.background, vertical = true).verticalScroll(homeScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Greeting(session?.userName)
             AttendanceCard(s, onOpenAttendance)
+            id.znetworks.nexus.feature.presence.SetStatusEntry(home = true)
             LevelCard(s.game) { levelOpen = true }
             SearchRow(s.unread, onSearch, onOpenInbox)
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) }
