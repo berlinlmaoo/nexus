@@ -33,5 +33,7 @@ extension AppLanguage {
         "Transcribe": "Transkripsi",
         "Minutes & tasks ready": "Notulen & task siap",
         "Transcribing…": "Mentranskrip…",
+        // R-9 ticket status menu: Awaiting decision is set by the server only
+        "Set automatically when GIDEON answers or a proposal arrives": "Diatur otomatis saat GIDEON menjawab atau ada usulan masuk",
     ]
 }

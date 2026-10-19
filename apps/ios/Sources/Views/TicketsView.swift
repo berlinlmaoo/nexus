@@ -75,27 +75,27 @@ func ticketCategoryName(_ key: String) -> String {
 // Free functions rather than members of `Complaint`, because the detail sheet has to draw the same
 // chip from the LIVE detail payload: a BoD's reply moves an OPEN ticket to IN_REVIEW, so the status
 // on the list row it was opened from is stale the moment anybody answers.
-func ticketStatusLabel(_ key: String) -> String {
+/// The board's names everywhere a ticket's status shows (owner, 19 Oct 2026, R-9): New · Awaiting decision ·
+/// In review · Done, and Closed as the second "done" ("Closed (no action)" in the status menu). Spelled out per
+/// language because the shared table already gives "New" and "In review" other Indonesian words elsewhere.
+func ticketStatusLabel(_ key: String, menu: Bool = false) -> String {
+    let id = AppLanguage.shared.lang == .id
     switch key {
-    case "AWAITING_DECISION": return T("Awaiting decision")
-    case "IN_REVIEW": return T("In review")
-    case "RESOLVED": return T("Resolved")
-    case "CLOSED": return T("Closed")
-    default: return T("Open")
+    case "AWAITING_DECISION": return id ? "Menunggu keputusan" : "Awaiting decision"
+    case "IN_REVIEW": return id ? "Ditangani" : "In review"
+    case "RESOLVED": return id ? "Selesai" : "Done"
+    case "CLOSED": return menu ? (id ? "Ditutup (tanpa tindakan)" : "Closed (no action)") : (id ? "Ditutup" : "Closed")
+    default: return id ? "Baru" : "New"
     }
 }
+/// One colour per board column, the same on the column header, the status menu and the pills (R-9):
+/// New grey, Awaiting decision violet, In review amber, Done green; Closed stays grey.
 func ticketStatusTone(_ key: String) -> ChipTone {
     switch key {
-    // The web's colours (complaints.tsx STATUS): Open amber, In review sky, Resolved green
-    // (UI tour 13 Oct 2026: the iPhone had In review amber and Open red).
     case "RESOLVED": return .success
-    case "IN_REVIEW": return .info
-    // Violet, the colour the web gives it, and its own case rather than OPEN's red on the way to
-    // `default`: the ticket HAS been answered, it just is not anybody's yet. Red said "untouched".
+    case "IN_REVIEW": return .warning
     case "AWAITING_DECISION": return .accent
-    case "CLOSED": return .neutral
-    case "OPEN": return .warning
-    default: return .danger
+    default: return .neutral
     }
 }
 
@@ -300,10 +300,8 @@ struct TicketsView: View {
     }
     private func filterLabel(_ f: String) -> String {
         switch f {
-        case "OPEN": return isBod ? T("Inbox") : T("Open")
-        case "IN_REVIEW": return T("In review")
-        case "RESOLVED": return T("Resolved")
-        case "CLOSED": return T("Closed")
+        case "OPEN": return isBod ? T("Inbox") : ticketStatusLabel("OPEN")
+        case "IN_REVIEW", "RESOLVED", "CLOSED": return ticketStatusLabel(f)
         default: return T("All")
         }
     }
@@ -685,11 +683,10 @@ private struct TicketBoardLane: View {
     let onMove: (String, String) -> Void
     @State private var targeted = false
     @Environment(\.horizontalSizeClass) private var hSize
-    private var label: String { status == "OPEN" ? T("New") : status == "DONE" ? T("Done") : ticketStatusLabel(status) }
     private var target: String { status == "DONE" ? "RESOLVED" : status }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack { Text(label).font(NXFont.text(14, .semibold)); Spacer(); Text(AppNumber.int(items.count)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            TicketLaneHeader(status: target, count: items.count)
             ScrollView(.vertical) {
                 LazyVStack(spacing: 10) {
                     if items.isEmpty { EmptyState(icon: "ticket", title: T("No tickets yet"), subtitle: "").padding(.vertical, 12) }
@@ -724,16 +721,55 @@ private struct TicketBoardLane: View {
                     Spacer()
                     if let date = ProjDate.parse(item.lastMessageAt ?? item.createdAt) { Text(ProjDate.dayLabel(date)) }
                 }.font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                if status == "DONE" { NexusChip(text: item.statusLabel, tone: .neutral) }
+                if status == "DONE" { NexusChip(text: item.statusLabel, tone: item.tone) }
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(NX.card, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
         }.buttonStyle(.plain).contextMenu {
             if canManage {
                 ForEach(["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"], id: \.self) { status in
-                    Button(ticketStatusLabel(status)) { onMove(item.id, status) }.disabled(item.statusKey == status)
+                    Button { onMove(item.id, status) } label: { TicketStatusMenuLabel(status: status, current: item.statusKey == status) }
+                        .disabled(item.statusKey == status)
                 }
             }
         }
+    }
+}
+
+/// A board column's head: the status colour as a dot on a tinted band, the name and the count (R-9).
+private struct TicketLaneHeader: View {
+    let status: String
+    let count: Int
+    var body: some View {
+        let tone = ticketStatusTone(status)
+        HStack(spacing: 8) {
+            Circle().fill(tone.fg).frame(width: 8, height: 8)
+            Text(ticketStatusLabel(status)).font(NXFont.text(14, .semibold)).foregroundStyle(tone.fg)
+            Spacer()
+            Text(AppNumber.int(count)).font(NXFont.text(12, .semibold)).foregroundStyle(tone.fg.opacity(0.8)).monospacedDigit()
+        }
+        .padding(.horizontal, 10).frame(height: 34)
+        .background(tone.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A status in a menu: its colour dot, the board's name, a tick on the current one; Awaiting decision says
+/// why it can't be chosen (the server sets it, 422 otherwise).
+struct TicketStatusMenuLabel: View {
+    let status: String
+    let current: Bool
+    var body: some View {
+        if status == "AWAITING_DECISION" {
+            Label {
+                Text(ticketStatusLabel(status, menu: true))
+                Text(T("Set automatically when GIDEON answers or a proposal arrives"))
+            } icon: { dot }
+        } else {
+            Label { Text(ticketStatusLabel(status, menu: true) + (current ? "  ✓" : "")) } icon: { dot }
+        }
+    }
+    private var dot: some View {
+        Image(systemName: "circle.fill").symbolRenderingMode(.palette).foregroundStyle(ticketStatusTone(status).fg)
     }
 }
 
@@ -800,20 +836,15 @@ struct TicketDetailSheet: View {
     @ViewBuilder private var statusControl: some View {
         if detail?.canManage == true {
             Menu {
-                ForEach(Self.settableStatuses, id: \.self) { key in
+                // In the board's column order. The current one stays in the list with a tick rather than
+                // being hidden: a menu whose contents shift depending on where you are is harder to learn.
+                ForEach(Self.menuStatuses, id: \.self) { key in
                     Button {
                         Task { await move(to: key) }
                     } label: {
-                        // The current one stays in the list with a tick rather than being hidden:
-                        // a menu whose contents shift depending on where you are is harder to learn
-                        // than one that always shows the same four and says which you are on.
-                        if key == statusKey {
-                            Label(ticketStatusLabel(key), systemImage: "checkmark")
-                        } else {
-                            Text(ticketStatusLabel(key))
-                        }
+                        TicketStatusMenuLabel(status: key, current: key == statusKey)
                     }
-                    .disabled(key == statusKey)
+                    .disabled(key == statusKey || key == "AWAITING_DECISION")
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -835,7 +866,8 @@ struct TicketDetailSheet: View {
     /// AWAITING_DECISION is missing on purpose and the server refuses it too (422): it is written
     /// when GIDEON answers or a proposal lands, and a director setting it by hand would be saying
     /// "somebody else decide this" about a ticket they are already holding.
-    private static let settableStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
+    /// Shown disabled with its hint, so the menu reads like the board's columns (R-9).
+    private static let menuStatuses = ["OPEN", "AWAITING_DECISION", "IN_REVIEW", "RESOLVED", "CLOSED"]
 
     private func move(to status: String) async {
         guard status != statusKey, !movingStatus else { return }
