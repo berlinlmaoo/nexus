@@ -2,6 +2,10 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "These minutes were already saved, so the speaker names can’t change anymore.": "Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.",
+        "This meeting note was deleted": "Catatan meeting ini sudah dihapus",
+        "It was deleted, or you no longer have access to it.": "Sudah dihapus, atau kamu tidak punya akses lagi.",
+        "All meeting notes": "Semua catatan meeting",
         "You can view this form but not change it.": "Kamu bisa melihat form ini tapi tidak bisa mengubahnya.",
         "Also editing: %@": "Ikut mengedit: %1$@",
         "%@ is editing": "%1$@ sedang mengedit",
