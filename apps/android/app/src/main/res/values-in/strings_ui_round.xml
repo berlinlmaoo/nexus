@@ -59,4 +59,5 @@
     <plurals name="ui_vault_moved"><item quantity="other">%1$d item dipindahkan ke %2$s</item></plurals>
     <string name="ui_ticket_system_status">Status Menunggu keputusan diatur otomatis.</string>
     <string name="ui_timeline_names">Nama</string>
+    <string name="ui_calendar_count_legend">angka = tugas pada hari itu</string>
 </resources>

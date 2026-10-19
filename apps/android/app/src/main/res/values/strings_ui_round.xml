@@ -59,4 +59,5 @@
     <plurals name="ui_vault_moved"><item quantity="one">%1$d item moved to %2$s</item><item quantity="other">%1$d items moved to %2$s</item></plurals>
     <string name="ui_ticket_system_status">Awaiting decision is set automatically.</string>
     <string name="ui_timeline_names">Names</string>
+    <string name="ui_calendar_count_legend">number = tasks that day</string>
 </resources>
