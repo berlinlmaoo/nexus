@@ -178,6 +178,7 @@ struct MessagesView: View {
                 // The split layout draws its own compose button; these two never coexist, so the
                 // shortcut is never registered twice.
                 .keyboardShortcut("n", modifiers: .command)
+                .accessibilityLabel(T("New chat")).accessibilityIdentifier("messages.new")
             }
         }
     }
