@@ -5,10 +5,10 @@ import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { isRecordNotFound } from "@/lib/prisma-errors"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 
 /**
  * Room Booking — the one path that makes a booking (POST /api/room-bookings and GIDEON book_room), the one
@@ -22,6 +22,22 @@ import { emitWorkspaceChanged } from "@/lib/socket-emitter"
  * refuses the second of two requests that passed that check at the same moment. Both end as the same
  * 409 ROOM_TAKEN.
  */
+
+/**
+ * The rooms (Studio, Ruang Meeting, VIP) are the company's office: they belong ONLY to the company workspace
+ * (owner, 19 Oct 2026, QA B-6). A personal or demo workspace never sees, books, moves or deletes a room
+ * booking, and every booking lands in the company workspace. This is the one scope every room path reads:
+ * [company workspace] for its members, [] for anyone else.
+ */
+export async function roomWorkspaceIds(userId: string): Promise<string[]> {
+  return (await orgRoleOf(userId)) ? [ORG_WORKSPACE_ID] : []
+}
+
+/** The refusal for somebody outside the company workspace (POST / PATCH / DELETE). */
+export const ROOMS_NOT_AVAILABLE = {
+  error: "Room booking is only available in the Z Networks workspace.",
+  code: "ROOMS_NOT_AVAILABLE",
+} as const
 
 export const bookingInclude = {
   createdBy: { select: { id: true, name: true, email: true, avatar: true } },
@@ -200,7 +216,9 @@ export async function createRoomBooking(input: {
   end: Date
 }): Promise<CreateBookingResult> {
   const { userId, workspaceId, room, start, end } = input
-  const scope = input.scopeWorkspaceIds.includes(workspaceId) ? input.scopeWorkspaceIds : [workspaceId, ...input.scopeWorkspaceIds]
+  // Rooms belong to the company workspace only (B-6): a booking anywhere else is refused, whoever asks.
+  if (workspaceId !== ORG_WORKSPACE_ID) return { ok: false, status: 403, body: { ...ROOMS_NOT_AVAILABLE } }
+  const scope = [ORG_WORKSPACE_ID]
   const title = input.title.trim()
   if (!BOOKING_ROOMS.includes(room)) return { ok: false, status: 400, body: { error: "Unknown room", code: "UNKNOWN_ROOM" } }
   if (!title) return { ok: false, status: 400, body: { error: "Title is required" } }
@@ -265,7 +283,8 @@ export type ManageableBooking = { ok: true; booking: BookingWithCreator; workspa
  * (canManageBooking). 404 when it is not in their workspaces, 403 when it is not theirs to change.
  */
 export async function findManageableBooking(userId: string, bookingId: string, verb: keyof typeof NOT_YOURS = "change"): Promise<ManageableBooking | BookingRefusal> {
-  const workspaceIds = await getUserWorkspaceIds(userId)
+  const workspaceIds = await roomWorkspaceIds(userId)
+  if (workspaceIds.length === 0) return { ok: false, status: 403, body: { ...ROOMS_NOT_AVAILABLE } }
   const booking = await prisma.roomBooking.findFirst({
     where: { id: bookingId, workspaceId: { in: workspaceIds } },
     include: bookingInclude,

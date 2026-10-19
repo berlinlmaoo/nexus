@@ -3,9 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { createRoomBookingSchema, validateBody } from "@/lib/validations"
-import { bookingInclude, createRoomBooking } from "@/lib/room-booking"
+import { bookingInclude, createRoomBooking, roomWorkspaceIds, ROOMS_NOT_AVAILABLE } from "@/lib/room-booking"
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,9 +28,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid date range" }, { status: 400 })
     }
 
-    const workspaceIds = await getUserWorkspaceIds(session.user.id)
+    // Rooms belong to the company workspace only (B-6): anyone else sees no bookings at all.
+    // `roomsAvailable` is additive; released apps ignore it and just see an empty list.
+    const workspaceIds = await roomWorkspaceIds(session.user.id)
     if (workspaceIds.length === 0) {
-      return NextResponse.json({ bookings: [] })
+      return NextResponse.json({ bookings: [], roomsAvailable: false })
     }
 
     const bookings = await prisma.roomBooking.findMany({
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ startsAt: "asc" }, { createdAt: "asc" }],
     })
 
-    return NextResponse.json({ bookings })
+    return NextResponse.json({ bookings, roomsAvailable: true })
   } catch (error) {
     console.error("Room bookings GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -68,10 +69,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { room, title, startsAt, endsAt, description } = validation.data
-    const workspaceIds = await getUserWorkspaceIds(session.user.id)
+    // Always the company workspace (B-6): it used to be the person's first workspace, which for somebody with a
+    // personal workspace too could be the personal one (and skip the company's double-booking guard).
+    const workspaceIds = await roomWorkspaceIds(session.user.id)
     const workspaceId = workspaceIds[0]
     if (!workspaceId) {
-      return NextResponse.json({ error: "No workspace found for user" }, { status: 403 })
+      return NextResponse.json({ ...ROOMS_NOT_AVAILABLE }, { status: 403 })
     }
 
     // The same path as GIDEON's book_room (lib/room-booking.ts): range and past checks, the conflict guard

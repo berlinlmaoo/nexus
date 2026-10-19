@@ -2,8 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
-import { roomAvailability } from "@/lib/room-booking"
+import { roomAvailability, roomWorkspaceIds } from "@/lib/room-booking"
 
 const MAX_SLOT_MS = 24 * 60 * 60 * 1000
 
@@ -23,7 +22,7 @@ export async function GET(req: NextRequest) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start || end.getTime() - start.getTime() > MAX_SLOT_MS) {
       return NextResponse.json({ error: "Invalid time range" }, { status: 400 })
     }
-    const workspaceIds = await getUserWorkspaceIds(session.user.id)
+    const workspaceIds = await roomWorkspaceIds(session.user.id)
     if (workspaceIds.length === 0) return NextResponse.json({ rooms: [], freeSlots: [] })
     const excludeId = req.nextUrl.searchParams.get("excludeBookingId")?.trim() || undefined
     return NextResponse.json(await roomAvailability(workspaceIds, start, end, excludeId))

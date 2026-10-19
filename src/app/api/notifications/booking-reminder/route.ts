@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { NextRequest, NextResponse } from "next/server"
 import { secretMatches } from "@/lib/cron-auth"
 import prisma from "@/lib/prisma"
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       const until = new Date(now.getTime() + LEAD_MINUTES * 60_000)
 
       const soon = await prisma.roomBooking.findMany({
-        where: { status: "ACTIVE", startsAt: { gt: now, lte: until } },
+        where: { workspaceId: ORG_WORKSPACE_ID, status: "ACTIVE", startsAt: { gt: now, lte: until } },
         select: { id: true, room: true, title: true, startsAt: true, createdById: true },
       })
 
