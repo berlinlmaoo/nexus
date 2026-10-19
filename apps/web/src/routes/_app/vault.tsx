@@ -1384,8 +1384,9 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
   const pdfUrl = item ? (isPdf(item) ? item.url : item.previewUrl && office.isSuccess ? item.previewUrl : null) : null;
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent lang={lang} className="max-w-3xl">
-        <DialogHeader><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
+      {/* One shrinkable column: a long file name (truncate = nowrap) used to widen the grid past a phone's screen. */}
+      <DialogContent lang={lang} className="max-w-3xl grid-cols-[minmax(0,1fr)]">
+        <DialogHeader className="min-w-0"><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
         {item && (
           <div className="max-h-[65vh] overflow-auto rounded-lg bg-muted/40">
             {mime.startsWith("image/") ? (
