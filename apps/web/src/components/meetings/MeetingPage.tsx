@@ -15,8 +15,9 @@ import { DateField } from "@/components/DateField";
 import { Avatar } from "@/components/Avatar";
 import { PeoplePicker } from "@/components/tasks/TaskComposer";
 import { LoadError } from "@/components/LoadError";
+import { EmptyAction } from "@/components/EmptyState";
 import { GideonMark } from "@/components/gideon/GideonMark";
-import { nexusApi } from "@/lib/nexus-api";
+import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
@@ -192,7 +193,22 @@ export function MeetingPage({ id }: { id: string }) {
   };
 
   if (q.isLoading) return <div className="mx-auto w-full max-w-[860px] space-y-3 px-4 py-10 md:px-8" aria-busy>{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>;
-  if (q.isError || !m || !draft) return <div className="mx-auto w-full max-w-[860px] px-4 py-10 md:px-8"><LoadError error={q.error} onRetry={() => void q.refetch()} /></div>;
+  if (q.isError || !m || !draft) {
+    // A deleted meeting (or one the person can no longer see: the server answers 404 for both) is not a server
+    // error: say so, without Try again (QA final 19 Oct 2026, D-12 — a "notes ready" notification outlives it).
+    const err = q.error instanceof MeetingApiError ? new ApiError(q.error.status, q.error.message, q.error.body) : q.error;
+    return (
+      <div className="mx-auto w-full max-w-[860px] px-4 py-10 md:px-8">
+        <LoadError
+          error={err}
+          onRetry={() => void q.refetch()}
+          notFoundTitle={t("This meeting note was deleted")}
+          notFoundMessage={t("It was deleted, or you no longer have access to it.")}
+          action={err instanceof ApiError && err.status === 404 ? <EmptyAction to="/meetings" secondary>{t("All meeting notes")}</EmptyAction> : undefined}
+        />
+      </div>
+    );
+  }
 
   const included = draft.proposals.filter((p) => p.include);
   const members = m.members ?? [];

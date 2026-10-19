@@ -156,7 +156,7 @@ type MeetingPing = { meetingId: string; projectId: string | null; status: Meetin
 export function useMeeting(id: string) {
   const qc = useQueryClient();
   const { socket } = useRealtime();
-  const q = useQuery({ queryKey: meetingKey(id), queryFn: () => getMeeting(id), retry: 1, refetchOnWindowFocus: true });
+  const q = useQuery({ queryKey: meetingKey(id), queryFn: () => getMeeting(id), retry: (n, e) => !(e instanceof MeetingApiError && e.status >= 400 && e.status < 500) && n < 1, refetchOnWindowFocus: true });
   useRealtimeRoom(q.data?.projectId ? `project:${q.data.projectId}` : null);
   useEffect(() => {
     if (!socket) return;
