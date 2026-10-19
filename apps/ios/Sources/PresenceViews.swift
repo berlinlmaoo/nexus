@@ -27,7 +27,7 @@ struct PresenceLine: View {
         if let status {
             HStack(spacing: 6) {
                 PresenceDot(tone: status.tone)
-                Text(status.localizedLabel(AppLanguage.shared.lang.rawValue))
+                Text(status.localizedLabel(AppLanguage.shared.lang.rawValue)).lineLimit(2).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 if showUntil, let until = PresenceTime.until(status.until, language: AppLanguage.shared.lang.rawValue) {
                     Text("· " + String(format: T("until %@"), until))
                 }
@@ -69,6 +69,7 @@ struct SetPresenceRow: View {
 struct SetPresenceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    @State private var selectedAvailability = "away"
     @State private var later = false
     @State private var start = Date().addingTimeInterval(3600)
     @State private var clearAfter = "60"
@@ -107,7 +108,7 @@ struct SetPresenceSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.disabled(busy) }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button { mutate { try await PresenceStore.shared.save(text: statusText, startsAt: later ? start : nil, endsAt: ends) } } label: {
+                        Button { mutate { try await PresenceStore.shared.save(text: statusText, startsAt: later ? start : nil, endsAt: ends, availability: selectedAvailability) } } label: {
                             if busy { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
                         }.tint(NX.violetText).disabled(busy || !valid || !PresenceStore.shared.enabled).accessibilityIdentifier("presence.save")
                     }
@@ -133,14 +134,26 @@ struct SetPresenceSheet: View {
         }
     }
     private var availability: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(T("Availability"))
-                Spacer()
-                HStack { PresenceDot(tone: "yellow"); Text(T("Away")) }
-            }.font(NXFont.text(14))
-            Text(T("A custom status currently sets you as Away.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(T("Availability")).font(NXFont.text(14))
+            HStack(spacing: 4) {
+                availabilityOption("online", label: "Online", tone: "green")
+                availabilityOption("away", label: "Away", tone: "yellow")
+                availabilityOption("dnd", label: T("Do not disturb"), tone: "red")
+            }.padding(4).background(NX.muted, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+    private func availabilityOption(_ value: String, label: String, tone: String) -> some View {
+        Button { selectedAvailability = value } label: {
+            HStack(spacing: 5) {
+                PresenceDot(tone: tone, size: 7)
+                Text(label).font(NXFont.text(12, .medium)).lineLimit(2).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 3)
+                .foregroundStyle(NX.foreground)
+                .background(selectedAvailability == value ? NX.card : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier("presence.availability." + value)
+            .accessibilityAddTraits(selectedAvailability == value ? .isSelected : [])
     }
     private var quickPicks: some View {
         VStack(spacing: 0) {
@@ -182,6 +195,7 @@ struct SetPresenceSheet: View {
         await PresenceStore.shared.refresh()
         guard let manual = PresenceStore.shared.status(Keychain.load()?.userId)?.manual else { return }
         displayedManualId = manual.id
+        selectedAvailability = manual.selectedAvailability
         let first = manual.text.first
         if let first, first.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) {
             emoji = String(first); text = String(manual.text.dropFirst()).trimmingCharacters(in: .whitespaces)

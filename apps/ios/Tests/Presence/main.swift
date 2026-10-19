@@ -3,6 +3,10 @@ var checks = 0
 func check(_ value: @autoclosure () -> Bool, _ message: String) { checks += 1; precondition(value(),message) }
 let raw = #"{"userId":"me","state":"future_state","tone":"yellow","reason":"future_reason","label":{"en":"Server words","id":"Kata server"},"until":"2026-10-20T13:00:00Z","manual":{"id":"019a0000-0000-7000-b000-000000000001","text":"Meeting","startsAt":"2026-10-20T11:00:00Z","endsAt":"2026-10-20T13:00:00Z"},"latitude":123,"address":"never persisted"}"#
 let status = try JSONDecoder().decode(PresenceStatus.self, from: Data(raw.utf8))
+check(status.availability == nil && status.manual?.selectedAvailability == "away", "Released-server absence keeps Away")
+let dndRaw = raw.replacingOccurrences(of: "\"state\":\"future_state\"", with: "\"state\":\"dnd\",\"availability\":\"dnd\"").replacingOccurrences(of: "\"text\":\"Meeting\"", with: "\"availability\":\"dnd\",\"text\":\"Meeting\"")
+let dnd = try JSONDecoder().decode(PresenceStatus.self, from: Data(dndRaw.utf8))
+check(dnd.state == "dnd" && dnd.availability == "dnd" && dnd.manual?.selectedAvailability == "dnd", "Running and scheduled availability decode")
 check(status.localizedLabel("id") == "Kata server" && status.localizedLabel("en") == "Server words", "Unknown state and reason display server labels")
 let encoded = String(decoding: try JSONEncoder().encode(status), as: UTF8.self)
 check(!encoded.contains("latitude") && !encoded.contains("address"), "Only label data is retained")
@@ -32,6 +36,12 @@ func envelope(_ status: String = raw, enabled: Bool = true) -> Data { Data("{\"e
     NativeAPI.replies = [.init(data: Data("{\"status\":\(raw)}".utf8))]
     try await store.save(text: "Meeting", startsAt: nil, endsAt: today)
     check(NativeAPI.requests.last?.1 == "PUT" && NativeAPI.requests.last?.2["startsAt"] is NSNull, "Now sends null start")
+    check(NativeAPI.requests.last?.2["availability"] as? String == "away", "Default save explicitly preserves Away")
+    for value in ["online", "dnd"] {
+        NativeAPI.replies = [.init(data: Data("{\"status\":\(dndRaw)}".utf8))]
+        try await store.save(text: "Meeting", startsAt: nil, endsAt: today, availability: value)
+        check(NativeAPI.requests.last?.2["availability"] as? String == value, "Every replacement sends the chosen availability")
+    }
     RemoteConfig.shared.presenceStatus = false
     check(!store.enabled && store.status("me") == nil, "Remote off hides cache")
     RemoteConfig.shared.presenceStatus = true

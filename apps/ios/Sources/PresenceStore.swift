@@ -49,10 +49,10 @@ final class PresenceStore {
         guard let event = try? JSONDecoder().decode(Event.self, from: Data(json.utf8)), event.userId == event.status.userId else { return }
         accept(event.status)
     }
-    func save(text: String, startsAt: Date?, endsAt: Date) async throws {
+    func save(text: String, startsAt: Date?, endsAt: Date, availability: String = "away") async throws {
         guard let userId = context() else { throw APIError.unauthorized }
         let ticket = epoch
-        let result: PresenceMutation = try await NativeAPI.request("/api/presence/manual", method: "PUT", body: ["text":text, "startsAt": startsAt.map { PresenceTime.iso($0) as Any } ?? NSNull(), "endsAt": PresenceTime.iso(endsAt)])
+        let result: PresenceMutation = try await NativeAPI.request("/api/presence/manual", method: "PUT", body: ["text":text, "startsAt": startsAt.map { PresenceTime.iso($0) as Any } ?? NSNull(), "endsAt": PresenceTime.iso(endsAt), "availability": availability])
         guard ticket == epoch, owner == userId, Keychain.load()?.userId == userId else { return }
         accept(result.status)
     }

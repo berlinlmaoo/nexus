@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Do not disturb": "Jangan diganggu",
         "GIDEON uses what it remembers to personalize your answers.": "GIDEON memakai yang diingatnya untuk menyesuaikan jawaban buatmu.",
         "No changes: everything is already like this": "Tidak ada perubahan: semuanya sudah seperti ini",
         "These minutes were already saved, so the speaker names can’t change anymore.": "Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.",
