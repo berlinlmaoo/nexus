@@ -55,6 +55,7 @@ data class Conversation(
     val canManageMembers: Boolean? = null,
     /** False in a project room the viewer may only read (Can view, 13 Oct); null = an older server. */
     val canPost: Boolean? = null,
+    val peer: ChatPeer? = null,
 ) {
     fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
         mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false
@@ -63,14 +64,16 @@ data class Conversation(
      * or project room by its name.
      */
     fun title(meId: String?, dmFallback: String = "—"): String = when (type) {
-        "DM" -> members.firstOrNull { it.uid != meId }?.user?.name ?: name ?: dmFallback
+        "DM" -> other(meId)?.name?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: dmFallback
         else -> name ?: members.filter { it.uid != meId }.joinToString(", ") { it.displayName }.ifBlank { "—" }
     }
 
     /** The web's initials: first letters of the first two words ("Budi Z" → "BZ", "Direct message" → "DM"); never "?" for a named room. */
     fun initials(meId: String?, dmFallback: String): String = ChatInitials.of(title(meId, dmFallback))
-    fun other(meId: String?): ChatUser? = if (type == "DM") members.firstOrNull { it.uid != meId }?.user else null
+    fun other(meId: String?): ChatUser? = if (type == "DM") members.firstOrNull { it.uid != meId }?.user ?: peer?.let { ChatUser(it.id, it.name, it.avatar) } else null
 }
+
+@Serializable data class ChatPeer(val id: String? = null, val name: String? = null, val avatar: String? = null, val left: Boolean = false)
 
 @Serializable
 data class ConversationsResponse(val conversations: List<Conversation> = emptyList(), val totalUnread: Int? = null) {

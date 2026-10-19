@@ -51,4 +51,8 @@
     <string name="ui_gideon_clear_history">Hapus seluruh riwayat chat</string>
     <string name="ui_gideon_delete_confirm">Hapus chat ini beserta lampirannya? Tindakan ini tidak bisa dibatalkan.</string>
     <string name="ui_gideon_clear_confirm">Hapus seluruh chat GIDEON kamu beserta lampirannya? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="ui_messages_empty_direct">Belum ada pesan pribadi</string>
+    <string name="ui_messages_empty_groups">Belum ada percakapan grup</string>
+    <string name="ui_messages_empty_projects">Belum ada percakapan proyek</string>
+    <string name="ui_messages_projects_hint">Percakapan untuk proyekmu muncul di sini.</string>
 </resources>

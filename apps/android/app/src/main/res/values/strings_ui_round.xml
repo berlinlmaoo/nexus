@@ -51,4 +51,8 @@
     <string name="ui_gideon_clear_history">Clear all chat history</string>
     <string name="ui_gideon_delete_confirm">Delete this chat and its attachments? This cannot be undone.</string>
     <string name="ui_gideon_clear_confirm">Delete all your GIDEON chats and their attachments? This cannot be undone.</string>
+    <string name="ui_messages_empty_direct">No direct messages yet</string>
+    <string name="ui_messages_empty_groups">No group conversations yet</string>
+    <string name="ui_messages_empty_projects">No project conversations yet</string>
+    <string name="ui_messages_projects_hint">Conversations for your projects appear here.</string>
 </resources>
