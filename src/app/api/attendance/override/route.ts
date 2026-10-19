@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
@@ -24,7 +25,7 @@ const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", 
 // Cuti / Sakit / Day off — refunding every attendance XP penalty + restoring an auto-cut day-off
 // for that day — or just CLEAR_PENALTY (remove the punishment, change nothing else).
 // All actions are idempotent and audit-logged.
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -279,3 +280,6 @@ async function logOverride(
     metadata: { workspaceId, targetUserId, date: dateKey, override: action, ...metadata },
   })
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const POST = pingActorAfter("override", handlePOST)

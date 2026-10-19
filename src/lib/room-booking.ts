@@ -249,7 +249,7 @@ export async function createRoomBooking(input: {
       [`Room booked: ${roomName(room, "en")}`, `${title} · ${formatBookingSlot(start, end, "en")}. A reminder comes before it starts.`],
       [`Ruangan dibooking: ${room}`, `${title} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`]
     ),
-    link: "/room-booking",
+    link: `/room-booking?booking=${encodeURIComponent(booking.id)}`,
     push: true,
   }).catch(() => null)
 
@@ -368,7 +368,7 @@ export async function updateRoomBooking(input: { userId: string; bookingId: stri
           ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
           : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`]
       ),
-      link: "/room-booking",
+      link: cancelled ? "/room-booking" : `/room-booking?booking=${encodeURIComponent(booking.id)}`,
       push: true,
     }).catch(() => null)
   }

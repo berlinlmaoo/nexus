@@ -3,7 +3,7 @@ import { useLang } from "@/lib/lang";
 import type { PipelineSummary } from "@/lib/pipeline";
 import { fmtIdr, fmtIdrFull } from "./pipeline-ui";
 
-type Tile = { label: string; value: string; full?: string; sub: string; warn?: string; zero: boolean; tone?: "bad" | "warn" | "good"; kind: "money" | "count" };
+type Tile = { label: string; value: string; full?: string; sub: string; subFull?: string; warn?: string; zero: boolean; tone?: "bad" | "warn" | "good"; kind: "money" | "count" };
 
 /**
  * The instrument strip (the GM's "instruments"): readings over every deal of the project, never the
@@ -27,13 +27,16 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
     { kind: "money", label: t("Won"), ...money(s.wonValue), sub: t("{n} active · {lost} lost", { n: s.activeCount, lost: s.lostCount }) },
     {
       kind: "money", label: t("Receivable"), ...money(s.receivable),
-      sub: s.receivableOverdue > 0 ? t("{amount} overdue", { amount: fmtIdr(s.receivableOverdue, lang) }) : t("Nothing overdue"),
+      sub: s.receivableOverdue > 0 ? t("{amount} overdue", { amount: fmtIdr(s.receivableOverdue, lang) }) : t("None overdue"),
+      // Short on purpose: eight tiles share a 1440 screen (QA final 19 Oct, D-7); the long line is the tooltip.
+      subFull: s.receivableOverdue > 0 ? undefined : t("Nothing overdue"),
       tone: s.receivableOverdue > 0 ? "bad" : undefined,
     },
     {
       kind: "money", label: t("Real profit"), ...money(s.realProfit ?? 0),
       full: `${fmtIdrFull(s.realProfit ?? 0, lang)} · ${t("Real cost")} ${fmtIdrFull(s.realCost ?? 0, lang)}`,
-      sub: t("{n} of {total} deals have costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
+      sub: t("{n}/{total} with costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
+      subFull: t("{n} of {total} deals have costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
       warn: (s.costNoNetCount ?? 0) > 0 ? t("{n} deals have costs but no net value", { n: s.costNoNetCount }) : undefined,
       tone: (s.realProfit ?? 0) < 0 ? "bad" : undefined,
     },
@@ -67,7 +70,7 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
               >
                 {tile.value}
               </dd>
-              <dd className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{tile.sub}</dd>
+              <dd title={tile.subFull ?? tile.sub} className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{tile.sub}</dd>
               {tile.warn && (
                 <dd title={tile.warn} className="mt-0.5 truncate text-xs tabular-nums text-amber-700 dark:text-amber-300">
                   {tile.warn}

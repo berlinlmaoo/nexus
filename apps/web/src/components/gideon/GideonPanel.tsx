@@ -104,6 +104,15 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
   }
 }
 
+/** A tool's name in words ("search_workspace" → "Searching your workspace"), for lists of tools used — Control Room
+ *  › GIDEON › Insights (QA final 19 Oct 2026, C-D6). An unknown tool reads as its words, never as snake_case. */
+export function toolLabel(tool: string, t: LangApi["t"]): string {
+  const label = stepText({ id: "", tool, arg: null, label: "", status: "done" }, t);
+  if (label && label !== tool) return label;
+  const words = tool.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : tool;
+}
+
 const STATUS_WORD: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 
 export type GideonPanelVariant = "float" | "side" | "page";
@@ -683,6 +692,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   // The full page with nothing asked yet is Notion AI's home: the greeting, the box under it in the middle
   // of the page, the starters under the box. Once a question is sent the box moves to the bottom.
   const centeredHome = isPage && isEmpty;
+  // Menus under the box only where the home block is centred (sm+); on a phone the box sits at the bottom (U-13).
+  const menusBelow = centeredHome && typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 640px)").matches;
   // Sending from the centred box moves it to the bottom; keep the cursor in it (keyboard devices only).
   useEffect(() => {
     if (!isPage || centeredHome || window.matchMedia?.("(pointer: coarse)").matches) return;
@@ -703,7 +714,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {prefs?.reviewNotice && <ReviewNotice />}
-        {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
+        {mention && <MentionPicker query={mention.query} below={menusBelow} onPick={addRef} onClose={() => setMention(null)} />}
         {/* GIDEON credits sit above the composer (owner, 18 Oct 2026); the pool on hover / tap. */}
         <div className="flex min-h-6 items-center px-1 pb-1"><GideonCreditMeter /></div>
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
@@ -775,7 +786,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuTrigger>
               {/* One line per action with a quiet hint under it; opens below the composer on the centred home so it
                   never covers the greeting (owner, 18 Oct 2026: "berantakan"). */}
-              <DropdownMenuContent align="start" side={centeredHome ? "bottom" : "top"} sideOffset={6} className="w-80 p-1">
+              <DropdownMenuContent align="start" side={menusBelow ? "bottom" : "top"} sideOffset={6} className="w-80 p-1">
                 {([
                   { icon: ImagePlus, label: t("Upload a photo"), hint: t("Screenshots and pictures"), run: () => imageInput.current?.click() },
                   { icon: Paperclip, label: t("Upload a file"), hint: t("PDF, Word, Excel or text"), run: () => fileInput.current?.click() },
@@ -858,22 +869,24 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       onNew={() => { newChat(); if (isPage) router.history.replace("/gideon"); }}
     />
   ) : centeredHome ? (
-    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-6">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 py-8">
+    // U-13 (owner, 19 Oct 2026): heading, the privacy line and the suggestions first; the composer with its credits
+    // and "can make mistakes" lines last, together. On a phone the block sits at the bottom, by the thumb.
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-3 sm:pb-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 py-6 sm:justify-center sm:gap-6 sm:py-8">
         {waitingSection}
         <div className="flex flex-col items-center text-center">
           <span className="mb-4 grid h-16 w-16 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-8 w-8 text-foreground" /></span>
           <h1 className="text-balance font-display text-2xl font-bold tracking-tight sm:text-[2rem] sm:leading-tight">{greeting}</h1>
+          <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
         </div>
-        {composerBox}
-        <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
+        <div role="menu" aria-label={t("Suggestions")} className="flex flex-wrap justify-center gap-x-1 gap-y-1">
           {suggestions.map((s) => (
-            <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button key={s.text} role="menuitem" type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <s.icon className="h-4 w-4 shrink-0" /><span className="min-w-0 text-left">{s.text}</span>
             </button>
           ))}
         </div>
-        <p className="mx-auto max-w-md text-center text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
+        {composerBox}
       </div>
     </div>
   ) : (

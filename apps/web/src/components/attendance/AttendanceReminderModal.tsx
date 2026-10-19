@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useModalTurn } from "@/lib/modal-queue";
 import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -85,7 +86,11 @@ export function AttendanceReminderModal() {
   // keep showing until check-in. No shift set → no time gate. A forgotten checkout ignores the window.
   const shiftStartMin = parseHHMM(data?.myShift?.startTime);
   const withinReminderWindow = shiftStartMin === null ? true : nowMinutesInZone() >= shiftStartMin - REMINDER_LEAD_MINUTES;
-  const shouldShow = !today.isLoading && !today.isError && !!data && !checkedIn && !hasApprovedLeave && !dismissed && !wsm.isLoading && !exemptFromAttendance && (forcedCheckout || withinReminderWindow);
+  const wanted = !today.isLoading && !today.isError && !!data && !checkedIn && !hasApprovedLeave && !dismissed && !wsm.isLoading && !exemptFromAttendance && (forcedCheckout || withinReminderWindow);
+
+  // Queued behind the XP alert and announcements (C-D1, lib/modal-queue).
+  const turn = useModalTurn("attendanceReminder", today.isLoading || wsm.isLoading ? "pending" : wanted ? "want" : "idle");
+  const shouldShow = wanted && turn;
 
   // lock scroll while open
   useEffect(() => {

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { ensureSheetFormattingColumns } from "@/lib/project-sheets"
 import { copySheet } from "@/lib/sheet-structure"
+import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
@@ -215,6 +216,74 @@ export async function POST(
       })
     }
 
+    // Pages and Forms come along too (A-3, owner 19 Oct 2026 — as Notion copies sub-pages). Pages keep
+    // their hierarchy, order, icon, cover and content; Forms keep their questions and settings with the
+    // custom-field and section ids swapped for the copy's (a form routes answers into them). Form
+    // submissions, and the tasks they made, are the original's history and stay behind.
+    const idSwaps = [...fieldIdMap, ...sectionIdMap]
+    const swapIds = <T,>(json: T): T => {
+      if (json == null) return json
+      let text = JSON.stringify(json)
+      for (const [from, to] of idSwaps) text = text.split(from).join(to)
+      return JSON.parse(text) as T
+    }
+    const docs = await prisma.doc.findMany({
+      where: { projectId },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      select: { id: true, title: true, content: true, contentText: true, parentId: true, position: true, icon: true, coverImage: true, fullWidth: true, verificationStatus: true },
+    })
+    const docIdMap = new Map<string, string>()
+    // Parents before children: copy in rounds, each round taking the pages whose parent is already copied
+    // (or is not a page of this project — that one becomes a top-level page of the copy).
+    const docIds = new Set(docs.map((d) => d.id))
+    let pending = docs
+    while (pending.length) {
+      const ready = pending.filter((d) => !d.parentId || !docIds.has(d.parentId) || docIdMap.has(d.parentId))
+      if (!ready.length) break // a parent cycle: impossible through the API; stop rather than loop
+      for (const d of ready) {
+        const created = await prisma.doc.create({
+          data: {
+            title: d.title,
+            content: (d.content ?? undefined) as InputJsonValue | undefined,
+            contentText: d.contentText,
+            parentId: d.parentId ? docIdMap.get(d.parentId) ?? null : null,
+            position: d.position,
+            icon: d.icon,
+            coverImage: d.coverImage,
+            fullWidth: d.fullWidth,
+            verificationStatus: d.verificationStatus,
+            projectId: newProject.id,
+            authorId: me,
+            ownerId: me,
+          },
+          select: { id: true },
+        })
+        docIdMap.set(d.id, created.id)
+      }
+      const done = new Set(ready.map((d) => d.id))
+      pending = pending.filter((d) => !done.has(d.id))
+    }
+
+    const forms = await prisma.form.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } })
+    for (const f of forms) {
+      await prisma.form.create({
+        data: {
+          name: f.name,
+          // Slugs are public links and unique: the copy gets its own.
+          slug: await generateUniqueFormSlug(prisma, f.name),
+          description: f.description,
+          fields: swapIds(f.fields) as InputJsonValue,
+          branding: (f.branding ?? undefined) as InputJsonValue | undefined,
+          accessSchedule: (f.accessSchedule ?? undefined) as InputJsonValue | undefined,
+          settings: (swapIds(f.settings) ?? undefined) as InputJsonValue | undefined,
+          isPublic: f.isPublic,
+          requireAuth: f.requireAuth,
+          projectId: newProject.id,
+        },
+        select: { id: true },
+      })
+    }
+
     logAudit({
       action: "create",
       entityType: "project",
@@ -222,7 +291,7 @@ export async function POST(
       entityName: newProject.name,
       userId: me,
       request,
-      metadata: { duplicatedFrom: projectId },
+      metadata: { duplicatedFrom: projectId, pages: docIdMap.size, forms: forms.length },
     })
 
     // The copy, complete with its tasks, appears live beside the original for the workspace and its members.

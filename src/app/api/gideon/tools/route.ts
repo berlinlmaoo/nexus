@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { nextDocPosition } from "@/lib/doc-position"
 import { sectionForStatus } from '@/lib/status-sections'
 import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { isCheckInAway, placeLabel } from '@/lib/attendance-place'
@@ -471,6 +472,8 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
       authorId: await getGideonUserId(),
       ownerId: actor.id,
       parentId: typeof input.parentId === 'string' && input.parentId ? input.parentId : null,
+      // New pages go to the bottom of their siblings (A-26).
+      position: await nextDocPosition(projectId, typeof input.parentId === 'string' && input.parentId ? input.parentId : null),
     },
     select: { id: true, title: true, createdAt: true },
   })

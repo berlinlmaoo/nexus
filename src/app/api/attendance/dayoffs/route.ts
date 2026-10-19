@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
 
 // Set (or reset) a member's monthly day-off quota override.
 //   PATCH { userId, quota }  -> quota = integer 0..366, or null/"" to reset to the default (4)
-export async function PATCH(req: NextRequest) {
+async function handlePATCH(req: NextRequest) {
   try {
     const g = await gate(req)
     if (g.error) return g.error
@@ -152,7 +153,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const g = await gate(req)
     if (g.error) return g.error
@@ -231,7 +232,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+async function handleDELETE(req: NextRequest) {
   try {
     const g = await gate(req)
     if (g.error) return g.error
@@ -267,3 +268,8 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const PATCH = pingActorAfter("dayoff", handlePATCH)
+export const POST = pingActorAfter("dayoff", handlePOST)
+export const DELETE = pingActorAfter("dayoff", handleDELETE)

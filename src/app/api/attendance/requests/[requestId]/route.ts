@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -11,7 +12,7 @@ import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 import { touchPresenceSoon } from "@/lib/presence"
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   { params }: { params: Promise<{ requestId: string }> }
 ) {
@@ -232,3 +233,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const PATCH = pingActorAfter("request", handlePATCH)
