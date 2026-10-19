@@ -1,10 +1,43 @@
-# Android parity audit ? 19 October 2026
+# Android parity audit - 19 October 2026
 
-**Round 3 complete.** G6 personalization and G17 templates/page management are implemented. The build passes 875 JVM tests and assembleDebug. All 152 captures (38 states in English/Indonesian, light/dark) pass the localized-control audit. Live functional results and remaining limits are recorded below.
+**Round 4 task complete.** The tested source is 76632270, merging hub/dev 603f9dd7a with the parity branch. testDebugUnitTest and assembleDebug pass: 929 tests, zero failures/errors/skips. Version remains 13 / 0.1.6; no APK publication.
 
-Branch: feat/android-parity-19oct. Round-3 baseline: hub/dev at 56b3e86c (round 2 merged). Source audit and new changes use this checkout. No server edits, version changes, APK publication or edits to the other checkout. Historical round-1/2 evidence is retained below.
+## Round-4 merge and regression verification
 
-## Round-3 implementation and current evidence
+The GideonScreen conflict was resolved keeping both sets of behavior:
+
+- UI-round model/header controls, memory settings and summary routes, delete-current/clear-history confirmations, and the scrollable fresh-chat suggestions with pending approvals are retained.
+- G6 assistant name/instructions remain editable through the distinct Assistant preferences / Preferensi asisten entry. The UI-round Personalize entry still opens memory settings; GIDEON Memory opens its summary.
+- The custom assistant name is used in the merged toolbar subtitle and fresh-chat prompt. Review-notice acknowledgement keeps the server-backed G6 flag and retry behavior.
+
+Build log: C:/Users/Berlin/android-parity-r4-build.log. Device checks repeat the round-3 matrix and add seven merged GIDEON states: fresh chat/top and bottom, menu, memory settings/summary, and delete/clear confirmations. The matrix is complete: 45 states in each variant, 180 successful captures, zero audit findings. The audit checks localized controls, project context, refund preview totals and visible loading/network/permission errors. The installed APK checksum matches the tested build.
+
+Evidence: [gallery](../../../../nexus-shots/parity4/index.html), [manifest](../../../../nexus-shots/parity4/manifest.json), [audit](../../../../nexus-shots/parity4/audit.json). [Functional results](../../../../nexus-shots/parity4/functional-results.json) and the [downloaded ZIP](../../../../nexus-shots/parity4/native-vault.zip) are also available outside Git.
+
+| Live check on the merged build | Result |
+|---|---|
+| G6 save/header/fresh prompt | Native save passed; ParityQA appears below the model selector and in the prompt. Original preferences restored |
+| G17 template/delete | Native template creation has nonempty canonical content; confirmed deletion verified by API 404. API subpage, metadata, duplicate and timestamp-conflict checks passed |
+| G5 draft/writing | Local draft recovered after process stop and discarded; server body unchanged. Live writing review generated successfully and was cancelled without applying |
+| G13-G16 | Native rule, digest and Autofill edits passed and remain disabled; bundle applied only to the owned QA project |
+| G7 | Native save/open passed; canonical nonempty page body verified, temporary page deleted |
+| G12 | Native SAF selection/upload, authenticated exact-byte download and confirmed removal passed |
+| G18 | Native create/revoke passed. The one-time token was not copied, captured or logged |
+| G21 | Authenticated native ZIP streaming passed; 192,039 bytes, valid header/end record, share chooser opened without external sharing |
+
+The fresh-chat bottom capture also shows the existing pending-approval section beneath the suggestions, verifying the retained U-13 layout. No additional app code defects were found after resolving the merge. Old QA selectors were updated for Formatting and the phone-sized Settings label; interrupted/stale captures were rerun with clean launches. The FILE fixture was selected through internal storage's Download folder because the system Downloads shortcut omitted the adb-created file.
+
+Cleanup: temporary pages and active round-4 tokens remaining: **0**. All cleanup responses succeeded. Removed the disabled automation/schedule/Autofill config, test bundle/empty section and FILE property; restored original personal preferences, project hidden tabs and page metadata. Original round-2 fixtures remain.
+
+Resource cleanup: own emulator-5570 stopped; animation settings restored and display overrides reset. Gradle --stop in this checkout reported no daemons running. Other emulators/checkouts were untouched. The watchdog's minimum observed free RAM was **2.69 GB**, above the 2.5 GB floor; controlled restarts and hardware rendering resolved emulator memory pressure.
+
+Remaining scope is unchanged: G5 full WYSIWYG/selection formatting, rich writing-output insertion, collaboration and background replay (approximately 2-4 days); FILE previews in Table/Gallery (approximately 1 day). Browser-only G9 routes remain web scope. Shared administrative mutations and multiple-role cases were not exercised; confirmations and refund dry-run were read-only. Review-notice acknowledgement retains unit/API coverage rather than forcing a live acknowledgement.
+
+Delivery: C:/Users/Berlin/android-parity-19oct.bundle, range hub/dev..feat/android-parity-19oct, prerequisites **56b3e86c1** and **603f9dd7a**. Tested source is 76632270; only the report commit follows. No APK was published.
+
+## Historical round-3 implementation and evidence
+
+Round-3 baseline was hub/dev 56b3e86c. The evidence below describes that delivery; the round-4 results above supersede its build and bundle information.
 
 - G6: personal name and standing instructions use the existing per-account prefs API. Empty values reset to defaults. The header/empty chat use the chosen name. Review acknowledgement uses the server flag and only persists after successful PUT; a failed request remains retryable.
 - G17: native project/template selection with preview, blank/template creation, subpages, hierarchy, title/emoji/parent/cover/full-width properties, duplication and confirmed deletion. Parent choices exclude descendants. Metadata PATCH carries baseUpdatedAt and never sends content. Deleting a parent promotes its children, matching the server. Known cover gradients and authenticated cover URLs render in the reader.
