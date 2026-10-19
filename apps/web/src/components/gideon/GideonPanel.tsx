@@ -27,7 +27,7 @@ import {
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
   isAcceptedGideonFile,
   type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonContextRef, type GideonFile, type GideonMessage,
-  type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
+  proposalSummary, type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
 } from "@/lib/gideon";
 import {
   deleteGideonChat, getGideonPrefs, listGideonChats, markdownToDoc, renameGideonChat, saveGideonAnswerAsDoc, saveGideonPrefs, setCachedGideonPrefs,
@@ -1571,7 +1571,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
 }
 
 function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const decide = async (d: "apply" | "discard") => {
@@ -1594,7 +1594,8 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
     proposal.status === "APPLYING" ? t("Applying…") : null;
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
-      <ProposalHead open={open} title={title} summary={proposal.summary} />
+      <ProposalHead open={open} title={title} summary={proposalSummary(proposal, lang)} />
+      {open && proposal.noChange && <p className="px-3 pb-2 text-xs font-medium text-amber-700 dark:text-amber-300">{t("No changes: everything is already like this")}</p>}
       {open && proposal.diff.length > 0 && (
         <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
           {proposal.diff.map((row, i) => (
@@ -1663,7 +1664,7 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
  * change, and what the person did with it. No Apply / Discard.
  */
 function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const status =
     proposal.status === "APPLIED" ? { text: t("Applied by them"), tone: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300" } :
     proposal.status === "DISCARDED" ? { text: t("Discarded by them"), tone: "bg-muted text-muted-foreground" } :
@@ -1676,7 +1677,7 @@ function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
         <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background"><GideonMark className="h-3.5 w-3.5" /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">{proposalTitle(proposal.action, t)}</span>
-          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposal.summary}</span>
+          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposalSummary(proposal, lang)}</span>
         </span>
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", status.tone)}>{status.text}</span>
       </div>

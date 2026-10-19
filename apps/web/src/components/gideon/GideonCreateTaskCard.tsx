@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2, X } from "lucide-react";
-import { decideGideonProposal, gideonTaskTargetOptions, type GideonProposal } from "@/lib/gideon";
+import { decideGideonProposal, gideonTaskTargetOptions, proposalSummary, type GideonProposal } from "@/lib/gideon";
 import { SelectPicker } from "@/components/SelectPicker";
 import { DateField } from "@/components/DateField";
 import { useLang } from "@/lib/lang";
@@ -16,7 +16,7 @@ import { PROPOSAL_APPLY, PROPOSAL_DISCARD, ProposalHead } from "./GideonProposal
  * the server checks the project, column and PIC again and creates exactly one task.
  */
 export function GideonCreateTaskCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const tt = proposal.taskTarget!;
   const [projectId, setProjectId] = useState<string | null>(tt.projectId);
   const [taskListId, setTaskListId] = useState<string | null>(tt.taskListId);
@@ -66,7 +66,7 @@ export function GideonCreateTaskCard({ proposal, onDecided }: { proposal: Gideon
   const row = "grid grid-cols-[6.5rem_1fr] items-center gap-2 rounded-md bg-muted/40 px-2 py-1";
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-      <ProposalHead open title={t("Create a task")} summary={proposal.summary} />
+      <ProposalHead open title={t("Create a task")} summary={proposalSummary(proposal, lang)} />
       <div className="space-y-1.5 px-3 pb-2.5 text-[13px]">
         <div className={row}>
           <span className="text-muted-foreground">{t("Title")}</span>
