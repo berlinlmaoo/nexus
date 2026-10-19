@@ -219,6 +219,7 @@ private struct GideonPerfSummaryStrip: View {
 /// once instead of a dash each.
 private struct GideonPerfTierCard: View {
     let tier: GideonPerformanceData.Tier
+    /// Two columns; three in a row when only the three live tiles are left (no answer in 15 min).
     private let tiles = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -229,7 +230,7 @@ private struct GideonPerfTierCard: View {
             }
             if let reason = tier.reason { Text(reasonText(reason)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true) }
             if quiet { Text(T("No answers in 15 min")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-            LazyVGrid(columns: tiles, alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: quiet ? tiles + [GridItem(.flexible(), spacing: 8)] : tiles, alignment: .leading, spacing: 8) {
                 if !quiet {
                     GideonPerfTile(value: seconds(tier.p50Ms), label: T("Typical time (p50)"))
                     GideonPerfTile(value: seconds(tier.p95Ms), label: T("Slowest 5% (p95)"))
