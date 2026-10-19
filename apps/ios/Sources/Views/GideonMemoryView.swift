@@ -126,7 +126,7 @@ private struct GideonMemorySummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 summarySubtitle
-                if store.loading && !store.loaded { MemoryLoadingGrid().frame(height: 320) }
+                if !revealed && (store.loading || !store.loaded) { MemoryLoadingGrid().frame(height: 320) }
                 else if store.loaded {
                     if store.memories.isEmpty { EmptyState(icon: "brain", title: T("Nothing remembered yet"), subtitle: T("Add things here or tell GIDEON in a chat.")) }
                     ForEach(Array(sections.enumerated()), id: \.element.kind) { index, section in
@@ -198,7 +198,7 @@ private struct GideonMemorySummaryView: View {
                 if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.roundedBorder) }
                 HStack { Button(T("Cancel")) { editing = nil }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
             } else {
-                Text(memory.text).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Text(profileDisplay(memory)).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 if memory.status == "PENDING" {
                     HStack { NexusChip(text: T("Suggested, not saved yet"), tone: .neutral); Button(T("Save")) { Task { await store.save(memory) } }.font(NXFont.text(12, .semibold)).disabled(store.busy || store.paused).accessibilityIdentifier("memory.save." + memory.id); Spacer() }
@@ -213,6 +213,10 @@ private struct GideonMemorySummaryView: View {
                 }.font(NXFont.text(12))
             }
         }.padding(14).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border)).accessibilityElement(children: .contain).accessibilityIdentifier("memory.row." + memory.id)
+    }
+    private func profileDisplay(_ memory: GideonMemory) -> String {
+        guard let field = MemoryProfileField.allCases.first(where: { $0.kind == memory.kind && memory.text.hasPrefix($0.prefix) }) else { return memory.text }
+        return field.label + ": " + String(memory.text.dropFirst(field.prefix.count))
     }
     private func saveEdit(_ memory: GideonMemory) { Task { if await store.edit(memory, text: editText, kind: editKind.rawValue, date: editDay) { editing = nil } } }
     private func memoryDay(_ value: String?) -> String? {
