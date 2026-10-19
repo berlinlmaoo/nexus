@@ -719,6 +719,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             }}
             placeholder={t("Ask anything. Type @ to add a page")}
             aria-label={t("Ask {assistant}", { assistant: name })}
+            data-gideon-composer=""
             rows={centeredHome ? 2 : 1}
             className={cn("block max-h-[40vh] min-h-[2.75rem] w-full resize-none bg-transparent px-3.5 pt-3 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/80", isPage && "text-[15px]")}
           />

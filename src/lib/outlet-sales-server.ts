@@ -604,12 +604,18 @@ export async function putOutletTarget(
     }
     data[key] = Math.round(n)
   }
-  const before = await prisma.outletSalesTarget.findUnique({ where: { projectId_month: { projectId, month } } })
-  const saved = await prisma.outletSalesTarget.upsert({
-    where: { projectId_month: { projectId, month } },
-    create: { projectId, month, salesTarget: data.salesTarget ?? null, paxTarget: data.paxTarget ?? null, updatedById: userId },
-    update: { ...data, updatedById: userId },
-    include: { updatedBy: personSelect },
+  // One writer per outlet-month (QA 19 Oct 2026: three parallel saves of a new month gave two 500s on the
+  // unique key, the check-then-insert the day targets already lock against).
+  const { before, saved } = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`outlettarget|${projectId}|${month}`})::int8)`
+    const before = await tx.outletSalesTarget.findUnique({ where: { projectId_month: { projectId, month } } })
+    const saved = await tx.outletSalesTarget.upsert({
+      where: { projectId_month: { projectId, month } },
+      create: { projectId, month, salesTarget: data.salesTarget ?? null, paxTarget: data.paxTarget ?? null, updatedById: userId },
+      update: { ...data, updatedById: userId },
+      include: { updatedBy: personSelect },
+    })
+    return { before, saved }
   })
   const changedSales = (before?.salesTarget ?? null) !== saved.salesTarget
   const changedPax = (before?.paxTarget ?? null) !== saved.paxTarget

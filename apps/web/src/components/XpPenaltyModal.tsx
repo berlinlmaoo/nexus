@@ -26,19 +26,19 @@ function penaltyLabel(p: NexusXpPenalty): string {
   switch (p.kind) {
     case "late": {
       // Exact (uncapped) minutes when the backend has them; else derive from the capped XP (-1/min, max 120).
-      if (typeof p.lateMinutes === "number" && p.lateMinutes > 0) return `Checked in ${p.lateMinutes} min late`;
+      if (typeof p.lateMinutes === "number" && p.lateMinutes > 0) return tr("Checked in {n} min late", { n: p.lateMinutes });
       const m = Math.abs(p.amount);
-      return m ? `Checked in ${m >= 120 ? "120+" : m} min late` : "Checked in late";
+      return m ? tr("Checked in {n} min late", { n: m >= 120 ? "120+" : m }) : tr("Checked in late");
     }
-    case "nocheckout": return "Forgot to check out";
-    case "alpha": return "Absent — no notice";
+    case "nocheckout": return tr("Forgot to check out");
+    case "alpha": return tr("Absent — no notice");
     case "admin": {
       const note = p.reason.startsWith("admin:adjust:") ? p.reason.slice("admin:adjust:".length) : "";
-      return note ? `XP cut by admin · ${note}` : "XP cut by admin";
+      return note ? tr("XP cut by admin · {note}", { note }) : tr("XP cut by admin");
     }
     // Unknown negative reasons: never show a raw machine string to staff.
     // (New penalty types should be added to kindOf() on the backend + a case here.)
-    default: return "XP lost";
+    default: return tr("XP lost");
   }
 }
 

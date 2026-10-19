@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
-    const { type, userIds, name } = await req.json()
+    const { type, userIds, name } = ((await req.json().catch(() => null)) ?? {}) as Record<string, any>
     // Released apps may still hold ids from before the UUIDv7 conversion (cached people lists, old links):
     // resolve them here, because the reachability check below compares the ids in JS, not in Prisma.
     const asked: string[] = Array.isArray(userIds) ? userIds.filter((u: unknown): u is string => typeof u === "string" && !!u) : []

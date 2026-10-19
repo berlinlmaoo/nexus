@@ -9,6 +9,7 @@ import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormBuilder } from "./FormStudio";
 import { coverCss } from "./form-model";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 
 // The builder itself lives in FormStudio.tsx (Notion-style rebuild, 12 Oct 2026).
 export { FormBuilder };
@@ -90,6 +91,8 @@ export function FormCard({ form, projectName, onEdit }: { form: NexusForm; proje
 /** Project-scoped forms list + builder (used in the project detail "Forms" tab). */
 export function ProjectFormsView({ projectId }: { projectId: string }) {
   const { t } = useLang();
+  // Can view / Can comment: no "New form" (its first save answered 403, QA final 19 Oct).
+  const canEdit = useProjectCanEdit();
   const forms = useQuery({ queryKey: ["nexus", "forms", projectId], queryFn: () => nexusApi.forms(projectId), enabled: !!projectId, retry: false });
   const rows = forms.data ?? [];
   const { builder, open, close, onCreated } = useFormBuilderParam(forms.data, forms.isSuccess || forms.isError);
@@ -100,7 +103,7 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
           <h2 className="font-display text-lg font-bold tracking-tight">{t("Forms")}</h2>
           <p className="text-sm text-muted-foreground">{t("Each time someone submits a form, it creates a task in this project.")}</p>
         </div>
-        <button onClick={() => open()} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+        {canEdit && <button onClick={() => open()} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>}
       </div>
       {forms.isLoading && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -117,7 +120,7 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
           <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
           <div className="text-lg font-bold">{t("No forms yet")}</div>
           <p className="mt-2 text-sm text-muted-foreground">{t("Create the first form for this project.")}</p>
-          <button onClick={() => open()} className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+          {canEdit && <button onClick={() => open()} className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>}
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

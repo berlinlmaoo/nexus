@@ -46,13 +46,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!text) return NextResponse.json({ error: "Komentar gak boleh kosong." }, { status: 422 })
     if (text.length > COMMENT_MAX) return NextResponse.json({ error: "Komentar terlalu panjang." }, { status: 422 })
 
-    const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { authorId: true } })
+    const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { id: true, authorId: true } })
     if (!post) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
 
     const wanted = [...new Set(mentionIds)].filter((x) => typeof x === "string" && x && x !== me).slice(0, MENTION_MAX)
     const validMentions = wanted.length ? await prisma.user.findMany({ where: { id: { in: wanted } }, select: { id: true, name: true } }) : []
 
     const comment = await prisma.$transaction(async (tx) => {
+      // Lock the post first so parallel comments recount in turn (QA final 19 Oct 2026: 12 at once -> commentCount 9).
+      await tx.$executeRaw`SELECT 1 FROM "Post" WHERE id = ${post.id} FOR UPDATE`
       const c = await tx.postComment.create({
         data: { text, postId: id, authorId: me },
         include: { author: { select: { id: true, name: true, avatar: true } } },

@@ -90,12 +90,24 @@ export function GideonAskButton({ className }: { className?: string }) {
   const name = useGideonName();
   const { t } = useLang();
   const prefs = useGideonPrefs();
+  const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const onFullPage = pathname === "/gideon" || pathname.startsWith("/gideon/");
   // What this person calls GIDEON, for the button's label before the panel was ever opened.
   useEffect(() => { if (!prefs) getGideonPrefs().then(setCachedGideonPrefs).catch(() => undefined); }, [prefs]);
   return (
     <button
       type="button"
-      onClick={() => openGideon(null)}
+      // On the full GIDEON page the panel never renders, so opening it there did nothing and then popped the
+      // panel open on the next page (QA final 19 Oct, E-1): bring the composer of the page into view instead.
+      onClick={() => {
+        if (onFullPage) {
+          const box = document.querySelector<HTMLTextAreaElement>("textarea[data-gideon-composer]");
+          box?.scrollIntoView({ block: "center" });
+          box?.focus();
+          return;
+        }
+        openGideon(null);
+      }}
       onPointerEnter={() => void loadPanel()}
       onFocus={() => void loadPanel()}
       aria-label={t("Open {assistant}", { assistant: name })}

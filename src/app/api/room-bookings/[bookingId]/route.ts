@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
     }
 
     const { bookingId } = await params
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validation = validateBody(updateRoomBookingSchema, body)
     if (!validation.success) {
       return validation.error

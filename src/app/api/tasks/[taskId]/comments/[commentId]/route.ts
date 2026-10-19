@@ -7,6 +7,8 @@ import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { auditSnippet } from "@/lib/deletion-entities"
 import { hasProjectLevel } from "@/lib/rbac"
+import { emitCommentAdded } from "@/lib/socket-emitter"
+import { isRecordNotFound } from "@/lib/prisma-errors"
 
 export async function PATCH(
   request: NextRequest,
@@ -18,6 +20,7 @@ export async function PATCH(
 
     const comment = await prisma.comment.findUnique({
       where: { id: (await params).commentId, taskId: (await params).taskId },
+      include: { task: { select: { taskList: { select: { projectId: true } } } } },
     })
 
     if (!comment) {
@@ -27,6 +30,12 @@ export async function PATCH(
     if (comment.userId !== session.user.id) {
       return NextResponse.json({ error: "You can only edit your own comments" }, { status: 403 })
     }
+    // Still allowed to comment there (QA final 19 Oct): someone removed from the project, or turned to
+    // Can view, could still rewrite their old comments.
+    const projectId = comment.task.taskList.projectId
+    if (!(await hasProjectLevel(session.user.id!, projectId, "COMMENT"))) {
+      return NextResponse.json({ error: "Forbidden: you need Can comment access in this project", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
+    }
 
     const body = await request.json()
     const { content } = body
@@ -35,13 +44,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Content is required" }, { status: 400 })
     }
 
-    const updated = await prisma.comment.update({
-      where: { id: (await params).commentId },
-      data: { content: content.trim(), isEdited: true },
-      include: { user: true },
-    })
+    let updated
+    try {
+      updated = await prisma.comment.update({
+        where: { id: (await params).commentId },
+        data: { content: content.trim(), isEdited: true },
+        include: { user: true },
+      })
+    } catch (e) {
+      // Deleted a moment ago (an edit racing a delete answered 500).
+      if (isRecordNotFound(e)) return NextResponse.json({ error: "Comment not found" }, { status: 404 })
+      throw e
+    }
 
     logAudit({ action: "update", entityType: "comment", entityId: (await params).commentId, userId: session.user.id!, request })
+    // Realtime (QA final 19 Oct): only a NEW comment pinged the project; an edit stayed invisible to the
+    // others until they reopened the task. Every client treats comment-added as "refetch this task's thread".
+    emitCommentAdded(projectId, comment.taskId, { id: comment.id, taskId: comment.taskId, change: "edited" })
 
     return NextResponse.json(updated)
   } catch (error) {
@@ -95,6 +114,7 @@ export async function DELETE(
       meta: { open: { type: "task", id: comment.taskId, projectId }, projectId, taskId: comment.taskId },
       remove: (tx) => tx.comment.delete({ where: { id: commentId } }),
     })
+    emitCommentAdded(projectId, comment.taskId, { id: commentId, taskId: comment.taskId, change: "deleted" })
 
     return NextResponse.json({ success: true })
   } catch (error) {

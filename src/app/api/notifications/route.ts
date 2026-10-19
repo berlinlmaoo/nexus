@@ -87,12 +87,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ deleted: result.count })
     }
 
-    const body = await req.json()
+    const body = (await req.json().catch(() => null)) ?? {}
 
     // Batch delete by ids array
     if (Array.isArray(body.ids) && body.ids.length > 0) {
       const result = await prisma.notification.deleteMany({
-        where: { id: { in: body.ids }, userId: session.user.id },
+        where: { id: { in: body.ids.filter((x: unknown): x is string => typeof x === "string") }, userId: session.user.id },
       })
       logAudit({ action: 'delete', entityType: 'notification', userId: session.user.id, request: req, metadata: { ids: body.ids, deleted: result.count } })
       return NextResponse.json({ deleted: result.count })
@@ -100,9 +100,11 @@ export async function DELETE(req: NextRequest) {
 
     // Single delete by id
     if (body.id) {
-      await prisma.notification.delete({ where: { id: body.id, userId: session.user.id } })
-      logAudit({ action: 'delete', entityType: 'notification', entityId: body.id, userId: session.user.id, request: req })
-      return NextResponse.json({ success: true })
+      // deleteMany, not delete: a double tap (or a second device) deleting the same row, or an id that is
+      // not theirs, threw "record not found" → 500. Already gone = done.
+      const result = await prisma.notification.deleteMany({ where: { id: String(body.id), userId: session.user.id } })
+      if (result.count > 0) logAudit({ action: 'delete', entityType: 'notification', entityId: body.id, userId: session.user.id, request: req })
+      return NextResponse.json({ success: true, deleted: result.count })
     }
 
     return NextResponse.json({ error: 'id, ids array, or clearRead param required' }, { status: 400 })

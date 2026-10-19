@@ -43,14 +43,21 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
     retry: false,
   });
 
+  const meQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
+  const myId = meQ.data?.user?.id;
   const projects = useMemo(() => {
     const all = projectsQ.data ?? [];
     const s = q.trim().toLowerCase();
     // Copying into the project it already lives in is what plain Duplicate is for — hide it here so
-    // the list only offers real destinations.
-    const pool = all.filter((p) => p.id !== sourceProjectId);
+    // the list only offers real destinations. So are projects where I can only view or comment: the copy
+    // there is refused (Can edit needed), and offering them ended in "Couldn't copy" (QA final 19 Oct).
+    const readOnly = (p: (typeof all)[number]) => {
+      const m = myId ? p.members?.find((x) => x.userId === myId) : undefined;
+      return !!m && (m.role === "VIEWER" || m.role === "GUEST" || m.accessLevel === "VIEW" || m.accessLevel === "COMMENT");
+    };
+    const pool = all.filter((p) => p.id !== sourceProjectId && !readOnly(p));
     return s ? pool.filter((p) => p.name.toLowerCase().includes(s)) : pool;
-  }, [projectsQ.data, q, sourceProjectId]);
+  }, [projectsQ.data, q, sourceProjectId, myId]);
 
   const lists = useMemo(
     () => (projectQ.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),

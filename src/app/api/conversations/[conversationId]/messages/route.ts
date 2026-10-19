@@ -5,7 +5,7 @@ import { CHAT_MESSAGE_INCLUDE, chatFileCarrierFor, conversationAccess, canPostIn
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
-import { advanceLastReadAt, lockConversationClock } from "@/lib/chat-order"
+import { advanceLastReadAt, lockConversationClock, chatRaceResponse } from "@/lib/chat-order"
 import {
   CHAT_FILE_PREFIX,
   CHAT_STORED_NAME,
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       return NextResponse.json({ error: "You can view this project but not post in it.", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
     }
 
-    const { content, mentionedUserIds, attachmentUrl, attachmentType, attachmentName, replyToId } = await req.json()
+    const { content, mentionedUserIds, attachmentUrl, attachmentType, attachmentName, replyToId } = ((await req.json().catch(() => null)) ?? {}) as Record<string, any>
     const text = typeof content === "string" ? content.trim() : ""
     // Only accept an attachment path this server itself handed out. Taking an arbitrary URL here
     // would turn every message into an open redirect and let anyone point the chat at a remote host.
@@ -263,6 +263,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
 
     return NextResponse.json({ message: forClient(req, { messages: [message] }).messages[0] }, { status: 201 })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("messages POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

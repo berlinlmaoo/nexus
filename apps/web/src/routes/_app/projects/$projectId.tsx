@@ -1594,6 +1594,9 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const qc = useQueryClient();
   const { t } = useLang();
   const bulk = useTaskBulk();
+  // Can view / Can comment: no drag affordance (QA final 19 Oct: a viewer could pick a card up and got
+  // "Couldn't move the task" on the drop).
+  const canEditHere = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
@@ -1609,7 +1612,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
       <div
         role="button"
         tabIndex={0}
-        draggable={!linkedFrom && !draft}
+        draggable={!linkedFrom && !draft && canEditHere}
         onDragStart={(e) => onDrag(task, lane, row, e)}
         onDragEnd={onDragEnd}
         onClick={cardProps.onClick}
@@ -1633,7 +1636,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
-            disabled={draft}
+            disabled={draft || !canEditHere}
             className="mt-px grid shrink-0 place-items-center rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:size-11"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
@@ -1802,6 +1805,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   const tint = cardTint(task, cfg, defs, ctx);
   const filteredOut = useFilteredOut(task.id);
   const toggleDone = useDoneToggle(task, task.taskList?.projectId ?? undefined);
+  // Can view / Can comment: the circle shows the state but doesn't toggle (it answered 403, QA final 19 Oct).
+  const canEditRow = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const handle = dragGroup !== null && onDragTask ? (
     <DragHandle
@@ -1828,7 +1833,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         aria-label={done ? t("Mark as not done") : t("Mark as done")}
         title={done ? t("Mark as not done") : t("Mark as done")}
         tabIndex={-1}
-        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
+        aria-disabled={!canEditRow || undefined}
+        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft || !canEditRow) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
         className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:p-3.5"
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
@@ -1976,7 +1982,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     for (const k of fallbackKeys) { const d = parseDate(taskValues(task, k)[0]); if (d) return d; }
     return null;
   };
-  const movable = (task: NexusTask) => canDrag && !!ownDate(task);
+  const canEditDates = useProjectCanEdit();
+  const movable = (task: NexusTask) => canDrag && canEditDates && !!ownDate(task);
   const dated = tasks.filter((task) => dateOf(task));
   const undated = tasks.filter((task) => !dateOf(task));
   // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
@@ -2061,7 +2068,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <h3 className="mr-auto text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", ...(pickedDate.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }).format(pickedDate).replace(/\bSept\b/, "Sep")}</h3>
-        <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>
+        {canEditDates && <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>}
       </div>
       {pickedTasks.map((task) => {
         const done = isDone(task.status);
@@ -2179,7 +2186,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   className={cn("group/cal relative min-h-[7.5rem] border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth ? "bg-muted/40" : idx % 7 >= 5 && "bg-muted/20", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    {inMonth && canEditDates ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}
                         className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate() === 1 && !isToday ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</button>
@@ -2318,8 +2325,9 @@ const GANTT_BAR: Record<string, string> = {
   URGENT: "bg-rose-500",
   HIGH: "bg-orange-500",
   MEDIUM: "bg-sky-500",
-  LOW: "bg-violet-500",
-  NONE: "bg-teal-500",
+  // LOW green, No priority gray (owner, 18 Oct 2026), like the Calendar stripes (CAL_STRIPE).
+  LOW: "bg-emerald-500",
+  NONE: "bg-muted-foreground/40",
 };
 function tlInitials(name?: string | null) {
   if (!name) return "?";
@@ -2365,6 +2373,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   groups: TaskGroup[]; groupBy: string | null; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
   onSetDates: (task: NexusTask, changes: Record<string, string | null>) => void;
 }) {
+  const canEditBars = useProjectCanEdit();
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
   // Phone: the frozen column is the title only, ~40% of the width, so the bars have room (Duration and
@@ -2639,7 +2648,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
                     const dragging = drag?.id === task.id && drag.moved;
-                    const canMove = (startW || endW) && !marker && !task.id.startsWith("draft-");
+                    const canMove = canEditBars && (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>

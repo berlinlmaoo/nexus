@@ -12,6 +12,7 @@ import {
   defaultProbability,
   nextDealCode,
   claimDealCode,
+  lockDealCodes,
   parseDealFields,
   pipelineGate,
   serializeDeal,
@@ -71,33 +72,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!parsed.ok) return NextResponse.json({ ...parsed.error, code: "INVALID_FIELD" }, { status: 400 })
 
     const stage = (parsed.data.stage as string | undefined) ?? "Incoming"
-    const last = await prisma.pipelineDeal.findFirst({
-      where: { projectId, stage },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    })
 
-    // Two people adding a deal in the same second can pick the same code; the ledger of handed-out codes
-    // (PipelineDealCode, unique across all boards) refuses the second, which then takes the next one.
+    // Codes come from one series across all boards (PipelineDealCode, unique). Numbering is serialised by a
+    // transaction lock, so parallel creates each take the next code instead of colliding; the unique key
+    // stays as the last guard (one retry for a code written outside this route, e.g. the import script).
     let created = null
-    for (let attempt = 0; attempt < 4 && !created; attempt++) {
-      const code = await nextDealCode(projectId)
+    for (let attempt = 0; attempt < 2 && !created; attempt++) {
       try {
         created = await prisma.$transaction(async (tx) => {
+          await lockDealCodes(tx)
+          const code = await nextDealCode(projectId, new Date(), tx)
+          const last = await tx.pipelineDeal.findFirst({
+            where: { projectId, stage },
+            orderBy: { position: "desc" },
+            select: { position: true },
+          })
           await claimDealCode(tx, code, projectId)
           return tx.pipelineDeal.create({
-          data: {
-            probability: defaultProbability(stage),
-            ...parsed.data,
-            name: parsed.data.name as string,
-            stage,
-            code,
-            position: (last?.position ?? 0) + 1024,
-            projectId,
-            createdById: userId,
-            updatedById: userId,
-          },
-          include: dealInclude,
+            data: {
+              probability: defaultProbability(stage),
+              ...parsed.data,
+              name: parsed.data.name as string,
+              stage,
+              code,
+              position: (last?.position ?? 0) + 1024,
+              projectId,
+              createdById: userId,
+              updatedById: userId,
+            },
+            include: dealInclude,
           })
         })
       } catch (error) {

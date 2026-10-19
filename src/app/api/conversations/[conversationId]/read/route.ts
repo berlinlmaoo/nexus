@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { CHAT_NOTIFICATION_TYPES } from "@/lib/chat-unread"
 import { chatLink } from "@/lib/chat-rules"
-import { advanceLastReadAt } from "@/lib/chat-order"
+import { advanceLastReadAt, chatRaceResponse } from "@/lib/chat-order"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 
 /**
@@ -80,6 +80,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     })
     return NextResponse.json({ success: true, lastReadAt: lastReadAt.toISOString() })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation read error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

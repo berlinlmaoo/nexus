@@ -24,7 +24,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     }
 
-    const payload = await request.json()
+    const payload = await request.json().catch(() => null) // malformed body → 400 below, not a 500
     const validation = attendanceRequestPatchSchema.safeParse(payload)
     if (!validation.success) {
       const fieldErrors = validation.error.flatten().fieldErrors

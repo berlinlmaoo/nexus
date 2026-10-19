@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
 import { AvatarFace } from "@/components/Avatar";
 import { formatCount } from "@/lib/number-format"
+import { t as tr } from "@/lib/lang"
 
 export interface LeaderboardRankingItem {
   userId: string
@@ -86,13 +87,13 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                   <div className="min-w-0 flex-1">
                     {/* Two lines before "…", like the tie ribbon (UI tour run 16, R16-WM-10). */}
                     <div className="line-clamp-2 font-semibold leading-tight">{item.userName}</div>
-                    {item.byline && <div className="truncate text-sm text-muted-foreground">{item.byline}</div>}
+                    {item.byline && <div className="line-clamp-2 text-sm leading-tight text-muted-foreground">{item.byline}</div>}
                   </div>
                   <span className="shrink-0 text-base font-bold tabular-nums">{formatValue(item.value)}</span>
                 </motion.button>
               )
             })}
-            {rows.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">No rankings yet.</div>}
+            {rows.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">{tr("No rankings yet.")}</div>}
           </div>
         </div>
 

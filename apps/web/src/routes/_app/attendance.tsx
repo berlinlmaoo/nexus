@@ -1647,7 +1647,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     return (
       <div key={`offsite-${it.id}`} id={`focus-offsite-${it.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`offsite-${it.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-48">
           {/* The kind badge is what keeps the merged queue readable: these rows sit shoulder to
               shoulder with leave/permit requests, and a reviewer has to see at a glance that this one
               is a check-out from outside the geofence, judged on distance and not on a date range. */}
@@ -1685,7 +1685,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     return (
       <div key={r.id} id={`focus-req-${r.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`req-${r.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-48">
           <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ? tr(REQ_LABEL[typeKey]) : statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
           <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${attendanceReasonText(r.reason)}` : ""}</div>
           {/* Permit evidence, right under the reason — this is what separates a real errand from a
@@ -1954,7 +1954,12 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     : type === "LEAVE" ? (leave?.remaining ?? null)
     : null;
   // Said before the submit, not after: a day asked for with none left is caught here.
-  const quotaProblem = !granting && remainingDays != null && remainingDays < 1
+  // The day-off numbers above are this attendance period's (28th → 27th). A date in a later period has
+  // its own allowance, which the server checks on submit: with this period used up, a staff could not
+  // file a day off for the 29th at all — the button stayed disabled although the server would accept it.
+  const periodIndex = (k: string) => { const [y, m, d] = k.split("-").map(Number); return y * 12 + m + (d >= 28 ? 1 : 0); };
+  const otherPeriod = type === "DAY_OFF" && Boolean(date) && periodIndex(date) !== periodIndex(today);
+  const quotaProblem = !granting && !otherPeriod && remainingDays != null && remainingDays < 1
     ? tr("You have no {type} days left.", { type: tr(REQ_LABEL[type] ?? "days").toLowerCase() })
     : null;
   const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };

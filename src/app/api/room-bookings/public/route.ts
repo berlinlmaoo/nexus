@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 // PUBLIC, no-login read for the per-room TV display. Returns ONLY a single known room's ACTIVE bookings
 // with minimal fields (time + title) — no creator/description/workspace, so nothing personal leaks.
@@ -25,7 +26,9 @@ export async function GET(req: NextRequest) {
     }
 
     const bookings = await prisma.roomBooking.findMany({
-      where: { room, status: "ACTIVE", startsAt: { lte: end }, endsAt: { gte: start } },
+      // The TV is in the office: only the company workspace books these rooms (QA final 19 Oct 2026: the
+      // Demo Studio workspace's sample bookings showed on the Studio display as if the room were taken).
+      where: { workspaceId: ORG_WORKSPACE_ID, room, status: "ACTIVE", startsAt: { lte: end }, endsAt: { gte: start } },
       select: { id: true, room: true, title: true, startsAt: true, endsAt: true },
       orderBy: [{ startsAt: "asc" }],
       take: 300,
