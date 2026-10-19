@@ -98,7 +98,7 @@ data class DayOffAllowance(
 )
 
 @Serializable
-data class DayOffGrant(val days: Int? = null, val reason: String? = null)
+data class DayOffGrant(val days: Int? = null, val reason: String? = null, val id: String? = null)
 
 @Serializable
 data class TodayRequest(
@@ -121,6 +121,7 @@ data class AttendanceToday(
     val dayOffQuota: Int? = null,
     val dayOffUsedThisMonth: Int? = null,
     val dayOffAllowance: DayOffAllowance? = null,
+    val dayOffNextPeriod: DayOffNextPeriod? = null,
     val restDays: List<Int>? = null,
     val isRestDayToday: Boolean? = null,
     val redDateQuota: Int? = null,
@@ -132,6 +133,8 @@ data class AttendanceToday(
     val annualLeave: AnnualLeave? = null,
     val viewerId: String? = null,
 )
+
+@Serializable data class DayOffNextPeriod(val period: String, val quota: Int = 0, val used: Int = 0, val remaining: Int = 0)
 
 @Serializable
 data class OfficesResponse(val offices: List<OfficeRef> = emptyList())

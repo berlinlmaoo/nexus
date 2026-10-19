@@ -24,7 +24,8 @@ import type { GideonMemory } from "@/lib/gideon";
  * not One Above All). U-2 (same day, "buat mirip kaya ChatGPT aja"): the main page is grouped rows — the switch,
  * "Memory summary ›", and three fixed fields saved as ordinary memories (no AI writes them). The summary is its own
  * view: a dot-grid shimmer while loading, then the sections slide up in order; each memory has one ⋯ menu; the
- * composer at the bottom adds one directly (same rules as before: no secrets, at most 40).
+ * composer at the bottom adds one directly (same rules as before: no secrets, at most 40). R-2: the composer is one
+ * soft rounded capsule with the send button inside it (no hard border), like the iOS one.
  */
 
 type Kind = GideonMemory["kind"];
@@ -257,7 +258,7 @@ function MemorySummary({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="sticky bottom-0 mt-6 bg-background/95 pb-2 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <form className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-1.5 shadow-soft focus-within:border-primary"
+        <form className="flex items-center gap-2 rounded-full bg-muted/70 py-1 pl-4 pr-1 transition-shadow focus-within:ring-2 focus-within:ring-primary/30"
           onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(); }}>
           <input value={text} onChange={(e) => setText(e.target.value)} maxLength={data?.textMax ?? 200} disabled={!data || paused || atMax}
             placeholder={t("Add or update…")} aria-label={t("Something for GIDEON to remember")}

@@ -16,6 +16,21 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class MeetingsTest {
+    @Test fun queueReadingsUpdateAtTheSameVersionAndQueueZeroRefetches() {
+        val m = Meeting("m", status = "TRANSCRIBING", progress = .2, version = 4)
+        assertEquals(.7, meetingReading(m, MeetingChanged("m", status = "TRANSCRIBING", progress = .7, version = 4))!!.progress, .001)
+        assertNull(meetingReading(m, MeetingChanged("m", status = "TRANSCRIBING", progress = 0.0, version = 4)))
+        assertNull(meetingReading(m, MeetingChanged("m", status = "READY", progress = 1.0, version = 5)))
+        assertEquals(m, meetingReading(m, MeetingChanged("m", status = "TRANSCRIBING", progress = .1, version = 3)))
+    }
+    @Test fun appliedSpeakerNamesCannotBeOverlaidByPendingOrSubmittedDrafts() {
+        val speaker = MeetingSpeaker(name = "Saved speaker")
+        val server = Meeting("m", status = "APPLIED", speakers = mapOf("Speaker 1" to speaker), progress = 1.0, version = 8)
+        val edits = mapOf("title" to JsonPrimitive("My title"), "speakers" to NexusJson.parseToJsonElement("""{"Speaker 1":{"name":"Unsaved speaker"}}"""))
+        val merged = meetingAcknowledge(server, edits, emptyMap())
+        assertEquals("My title", merged.title); assertEquals("Saved speaker", merged.speakers!!["Speaker 1"]!!.name)
+        assertEquals(1.0, merged.progress, .001); assertEquals(8, merged.version)
+    }
     @Test fun speakerEditsPreserveOtherAutomaticNamesAndClearTheEditedAutoFlag() {
         val original = mapOf("Speaker 1" to MeetingSpeaker("Berlin", "u1", true), "Speaker 2" to MeetingSpeaker("Rina", "u2", true))
         val changed = MeetingRules.nameVoice(original, "Speaker 1", "Bagas", "u3")

@@ -68,18 +68,20 @@ object XpPenaltyRules{
     fun dismissed(seen:List<String>,rows:List<JsonObject>)=(seen+rows.map{it.text("id")}).distinct().takeLast(150)
 }
 @Composable
-internal fun XpPenaltyHost(allowed:Boolean){
+internal fun XpPenaltyHost(allowed:Boolean,onState:(loading:Boolean,pending:Boolean)->Unit = {_,_->}){
     val ctx=LocalContext.current
     val container=(ctx.applicationContext as NexusApplication).container
     val user=container.sessionStore.current?.userId?:return
     val api=remember{XpAdminApi(container.api)}
     val seenKey=container.api.url("/").toString()+":"+user
     val prefs=remember{ctx.getSharedPreferences("nexus.xp-penalties",android.content.Context.MODE_PRIVATE)}
-    var rows by remember(user){mutableStateOf<List<JsonObject>>(emptyList())}
-    var seen by remember(user){mutableStateOf(prefs.getString(seenKey,"").orEmpty().split("|").filter{it.isNotBlank()})}
+    var rows by remember(seenKey){mutableStateOf<List<JsonObject>>(emptyList())}
+    var seen by remember(seenKey){mutableStateOf(prefs.getString(seenKey,"").orEmpty().split("|").filter{it.isNotBlank()})}
+    var loading by remember(seenKey){mutableStateOf(true)}
     val lifecycle=LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(user,lifecycle){lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED){delay(1800);while(true){try{rows=api.penalties()}catch(_:ApiError){};delay(30000)}}}
+    LaunchedEffect(seenKey,lifecycle){lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED){delay(1800);while(true){try{rows=api.penalties()}catch(_:ApiError){}finally{loading=false};delay(30000)}}}
     val fresh=XpPenaltyRules.fresh(rows,seen.toSet())
+    SideEffect { onState(loading,fresh.isNotEmpty()) }
     fun dismiss(){seen=XpPenaltyRules.dismissed(seen,fresh);prefs.edit().putString(seenKey,seen.joinToString("|")).apply()}
     if(allowed&&fresh.isNotEmpty())AlertDialog(onDismissRequest=::dismiss,title={Text(stringResource(R.string.xad_penalties))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
         fresh.forEach{p->val label=when(p.text("kind")){"late"->ctx.getString(R.string.xad_late,p.number("lateMinutes")?.toInt()?.toString()?:kotlin.math.abs(p.number("amount")?.toInt()?:0).let{if(it>=120)"120+"else it.toString()});"nocheckout"->ctx.getString(R.string.xad_nocheckout);"alpha"->ctx.getString(R.string.xad_absent);"admin"->ctx.getString(R.string.xad_admin,p.text("reason").removePrefix("admin:adjust:").takeIf{p.text("reason").startsWith("admin:adjust:")}.orEmpty());else->ctx.getString(R.string.xad_lost)}

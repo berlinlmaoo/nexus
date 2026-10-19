@@ -30,6 +30,36 @@ class BlockEditingTest {
         assertEquals(JsonArray(listOf(second,first)),BlockTree.moveUp(tree,listOf(1))["content"])
         val removed=BlockTree.remove(tree,listOf(0));assertEquals(JsonArray(listOf(second)),removed["content"]);assertEquals(tree["attrs"],removed["attrs"])
     }
+    @Test fun clearingThenRetypingRetainsTypingMarksAndAttributes(){
+        val node=doc("""{"type":"paragraph","attrs":{"id":"stable"},"content":[{"type":"text","text":"Bold","marks":[{"type":"bold"},{"type":"futureMark","attrs":{"keep":true}}]}]}""")
+        val cleared=BlockTree.replaceText(node,"")
+        assertEquals("",BlockTree.text(cleared))
+        val typed=BlockTree.replaceText(cleared,"Replacement")
+        assertEquals("Replacement",BlockTree.text(typed))
+        assertEquals(node["attrs"],typed["attrs"])
+        assertEquals(node["content"]!!.jsonArray[0].jsonObject["marks"],typed["content"]!!.jsonArray[0].jsonObject["marks"])
+    }
+    @Test fun editingAcrossHardBreakKeepsItsAttributesAndUnchangedMarks(){
+        val node=doc("""{"type":"paragraph","content":[{"type":"text","text":"Bold","marks":[{"type":"bold"}]},{"type":"hardBreak","attrs":{"future":true}},{"type":"text","text":"Italic","marks":[{"type":"italic"}]}]}""")
+        val changed=BlockTree.replaceText(node,"Bold more\nItalic")
+        assertEquals("Bold more\nItalic",BlockTree.text(changed))
+        assertEquals(node["content"]!!.jsonArray[1],changed["content"]!!.jsonArray[2])
+        assertEquals(node["content"]!!.jsonArray.last(),changed["content"]!!.jsonArray.last())
+        val multiline=BlockTree.replaceText(BlockTree.paragraph("a"),"a\nb")
+        assertTrue(multiline["content"]!!.jsonArray.any{it.jsonObject["type"]==JsonPrimitive("hardBreak")})
+    }
+    @Test fun replacingEmojiNeverSplitsASurrogatePairAcrossRuns(){
+        val changed=BlockTree.replaceText(BlockTree.paragraph("a😁z"),"a😂z")
+        assertEquals("a😂z",BlockTree.text(changed))
+        changed["content"]!!.jsonArray.forEach { run ->
+            val text=run.jsonObject["text"]!!.jsonPrimitive.content
+            assertFalse(text.first().isLowSurrogate());assertFalse(text.last().isHighSurrogate())
+        }
+    }
+    @Test fun opaqueInlineNodesCannotBeFlattenedByTextReplacement(){
+        val node=doc("""{"type":"paragraph","content":[{"type":"mention","attrs":{"id":"keep"}}]}""")
+        assertEquals(node,BlockTree.replaceText(node,"replacement"))
+    }
     @Test fun canonicalReadAndSaveUseExactBase()=runTest{
         val server=MockWebServer();server.start()
         try{val api=BlockEditorApi(ApiClient(server.url("/"),ClientIdentity("0.1.6",13,36),{Session("t","c","u")},mayCarrySession={true}))

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ui_status_title">Status</string>
+    <string name="ui_status_placeholder">Lagi apa?</string>
+    <string name="ui_status_emoji">Pilih emoji</string>
+    <string name="ui_status_no_emoji">Tanpa emoji</string>
+    <string name="ui_status_availability">Ketersediaan</string>
+    <string name="ui_status_online">Online</string>
+    <string name="ui_status_away">Away</string>
+    <string name="ui_status_dnd">Jangan diganggu</string>
+    <string name="ui_status_away_hint">Status buatanmu saat ini menandai kamu tidak di tempat.</string>
+    <string name="ui_status_quick">Pilihan cepat</string>
+    <string name="ui_status_road">Di jalan</string>
+    <string name="ui_status_3h">3 jam</string>
+    <string name="ui_status_starts">Mulai</string>
+    <string name="ui_status_until">Sampai %1$s</string>
+    <string name="ui_memory_summary">Ringkasan memori</string>
+    <string name="ui_memory_summary_hint">Lihat apa yang GIDEON pelajari tentang kamu. Tambahkan di sini atau bilang di chat.</string>
+    <string name="ui_memory_nickname">Nama panggilanmu</string>
+    <string name="ui_memory_role">Peran / pekerjaanmu</string>
+    <string name="ui_memory_about">Tentang kamu</string>
+    <string name="ui_memory_about_hint">Minat, nilai dan preferensimu.</string>
+    <string name="ui_memory_optional">Opsional</string>
+    <string name="ui_memory_about_section">Tentang kamu</string>
+    <string name="ui_memory_people">Orang</string>
+    <string name="ui_memory_loading">Memuat…</string>
+    <string name="ui_memory_updated">Diperbarui %1$s</string>
+    <string name="ui_memory_just_now">baru saja</string>
+    <string name="ui_memory_add_update">Tambah atau perbarui…</string>
+    <plurals name="ui_memory_minutes_ago"><item quantity="other">%1$d menit lalu</item></plurals>
+    <plurals name="ui_memory_hours_ago"><item quantity="other">%1$d jam lalu</item></plurals>
+    <plurals name="ui_memory_days_ago"><item quantity="other">%1$d hari lalu</item></plurals>
+    <string name="ui_ticket_all_categories">Semua kategori</string>
+    <string name="ui_ticket_new">Baru</string>
+    <string name="ui_ticket_done">Selesai</string>
+    <string name="ui_ticket_gideon_replied">GIDEON sudah membalas</string>
+    <string name="ui_vault_add">Tambahkan ke Vault</string>
+    <string name="ui_vault_upload_file">Unggah file</string>
+    <string name="ui_vault_from_photos">Dari Foto</string>
+    <string name="ui_vault_select">Pilih</string>
+    <string name="ui_vault_storage">Penyimpanan</string>
+    <plurals name="ui_vault_selected"><item quantity="other">%1$d dipilih</item></plurals>
+    <plurals name="ui_vault_trash_selected"><item quantity="other">Pindahkan %1$d item ke Sampah?</item></plurals>
+    <string name="ui_meeting_title">Judul rapat</string>
+    <string name="ui_meeting_auto">Otomatis (ID + EN)</string>
+    <string name="ui_meeting_speaker_caption">Mulai dengan perkenalan singkat: “Hai, saya Berlin…”. Suara hanya dipakai untuk memberi label rekaman ini.</string>
+    <string name="ui_meeting_start_recording">Mulai merekam</string>
+    <string name="ui_meeting_upload_audio">Unggah file audio</string>
+    <string name="ui_meeting_footer">Maks. %1$d menit · %2$d MB · diproses di server milik perusahaan. Periksa notula dan tugas sebelum Terapkan.</string>
+    <string name="ui_gideon_personalize">Personalisasi</string>
+    <string name="ui_gideon_delete_chat">Hapus chat ini</string>
+    <string name="ui_gideon_clear_history">Hapus seluruh riwayat chat</string>
+    <string name="ui_gideon_delete_confirm">Hapus chat ini beserta lampirannya? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="ui_gideon_clear_confirm">Hapus seluruh chat GIDEON kamu beserta lampirannya? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="ui_messages_empty_direct">Belum ada pesan pribadi</string>
+    <string name="ui_messages_empty_groups">Belum ada percakapan grup</string>
+    <string name="ui_messages_empty_projects">Belum ada percakapan proyek</string>
+    <string name="ui_messages_projects_hint">Percakapan untuk proyekmu muncul di sini.</string>
+    <plurals name="ui_vault_move_selected"><item quantity="other">Pindahkan %1$d item</item></plurals>
+    <plurals name="ui_vault_moved"><item quantity="other">%1$d item dipindahkan ke %2$s</item></plurals>
+    <string name="ui_ticket_system_status">Status Menunggu keputusan diatur otomatis.</string>
+    <string name="ui_timeline_names">Nama</string>
+    <string name="ui_calendar_count_legend">angka = tugas pada hari itu</string>
+</resources>

@@ -54,97 +54,43 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     }
 }
 
-@Composable fun GideonMemoryScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val container = (context.applicationContext as NexusApplication).container
-    val store = container.gideonMemories
-    val snapshot by store.state.collectAsStateWithLifecycle()
-    val data = snapshot.data
-    val scope = rememberCoroutineScope()
-    val c = Nx.colors
-    val locale = LocalConfiguration.current.locales[0]
-    val id = ConfigBody.lang(locale) == "id"
-    var text by rememberSaveable { mutableStateOf("") }
-    var kind by rememberSaveable { mutableStateOf("FACT") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var confirm by remember { mutableStateOf(false) }
-    val addFocus = remember { FocusRequester() }
-    fun act(block: suspend () -> Unit) { if (busy) return; busy = true; error = null; scope.launch {
-        try { block() } catch (e: ApiError) { error = memoryError(e, id, context.getString(R.string.gm_failed)) } finally { busy = false }
-    } }
-    LaunchedEffect(Unit) { act { store.refresh() } }
-    Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        PageHeader(stringResource(R.string.gm_title), subtitle = stringResource(R.string.gm_subtitle), subtitleMaxLines = Int.MAX_VALUE, onBack = onBack) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val label = stringResource(R.string.gm_use)
-                    Text(label, Modifier.weight(1f), color = c.foreground)
-                    Switch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy, modifier = Modifier.semantics { contentDescription = label })
-                }
-                Text(stringResource(R.string.gm_off_hint), color = c.mutedFg, fontSize = 12.sp)
-            }
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(text, { text = it.take(data.textMax.coerceAtLeast(1)) }, placeholder = { Text(stringResource(R.string.gm_placeholder)) },
-                        enabled = snapshot.loaded && !busy && MemoryRules.canAdd(data), supportingText = { Text("${text.length}/${data.textMax}") }, modifier = Modifier.fillMaxWidth().focusRequester(addFocus))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val types = listOf("FACT" to stringResource(R.string.gm_note), "PREFERENCE" to stringResource(R.string.gm_preference), "PERSON" to stringResource(R.string.gm_about), "DATE" to stringResource(R.string.gm_date))
-                        GPicker(stringResource(R.string.gm_type), types.first { it.first == kind }.second, types, !busy && MemoryRules.canAdd(data)) { kind = it }
-                        NxButton(stringResource(R.string.gm_add), { act { store.add(text, kind); text = "" } }, enabled = snapshot.loaded && !busy && MemoryRules.canAdd(data) && text.isNotBlank(), kind = NxButtonKind.PRIMARY, compact = true)
-                    }
-                    if (data.paused) Text(stringResource(R.string.gm_paused), color = c.mutedFg, fontSize = 12.sp)
-                    else if (data.memories.size >= data.max) Text(stringResource(R.string.gm_full, data.max.toString()), color = c.mutedFg, fontSize = 12.sp)
-                }
-            }
-            error?.let { message -> item { Text(message, color = c.dangerText); if (!snapshot.loaded) TextButton(onClick = { act { store.refresh() } }) { Text(stringResource(R.string.gx_try_again)) } } }
-            if (snapshot.loaded && data.memories.isEmpty()) item { EmptyState(Icons.Outlined.Psychology, stringResource(R.string.gm_empty), stringResource(R.string.gm_empty_hint), stringResource(R.string.gm_add), { addFocus.requestFocus() }, actionEnabled = MemoryRules.canAdd(data) && !busy) }
-            listOf("PREFERENCE" to R.string.gm_preferences, "PERSON" to R.string.gm_about, "DATE" to R.string.gm_dates, "FACT" to R.string.gm_notes).forEach { (type, label) ->
-                val rows = data.memories.filter { it.kind == type || type == "FACT" && it.kind !in setOf("PREFERENCE", "PERSON", "DATE", "FACT") }
-                if (rows.isNotEmpty()) item(key = type) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(stringResource(label), color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(8.dp))) {
-                            rows.forEachIndexed { index, memory ->
-                                key(memory.id) { if (index > 0) HorizontalDivider(color = c.border); MemoryRow(memory, busy, data.paused, data.textMax, act = ::act) }
-                            }
-                        }
-                    }
-                }
-            }
-            if (data.memories.isNotEmpty()) item { TextButton(onClick = { confirm = true }, enabled = !busy) { Text(stringResource(R.string.gm_forget_all), color = c.dangerText) } }
-        }
-    }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.gm_forget_title)) }, text = { Text(pluralStringResource(R.plurals.gm_forget_body, data.memories.size, data.memories.size)) },
-        confirmButton = { TextButton(onClick = { confirm = false; act { store.forgetAll(); UiNotice.show(context.getString(R.string.gm_forgotten)) } }) { Text(stringResource(R.string.gm_forget_all), color = c.dangerText) } },
-        dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
-}
-
 @OptIn(ExperimentalLayoutApi::class)
-@Composable private fun MemoryRow(memory: GMemory, busy: Boolean, paused: Boolean, limit: Int, act: (suspend () -> Unit) -> Unit) {
+@Composable internal fun MemoryRow(memory: GMemory, busy: Boolean, paused: Boolean, limit: Int, act: (suspend () -> Unit) -> Unit) {
     val context = LocalContext.current
     val store = (context.applicationContext as NexusApplication).container.gideonMemories
     val c = Nx.colors
+    val profileField = MemoryProfile.field(memory)
+    val initialDraft = if (profileField == null) memory.text else MemoryProfile.value(profileField, memory)
     var editing by remember(memory.id) { mutableStateOf(false) }
-    var draft by remember(memory.id, memory.text) { mutableStateOf(memory.text) }
-    fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, draft); editing = false } }
+    var menu by remember(memory.id) { mutableStateOf(false) }
+    var draft by remember(memory.id, memory.text) { mutableStateOf(initialDraft) }
+    fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, if (profileField == null) draft else MemoryProfile.payload(profileField, draft)); editing = false } }
     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (editing) {
-            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
-                if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = memory.text; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
+            OutlinedTextField(draft, { draft = it.take(if (profileField == null) limit.coerceAtLeast(1) else MemoryProfile.limit(profileField, limit)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = initialDraft; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
             }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }))
-            Row { TextButton(onClick = { draft = memory.text; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
+            Row { TextButton(onClick = { draft = initialDraft; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
         } else {
-            Text(memory.text, color = c.foreground)
+            Row(verticalAlignment = Alignment.Top) {
+                val text = if (profileField == null) memory.text else stringResource(when (profileField) {
+                    MemoryProfile.Field.NICKNAME -> R.string.ui_memory_nickname
+                    MemoryProfile.Field.ROLE -> R.string.ui_memory_role
+                    MemoryProfile.Field.ABOUT -> R.string.ui_memory_about
+                }) + ": " + MemoryProfile.value(profileField, memory)
+                Text(text, color = c.foreground, modifier = Modifier.weight(1f))
+                Box {
+                    IconButton(onClick = { menu = true }, enabled = !busy, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreHoriz, stringResource(R.string.more), tint = c.mutedFg) }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.gm_edit)) }, onClick = { menu = false; editing = true })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.gm_delete), color = c.dangerText) }, onClick = { menu = false; act { store.forget(memory); UiNotice.show(context.getString(R.string.gm_forgotten)) } })
+                    }
+                }
+            }
             if (memory.kind == "DATE") MemoryRules.date(memory.monthDay, LocalConfiguration.current.locales[0])?.let { Text(it, color = c.mutedFg, fontSize = 12.sp) }
             if (memory.status == "PENDING") FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.gm_suggested), color = c.accentFg, fontSize = 12.sp, modifier = Modifier.background(c.accentBg, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
                 NxButton(stringResource(R.string.gm_save), { act { store.save(memory) } }, enabled = !busy && !paused, kind = NxButtonKind.PRIMARY, compact = true)
-            }
-            Row {
-                TextButton(onClick = { editing = true }, enabled = !busy) { Text(stringResource(R.string.gm_edit)) }
-                TextButton(onClick = { act { store.forget(memory); UiNotice.show(context.getString(R.string.gm_forgotten)) } }, enabled = !busy) { Text(stringResource(R.string.gm_delete), color = c.dangerText) }
             }
         }
     }

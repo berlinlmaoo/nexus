@@ -1,0 +1,30 @@
+<resources>
+    <string name="qa_person_trail">%1$s\'s location trail</string>
+    <string name="qa_dayoff_allowance">Day-off allowance</string>
+    <string name="qa_dayoff_no_bonus">No extra days off this period.</string>
+    <string name="qa_dayoff_bonus_days">Extra days off: %1$d</string>
+    <string name="qa_outlet_settings_short">Settings</string>
+    <string name="qa_term_overpaid">· Overpaid by %1$s</string>
+    <string name="qa_term_overpaid_warning">Overpaid by %1$s. It still counts as paid in full.</string>
+    <string name="qa_rooms_company_title">Room booking is for the Z Networks office</string>
+    <string name="qa_rooms_company_body">The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.</string>
+    <string name="qa_booking_delete_body">The room is free again for that time. You can restore the booking from Control Room → Audit.</string>
+    <string name="qa_dayoff_current">Day off: %1$d of %2$d left this period</string>
+    <string name="qa_dayoff_next">Day off: %1$d of %2$d left in the period of that date</string>
+    <string name="qa_dayoff_checked">Day-off balance is checked when you submit.</string>
+    <string name="qa_meeting_deleted">This meeting note was deleted</string>
+    <string name="qa_meeting_deleted_body">It was deleted, or you no longer have access to it.</string>
+    <string name="qa_all_meetings">All meeting notes</string>
+    <string name="qa_meeting_speakers_locked">Locked: these minutes were saved to the project, so the names stay as they are.</string>
+    <string name="qa_meeting_speakers_applied">These minutes were already saved, so the speaker names can\'t change anymore.</string>
+    <plurals name="qa_gideon_waiting_count"><item quantity="one">%1$d change waiting for your approval</item><item quantity="other">%1$d changes waiting for your approval</item></plurals>
+    <string name="qa_gideon_no_change">No changes: everything is already like this</string>
+    <string name="qa_gideon_waiting">%1$d changes waiting for your approval</string>
+    <string name="qa_chat_count">%1$s / 4,000 characters</string>
+    <string name="qa_chat_too_long">Too long: %1$s / 4,000 characters. Shorten it or split it into several messages.</string>
+    <string name="qa_chat_denied">You\'re no longer in this chat</string>
+    <string name="qa_form_readonly">You can view this form but not change it.</string>
+    <string name="qa_form_editors">Also editing: %1$s</string>
+    <string name="qa_form_editing">%1$s is editing</string>
+    <string name="qa_form_editing_more">%1$s and %2$d more are editing</string>
+</resources>

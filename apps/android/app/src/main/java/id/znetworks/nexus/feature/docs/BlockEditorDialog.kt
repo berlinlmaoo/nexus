@@ -14,7 +14,7 @@ import androidx.compose.ui.window.DialogProperties
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
-import id.znetworks.nexus.feature.projects.BuilderPick
+
 import id.znetworks.nexus.feature.social.*
 import id.znetworks.nexus.ui.components.describe
 import kotlinx.coroutines.launch
@@ -79,12 +79,12 @@ private fun BlockEditorDialog(kind:String,id:String,onSaved:()->Unit,close:()->U
                         if(canEdit){
                             if(line.editable)BlockFormat(line.node,!busy){next->edit(BlockTree.update(d,line.path){next})}
                             if(line.editable)BlockWriting(api,kind,id,BlockTree.text(line.node),!busy,{value->edit(BlockTree.update(d,line.path){BlockTree.replaceText(it,value)})},{value->edit(BlockTree.append(d,BlockTree.paragraph(value)))})
-                            if(line.editable)BuilderPick(stringResource(R.string.be_turn),type,listOf("paragraph" to stringResource(R.string.be_text),"heading" to stringResource(R.string.be_heading),"codeBlock" to stringResource(R.string.be_code)),!busy){next->edit(BlockTree.update(d,line.path){JsonObject(it+("type" to JsonPrimitive(next))+("attrs" to if(next=="heading")JsonObject(it.objectAt("attrs")+("level" to JsonPrimitive(2)))else it.objectAt("attrs")))})}
-                            Row{if(line.path.last()>0)TextButton(onClick={edit(BlockTree.moveUp(d,line.path))},enabled=!busy){Text(stringResource(R.string.ab_up))};TextButton(onClick={remove=line.path},enabled=!busy){Text(stringResource(R.string.ab_remove))}}
+                            if(line.editable)BlockPick(stringResource(R.string.be_turn),type,listOf("paragraph" to stringResource(R.string.be_text),"heading" to stringResource(R.string.be_heading),"codeBlock" to stringResource(R.string.be_code)),!busy){next->edit(BlockTree.update(d,line.path){JsonObject(it+("type" to JsonPrimitive(next))+("attrs" to if(next=="heading")JsonObject(it.objectAt("attrs")+("level" to JsonPrimitive(2)))else it.objectAt("attrs")))})}
+                            Row{if(line.path.last()>0)TextButton(onClick={edit(BlockTree.moveUp(d,line.path))},enabled=!busy){Text(stringResource(R.string.be_up))};TextButton(onClick={remove=line.path},enabled=!busy){Text(stringResource(R.string.be_remove))}}
                         }
                     }}
                 }
-                if(canEdit)BuilderPick(stringResource(R.string.be_add),"",listOf("paragraph" to stringResource(R.string.be_text),"heading" to stringResource(R.string.be_heading),"bulletList" to stringResource(R.string.be_bullet),"orderedList" to stringResource(R.string.be_numbered),"taskList" to stringResource(R.string.be_todo),"blockquote" to stringResource(R.string.be_quote),"details" to stringResource(R.string.be_toggle),"codeBlock" to stringResource(R.string.be_code),"horizontalRule" to stringResource(R.string.be_divider)),!busy){type->
+                if(canEdit)BlockPick(stringResource(R.string.be_add),"",listOf("paragraph" to stringResource(R.string.be_text),"heading" to stringResource(R.string.be_heading),"bulletList" to stringResource(R.string.be_bullet),"orderedList" to stringResource(R.string.be_numbered),"taskList" to stringResource(R.string.be_todo),"blockquote" to stringResource(R.string.be_quote),"details" to stringResource(R.string.be_toggle),"codeBlock" to stringResource(R.string.be_code),"horizontalRule" to stringResource(R.string.be_divider)),!busy){type->
                     val node=when(type){"bulletList","orderedList","taskList"->buildJsonObject{put("type",type);put("content",JsonArray(listOf(buildJsonObject{put("type",if(type=="taskList")"taskItem"else"listItem");if(type=="taskList")put("attrs",buildJsonObject{put("checked",false)});put("content",JsonArray(listOf(BlockTree.paragraph())))})))};"blockquote"->buildJsonObject{put("type",type);put("content",JsonArray(listOf(BlockTree.paragraph())))};"details"->buildJsonObject{put("type",type);put("content",JsonArray(listOf(buildJsonObject{put("type","detailsSummary")},buildJsonObject{put("type","detailsContent");put("content",JsonArray(listOf(BlockTree.paragraph())))})))};else->JsonObject(BlockTree.paragraph()+("type" to JsonPrimitive(type))+("attrs" to if(type=="heading")buildJsonObject{put("level",2)}else buildJsonObject{}))}
                     edit(BlockTree.append(d,node))
                 }
@@ -94,6 +94,6 @@ private fun BlockEditorDialog(kind:String,id:String,onSaved:()->Unit,close:()->U
         }}
     }
     conflict?.let{remote->AlertDialog(onDismissRequest={conflict=null},title={Text(stringResource(R.string.be_conflict))},text={Column{error?.let{Text(it,color=MaterialTheme.colorScheme.error)};Text(stringResource(R.string.be_conflict_help));Text(BlockTree.text(remote).take(1500))}},confirmButton={TextButton(onClick={save(true)},enabled=!busy){Text(stringResource(R.string.be_keep_both))}},dismissButton={TextButton(onClick={base=remote;doc=remote;mirror(remote,remote);conflict=null},enabled=!busy){Text(stringResource(R.string.be_latest))}})}
-    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.be_leave))},confirmButton={TextButton(onClick=close){Text(stringResource(R.string.be_keep_draft))}},dismissButton={TextButton(onClick={prefs.edit().remove(draftKey).apply();close()}){Text(stringResource(R.string.ab_discard_action))}})
-    remove?.let{path->AlertDialog(onDismissRequest={remove=null},title={Text(stringResource(R.string.be_delete))},confirmButton={TextButton(onClick={doc?.let{edit(BlockTree.remove(it,path))};remove=null}){Text(stringResource(R.string.ab_remove))}},dismissButton={TextButton(onClick={remove=null}){Text(stringResource(R.string.cancel))}})}
+    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.be_leave))},confirmButton={TextButton(onClick=close){Text(stringResource(R.string.be_keep_draft))}},dismissButton={TextButton(onClick={prefs.edit().remove(draftKey).apply();close()}){Text(stringResource(R.string.be_discard))}})
+    remove?.let{path->AlertDialog(onDismissRequest={remove=null},title={Text(stringResource(R.string.be_delete))},confirmButton={TextButton(onClick={doc?.let{edit(BlockTree.remove(it,path))};remove=null}){Text(stringResource(R.string.be_remove))}},dismissButton={TextButton(onClick={remove=null}){Text(stringResource(R.string.cancel))}})}
 }

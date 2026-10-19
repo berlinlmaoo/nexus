@@ -173,6 +173,7 @@ data class PipelineTerm(val raw: JsonObject) {
     val invoiceNo get() = raw["invoiceNo"].str().orEmpty()
     val invoiceDate get() = raw["invoiceDate"].str()?.takeIf { it.isNotBlank() }?.take(10)
     val paidAmount get() = raw["paidAmount"].num() ?: 0.0
+    val overpaid get() = (raw["overpaid"].num() ?: 0.0).coerceAtLeast(0.0)
     val paidAt get() = raw["paidAt"].str()?.takeIf { it.isNotBlank() }?.take(10)
     val note get() = raw["note"].str().orEmpty()
     /** Not Invoiced | Invoiced | Partial | Paid | Overdue (an unknown one is shown as-is). */

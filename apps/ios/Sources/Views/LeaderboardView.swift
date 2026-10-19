@@ -99,6 +99,7 @@ struct LeaderboardView: View {
                     .padding(.top, 4)
             }
         }
+        .liveRefresh(every: 60, on: [.nexusXPChanged, .nexusRealtimeConnected]) { await load() }
         .navigationTitle(T("Leaderboard"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }

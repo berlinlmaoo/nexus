@@ -19,8 +19,14 @@ final class MeetingStore {
     func load() async {
         do {
             let response: MeetingEnvelope = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id))
-            guard !hasUnsaved else { latestEventVersion = max(latestEventVersion, response.meeting.version); return }
+            guard !hasUnsaved else {
+                latestEventVersion = max(latestEventVersion, response.meeting.version)
+                if response.meeting.version == meeting?.version { meeting?.progress = response.meeting.progress; meeting?.queue = response.meeting.queue }
+                return
+            }
             meeting = response.meeting; failure = nil
+        } catch let error as NativeAPIError where error.status == 404 {
+            deleted = true; meeting = nil; failure = nil
         } catch { if !Task.isCancelled { failure = error.localizedDescription } }
     }
     func change(_ fields: [String: Any], edit: (inout MeetingNote) -> Void) {
@@ -81,6 +87,11 @@ final class MeetingStore {
                 else { meeting?.version = updated.version }
                 failure = nil
                 if fields["speakers"] != nil && response.meeting.status == "READY" { notice = T("Saved. To use the new names in the minutes, choose Write the minutes again.") }
+            } catch let error as NativeAPIError where error.code == "ALREADY_APPLIED" {
+                if let current = try? JSONDecoder().decode(MeetingEnvelope.self, from: error.data) { meeting = current.meeting }
+                pending = [:]
+                notice = T("These minutes were already saved, so the speaker names can’t change anymore.")
+                return false
             } catch let error as NativeAPIError where error.code == "VERSION_CONFLICT" {
                 if let current = try? JSONDecoder().decode(MeetingEnvelope.self, from: error.data) { meeting = current.meeting }
                 pending = [:]
@@ -98,8 +109,13 @@ final class MeetingStore {
         struct Event: Decodable { let meetingId: String; let status: String?; let progress: Double?; let version: Int?; let deleted: Bool? }
         guard let event = try? JSONDecoder().decode(Event.self, from: Data(json.utf8)), event.meetingId == id else { return }
         if event.deleted == true { MeetingUploads.shared.cancelAndRemove(id); deleted = true; return }
-        if let version = event.version, let current = meeting, version <= current.version { return }
-        if hasUnsaved { latestEventVersion = max(latestEventVersion, event.version ?? 0); return }
+        if let version = event.version, let current = meeting, version < current.version { return }
+        if event.progress == 0 { await load(); return }
+        if hasUnsaved {
+            latestEventVersion = max(latestEventVersion, event.version ?? 0)
+            if event.version == meeting?.version, let progress = event.progress { meeting?.progress = progress }
+            return
+        }
         if let status = event.status, let current = meeting, status == current.status,
            ["UPLOADING", "TRANSCRIBING", "SUMMARIZING"].contains(status), current.queue?.waiting != true {
             if let progress = event.progress { meeting?.progress = progress }

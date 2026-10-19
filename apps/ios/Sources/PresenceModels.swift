@@ -8,6 +8,8 @@ struct PresenceStatus: Codable, Equatable, Sendable {
         let text: String
         let startsAt: String
         let endsAt: String
+        let availability: String?
+        var selectedAvailability: String { ["online", "away", "dnd"].contains(availability ?? "") ? availability! : "away" }
     }
     let userId: String
     let state: String
@@ -18,6 +20,7 @@ struct PresenceStatus: Codable, Equatable, Sendable {
     let until: String?
     let since: String?
     let manual: Manual?
+    let availability: String?
     func localizedLabel(_ language: String) -> String { language == "id" ? label.id ?? label.en : label.en }
 }
 struct PresenceEnvelope: Decodable {

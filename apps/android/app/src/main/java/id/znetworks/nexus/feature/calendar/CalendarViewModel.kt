@@ -157,6 +157,21 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
     private var structureFromDisk = false
     /** When the server last confirmed what is on screen (a 304 counts), for "Data as of 14.05". */
     private var confirmedAt: Long? = null
+    private val attemptedFolderIds = mutableSetOf<String>()
+
+    private suspend fun resolveFolders(structure: CalStructure): Boolean {
+        val owner = c.sessionStore.current?.userId
+        val unknown = _state.value.filters.folders.filter { id -> structure.folders.none { it.id == id } && id !in attemptedFolderIds }
+        if (unknown.isEmpty()) return false
+        attemptedFolderIds.addAll(unknown)
+        val resolved = runCatching { api.resolveLegacyFolders(unknown) }.getOrDefault(emptyMap())
+        if (owner != c.sessionStore.current?.userId || resolved.isEmpty()) return false
+        val before = _state.value.filters.folders
+        val after = before.map { resolved[it] ?: it }.distinct()
+        if (before == after) return false
+        _state.update { it.copy(filters = it.filters.copy(folders = after)) }; save()
+        return true
+    }
 
     init {
         val saved = runCatching { NexusJson.decodeFromString(Saved.serializer(), prefs.getString("saved", null) ?: "{}") }.getOrDefault(Saved())
@@ -222,7 +237,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
     }
 
     /** On show, on foreground, on pull, and every poll interval while visible. */
-    fun refresh(pulled: Boolean = false) = viewModelScope.launch {
+    fun refresh(pulled: Boolean = false): kotlinx.coroutines.Job = viewModelScope.launch {
         lock.withLock {
             if (pulled) _state.update { it.copy(refreshing = true) }
             val uid = c.sessionStore.current?.userId
@@ -249,6 +264,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                     var structureChanged = false
                     var structure = _state.value.structure?.takeIf { !structureFromDisk } ?: api.structure().also { structureChanged = true }.value
                     structureFromDisk = false
+                    if (resolveFolders(structure)) { refresh(); return@coroutineScope }
                     val today = _state.value.today
                     // Today's rail only: fetched beside /items, and only when today is in the range.
                     val overdueJob = if (today >= asked.first && today <= asked.second) async { runCatching { api.overdue(askedFolder).value.items }.getOrNull() } else null

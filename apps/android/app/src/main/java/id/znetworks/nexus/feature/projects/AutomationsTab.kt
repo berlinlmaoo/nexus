@@ -167,7 +167,7 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
                     Icon(Icons.Filled.Bolt, null, tint = c.mutedFg.copy(alpha = 0.5f), modifier = Modifier.size(28.dp))
                     Text(stringResource(R.string.au_empty_title), fontWeight = FontWeight.SemiBold, color = c.foreground)
                     Text(stringResource(if (d.canEdit) R.string.au_empty_lead else R.string.au_empty_member), fontSize = 12.sp, color = c.mutedFg, textAlign = TextAlign.Center)
-                    
+
                 }
             }
             items(d.automations, key = { it.id }) { a ->

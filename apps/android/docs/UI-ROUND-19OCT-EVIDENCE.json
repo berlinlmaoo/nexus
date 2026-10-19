@@ -1,0 +1,1599 @@
+{
+  "at": "2026-10-19T08:06:33.355Z",
+  "root": "C:/Users/Berlin/Documents/Dev/nexus-shots/ui-round-19oct/",
+  "variants": [
+    "en-light",
+    "en-dark",
+    "id-light",
+    "id-dark"
+  ],
+  "entries": [
+    {
+      "item": "U-1 Status",
+      "variant": "en-light",
+      "file": "en-light/u1-status.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "en-dark",
+      "file": "en-dark/u1-status.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-light",
+      "file": "id-light/u1-status.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-dark",
+      "file": "id-dark/u1-status.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "en-light",
+      "file": "en-light/u1-shoot-preset.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "en-dark",
+      "file": "en-dark/u1-shoot-preset.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-light",
+      "file": "id-light/u1-shoot-preset.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-dark",
+      "file": "id-dark/u1-shoot-preset.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "en-light",
+      "file": "en-light/n1-long-status-wrap.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "en-dark",
+      "file": "en-dark/n1-long-status-wrap.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-light",
+      "file": "id-light/n1-long-status-wrap.png"
+    },
+    {
+      "item": "U-1 Status",
+      "variant": "id-dark",
+      "file": "id-dark/n1-long-status-wrap.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-light",
+      "file": "en-light/u2-settings.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-dark",
+      "file": "en-dark/u2-settings.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-light",
+      "file": "id-light/u2-settings.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-dark",
+      "file": "id-dark/u2-settings.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-light",
+      "file": "en-light/u2-summary.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-dark",
+      "file": "en-dark/u2-summary.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-light",
+      "file": "id-light/u2-summary.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-dark",
+      "file": "id-dark/u2-summary.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-light",
+      "file": "en-light/u2-forget-confirm.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "en-dark",
+      "file": "en-dark/u2-forget-confirm.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-light",
+      "file": "id-light/u2-forget-confirm.png"
+    },
+    {
+      "item": "U-2 Memory",
+      "variant": "id-dark",
+      "file": "id-dark/u2-forget-confirm.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "en-light",
+      "file": "en-light/u3-notifications-error.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "en-dark",
+      "file": "en-dark/u3-notifications-error.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "id-light",
+      "file": "id-light/u3-notifications-error.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "id-dark",
+      "file": "id-dark/u3-notifications-error.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "en-light",
+      "file": "en-light/u3-notifications-recovered.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "en-dark",
+      "file": "en-dark/u3-notifications-recovered.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "id-light",
+      "file": "id-light/u3-notifications-recovered.png"
+    },
+    {
+      "item": "U-3 Notifications",
+      "variant": "id-dark",
+      "file": "id-dark/u3-notifications-recovered.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-board-new.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-board-new.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-board-new.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-board-new.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-board-lane-1.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-board-lane-1.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-board-lane-1.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-board-lane-1.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-board-lane-2.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-board-lane-2.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-board-lane-2.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-board-lane-2.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-board-lane-3.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-board-lane-3.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-board-lane-3.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-board-lane-3.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-category-menu.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-category-menu.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-category-menu.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-category-menu.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-light",
+      "file": "en-light/u4-category-filter.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "en-dark",
+      "file": "en-dark/u4-category-filter.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-light",
+      "file": "id-light/u4-category-filter.png"
+    },
+    {
+      "item": "U-4 Tickets",
+      "variant": "id-dark",
+      "file": "id-dark/u4-category-filter.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-add-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-add-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-add-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-add-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-more-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-more-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-more-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-more-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-row-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-row-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-row-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-row-menu.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-move-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-move-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-move-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-move-selection.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-light",
+      "file": "en-light/u5-rename.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "en-dark",
+      "file": "en-dark/u5-rename.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-light",
+      "file": "id-light/u5-rename.png"
+    },
+    {
+      "item": "U-5 Vault",
+      "variant": "id-dark",
+      "file": "id-dark/u5-rename.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-light",
+      "file": "en-light/u6-new-meeting.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-dark",
+      "file": "en-dark/u6-new-meeting.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-light",
+      "file": "id-light/u6-new-meeting.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-dark",
+      "file": "id-dark/u6-new-meeting.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-light",
+      "file": "en-light/u6-language-menu.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-dark",
+      "file": "en-dark/u6-language-menu.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-light",
+      "file": "id-light/u6-language-menu.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-dark",
+      "file": "id-dark/u6-language-menu.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-light",
+      "file": "en-light/u6-audio-picker.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "en-dark",
+      "file": "en-dark/u6-audio-picker.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-light",
+      "file": "id-light/u6-audio-picker.png"
+    },
+    {
+      "item": "U-6 Meetings",
+      "variant": "id-dark",
+      "file": "id-dark/u6-audio-picker.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-toolbar.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-toolbar.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-toolbar.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-toolbar.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-tier-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-tier-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-tier-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-tier-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-more-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-more-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-more-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-more-menu.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-keyboard-tier.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-keyboard-tier.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-keyboard-tier.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-keyboard-tier.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-delete-chat-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-delete-chat-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-delete-chat-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-delete-chat-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-light",
+      "file": "en-light/u7-clear-history-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "en-dark",
+      "file": "en-dark/u7-clear-history-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-light",
+      "file": "id-light/u7-clear-history-confirm.png"
+    },
+    {
+      "item": "U-7 GIDEON toolbar",
+      "variant": "id-dark",
+      "file": "id-dark/u7-clear-history-confirm.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-light",
+      "file": "en-light/u8-direct.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-dark",
+      "file": "en-dark/u8-direct.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-light",
+      "file": "id-light/u8-direct.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-dark",
+      "file": "id-dark/u8-direct.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-light",
+      "file": "en-light/u8-groups.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-dark",
+      "file": "en-dark/u8-groups.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-light",
+      "file": "id-light/u8-groups.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-dark",
+      "file": "id-dark/u8-groups.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-light",
+      "file": "en-light/u8-projects.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-dark",
+      "file": "en-dark/u8-projects.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-light",
+      "file": "id-light/u8-projects.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-dark",
+      "file": "id-dark/u8-projects.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-light",
+      "file": "en-light/u8-cold-remembered-tab.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "en-dark",
+      "file": "en-dark/u8-cold-remembered-tab.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-light",
+      "file": "id-light/u8-cold-remembered-tab.png"
+    },
+    {
+      "item": "U-8 Messages",
+      "variant": "id-dark",
+      "file": "id-dark/u8-cold-remembered-tab.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-light",
+      "file": "en-light/u9-timeline-hidden-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-dark",
+      "file": "en-dark/u9-timeline-hidden-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-light",
+      "file": "id-light/u9-timeline-hidden-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-dark",
+      "file": "id-dark/u9-timeline-hidden-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-light",
+      "file": "en-light/u9-timeline-narrow-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-dark",
+      "file": "en-dark/u9-timeline-narrow-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-light",
+      "file": "id-light/u9-timeline-narrow-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-dark",
+      "file": "id-dark/u9-timeline-narrow-names.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-light",
+      "file": "en-light/u9-table-frozen-name.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-dark",
+      "file": "en-dark/u9-table-frozen-name.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-light",
+      "file": "id-light/u9-table-frozen-name.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-dark",
+      "file": "id-dark/u9-table-frozen-name.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-light",
+      "file": "en-light/u9-name-opens-task.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "en-dark",
+      "file": "en-dark/u9-name-opens-task.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-light",
+      "file": "id-light/u9-name-opens-task.png"
+    },
+    {
+      "item": "U-9 Timeline and Table",
+      "variant": "id-dark",
+      "file": "id-dark/u9-name-opens-task.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-default.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-default.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-default.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-default.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-200.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-200.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-200.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-200.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-50.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-50.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-50.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-50.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-200-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-200-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-200-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-200-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-50-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-50-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-50-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-50-selection.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-reset-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-reset-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-reset-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-reset-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-frozen-horizontal.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-frozen-horizontal.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-frozen-horizontal.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-frozen-horizontal.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-frozen-vertical.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-frozen-vertical.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-frozen-vertical.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-frozen-vertical.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-light",
+      "file": "en-light/u10-remembered-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "en-dark",
+      "file": "en-dark/u10-remembered-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-light",
+      "file": "id-light/u10-remembered-100.png"
+    },
+    {
+      "item": "U-10 Spreadsheet",
+      "variant": "id-dark",
+      "file": "id-dark/u10-remembered-100.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-light",
+      "file": "en-light/u11-calendar-phone.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-dark",
+      "file": "en-dark/u11-calendar-phone.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-light",
+      "file": "id-light/u11-calendar-phone.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-dark",
+      "file": "id-dark/u11-calendar-phone.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-light",
+      "file": "en-light/u11-calendar-wide.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-dark",
+      "file": "en-dark/u11-calendar-wide.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-light",
+      "file": "id-light/u11-calendar-wide.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-dark",
+      "file": "id-dark/u11-calendar-wide.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-light",
+      "file": "en-light/u11-calendar-wide-legend.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "en-dark",
+      "file": "en-dark/u11-calendar-wide-legend.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-light",
+      "file": "id-light/u11-calendar-wide-legend.png"
+    },
+    {
+      "item": "U-11 Calendar",
+      "variant": "id-dark",
+      "file": "id-dark/u11-calendar-wide-legend.png"
+    },
+    {
+      "item": "U-12 Apply contrast",
+      "variant": "en-light",
+      "file": "en-light/u12-action-apply.png"
+    },
+    {
+      "item": "U-12 Apply contrast",
+      "variant": "en-dark",
+      "file": "en-dark/u12-action-apply.png"
+    },
+    {
+      "item": "U-12 Apply contrast",
+      "variant": "id-light",
+      "file": "id-light/u12-action-apply.png"
+    },
+    {
+      "item": "U-12 Apply contrast",
+      "variant": "id-dark",
+      "file": "id-dark/u12-action-apply.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-light",
+      "file": "en-light/u13-empty-chat.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-dark",
+      "file": "en-dark/u13-empty-chat.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-light",
+      "file": "id-light/u13-empty-chat.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-dark",
+      "file": "id-dark/u13-empty-chat.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-light",
+      "file": "en-light/u13-empty-chat-keyboard.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-dark",
+      "file": "en-dark/u13-empty-chat-keyboard.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-light",
+      "file": "id-light/u13-empty-chat-keyboard.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-dark",
+      "file": "id-dark/u13-empty-chat-keyboard.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-light",
+      "file": "en-light/e-d1-pending-collapsed.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-dark",
+      "file": "en-dark/e-d1-pending-collapsed.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-light",
+      "file": "id-light/e-d1-pending-collapsed.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-dark",
+      "file": "id-dark/e-d1-pending-collapsed.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-light",
+      "file": "en-light/e-d1-pending-expanded.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "en-dark",
+      "file": "en-dark/e-d1-pending-expanded.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-light",
+      "file": "id-light/e-d1-pending-expanded.png"
+    },
+    {
+      "item": "U-13 Empty chat",
+      "variant": "id-dark",
+      "file": "id-dark/e-d1-pending-expanded.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "en-light",
+      "file": "en-light/a12-live-form.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "en-dark",
+      "file": "en-dark/a12-live-form.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "id-light",
+      "file": "id-light/a12-live-form.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "id-dark",
+      "file": "id-dark/a12-live-form.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "en-light",
+      "file": "en-light/a12-saved-settled.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "en-dark",
+      "file": "en-dark/a12-saved-settled.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "id-light",
+      "file": "id-light/a12-saved-settled.png"
+    },
+    {
+      "item": "A-12 Forms",
+      "variant": "id-dark",
+      "file": "id-dark/a12-saved-settled.png"
+    },
+    {
+      "item": "A-24 Overview",
+      "variant": "en-light",
+      "file": "en-light/a24-overview-workload.png"
+    },
+    {
+      "item": "A-24 Overview",
+      "variant": "en-dark",
+      "file": "en-dark/a24-overview-workload.png"
+    },
+    {
+      "item": "A-24 Overview",
+      "variant": "id-light",
+      "file": "id-light/a24-overview-workload.png"
+    },
+    {
+      "item": "A-24 Overview",
+      "variant": "id-dark",
+      "file": "id-dark/a24-overview-workload.png"
+    },
+    {
+      "item": "B-13 Chat",
+      "variant": "en-light",
+      "file": "en-light/b13-deleted-chat.png"
+    },
+    {
+      "item": "B-13 Chat",
+      "variant": "en-dark",
+      "file": "en-dark/b13-deleted-chat.png"
+    },
+    {
+      "item": "B-13 Chat",
+      "variant": "id-light",
+      "file": "id-light/b13-deleted-chat.png"
+    },
+    {
+      "item": "B-13 Chat",
+      "variant": "id-dark",
+      "file": "id-dark/b13-deleted-chat.png"
+    },
+    {
+      "item": "B-16 Legacy folders",
+      "variant": "en-light",
+      "file": "en-light/b16-legacy-folder.png"
+    },
+    {
+      "item": "B-16 Legacy folders",
+      "variant": "en-dark",
+      "file": "en-dark/b16-legacy-folder.png"
+    },
+    {
+      "item": "B-16 Legacy folders",
+      "variant": "id-light",
+      "file": "id-light/b16-legacy-folder.png"
+    },
+    {
+      "item": "B-16 Legacy folders",
+      "variant": "id-dark",
+      "file": "id-dark/b16-legacy-folder.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-light",
+      "file": "en-light/c6-absent-date.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-dark",
+      "file": "en-dark/c6-absent-date.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-light",
+      "file": "id-light/c6-absent-date.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-dark",
+      "file": "id-dark/c6-absent-date.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-light",
+      "file": "en-light/c7-linked-booking.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-dark",
+      "file": "en-dark/c7-linked-booking.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-light",
+      "file": "id-light/c7-linked-booking.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-dark",
+      "file": "id-dark/c7-linked-booking.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-light",
+      "file": "en-light/c7-allowance.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-dark",
+      "file": "en-dark/c7-allowance.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-light",
+      "file": "id-light/c7-allowance.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-dark",
+      "file": "id-dark/c7-allowance.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-light",
+      "file": "en-light/c7-record-trail.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-dark",
+      "file": "en-dark/c7-record-trail.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-light",
+      "file": "id-light/c7-record-trail.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-dark",
+      "file": "id-dark/c7-record-trail.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-light",
+      "file": "en-light/bd1-delete-booking-confirm.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "en-dark",
+      "file": "en-dark/bd1-delete-booking-confirm.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-light",
+      "file": "id-light/bd1-delete-booking-confirm.png"
+    },
+    {
+      "item": "C-6 C-7 Attendance and booking links",
+      "variant": "id-dark",
+      "file": "id-dark/bd1-delete-booking-confirm.png"
+    },
+    {
+      "item": "C-D3 Session dialog",
+      "variant": "en-light",
+      "file": "en-light/cd3-session-confirm.png"
+    },
+    {
+      "item": "C-D3 Session dialog",
+      "variant": "en-dark",
+      "file": "en-dark/cd3-session-confirm.png"
+    },
+    {
+      "item": "C-D3 Session dialog",
+      "variant": "id-light",
+      "file": "id-light/cd3-session-confirm.png"
+    },
+    {
+      "item": "C-D3 Session dialog",
+      "variant": "id-dark",
+      "file": "id-dark/cd3-session-confirm.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-light",
+      "file": "en-light/cd4-dayoff-current.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-dark",
+      "file": "en-dark/cd4-dayoff-current.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-light",
+      "file": "id-light/cd4-dayoff-current.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-dark",
+      "file": "id-dark/cd4-dayoff-current.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-light",
+      "file": "en-light/cd4-dayoff-next.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-dark",
+      "file": "en-dark/cd4-dayoff-next.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-light",
+      "file": "id-light/cd4-dayoff-next.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-dark",
+      "file": "id-dark/cd4-dayoff-next.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-light",
+      "file": "en-light/cd4-dayoff-far.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "en-dark",
+      "file": "en-dark/cd4-dayoff-far.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-light",
+      "file": "id-light/cd4-dayoff-far.png"
+    },
+    {
+      "item": "C-D4 Day-off balance",
+      "variant": "id-dark",
+      "file": "id-dark/cd4-dayoff-far.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-light",
+      "file": "en-light/d7-pipeline-kpis.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-dark",
+      "file": "en-dark/d7-pipeline-kpis.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-light",
+      "file": "id-light/d7-pipeline-kpis.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-dark",
+      "file": "id-dark/d7-pipeline-kpis.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-light",
+      "file": "en-light/d7-pipeline-kpis-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-dark",
+      "file": "en-dark/d7-pipeline-kpis-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-light",
+      "file": "id-light/d7-pipeline-kpis-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-dark",
+      "file": "id-dark/d7-pipeline-kpis-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-light",
+      "file": "en-light/d8-outlet-settings-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-dark",
+      "file": "en-dark/d8-outlet-settings-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-light",
+      "file": "id-light/d8-outlet-settings-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-dark",
+      "file": "id-dark/d8-outlet-settings-short.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-light",
+      "file": "en-light/dq1-overpaid-term.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-dark",
+      "file": "en-dark/dq1-overpaid-term.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-light",
+      "file": "id-light/dq1-overpaid-term.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-dark",
+      "file": "id-dark/dq1-overpaid-term.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-light",
+      "file": "en-light/dq1-overpaid-warning.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "en-dark",
+      "file": "en-dark/dq1-overpaid-warning.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-light",
+      "file": "id-light/dq1-overpaid-warning.png"
+    },
+    {
+      "item": "D-7 D-8 D-Q1 Pipeline and Outlet",
+      "variant": "id-dark",
+      "file": "id-dark/dq1-overpaid-warning.png"
+    },
+    {
+      "item": "D-12 Missing meeting",
+      "variant": "en-light",
+      "file": "en-light/d12-missing-meeting.png"
+    },
+    {
+      "item": "D-12 Missing meeting",
+      "variant": "en-dark",
+      "file": "en-dark/d12-missing-meeting.png"
+    },
+    {
+      "item": "D-12 Missing meeting",
+      "variant": "id-light",
+      "file": "id-light/d12-missing-meeting.png"
+    },
+    {
+      "item": "D-12 Missing meeting",
+      "variant": "id-dark",
+      "file": "id-dark/d12-missing-meeting.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "en-light",
+      "file": "en-light/g5-doc.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "en-dark",
+      "file": "en-dark/g5-doc.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "id-light",
+      "file": "id-light/g5-doc.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "id-dark",
+      "file": "id-dark/g5-doc.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "en-light",
+      "file": "en-light/g5-editor.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "en-dark",
+      "file": "en-dark/g5-editor.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "id-light",
+      "file": "id-light/g5-editor.png"
+    },
+    {
+      "item": "G5 Canonical editor",
+      "variant": "id-dark",
+      "file": "id-dark/g5-editor.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u2-row-menu.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u10-edit-200.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u10-edit-50.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u5-docx-open.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/b12-before-event.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/b12-live-calendar-event.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/g5-saved.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/g5-conflict.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/g5-keep-both.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u6-recording.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u6-recording-paused.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u6-recording-stopped.png"
+    },
+    {
+      "item": "Native functional checks (EN light)",
+      "variant": "en-light",
+      "file": "en-light/u6-recording-discard-confirm.png"
+    }
+  ],
+  "missing": [],
+  "excluded": "Failed attempts and investigation captures are excluded; native functional-only captures are listed in the reports."
+}

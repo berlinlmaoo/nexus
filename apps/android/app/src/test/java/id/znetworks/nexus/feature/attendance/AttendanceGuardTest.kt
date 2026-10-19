@@ -194,7 +194,9 @@ class AttendanceGuardTest {
                 assertFalse("${f.name}: $l", Regex("""api\.|vm\.|scope\.launch""").containsMatchIn(l.substringAfter("color = c.danger").substringBefore("PendingConfirm(")))
             }
         }
-        assertEquals(sortedSetOf("HomeScreen.kt", "ThreadsScreen.kt", "WhatsNew.kt", "SocialEditors.kt", "OutletSettings.kt"), filesMatching(Regex("""ModalBottomSheet\(""")))
+        // Owner-approved editors are sheets; destructive confirmations remain centred.
+        assertEquals(sortedSetOf("HomeScreen.kt", "PresenceUi.kt", "ThreadsScreen.kt", "WhatsNew.kt", "SocialEditors.kt", "OutletSettings.kt"), filesMatching(Regex("""ModalBottomSheet\(""")))
+
     }
 
     @Test fun orgChartNeverWritesPositions() {

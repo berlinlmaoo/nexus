@@ -115,7 +115,7 @@ fun ProjectSheetTab(projectId: String, onOpenWeb: () -> Unit) {
             when {
                 d == null && s.loadError != null -> LoadFailed(s.loadError!!) { store.reload() }
                 d == null -> Centered()
-                else -> Grid(d, s, store)
+                else -> androidx.compose.runtime.key(d.id) { Grid(d, s, store) }
             }
         }
         if (d != null && s.selected != null) EditBar(d, s, store)
@@ -231,30 +231,39 @@ private fun Grid(d: SheetData, s: SheetUi, store: SheetStore) {
     val bodyRows = rows.filter { it.id !in frozenRowIds }
     val away = remember(d) { SheetRanges.mergedAway(d.settings, shape) }
     val showNames = cols.any { it.name.isNotBlank() || it.type != "text" }
-    Column(Modifier.fillMaxSize()) {
+    val vertical = androidx.compose.foundation.lazy.rememberLazyListState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val fixedWidth = with(density) { (NUM_W + leftCols.fold(0.dp) { total, col -> total + colWidth(col) }).toPx() }
+    val fixedHeight = with(density) { ((if (showNames) 50.dp else 24.dp) + topRows.fold(0.dp) { total, row -> total + rowHeight(row) } + if (topRows.isEmpty()) 0.dp else 2.dp).toPx() }
+    val heights = bodyRows.map { with(density) { rowHeight(it).toPx() } }
+    val zoom = rememberSheetZoom(d.id, fixedWidth, fixedHeight, heights, h, vertical)
+    androidx.compose.runtime.CompositionLocalProvider(LocalSheetZoom provides zoom.scale, LocalSheetMultiTouch provides zoom.multiTouch) {
+    Column(Modifier.fillMaxSize().then(zoom.modifier)) {
         // Letters (and the column names, when any column has one or a non-text type), sticky.
         HeaderRow(leftCols, rightCols, h, shape) { col -> SheetFormula.colLetter(shape.columnIds.indexOf(col.id)) }
         if (showNames) HeaderRow(leftCols, rightCols, h, shape, names = true) { col -> col.name }
         topRows.forEach { r -> GridRow(d, s, store, r, leftCols, rightCols, h, away) }
-        if (topRows.isNotEmpty()) HorizontalDivider(color = c.boundary, thickness = 2.dp)
-        LazyColumn(Modifier.weight(1f)) {
+        if (topRows.isNotEmpty()) HorizontalDivider(color = c.boundary, thickness = 2.dp * zoom.scale)
+        LazyColumn(Modifier.weight(1f), state = vertical, userScrollEnabled = !zoom.multiTouch) {
             items(bodyRows, key = { it.id }) { r -> GridRow(d, s, store, r, leftCols, rightCols, h, away) }
         }
+    }
     }
 }
 
 @Composable
 private fun HeaderRow(left: List<SheetColumn>, right: List<SheetColumn>, h: ScrollState, shape: SheetFormula.Shape, names: Boolean = false, label: (SheetColumn) -> String) {
     val c = Nx.colors
-    @Composable fun cell(col: SheetColumn) = Box(Modifier.width(colWidth(col)).height(if (names) 26.dp else 24.dp).background(c.muted).border(0.5.dp, c.border),
+    val zoom = LocalSheetZoom.current
+    @Composable fun cell(col: SheetColumn) = Box(Modifier.width((colWidth(col) * zoom)).height((if (names) 26.dp else 24.dp) * zoom).background(c.muted).border(0.5.dp * zoom, c.border),
         contentAlignment = Alignment.Center) {
-        Text(label(col), fontSize = if (names) 11.sp else 12.sp, fontWeight = if (names) FontWeight.Medium else FontWeight.Normal, color = c.mutedFg, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+        Text(label(col), fontSize = (if (names) 11.sp else 12.sp) * zoom, fontWeight = if (names) FontWeight.Medium else FontWeight.Normal, color = c.mutedFg, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp * zoom))
     }
     Row {
-        Box(Modifier.width(NUM_W).height(if (names) 26.dp else 24.dp).background(c.muted).border(0.5.dp, c.border))
+        Box(Modifier.width(NUM_W * zoom).height((if (names) 26.dp else 24.dp) * zoom).background(c.muted).border(0.5.dp * zoom, c.border))
         left.forEach { cell(it) }
-        Row(Modifier.horizontalScroll(h)) { right.forEach { cell(it) } }
+        Row(Modifier.horizontalScroll(h, enabled = !LocalSheetMultiTouch.current)) { right.forEach { cell(it) } }
     }
 }
 
@@ -262,13 +271,14 @@ private fun HeaderRow(left: List<SheetColumn>, right: List<SheetColumn>, h: Scro
 private fun GridRow(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, left: List<SheetColumn>, right: List<SheetColumn>, h: ScrollState,
                     away: Set<Pair<String, String>>) {
     val c = Nx.colors
-    val ht = rowHeight(r)
+    val zoom = LocalSheetZoom.current
+    val ht = rowHeight(r) * zoom
     Row {
-        Box(Modifier.width(NUM_W).height(ht).background(c.muted).border(0.5.dp, c.border), contentAlignment = Alignment.Center) {
-            Text("${d.rows.indexOf(r) + 1}", fontSize = 11.sp, color = c.mutedFg)
+        Box(Modifier.width(NUM_W * zoom).height(ht).background(c.muted).border(0.5.dp * zoom, c.border), contentAlignment = Alignment.Center) {
+            Text("${d.rows.indexOf(r) + 1}", fontSize = 11.sp * zoom, color = c.mutedFg)
         }
         left.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) }
-        Row(Modifier.horizontalScroll(h)) { right.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) } }
+        Row(Modifier.horizontalScroll(h, enabled = !LocalSheetMultiTouch.current)) { right.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) } }
     }
 }
 
@@ -288,6 +298,7 @@ private fun readableOn(bg: Color): Color = if (0.2126f * bg.red + 0.7152f * bg.g
 @Composable
 private fun SheetCell(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, col: SheetColumn, ht: Dp, mergedAway: Boolean) {
     val c = Nx.colors
+    val zoom = LocalSheetZoom.current
     val key = CellKey(r.id, col.id)
     val selected = s.selected == key
     val st: JsonObject? = r.styles[col.id]
@@ -312,8 +323,8 @@ private fun SheetCell(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, 
     val size = ((sv("fp")?.toFloatOrNull() ?: 10f) * 1.3f).coerceIn(9f, 28f)
     val deco = listOfNotNull(if (sv("s") == "1") TextDecoration.LineThrough else null,
         if (sv("u") == "1" || SheetCells.linkUrl(r.cells[col.id]) != null) TextDecoration.Underline else null)
-    Box(Modifier.width(colWidth(col)).height(ht).background(bg ?: c.card).border(if (selected) 2.dp else 0.5.dp, if (selected) c.onyx else c.border)
-        .combinedClickable(
+    Box(Modifier.width((colWidth(col) * zoom)).height(ht).background(bg ?: c.card).border((if (selected) 2.dp else 0.5.dp) * zoom, if (selected) c.onyx else c.border)
+        .sheetCellActions(
             onClick = {
                 if (!selected) store.selectCell(key)
                 else if (store.canEdit() && !mergedAway) when {
@@ -323,16 +334,16 @@ private fun SheetCell(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, 
                 }
             },
             onLongClick = { store.selectCell(key); if (store.canEdit()) menu = true },
-        ).padding(horizontal = 6.dp, vertical = 3.dp), contentAlignment = va) {
+        ).padding(horizontal = 6.dp * zoom, vertical = 3.dp * zoom), contentAlignment = va) {
         if (checkbox && !mergedAway) {
             val on = SheetCells.checked(r.cells[col.id])
-            Text(if (on) "☑" else "☐", fontSize = 16.sp, color = c.foreground, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Text(if (on) "☑" else "☐", fontSize = 16.sp * zoom, color = c.foreground, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         } else if ((col.type == "select" || col.type == "multiselect") && text.isNotEmpty() && col.optionColors.isNotEmpty()) {
             val tone = styleColor(col.optionColors[text.substringBefore(", ")])
-            Text(text, fontSize = 12.sp, color = tone?.let { readableOn(it.copy(alpha = 1f)) } ?: c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(tone ?: c.muted).padding(horizontal = 6.dp, vertical = 2.dp))
+            Text(text, fontSize = 12.sp * zoom, color = tone?.let { readableOn(it.copy(alpha = 1f)) } ?: c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp * zoom)).background(tone ?: c.muted).padding(horizontal = 6.dp * zoom, vertical = 2.dp * zoom))
         } else {
-            Text(text, fontSize = size.sp, color = if (dim) fg.copy(alpha = 0.5f) else fg, textAlign = ha, modifier = Modifier.fillMaxWidth(),
+            Text(text, fontSize = size.sp * zoom, color = if (dim) fg.copy(alpha = 0.5f) else fg, textAlign = ha, modifier = Modifier.fillMaxWidth(),
                 fontWeight = if (sv("b") == "1") FontWeight.Bold else null, fontStyle = if (sv("i") == "1") FontStyle.Italic else null,
                 textDecoration = if (deco.isEmpty()) null else TextDecoration.combine(deco),
                 maxLines = if (wrap) Int.MAX_VALUE else 1, overflow = if (wrap) TextOverflow.Clip else TextOverflow.Ellipsis, softWrap = wrap)

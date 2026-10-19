@@ -11,6 +11,8 @@ enum NativeRefusal {
             }
             text = "This file is too large. Choose a smaller file."
         case "UNSUPPORTED_TYPE": text = "This file type isn't supported. Choose a picture, PDF, Office document, CSV, TXT or ZIP."
+        case "MESSAGE_TOO_LONG": text = "This message is too long. Shorten it or split it into several messages."
+        case "ROOMS_NOT_AVAILABLE": text = "The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room."
         case "EMPTY_FILE": text = "This file is empty. Choose another file."
         case "ASSIGNEES_CHANGED": text = "The assignees changed. Check the latest list and try again."
         case "TOO_MANY_TAGS": text = "A task can have at most 20 tags."

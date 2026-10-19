@@ -13,6 +13,12 @@ import java.io.File
 
 /** PIPELINE-DASHBOARD §11 (owner, 9 Oct evening): members-only board, payments per term. */
 class PipelineTermsTest {
+    @Test fun overpaymentIsAdditiveAndDoesNotChangeThePaidStatus() {
+        val old = PipelineTerm(id.znetworks.nexus.core.net.NexusJson.parseToJsonElement("""{"id":"t","amount":10,"paidAmount":12,"status":"Paid"}""").jsonObject)
+        assertEquals(0.0, old.overpaid, .001); assertTrue(old.isPaid)
+        val fresh = PipelineTerm(kotlinx.serialization.json.JsonObject(old.raw + ("overpaid" to kotlinx.serialization.json.JsonPrimitive(2))))
+        assertEquals(2.0, fresh.overpaid, .001); assertTrue(fresh.isPaid)
+    }
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
 
     private val withTerms = deal("""{"id":"a","invoiceValue":100000000,"contractValue":120000000,"outstandingReceivable":999,"paymentStatus":"Not Yet",

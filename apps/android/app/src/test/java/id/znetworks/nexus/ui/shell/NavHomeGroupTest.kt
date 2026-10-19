@@ -45,7 +45,8 @@ class NavHomeGroupTest {
         assertEquals(0, BoardModel.startColumn(days, LocalDate.of(2026, 11, 9))) // a past period: its first day
         val ui = File("src/main/java/id/znetworks/nexus/feature/attendance/history/BoardUi.kt").readText()
         // Set before the first frame, per period; a reload never swaps the grid for a spinner.
-        assertTrue(ui.contains("remember(days) { ScrollState(")); assertFalse(ui.contains("hScroll.scrollTo("))
+        // An explicit C-6 date link also keys the initial state; ordinary refreshes still keep it.
+        assertTrue(ui.contains("remember(days, focusedDay) { ScrollState(")); assertFalse(ui.contains("hScroll.scrollTo("))
         assertTrue(ui.contains("s.loading && rows.isEmpty() ->"))
     }
 }

@@ -131,6 +131,7 @@ class AppContainer(private val context: Context) {
         })
     /** "… is typing" per conversation, fed only by the socket; cleared when it drops (TYPING.md). */
     val typing = id.znetworks.nexus.feature.chat.TypingStore()
+    private var calendarLiveRefresh: kotlinx.coroutines.Job? = null
 
     init {
         appScope.launch { realtime.state.collect { if (it != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typing.clear() } }
@@ -141,12 +142,21 @@ class AppContainer(private val context: Context) {
                 if (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.TYPING || e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED)
                     typing.apply(e, sessionStore.current?.userId)
                 when (e.name) {
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.CALENDAR_CHANGED -> {
+                        calendarLiveRefresh?.cancel()
+                        calendarLiveRefresh = appScope.launch { kotlinx.coroutines.delay(300); refreshCalendarWidgets(force = true) }
+                    }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED -> appScope.launch { presence.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED -> appScope.launch {
+                        if (responseCache.load("leaderboard") != null) runCatching { id.znetworks.nexus.feature.people.PeopleApi(api).leaderboard() }
+                        if (sessionStore.current?.userId in e.userIds) runCatching { api.getCached("/api/gamification/me", "gamification", id.znetworks.nexus.feature.home.Gamification.serializer()) }
+                    }
                     "presence-changed" -> presenceStatuses.receive(e.raw)
                     "gideon-tiers" -> gideonTiers.receive(e.raw)
                     id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED,
                     id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> { chatEvents.tryEmit(e.conversationId); badges.refresh() }
                     id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION -> badges.refresh()
-                    id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh(); gideonTiers.refresh(); presenceStatuses.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh(); gideonTiers.refresh(); presenceStatuses.refresh(); refreshCalendarWidgets(force = true) }
                 }
             }
         }

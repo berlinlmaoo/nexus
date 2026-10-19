@@ -110,6 +110,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
     var board by remember { mutableStateOf<Leaderboard?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED }) { tick++ }
     LaunchedEffect(tick) { try { board = api.leaderboard().value; error = null } catch (e: ApiError) { error = e.describe(context.resources) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
         PageHeader(stringResource(R.string.home_q_leaderboard), subtitle = stringResource(R.string.sub_leaderboard), onBack = onBack)

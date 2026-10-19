@@ -346,7 +346,11 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
     val maxD = (wins.maxOfOrNull { it.end }?.let { maxOf(it, today) } ?: today.plusDays(14)).plusDays(3)
     val dayCount = ChronoUnit.DAYS.between(minD, maxD).toInt() + 1
     val dayW = 40.dp; val rowH = 44.dp; val groupH = 32.dp
-    val leftW = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.4f).dp.coerceIn(120.dp, 200.dp)
+    val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val compact = screenWidth < 600
+    var names by rememberSaveable { mutableStateOf(false) }
+    val showNames = !compact || names
+    val leftW = if (compact) 120.dp else (screenWidth * 0.4f).dp.coerceIn(120.dp, 200.dp)
     fun x(d: LocalDate) = dayW * ChronoUnit.DAYS.between(minD, d).toInt()
     fun w(win: BoardLogic.Window) = dayW * (ChronoUnit.DAYS.between(win.start, win.end).toInt() + 1)
     val days = (0 until dayCount).map { minD.plusDays(it.toLong()) }
@@ -355,8 +359,12 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
     // Opens on today, one day from the left edge.
     LaunchedEffect(minD) { with(density) { h.scrollTo((x(today) - dayW).coerceAtLeast(0.dp).roundToPx()) } }
     val bodyH = 74.dp + groupH * rowsByGroup.size + rowH * rowsByGroup.sumOf { it.second.size }
-    Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Column(Modifier.width(leftW).background(c.card)) {
+    Column(Modifier.fillMaxSize()) {
+    if (compact) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
+        androidx.compose.material3.FilterChip(names, { names = !names }, label = { Text(stringResource(R.string.ui_timeline_names)) })
+    }
+    Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+        if (showNames) Column(Modifier.width(leftW).background(c.card)) {
             Box(Modifier.height(74.dp).fillMaxWidth().padding(start = 12.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
                 Text(stringResource(R.string.pp_col_name), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
             }
@@ -375,13 +383,13 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
                             tint = if (t.isDone) c.foreground else c.mutedFg.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, lineHeight = 17.sp, maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis,
                             color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
                     }
                 }
             }
         }
-        Box(Modifier.width(1.dp).height(bodyH).background(c.border))
+        if (showNames) Box(Modifier.width(1.dp).height(bodyH).background(c.border))
         Box(Modifier.weight(1f).horizontalScroll(h)) {
             Box(Modifier.width(dayW * dayCount).height(bodyH)) {
                 days.filter { it.dayOfWeek == DayOfWeek.SATURDAY || it.dayOfWeek == DayOfWeek.SUNDAY }.forEach { day ->
@@ -410,8 +418,13 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                             }
                         }
                     }
-                    rowsByGroup.forEach { (_, rows) ->
-                        Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
+                    rowsByGroup.forEach { (name, rows) ->
+                        Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)).then(if (!showNames) Modifier.clickable { collapsed = if (name in collapsed) collapsed - name else collapsed + name } else Modifier)) {
+                            if (!showNames) Row(Modifier.offset(x = with(density) { h.value.toDp() }).height(groupH).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (name in collapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                                Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                            }
+                        }
                         rows.forEach { (t, win) ->
                             Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
                                 if (win == null) Text(stringResource(R.string.tl_no_date), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.offset(x = with(density) { h.value.toDp() }).background(c.background).padding(horizontal = 8.dp))
@@ -424,6 +437,12 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                                     if (w(win) >= 100.dp) Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 if (win != null && w(win) < 100.dp) Text(t.title, color = c.foreground, fontSize = 12.sp, maxLines = 1, modifier = Modifier.offset(x = x(win.start) + maxOf(w(win), dayW) + 8.dp))
+                                if (win != null && !t.isDone && win.end < today && with(density) { (x(win.end) + dayW).toPx() } < h.value) {
+                                    Row(Modifier.offset(x = with(density) { h.value.toDp() }).height(32.dp).background(c.background).clickable { onOpen(t.id) }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("‹ " + win.end.format(id.znetworks.nexus.core.i18n.AppDateFormats.ofPattern("d MMM")), color = c.dangerText, fontSize = 12.sp, modifier = Modifier.background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 4.dp))
+                                        if (!showNames) Text(t.title, color = c.foreground, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
                             }
                         }
                     }
@@ -432,6 +451,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                 Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.violet.copy(alpha = 0.65f)))
             }
         }
+    }
     }
 }
 

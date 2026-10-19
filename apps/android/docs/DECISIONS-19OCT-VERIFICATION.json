@@ -1,0 +1,498 @@
+{
+  "at": "2026-10-19T09:28:28.540Z",
+  "branch": "feat/android-decisions-19oct",
+  "base": "febfa38f",
+  "sourceCommit": "8e956320",
+  "build": {
+    "tasks": [
+      "testDebugUnitTest",
+      "assembleDebug"
+    ],
+    "tests": 920,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "sourceUnchangedSince": "8e956320",
+    "forcedFullBuild": {
+      "base": "febfa38f",
+      "executedTasks": 46,
+      "passed": true
+    },
+    "finalBuild": {
+      "source": "8e956320",
+      "testsExecuted": true,
+      "assembleDebugPassed": true,
+      "executedTasks": 7
+    },
+    "suites": 186
+  },
+  "contracts": [
+    {
+      "file": "CODEX-INPUT/android-phase2-19oct.md",
+      "sha256": "902bcc1306eb74c2eb5de7dfea948e9dd69c8e14468d8b950f949b6efb5c8501"
+    },
+    {
+      "file": "CODEX-INPUT/qa-decisions-19oct.md",
+      "sha256": "2849a0d4239b7de9ce56257c856cf0a98fcf679fc56a45f75a6d0d7dd85aed6d"
+    },
+    {
+      "file": "CODEX-INPUT/ui-round-19oct.md",
+      "sha256": "adeabfafc57e5993bf2c8d48de4deb2df48776f56aa31214e59c919e602d0296"
+    }
+  ],
+  "emulator": {
+    "serial": "emulator-5556",
+    "avd": "Pixel_7",
+    "gpu": "host",
+    "window": true,
+    "stoppedAt": "2026-10-19T09:28:28.3908151Z"
+  },
+  "runs": {
+    "phase2-native": {
+      "files": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\a12-live-form.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\e-d1-pending-collapsed.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\e-d1-pending-expanded.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\b13-deleted-chat.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\a12-live-form.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\e-d1-pending-collapsed.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\e-d1-pending-expanded.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\b13-deleted-chat.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\a12-live-form.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\e-d1-pending-collapsed.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\e-d1-pending-expanded.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\b13-deleted-chat.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\a12-live-form.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\e-d1-pending-collapsed.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\e-d1-pending-expanded.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\b13-deleted-chat.png"
+      ],
+      "checks": [
+        "native local title + remote question live; both read back"
+      ],
+      "completed": "id-dark",
+      "sourceCommit": "bb7c1c38"
+    },
+    "phase2-final": {
+      "at": "2026-10-19T08:54:09.830Z",
+      "reports": [
+        {
+          "variant": "en-light",
+          "checks": [
+            "d12-missing-meeting",
+            "a12-saved-settles",
+            "c6-absent-date",
+            "c7-booking-link-and-delete-cancel",
+            "c7-allowance-link",
+            "b16-legacy-folder"
+          ],
+          "files": [
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\d12-missing-meeting.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\a12-saved-settled.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\c6-absent-date.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\c7-linked-booking.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\bd1-delete-booking-confirm.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\c7-allowance.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\b16-legacy-folder.png"
+          ],
+          "failures": []
+        },
+        {
+          "variant": "id-dark",
+          "checks": [
+            "d12-missing-meeting",
+            "a12-saved-settles",
+            "c6-absent-date",
+            "c7-booking-link-and-delete-cancel",
+            "c7-allowance-link",
+            "b16-legacy-folder"
+          ],
+          "files": [
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\d12-missing-meeting.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\a12-saved-settled.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\c6-absent-date.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\c7-linked-booking.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\bd1-delete-booking-confirm.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\c7-allowance.png",
+            "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\b16-legacy-folder.png"
+          ],
+          "failures": []
+        }
+      ],
+      "sourceCommit": "bb7c1c38"
+    },
+    "viewer": {
+      "at": "2026-10-19T09:06:09.219Z",
+      "files": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\a4-comment-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\a4-view-no-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\a4-comment-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\a4-view-no-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\a4-comment-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\a4-view-no-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\a4-comment-composer.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\a4-view-no-composer.png"
+      ],
+      "checks": [
+        "en-light: staged client VIEW hides composer and blocks direct action; COMMENT composer remains; server comments unchanged",
+        "en-dark: staged client VIEW hides composer and blocks direct action; COMMENT composer remains; server comments unchanged",
+        "id-light: staged client VIEW hides composer and blocks direct action; COMMENT composer remains; server comments unchanged",
+        "id-dark: staged client VIEW hides composer and blocks direct action; COMMENT composer remains; server comments unchanged"
+      ],
+      "sourceCommit": "bb7c1c38"
+    },
+    "chat-limit": {
+      "at": "2026-10-19T09:07:08.918Z",
+      "files": [
+        "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b15-too-long-draft.png"
+      ],
+      "checks": [
+        "4001-character native draft retained; warning shown; Send disabled; nothing sent"
+      ],
+      "sourceCommit": "bb7c1c38"
+    },
+    "n1": {
+      "at": "2026-10-19T09:24:33.245Z",
+      "checks": [
+        "online native Save/readback",
+        "away native Save/readback",
+        "dnd native Save/readback",
+        "original status restored"
+      ],
+      "contractVerificationCommit": "f6e82c11",
+      "renderVerificationCommit": "8e956320",
+      "renderChecks": [
+        "id-light: full availability label visible within the segment on two lines",
+        "id-dark: full availability label visible within the segment on two lines",
+        "en-light: full availability label visible within the segment",
+        "en-dark: full availability label visible within the segment"
+      ],
+      "files": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-light\\n1-availability.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\n1-availability.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\n1-online.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\n1-away.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\n1-dnd.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-dark\\n1-availability.png"
+      ],
+      "sourceCommit": "8e956320"
+    },
+    "dayoff": {
+      "at": "2026-10-19T09:13:55.652Z",
+      "files": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\cd4-dayoff-current.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\cd4-dayoff-next.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\cd4-dayoff-far.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\cd4-dayoff-current.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\cd4-dayoff-next.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\id-dark\\cd4-dayoff-far.png"
+      ],
+      "checks": [
+        "Current, next and far period captions verified natively in EN/light and ID/dark; no request submitted"
+      ],
+      "sourceCommit": "bb7c1c38"
+    },
+    "calendar-live": {
+      "at": "2026-10-19T09:25:30.284Z",
+      "files": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\b12-before-event.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-decisions-19oct\\en-light\\b12-live-calendar-event.png"
+      ],
+      "checks": [
+        "Native Calendar received outside-client task title update in 2939 ms without refresh",
+        "Owned task title restored"
+      ],
+      "sourceCommit": "8e956320"
+    }
+  },
+  "cleanup": {
+    "at": "2026-10-19T09:26:49.036Z",
+    "complete": true,
+    "checks": [
+      "Original server manual status restored; existing booking retained",
+      "Owned projects is inaccessible after cleanup",
+      "Owned forms is inaccessible after cleanup",
+      "Owned tasks is inaccessible after cleanup",
+      "Owned conversations is inaccessible after cleanup",
+      "Original appearance, language, calendar and message-tab preference contents restored (shell newline translation removed)",
+      "Temporary AVD-only instrumentation uninstalled; helper captures removed from device"
+    ]
+  },
+  "entries": [
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b15-too-long-draft.png",
+      "variant": "en-light",
+      "sha256": "e2f5b6db5e9c2ffdfaabcd96ebeff563b984d1346bb9c854b34cc749947391e5"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/a12-live-form.png",
+      "variant": "en-dark",
+      "sha256": "8aa9d6687a86788a64322087e9c155532bf9ddbf3e12d9e2c9e52cd5615c78fe"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/a4-comment-composer.png",
+      "variant": "en-dark",
+      "sha256": "1ca1bdf5c5f5292e39c97378535fd924ae641bdd0f1f62a60e0148565c0207fb"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/a4-view-no-composer.png",
+      "variant": "en-dark",
+      "sha256": "37681b3c2f8f80009b99bf989e4a3f68b4b228a04a89b1ce1c452d8687244470"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/b13-deleted-chat.png",
+      "variant": "en-dark",
+      "sha256": "666c2871f95faf93ad03c4772b417e45e37ae1eb33ce774d0db93acfe8eed6fc"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/e-d1-pending-collapsed.png",
+      "variant": "en-dark",
+      "sha256": "7edbad2c304c9ccf2eef063d13be3956c42cd2ba14abd6283d6d5641ee2e92e5"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/e-d1-pending-expanded.png",
+      "variant": "en-dark",
+      "sha256": "15d48c082e10509137f659e00600ca48a0137dca1c862d81c9e86ebc62dcbb43"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-dark/n1-availability.png",
+      "variant": "en-dark",
+      "sha256": "ed3d32ac5f48020f3ba0f89a3823f3d75ebadee7a0b64e94325bc07d368fbc9e"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/a12-live-form.png",
+      "variant": "en-light",
+      "sha256": "a7e255958111a51761dc30a97151ec826bcbdee9c46d6340641e622113d6ae77"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/a12-saved-settled.png",
+      "variant": "en-light",
+      "sha256": "7c130efea6c19492efacd4712dc9ad208865037dfa147b1131088eba5c13ed8c"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/a4-comment-composer.png",
+      "variant": "en-light",
+      "sha256": "dfa61e3fe372e5f2e118f2f48d969b2fb7a7c6f55766d6984b53afc5118380f6"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/a4-view-no-composer.png",
+      "variant": "en-light",
+      "sha256": "2d97a8cb6336f7a51c5b19c7851b5a7446986cc560a5a5c2046114b3ba41490c"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b12-before-event.png",
+      "variant": "en-light",
+      "sha256": "71d2ca9eac99b5c2bdee9d210220e920303a0f61f396f017f5f977e90628e45a"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b12-live-calendar-event.png",
+      "variant": "en-light",
+      "sha256": "ab25e3c359f2754ae72ea335c6ba343fb42b945f905c197c956e43013355a9d4"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b13-deleted-chat.png",
+      "variant": "en-light",
+      "sha256": "bca7b73750dc79bdc943d189058b5ff72567cc3ea03905980c7dc7328cd1a444"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/b16-legacy-folder.png",
+      "variant": "en-light",
+      "sha256": "7a877d2ecb0b84dcfa0804258797b05bb382b0075f486c1dbc26b3a7d249b99f"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/bd1-delete-booking-confirm.png",
+      "variant": "en-light",
+      "sha256": "dcb79152b8f1d830e7e839fad44ac3d14e47c72813540e4c4906db2d1b27e08a"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/c6-absent-date.png",
+      "variant": "en-light",
+      "sha256": "6240f1cb0faab93fca53c253fa87efe20cc42ca4dfefc18fd3286869488a1038"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/c7-allowance.png",
+      "variant": "en-light",
+      "sha256": "54da070fe0611f835ce4508126fc95262b84c812d11a3461d2a149da6ef3fa16"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/c7-linked-booking.png",
+      "variant": "en-light",
+      "sha256": "8d392211e0cc6dd10cf06e432259af534b226ff820e69f529df108d3e9b5871c"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/cd4-dayoff-current.png",
+      "variant": "en-light",
+      "sha256": "46b2650d443b7e33c6aba47ebd64af4fcbb41ceed8b56ee92123eec43e1c9e05"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/cd4-dayoff-far.png",
+      "variant": "en-light",
+      "sha256": "f25304d908c98f386430166091ba3977e215c997054bb975f01db909842c4bb3"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/cd4-dayoff-next.png",
+      "variant": "en-light",
+      "sha256": "2955351b9fee5f98912ce7977cf59adb3ef312e64c6c4681c51bc8efa216f217"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/d12-missing-meeting.png",
+      "variant": "en-light",
+      "sha256": "920e26a6ffaded1d0d5ae21645f6744e61921e81854aab449732d004271adc61"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/e-d1-pending-collapsed.png",
+      "variant": "en-light",
+      "sha256": "d96e89277e7ba9347093793143ff59b955c07144d671eef2e9c786a7896a65c4"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/e-d1-pending-expanded.png",
+      "variant": "en-light",
+      "sha256": "26d99e084bd231a89c9ecd7591d0041647f0eb618e827d88a684b683efbf6341"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/n1-away.png",
+      "variant": "en-light",
+      "sha256": "c11d2898b97b142315ddfe58099290f80c5e73f0c59c3776f9b7214b3708ea37"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/n1-dnd.png",
+      "variant": "en-light",
+      "sha256": "b10941936ff2dca95bf556bef37aab2236a3379e7605336f77911eec1f56ce8f"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/en-light/n1-online.png",
+      "variant": "en-light",
+      "sha256": "a8990517300de821ecc157ca9b465b39c185a00fddd8d7f200507c3e9afd5ea0"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/a12-live-form.png",
+      "variant": "id-dark",
+      "sha256": "264c8b727b5267470357688df2fb06d5c8907f1fd3bbc11834b8c8e1763062ec"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/a12-saved-settled.png",
+      "variant": "id-dark",
+      "sha256": "62145941808cc79850d995641f4cac4610a6b5b5257785957c61c05e1bc4dcd9"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/a4-comment-composer.png",
+      "variant": "id-dark",
+      "sha256": "1d2faf2a9298e86cb96a90235d8f6ad2ee32b318d7667cf3d5968c9a72be6168"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/a4-view-no-composer.png",
+      "variant": "id-dark",
+      "sha256": "3188f4b5efa605c5f73deeeb31ca00be65e4b3d9fc742d94bf48799a8e42dc93"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/b13-deleted-chat.png",
+      "variant": "id-dark",
+      "sha256": "d603a10cf4482265fece53e2667c82fa62116d5bd32c1df9c8190e50efd95f4d"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/b16-legacy-folder.png",
+      "variant": "id-dark",
+      "sha256": "b6c429ed877c05cabef3abafef597527c5957c7b7c5f412a275a54050cfa5504"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/bd1-delete-booking-confirm.png",
+      "variant": "id-dark",
+      "sha256": "761106e6051d7593929f2f69abad7b1627685ff209b3039efc66a13bb0889aad"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/c6-absent-date.png",
+      "variant": "id-dark",
+      "sha256": "c47098e6a77d299abf35464eeedc3513cd34eb6d906d03210d2c5ffa9540821c"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/c7-allowance.png",
+      "variant": "id-dark",
+      "sha256": "28aff52db9517eacab11639677375f91883dd1534c1bfc56f1ef0a7724c84ddc"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/c7-linked-booking.png",
+      "variant": "id-dark",
+      "sha256": "e3c4410254b845e35af28c8568c3c6a74d3f9c267bc5a119d0cc3cc8565143e9"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/cd4-dayoff-current.png",
+      "variant": "id-dark",
+      "sha256": "fb0180dc707d0b857533b4359fdbf3a1833613d4c6efde9b3731428d8ed21982"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/cd4-dayoff-far.png",
+      "variant": "id-dark",
+      "sha256": "2f068c4662660a55954628268547db41a0f517018f084f1889b26ca5f6a0be98"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/cd4-dayoff-next.png",
+      "variant": "id-dark",
+      "sha256": "fd9d782f04b53a31aec0b5e33dd80d16c3d809f58729ae63d50a1454e1b735b3"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/d12-missing-meeting.png",
+      "variant": "id-dark",
+      "sha256": "68661353e15ff74816302fd536746a6abb5d58ac26c05c3d2160c0fd1c17bb18"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/e-d1-pending-collapsed.png",
+      "variant": "id-dark",
+      "sha256": "beaa703e41b47acc554e9513b76c7cf06df5c9e2c1eb0d42530ac21d7635aa73"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/e-d1-pending-expanded.png",
+      "variant": "id-dark",
+      "sha256": "eaeebbb9938ab191bef7483e9543ff81b68976325c8f8d18fee9a175f974de70"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-dark/n1-availability.png",
+      "variant": "id-dark",
+      "sha256": "1315889b7f74be8d132e54991b6b33200ed68e1421ab3e4e97c44d08b440ea7c"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/a12-live-form.png",
+      "variant": "id-light",
+      "sha256": "dd27693dd33e66612bc2cbe24ff6c38e57a64ee86b4d7a09ef8c4ea777875da8"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/a4-comment-composer.png",
+      "variant": "id-light",
+      "sha256": "50ab9917bcad4500fe76c3d4be2689e30bd983b796525c5e9aeb4a106662cbb0"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/a4-view-no-composer.png",
+      "variant": "id-light",
+      "sha256": "6191cd0608ed145494d3aa78920a8875aafce0d459200e84dddff041da2ef488"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/b13-deleted-chat.png",
+      "variant": "id-light",
+      "sha256": "17e11ebc6067404af37e02a46b94d39cd8d9eb19b49a100f84d811d8153af925"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/e-d1-pending-collapsed.png",
+      "variant": "id-light",
+      "sha256": "783b307663d6f7ad3f62f9f8d2343a5cc65d588997c9d6663a003feb417b1755"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/e-d1-pending-expanded.png",
+      "variant": "id-light",
+      "sha256": "871132150b9d7d009217f50a29fb2220228bfdab1e83f4331c696130d6ba8057"
+    },
+    {
+      "file": "C:/Users/Berlin/Documents/Dev/nexus-shots/android-decisions-19oct/id-light/n1-availability.png",
+      "variant": "id-light",
+      "sha256": "472529166ff519d5a031f9be15ed0a0639113836c4dad63dd97ecb730feaf7f5"
+    }
+  ],
+  "priorEvidence": {
+    "report": "QA-DECISIONS-19OCT.md",
+    "manifest": "UI-ROUND-19OCT-EVIDENCE.json",
+    "captures": 317
+  },
+  "limits": [
+    "Native VIEW/COMMENT permission rendering for A-4 is staged in client memory, not a second-role authenticated session.",
+    "No different-person Forms presence/caret session; Android plus remote API verifies transport and independent edits.",
+    "No real attendance/XP mutations across devices; no placed-widget test or outsider native Rooms session."
+  ]
+}

@@ -547,7 +547,7 @@ struct OutletHeader: View {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
-                        if labelled { Text(T("Report settings")).font(NXFont.text(size, .semibold)).lineLimit(1).fixedSize() }
+                        if labelled { Text(T(tight ? "Settings" : "Report settings")).font(NXFont.text(size, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(NX.foreground)
                     .padding(.horizontal, labelled ? side : 0)

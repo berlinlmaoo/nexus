@@ -42,7 +42,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.*
 import java.time.LocalDate
 
-@Composable fun MeetingScreen(id: String, onBack: () -> Unit, vm: MeetingEditor = viewModel()) {
+@Composable fun MeetingScreen(id: String, onBack: () -> Unit, onAllMeetings: () -> Unit = onBack, vm: MeetingEditor = viewModel()) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     val state by vm.state.collectAsStateWithLifecycle()
@@ -62,7 +62,7 @@ import java.time.LocalDate
     RealtimeRoom(m?.projectId?.let { "project:$it" })
     LiveRefresh(id, 20_000, 15_000, { event ->
         if (event.name != "meeting-changed") false else event.raw?.let {
-            runCatching { NexusJson.decodeFromString(MeetingChanged.serializer(), it) }.getOrNull()?.let { e -> if (e.meetingId == id && e.deleted) vm.deleted(); e.meetingId == id }
+            runCatching { NexusJson.decodeFromString(MeetingChanged.serializer(), it) }.getOrNull()?.let(vm::reading)
         } ?: false
     }) { vm.refresh() }
     val lang = ConfigBody.lang(androidx.compose.ui.platform.LocalConfiguration.current.locales[0])
@@ -80,7 +80,12 @@ import java.time.LocalDate
             }
         }
         if (m == null) {
-            if (state.loading) CircularProgressIndicator(Modifier.padding(24.dp)) else EmptyState(Icons.Outlined.Mic, stringResource(R.string.meet_load_failed), "", stringResource(R.string.gx_try_again), { scope.launch { vm.refresh() } })
+            when {
+                state.missing -> EmptyState(Icons.Outlined.Mic, stringResource(R.string.qa_meeting_deleted), stringResource(R.string.qa_meeting_deleted_body), stringResource(R.string.qa_all_meetings), onAllMeetings)
+                state.loading -> CircularProgressIndicator(Modifier.padding(24.dp))
+                state.terminal -> EmptyState(Icons.Outlined.Mic, stringResource(R.string.meet_load_failed), "", stringResource(R.string.qa_all_meetings), onAllMeetings)
+                else -> EmptyState(Icons.Outlined.Mic, stringResource(R.string.meet_load_failed), "", stringResource(R.string.gx_try_again), { scope.launch { vm.refresh() } })
+            }
             return@Column
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

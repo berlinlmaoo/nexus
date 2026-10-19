@@ -1221,6 +1221,7 @@ struct PipelineTermsList: View {
                         NexusChip(text: PipelineText.termStatus(t.status), tone: PipelineText.termTone(t.status))
                     }
                     Text(PipelineFormat.idrFull(t.amount)).font(NXFont.text(13)).foregroundStyle(NX.foreground).monospacedDigit()
+                    if t.overpaid > 0 { Text(String(format: T("Overpaid by %@"), PipelineFormat.idrFull(t.overpaid))).font(NXFont.text(12)).foregroundStyle(NX.warning) }
                     Text(detail(t)).font(NXFont.text(12))
                         .foregroundStyle(t.daysOverdue > 7 ? ChipTone.danger.fg : NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1374,6 +1375,8 @@ struct PipelineTermSheet: View {
 
     @ViewBuilder private var paidFields: some View {
         PipelineFieldBox(T("Amount paid")) { money($paid) }
+        let extra = (PipelineFormat.parseMoney(paid) ?? 0) - (term?.amount ?? PipelineFormat.parseMoney(amount) ?? 0)
+        if extra > 0 { Text(String(format: T("Overpaid by %@. It still counts as paid in full."), PipelineFormat.idrFull(extra))).font(NXFont.text(12)).foregroundStyle(NX.warning).fixedSize(horizontal: false, vertical: true) }
         PipelineFieldBox(T("Paid on")) {
             PipelineDateInput(label: T("Paid on"), value: paidAt) { paidAt = $0 }
         }

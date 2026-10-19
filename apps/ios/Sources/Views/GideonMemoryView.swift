@@ -18,81 +18,189 @@ struct GideonMemorySheet: View {
     }
 }
 
+private enum MemoryProfileField: String, CaseIterable, Identifiable {
+    case nickname, occupation, about
+    var id: String { rawValue }
+    var label: String { T(self == .nickname ? "Your nickname" : self == .occupation ? "Your role / occupation" : "More about you") }
+    var maxLength: Int { self == .nickname ? 60 : self == .occupation ? 120 : 170 }
+    var key: String { self == .occupation ? "role" : rawValue }
+    var source: String { self == .nickname ? "PROFILE_NICKNAME" : self == .occupation ? "PROFILE_ROLE" : "PROFILE_ABOUT" }
+    var prefix: String { self == .nickname ? "Nickname: " : self == .occupation ? "Role / occupation: " : "More about me: " }
+    func memory(in items: [GideonMemory]) -> GideonMemory? {
+        items.first { $0.status == "ACTIVE" && ($0.source == source || ($0.source == "SETTINGS" && ($0.text.hasPrefix(prefix) || (self == .about && $0.text.hasPrefix("About me: "))))) }
+    }
+    func value(in items: [GideonMemory], profile: GideonMemoryProfile? = nil) -> String {
+        if let profile { return (self == .nickname ? profile.nickname : self == .occupation ? profile.role : profile.about) ?? "" }
+        guard let memory = memory(in: items) else { return "" }
+        if memory.text.hasPrefix(prefix) { return String(memory.text.dropFirst(prefix.count)) }
+        if self == .about && memory.text.hasPrefix("About me: ") { return String(memory.text.dropFirst("About me: ".count)) }
+        return memory.text
+    }
+}
+
 struct GideonMemoryView: View {
     var embedded = false
     @Environment(AuthStore.self) private var auth
     @State private var store = GideonMemoryStore.shared
+    var body: some View {
+        Group {
+            if embedded { pageContent }
+            else { ScrollView { pageContent } }
+        }.background(NX.background)
+            .navigationTitle(embedded ? "" : T("GIDEON Memory")).navigationBarTitleDisplayMode(.inline)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("memory.settings")
+            .task { await store.refresh() }
+            .liveRefresh(every: 60, on: [.nexusRealtimeConnected], refreshOnReturn: true) { await store.refresh() }
+            .onChange(of: store.sessionExpired) { _, expired in if expired { auth.logout() } }
+    }
+    private var pageContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if embedded { Text(T("GIDEON Memory")).font(NXFont.display(26, .bold)) }
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(T("Use GIDEON Memory"), isOn: Binding(get: { !store.paused && store.available }, set: { on in Task { await store.setPaused(!on) } }))
+                    .tint(NX.violet).disabled(store.busy || !store.loaded || !store.available).accessibilityIdentifier("memory.enabled")
+                Text(T(store.paused ? "Off: GIDEON doesn't remember anything new and doesn't use what's here." : "GIDEON uses what it remembers to personalize your answers.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }.padding(16).background(NX.card, in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 8) {
+                NavigationLink { GideonMemorySummaryView() } label: {
+                    HStack { Text(T("Memory summary")).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").foregroundStyle(NX.mutedFg) }.frame(minHeight: 32)
+                }.accessibilityIdentifier("memory.summary")
+                Text(T("See what GIDEON has learned about you. Add things here or tell it in a chat.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }.padding(16).background(NX.card, in: RoundedRectangle(cornerRadius: 14))
+            VStack(spacing: 0) {
+                ForEach(MemoryProfileField.allCases) { field in
+                    if field != .nickname { Divider() }
+                    NavigationLink { MemoryProfileEditor(field: field) } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack { Text(field.label).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").foregroundStyle(NX.mutedFg) }
+                            let value = field.value(in: store.memories, profile: store.profile)
+                            Text(value.isEmpty ? T("Not set") : value).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    }.disabled(!store.loaded || store.paused || !store.available || !store.profileAvailable).accessibilityIdentifier("memory.profile." + field.rawValue)
+                }
+            }.background(NX.card, in: RoundedRectangle(cornerRadius: 14))
+            if store.loaded && !store.profileAvailable {
+                Text(T("Profile fields aren't available on this server yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+            if !store.available { Text(T("GIDEON Memory is not available right now.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            Text(T("What GIDEON remembers about you, so its answers fit you. Only you can see this.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            if store.loading && !store.loaded { ProgressView(T("Loading…")) }
+            if let failure = store.failure {
+                Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger)
+                Button(T("Retry")) { Task { await store.refresh() } }.buttonStyle(.nxBordered)
+            }
+        }.font(NXFont.text(14)).padding(embedded ? 0 : 20).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
+    }
+}
+
+private struct MemoryProfileEditor: View {
+    let field: MemoryProfileField
+    @Environment(\.dismiss) private var dismiss
+    @State private var store = GideonMemoryStore.shared
+    @State private var value = ""
+    @State private var original: GideonMemory?
+    var body: some View {
+        Form {
+            Section(field.label) {
+                TextField(field.label, text: $value, axis: .vertical).lineLimit(3...8).accessibilityIdentifier("memory.profile.text")
+                    .onChange(of: value) { _, _ in while value.utf16.count > min(field.maxLength, store.textMax - field.prefix.utf16.count) && !value.isEmpty { value.removeLast() } }
+            }
+            Section { Text(T("Saved directly as a private memory. Only you can see this.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            if let failure = store.failure { Text(failure).foregroundStyle(NX.danger) }
+            if store.full && original == nil { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))) }
+        }.navigationTitle(field.label).navigationBarTitleDisplayMode(.inline).keyboardDoneBar()
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(T("Save")) { Task { await save() } }.disabled(store.busy || store.paused || !store.available || !store.profileAvailable || (store.full && original == nil) || (!store.loaded)).accessibilityIdentifier("memory.profile.save") } }
+            .onAppear { original = field.memory(in: store.memories); value = field.value(in: store.memories, profile: store.profile) }
+    }
+    private func save() async {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if await store.setProfile(field: field.key, value: text) { dismiss() }
+    }
+}
+
+private struct GideonMemorySummaryView: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var store = GideonMemoryStore.shared
     @State private var text = ""
-    @State private var kind: MemoryKind = .fact
-    @State private var day = ""
     @State private var editing: String?
     @State private var editText = ""
     @State private var editKind: MemoryKind = .fact
     @State private var editDay = ""
     @State private var confirmAll = false
+    @State private var revealed = false
+    @State private var updated = Date()
+    private var sections: [(kind: String, title: String)] { [("PREFERENCE", "Preferences"), ("PERSON", "About you"), ("DATE", "Dates"), ("FACT", "Notes")] }
     var body: some View {
-        Group {
-            if embedded { pageContent }
-            else { ScrollView { pageContent } }
-
-        }.background(NX.background)
-            .navigationTitle(embedded ? "" : T("GIDEON Memory")).navigationBarTitleDisplayMode(.inline)
-            .accessibilityElement(children: .contain).accessibilityIdentifier("memory.settings").keyboardDoneBar()
-            .task { await store.refresh() }
-            .liveRefresh(every: 60, on: [.nexusRealtimeConnected], refreshOnReturn: true) { await store.refresh() }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                summarySubtitle
+                if !revealed && (store.loading || !store.loaded) { MemoryLoadingGrid().frame(height: 320) }
+                else if store.loaded {
+                    if store.memories.isEmpty { EmptyState(icon: "brain", title: T("Nothing remembered yet"), subtitle: T("Add things here or tell GIDEON in a chat.")) }
+                    ForEach(Array(sections.enumerated()), id: \.element.kind) { index, section in
+                        let memories = store.memories.filter { $0.kind == section.kind }
+                        if !memories.isEmpty {
+                            ZStack(alignment: .topLeading) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(T(section.title)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                    ForEach(memories) { row($0) }
+                                }.opacity(revealed ? 1 : 0).offset(y: revealed ? 0 : 8)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    RoundedRectangle(cornerRadius: 4).fill(NX.muted).frame(width: 100, height: 14)
+                                    RoundedRectangle(cornerRadius: 6).fill(NX.muted).frame(height: 34)
+                                }.opacity(revealed ? 0 : 1).accessibilityHidden(true)
+                            }
+                                .animation(reduceMotion ? nil : .easeOut(duration: 0.2).delay(Double(index) * 0.05), value: revealed)
+                        }
+                    }
+                    Button(T("Forget everything"), role: .destructive) { confirmAll = true }.disabled(store.busy).accessibilityIdentifier("memory.forgetAll")
+                }
+                if let failure = store.failure {
+                    Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger)
+                    Button(T("Retry")) { Task { await reload() } }.buttonStyle(.nxBordered)
+                }
+            }.padding(20).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
+        }.background(NX.background).navigationTitle(T("Memory summary")).navigationBarTitleDisplayMode(.inline)
+            .accessibilityIdentifier("memory.summary.page").keyboardDoneBar()
+            .safeAreaInset(edge: .bottom) { composer }
+            .task { await reload() }
             .onChange(of: store.sessionExpired) { _, expired in if expired { auth.logout() } }
             .alert(T("Forget everything?"), isPresented: $confirmAll) {
                 Button(T("Cancel"), role: .cancel) {}
                 Button(T("Forget everything"), role: .destructive) { Task { await store.forgetEverything() } }
-            } message: { Text(String(format: T("GIDEON stops using the %@ things it remembers about you. They're deleted for good after 30 days."), AppNumber.int(store.memories.count))) }
+            } message: { Text(store.memories.count == 1 ? T("GIDEON stops using the 1 thing it remembers about you. It's deleted for good after 30 days.") : String(format: T("GIDEON stops using the %@ things it remembers about you. They're deleted for good after 30 days."), AppNumber.int(store.memories.count))) }
     }
-    private var pageContent: some View {
-            VStack(alignment: .leading, spacing: 20) {
-                if embedded { Text(T("GIDEON Memory")).font(NXFont.display(26, .bold)) }
-                Text(T("What GIDEON remembers about you, so its answers fit you. Only you can see this.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                Toggle(T("Use GIDEON Memory"), isOn: Binding(get: { !store.paused }, set: { on in Task { await store.setPaused(!on) } }))
-                    .tint(NX.foreground).disabled(store.busy || !store.loaded).accessibilityIdentifier("memory.enabled")
-                Text(T("Off: GIDEON doesn't remember anything new and doesn't use what's here.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                if store.loading && !store.loaded { ProgressView().frame(maxWidth: .infinity) }
-                if let failure = store.failure {
-                    HStack(alignment: .top) { Text(failure).foregroundStyle(NX.danger); Spacer(); Button(T("Try again")) { Task { await store.refresh() } } }.font(NXFont.text(12)).accessibilityIdentifier("memory.error")
+    private var summarySubtitle: some View {
+        Group {
+            if store.loading { MemoryLoadingTitle() }
+            else if store.loaded {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(String(format: T("Updated %@"), relative(updated, now: context.date)))
                 }
-                if let notice = store.notice { Text(notice).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityIdentifier("memory.notice") }
-                if store.loaded {
-                    addRow
-                    if store.memories.isEmpty {
-                        EmptyState(icon: "brain", title: T("Nothing remembered yet"), subtitle: T("Tell GIDEON in a chat, e.g. “remember that I prefer short answers”, or add something here."))
-                    } else {
-                        ForEach([MemoryKind.preference, .person, .date, .fact]) { group in
-                            let rows = store.memories.filter { (MemoryKind(rawValue: $0.kind) ?? .fact) == group }
-                            if !rows.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text(group.heading).font(NXFont.text(16, .semibold))
-                                    ForEach(rows) { memory in row(memory) }
-                                }
-                            }
-                        }
-                        Button(T("Forget everything"), role: .destructive) { confirmAll = true }.buttonStyle(.nxDestructive).disabled(store.busy).accessibilityIdentifier("memory.forgetAll")
-                    }
-                }
-            }.padding(embedded ? 0 : 20).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
-    }
-    private var addRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField(T("e.g. Keep answers short."), text: $text, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder)
-                .onChange(of: text) { _, value in if value.count > store.textMax { text = String(value.prefix(store.textMax)) } }
-                .accessibilityIdentifier("memory.text")
-            HStack {
-                Picker(T("Type"), selection: $kind) { ForEach(MemoryKind.allCases) { Text($0.label).tag($0) } }.pickerStyle(.menu).accessibilityIdentifier("memory.kind")
-                Spacer()
-                Text(AppNumber.int(text.count) + "/" + AppNumber.int(store.textMax)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                Button(T("Add")) { Task { if await store.add(text: text, kind: kind.rawValue, date: day) { text = ""; day = "" } } }.buttonStyle(.nxPrimary)
-                    .disabled(store.busy || store.paused || store.full || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("memory.add")
             }
-            if kind == .date { TextField(T("MM-DD (optional)"), text: $day).textFieldStyle(.roundedBorder).accessibilityIdentifier("memory.date") }
-            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-        }.nexusCard().disabled(store.paused)
+        }.font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+    }
+    private func relative(_ date: Date, now: Date) -> String {
+        let f = RelativeDateTimeFormatter(); f.locale = AppDateLocale.current; return f.localizedString(for: date, relativeTo: now)
+    }
+    private func reload() async {
+        let started = Date(); await store.refresh(); updated = ProjDate.parse(store.updatedAt) ?? Date()
+        if Date().timeIntervalSince(started) < 0.25 || reduceMotion { var t = Transaction(); t.disablesAnimations = true; withTransaction(t) { revealed = true } }
+        else { revealed = true }
+    }
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .bottom) {
+                TextField(T("Add or update…"), text: $text, axis: .vertical).lineLimit(1...4).textFieldStyle(.roundedBorder).accessibilityIdentifier("memory.text")
+                    .onChange(of: text) { _, _ in while text.utf16.count > store.textMax { text.removeLast() } }
+                Button { Task { if await store.add(text: text.trimmingCharacters(in: .whitespacesAndNewlines), kind: "FACT", date: "") { text = ""; updated = Date() } } } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
+                    .buttonStyle(.nxPrimary).accessibilityLabel(T("Add")).accessibilityIdentifier("memory.add")
+                    .disabled(store.busy || store.paused || !store.available || store.full || !store.loaded || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+        }.padding(16).background(NX.background)
     }
     @ViewBuilder private func row(_ memory: GideonMemory) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -105,24 +213,61 @@ struct GideonMemoryView: View {
                 if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.roundedBorder) }
                 HStack { Button(T("Cancel")) { editing = nil }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
             } else {
-                Text(memory.text).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-                if memory.status == "PENDING" {
-                    HStack { NexusChip(text: T("Suggested, not saved yet"), tone: .neutral); Button(T("Save")) { Task { await store.save(memory) } }.font(NXFont.text(12, .semibold)).disabled(store.busy || store.paused).accessibilityIdentifier("memory.save." + memory.id); Spacer() }
-                }
-                HStack {
-                    Spacer()
-                    Button { editing = memory.id; editText = memory.text; editKind = MemoryKind(rawValue: memory.kind) ?? .fact; editDay = memory.monthDay ?? "" } label: { Label(T("Edit"), systemImage: "pencil") }.accessibilityIdentifier("memory.edit." + memory.id)
-                    Button(role: .destructive) { Task { await store.remove(memory) } } label: { Label(T("Delete"), systemImage: "trash") }.accessibilityIdentifier("memory.delete." + memory.id)
-                }.font(NXFont.text(12)).buttonStyle(.borderless).disabled(store.busy)
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(profileDisplay(memory)).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                        if memory.status == "PENDING" {
+                            HStack { NexusChip(text: T("Suggested, not saved yet"), tone: .neutral); Button(T("Save")) { Task { await store.save(memory) } }.font(NXFont.text(12, .semibold)).disabled(store.busy || store.paused).accessibilityIdentifier("memory.save." + memory.id); Spacer() }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    Menu {
+                        Button { editing = memory.id; editText = memory.text; editKind = MemoryKind(rawValue: memory.kind) ?? .fact; editDay = memory.monthDay ?? "" } label: { Label(T("Edit"), systemImage: "pencil") }.accessibilityIdentifier("memory.edit." + memory.id)
+                        Button(role: .destructive) { Task { await store.remove(memory) } } label: { Label(T("Delete"), systemImage: "trash") }.accessibilityIdentifier("memory.delete." + memory.id)
+                    } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                        .accessibilityLabel(T("Memory options")).disabled(store.busy)
+                }.font(NXFont.text(12))
             }
         }.padding(14).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border)).accessibilityElement(children: .contain).accessibilityIdentifier("memory.row." + memory.id)
+    }
+    private func profileDisplay(_ memory: GideonMemory) -> String {
+        guard let field = MemoryProfileField.allCases.first(where: { $0.source == memory.source }) else { return memory.text }
+        return field.label + ": " + (memory.text.hasPrefix(field.prefix) ? String(memory.text.dropFirst(field.prefix.count)) : memory.text)
     }
     private func saveEdit(_ memory: GideonMemory) { Task { if await store.edit(memory, text: editText, kind: editKind.rawValue, date: editDay) { editing = nil } } }
     private func memoryDay(_ value: String?) -> String? {
         guard let value else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
         return f.date(from: "2024-" + value).map { AppDateLocale.formatter("d MMM", timeZone: TimeZone(secondsFromGMT: 0)).string(from: $0) }
+    }
+}
+
+private struct MemoryLoadingTitle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
+            Text(T("Loading…")).overlay {
+                LinearGradient(colors: [.clear, NX.foreground.opacity(0.7), .clear], startPoint: UnitPoint(x: phase * 2 - 1, y: 0), endPoint: UnitPoint(x: phase * 2, y: 1))
+                    .mask(Text(T("Loading…")))
+            }
+        }
+    }
+}
+private struct MemoryLoadingGrid: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+            Canvas { context, size in
+                let phase = timeline.date.timeIntervalSinceReferenceDate * 4
+                for row in 0..<Int(size.height / 22) {
+                    for col in 0..<Int(size.width / 22) {
+                        let alpha = reduceMotion ? 0.12 : 0.08 + (sin(phase - Double(row + col) * 0.35) + 1) * 0.06
+                        context.fill(Path(ellipseIn: CGRect(x: CGFloat(col * 22 + 10), y: CGFloat(row * 22 + 10), width: 2, height: 2)), with: .color(NX.mutedFg.opacity(alpha)))
+                    }
+                }
+            }
+        }.accessibilityHidden(true)
     }
 }
 

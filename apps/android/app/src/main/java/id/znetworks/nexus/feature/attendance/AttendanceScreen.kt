@@ -71,6 +71,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -132,6 +133,13 @@ fun AttendanceScreen(
     // A push / inbox row about attendance: the request with its buttons, the offsite review, or
     // the prefilled permit composer. Claimed here, so it survives a cold start and a sign-in.
     val context = LocalContext.current
+    var allowanceGrant by rememberSaveable { mutableStateOf<String?>(null) }
+    val boardInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val boardState by board.state.collectAsStateWithLifecycle()
+    LaunchedEffect(boardState.highlightDay, boardState.loading) {
+        if (boardState.highlightDay != null && !boardState.loading) { androidx.compose.runtime.withFrameNanos { }; boardInView.bringIntoView() }
+    }
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED }) { vm.load(); requests.load(); board.load() }
     val router = (context.applicationContext as NexusApplication).container.router
     val pending by router.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {
@@ -140,6 +148,9 @@ fun AttendanceScreen(
         when {
             t.permitToday -> requests.openPermitToday()
             t.requestId != null || t.offsiteId != null -> requests.focus(t.requestId, t.offsiteId)
+            t.date != null -> { board.focusDate(t.date); vm.load() }
+            t.trailRecordId != null -> board.focusTrail(t.trailRecordId, t.memberId)
+            t.bonusId != null -> { allowanceGrant = t.bonusId; vm.load() }
             else -> vm.load()
         }
     }
@@ -269,7 +280,7 @@ fun AttendanceScreen(
             Metrics(s, forcePending, hereName.takeIf { s.today?.today?.let { it.hasCheckedIn && !it.hasCheckedOut } == true })
             // Filing changes today's quota and cover: re-read it after a request goes in.
             SubmissionsCard(requests, onFiled = { vm.load() })
-            CrewBoardCard(board)
+            Box(Modifier.bringIntoViewRequester(boardInView)) { CrewBoardCard(board) }
             // Offices and their check-in radius, for whoever manages attendance (iOS OfficesCard after the board).
             if (s.today?.canManageAttendance == true) id.znetworks.nexus.feature.admin.OfficesCard()
         }
@@ -277,6 +288,7 @@ fun AttendanceScreen(
     }
 
     if (q.heldNoticeDue && q.isHeldForUpdate) HeldNotice(q, onDismiss = vm::heldNoticeSeen)
+    allowanceGrant?.let { grant -> AttendanceAllowance(s.today, grant) { allowanceGrant = null } }
 }
 
 private fun hasFine(context: android.content.Context) =

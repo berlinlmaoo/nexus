@@ -492,6 +492,7 @@ struct AttendanceRequestsCard: View {
         // a plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
         // their own history while the crew's pending requests sat on the server unseen.
         .task(id: permissionKey) { await load() }
+        .liveRefresh(every: 60, on: [.nexusAttendanceChanged, .nexusRealtimeConnected]) { await load() }
         // canGrant, not canReview: it is canManageAttendance, the same test the server uses for its
         // BoD exemptions. A manager who may REVIEW requests is not exempt from filing rules, and
         // offering them the exemptions only led to a refusal at submit.
@@ -1224,11 +1225,23 @@ struct RequestComposerSheet: View {
     /// Days left in the bucket this type draws from, if it draws from one.
     private var remainingDays: Int? {
         switch type {
-        case "DAY_OFF": return max(0, (quota?.dayOffQuota ?? 0) - (quota?.dayOffUsedThisMonth ?? 0))
+        case "DAY_OFF":
+            let distance = dayOffPeriodDistance
+            if distance == 1 { return quota?.dayOffNextPeriod?.remaining }
+            if distance > 1 { return nil }
+            return quota.map { max(0, ($0.dayOffQuota ?? 0) - ($0.dayOffUsedThisMonth ?? 0)) }
         case "RED_DATE": return max(0, (quota?.redDateQuota ?? 0) - (quota?.redDateUsedThisMonth ?? 0))
         case "LEAVE": return quota?.annualLeave?.remaining
         default: return nil
         }
+    }
+    private var dayOffPeriodDistance: Int {
+        let c = ProjDate.cal
+        func period(_ date: Date) -> Date {
+            let shifted = c.component(.day, from: date) >= 28 ? c.date(byAdding: .month, value: 1, to: date) ?? date : date
+            return c.date(from: c.dateComponents([.year, .month], from: shifted)) ?? shifted
+        }
+        return c.dateComponents([.month], from: period(Date()), to: period(start)).month ?? 0
     }
     /// Said before the submit, not after. One date is one day, so this is simply "none left".
     /// Not waived for `canGrant`: the server charges a BoD's own request to their own quota exactly
@@ -1331,7 +1344,8 @@ struct RequestComposerSheet: View {
         case "PERMIT":
             return T("One day per request, today or later, with a photo and your location.")
         case "DAY_OFF":
-            guard let left = remainingDays else { return T("Uses your day-off quota.") }
+            guard let left = remainingDays else { return T("Your day-off balance for that period is checked when you submit.") }
+            if dayOffPeriodDistance == 1 { return String(format: T("Day off: %d of %d left in the period of that date."), left, quota?.dayOffNextPeriod?.quota ?? 0) }
             return String(format: T("Day off: %d of %d left this period."), left, quota?.dayOffQuota ?? 0)
         default:
             guard let left = remainingDays else { return T("Uses this month's public-holiday quota.") }

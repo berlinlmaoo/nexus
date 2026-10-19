@@ -209,8 +209,8 @@ private struct GraceWarningNotice: ViewModifier {
         content.alert(
             T("Update NEXUS soon"),
             // Never on top of the lock screen: once locked, the warning has already come true.
-            isPresented: Binding(get: { gate.graceNoticeDue && gate.grace != nil && gate.required == nil },
-                                 set: { if !$0 { gate.graceNoticeSeen() } }),
+            isPresented: Binding(get: { !TourMode.isActive && StartupModalQueue.shared.owner == .update && gate.graceNoticeDue && gate.grace != nil && gate.required == nil },
+                                 set: { if !$0, StartupModalQueue.shared.owner == .update { gate.graceNoticeSeen(); StartupModalQueue.shared.finish(.update) } }),
             presenting: gate.grace
         ) { _ in
             if let url = gate.storeUrl {
@@ -219,6 +219,9 @@ private struct GraceWarningNotice: ViewModifier {
             Button(T("Later"), role: .cancel) {}
         } message: { grace in
             Text(GraceWording.sentence(grace))
+        }
+        .onChange(of: gate.graceNoticeDue && gate.grace != nil && gate.required == nil, initial: true) { _, due in
+            StartupModalQueue.shared.update(.update, pending: due && !TourMode.isActive)
         }
     }
 }
@@ -256,17 +259,20 @@ private struct HeldAttendanceNotice: ViewModifier {
         content
             .alert(title,
                    isPresented: Binding(get: { queue.heldNoticeDue && queue.isHeldForUpdate
-                                                && (gate.required != nil) == whileLocked },
+                                                && (gate.required != nil) == whileLocked && (whileLocked || StartupModalQueue.shared.owner == .attendance) },
                                         // Only THIS instance's own dismissal counts as seen. The
                                         // Attendance one being torn down by the cover must not
                                         // swallow the notice the cover is about to show.
-                                        set: { if !$0, (gate.required != nil) == whileLocked { queue.heldNoticeDue = false } })) {
+                                        set: { if !$0, (gate.required != nil) == whileLocked { queue.heldNoticeDue = false; StartupModalQueue.shared.finish(.attendance) } })) {
                 if let url = gate.required?.storeUrl ?? gate.storeUrl {
                     Button(T("Open App Store")) { openURL(url) }
                 }
                 Button(T("OK"), role: .cancel) {}
             } message: {
                 Text(message)
+            }
+            .onChange(of: queue.heldNoticeDue && queue.isHeldForUpdate, initial: true) { _, due in
+                if !whileLocked { StartupModalQueue.shared.update(.attendance, pending: due) }
             }
             .onAppear {
                 // The Attendance screen says it again every time it opens with something held;

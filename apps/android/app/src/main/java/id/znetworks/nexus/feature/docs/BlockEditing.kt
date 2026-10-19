@@ -32,13 +32,26 @@ object BlockTree {
     fun replaceText(node:JsonObject,value:String):JsonObject {
         val old=text(node);if(old==value)return node
         val raw=(node["content"] as? JsonArray).orEmpty()
-        if(raw.any{it.jsonObject.text("type")!="text"})return JsonObject(node+("content" to JsonArray(if(value.isEmpty())emptyList()else listOf(buildJsonObject{put("type","text");put("text",value)}))))
+        // Keep a local empty run as the typing style when the user clears the field.
+        // The canonical writer sanitizes empty text if an empty paragraph is saved.
+        if(raw.any { it.jsonObject.text("type") !in setOf("text", "hardBreak") }) return node
+        if(value.isEmpty() && raw.any { it.jsonObject.text("type")=="text" }) {
+            val emptyRun = JsonObject(raw.first { it.jsonObject.text("type")=="text" }.jsonObject+("text" to JsonPrimitive("")))
+            return JsonObject(node+("content" to JsonArray(listOf(emptyRun))))
+        }
         var prefix=0;while(prefix<old.length&&prefix<value.length&&old[prefix]==value[prefix])prefix++
+        if(prefix in 1 until old.length && old[prefix].isLowSurrogate() && old[prefix-1].isHighSurrogate()) prefix--
         var suffix=0;while(suffix<old.length-prefix&&suffix<value.length-prefix&&old[old.lastIndex-suffix]==value[value.lastIndex-suffix])suffix++
-        fun slice(start:Int,end:Int):List<JsonElement>{var pos=0;return raw.mapNotNull{e->val n=e.jsonObject;val t=n.text("text");val a=maxOf(0,start-pos);val b=minOf(t.length,end-pos);pos+=t.length;if(a<b)JsonObject(n+("text" to JsonPrimitive(t.substring(a,b))))else null}}
+        if(suffix>0 && old.length-suffix>0 && old[old.length-suffix].isLowSurrogate() && old[old.length-suffix-1].isHighSurrogate()) suffix--
+        fun slice(start:Int,end:Int):List<JsonElement>{var pos=0;return raw.mapNotNull{e->val n=e.jsonObject;val hardBreak=n.text("type")=="hardBreak";val t=if(hardBreak)"\n" else n.text("text");val a=maxOf(0,start-pos);val b=minOf(t.length,end-pos);pos+=t.length;if(a<b){if(hardBreak)n else JsonObject(n+("text" to JsonPrimitive(t.substring(a,b))))}else null}}
         val middle=value.substring(prefix,value.length-suffix)
-        val style=(slice(maxOf(0,prefix-1),prefix).lastOrNull()?:raw.firstOrNull()) as? JsonObject
-        val inserted=if(middle.isEmpty())emptyList()else listOf(JsonObject((style?:buildJsonObject{put("type","text")})+("text" to JsonPrimitive(middle))))
+        val style=(slice(0,prefix).lastOrNull { it.jsonObject.text("type")=="text" }?:raw.firstOrNull { it.jsonObject.text("type")=="text" }) as? JsonObject
+        val inserted=if(middle.isEmpty())emptyList()else buildList<JsonElement> {
+            middle.split('\n').forEachIndexed { i, part ->
+                if(i>0)add(buildJsonObject{put("type","hardBreak")})
+                if(part.isNotEmpty())add(JsonObject((style?:buildJsonObject{put("type","text")})+("text" to JsonPrimitive(part))))
+            }
+        }
         return JsonObject(node+("content" to JsonArray(slice(0,prefix)+inserted+slice(old.length-suffix,old.length))))
     }
     fun paragraph(value:String="")=buildJsonObject{put("type","paragraph");put("content",JsonArray(if(value.isEmpty())emptyList()else listOf(buildJsonObject{put("type","text");put("text",value)})))}

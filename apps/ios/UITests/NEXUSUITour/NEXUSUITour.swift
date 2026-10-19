@@ -600,6 +600,7 @@ final class NEXUSUITour: XCTestCase {
             }
             pause(2.0)
         }
+        var savedFrames: [String: CGRect] = [:]
         for action in screen.appActions ?? [] {
             let match = NSPredicate(format: "label CONTAINS %@ OR identifier == %@", action.label, action.label)
             let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@ OR identifier == %@", action.label, action.label, action.label)
@@ -642,7 +643,10 @@ final class NEXUSUITour: XCTestCase {
                 let field = app.textFields.matching(textMatch).firstMatch
                 let search = app.searchFields.matching(textMatch).firstMatch
                 let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
-                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else { return "wrong-screen: missing or disabled input \(action.label)" }
+                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else {
+                    persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-input-target.txt")
+                    return "wrong-screen: missing or disabled input \(action.label)"
+                }
                 press(target)
                 dismissKeyboardIntroduction()
                 if action.kind == "replace" {
@@ -764,18 +768,92 @@ final class NEXUSUITour: XCTestCase {
                 pause(Double(action.text ?? "3") ?? 3)
                 app.activate()
                 pause(2)
+            case "rememberFrame", "sameFrame":
+                let target = app.descendants(matching: .any).matching(identifier: action.label).firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing geometry target \(action.label)" }
+                if action.kind == "rememberFrame" { savedFrames[action.label] = target.frame }
+                else {
+                    guard let before = savedFrames[action.label], abs(before.minX - target.frame.minX) < 2,
+                          abs(before.minY - target.frame.minY) < 2 else { return "wrong-screen: frozen header moved while scrolling" }
+                }
+            case "gridSelectVisible":
+                let grid = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
+                guard grid.waitForExistence(timeout: 10) else { return "wrong-screen: missing sheet grid" }
+                let corner = grid.cells.matching(identifier: "sheet.cell.0.0").firstMatch
+                guard corner.exists else { return "wrong-screen: frozen corner is missing" }
+                let bounds = grid.frame.intersection(app.windows.firstMatch.frame)
+                let left = max(bounds.minX, corner.frame.maxX) + 2
+                let top = max(bounds.minY, corner.frame.maxY) + 2
+                let region = CGRect(x: left, y: top, width: max(0, bounds.maxX - left - 2), height: max(0, bounds.maxY - top - 2))
+                let visibleCell = grid.cells.allElementsBoundByIndex.first {
+                    let bits = $0.identifier.split(separator: ".")
+                    let visible = $0.frame.intersection(region)
+                    return bits.count == 4 && (Int(bits[2]) ?? 0) > 0 && (Int(bits[3]) ?? 0) > 0 && !visible.isNull && visible.width > 8 && visible.height > 8
+                }
+                guard let cell = visibleCell else { return "wrong-screen: no visible non-frozen cell" }
+                let bits = cell.identifier.split(separator: ".")
+                var col = (Int(bits[3]) ?? 0) + 1; var letters = ""
+                while col > 0 { col -= 1; letters = String(UnicodeScalar(65 + col % 26)!) + letters; col /= 26 }
+                let expected = letters + String((Int(bits[2]) ?? 0) + 1)
+                let visible = cell.frame.intersection(region)
+                press(cell.coordinate(withNormalizedOffset: CGVector(dx: (visible.midX - cell.frame.minX) / cell.frame.width, dy: (visible.midY - cell.frame.minY) / cell.frame.height)))
+                pause(2)
+                let active = app.staticTexts.matching(identifier: "sheet.activeCell").firstMatch
+                guard active.exists && (active.label == expected || active.value as? String == expected) else { return "wrong-screen: visible cell selection did not match " + expected }
+            case "gridScroll":
+                let target = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no grid to scroll" }
+                if action.label == "up" { target.swipeUp() } else { target.swipeDown() }
+                pause(1)
+            case "pinch":
+                #if !targetEnvironment(macCatalyst)
+                let target = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
+                guard target.waitForExistence(timeout: 10), let scale = Double(action.text ?? "") else { return "wrong-screen: no sheet grid for pinch" }
+                target.pinch(withScale: CGFloat(scale), velocity: scale > 1 ? 1 : -1)
+                pause(1)
+                #endif
+            case "twoFingerReset":
+                #if !targetEnvironment(macCatalyst)
+                let target = app.collectionViews.matching(identifier: "sheet.grid").cells.matching(identifier: "sheet.cell.0.0").firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no visible frozen cell for reset" }
+                target.tap(withNumberOfTaps: 2, numberOfTouches: 2)
+                pause(1)
+                #endif
+            case "swipePage":
+                #if !targetEnvironment(macCatalyst)
+                let tabs = app.segmentedControls.matching(identifier: "messages.tabs").firstMatch
+                if tabs.exists && tabs.isHittable {
+                    // On iPad the conversation list owns the pager; the window centre can be a chat.
+                    let window = app.windows.firstMatch, pane = tabs.frame
+                    let y = min(pane.maxY + 90, window.frame.maxY - 140)
+                    let left = pane.minX + 18, right = pane.maxX - 18
+                    let from = action.label == "left" ? right : left
+                    let to = action.label == "left" ? left : right
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: (from - window.frame.minX) / window.frame.width, dy: (y - window.frame.minY) / window.frame.height))
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: (to - window.frame.minX) / window.frame.width, dy: (y - window.frame.minY) / window.frame.height))
+                    start.press(forDuration: 0.05, thenDragTo: end)
+                } else {
+                    if action.label == "left" { app.swipeLeft() } else { app.swipeRight() }
+                }
+                #else
+                if action.label == "left" { app.swipeLeft() } else { app.swipeRight() }
+                #endif
+                pause(1)
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
+            case "signal": persist(Data("ready".utf8), "tour-" + action.label + ".signal")
             case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
             case "tree": persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-\(action.label).txt")
             case "checkValue":
-                let target = app.textViews.matching(identifier: action.label).firstMatch
-                guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
+                let textView = app.textViews.matching(identifier: action.label).firstMatch
+                let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
+                guard target.exists, [target.label, target.value as? String ?? ""].contains(where: { $0.contains(action.text ?? "") }) else {
                     return "wrong-screen: missing expected text in \(action.label)"
                 }
             case "checkFrame":
-                let target = app.textViews.matching(identifier: action.label).firstMatch
+                let textView = app.textViews.matching(identifier: action.label).firstMatch
+                let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
                 let limits = (action.text ?? "").split(separator: ",").compactMap { Double($0) }
                 guard target.waitForExistence(timeout: 10), limits.count == 2,
                       target.frame.width >= CGFloat(limits[0]), target.frame.height <= CGFloat(limits[1]) else {
@@ -799,11 +877,18 @@ final class NEXUSUITour: XCTestCase {
             case "absent":
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
+            case "selected":
+                let segments = app.segmentedControls.matching(identifier: "messages.tabs").firstMatch
+                let target = segments.exists ? segments.buttons.matching(match).firstMatch : app.buttons.matching(match).firstMatch
+                guard target.waitForExistence(timeout: 10), target.isSelected == (action.text == "true") else {
+                    return "wrong-screen: unexpected selection for \(action.label)"
+                }
             case "enabled":
                 let target = app.buttons.matching(match).firstMatch
-                guard target.waitForExistence(timeout: 10), target.isEnabled == (action.text == "true") else {
-                    return "wrong-screen: unexpected enabled state for \(action.label)"
-                }
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing enabled-state target \(action.label)" }
+                let expected = action.text == "true", deadline = Date().addingTimeInterval(12)
+                while target.isEnabled != expected && Date() < deadline { pause(0.2) }
+                guard target.isEnabled == expected else { return "wrong-screen: unexpected enabled state for \(action.label)" }
             case "check":
                 #if targetEnvironment(macCatalyst)
                 let labelled = app.descendants(matching: .any).matching(match).firstMatch

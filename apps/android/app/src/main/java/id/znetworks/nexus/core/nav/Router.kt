@@ -12,8 +12,10 @@ import java.net.URLDecoder
 sealed interface Target {
     data object Gideon : Target
     data object GideonMemory : Target
+    data object GideonMemorySummary : Target
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
-    data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
+    data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false,
+        val date: String? = null, val trailRecordId: String? = null, val memberId: String? = null, val bonusId: String? = null) : Target
     data object Inbox : Target
     data object Reminders : Target
     data class Meetings(val projectId: String? = null) : Target
@@ -47,6 +49,7 @@ sealed interface Target {
     data object Leaderboard : Target
     data class Profile(val userId: String) : Target
     data object RoomBooking : Target
+    data class Booking(val id: String) : Target
     /** The master Calendar (replaces Team Calendar): `/calendar?date=&view=&lens=&focus=&scope=&task=`. */
     data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null, val q: String? = null, val folder: String? = null, val unit: String? = null, val person: String? = null, val project: String? = null, val prio: String? = null, val done: String? = null, val overdue: String? = null) : Target
     /** Control Room (manager and above). */
@@ -122,6 +125,9 @@ object Links {
                 q["request"] != null -> Target.Attendance(requestId = q["request"])
                 q["offsite"] != null -> Target.Attendance(offsiteId = q["offsite"])
                 q["permit"] == "today" -> Target.Attendance(permitToday = true)
+                !q["trail"].isNullOrBlank() -> Target.Attendance(trailRecordId = q["trail"], memberId = q["member"])
+                !q["bonus"].isNullOrBlank() -> Target.Attendance(bonusId = q["bonus"])
+                q["absent"] != null || (q["date"] != null && q["reminder"] == null) -> Target.Attendance(date = (q["absent"] ?: q["date"])?.takeIf { runCatching { java.time.LocalDate.parse(it) }.isSuccess })
                 else -> Target.Attendance()
             }
             p == "/inbox" -> Target.Inbox
@@ -149,7 +155,7 @@ object Links {
             p == "/vault" -> Target.Vault(q["folder"] ?: q["id"], q["item"]?.takeIf { it.isNotBlank() })
             p == "/reports" -> Target.Reports(null)
             p == "/leaderboard" -> Target.Leaderboard
-            p == "/room-booking" -> Target.RoomBooking
+            p == "/room-booking" -> q["booking"]?.takeIf { it.isNotBlank() }?.let { Target.Booking(it) } ?: Target.RoomBooking
             p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"], q["q"], q["folder"], q["unit"], q["person"], q["project"], q["prio"], q["done"], q["overdue"])
             // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])

@@ -150,6 +150,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val state = _state.asStateFlow()
     val shortcuts = c.shortcuts
 
+    fun refreshPersonal() = viewModelScope.launch {
+        val owner = c.sessionStore.current?.userId ?: return@launch
+        val game = async { runCatching { c.api.getCached("/api/gamification/me", "gamification", Gamification.serializer()).value }.getOrNull() }
+        val today = async { runCatching { c.attendanceApi.today() }.getOrNull() }
+        val g = game.await(); val t = today.await()
+        if (c.sessionStore.current?.userId == owner) _state.update { it.copy(game = g ?: it.game, today = t ?: it.today) }
+    }
+
     fun load() = viewModelScope.launch {
         shortcuts.refresh()
         val me = c.sessionStore.current?.userId ?: return@launch
@@ -236,6 +244,11 @@ fun HomeScreen(
     var levelOpen by rememberSaveable { mutableStateOf(false) }
     // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
     LaunchedEffect(Unit) { vm.load() }
+    val liveContainer = (LocalContext.current.applicationContext as NexusApplication).container
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { e ->
+        e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED ||
+            (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED && liveContainer.sessionStore.current?.userId in e.userIds)
+    }) { vm.refreshPersonal().join() }
 
     // Card rects, not state: written on every scroll frame, read only when a card is tapped (iOS MorphFrameStore).
     val statRects = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
@@ -672,7 +685,7 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
         (Triple(R.string.mt_vault, Icons.Filled.Storage, c.violetText) to { onOpenWeb("/vault") }).takeIf { showThreads },
         Triple(R.string.home_attendance, Icons.Filled.WatchLater, c.success) to onOpenAttendance,
         Triple(R.string.home_q_leaderboard, Icons.Filled.EmojiEvents, c.warning) to { onOpenWeb("/leaderboard") },
-        Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") },
+        (Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") }).takeIf { showThreads },
         // Threads is the company's (iOS 14b086f): no tile until known, none outside Z Networks.
         (Triple(R.string.home_q_threads, Icons.Filled.Forum, c.violetText) to { onOpenWeb("/threads") }).takeIf { showThreads },
         // The Calendar is a tab too: Ticket takes its place.

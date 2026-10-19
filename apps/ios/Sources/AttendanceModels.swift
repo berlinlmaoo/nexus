@@ -6,6 +6,8 @@ struct AttendanceToday: Decodable, Sendable {
     let activeOfficeCount: Int?
     let canManageAttendance: Bool?
     let canReviewAttendanceRequests: Bool?
+    var dayOffNextPeriod: DayOffNextPeriod? = nil
+    struct DayOffNextPeriod: Decodable, Sendable { let period: String; let quota: Int; let used: Int; let remaining: Int }
     let dayOffUsedThisMonth: Int?
     let dayOffQuota: Int?
     let redDateUsedThisMonth: Int?

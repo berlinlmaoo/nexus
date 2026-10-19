@@ -41,7 +41,7 @@ private val voiceDark = listOf(0xFFC4B5FD, 0xFF7DD3FC, 0xFF6EE7B7, 0xFFFCD34D, 0
     }
     MeetingSection(stringResource(R.string.meet_speakers)) {
         Text(pluralStringResource(R.plurals.meet_voices, voices.size, voices.size), color = c.mutedFg, fontSize = 12.sp)
-        Text(stringResource(R.string.meet_speakers_hint), color = c.mutedFg, fontSize = 12.sp)
+        Text(stringResource(if (meeting.status in setOf("APPLIED", "APPLYING")) R.string.qa_meeting_speakers_locked else R.string.meet_speakers_hint), color = c.mutedFg, fontSize = 12.sp)
         Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(12.dp))) {
             voices.forEachIndexed { index, label ->
                 val speaker = map[label]

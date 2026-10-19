@@ -288,7 +288,7 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
         if let projectId, !projectId.isEmpty { return .project(projectId) }
         // "Budi is outside the office" is about the crew board, where that person's today shows it:
         // the board, not the top of the Attendance screen its "/attendance" link would land on.
-        if (type ?? "").lowercased() == Self.outsideApproverType { return .crewBoard }
+        if (type ?? "").lowercased() == Self.outsideApproverType, link?.contains("trail=") != true { return .crewBoard }
         // The link before the type keywords, since 0.1.5 on both clients: the server now puts the
         // record's id in it (`/attendance?request=…`, `/complaints?id=…`, `/messages?c=…`), and
         // matching the type first threw that id away — every attendance signal landed on the top of
@@ -362,6 +362,8 @@ enum NotificationTarget: Hashable {
     case screen(NXScreen)
     /// One leave / permit / sick / day-off request — `/attendance?request=<id>`. Lands on the
     /// request itself, Approve and Reject in front of the reviewer.
+    case attendanceRecordLink(String)
+    case bookingLink(String)
     case attendanceRequest(String)
     /// One offsite check-out awaiting review — `/attendance?offsite=<record id>`.
     case offsiteCheckout(String)
@@ -394,7 +396,8 @@ enum NotificationTarget: Hashable {
         switch self {
         case .gideonPerformance:                 return .admin
         case .screen(let s):                     return s
-        case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard: return .attendance
+        case .attendanceRecordLink, .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard: return .attendance
+        case .bookingLink: return .roomBooking
         case .complaint:                         return .tickets
         case .conversation:                      return .messages
         case .announcement:                      return .dashboard
@@ -429,7 +432,8 @@ enum NotificationTarget: Hashable {
             else { self = .screen(.projects) }
         case "my-tasks":                self = .screen(.tasks)
         case "attendance":
-            if let id = Self.queryValue("request", in: path) { self = .attendanceRequest(id) }
+            if ["absent", "date", "trail", "bonus"].contains(where: { Self.queryValue($0, in: path) != nil }) { self = .attendanceRecordLink(path) }
+            else if let id = Self.queryValue("request", in: path) { self = .attendanceRequest(id) }
             else if let id = Self.queryValue("offsite", in: path) { self = .offsiteCheckout(id) }
             else if Self.queryValue("permit", in: path) == "today" { self = .permitToday }
             else if Self.queryValue("board", in: path) != nil { self = .crewBoard }
@@ -460,7 +464,7 @@ enum NotificationTarget: Hashable {
             else if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
         case "legal":
             if let id = Self.queryValue("request", in: path) { self = .legalBoard(id) } else { self = .screen(.legal) }
-        case "room-booking":            self = .screen(.roomBooking)
+        case "room-booking":            self = Self.queryValue("booking", in: path).map(Self.bookingLink) ?? .screen(.roomBooking)
         // The Calendar (0.1.7) under its web name and both old ones. `/master-calendar?booking=<id>` is
         // the room-booking reminder (booking_soon), written when bookings lived on the Team Calendar;
         // the Calendar holds tasks only, so that one opens Room Booking.

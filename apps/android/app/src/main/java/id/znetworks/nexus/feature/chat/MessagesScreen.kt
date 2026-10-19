@@ -174,29 +174,9 @@ fun MessagesScreen(onBack: (() -> Unit)?, onOpenChat: (String) -> Unit, vm: Mess
             id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Edit, stringResource(R.string.chat_new), { vm.loadRoster(); composing = true }, primary = true)
         }
         s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
-        Box(Modifier.weight(1f)) {
-            when {
-                s.loading && s.conversations.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                s.error != null && s.conversations.isEmpty() -> EmptyState(Icons.Filled.Forum, stringResource(R.string.chat_load_failed), s.error!!,
-                    stringResource(R.string.try_again), vm::refresh, Modifier.fillMaxSize())
-                s.conversations.isEmpty() -> EmptyState(Icons.Filled.Forum, stringResource(R.string.chat_empty), stringResource(R.string.chat_empty_sub),
-                    stringResource(R.string.chat_new), { vm.loadRoster(); composing = true }, Modifier.fillMaxSize())
-                else -> PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh) {
-                    val groups = listOf("DM" to R.string.chat_direct, "GROUP" to R.string.chat_groups, "PROJECT" to R.string.chat_projects)
-                        .map { (t, l) -> l to s.conversations.filter { it.type == t } }.filter { it.second.isNotEmpty() }
-                    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                        groups.forEach { (label, list) ->
-                            item(key = "h$label") {
-                                Text(stringResource(label).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
-                                    color = c.mutedFg, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
-                            }
-                            items(list, key = { it.id }) { conv -> ConversationRow(conv, vm.meId, typing = typingRooms[conv.id].orEmpty().isNotEmpty()) { onOpenChat(conv.id) } }
-                        }
-                    }
-                }
-            }
-        }
+        MessagesPager(s, vm.meId, typingRooms.filterValues { it.isNotEmpty() }.keys, vm::refresh, { vm.loadRoster(); composing = true }, onOpenChat, Modifier.weight(1f))
     }
+
     if (composing) NewChatDialog(s, vm.meId, onDismiss = { composing = false }) { ids, name, group ->
         composing = false; vm.create(ids, name, group, onOpenChat)
     }

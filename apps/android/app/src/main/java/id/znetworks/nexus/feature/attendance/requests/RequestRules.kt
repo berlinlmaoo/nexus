@@ -40,17 +40,29 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
     @Suppress("UNUSED_PARAMETER")
     fun earliest(type: String, now: Instant = Instant.now()): LocalDate? = OfficeTime.today(now)
 
-    fun remainingDays(type: String): Int? = when (type) {
-        "DAY_OFF" -> today?.let { maxOf(0, (it.dayOffQuota ?: 0) - (it.dayOffUsedThisMonth ?: 0)) }
+    data class DayOffBalance(val remaining: Int?, val quota: Int?, val next: Boolean = false)
+    fun dayOffBalance(date: LocalDate, now: Instant = Instant.now()): DayOffBalance {
+        val current = today?.attendanceDateKey?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: OfficeTime.today(now)
+        val currentPeriod = java.time.YearMonth.parse(OfficeTime.periodKey(current))
+        val chosenPeriod = java.time.YearMonth.parse(OfficeTime.periodKey(date))
+        val distance = java.time.temporal.ChronoUnit.MONTHS.between(currentPeriod, chosenPeriod)
+        if (distance <= 0) return DayOffBalance(today?.let { maxOf(0, (it.dayOffQuota ?: 0) - (it.dayOffUsedThisMonth ?: 0)) }, today?.dayOffQuota)
+        val next = today?.dayOffNextPeriod
+        if (distance == 1L && next?.period == chosenPeriod.toString()) return DayOffBalance(next.remaining.coerceIn(0, next.quota.coerceAtLeast(0)), next.quota, next = true)
+        return DayOffBalance(null, null)
+    }
+
+    fun remainingDays(type: String, date: LocalDate? = null, now: Instant = Instant.now()): Int? = when (type) {
+        "DAY_OFF" -> dayOffBalance(date ?: today?.attendanceDateKey?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: OfficeTime.today(now), now).remaining
         "RED_DATE" -> today?.let { maxOf(0, (it.redDateQuota ?: 0) - (it.redDateUsedThisMonth ?: 0)) }
         "LEAVE" -> today?.annualLeave?.remaining
         else -> null
     }
 
     /** Said before submit: one date is one day, so this is simply "none left". */
-    fun quotaExhausted(type: String): Boolean {
+    fun quotaExhausted(type: String, date: LocalDate? = null, now: Instant = Instant.now()): Boolean {
         if (today == null) return false
-        val left = remainingDays(type) ?: return false
+        val left = remainingDays(type, date, now) ?: return false
         return left < 1
     }
 
@@ -75,7 +87,7 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
     ): Missing? {
         val r = reason.trim()
         return when {
-            quotaExhausted(type) -> Missing.QUOTA
+            quotaExhausted(type, date, now) -> Missing.QUOTA
             type == "LEAVE" && leaveDays < 1 -> Missing.DATES
             earliest(type, now)?.let { date.isBefore(it) } == true -> Missing.DATE
             r.length < 3 || (prefillReason != null && r == prefillReason.trim()) -> Missing.REASON

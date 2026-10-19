@@ -130,7 +130,7 @@ fun VaultTile(i: VaultItem, onOpen: () -> Unit, onMenu: @Composable () -> Unit) 
  * The item itself is never listed, so its own subtree can't be reached.
  */
 @Composable
-fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMoved: (VaultItem, String) -> Unit) {
+fun VaultMoveDialog(item: VaultItem, api: VaultApi, items: List<VaultItem> = listOf(item), onDismiss: () -> Unit, onMoved: (VaultItem, String) -> Unit) {
     val c = Nx.colors
     val res = LocalContext.current.resources
     val scope = rememberCoroutineScope()
@@ -138,6 +138,8 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
     var list by remember { mutableStateOf<VaultList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var remaining by remember(items) { mutableStateOf(items) }
+    var firstMoved by remember(items) { mutableStateOf<VaultItem?>(null) }
     LaunchedEffect(at) {
         list = null; error = null
         try { list = api.list(at) } catch (e: ApiError) { error = e.describe(res) }
@@ -145,26 +147,26 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
     val root = "Vault"
     val here = list?.breadcrumb?.lastOrNull()?.name ?: root
     val block = list?.let { VaultRules.moveBlock(item.parentId, at, it.canWrite) }
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(stringResource(R.string.vm_title, item.name)) },
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(if (items.size == 1) stringResource(R.string.vm_title, item.name) else androidx.compose.ui.res.pluralStringResource(R.plurals.ui_vault_move_selected, items.size, items.size)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The path, to walk up: Vault › LOGO › …
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(root, fontSize = 12.sp, color = if (at == null) c.foreground else c.violetText, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(enabled = at != null) { at = null })
+                        modifier = Modifier.clickable(enabled = at != null && firstMoved == null) { at = null })
                     list?.breadcrumb?.forEach { b ->
                         Text(" › ", fontSize = 12.sp, color = c.mutedFg)
                         Text(b.name, fontSize = 12.sp, color = if (b.id == at) c.foreground else c.violetText, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable(enabled = b.id != at) { at = b.id })
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable(enabled = b.id != at && firstMoved == null) { at = b.id })
                     }
                 }
-                val folders = list?.items?.filter { it.isFolder && it.id != item.id }.orEmpty()
+                val folders = list?.items?.filter { it.isFolder && items.none { selected -> selected.id == it.id } }.orEmpty()
                 when {
                     list == null && error == null -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     list != null && folders.isEmpty() -> Text(stringResource(R.string.vm_no_folders), fontSize = 13.sp, color = c.mutedFg)
                     else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(VaultRules.sorted(folders), key = { it.id }) { f ->
-                            Row(Modifier.fillMaxWidth().clickable { at = f.id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().clickable(enabled = firstMoved == null) { at = f.id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Folder, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
                                 Text(f.name, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next), tint = c.mutedFg)
@@ -180,7 +182,14 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
         confirmButton = { TextButton(onClick = {
             busy = true; error = null
             scope.launch {
-                try { onMoved(api.move(item.id, at), here) }
+                try {
+                    for (selected in remaining.toList()) {
+                        val moved = api.move(selected.id, at)
+                        if (firstMoved == null) firstMoved = moved
+                        remaining = remaining.filterNot { it.id == selected.id }
+                    }
+                    firstMoved?.let { onMoved(it, here) }
+                }
                 catch (e: ApiError) { error = e.describe(res) }
                 busy = false
             }

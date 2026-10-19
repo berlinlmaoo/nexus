@@ -798,7 +798,10 @@ struct SocialDaySheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if ready { form } else {
+                if ready { form }
+                else if let failure = store.loadError {
+                    ErrorState(message: failure, icon: "wifi.exclamationmark") { Task { await store.load(); fill() } }
+                } else {
                     ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -851,6 +854,8 @@ struct SocialDaySheet: View {
         }
         .interactiveDismissDisabled(dirty)
         .onAppear { fill() }
+        // An empty day stays nil after its month loads; observe the month as well as the day.
+        .onChange(of: store.response?.month) { _, _ in if !dirty { fill() } }
         .onChange(of: store.day(date)) { _, _ in if !dirty { fill() } }
         .alert(confirmDiscard ? T("Discard the changes you haven't saved?") : (error ?? ""),
                isPresented: Binding(get: { confirmDiscard || error != nil }, set: { if !$0 { confirmDiscard = false; error = nil } })) {

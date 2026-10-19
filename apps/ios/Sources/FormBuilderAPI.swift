@@ -31,6 +31,20 @@ extension APIClient {
         return try Self.decodeBuilder([BuilderForm].self, from: data)
     }
 
+    func builderForm(_ id: String) async throws -> BuilderForm {
+        let data = try await formBuilderCall(makeRequest("/api/forms/\(encValue(id))?lite=1"))
+        return try Self.decodeBuilder(BuilderForm.self, from: data)
+    }
+
+    func applyFormOps(_ id: String, ops: [FormCoedit.Object], version: Int, tab: String) async throws -> FormOpsReply {
+        var req = makeRequest("/api/forms/\(encValue(id))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(tab, forHTTPHeaderField: "X-Nexus-Tab")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["ops": ops.map { $0.mapValues(\.any) }, "baseVersion": version])
+        let data = try await formBuilderCall(req)
+        return try Self.decodeBuilder(FormOpsReply.self, from: data)
+    }
+
     /// POST /api/forms → the new form (201), slug included.
     func createForm(_ body: [String: Any]) async throws -> BuilderForm {
         var req = makeRequest("/api/forms", method: "POST")

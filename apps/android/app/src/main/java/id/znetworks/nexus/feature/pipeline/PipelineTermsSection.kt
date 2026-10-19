@@ -107,6 +107,7 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
         Text(if (t.isPaid) stringResource(R.string.pl_t_paid_full, t.paidAt?.let(::dayLabel) ?: "–") else stringResource(R.string.pl_t_still_owed, PipelineFormat.idrFull(t.outstanding)),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (t.isPaid) c.success else if (t.daysOverdue > 0) c.danger else c.mutedFg)
         TextSave(stringResource(R.string.pl_f_name), t.label) { save(f("label" to JsonPrimitive(it))) }
+        if (t.overpaid > 0) Text(stringResource(R.string.qa_term_overpaid, PipelineFormat.idrFull(t.overpaid)), color = c.warningFg, fontSize = 12.sp)
         Money(stringResource(R.string.pl_t_amount), t.amount) { save(f("amount" to JsonPrimitive(it))) }
         DateSave(stringResource(R.string.pl_f_due_date), t.dueDate) { save(f("dueDate" to day(it))) }
         TextSave(stringResource(R.string.pl_t_invoice_no), t.invoiceNo) { save(f("invoiceNo" to JsonPrimitive(it))) }
@@ -146,6 +147,7 @@ private fun MarkPaid(t: PipelineTerm, onDismiss: () -> Unit, onSave: (Double, St
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 DateSave(stringResource(R.string.pl_t_paid_at), date) { it?.let { d -> date = d } }
+                if (parsed != null && parsed > t.amount) Text(stringResource(R.string.qa_term_overpaid_warning, PipelineFormat.idrFull(parsed - t.amount)), color = Nx.colors.warningFg, fontSize = 12.sp)
             }
         },
         confirmButton = { TextButton(onClick = { parsed?.let { onSave(it, date) } }, enabled = parsed != null) { Text(stringResource(R.string.save)) } },

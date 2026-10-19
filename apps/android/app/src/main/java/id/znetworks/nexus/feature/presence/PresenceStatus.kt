@@ -13,9 +13,9 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@Serializable data class ManualPresence(val id: String, val text: String, val startsAt: String, val endsAt: String)
+@Serializable data class ManualPresence(val id: String, val text: String, val startsAt: String, val endsAt: String, val availability: String = "away")
 @Serializable data class PersonPresence(val userId: String, val state: String, val tone: String, val reason: String? = null,
-    val text: String? = null, val label: Map<String, String> = emptyMap(), val until: String? = null, val since: String? = null, val manual: ManualPresence? = null) {
+    val text: String? = null, val label: Map<String, String> = emptyMap(), val until: String? = null, val since: String? = null, val manual: ManualPresence? = null, val availability: String? = null) {
     fun label(language: String) = label[language] ?: label["en"].orEmpty()
 }
 @Serializable data class PresenceResponse(val enabled: Boolean = true, val statuses: List<PersonPresence> = emptyList(), val status: PersonPresence? = null, val serverTime: String? = null)
@@ -25,7 +25,8 @@ data class PresenceSnapshot(val enabled: Boolean = true, val statuses: Map<Strin
 
 class PresenceApi(private val api: ApiClient) {
     suspend fun list() = api.get("/api/presence", PresenceResponse.serializer())
-    suspend fun set(text: String, start: Instant?, end: Instant) = api.send(Request.Builder().url(api.url("/api/presence/manual")).put(buildJsonObject {
+    suspend fun set(text: String, start: Instant?, end: Instant, availability: String = "away") = api.send(Request.Builder().url(api.url("/api/presence/manual")).put(buildJsonObject {
+        put("availability", availability)
         put("text", text.trim()); put("startsAt", start?.toString()?.let(::JsonPrimitive) ?: JsonNull); put("endsAt", end.toString())
     }.toString().toJsonBody()).build(), PresenceMutation.serializer())
     suspend fun clear(id: String) = api.send(Request.Builder().url(api.url("/api/presence/manual?id=" + URLEncoder.encode(id, "UTF-8"))).delete().build(), PresenceMutation.serializer())
@@ -63,7 +64,7 @@ class PresenceStatuses(private val api: PresenceApi, private val owner: () -> St
         changedAt[status.userId] = ++revision
         mutable.value = mutable.value.copy(statuses = mutable.value.statuses + (status.userId to status))
     }
-    suspend fun set(text: String, start: Instant?, end: Instant) { val user = owner(); val epoch = synchronized(lock) { generation }; val r = api.set(text, start, end)
+    suspend fun set(text: String, start: Instant?, end: Instant, availability: String = "away") { val user = owner(); val epoch = synchronized(lock) { generation }; val r = api.set(text, start, end, availability)
         synchronized(lock) { if (user != null && owner() == user && generation == epoch) r.status?.let(::patch) }
     }
     suspend fun clear(id: String) { val user = owner(); val epoch = synchronized(lock) { generation }; val r = api.clear(id)
@@ -74,7 +75,7 @@ class PresenceStatuses(private val api: PresenceApi, private val owner: () -> St
 object PresenceTimes {
     val zone: ZoneId = ZoneId.of("Asia/Jakarta")
     fun end(start: Instant, option: String, picked: LocalDateTime): Instant = when (option) {
-        "30m" -> start.plusSeconds(1800); "2h" -> start.plusSeconds(7200)
+        "30m" -> start.plusSeconds(1800); "2h" -> start.plusSeconds(7200); "3h" -> start.plusSeconds(10800)
         "today" -> start.atZone(zone).toLocalDate().atTime(23, 59).atZone(zone).toInstant()
         "pick" -> picked.atZone(zone).toInstant(); else -> start.plusSeconds(3600)
     }
@@ -83,5 +84,13 @@ object PresenceTimes {
             if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(it)) LocalDate.parse(it).format(DateTimeFormatter.ofPattern("EEE d MMM", locale))
             else Instant.parse(it).atZone(zone).let { t -> t.format(DateTimeFormatter.ofPattern(if (t.toLocalDate() == now.atZone(zone).toLocalDate()) "HH:mm" else "EEE d MMM HH:mm", locale)) }
         }.getOrNull()
+    }
+}
+
+object PresenceDraft {
+    fun payload(emoji: String, text: String): String = listOf(emoji.trim(), text.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+    fun split(value: String): Pair<String, String> {
+        val emoji = listOf("🗓️", "🍽️", "🎬", "🚗").firstOrNull { value == it || value.startsWith("$it ") } ?: return "" to value
+        return emoji to value.removePrefix(emoji).trimStart()
     }
 }

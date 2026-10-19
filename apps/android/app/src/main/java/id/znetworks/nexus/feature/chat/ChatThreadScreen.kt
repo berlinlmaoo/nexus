@@ -158,6 +158,8 @@ data class ThreadState(
     val newerPending: Boolean = false,
     /** The group was deleted (here or elsewhere, DELETE-GROUP): the thread shows that instead, and stops polling. */
     val deleted: Boolean = false,
+    val denied: Boolean = false,
+    val tooLongText: String? = null,
 )
 
 class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -174,7 +176,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
     init {
         viewModelScope.launch {
-            runCatching { api.conversations().value.conversations.firstOrNull { it.id == id } }.getOrNull()?.let { conv -> _state.update { it.copy(conversation = conv) } }
+            val conv = runCatching { api.conversations().value.conversations.firstOrNull { it.id == id } }.getOrNull()
+            if (conv != null) _state.update { it.copy(conversation = conv) }
+            else try { api.info(id) } catch (e: ApiError) { unavailable(e) }
         }
         // The first page once; after that the screen polls only while it is visible (CHAT-REPORT P0).
         // Opened on a message (a search result): the page around it instead.
@@ -183,21 +187,24 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     private suspend fun firstPage() {
+        if (_state.value.deleted) return
         try {
             val r = api.messages(id)
             _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.value.messages), hasMore = r.value.hasMore, nextCursor = r.value.nextCursor,
                 loading = false, savedAt = r.savedAtMillis) }
         } catch (e: ApiError) {
-            if (goneGroup(e)) return markDeleted()
+            if (unavailable(e)) return
             _state.update { it.copy(loading = false, notice = if (it.messages.isEmpty()) e.describe(res) else it.notice) }
         }
     }
 
-    /** A JSON 404 for a group (or a room this phone doesn't know yet): it was deleted. */
-    private fun goneGroup(e: ApiError) = (e as? ApiError.Http)?.let { it.status == 404 && it.body != null } == true &&
-        (_state.value.conversation?.type ?: "GROUP") == "GROUP"
+    private fun unavailable(e: ApiError): Boolean {
+        val status = (e as? ApiError.Http)?.status
+        if (status != 404 && status != 403) return false
+        markDeleted(status == 403); return true
+    }
 
-    fun markDeleted() { _state.update { it.copy(deleted = true, loading = false) }; ChatNotifier.cancel(getApplication(), id) }
+    fun markDeleted(denied: Boolean = false) { _state.update { it.copy(deleted = true, denied = denied, loading = false, notice = null, messages = emptyList(), conversation = null, replyTo = null) }; ChatNotifier.cancel(getApplication(), id) }
 
     /**
      * Only what is new (`after=<last id>`), merged by id: nothing held is ever dropped. An older server that
@@ -205,6 +212,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
      * fetched with `before` until they meet what is held (at most 5).
      */
     suspend fun poll() {
+        if (_state.value.deleted) return
         val held = _state.value.messages
         val last = held.lastOrNull()?.id ?: return firstPage()
         try {
@@ -222,7 +230,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 }
             }
             _state.update { it.copy(messages = merged, loading = false, savedAt = null) }
-        } catch (e: ApiError) { if (goneGroup(e)) markDeleted() /* else a failed poll keeps what is on screen; the next one tries again */ }
+        } catch (e: ApiError) { unavailable(e) /* else a failed poll keeps what is on screen; the next one tries again */ }
     }
 
     /**
@@ -295,8 +303,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     /** The composer clears only after the server says yes: a failed send leaves the text in place. */
     fun send(text: String, onSent: () -> Unit) {
         val s = _state.value
-        if (s.sending || (text.isBlank() && s.attachment == null)) return
-        _state.update { it.copy(sending = true, notice = null) }
+        if (s.deleted || s.sending || (text.isBlank() && s.attachment == null)) return
+        if (ChatComposerLimit.tooLong(text)) { _state.update { it.copy(tooLongText = text) }; return }
+        _state.update { it.copy(sending = true, notice = null, tooLongText = null) }
         viewModelScope.launch {
             try {
                 api.send(id, text, Mentions.ids(text, picked), s.attachment, s.replyTo?.id)
@@ -305,7 +314,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 onSent()
                 poll()
             } catch (e: ApiError) {
-                _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.chat_send_failed)) }
+                _state.update { if ((e as? ApiError.Http)?.code == "MESSAGE_TOO_LONG") it.copy(tooLongText = text) else it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.chat_send_failed)) }
             }
             _state.update { it.copy(sending = false) }
         }
@@ -400,6 +409,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 anchorId = messageId.takeIf { mid -> r.messages.any { m -> m.id == mid } }, newerPending = r.hasMoreNewer) }
             if (r.messages.none { it.id == messageId }) _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }
         } catch (e: ApiError) {
+            if (unavailable(e)) return
             val h = e as? ApiError.Http
             if (h?.status == 400 && h.code == "UNKNOWN_MESSAGE") { firstPage(); _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }; return }
             // No `around` (older server): page back from the newest until it shows up.
@@ -458,7 +468,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     val container = (context.applicationContext as NexusApplication).container
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     // message-created goes to the conversation's own room (pages/api/socket.ts): sit in it while open.
-    id.znetworks.nexus.core.realtime.RealtimeRoom("conversation:${vm.id}")
+    id.znetworks.nexus.core.realtime.RealtimeRoom(if (s.deleted) null else "conversation:${vm.id}")
     LaunchedEffect(lifecycle, vm.id) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             ChatPresence.openConversationId = vm.id
@@ -487,10 +497,13 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
         if (typers.isNotEmpty() && lastShown >= list.layoutInfo.totalItemsCount - 2) list.animateScrollToItem(list.layoutInfo.totalItemsCount)
     }
 
+    val length = ChatComposerLimit.length(input)
+    val tooLong = length > ChatComposerLimit.MAX_LENGTH || s.tooLongText == input
+    val formattedLength = java.text.NumberFormat.getIntegerInstance(context.resources.configuration.locales[0]).format(length)
     val conv = s.conversation
     val members = conv?.members.orEmpty().filter { it.uid != vm.meId }
     val mentionQuery = Mentions.query(input)
-    val matches = if (mentionQuery == null) emptyList() else members.filter { mentionQuery.isEmpty() || it.displayName.contains(mentionQuery, true) }
+    val matches = if (mentionQuery == null) emptyList() else members.filter { Mentions.matches(it.displayName, mentionQuery) }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -529,7 +542,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
             }
         }
-        if (s.deleted) { DeletedGroup(onBack); return@Column }
+        if (s.deleted) { DeletedGroup(onBack, s.denied); return@Column }
         LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (s.hasMore) item(key = "earlier") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -644,6 +657,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     }
                 }
             }
+            if (length >= ChatComposerLimit.COUNTER_FROM || tooLong) Text(stringResource(if (tooLong) R.string.qa_chat_too_long else R.string.qa_chat_count, formattedLength), color = if (tooLong) c.dangerText else c.mutedFg, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp))
             // Can view in a project room: read, no composer (web N-03).
             if (s.conversation?.canPost == false) Text(stringResource(R.string.chat_view_only), fontSize = 12.sp, color = c.mutedFg,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp))
@@ -670,7 +684,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 TextField(input, { input = it }, placeholder = { Text(stringResource(R.string.chat_placeholder), fontSize = 14.sp) }, maxLines = 5,
                     colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
                     shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).padding(horizontal = 6.dp).onFocusChanged { if (!it.isFocused) typingSender.stop() })
-                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, modifier = Modifier.background(if (input.isNotBlank() || s.attachment != null) c.onyx else c.mutedFg, CircleShape), enabled = !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
+                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, modifier = Modifier.background(if (input.isNotBlank() || s.attachment != null) c.onyx else c.mutedFg, CircleShape), enabled = !tooLong && !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
                     if (s.sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.background)
                 }
@@ -792,14 +806,14 @@ internal fun SystemPill(m: Message, meId: String?) {
 
 /** The group was deleted (DELETE-GROUP): instead of its messages and composer. */
 @Composable
-private fun ColumnScope.DeletedGroup(onBack: () -> Unit) {
+private fun ColumnScope.DeletedGroup(onBack: () -> Unit, denied: Boolean = false) {
     val c = Nx.colors
     Column(Modifier.weight(1f).fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Filled.Delete, null, tint = c.mutedFg, modifier = Modifier.size(40.dp))
         Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.dg_deleted_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+        Text(stringResource(if (denied) R.string.qa_chat_denied else R.string.dg_deleted_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Text(stringResource(R.string.dg_deleted_body), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        if (!denied) Text(stringResource(R.string.dg_deleted_body), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(16.dp))
         androidx.compose.material3.Button(onClick = onBack) { Text(stringResource(R.string.dg_back_to_chats)) }

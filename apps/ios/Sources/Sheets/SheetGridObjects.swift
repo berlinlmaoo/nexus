@@ -31,6 +31,7 @@ enum SheetGridFonts {
         if traits != base.fontDescriptor.symbolicTraits, let d = base.fontDescriptor.withSymbolicTraits(traits) {
             out = UIFont(descriptor: d, size: size)
         }
+        if cache.count >= 512 { cache.removeAll(keepingCapacity: true) }
         cache[key] = out
         return out
     }

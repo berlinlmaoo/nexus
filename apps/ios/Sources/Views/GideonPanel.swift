@@ -137,6 +137,8 @@ struct GideonPanel: View {
     @State private var showChats = false
     /// Apply / Discard asks first, in a centred alert (house rule).
     @State private var decision: GideonDecision?
+    @State private var waitingProposals: [GideonProposal] = []
+    @State private var waitingExpanded = false
     @State private var showPersonalize = false
     @State private var showMemory = false
     @State private var saveRequest: GideonSaveRequest?
@@ -242,7 +244,7 @@ struct GideonPanel: View {
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
                     Button(d.buttonLabel, role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
-                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
+                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task); await loadWaiting() }
                     }
                     Button(T("Cancel"), role: .cancel) {}
                 } message: { d in Text(d.message) }
@@ -353,33 +355,20 @@ struct GideonPanel: View {
             ZStack {
                 NX.background.ignoresSafeArea()
                 VStack(spacing: 0) {
-                    // The phone's bar drops its title for the tier, history, new chat and ⋯ group, so the name
-                    // and the web's "Acts in NEXUS as you" (what GIDEON may do) sit at the top of the page
-                    // (UI tour run 19, R19-I-11).
-                    if GideonSystemTitle.available && hSize == .compact {
-                        title.frame(maxWidth: .infinity).padding(.vertical, 6)
-                    }
                     conversation
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .modifier(GideonSystemTitle(title: displayName, subtitle: subtitleText))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
+                ToolbarItemGroup(placement: .topBarLeading) {
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
-                }
-                if !GideonSystemTitle.available {
-                    ToolbarItem(placement: .principal) { title }
-                }
-                ToolbarItem(placement: .topBarTrailing) { tierChip }
-                // Chat history and New chat as their own buttons, as web's header (UI tour run 7);
-                // the rest stays in ⋯.
-                ToolbarItemGroup(placement: .primaryAction) {
                     Button { showChats = true } label: { Image(systemName: "clock.arrow.circlepath") }
-                        .accessibilityLabel(T("Chat history"))
+                        .accessibilityLabel(T("Chat history")).accessibilityIdentifier("gideon.toolbar.history")
+                }
+                ToolbarItem(placement: .principal) { compactTitle }
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { newChat() } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel(T("New chat"))
+                        .accessibilityLabel(T("New chat")).accessibilityIdentifier("gideon.toolbar.new")
                     Menu {
                         Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
                         if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
@@ -388,10 +377,17 @@ struct GideonPanel: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel(T("Chat options"))
+                    .accessibilityLabel(T("Chat options")).accessibilityIdentifier("gideon.toolbar.options")
                 }
             }
         }
+    }
+
+    private var compactTitle: some View {
+        VStack(spacing: 1) {
+            tierChip
+            Text(subtitleText).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        }.frame(maxWidth: 160)
     }
 
     @ViewBuilder private var moreDestructiveItems: some View {
@@ -475,12 +471,11 @@ struct GideonPanel: View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
                 Text(tier.label).font(NXFont.text(13, .semibold)).lineLimit(1)
-                if tier == .luna { tierBadge("Default", experimental: false) }
-                if tier == .experimental { tierBadge("Experimental", experimental: true) }
+                if wide && tier == .luna { tierBadge("Default", experimental: false) }
+                if wide && tier == .experimental { tierBadge("Experimental", experimental: true) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(NX.mutedFg)
+            .foregroundStyle(NX.foreground)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
@@ -557,6 +552,9 @@ struct GideonPanel: View {
                             submit()
                         }
                     }
+                    if reviewTurns == nil && !waitingProposals.isEmpty {
+                        GideonWaitingSection(proposals: waitingProposals, expanded: $waitingExpanded) { proposal in proposalCard(proposal) }
+                    }
                     ForEach(chat.turns) { turn in
                         bubble(turn).id(turn.id).transition(appear)
                     }
@@ -574,7 +572,11 @@ struct GideonPanel: View {
             }
             // Everything that can leave the newest message under the fold: history arriving, a turn
             // being added, the answer landing inside it, and the keyboard taking half the screen.
-            .onChange(of: chat.turns.count) { _, _ in toBottom(proxy) }
+            .onChange(of: chat.turns.count) { _, _ in
+                waitingExpanded = chat.turns.isEmpty && waitingProposals.count <= 2
+                toBottom(proxy)
+            }
+            .onChange(of: chat.sending) { _, sending in if !sending { Task { await loadWaiting() } } }
             .onChange(of: chat.turns.last?.content) { _, _ in toBottom(proxy) }
             .onChange(of: chat.error) { _, _ in toBottom(proxy) }
             .onChange(of: composerFocused) { _, focused in
@@ -595,6 +597,8 @@ struct GideonPanel: View {
                 // transcript alone while a question is in flight, when a new chat was asked for, and
                 // when the fetch fails, which is what makes running it on every open safe.
                 await chat.refresh()
+                await loadWaiting()
+                waitingExpanded = chat.turns.isEmpty && waitingProposals.count <= 2
                 // The stack is lazy, so the last row does not exist on the pass that sets `turns`;
                 // one hop later it does. Unanimated on purpose — opening the panel should START at
                 // the newest message, not scroll there through history nobody asked to re-read.
@@ -602,6 +606,13 @@ struct GideonPanel: View {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
+    }
+
+    private func loadWaiting() async {
+        guard reviewTurns == nil, let owner = Keychain.load()?.userId else { return }
+        struct Response: Decodable { let proposals: [GideonProposal] }
+        guard let response: Response = try? await NativeAPI.request("/api/gideon/proposals"), Keychain.load()?.userId == owner else { return }
+        waitingProposals = response.proposals.filter(\.isPending)
     }
 
     /// The last failure, in words, with Try again when asking again can help (GIDEON busy or unreachable,
@@ -1073,8 +1084,8 @@ struct GideonPanel: View {
                 .accessibilityIdentifier("gideon.reviewNotice")
             }
             mentionPicker
-            GideonCreditMeter().padding(.horizontal, 4).padding(.bottom, 4)
             composer
+            GideonCreditMeter().padding(.horizontal, 4)
             Text(T("GIDEON is AI and can make mistakes."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1185,7 +1196,7 @@ struct GideonPanel: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
-                Text(approvalMode.name).lineLimit(1)
+                if wide { Text(approvalMode.name).lineLimit(1) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
             .font(NXFont.text(13, .semibold))
@@ -1196,6 +1207,7 @@ struct GideonPanel: View {
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .accessibilityLabel(approvalMode.name)
         .accessibilityIdentifier("gideon.approvalMode")
         .help(approvalMode.blurb)
     }
@@ -1478,7 +1490,7 @@ struct GideonDecision: Identifiable {
         if let booking, !booking.room.isEmpty {
             return [RoomBooking.label(booking.room), proposal.booking?.title ?? proposal.bookingChange?.title].compactMap { $0 }.joined(separator: " · ")
         }
-        return proposal.summary ?? ""
+        return proposal.localizedSummary ?? ""
     }
 }
 

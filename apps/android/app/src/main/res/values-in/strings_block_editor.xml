@@ -1,4 +1,12 @@
 <resources>
+    <string name="be_up">Pindah ke atas</string>
+    <string name="be_action">Aksi</string>
+    <string name="be_remove">Hapus</string>
+    <string name="be_discard">Buang</string>
+    <string name="be_language">Bahasa</string>
+    <string name="be_language_en">English</string>
+    <string name="be_language_id">Bahasa Indonesia</string>
+    <string name="be_instructions">Instruksi</string>
     <string name="be_edit">Edit isi</string>
     <string name="be_text">Teks</string>
     <string name="be_heading">Judul</string>
