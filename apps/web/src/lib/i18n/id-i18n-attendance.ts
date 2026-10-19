@@ -247,6 +247,8 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "A photo of the doctor's note is required. Today or later — a past day is filed by a board member.": "Wajib foto surat dokter. Hari ini atau setelahnya — hari yang sudah lewat diajukan oleh direksi.",
   "Today or later, with a photo and your location.": "Hari ini atau setelahnya, dengan foto dan lokasimu.",
   "Day off: {left} of {quota} left this period.": "Day off: sisa {left} dari {quota} periode ini.",
+  "Day off: {left} of {quota} left in the period of that date.": "Day off: sisa {left} dari {quota} di periode tanggal itu.",
+  "That date is in a later period — its day-off allowance is checked when you submit.": "Tanggal itu ada di periode berikutnya — jatah day off-nya dicek saat kamu kirim.",
   "Public holiday: {left} of {quota} left this month.": "Tanggal merah: sisa {left} dari {quota} bulan ini.",
   "{year} annual leave: {left} of {quota} days left.": "Cuti tahunan {year}: sisa {left} dari {quota} hari.",
   "{year} annual leave is used up ({quota} days taken).": "Cuti tahunan {year} sudah habis ({quota} hari terpakai).",
