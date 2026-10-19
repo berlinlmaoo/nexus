@@ -50,7 +50,7 @@ const INVALIDATION: Record<string, string[]> = {
  * conversation list and its badge, the bell). Events emitted while the socket was down are gone
  * for good, so without this an open chat would stay frozen at the moment the connection dropped.
  */
-const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info"];
+const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info", "complaint"];
 
 /**
  * Realtime diagnostics: every event received is logged with console.debug in dev builds, or anywhere
@@ -420,6 +420,84 @@ export function RealtimeProvider({
         };
         socket.on("form-responses-changed", onFormResponses);
         cleanups.push(() => socket.off("form-responses-changed", onFormResponses));
+
+        // Something inside a project that no other event covers (server since 19 Oct 2026, lib/project-realtime.ts):
+        // `project-changed` { projectId, kind, id, actorId } to the project's room, already folded per (project, kind,
+        // id) on the server. Ids only: each kind refetches the screens that show it, if they are on screen. Never the
+        // sheet grid, a page body or the form builder (they sync through their own live rooms), so nothing being
+        // typed is replaced. The actor's own pings are not skipped: their other tabs move too.
+        const onProjectChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { projectId?: unknown; kind?: unknown; id?: unknown };
+          const pid = typeof data.projectId === "string" ? data.projectId : null;
+          const id = typeof data.id === "string" ? data.id : null;
+          if (!pid) return;
+          if (debug) console.debug("[realtime] project-changed", { kind: data.kind });
+          const opts = { cancelRefetch: false } as const;
+          switch (data.kind) {
+            case "task":
+              if (id) {
+                void queryClient.invalidateQueries({ queryKey: ["task", id] }, opts);
+                void queryClient.invalidateQueries({ queryKey: ["task-attachments", id] }, opts);
+                void queryClient.invalidateQueries({ queryKey: ["task-followers", id] }, opts);
+              }
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-task-covers", pid] }, opts);
+              break;
+            case "tasks":
+              taskBurst.projects.add(pid);
+              taskBurst.flat.add(pid);
+              taskBurst.others = true;
+              if (id) void queryClient.invalidateQueries({ queryKey: ["task", id] }, opts);
+              scheduleTasks();
+              break;
+            case "forms":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "forms"] }, opts);
+              break;
+            case "sheets":
+              // The tab bar only (exact key): the grid ["nexus","sheet",id] has its own sheet-structure event.
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-sheets", pid], exact: true }, opts);
+              break;
+            case "sheet-comments":
+              if (id) void queryClient.invalidateQueries({ queryKey: ["nexus", "sheet-comments", id] }, opts);
+              break;
+            case "status-updates":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project", pid, "status-updates"] }, opts);
+              break;
+            case "members":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-members", pid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-members-lite", pid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["project-members", pid] }, opts);
+              break;
+            default:
+              // "pages", "files" or a kind a newer server adds: no web screen shows them yet.
+              break;
+          }
+        };
+        socket.on("project-changed", onProjectChanged);
+        cleanups.push(() => socket.off("project-changed", onProjectChanged));
+
+        // A support ticket changed (server since 19 Oct 2026, lib/complaint-realtime.ts): `complaint-changed` { id, kind }
+        // reaches only its reporter and the workspace's BoD/OAA. The board (cards + counts) and an open thread refetch;
+        // the reply box keeps its own state, so a reply being typed stays.
+        let complaintTimer: ReturnType<typeof setTimeout> | null = null;
+        const complaintIds = new Set<string>();
+        const onComplaintChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { id?: unknown; kind?: unknown };
+          if (typeof data.id === "string") complaintIds.add(data.id);
+          if (debug) console.debug("[realtime] complaint-changed", { kind: data.kind });
+          if (complaintTimer) return;
+          complaintTimer = setTimeout(() => {
+            complaintTimer = null;
+            const opts = { cancelRefetch: false } as const;
+            void queryClient.invalidateQueries({ queryKey: ["complaints"] }, opts);
+            complaintIds.forEach((cid) => {
+              void queryClient.invalidateQueries({ queryKey: ["complaint", cid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["complaint-corrections", cid] }, opts);
+            });
+            complaintIds.clear();
+          }, 150);
+        };
+        socket.on("complaint-changed", onComplaintChanged);
+        cleanups.push(() => { socket.off("complaint-changed", onComplaintChanged); if (complaintTimer) clearTimeout(complaintTimer); });
 
         // Taken out of a project (or sheet) room because access to the project ended (server since 13 Oct 2026):
         // the open project refetches and shows the no-access state instead of silently going quiet; the
