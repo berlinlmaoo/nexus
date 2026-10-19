@@ -135,11 +135,16 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                         }
                     } }, supportingText = { Text("${payload.length}/80", color = if (payload.length > 80) c.dangerText else c.mutedFg) }, enabled = !busy, isError = payload.length > 80, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.ui_status_availability), color = c.mutedFg, fontSize = 12.sp)
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
-                        SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
-                            shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.size(7.dp).background(dotColor(tone), CircleShape)) }) {
-                            Text(stringResource(label), maxLines = 2, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    // Material measures the label with the whole segment width; reserve its icon and padding.
+                    val labelWidth = (maxWidth / 3 - 16.dp - SegmentedButtonDefaults.IconSize - 8.dp).coerceAtLeast(1.dp)
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
+                            SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
+                                modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.requiredSize(7.dp).background(dotColor(tone), CircleShape)) }) {
+                                Text(stringResource(label), Modifier.widthIn(max = labelWidth), maxLines = 2, softWrap = true, fontSize = 12.sp, lineHeight = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
                         }
                     }
                 }
