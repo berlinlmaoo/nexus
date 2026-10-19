@@ -2,6 +2,15 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Your nickname": "Nama panggilanmu",
+        "Your role / occupation": "Peran / pekerjaanmu",
+        "More about you": "Tentang dirimu",
+        "Memory summary": "Ringkasan memori",
+        "See what GIDEON has learned about you. Add things here or tell it in a chat.": "Lihat apa yang GIDEON pelajari tentangmu. Tambahkan di sini atau ceritakan lewat chat.",
+        "Saved directly as a private memory. Only you can see this.": "Disimpan langsung sebagai memori pribadi. Hanya kamu yang bisa melihatnya.",
+        "Memory options": "Opsi memori",
+        "Updated %@": "Diperbarui %1$@",
+        "Add or update…": "Tambah atau perbarui…",
         "All categories": "Semua kategori",
         "Names": "Nama",
         "No %@ chats yet": "Belum ada chat %1$@",
