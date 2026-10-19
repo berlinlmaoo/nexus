@@ -8,7 +8,7 @@ private enum MessageCategory: String, CaseIterable, Identifiable {
     case direct = "Direct", groups = "Groups", projects = "Projects"
     var id: String { rawValue }
     var type: String { self == .direct ? "DM" : self == .groups ? "GROUP" : "PROJECT" }
-    init(type: String) { self = type == "GROUP" ? .groups : type == "PROJECT" ? .projects : .direct }
+    init(type: String?) { self = type == "GROUP" ? .groups : type == "PROJECT" ? .projects : .direct }
 }
 
 /// Port of messages.tsx: conversation list grouped Direct/Groups/Projects → tap → chat thread.
