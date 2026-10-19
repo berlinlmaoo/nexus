@@ -1,0 +1,18 @@
+<resources>
+    <string name="gca_role_default">Bawaan peran</string>
+    <string name="gca_daily">Batas harian</string>
+    <string name="gca_period">Kuota periode</string>
+    <string name="gca_note">Catatan</string>
+    <string name="gca_save_limits">Simpan batas</string>
+    <string name="gca_bonus">Kredit bonus</string>
+    <string name="gca_bonus_help">Ditambahkan ke kuota orang ini untuk periode berjalan. Kredit bonus yang tidak dipakai habis saat periode berakhir.</string>
+    <string name="gca_credits">Kredit</string>
+    <string name="gca_reason">Alasan</string>
+    <string name="gca_grant">Berikan bonus</string>
+    <string name="gca_confirm">Berikan %1$s kredit bonus?</string>
+    <string name="gca_role_defaults">Bawaan peran</string>
+    <string name="gca_save_defaults">Simpan bawaan peran</string>
+    <string name="gca_board">Direksi</string>
+    <string name="gca_manager">Manajer</string>
+    <string name="gca_staff">Staf</string>
+</resources>
