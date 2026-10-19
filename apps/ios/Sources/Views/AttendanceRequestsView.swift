@@ -578,8 +578,7 @@ struct AttendanceRequestsCard: View {
                 }
             }
             .padding(.horizontal, 11).padding(.vertical, 8)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(NX.border))
+            .nxSoftField(radius: 11)
         }
     }
 
@@ -991,7 +990,7 @@ private struct RequestFocusSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(T("Why is it rejected?")).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
                         TextField(T("The requester will read this"), text: $note, axis: .vertical)
-                            .lineLimit(2...5).textFieldStyle(.roundedBorder)
+                            .lineLimit(2...5).textFieldStyle(.nxSoft)
                         HStack(spacing: 8) {
                             Button(T("Back")) { rejecting = false }.buttonStyle(.bordered)
                             Button(T("Confirm rejection")) { Task { await decide("reject", note: note) } }
@@ -1118,8 +1117,7 @@ struct RejectReasonSheet: View {
                             SectionLabel(T("REJECTION REASON"))
                             TextField(T("Say why, so they can fix it and file again…"), text: $note, axis: .vertical)
                                 .font(NXFont.text(15)).lineLimit(3...6).padding(12)
-                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .nxSoftField(radius: 12)
                             Text(T("The person who filed it reads this next to the decision."))
                                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
@@ -1472,8 +1470,7 @@ struct RequestComposerSheet: View {
                         field(T("REASON")) {
                             TextField(T("Reason / context…"), text: $reason, axis: .vertical)
                                 .font(NXFont.text(15)).lineLimit(3...6).padding(12)
-                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .nxSoftField(radius: 12)
                         }
                         if showAttachment {
                             field((type == "SICK" ? T("SICK NOTE PHOTO") : T("SUPPORTING PHOTO"))

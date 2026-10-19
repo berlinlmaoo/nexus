@@ -270,7 +270,7 @@ private struct GideonMemorySummaryView: View {
                     .onChange(of: editText) { _, value in if value.count > store.textMax { editText = String(value.prefix(store.textMax)) } }
                     .accessibilityIdentifier("memory.edit.text")
                 Picker(T("Type"), selection: $editKind) { ForEach(MemoryKind.allCases) { Text($0.label).tag($0) } }.pickerStyle(.menu)
-                if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.roundedBorder) }
+                if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.nxSoft) }
                 HStack { Button(T("Cancel")) { editing = nil }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
             } else {
                 HStack(alignment: .top, spacing: 8) {
@@ -402,7 +402,13 @@ private struct MemoryInlineTextField: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> MemoryInlineUIKitField {
         let field = MemoryInlineUIKitField()
-        field.borderStyle = .roundedRect
+        // The soft filled field, no outline (R-16).
+        field.borderStyle = .none
+        field.backgroundColor = UIColor(NX.muted)
+        field.layer.cornerRadius = 10
+        field.layer.cornerCurve = .continuous
+        field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 10, height: 1)); field.leftViewMode = .always
+        field.rightView = UIView(frame: CGRect(x: 0, y: 0, width: 10, height: 1)); field.rightViewMode = .always
         field.font = UIFont.preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
         field.returnKeyType = .done

@@ -997,8 +997,7 @@ struct OutletNumberField: View {
                 }
         }
         .padding(.horizontal, 12).frame(minHeight: 44)
-        .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 12)
     }
 }
 

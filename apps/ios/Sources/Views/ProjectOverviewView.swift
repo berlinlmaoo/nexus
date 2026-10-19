@@ -1199,8 +1199,7 @@ private struct OverviewStatusUpdatesCard: View {
                     .lineLimit(2...10)
                     .font(NXFont.text(14))
                     .padding(10)
-                    .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .nxSoftField(radius: 12)
                     .accessibilityLabel(T("Status update"))
                 if let error {
                     Text(error).font(NXFont.text(12)).foregroundStyle(NX.danger)

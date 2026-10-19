@@ -195,6 +195,44 @@ extension View {
     }
 }
 
+/// One soft style for text fields, pickers and boxed rows (Berlin device review 19 Oct, R-16: no hard outlines):
+/// a filled muted background, 10–12 pt corners, no border. A ring only where it means something: the accent
+/// while editing, red on an error.
+struct NXSoftField: ViewModifier {
+    var radius: CGFloat = 12
+    var focused = false
+    var error = false
+    func body(content: Content) -> some View {
+        content
+            .background(NX.muted, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay {
+                if error || focused {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .strokeBorder(error ? NX.danger.opacity(0.7) : NX.violet.opacity(0.55), lineWidth: 1.5)
+                }
+            }
+    }
+}
+
+extension View {
+    func nxSoftField(radius: CGFloat = 12, focused: Bool = false, error: Bool = false) -> some View {
+        modifier(NXSoftField(radius: radius, focused: focused, error: error))
+    }
+}
+
+/// `.roundedBorder`'s replacement: the soft filled field, padded like the web's inputs.
+struct NXSoftTextFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .nxSoftField(radius: 10)
+    }
+}
+
+extension TextFieldStyle where Self == NXSoftTextFieldStyle {
+    static var nxSoft: NXSoftTextFieldStyle { NXSoftTextFieldStyle() }
+}
+
 enum ChipTone {
     case neutral, accent, success, warning, danger, info, coral, orange
 

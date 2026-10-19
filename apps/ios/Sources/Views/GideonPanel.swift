@@ -469,7 +469,7 @@ struct GideonPanel: View {
 
     /// Tier names with their Default / Experimental badges; live availability is owned by the server.
     @State private var showTierPicker = false
-    /// Wide: the outlined chip beside the page header. Compact: the sheet's plain title (R-1).
+    /// Wide: the soft chip beside the page header. Compact: the sheet's plain title (R-1).
     private var tierChip: some View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
@@ -482,8 +482,9 @@ struct GideonPanel: View {
             .foregroundStyle(NX.foreground)
             .padding(.horizontal, wide ? 10 : 4)
             .frame(height: wide ? 30 : 24)
-            .overlay {
-                if wide { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border) }
+            // Wide: a soft filled chip, no outline (R-16).
+            .background {
+                if wide { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted) }
             }
             .contentShape(Rectangle())
         }

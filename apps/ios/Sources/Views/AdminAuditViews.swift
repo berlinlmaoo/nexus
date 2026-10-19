@@ -115,8 +115,7 @@ struct AdminAuditSection: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            .nxSoftField(radius: 12)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {

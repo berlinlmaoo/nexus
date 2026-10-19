@@ -168,7 +168,7 @@ struct MeetingDetailView: View {
                 HStack(spacing: 12) {
                     Text(meeting.selectedTasks.count == 1 ? T("Save the minutes and create 1 task") : String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
                     Spacer()
-                    Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxPrimary).disabled(!meeting.canApplyDraft || store.busy)
+                    Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxAccent).disabled(!meeting.canApplyDraft || store.busy)
                         .accessibilityIdentifier("meetings.apply")
                 }.padding(16).background(NX.card).overlay(alignment: .top) { Divider() }
             }
@@ -236,19 +236,32 @@ struct MeetingDetailView: View {
                 sectionTitle("Open questions"); stringList(mom.openQuestions, editable: editable(meeting), label: "Open questions") { values in store.updateMinutes { $0.openQuestions = values } }
                 sectionTitle("Action items")
                 ForEach(mom.actionItems.indices, id: \.self) { index in
-                    VStack(alignment: .leading, spacing: 7) {
-                        textEditor(mom.actionItems[index].text, editable: editable(meeting), id: "action-\(index)") { value in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].text = value } }
-                        if editable(meeting) {
-                            TextField(T("Owner"), text: Binding(get: { store.meeting?.mom?.actionItems.meetingElement(index)?.owner ?? "" }, set: { value in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].owner = value.isEmpty ? nil : value } })).textFieldStyle(.roundedBorder)
-                            NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.mom?.actionItems.meetingElement(index)?.due.map(CalDays.date) }, set: { date in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].due = date.map(CalDays.key) } }))
-                            Button(T("Remove"), role: .destructive) { store.updateMinutes { if $0.actionItems.indices.contains(index) { $0.actionItems.remove(at: index) } } }
-                        } else { Text([mom.actionItems[index].owner,mom.actionItems[index].due].compactMap { $0 }.joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-                    }.nexusCard()
+                    actionItemCard(mom.actionItems[index], index: index, meeting: meeting)
                 }
                 if editable(meeting) { Button(T("Add action item")) { store.updateMinutes { $0.actionItems.append(.init(text: "", owner: nil, due: nil)) } }.buttonStyle(.nxBordered) }
             }
             if meeting.status == "READY" { proposals(meeting) }
         }
+    }
+    /// One action item (R-16): the text with a small trash button top-right, then the owner chip and a
+    /// compact "Due [Add date]" row, no boxed fields.
+    private func actionItemCard(_ item: MeetingMinutes.Action, index: Int, meeting: MeetingNote) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                textEditor(item.text, editable: editable(meeting), id: "action-\(index)") { value in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].text = value } }
+                if editable(meeting) {
+                    MeetingRemoveButton(label: T("Remove action item")) { store.updateMinutes { if $0.actionItems.indices.contains(index) { $0.actionItems.remove(at: index) } } }
+                }
+            }
+            if editable(meeting) {
+                MeetingOwnerChip(owner: item.owner, members: meeting.members ?? []) { name in
+                    store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].owner = name }
+                }
+                NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.mom?.actionItems.meetingElement(index)?.due.map(CalDays.date) }, set: { date in store.updateMinutes { guard $0.actionItems.indices.contains(index) else { return }; $0.actionItems[index].due = date.map(CalDays.key) } }))
+            } else {
+                Text([item.owner, item.due].compactMap { $0 }.joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+        }.nexusCard()
     }
     private func attendees(_ meeting: MeetingNote) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -261,7 +274,7 @@ struct MeetingDetailView: View {
             }
             if editable(meeting) {
                 HStack {
-                    TextField(T("Add attendee"), text: $attendee).textFieldStyle(.roundedBorder)
+                    TextField(T("Add attendee"), text: $attendee).textFieldStyle(.nxSoft)
                     Button(T("Add")) { let name = attendee.trimmingCharacters(in: .whitespacesAndNewlines); if !name.isEmpty { store.updateMinutes { if !$0.attendees.contains(name) { $0.attendees.append(name) } }; attendee = "" } }.buttonStyle(.nxBordered).disabled(attendee.trimmingCharacters(in: .whitespaces).isEmpty)
                     Menu(T("Project members")) {
                         ForEach(meeting.members ?? []) { member in
@@ -295,7 +308,14 @@ struct MeetingDetailView: View {
                                 Label(member.name ?? "—", systemImage: proposal.assigneeIds.contains(member.id) ? "checkmark" : "person")
                             }
                         }
-                    } label: { Label(proposal.assigneeIds.isEmpty ? T("Unassigned") : (meeting.members ?? []).filter { proposal.assigneeIds.contains($0.id) }.compactMap(\.name).joined(separator: ", "), systemImage: "person") }.accessibilityIdentifier("meetings.proposal.pic." + proposal.key)
+                    } label: {
+                        // A people chip like the action items' owner (R-16), not a bare accent link.
+                        Label(proposal.assigneeIds.isEmpty ? T("Unassigned") : (meeting.members ?? []).filter { proposal.assigneeIds.contains($0.id) }.compactMap(\.name).joined(separator: ", "), systemImage: proposal.assigneeIds.isEmpty ? "plus" : "person.fill")
+                            .font(NXFont.text(13, .medium)).foregroundStyle(proposal.assigneeIds.isEmpty ? NX.mutedFg : NX.foreground).lineLimit(1)
+                            .padding(.horizontal, 10).frame(minHeight: 30)
+                            .background(NX.muted, in: Capsule())
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }.menuIndicator(.hidden).buttonStyle(.plain).accessibilityIdentifier("meetings.proposal.pic." + proposal.key)
                     NativeOptionalDay(label: "Due", value: Binding(get: { store.meeting?.proposals?.meetingElement(index)?.dueDate.map(CalDays.date) }, set: { date in store.updateProposals { guard $0.indices.contains(index) else { return }; $0[index].dueDate = date.map(CalDays.key) } }), controlID: "meetings.proposal.due." + proposal.key)
                 }.disabled(!meeting.can.edit).nexusCard()
             }
@@ -304,7 +324,7 @@ struct MeetingDetailView: View {
     private func transcript(_ segments: [MeetingNote.Segment], meeting: MeetingNote) -> some View {
         DisclosureGroup(T("Transcript"), isExpanded: $transcriptOpen) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField(T("Find in transcript"), text: $transcriptSearch).textFieldStyle(.roundedBorder)
+                TextField(T("Find in transcript"), text: $transcriptSearch).textFieldStyle(.nxSoft)
                 Text(T("Automatic transcript — names and words can be misheard.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                     if transcriptSearch.isEmpty || segment.text.localizedCaseInsensitiveContains(transcriptSearch) {

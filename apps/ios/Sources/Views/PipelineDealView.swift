@@ -674,16 +674,14 @@ struct PipelineNewDealSheet: View {
                         TextField(T("e.g. Brand activation, Jakarta Fair"), text: $name)
                             .font(NXFont.text(16)).focused($nameFocused).submitLabel(.next)
                             .padding(12)
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                            .nxSoftField(radius: 12)
                     }
                     PipelineFieldBox(T("Brand / client")) {
                         TextField(T("Brand / client"), text: $brand)
                             .font(NXFont.text(16)).submitLabel(.done)
                             .onSubmit { if !trimmed.isEmpty { Task { await create() } } }
                             .padding(12)
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                            .nxSoftField(radius: 12)
                     }
                     PipelineFieldBox(T("Stage")) {
                         PipelineMenuInput(label: T("Stage"), value: chosenStage,
@@ -1392,8 +1390,7 @@ struct PipelineTermSheet: View {
         }
         .font(NXFont.text(15))
         .padding(12)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 12)
     }
 
     private func money(_ text: Binding<String>) -> some View {
@@ -1402,8 +1399,7 @@ struct PipelineTermSheet: View {
             TextField("0", text: text).font(NXFont.text(15)).keyboardType(.numberPad).monospacedDigit()
         }
         .padding(12)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 12)
     }
 
     private func start() {

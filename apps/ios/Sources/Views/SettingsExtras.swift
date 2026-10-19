@@ -351,8 +351,7 @@ struct SecurityCard: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
                 .accessibilityLabel(label)
             if let hint {
                 Text(hint).font(NXFont.text(11)).foregroundStyle(hintIsError ? NX.danger : NX.mutedFg)
@@ -492,8 +491,7 @@ struct PasskeyCard: View {
             .font(NXFont.text(14))
             .textInputAutocapitalization(.words).autocorrectionDisabled()
             .padding(.horizontal, 12).frame(minHeight: 40)
-            .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+            .nxSoftField(radius: 10)
         if hSize == .regular {
             HStack(spacing: 8) { field; addButton.fixedSize() }
         } else {

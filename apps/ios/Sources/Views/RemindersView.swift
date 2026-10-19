@@ -16,7 +16,7 @@ struct RemindersView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField(T("What should we remind you about?"), text: $text, axis: .vertical)
-                        .lineLimit(2...5).textFieldStyle(.roundedBorder).accessibilityIdentifier("reminders.text")
+                        .lineLimit(2...5).textFieldStyle(.nxSoft).accessibilityIdentifier("reminders.text")
                     DatePicker(T("Remind me at"), selection: $remindAt, in: Date()..., displayedComponents: [.date, .hourAndMinute])
                         .environment(\.timeZone, wib)
                     Text(T("Times are WIB.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

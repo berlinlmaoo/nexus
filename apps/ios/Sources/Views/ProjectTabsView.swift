@@ -1680,8 +1680,7 @@ struct CreateTaskSheet: View {
                         field(T("TASK TITLE")) {
                             TextField("mis. Shooting EPS 2", text: $title, axis: .vertical)
                                 .font(NXFont.text(16)).lineLimit(3).padding(12)
-                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .nxSoftField(radius: 12)
                         }
                         field(T("SECTION")) {
                             Menu {
@@ -1691,8 +1690,7 @@ struct CreateTaskSheet: View {
                                     Text(laneName).font(NXFont.text(15)).foregroundStyle(NX.foreground)
                                     Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                                 }
-                                .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .padding(12).nxSoftField(radius: 12)
                             }
                         }
                         field(T("PRIORITY")) {
@@ -1774,7 +1772,7 @@ struct CreateTaskSheet: View {
                         Text(v.isEmpty ? "—" : v).font(NXFont.text(15)).foregroundStyle(v.isEmpty ? NX.mutedFg : NX.foreground)
                         Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     }
-                    .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    .padding(10).nxSoftField(radius: 10)
                 }
             } else if type == "MULTI_SELECT", !choices.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1793,13 +1791,13 @@ struct CreateTaskSheet: View {
             } else if type == "PLACE" {
                 VStack(spacing: 6) {
                     TextField(T("Place / location name"), text: placeLabel(f.id)).font(NXFont.text(15)).padding(10)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                        .nxSoftField(radius: 10)
                     TextField(T("Google Maps link"), text: placeMap(f.id)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                        .nxSoftField(radius: 10)
                 }
             } else {
                 TextField("…", text: cfText(f.id)).font(NXFont.text(15)).padding(10)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    .nxSoftField(radius: 10)
             }
         }
     }

@@ -942,8 +942,7 @@ struct CreateFolderSheet: View {
                         field(T("FOLDER NAME")) {
                             TextField("mis. Client Pertamina", text: $name)
                                 .font(NXFont.text(16)).padding(12)
-                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .nxSoftField(radius: 12)
                         }
                         field(T("ICON")) {
                             HStack(spacing: 8) {
@@ -1169,16 +1168,14 @@ struct CreateProjectSheet: View {
                         field(T("PROJECT NAME")) {
                             TextField("mis. Z Networks Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
-                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                .nxSoftField(radius: 12)
                         }
                         if kind == .task {
                             field(T("Brief")) {
                                 TextField(T("What's the project, who owns it, and what should move first?"), text: $brief, axis: .vertical)
                                     .lineLimit(3...6)
                                     .font(NXFont.text(15)).padding(12)
-                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                    .nxSoftField(radius: 12)
                             }
                             field(T("Tabs")) { NewProjectTabsPicker(hiddenTabs: $hiddenTabs) }
                         }
@@ -1192,8 +1189,7 @@ struct CreateProjectSheet: View {
                             }
                             .tint(NX.violet)
                             .padding(12)
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                            .nxSoftField(radius: 12)
                         }
                         field(T("Members")) {
                             HStack(alignment: .top, spacing: 8) {

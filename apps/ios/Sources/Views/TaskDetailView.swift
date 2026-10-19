@@ -934,16 +934,14 @@ struct QuestComposerSheet: View {
                     SectionLabel(T("Quest title"))
                     TextField(T("Quest title"), text: $title, axis: .vertical)
                         .font(NXFont.text(15)).padding(12)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 12)
 
                     SectionLabel(T("XP reward"))
                     Stepper(value: $xp, in: 1...50) {
                         HStack { Text(T("Reward")).font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); QuestXPChip(xp: xp) }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .nxSoftField(radius: 12)
 
                     Text(T("The quest completes when this task is done. XP goes to the assignee, and the quest is visible to every project member. Max 50 XP."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

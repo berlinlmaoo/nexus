@@ -17,6 +17,9 @@ final class MeetingStore {
     init(id: String) { self.id = id }
     var hasUnsaved: Bool { !pending.isEmpty || saving }
     func load() async {
+        #if DEBUG
+        if id == MeetingReviewTourFixture.id, let fixture = MeetingReviewTourFixture.meeting() { meeting = fixture; return }
+        #endif
         do {
             let response: MeetingEnvelope = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id))
             guard !hasUnsaved else {

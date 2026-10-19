@@ -350,8 +350,7 @@ struct LegalFieldInput: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 84)
                 .padding(.horizontal, 6).padding(.vertical, 4)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(error != nil ? NX.danger.opacity(0.7) : NX.border))
+                .nxSoftField(radius: 10, error: error != nil)
         case "date":
             dateInput
         case "money":

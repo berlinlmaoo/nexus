@@ -307,7 +307,7 @@ struct FormStudioHead: View {
             LinearGradient(colors: p.colors.map { Color(uiColor: UIColor(rgb: $0)) }, startPoint: .topLeading, endPoint: .bottomTrailing)
                 .frame(height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(on ? NX.foreground : Color.clear, lineWidth: 2))
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(on ? NX.violet : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(T(p.label))
@@ -944,7 +944,7 @@ struct FormStudioSettingsTab: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(on ? NX.muted.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? NX.foreground.opacity(0.6) : NX.border))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? NX.violet.opacity(0.6) : NX.border))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1075,7 +1075,7 @@ struct FormStudioSettingsTab: View {
                         .keyboardType(.numberPad)
                         .font(NXFont.text(15)).monospacedDigit()
                         .padding(.horizontal, 10).frame(width: 110, height: 36)
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 10)
                     Text(T("then the form closes by itself")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
@@ -1121,8 +1121,7 @@ struct FormStudioSettingsTab: View {
             field()
                 .font(NXFont.text(15))
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
         }
     }
 
@@ -1150,7 +1149,7 @@ struct FormStudioSettingsTab: View {
                 TextField(T("Search project members"), text: $who).font(NXFont.text(15))
             }
             .padding(.horizontal, 12).frame(height: 38)
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            .nxSoftField(radius: 10)
             VStack(spacing: 0) {
                 let list = shownMembers
                 if list.isEmpty {

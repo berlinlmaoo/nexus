@@ -175,8 +175,7 @@ struct TemplateGallery: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 12)
     }
 
     private var categoryChips: some View {

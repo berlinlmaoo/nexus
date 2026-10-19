@@ -278,8 +278,7 @@ struct AdminExtraDayOffSection: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            .nxSoftField(radius: 12)
 
             // The chosen people stay visible while the search narrows the list below.
             if !selected.isEmpty {
@@ -353,8 +352,7 @@ struct AdminExtraDayOffSection: View {
                 TextField(T("e.g. Worked the 3-day Jakarta event"), text: $reason, axis: .vertical)
                     .font(NXFont.text(14)).lineLimit(1...4)
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                    .nxSoftField(radius: 12)
                     .onChange(of: reason) { _, new in
                         if new.count > Self.reasonMax { reason = String(new.prefix(Self.reasonMax)) }
                     }

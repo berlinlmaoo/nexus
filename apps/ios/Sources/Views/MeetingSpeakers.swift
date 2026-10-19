@@ -51,7 +51,7 @@ struct MeetingSpeakersSection: View {
             if editable {
                 HStack {
                     TextField(T("Who is this?"), text: Binding(get: { store.meeting?.speakers?[key]?.name ?? "" }, set: { store.setSpeaker(key, name: $0) }))
-                        .textFieldStyle(.roundedBorder).accessibilityIdentifier("meetings.speaker.name." + key)
+                        .textFieldStyle(.nxSoft).accessibilityIdentifier("meetings.speaker.name." + key)
                     if let members = meeting.members, !members.isEmpty {
                         Menu { ForEach(members) { member in Button(member.name ?? "—") { store.setSpeaker(key, name: member.name ?? "", userId: member.id) } } } label: { Image(systemName: "person.crop.circle.badge.plus").frame(width: 36, height: 36) }.accessibilityLabel(T("Project members"))
                     }

@@ -164,7 +164,7 @@ struct SetPresenceSheet: View {
                 } label: { Text(emoji).font(.system(size: 26)).frame(width: 44, height: 44) }
                     .accessibilityLabel(T("Status emoji"))
                 TextField(T("What are you up to?"), text: $text).textFieldStyle(.plain).accessibilityIdentifier("presence.text")
-            }.padding(8).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+            }.padding(8).nxSoftField(radius: 12)
             Text(AppNumber.int(statusText.utf16.count) + "/80")
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -290,7 +290,7 @@ private struct PresenceScheduleGroup: View {
                         .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity).accessibilityIdentifier("presence.startsAt")
                 }
             }
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+            .nxSoftField(radius: 12)
             Text(summary).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.horizontal, 4).accessibilityIdentifier("presence.summary")
         }.font(NXFont.text(14))
     }

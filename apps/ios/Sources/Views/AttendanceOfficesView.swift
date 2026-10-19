@@ -223,7 +223,7 @@ struct OfficeComposerSheet: View {
     }
     private func field(_ text: Binding<String>, _ ph: String) -> some View {
         TextField(ph, text: text).font(NXFont.text(15)).autocorrectionDisabled().padding(12)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            .nxSoftField(radius: 12)
     }
     private func remove() async {
         guard let editing else { return }
@@ -304,8 +304,7 @@ struct OfficeMapPicker: View {
                 if searching { ProgressView().scaleEffect(0.8) }
                 else if !query.isEmpty { Button { query = ""; results = [] } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }.buttonStyle(.plain) }
             }
-            .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            .padding(12).nxSoftField(radius: 12)
             if !results.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(Array(results.prefix(5).enumerated()), id: \.offset) { _, item in
