@@ -1,5 +1,9 @@
 # NEXUS Android: status
 
+## UI round and owner QA decisions — 19 Oct 2026
+
+Branch `feat/ui-round-android-19oct` includes the reviewed final-QA fixes and latest local DEV 56b3e86c. U-1–U-13 + N-1 and the native QA-decision contracts are implemented. **917 JVM tests, zero failures/errors; testDebugUnitTest + assembleDebug PASS.** VersionCode remains 13; no push or publication. Four-variant native verification and exact-fixture cleanup are finishing. [UI matrix](UI-ROUND-19OCT.md) · [owner-decision matrix](QA-DECISIONS-19OCT.md).
+
 ## Final QA tour - 19 Oct 2026
 
 Completed 10:28 WIB: 133 screen states in EN/light, EN/dark, ID/light and ID/dark (532 states; 814 indexed captures). Fixed confirmed defects: Memory confirmation plurals (219969e2), components ignoring the selected app theme (ba388e2a), profile attendance-period localization (8bf49b70), Indonesian meeting labels (93f8e152), and Vault folder-count plurals (3e3f03de). **829 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.**
