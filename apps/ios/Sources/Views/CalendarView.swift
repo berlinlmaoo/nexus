@@ -1994,9 +1994,12 @@ struct CalendarView: View {
         let missing = filters.folders.filter { !known.contains($0) && !resolvedFolderAttempts.contains(user + "|" + $0) }
         guard !missing.isEmpty else { return }
         resolvedFolderAttempts.formUnion(missing.map { user + "|" + $0 })
+        defer {
+            if Task.isCancelled { resolvedFolderAttempts.subtract(missing.map { user + "|" + $0 }) }
+        }
         do {
             let mapping = try await APIClient.shared.calendarLegacyFolderIds(missing)
-            guard user == uid else { return }
+            guard !Task.isCancelled, user == uid else { return }
             var next = filters
             next.folders = Array(Set(next.folders.map { mapping[$0] ?? $0 })).sorted()
             if next.folders != filters.folders { filtersBinding.wrappedValue = next }
