@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -126,6 +127,7 @@ async function handlePATCH(
 
       // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
       touchPresenceSoon(updated.userId)
+      noteAttendanceChanged(updated.userId, "request", updated.id, updated.startDate)
       return NextResponse.json({ request: serializeAttendanceRequest(updated) })
     }
 
@@ -227,6 +229,7 @@ async function handlePATCH(
 
     // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
     touchPresenceSoon(updated.userId)
+    noteAttendanceChanged(updated.userId, "request", updated.id, updated.startDate)
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })
   } catch (error) {
     console.error("Error updating attendance request:", error)

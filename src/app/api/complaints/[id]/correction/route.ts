@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { NextRequest, NextResponse } from "next/server"
 import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetailed, readAttendancePenaltiesForDate } from "@/lib/attendance-absence"
 import { auth } from "@/lib/auth"
@@ -326,6 +327,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         },
       })
       void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan pembatalan potongan ${dateKey} disetujui BoD — XP dan jatah day off hari itu sudah kembali.`, detailEn: `The BoD approved cancelling the ${dateKey} cut — that day's XP and day off are back.` }).catch(() => {})
+      noteAttendanceChanged(correction.userId, "correction", correction.id, dateKey)
       // record: null, and it means it — no AttendanceRecord was read, written or created.
       void emitComplaintChanged(id, "correction")
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
@@ -567,6 +569,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan koreksi absen ${dateKey} disetujui BoD — catatan absen hari itu sudah diperbarui.`, detailEn: `The BoD approved the attendance correction for ${dateKey} — that day's record is updated.` }).catch(() => {})
 
     void emitComplaintChanged(id, "correction")
+    noteAttendanceChanged(targetUserId, "correction", correction.id, dateKey)
     return NextResponse.json({
       correction: serializeAttendanceCorrection(updatedCorrection),
       record: serializeAttendanceRecord(updatedRecord),

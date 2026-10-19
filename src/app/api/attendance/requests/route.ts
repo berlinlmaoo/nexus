@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { mkdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
@@ -946,6 +947,7 @@ export async function POST(request: NextRequest) {
 
     // Presence status (lib/presence.ts): recomputed after the write, never awaited, never fails it.
     touchPresenceSoon(attendanceRequest.userId)
+    noteAttendanceChanged(attendanceRequest.userId, "request", attendanceRequest.id, attendanceRequest.startDate)
     return NextResponse.json({ request: serializeAttendanceRequest(attendanceRequest) }, { status: 201 })
   } catch (error) {
     console.error("Error creating attendance request:", error)
