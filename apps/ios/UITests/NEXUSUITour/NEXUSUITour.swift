@@ -793,7 +793,8 @@ final class NEXUSUITour: XCTestCase {
                     return "wrong-screen: missing expected text in \(action.label)"
                 }
             case "checkFrame":
-                let target = app.textViews.matching(identifier: action.label).firstMatch
+                let textView = app.textViews.matching(identifier: action.label).firstMatch
+                let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
                 let limits = (action.text ?? "").split(separator: ",").compactMap { Double($0) }
                 guard target.waitForExistence(timeout: 10), limits.count == 2,
                       target.frame.width >= CGFloat(limits[0]), target.frame.height <= CGFloat(limits[1]) else {

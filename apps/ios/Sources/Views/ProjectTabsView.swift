@@ -612,7 +612,7 @@ struct TimelineTab: View {
             if #available(iOS 18.0, *) {
                 HStack(alignment: .top, spacing: 0) {
                     if leftW > 0 {
-                        leftHeader.frame(width: leftW)
+                        leftHeader.frame(width: leftW).accessibilityIdentifier("timeline.name.column")
                             .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
                     }
                     TimelineAxisHeader(offsetX: offsetX, monthLabel: visibleMonth(ax), monthH: monthH) {

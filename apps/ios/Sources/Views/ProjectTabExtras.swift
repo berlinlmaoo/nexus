@@ -457,6 +457,7 @@ struct TableHeaderRow: View {
             // The web's "T" text-field icon, not Notion's "Aa" (parity outranks Notion; UI tour run 19, R19-I-18).
             // The web's "T" text glyph (UI tour run 20, R20-I-04 / R20-B-11; it was "Aa", then "A").
             cell(T("Name"), icon: TextPropertyGlyph.symbol, width: cols.name, first: true)
+                .accessibilityIdentifier("table.name.header")
                 .background(NX.card)
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
