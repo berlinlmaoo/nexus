@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ui_status_title">Status</string>
+    <string name="ui_status_placeholder">What are you up to?</string>
+    <string name="ui_status_emoji">Choose an emoji</string>
+    <string name="ui_status_no_emoji">No emoji</string>
+    <string name="ui_status_availability">Availability</string>
+    <string name="ui_status_online">Online</string>
+    <string name="ui_status_away">Away</string>
+    <string name="ui_status_away_hint">Custom statuses currently show you as away.</string>
+    <string name="ui_status_quick">Quick picks</string>
+    <string name="ui_status_road">On the road</string>
+    <string name="ui_status_3h">3 hours</string>
+    <string name="ui_status_starts">Starts</string>
+    <string name="ui_status_until">Until %1$s</string>
+</resources>
