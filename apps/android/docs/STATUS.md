@@ -1,5 +1,14 @@
 # NEXUS Android: status
 
+## Final QA tour - 19 Oct 2026
+
+Completed 10:28 WIB: 133 screen states in EN/light, EN/dark, ID/light and ID/dark (532 states; 814 indexed captures). Fixed confirmed defects: Memory confirmation plurals (219969e2), components ignoring the selected app theme (ba388e2a), profile attendance-period localization (8bf49b70), Indonesian meeting labels (93f8e152), and Vault folder-count plurals (3e3f03de). **829 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.**
+
+Native task create/edit/comment, form submission, chat PDF upload/open, GIDEON answer and two-session chat/task/presence checks passed. Opposite Android/app theme overrides rechecked on the rebuilt app. Known Social Media Report and newer Outlet overview/settings gaps remain separate native feature work. [Full issue/severity/fixed matrix and limits](QA-FINAL-19OCT.md); [local screenshot index](../../../../nexus-shots/qa-final-19oct/index.html).
+
+QA fixtures cleaned up by exact ID, preferences restored, original session retained, temporary second session revoked, English/light restored and Pixel_7 shut down. Visible window + host GPU, DEV only; no version change, publication or push.
+
+
 ## Small polish — item 18 (19 Oct 2026)
 
 All three fixes are complete; reviewed head 578e7fab is retained. Green commits: f813b0d6 (menu icons/voice plurals), 405c537d (native links). **822 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** DEV verification used Pixel_7 with a visible window and host GPU; versionCode remains 13.
