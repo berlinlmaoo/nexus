@@ -10,7 +10,7 @@ import java.time.Instant
 )
 @Serializable data class PerfThresholds(val gpuHotC: Int = 85, val model0DownMin: Int = 5, val errorRatePct: Int = 5, val errorRateWindowMin: Int = 15, val errorRateMinAnswers: Int = 5, val vramFullPct: Int = 98, val sustainMin: Int = 2)
 @Serializable data class PerfTelemetry(val lastAt: String? = null, val stale: Boolean = false, val cadenceSec: Int = 5)
-@Serializable data class PerfTier(val id: String, val status: String = "unavailable", val reason: String? = null, val inFlight: Int = 0, val answers15m: Int = 0, val failures15m: Int = 0, val errorRate: Double? = null, val p50Ms: Double? = null, val p95Ms: Double? = null, val avgCredits15m: Double? = null, val avgCredits24h: Double? = null, val answers24h: Int = 0)
+@Serializable data class PerfTier(val id: String, val status: String = "unavailable", val reason: String? = null, val inFlight: Int = 0, val answers15m: Int = 0, val failures15m: Int = 0, val errorRate: Double? = null, val p50Ms: Double? = null, val p95Ms: Double? = null, val avgCredits15m: Double? = null, val avgCredits24h: Double? = null, val answers24h: Int = 0, val failures24h: Int? = null)
 @Serializable data class PerfLive(val at: String? = null, val gpu: PerfGpu? = null, val engine: PerfEngine = PerfEngine(), val whisper: PerfWhisper? = null)
 @Serializable data class PerfGpu(val name: String? = null, val util: Double? = null, val memUsedMiB: Double? = null, val memTotalMiB: Double? = null, val tempC: Double? = null, val powerW: Double? = null, val powerLimitW: Double? = null)
 @Serializable data class PerfEngine(val up: Boolean = false, val model: PerfLoadedModel? = null)
@@ -27,6 +27,8 @@ import java.time.Instant
 @Serializable data class PerfEvent(val kind: String? = null, val live: PerfLive? = null)
 
 object PerformanceRules {
+    /** Missing from older servers: absence must not look like a measured zero or a 15-minute count. */
+    fun errors24h(tiers: List<PerfTier>): Int? = if (tiers.isEmpty() || tiers.any { it.failures24h == null }) null else tiers.sumOf { it.failures24h!! }
     fun allowed(role: String?, company: Boolean) = company && role in setOf("BOD", "ONE_ABOVE_ALL")
     fun stale(telemetry: PerfTelemetry, now: Instant = Instant.now()): Boolean = telemetry.stale || telemetry.lastAt?.let {
         runCatching { java.time.Duration.between(Instant.parse(it), now).seconds > 180 }.getOrDefault(true)

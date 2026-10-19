@@ -101,15 +101,11 @@ import java.time.format.DateTimeFormatter
         item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PerfTile(R.string.rev_perf_answers24, n(d.tiers.sumOf { it.answers24h }), Modifier.weight(1f))
-                // The endpoint exposes failures15m, not a 24-hour error count. Never mislabel that window.
-                PerfTile(R.string.rev_perf_errors24, stringResource(R.string.rev_perf_not_reported), Modifier.weight(1f))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(Modifier.size(7.dp).background(if (stale) c.warningFg else c.success, CircleShape))
-                        Text("GPU", color = c.foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
+                PerfTile(R.string.rev_perf_errors24, n(PerformanceRules.errors24h(d.tiers)), Modifier.weight(1f))
+                Row(Modifier.weight(1.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(Modifier.size(7.dp).background(if (stale) c.warningFg else c.success, CircleShape))
                     val age = d.telemetry.lastAt?.let { runCatching { ((now - Instant.parse(it).toEpochMilli()) / 1000).coerceAtLeast(0) }.getOrNull() }
-                    Text(if (age == null) stringResource(R.string.perf_no_gpu) else stringResource(R.string.rev_perf_updated, n(age)), color = c.mutedFg, fontSize = 11.sp)
+                    Text("GPU · " + if (age == null) stringResource(R.string.perf_no_gpu) else stringResource(R.string.rev_perf_updated, n(age)), color = c.mutedFg, fontSize = 11.sp)
                 }
             }
             Text(stringResource(R.string.perf_subtitle), color = c.mutedFg, fontSize = 11.sp)
