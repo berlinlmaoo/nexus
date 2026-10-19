@@ -97,6 +97,10 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     let id: String
     let action: String?
     let summary: String?
+    var summaryEn: String? = nil
+    var summaryId: String? = nil
+    var noChange: Bool? = nil
+    var localizedSummary: String? { (AppLanguage.shared.lang == .id ? summaryId : summaryEn) ?? summary }
     let status: String
     let error: String?
     let diff: [Row]?

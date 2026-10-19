@@ -137,6 +137,8 @@ struct GideonPanel: View {
     @State private var showChats = false
     /// Apply / Discard asks first, in a centred alert (house rule).
     @State private var decision: GideonDecision?
+    @State private var waitingProposals: [GideonProposal] = []
+    @State private var waitingExpanded = false
     @State private var showPersonalize = false
     @State private var showMemory = false
     @State private var saveRequest: GideonSaveRequest?
@@ -242,7 +244,7 @@ struct GideonPanel: View {
                 } }
                 .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
                     Button(d.buttonLabel, role: (d.proposal.action == "delete_task" || GideonToolAction.get(d.proposal.action)?.destructive == true) && d.apply ? .destructive : (d.apply ? nil : .destructive)) {
-                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task) }
+                        Task { await chat.decide(d.proposal, apply: d.apply, booking: d.booking, task: d.task); await loadWaiting() }
                     }
                     Button(T("Cancel"), role: .cancel) {}
                 } message: { d in Text(d.message) }
@@ -550,6 +552,9 @@ struct GideonPanel: View {
                             submit()
                         }
                     }
+                    if reviewTurns == nil && !waitingProposals.isEmpty {
+                        GideonWaitingSection(proposals: waitingProposals, expanded: $waitingExpanded) { proposal in proposalCard(proposal) }
+                    }
                     ForEach(chat.turns) { turn in
                         bubble(turn).id(turn.id).transition(appear)
                     }
@@ -567,7 +572,11 @@ struct GideonPanel: View {
             }
             // Everything that can leave the newest message under the fold: history arriving, a turn
             // being added, the answer landing inside it, and the keyboard taking half the screen.
-            .onChange(of: chat.turns.count) { _, _ in toBottom(proxy) }
+            .onChange(of: chat.turns.count) { _, _ in
+                waitingExpanded = chat.turns.isEmpty && waitingProposals.count <= 2
+                toBottom(proxy)
+            }
+            .onChange(of: chat.sending) { _, sending in if !sending { Task { await loadWaiting() } } }
             .onChange(of: chat.turns.last?.content) { _, _ in toBottom(proxy) }
             .onChange(of: chat.error) { _, _ in toBottom(proxy) }
             .onChange(of: composerFocused) { _, focused in
@@ -588,6 +597,8 @@ struct GideonPanel: View {
                 // transcript alone while a question is in flight, when a new chat was asked for, and
                 // when the fetch fails, which is what makes running it on every open safe.
                 await chat.refresh()
+                await loadWaiting()
+                waitingExpanded = chat.turns.isEmpty && waitingProposals.count <= 2
                 // The stack is lazy, so the last row does not exist on the pass that sets `turns`;
                 // one hop later it does. Unanimated on purpose — opening the panel should START at
                 // the newest message, not scroll there through history nobody asked to re-read.
@@ -595,6 +606,13 @@ struct GideonPanel: View {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
+    }
+
+    private func loadWaiting() async {
+        guard reviewTurns == nil, let owner = Keychain.load()?.userId else { return }
+        struct Response: Decodable { let proposals: [GideonProposal] }
+        guard let response: Response = try? await NativeAPI.request("/api/gideon/proposals"), Keychain.load()?.userId == owner else { return }
+        waitingProposals = response.proposals.filter(\.isPending)
     }
 
     /// The last failure, in words, with Try again when asking again can help (GIDEON busy or unreachable,
@@ -1178,7 +1196,7 @@ struct GideonPanel: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
-                Text(approvalMode.name).lineLimit(1)
+                if wide { Text(approvalMode.name).lineLimit(1) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
             .font(NXFont.text(13, .semibold))
@@ -1189,6 +1207,7 @@ struct GideonPanel: View {
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .accessibilityLabel(approvalMode.name)
         .accessibilityIdentifier("gideon.approvalMode")
         .help(approvalMode.blurb)
     }
@@ -1471,7 +1490,7 @@ struct GideonDecision: Identifiable {
         if let booking, !booking.room.isEmpty {
             return [RoomBooking.label(booking.room), proposal.booking?.title ?? proposal.bookingChange?.title].compactMap { $0 }.joined(separator: " · ")
         }
-        return proposal.summary ?? ""
+        return proposal.localizedSummary ?? ""
     }
 }
 

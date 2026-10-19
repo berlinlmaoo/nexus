@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "No changes: everything is already like this": "Tidak ada perubahan: semuanya sudah seperti ini",
         "These minutes were already saved, so the speaker names can’t change anymore.": "Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.",
         "This meeting note was deleted": "Catatan meeting ini sudah dihapus",
         "It was deleted, or you no longer have access to it.": "Sudah dihapus, atau kamu tidak punya akses lagi.",
@@ -21,6 +22,7 @@ extension AppLanguage {
         "Day off: %d of %d left in the period of that date.": "Day off: %1$d dari %2$d tersisa di periode tanggal itu.",
         "This booking was deleted or canceled.": "Booking ini sudah dihapus atau dibatalkan.",
         "%@’s location trail": "Jejak lokasi %1$@",
+        "%@ changes waiting for your approval": "%1$@ perubahan menunggu persetujuanmu",
 
         "GIDEON stops using the 1 thing it remembers about you. It's deleted for good after 30 days.": "GIDEON berhenti memakai 1 hal yang diingat tentangmu. Hal itu dihapus permanen setelah 30 hari.",
         "Start a new recording?": "Mulai rekaman baru?",
