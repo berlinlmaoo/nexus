@@ -273,7 +273,10 @@ export async function restorableDelete(
     // Two deletes of the same row at once (double click, two people): the first one removed it, this
     // one's remove() found nothing (P2025) and its copy rolled back. The row is gone either way, so this
     // request ends like an idempotent delete instead of a 500 (QA final 19 Oct: 5 parallel deletes of a
-    // custom field = 1x 200 + 4x 500), and its audit row, which has no copy behind it, goes too.
+    // custom field = 1x 200 + 4x 500).
+    // Nothing was deleted by THIS request (its transaction rolled back), so its audit row, which has no
+    // copy behind it, would only show a delete that never happened.
+    if (auditLogId) await prisma.auditLog.deleteMany({ where: { id: auditLogId } }).catch(() => {})
     if (!isRecordNotFound(error)) throw error
     // Only when the row really is gone: a P2025 on some OTHER row (a section deleted while its tasks were
     // being moved into it) stays an error rather than a false "deleted".
@@ -282,7 +285,6 @@ export async function restorableDelete(
       .$queryRawUnsafe<{ n: number }[]>(`SELECT count(*)::int AS n FROM "${table}" WHERE id = ANY($1::text[])`, input.rootIds ?? [input.entityId])
       .then((r) => r[0]?.n ?? 1, () => 1)
     if (left > 0) throw error
-    if (auditLogId) await prisma.auditLog.deleteMany({ where: { id: auditLogId } }).catch(() => {})
     return { auditLogId: null, rows: 0 }
   }
 }
