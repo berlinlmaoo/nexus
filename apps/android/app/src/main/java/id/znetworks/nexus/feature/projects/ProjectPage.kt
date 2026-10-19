@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -391,7 +390,8 @@ private fun TabChip(icon: ImageVector, label: String?, on: Boolean, onClick: () 
 @Composable
 fun GroupPill(g: TaskGroup, label: String, calc: String?) {
     val c = Nx.colors
-    val tone = g.colorKey?.let { StatusOptions.tone(it, isSystemInDarkTheme() || c.background.luminance() < 0.3f) }
+    val dark = Nx.isDark
+    val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (tone != null) {
             Row(Modifier.clip(RoundedCornerShape(6.dp)).background(tone.bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {

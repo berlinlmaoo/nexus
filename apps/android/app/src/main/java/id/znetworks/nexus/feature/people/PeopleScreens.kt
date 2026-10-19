@@ -7,7 +7,6 @@ import id.znetworks.nexus.core.i18n.AppDateFormats
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.foundation.lazy.itemsIndexed
 import id.znetworks.nexus.ui.components.PageHeader
@@ -171,7 +170,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
 @Composable
 private fun Podium(top: List<List<BoardRow>>) {
     val c = Nx.colors
-    val dark = isSystemInDarkTheme()
+    val dark = Nx.isDark
     data class Step(val bar: Color, val text: Color, val ring: Color, val crown: Color, val height: androidx.compose.ui.unit.Dp, val avatar: androidx.compose.ui.unit.Dp)
     fun style(rank: Int) = when (rank.coerceIn(1, 3)) {
         1 -> Step(if (dark) Color(0x40FBBF24) else Color(0xFFFCD34D), if (dark) Color(0xFFFDE68A) else Color(0xFF78350F), Color(0xFFFCD34D), Color(0xFFF59E0B), 128.dp, 72.dp)
