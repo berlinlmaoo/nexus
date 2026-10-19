@@ -1,0 +1,26 @@
+<resources>
+    <string name="crew_employment">Tanggal mulai kerja</string>
+    <string name="crew_deductions">Potongan XP dan day off</string>
+    <string name="crew_all_people">Semua orang</string>
+    <string name="crew_no_deductions">Tidak ada potongan periode ini.</string>
+    <string name="crew_late">Telat check-in</string>
+    <string name="crew_no_checkout">Lupa check-out</string>
+    <string name="crew_absent">Tidak hadir</string>
+    <string name="crew_auto_dayoff">Potongan day off otomatis</string>
+    <string name="crew_days">day off</string>
+    <string name="crew_cleared">Dihapus</string>
+    <string name="crew_clear">Hapus potongan</string>
+    <string name="crew_search">Cari orang</string>
+    <string name="crew_no_start">Tanggal mulai belum diisi</string>
+    <string name="crew_eligible">Berhak atas cuti tahunan</string>
+    <string name="crew_eligible_from">Berhak mulai %1$s</string>
+    <string name="crew_ineligible">Belum bisa mengajukan cuti</string>
+    <string name="crew_set_start">Atur tanggal mulai kerja</string>
+    <string name="crew_remaining">Sisa day off: %1$d / %2$d</string>
+    <string name="crew_red_remaining">Sisa tanggal merah: %1$d</string>
+    <string name="crew_left">Keluar pada %1$s</string>
+    <string name="crew_view_log">Lihat potongan</string>
+    <string name="crew_clear_date">Kosongkan tanggal</string>
+    <string name="crew_clear_confirm">Hapus semua potongan pada %1$s?</string>
+    <string name="crew_clear_help">XP dikembalikan dan day off yang dipotong otomatis dipulihkan. Status absensi tidak berubah. Semua potongan pada tanggal ini dihapus bersama.</string>
+</resources>
