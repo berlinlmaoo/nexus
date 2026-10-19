@@ -183,7 +183,7 @@ export async function loadSocialMonth(projectId: string, month: string, today: s
     targets,
     dayTargets,
     days: days.map((d) => ({ ...d, updatedAt: touched[d.date]?.at ?? null, updatedBy: touched[d.date]?.by ?? null })),
-    overview: summarizeSocial(month, today, config, days),
+    overview: summarizeSocial(month, today, config, days, targets),
   }
 }
 

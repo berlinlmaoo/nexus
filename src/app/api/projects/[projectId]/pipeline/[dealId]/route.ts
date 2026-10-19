@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { isRecordNotFound } from "@/lib/prisma-errors"
 import { emitPipelineChanged } from "@/lib/socket-emitter"
 import { pipelineToday } from "@/lib/pipeline"
 import { syncMainDateTask } from "@/lib/pipeline-execution"
@@ -243,6 +244,8 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
     emitPipelineChanged(projectId, dealId, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
+    // Two people deleting the same deal at once: the second finds it gone (QA 19 Oct 2026: was a 500).
+    if (isRecordNotFound(error)) return notFound()
     console.error("Error deleting pipeline deal:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
