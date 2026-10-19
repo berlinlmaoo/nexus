@@ -138,6 +138,7 @@ struct AutomationNotificationsCard: View {
     @State private var failed = false
     @State private var loading = true
     @State private var loadFailed = false
+    @State private var injectedFailure = false
 
     var body: some View {
         Group {
@@ -182,8 +183,14 @@ struct AutomationNotificationsCard: View {
     @MainActor private func load() async {
         loading = true; loadFailed = false
         defer { loading = false }
-        do { on = try await APIClient.shared.notificationPrefs().automation }
-        catch { loadFailed = true }
+        do {
+            // A deterministic Debug tour scenario; the retry always uses the real API.
+            if TourMode.isActive && TourMode.argument("nexusTourScreen") == "u3-notifications-retry" && !injectedFailure {
+                injectedFailure = true
+                throw URLError(.notConnectedToInternet)
+            }
+            on = try await APIClient.shared.notificationPrefs().automation
+        } catch { loadFailed = true }
     }
 
     private func save(_ v: Bool) async {
