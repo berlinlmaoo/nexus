@@ -15,7 +15,9 @@ import { cn } from "@/lib/utils";
  * `enabled:false` (remote config off) → nothing is drawn anywhere.
  */
 
-export type PresenceState = "online" | "away" | "sick" | "leave" | "not_checked_in" | "offline";
+export type PresenceState = "online" | "away" | "dnd" | "sick" | "leave" | "not_checked_in" | "offline";
+/** N-1 (19 Oct 2026): what a manual status shows — Online · / Away · / Do not disturb ·. */
+export type PresenceAvailability = "online" | "away" | "dnd";
 export type PresenceTone = "green" | "yellow" | "red" | "grey" | "black";
 export type PresenceStatus = {
   userId: string;
@@ -23,10 +25,12 @@ export type PresenceStatus = {
   tone: PresenceTone;
   reason: string;
   text: string | null;
+  /** The running manual status's availability; null when none is running (older servers: absent). */
+  availability?: PresenceAvailability | null;
   label: { en: string; id: string };
   until: string | null;
   since: string | null;
-  manual: { id: string; text: string; startsAt: string; endsAt: string } | null;
+  manual: { id: string; text: string; startsAt: string; endsAt: string; availability?: PresenceAvailability } | null;
 };
 type PresenceList = { enabled: boolean; statuses: PresenceStatus[]; serverTime?: string };
 
@@ -34,7 +38,7 @@ export const PRESENCE_KEY = ["nexus", "presence"] as const;
 
 export const presenceApi = {
   list: () => apiFetch<PresenceList>("/api/presence"),
-  setManual: (body: { text: string; startsAt?: string | null; endsAt: string }) =>
+  setManual: (body: { text: string; startsAt?: string | null; endsAt: string; availability?: PresenceAvailability }) =>
     apiFetch<{ manual: PresenceStatus["manual"]; status: PresenceStatus | null }>("/api/presence/manual", { method: "PUT", body: JSON.stringify(body) }),
   clearManual: (id?: string | null) =>
     apiFetch<{ cleared: number; status: PresenceStatus | null }>(`/api/presence/manual${id ? `?id=${encodeURIComponent(id)}` : ""}`, { method: "DELETE" }),
@@ -104,7 +108,7 @@ export function presenceUntil(s: PresenceStatus, lang: Lang, t: (en: string, v?:
 }
 
 /**
- * Dot colours. Green and red are the usual; Away is amber; Leave / Not checked in are a hollow grey ring (⚪, "no
+ * Dot colours. Green and red are the usual (red = Sick leave and Do not disturb); Away is amber; Leave / Not checked in are a hollow grey ring (⚪, "no
  * attendance expected / not yet"), Offline a solid slate dot (⚫). Each tone differs in shape or fill as well as
  * colour, so the five read apart without colour (and the label is always next to it or in the tooltip).
  */

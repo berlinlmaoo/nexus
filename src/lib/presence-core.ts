@@ -4,7 +4,8 @@
  * (node src/lib/presence-core.test.mjs) and lib/presence.ts only gathers the facts.
  *
  * Order, first match wins:
- *   1. a manual status running now (Away · <text>)           — set by the person (web, app, GIDEON card)
+ *   1. a manual status running now (<availability> · <text>) — set by the person (web, app, GIDEON card);
+ *      availability Online / Away / Do not disturb (N-1, owner 19 Oct 2026; Away when the client sends none)
  *   2. an open attendance record (checked in, not out)        — Online · in the office / Away · out of the office
  *   3. an approved request covering today                     — Sick / Leave / Day off / Public holiday / Away · on permit
  *   4. checked out today                                      — Offline · checked out
@@ -15,7 +16,7 @@
  * It only READS attendance. Location stays coarse on purpose: in or out of an office, never where.
  */
 
-export type PresenceState = "online" | "away" | "sick" | "leave" | "not_checked_in" | "offline"
+export type PresenceState = "online" | "away" | "dnd" | "sick" | "leave" | "not_checked_in" | "offline"
 export type PresenceTone = "green" | "yellow" | "red" | "grey" | "black"
 export type PresenceReason =
   | "in_office"
@@ -31,15 +32,26 @@ export type PresenceReason =
   | "off_hours"
   | "not_a_workday"
 
-export type PresenceManual = { id: string; text: string; startsAt: string; endsAt: string }
+/**
+ * The availability a manual status shows (N-1, owner 19 Oct 2026): Online · <text>, Away · <text> or
+ * Do not disturb · <text>. Stored upper case ("ONLINE" | "AWAY" | "DND", column default AWAY), sent lower case like
+ * every other presence value. A client that sends none (iOS/Android 0.1.6 and older) gets Away, exactly as before.
+ */
+export type PresenceAvailability = "online" | "away" | "dnd"
+export const AVAILABILITIES: readonly PresenceAvailability[] = ["online", "away", "dnd"]
+export const DEFAULT_AVAILABILITY: PresenceAvailability = "away"
+
+export type PresenceManual = { id: string; text: string; startsAt: string; endsAt: string; availability: PresenceAvailability }
 
 export type PresenceStatus = {
   userId: string
   state: PresenceState
   tone: PresenceTone
   reason: PresenceReason
-  /** The manual status text (state away, reason custom); null otherwise. */
+  /** The manual status text (reason custom); null otherwise. */
   text: string | null
+  /** The running manual status's availability (reason custom; equals state); null when no manual status is running. */
+  availability: PresenceAvailability | null
   /** Both languages, ready to show: "Away · Out of the office" / "Away · Di luar kantor". */
   label: { en: string; id: string }
   /** When this status is known to end: a manual status's end, the last day of a request ("YYYY-MM-DD"). */
@@ -56,6 +68,7 @@ export type PresenceStatus = {
 export const TONE_OF: Record<PresenceState, PresenceTone> = {
   online: "green",
   away: "yellow",
+  dnd: "red",
   sick: "red",
   leave: "grey",
   not_checked_in: "grey",
@@ -65,6 +78,7 @@ export const TONE_OF: Record<PresenceState, PresenceTone> = {
 const STATE_WORD: Record<PresenceState, { en: string; id: string }> = {
   online: { en: "Online", id: "Online" },
   away: { en: "Away", id: "Away" },
+  dnd: { en: "Do not disturb", id: "Jangan diganggu" },
   sick: { en: "Sick leave", id: "Sakit" },
   leave: { en: "Leave", id: "Cuti" },
   not_checked_in: { en: "Not checked in yet", id: "Belum check-in" },
@@ -101,8 +115,27 @@ export class PresenceRefusal extends Error {
   }
 }
 
+/**
+ * The availability a client sent: missing / null / "" → Away (released apps send nothing); online | away | dnd in
+ * any case (so "DND" and "Online" work too); anything else is refused (code AVAILABILITY), never silently Away.
+ */
+export function parseAvailability(v: unknown): PresenceAvailability {
+  if (v == null || v === "") return DEFAULT_AVAILABILITY
+  const s = typeof v === "string" ? v.trim().toLowerCase() : ""
+  if ((AVAILABILITIES as readonly string[]).includes(s)) return s as PresenceAvailability
+  throw new PresenceRefusal("Availability is online, away or dnd.", "AVAILABILITY")
+}
+
+/** "ONLINE" | "AWAY" | "DND" (the column) → the API value; anything unknown reads as Away. */
+export function availabilityFromDb(v: string | null | undefined): PresenceAvailability {
+  const s = (v ?? "").toLowerCase()
+  return (AVAILABILITIES as readonly string[]).includes(s) ? (s as PresenceAvailability) : DEFAULT_AVAILABILITY
+}
+export const availabilityToDb = (a: PresenceAvailability): "ONLINE" | "AWAY" | "DND" => (a === "online" ? "ONLINE" : a === "dnd" ? "DND" : "AWAY")
+
 /** The manual status exactly as setting it would store it, or a refusal the person can act on. */
-export function checkManualStatus(input: { text: unknown; startsAt: Date | null; endsAt: Date | null }, now: Date = new Date()): { text: string; startsAt: Date; endsAt: Date } {
+export function checkManualStatus(input: { text: unknown; startsAt: Date | null; endsAt: Date | null; availability?: unknown }, now: Date = new Date()): { text: string; startsAt: Date; endsAt: Date; availability: PresenceAvailability } {
+  const availability = parseAvailability(input.availability)
   const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : ""
   if (!text) throw new PresenceRefusal("Write the status, e.g. “Meeting with a client”.", "TEXT")
   if ([...text].length > MANUAL_TEXT_MAX) throw new PresenceRefusal(`A status is at most ${MANUAL_TEXT_MAX} characters.`, "TEXT")
@@ -114,7 +147,7 @@ export function checkManualStatus(input: { text: unknown; startsAt: Date | null;
   if (startsAt.getTime() - now.getTime() > MANUAL_AHEAD_MS) throw new PresenceRefusal("A status can start at most 30 days ahead.", "START_FAR")
   if (endsAt.getTime() - Math.max(startsAt.getTime(), now.getTime()) > MANUAL_MAX_MS) throw new PresenceRefusal("A status lasts at most 14 days. For leave, file a request on the Attendance page.", "TOO_LONG")
   // A start in the past is "from now" (the card was confirmed a bit later than it was written).
-  return { text, startsAt: startsAt.getTime() < now.getTime() ? now : startsAt, endsAt }
+  return { text, startsAt: startsAt.getTime() < now.getTime() ? now : startsAt, endsAt, availability }
 }
 
 /**
@@ -142,7 +175,8 @@ export function parseWibTime(v: unknown, day?: string | null, now: Date = new Da
 export type PresenceFacts = {
   userId: string
   now: Date
-  manual: { id: string; text: string; startsAt: Date; endsAt: Date } | null
+  /** availability: absent = Away (a row written before the column existed reads as AWAY anyway). */
+  manual: { id: string; text: string; startsAt: Date; endsAt: Date; availability?: PresenceAvailability } | null
   /** The open record (checked in, not out) of today or yesterday (a night shift), if any. */
   open: {
     checkInAt: Date
@@ -165,14 +199,15 @@ export function decidePresence(f: PresenceFacts): PresenceStatus {
   const t = f.now.getTime()
   const manual = f.manual && f.manual.endsAt.getTime() > t ? f.manual : null
   const manualView: PresenceManual | null = manual
-    ? { id: manual.id, text: manual.text, startsAt: manual.startsAt.toISOString(), endsAt: manual.endsAt.toISOString() }
+    ? { id: manual.id, text: manual.text, startsAt: manual.startsAt.toISOString(), endsAt: manual.endsAt.toISOString(), availability: manual.availability ?? DEFAULT_AVAILABILITY }
     : null
-  const out = (state: PresenceState, reason: PresenceReason, extra: { text?: string | null; until?: string | null; since?: Date | null } = {}): PresenceStatus => ({
+  const out = (state: PresenceState, reason: PresenceReason, extra: { text?: string | null; until?: string | null; since?: Date | null; availability?: PresenceAvailability } = {}): PresenceStatus => ({
     userId: f.userId,
     state,
     tone: TONE_OF[state],
     reason,
     text: extra.text ?? null,
+    availability: extra.availability ?? null,
     label: presenceLabel(state, reason, extra.text ?? null),
     until: extra.until ?? null,
     since: extra.since ? extra.since.toISOString() : null,
@@ -180,7 +215,8 @@ export function decidePresence(f: PresenceFacts): PresenceStatus {
   })
 
   if (manual && manual.startsAt.getTime() <= t) {
-    return out("away", "custom", { text: manual.text, until: manual.endsAt.toISOString(), since: manual.startsAt })
+    const availability = manual.availability ?? DEFAULT_AVAILABILITY
+    return out(availability, "custom", { text: manual.text, until: manual.endsAt.toISOString(), since: manual.startsAt, availability })
   }
   if (f.open) {
     if (f.open.outsideSince) return out("away", "out_of_office", { since: f.open.outsideSince })
@@ -207,7 +243,8 @@ export function decidePresence(f: PresenceFacts): PresenceStatus {
 /** Whether two statuses would look different to anyone (the realtime event is sent only then). */
 export function samePresence(a: PresenceStatus | null | undefined, b: PresenceStatus | null | undefined): boolean {
   if (!a || !b) return a === b
-  return a.state === b.state && a.reason === b.reason && a.text === b.text && a.until === b.until
+  return a.state === b.state && a.reason === b.reason && a.text === b.text && a.until === b.until && (a.availability ?? null) === (b.availability ?? null)
+    && (a.manual?.availability ?? null) === (b.manual?.availability ?? null)
     && (a.manual?.id ?? null) === (b.manual?.id ?? null) && (a.manual?.endsAt ?? null) === (b.manual?.endsAt ?? null)
     && (a.manual?.startsAt ?? null) === (b.manual?.startsAt ?? null) && (a.manual?.text ?? null) === (b.manual?.text ?? null)
 }
