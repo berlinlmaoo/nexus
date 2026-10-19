@@ -360,6 +360,20 @@ extension ToolbarContent {
         self
         #endif
     }
+
+    /// The item without the shared glass bubble on every platform (a plain title, as ChatGPT's tier title).
+    @ToolbarContentBuilder func nxPlainBackground() -> some ToolbarContent {
+        if #available(iOS 26.0, *) { self.sharedBackgroundVisibility(.hidden) } else { self }
+    }
+}
+
+/// A plain title button: no border or fill, only a subtle dim while pressed.
+struct NXPlainPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.55 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
 }
 
 // MARK: - Sticky headers inside a page's scroll

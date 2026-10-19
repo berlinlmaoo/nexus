@@ -365,7 +365,7 @@ struct GideonPanel: View {
                     Button { showChats = true } label: { Image(systemName: "clock.arrow.circlepath") }
                         .accessibilityLabel(T("Chat history")).accessibilityIdentifier("gideon.toolbar.history")
                 }
-                ToolbarItem(placement: .principal) { compactTitle }
+                ToolbarItem(placement: .principal) { compactTitle }.nxPlainBackground()
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { newChat() } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel(T("New chat")).accessibilityIdentifier("gideon.toolbar.new")
@@ -383,11 +383,12 @@ struct GideonPanel: View {
         }
     }
 
+    /// "Phaëthon ⌄" as a plain title (no outline), the chat's title under it, as ChatGPT's header.
     private var compactTitle: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 0) {
             tierChip
-            Text(subtitleText).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
-        }.frame(maxWidth: 160)
+            Text(subtitleText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        }.frame(maxWidth: 200)
     }
 
     @ViewBuilder private var moreDestructiveItems: some View {
@@ -467,21 +468,25 @@ struct GideonPanel: View {
 
     /// Tier names with their Default / Experimental badges; live availability is owned by the server.
     @State private var showTierPicker = false
+    /// Wide: the outlined chip beside the page header. Compact: the sheet's plain title (R-1).
     private var tierChip: some View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
-                Text(tier.label).font(NXFont.text(13, .semibold)).lineLimit(1)
+                Text(tier.label).font(wide ? NXFont.text(13, .semibold) : NXFont.display(16, .bold)).lineLimit(1)
                 if wide && tier == .luna { tierBadge("Default", experimental: false) }
                 if wide && tier == .experimental { tierBadge("Experimental", experimental: true) }
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                Image(systemName: "chevron.down").font(.system(size: wide ? 9 : 11, weight: .bold))
+                    .foregroundStyle(wide ? NX.foreground : NX.mutedFg)
             }
             .foregroundStyle(NX.foreground)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            .padding(.horizontal, wide ? 10 : 4)
+            .frame(height: wide ? 30 : 24)
+            .overlay {
+                if wide { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border) }
+            }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NXPlainPressStyle())
         .disabled(chat.sending)
         .accessibilityLabel(T("GIDEON tier"))
         .accessibilityIdentifier("gideon.tier")
