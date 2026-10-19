@@ -71,6 +71,7 @@ import { ID_R18WEB } from "@/lib/i18n/id-r18web";
 import { ID_R19WEB } from "@/lib/i18n/id-r19web";
 import { ID_R20WEB } from "@/lib/i18n/id-r20web";
 import { ID_UI_C } from "@/lib/i18n/id-ui-c";
+import { ID_UI_D } from "@/lib/i18n/id-ui-d";
 import { ID_GIDEON_CALENDAR } from "@/lib/i18n/id-gideon-calendar";
 import { ID_GIDEON_DELETE } from "@/lib/i18n/id-gideon-delete";
 import { ID_GIDEON_TOOLS } from "@/lib/i18n/id-gideon-tools";
@@ -110,6 +111,8 @@ Object.assign(ID, ID_PRESENCE);
 Object.assign(ID, ID_UI_A);
 // UI round 19 Oct 2026, web part B (GIDEON Memory, meeting notes form, GIDEON header).
 Object.assign(ID, ID_UI_B);
+// UI round 19 Oct 2026, web part D (Vault, Messages).
+Object.assign(ID, ID_UI_D);
 
 function read(): Lang {
   try {

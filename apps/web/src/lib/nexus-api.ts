@@ -35,6 +35,8 @@ export type VaultItem = {
   /** `/api/vault/items/<id>/thumb?v=…` for a picture the server can shrink; add `&w=`. Absent from
    *  servers before 9 Oct 2026, and null for everything that is not such a picture. */
   thumbUrl?: string | null;
+  /** An office file as a PDF to show inline (`/api/vault/items/<id>/preview?v=…`); null otherwise. Since 19 Oct 2026. */
+  previewUrl?: string | null;
   uploader: VaultPerson | null;
   owner: VaultPerson | null;
   childCount: number;
