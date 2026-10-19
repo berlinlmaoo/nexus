@@ -820,7 +820,24 @@ final class NEXUSUITour: XCTestCase {
                 pause(1)
                 #endif
             case "swipePage":
+                #if !targetEnvironment(macCatalyst)
+                let tabs = app.segmentedControls.matching(identifier: "messages.tabs").firstMatch
+                if tabs.exists && tabs.isHittable {
+                    // On iPad the conversation list owns the pager; the window centre can be a chat.
+                    let window = app.windows.firstMatch, pane = tabs.frame
+                    let y = min(pane.maxY + 90, window.frame.maxY - 140)
+                    let left = pane.minX + 18, right = pane.maxX - 18
+                    let from = action.label == "left" ? right : left
+                    let to = action.label == "left" ? left : right
+                    let start = window.coordinate(withNormalizedOffset: CGVector(dx: (from - window.frame.minX) / window.frame.width, dy: (y - window.frame.minY) / window.frame.height))
+                    let end = window.coordinate(withNormalizedOffset: CGVector(dx: (to - window.frame.minX) / window.frame.width, dy: (y - window.frame.minY) / window.frame.height))
+                    start.press(forDuration: 0.05, thenDragTo: end)
+                } else {
+                    if action.label == "left" { app.swipeLeft() } else { app.swipeRight() }
+                }
+                #else
                 if action.label == "left" { app.swipeLeft() } else { app.swipeRight() }
+                #endif
                 pause(1)
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
