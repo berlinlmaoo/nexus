@@ -1804,6 +1804,9 @@ model Form {
   requireAuth Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  // Live co-editing (19 Oct 2026, prisma/sql/2026-10-19-form-coedit-version.sql): +1 per write of the builder
+  // content (op batch or whole-form save), under the row lock. Carried by the form-ops realtime event.
+  version     Int      @default(0)
 
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

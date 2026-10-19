@@ -11,6 +11,9 @@ import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
 import { normalizeFormBranding, normalizeFormSettings } from "@/lib/form-settings"
 import { Prisma } from "@/generated/prisma/client"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
+import { FormOpError, parseFormOps } from "@/lib/form-ops"
+import { announceFormChange, applyFormOpsToForm, BUILDER_FORM_SELECT } from "@/lib/form-coedit-server"
+import { originTabOf } from "@/lib/socket-emitter"
 
 const jsonOrDbNull = (value: object | null) => (value ? (value as InputJsonValue) : Prisma.DbNull)
 
@@ -23,6 +26,16 @@ export async function GET(
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { formId } = await params
+
+    // ?lite=1 (live co-editing, 19 Oct 2026): the builder's catch-up read after a reconnect: the form with its
+    // version and response count, without every submission.
+    if (new URL(request.url).searchParams.get("lite") === "1") {
+      const lite = await prisma.form.findUnique({ where: { id: formId }, select: BUILDER_FORM_SELECT })
+      if (!lite) return NextResponse.json({ error: "Form not found" }, { status: 404 })
+      const { allowed } = await checkProjectAccess(session.user.id, lite.projectId, ["VIEWER"])
+      if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return NextResponse.json(lite)
+    }
 
     const form = await prisma.form.findUnique({
       where: { id: formId },
@@ -54,6 +67,12 @@ export async function PATCH(
 
     const { formId } = await params
     const body = await request.json()
+
+    // Live co-editing (A-12, 19 Oct 2026): `{ ops: [...] }` edits parts of the form, merged at field level
+    // with whatever others changed meanwhile (lib/form-ops.ts). Released apps never send `ops`: they take the
+    // whole-form path below, unchanged.
+    if (body && typeof body === "object" && "ops" in body) return applyOps(request, formId, session.user.id, session.user.name ?? null, body)
+
     const { name, description, fields, isPublic, requireAuth, accessSchedule, branding, settings, baseUpdatedAt } = body
 
     const existing = await prisma.form.findUnique({
@@ -94,7 +113,9 @@ export async function PATCH(
     if (baseUpdatedAt !== undefined) {
       const base = typeof baseUpdatedAt === "string" ? new Date(baseUpdatedAt) : null
       if (!base || Number.isNaN(base.getTime())) return NextResponse.json({ error: "baseUpdatedAt must be an ISO date", code: "INVALID_BASE" }, { status: 400 })
-      const claimed = await prisma.form.updateMany({ where: { id: formId, updatedAt: base }, data })
+      // Every write steps the version (live co-editing): an op-based change made since the base moved updatedAt
+      // too, so this compare-and-swap refuses to write over it (409 below) exactly as before.
+      const claimed = await prisma.form.updateMany({ where: { id: formId, updatedAt: base }, data: { ...data, version: { increment: 1 } } })
       if (claimed.count === 0) {
         const current = await prisma.form.findUnique({ where: { id: formId } })
         return NextResponse.json(
@@ -104,8 +125,12 @@ export async function PATCH(
       }
       form = await prisma.form.findUniqueOrThrow({ where: { id: formId } })
     } else {
-      form = await prisma.form.update({ where: { id: formId }, data })
+      form = await prisma.form.update({ where: { id: formId }, data: { ...data, version: { increment: 1 } } })
     }
+
+    // Anyone editing it live gets the form as it is now (a whole-form save, kind "replace").
+    const live = await prisma.form.findUnique({ where: { id: formId }, select: BUILDER_FORM_SELECT })
+    if (live) announceFormChange({ form: live, kind: "replace", ops: [], actor: { id: session.user.id, name: session.user.name ?? null }, originTab: originTabOf(request) })
 
     logAudit({ action: "update", entityType: "form", entityId: formId, entityName: form.name, userId: session.user.id, request, metadata: { changes: Object.keys(body).filter((k) => k !== "baseUpdatedAt") } })
 
@@ -114,6 +139,39 @@ export async function PATCH(
     console.error("Error updating form:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+/**
+ * PATCH { ops, baseVersion? } — see lib/form-ops.ts and the native contract (~/nexus-ops/qa-decisions-19oct.md,
+ * "A-12 live form co-editing"). Can edit and up only. `baseVersion` is informational: ops are merged onto the
+ * current form whatever version the client last saw (field level, last writer wins), never refused for it.
+ */
+async function applyOps(request: NextRequest, formId: string, userId: string, userName: string | null, body: Record<string, unknown>) {
+  let ops
+  try {
+    ops = parseFormOps(body.ops)
+  } catch (e) {
+    if (e instanceof FormOpError) return NextResponse.json({ error: e.message, code: "INVALID_OP", index: e.index }, { status: 400 })
+    throw e
+  }
+  if (body.baseVersion !== undefined && !(Number.isInteger(body.baseVersion) && (body.baseVersion as number) >= 0)) {
+    return NextResponse.json({ error: "baseVersion must be a whole number", code: "INVALID_BASE" }, { status: 400 })
+  }
+
+  const existing = await prisma.form.findUnique({ where: { id: formId }, select: { projectId: true } })
+  if (!existing) return NextResponse.json({ error: "Form not found", code: "FORM_NOT_FOUND" }, { status: 404 })
+  const { allowed } = await checkProjectAccess(userId, existing.projectId, ["MEMBER"])
+  if (!allowed) return NextResponse.json({ error: "Only people who can edit this project can change its forms.", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
+
+  const out = await applyFormOpsToForm(formId, ops)
+  if (!out.ok) return NextResponse.json({ error: "Form not found", code: out.code }, { status: out.status })
+
+  if (out.changed) {
+    announceFormChange({ form: out.form, kind: "ops", ops: out.applied, actor: { id: userId, name: userName }, originTab: originTabOf(request) })
+    logAudit({ action: "update", entityType: "form", entityId: formId, entityName: out.form.name, userId, request, metadata: { ops: Array.from(new Set(out.applied.map((o) => o.op))), version: out.version } })
+  }
+
+  return NextResponse.json({ form: out.form, version: out.version, applied: out.applied.length, skipped: out.skipped })
 }
 
 export async function DELETE(

@@ -47,6 +47,14 @@ export function emitFormResponsesChanged(projectId: string, formId: string) {
   eventBus.emit(BUS_EVENTS.FORM_RESPONSES_CHANGED, { projectId, formId })
 }
 
+/**
+ * A form's questions/title/settings changed (live co-editing, 19 Oct 2026): the payload (lib/form-coedit-server.ts
+ * announceFormChange) goes to `form:<id>`, whose sockets were admitted with Can edit on the project.
+ */
+export function emitFormOps(projectId: string, formId: string, payload: Record<string, unknown>) {
+  eventBus.emit(BUS_EVENTS.FORM_OPS, { projectId, formId, payload })
+}
+
 /** Emit a notification to a specific user's room */
 export function emitNotification(userId: string, notification: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.NOTIFICATION, { userId, notification })
