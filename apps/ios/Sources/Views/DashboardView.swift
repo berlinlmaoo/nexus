@@ -1441,7 +1441,7 @@ struct DashboardView: View {
                     Text(t.laneName).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                if let p = t.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
+                if let p = t.priority, p.uppercased() != "NONE" { NexusChip(text: TaskPriorityName.label(p), tone: prioTone(p)) }
             }
             .padding(.vertical, 4)
         }
