@@ -181,9 +181,11 @@ export const MonthGrid = memo(function MonthGrid({
                       // readable (muted text, ≥4.5:1) and they remain buttons that select the day.
                       !inMonth ? "bg-muted/40" : weekend && "bg-muted/25",
                       "hover:bg-cal-accent/[0.06] focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-cal-accent",
-                      isSel && "z-[1] ring-2 ring-inset ring-cal-accent",
+                      // R-12 (19 Oct 2026, as on iOS): the chosen day is a soft rounded violet tint, no hard border.
+                      isSel && "isolate",
                     )}
                   >
+                    {isSel && <span aria-hidden className="pointer-events-none absolute inset-[3px] -z-10 rounded-[10px] bg-accent" />}
                     <span className={cn("flex items-start gap-1", compact ? "justify-start" : "justify-between")}>
                       <span className={cn(
                         "grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums md:h-7 md:min-w-7 md:text-sm",
