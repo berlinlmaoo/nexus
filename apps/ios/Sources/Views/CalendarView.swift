@@ -464,6 +464,9 @@ struct CalendarView: View {
         .task(id: rangeKey) { await loadItems(silent: items != nil) }
         .task(id: folderQuery) { await loadOverdue() }
         .task { await pollLoop() }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusCalendarChanged)) { _ in
+            if active { Task { await backgroundRefresh() } }
+        }
         .onChange(of: scenePhase) { _, phase in
             active = phase == .active
             if phase == .active { now = Date(); Task { await backgroundRefresh() } }

@@ -17,6 +17,8 @@ extension AppLanguage {
         "The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.": "Ruang meeting dan studio milik workspace Z Networks. Minta admin menambahkanmu ke workspace itu kalau perlu booking ruangan.",
         "Room booking is for the Z Networks office": "Booking ruangan khusus kantor Z Networks",
         "The room is free again for that time. You can restore the booking from Control Room → Audit.": "Ruangan kosong lagi di jam itu. Booking bisa dipulihkan dari Control Room → Audit.",
+        "Your day-off balance for that period is checked when you submit.": "Sisa day off untuk periode itu diperiksa saat kamu mengajukan.",
+        "Day off: %d of %d left in the period of that date.": "Day off: %1$d dari %2$d tersisa di periode tanggal itu.",
         "This booking was deleted or canceled.": "Booking ini sudah dihapus atau dibatalkan.",
         "%@’s location trail": "Jejak lokasi %1$@",
 
