@@ -785,15 +785,12 @@ final class NEXUSUITour: XCTestCase {
                 let left = max(bounds.minX, corner.frame.maxX) + 2
                 let top = max(bounds.minY, corner.frame.maxY) + 2
                 let region = CGRect(x: left, y: top, width: max(0, bounds.maxX - left - 2), height: max(0, bounds.maxY - top - 2))
-                let candidates = grid.cells.allElementsBoundByIndex.filter {
+                let visibleCell = grid.cells.allElementsBoundByIndex.first {
                     let bits = $0.identifier.split(separator: ".")
                     let visible = $0.frame.intersection(region)
                     return bits.count == 4 && (Int(bits[2]) ?? 0) > 0 && (Int(bits[3]) ?? 0) > 0 && !visible.isNull && visible.width > 8 && visible.height > 8
-                }.sorted {
-                    let a = $0.frame.intersection(region), b = $1.frame.intersection(region)
-                    return hypot(a.midX - region.midX, a.midY - region.midY) < hypot(b.midX - region.midX, b.midY - region.midY)
                 }
-                guard let cell = candidates.first else { return "wrong-screen: no visible non-frozen cell" }
+                guard let cell = visibleCell else { return "wrong-screen: no visible non-frozen cell" }
                 let bits = cell.identifier.split(separator: ".")
                 var col = (Int(bits[3]) ?? 0) + 1; var letters = ""
                 while col > 0 { col -= 1; letters = String(UnicodeScalar(65 + col % 26)!) + letters; col /= 26 }
@@ -871,9 +868,10 @@ final class NEXUSUITour: XCTestCase {
                 }
             case "enabled":
                 let target = app.buttons.matching(match).firstMatch
-                guard target.waitForExistence(timeout: 10), target.isEnabled == (action.text == "true") else {
-                    return "wrong-screen: unexpected enabled state for \(action.label)"
-                }
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing enabled-state target \(action.label)" }
+                let expected = action.text == "true", deadline = Date().addingTimeInterval(12)
+                while target.isEnabled != expected && Date() < deadline { pause(0.2) }
+                guard target.isEnabled == expected else { return "wrong-screen: unexpected enabled state for \(action.label)" }
             case "check":
                 #if targetEnvironment(macCatalyst)
                 let labelled = app.descendants(matching: .any).matching(match).firstMatch
