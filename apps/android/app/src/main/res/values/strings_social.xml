@@ -1,0 +1,43 @@
+<resources>
+    <string name="sm_title">Social Media Report</string>
+    <string name="sm_description">Daily views, likes, comments, shares and posts per platform, against monthly and daily targets.</string>
+    <string name="sm_this_month">This month</string>
+    <string name="sm_settings">Platforms &amp; targets</string>
+    <string name="sm_record_today">Record today</string>
+    <string name="sm_to_date">Month to date</string>
+    <string name="sm_not_started">%1$s hasn\'t started yet</string>
+    <string name="sm_empty">Nothing recorded for %1$s yet</string>
+    <string name="sm_archived">archived</string>
+    <string name="sm_engagement">Engagement</string>
+    <string name="sm_engagement_target">Engagement target</string>
+    <string name="sm_posts_target">Posts target</string>
+    <string name="sm_month_target">Month target: %1$s</string>
+    <string name="sm_views">Views</string>
+    <string name="sm_likes">Likes</string>
+    <string name="sm_comments">Comments</string>
+    <string name="sm_shares">Shares</string>
+    <string name="sm_posts">Posts published</string>
+    <string name="sm_engagement_info">Engagement = Likes + Comments + Shares</string>
+    <string name="sm_views_info">Views are counted on their own and are not part of engagement.</string>
+    <string name="sm_close">Close</string>
+    <string name="sm_save">Save</string>
+    <string name="sm_discard">Discard changes?</string>
+    <string name="sm_keep_editing">Keep editing</string>
+    <string name="sm_worked">What worked</string>
+    <string name="sm_didnt_work">What didn\'t work</string>
+    <string name="sm_day_targets">Set this day\'s targets</string>
+    <string name="sm_month_targets">Monthly targets</string>
+    <string name="sm_month_share">Month\'s target ÷ days</string>
+    <string name="sm_own_target">Own target</string>
+    <string name="sm_no_target">No target</string>
+    <string name="sm_platform">Platform name</string>
+    <string name="sm_restore">Restore</string>
+    <string name="sm_archive">Archive</string>
+    <string name="sm_move_up">Move up</string>
+    <string name="sm_add_platform">Add platform, e.g. YouTube</string>
+    <string name="sm_save_targets">Save platforms and set targets</string>
+    <string name="sm_archive_confirm">Archive this platform?</string>
+    <string name="sm_archive_help">Existing figures and targets will be preserved.</string>
+    <string name="sm_note_mark">Note</string>
+    <string name="sm_target_mark">Target</string>
+</resources>
