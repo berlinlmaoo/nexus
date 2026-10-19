@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
 import id.znetworks.nexus.ui.components.NxTextField
@@ -53,7 +55,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -397,13 +398,13 @@ private fun AutoAssignMembers(projectId: String, members: List<ProjectMemberRef>
             members.filter { it.uid.isNotBlank() }.forEach { member ->
                 val checked = member.uid in ids
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-                    .background(if (checked) c.onyx.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color.Transparent)
+                    .background(if (checked) c.accentBg else androidx.compose.ui.graphics.Color.Transparent)
                     .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Checkbox) { picked ->
                         val next = if (picked) ids + member.uid else ids - member.uid
                         if (picked) open = false // web: a pick folds the list; an un-pick keeps it open
                         onSelect(next)
                     }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(16.dp), tint = if (checked) c.foreground else c.mutedFg)
+                    Icon(if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, Modifier.size(16.dp), tint = if (checked) c.violetText else c.mutedFg)
                     Avatar(member.user?.name, member.user?.avatar, 22.dp, userId = member.uid)
                     Text(member.user?.name ?: member.user?.email ?: member.uid, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -434,7 +435,7 @@ private fun Flag(title: String, sub: String, on: Boolean, enabled: Boolean = tru
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
             if (sub.isNotEmpty()) Text(sub, fontSize = 11.sp, color = c.mutedFg)
         }
-        Switch(on, onChange, enabled = enabled)
+        NxSwitch(on, onChange, enabled = enabled)
     }
 }
 

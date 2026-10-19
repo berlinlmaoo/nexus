@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
 import id.znetworks.nexus.ui.components.NxTextField
@@ -42,7 +44,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -345,12 +346,12 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
             if (canManage) AdminCard(stringResource(R.string.ad_att_mode)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text("Flexi time", fontSize = 14.sp, color = c.foreground); Text(stringResource(R.string.ad_flexi_sub), fontSize = 11.sp, color = c.mutedFg) }
-                    Switch(m.flexiTimeEnabled, { patch("flexiTimeEnabled" to JsonPrimitive(it)) }, enabled = canManage && !busy)
+                    NxSwitch(m.flexiTimeEnabled, { patch("flexiTimeEnabled" to JsonPrimitive(it)) }, enabled = canManage && !busy)
                 }
                 HorizontalDivider(color = c.border)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text(stringResource(R.string.location_free), fontSize = 14.sp, color = c.foreground); Text(stringResource(R.string.ad_nogeo_sub), fontSize = 11.sp, color = c.mutedFg) }
-                    Switch(m.noGeofenceMode, { patch("noGeofenceMode" to JsonPrimitive(it)) }, enabled = canManage && !busy)
+                    NxSwitch(m.noGeofenceMode, { patch("noGeofenceMode" to JsonPrimitive(it)) }, enabled = canManage && !busy)
                 }
             }
             if (canManage) AdminCard(stringResource(R.string.ad_rest_days)) {

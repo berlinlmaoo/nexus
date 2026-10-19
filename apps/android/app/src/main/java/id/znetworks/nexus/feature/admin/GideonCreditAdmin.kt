@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import androidx.compose.foundation.layout.*
@@ -75,7 +77,7 @@ internal fun GideonCreditAdminTab() {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(when (role) { "ONE_ABOVE_ALL" -> "One Above All"; "BOD" -> stringResource(R.string.gca_board); "MANAGER" -> stringResource(R.string.gca_manager); else -> stringResource(R.string.gca_staff) })
                         Row {
-                            Switch(row.flag("unlimited"), { unlimited ->
+                            NxSwitch(row.flag("unlimited"), { unlimited ->
                                 val roles = draft!!.objectAt("roles")
                                 draft = JsonObject(draft!! + ("roles" to JsonObject(roles + (role to JsonObject(row + ("unlimited" to JsonPrimitive(unlimited)))))))
                             }, enabled = !busy)
@@ -172,9 +174,9 @@ internal fun GideonPersonCredits(userId: String, summary: GPersonOverview, saved
             val limits = p.objectAt("limits")
             Text(if (limits.flag("unlimited")) stringResource(R.string.gc_unlimited) else stringResource(R.string.gp_limits,
                 limits.number("daily")?.toInt() ?: 0, (limits.number("monthly") ?: 0.0).toInt() + (limits.number("bonus") ?: 0.0).toInt()))
-            Row { Switch(roleDefault, { roleDefault = it }, enabled = !busy && !loading); Text(stringResource(R.string.gca_role_default), Modifier.padding(12.dp)) }
+            Row { NxSwitch(roleDefault, { roleDefault = it }, enabled = !busy && !loading); Text(stringResource(R.string.gca_role_default), Modifier.padding(12.dp)) }
             if (!roleDefault) {
-                Row { Switch(unlimited, { unlimited = it }, enabled = !busy && !loading); Text(stringResource(R.string.gc_unlimited), Modifier.padding(12.dp)) }
+                Row { NxSwitch(unlimited, { unlimited = it }, enabled = !busy && !loading); Text(stringResource(R.string.gc_unlimited), Modifier.padding(12.dp)) }
                 if (!unlimited) {
                     CreditNumber(daily, R.string.gca_daily, !busy && !loading) { daily = it }
                     CreditNumber(monthly, R.string.gca_period, !busy && !loading) { monthly = it }

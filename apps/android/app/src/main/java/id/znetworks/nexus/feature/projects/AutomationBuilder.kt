@@ -1,5 +1,9 @@
 ﻿package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
@@ -53,7 +57,7 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(if (original == null) R.string.ab_new else R.string.ab_edit), style = MaterialTheme.typography.titleLarge)
                     NxTextField(name, { if (it.length <= 200) name = it }, label = { Text(stringResource(R.string.ab_name)) }, enabled = !busy, modifier = Modifier.fillMaxWidth())
-                    Row { Text(stringResource(R.string.ab_enabled), Modifier.weight(1f)); Switch(enabled, { enabled = it }, enabled = !busy) }
+                    Row { Text(stringResource(R.string.ab_enabled), Modifier.weight(1f)); NxSwitch(enabled, { enabled = it }, enabled = !busy) }
                     Text(stringResource(R.string.au_when_caps), style = MaterialTheme.typography.titleMedium)
                     RuleEditor(trigger, true, names, lanes, !busy) { trigger = it }
                     Text(stringResource(R.string.ab_conditions), style = MaterialTheme.typography.titleMedium)
@@ -152,7 +156,7 @@ private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lan
             val ctx = LocalContext.current
             val tokens = listOf("@actor", "@creator") + if (rule.type == "UNASSIGN") listOf("@all") else emptyList()
             (names.people.toList() + tokens.map { it to AutomationText.valueText(it, names) { id, args -> ctx.getString(id, *args) } }).forEach { (id, label) ->
-                Row { Checkbox(id in picked, { on -> change(rule.copy(value = JsonPrimitive((if (on) picked + id else picked - id).distinct().joinToString(",")))) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
+                Row { NxCheckbox(id in picked, { on -> change(rule.copy(value = JsonPrimitive((if (on) picked + id else picked - id).distinct().joinToString(",")))) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
             }
         }
         "FORM_SUBMITTED" -> BuilderPick(stringResource(R.string.ab_form), rule.text.orEmpty(), listOf("" to stringResource(R.string.ab_any)) + names.forms.toList(), enabled) { change(rule.copy(value = it.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) })) }
@@ -172,6 +176,6 @@ private fun PeopleConfig(cfg: JsonObject, key: String, names: AutomationNames, e
     // Roles use the same translated vocabulary as the rule summary.
     val ctx = LocalContext.current
     (names.people.toList() + tokens.map { it to AutomationText.valueText(it, names) { id, args -> ctx.getString(id, *args) } }).forEach { (id, label) ->
-        Row { Checkbox(id in picked, { on -> change(key, JsonArray((if (on) picked + id else picked - id).distinct().map { JsonPrimitive(it) })) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
+        Row { NxCheckbox(id in picked, { on -> change(key, JsonArray((if (on) picked + id else picked - id).distinct().map { JsonPrimitive(it) })) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
     }
 }

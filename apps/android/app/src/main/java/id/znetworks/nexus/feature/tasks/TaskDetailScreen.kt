@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.tasks
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.core.i18n.AppDateFormats
@@ -61,7 +63,6 @@ import androidx.compose.material.icons.filled.Label
 import id.znetworks.nexus.ui.components.describe
 import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -261,7 +262,7 @@ private fun CopyTaskDialog(sourceProject: String?, busy: Boolean, onDismiss: () 
                 Text(target!!.name, fontWeight = FontWeight.SemiBold)
                 LazyColumn(Modifier.heightIn(max = 300.dp)) { items(target!!.taskLists, key = { it.id }) { option ->
                     Row(Modifier.fillMaxWidth().clickable { lane = option.id }, verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(lane == option.id, { lane = option.id }); Text(option.name)
+                        NxCheckbox(lane == option.id, { lane = option.id }); Text(option.name)
                     }
                 } }
                 TextButton(onClick = { target = null; lane = null }) { Text(stringResource(R.string.back)) }
@@ -518,7 +519,7 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                             Avatar(m.user?.name, m.user?.avatar, 28.dp, userId = m.uid)
                             Spacer(Modifier.width(10.dp))
                             Text(m.user?.name ?: "—", Modifier.weight(1f), fontSize = 14.sp, color = c.foreground)
-                            Checkbox(id in chosen, { chosen = if (id in chosen) chosen - id else chosen + id })
+                            NxCheckbox(id in chosen, { chosen = if (id in chosen) chosen - id else chosen + id })
                         }
                     }
                 }

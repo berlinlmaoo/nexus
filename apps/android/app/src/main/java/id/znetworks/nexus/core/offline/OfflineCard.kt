@@ -1,5 +1,7 @@
 package id.znetworks.nexus.core.offline
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,7 +49,7 @@ fun OfflineCard() {
         s.progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.off_cellular), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            Switch(cellular, { cellular = it; sync.mediaOverCellular = it })
+            NxSwitch(cellular, { cellular = it; sync.mediaOverCellular = it })
         }
         TextButton(onClick = { sync.syncAll() }, enabled = s.running == null) { Text(stringResource(if (s.running != null) R.string.off_updating else R.string.off_update)) }
     }

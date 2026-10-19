@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.feature.presence.PresenceLine
@@ -778,7 +780,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
                                 Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                                     Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                                    androidx.compose.material3.Checkbox(on, { picked = if (on) picked - uid else picked + uid })
+                                    NxCheckbox(on, { picked = if (on) picked - uid else picked + uid })
                                 }
                             }
                         }

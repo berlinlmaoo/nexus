@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.meetings
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import android.Manifest
@@ -209,7 +211,7 @@ import java.io.File
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.People, null, tint = c.mutedFg)
                     Text(stringResource(R.string.meet_tell_speakers), Modifier.weight(1f), color = c.foreground)
-                    Switch(speakerLabels, { speakerLabels = it }, enabled = !busy)
+                    NxSwitch(speakerLabels, { speakerLabels = it }, enabled = !busy)
                 }
                 Text(stringResource(R.string.ui_meeting_speaker_caption), color = c.mutedFg, fontSize = 12.sp)
                 if (recording.recording) {

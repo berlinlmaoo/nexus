@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import androidx.compose.ui.zIndex
@@ -1078,7 +1080,7 @@ fun ViewFilterDialog(cfg: ViewConfig, lanes: List<Lane>, members: List<ProjectMe
                     "title" to stringResource(R.string.pp_col_name), "start" to stringResource(R.string.td_start_date))
                 ChipGroup(null, sorts, listOf(sort?.prop ?: "")) { p -> sort = if (p.isEmpty()) null else ViewSort(p, sort?.desc ?: false) }
                 if (sort != null) Row(Modifier.clickable { sort = sort?.copy(desc = !(sort?.desc ?: false)) }, verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(sort?.desc == true, { d -> sort = sort?.copy(desc = d) }); Text(stringResource(R.string.filter_desc))
+                    NxCheckbox(sort?.desc == true, { d -> sort = sort?.copy(desc = d) }); Text(stringResource(R.string.filter_desc))
                 }
                 HorizontalDivider(color = c.border)
                 Text(stringResource(R.string.filter_group), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
@@ -1113,8 +1115,8 @@ private fun ChipGroup(title: String?, options: List<Pair<String, String>>, picke
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             options.forEach { (k, label) ->
                 val on = k in picked
-                Text(label, fontSize = 13.sp, color = if (on) c.background else c.foreground, maxLines = 1,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) c.onyx else c.card).border(1.dp, if (on) c.onyx else c.border, RoundedCornerShape(8.dp))
+                Text(label, fontSize = 13.sp, color = if (on) c.violetText else c.foreground, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) c.accentBg else c.muted)
                         .clickable { onToggle(k) }.padding(horizontal = 10.dp, vertical = 7.dp))
             }
         }

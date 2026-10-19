@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.core.i18n.AppDateFormats
@@ -39,7 +43,6 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ViewKanban
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -267,7 +270,7 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
                         Text(stringResource(R.string.ng_make_group), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(stringResource(if (forced) R.string.ng_forced else R.string.ng_one_other), fontSize = 11.sp, color = c.mutedFg)
                     }
-                    androidx.compose.material3.Switch(forced || makeGroup, { makeGroup = it }, enabled = !forced)
+                    NxSwitch(forced || makeGroup, { makeGroup = it }, enabled = !forced)
                 }
                 if (forced || makeGroup) NxTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
                 NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
@@ -278,7 +281,7 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
                         Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - m else picked + m }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                             Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                            Checkbox(on, { picked = if (on) picked - m else picked + m })
+                            NxCheckbox(on, { picked = if (on) picked - m else picked + m })
                         }
                     }
                 }

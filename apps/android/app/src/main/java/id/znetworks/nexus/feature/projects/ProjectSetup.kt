@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import androidx.compose.foundation.background
@@ -25,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
@@ -191,7 +192,7 @@ fun PeoplePickerDialog(
                                     modifier = Modifier.background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
                                 Spacer(Modifier.width(8.dp))
                             }
-                            Checkbox(on, { picked = if (on) picked - uid else picked + uid })
+                            NxCheckbox(on, { picked = if (on) picked - uid else picked + uid })
                         }
                     }
                 }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -37,7 +39,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -357,7 +358,7 @@ private fun FieldEditorList(fields: List<LgField>, path: List<Int>, onChange: (L
                         else Text(lgFieldType(f.type), fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(vertical = 12.dp))
                     }
                     Text(stringResource(R.string.lg_required), fontSize = 14.sp, color = c.foreground)
-                    Switch(f.required, { v -> onChange(p) { it.copy(required = v) } }, enabled = !locked, colors = SwitchDefaults.colors(checkedTrackColor = c.violet))
+                    NxSwitch(f.required, { v -> onChange(p) { it.copy(required = v) } }, enabled = !locked, colors = SwitchDefaults.colors(checkedTrackColor = c.violet, checkedBorderColor = c.violet, checkedThumbColor = c.background))
                 }
                 if (f.type == "select") LgTextField(f.options.orEmpty().joinToString(", "), { v -> onChange(p) { it.copy(options = LegalLogic.choices(v)) } },
                     placeholder = stringResource(R.string.lg_choices))

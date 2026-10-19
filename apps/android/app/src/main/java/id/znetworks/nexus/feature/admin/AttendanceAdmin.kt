@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
 import id.znetworks.nexus.ui.components.NxTextField
@@ -45,7 +47,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -398,7 +399,7 @@ fun OfficesCard() {
                         Text(listOfNotNull(o.address ?: "—", "${o.radiusMeters} m", stringResource(R.string.aa_grace, o.lateGraceMinutes)).joinToString(" · "),
                             fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
                     }
-                    if (d.canManage) Switch(o.isActive, { on -> run { api.updateOffice(o.id, mapOf("isActive" to JsonPrimitive(on))) } })
+                    if (d.canManage) NxSwitch(o.isActive, { on -> run { api.updateOffice(o.id, mapOf("isActive" to JsonPrimitive(on))) } })
                 }
             }
         }

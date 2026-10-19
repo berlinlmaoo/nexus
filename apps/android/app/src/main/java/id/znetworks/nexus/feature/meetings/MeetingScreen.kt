@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.meetings
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import android.app.DatePickerDialog
@@ -175,7 +177,7 @@ import java.time.LocalDate
                     item { Text(stringResource(R.string.meet_tasks), fontWeight = FontWeight.SemiBold); Text(stringResource(R.string.meet_selected, m.proposals.count { it.include }.toString(), m.proposals.size.toString()), fontSize = 12.sp, color = c.mutedFg) }
                     items(m.proposals, key = { it.key }) { task -> MeetingSection("", card = true) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(task.include, { checked -> proposals(m.proposals.map { if (it.key == task.key) it.copy(include = checked) else it }) }, enabled = editable)
+                            NxCheckbox(task.include, { checked -> proposals(m.proposals.map { if (it.key == task.key) it.copy(include = checked) else it }) }, enabled = editable)
                             Text(stringResource(R.string.meet_task_title), color = c.mutedFg, fontSize = 12.sp)
                             Spacer(Modifier.weight(1f))
                             if (editable) IconButton(onClick = { proposals(m.proposals.filterNot { it.key == task.key }) }) {
@@ -263,7 +265,7 @@ import java.time.LocalDate
                     }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Avatar(member.name, member.avatar, 28.dp, userId = member.id)
                         Text(member.name, Modifier.weight(1f), color = c.foreground)
-                        Checkbox(member.id in selected, null)
+                        NxCheckbox(member.id in selected, null)
                     }
                 }
             }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.ui.components.PendingConfirm
@@ -41,7 +43,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -290,7 +291,7 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.tm_shift_custom), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                        Switch(shiftOn, { shiftOn = it; dirty = true })
+                        NxSwitch(shiftOn, { shiftOn = it; dirty = true })
                     }
                     if (shiftOn) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         TextButton(onClick = { pickTime = "start" }) { Text(stringResource(R.string.tm_in, start)) }

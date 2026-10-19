@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import androidx.compose.foundation.layout.*
@@ -53,7 +55,7 @@ internal fun CalendarPrivacyTab() {
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp)) {
                     Column(Modifier.weight(1f)) { Text(project.text("name")); Text(stringResource(if (project.flag("private")) R.string.calp_private else R.string.calp_visible), style = MaterialTheme.typography.bodySmall) }
-                    Switch(project.flag("private"), { isPrivate -> scope.launch {
+                    NxSwitch(project.flag("private"), { isPrivate -> scope.launch {
                         if (busy != null) return@launch
                         busy = project.text("id"); error = null
                         try { data = api.set(project.text("id"), isPrivate) }

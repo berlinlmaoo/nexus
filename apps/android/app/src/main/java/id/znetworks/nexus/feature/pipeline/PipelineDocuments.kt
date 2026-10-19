@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
 import id.znetworks.nexus.ui.components.NxTextField
@@ -38,7 +40,6 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -198,7 +199,7 @@ internal fun ServicesRow(deal: PipelineDeal, data: PipelineData, onSave: (List<S
         @Composable fun Option(s: String) {
             val on = picked.any { it.equals(s, ignoreCase = true) }
             Row(Modifier.fillMaxWidth().clickable { picked = PipelineServices.toggle(picked, s) }, verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(on, { picked = PipelineServices.toggle(picked, s) }); Text(s, fontSize = 14.sp, color = c.foreground)
+                NxCheckbox(on, { picked = PipelineServices.toggle(picked, s) }); Text(s, fontSize = 14.sp, color = c.foreground)
             }
         }
         AlertDialog(onDismissRequest = { open = false }, title = { Text(stringResource(R.string.pl_f_services)) },

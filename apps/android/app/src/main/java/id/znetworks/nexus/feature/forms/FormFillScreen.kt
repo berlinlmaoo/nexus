@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxOutlinedButton
 
 import id.znetworks.nexus.ui.components.NxTextField
@@ -38,7 +40,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -252,7 +253,7 @@ private fun FieldInput(f: FormField, s: FormFillState, vm: FormFillViewModel) {
                 }
             }
             f.kind == "checkbox" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox((v as? FormValue.Flag)?.on == true, { vm.set(f.id, FormValue.Flag(it)) })
+                NxCheckbox((v as? FormValue.Flag)?.on == true, { vm.set(f.id, FormValue.Flag(it)) })
                 f.placeholder?.let { Text(it, fontSize = 13.sp, color = c.foreground) }
             }
             f.kind == "file" -> FilesInput(f, v as? FormValue.Files, vm)

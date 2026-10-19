@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.core.i18n.AppDateFormats
@@ -58,7 +60,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -430,7 +431,7 @@ fun LgToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit, modif
     val c = Nx.colors
     Row(modifier.clickable(enabled = enabled) { onChange(!checked) }.defaultMinSize(minHeight = 44.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f, fill = false).padding(end = 10.dp))
-        Switch(checked, onChange, enabled = enabled, colors = SwitchDefaults.colors(checkedTrackColor = c.violet))
+        NxSwitch(checked, onChange, enabled = enabled, colors = SwitchDefaults.colors(checkedTrackColor = c.violet, checkedBorderColor = c.violet, checkedThumbColor = c.background))
     }
 }
 

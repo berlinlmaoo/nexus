@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin.orgchart
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.R
@@ -44,7 +46,6 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -535,7 +536,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                         if (on) run(res.getString(R.string.oc_t_removed, who, u.name), { api.removeMember(person.userId, u.id) }) { unitIds = unitIds - u.id }
                         else run(res.getString(R.string.oc_t_added, who, u.name), { api.addMember(person.userId, u.id) }) { unitIds = unitIds + u.id }
                     }.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(on, null, enabled = !busy)
+                    NxCheckbox(on, null, enabled = !busy)
                     KindTile(u.kind, u.logoUrl, 24); Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(u.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)

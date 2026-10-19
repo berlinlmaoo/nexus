@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.vault
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.ui.components.PageHeader
@@ -54,7 +58,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -296,7 +299,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                         Row(Modifier.fillMaxWidth().clickable {
                             when { selecting -> toggle(i); vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); i.isMedia -> viewing = media.indexOf(i); else -> vm.open(i, false) }
                         }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (selecting) androidx.compose.material3.Checkbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
+                            if (selecting) NxCheckbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
                             Box(Modifier.size(42.dp).background(if (i.isFolder) c.violet.copy(alpha = 0.14f) else c.muted, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                 // The server's small thumbnail (never the whole file); without one, the type icon.
                                     val t = VaultRules.thumb(i, 160)
@@ -343,7 +346,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                             Box(Modifier.padding(horizontal = 2.dp)) {
                                 VaultTile(i, onOpen = { if (selecting) toggle(i) else viewing = media.indexOf(i) }) {
                                     var menu by remember { mutableStateOf(false) }
-                                    if (selecting) androidx.compose.material3.Checkbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
+                                    if (selecting) NxCheckbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
                                     else IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = Color.White) }
                                     DropdownMenu(menu, { menu = false }) {
                                         DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
@@ -440,11 +443,11 @@ private fun ShareDialog(item: VaultItem, api: VaultApi, canExternal: Boolean, on
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.vault_members_only), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
                     // A public (/s/) link needs modify rights on the server.
-                    Switch(internal, { if (canExternal || it) internal = it })
+                    NxSwitch(internal, { if (canExternal || it) internal = it })
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.vault_allow_download), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                    Switch(download, { download = it })
+                    NxSwitch(download, { download = it })
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     VaultRules.EXPIRES.forEach { e -> FilterChip(expires == e, { expires = e }, { Text(if (e == "permanent") stringResource(R.string.vault_permanent) else e, fontSize = 12.sp) }) }

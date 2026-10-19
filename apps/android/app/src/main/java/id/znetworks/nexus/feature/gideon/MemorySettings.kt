@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -80,7 +82,7 @@ import kotlinx.coroutines.launch
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         val label = stringResource(R.string.gm_use)
                         Text(label, Modifier.weight(1f), color = c.foreground)
-                        Switch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy,
+                        NxSwitch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy,
                             modifier = Modifier.semantics { contentDescription = label })
                     }
                 }

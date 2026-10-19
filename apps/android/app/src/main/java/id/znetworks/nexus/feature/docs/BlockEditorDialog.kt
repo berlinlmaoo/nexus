@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.docs
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import androidx.compose.foundation.layout.*
@@ -77,7 +79,7 @@ private fun BlockEditorDialog(kind:String,id:String,onSaved:()->Unit,close:()->U
                         if(line.editable)NxTextField(BlockTree.text(line.node),{text->edit(BlockTree.update(d,line.path){BlockTree.replaceText(it,text)})},enabled=canEdit&&!busy,modifier=Modifier.fillMaxWidth())
                         else Text(BlockTree.text(line.node).ifBlank{stringResource(R.string.be_kept_help)})
                         val taskPath=line.path.indices.map{line.path.take(it+1)}.firstOrNull{BlockTree.at(d,it).text("type")=="taskItem"}
-                        if(taskPath!=null){val item=BlockTree.at(d,taskPath);Row{Checkbox(item.objectAt("attrs").flag("checked"),{on->edit(BlockTree.update(d,taskPath){JsonObject(it+("attrs" to JsonObject(it.objectAt("attrs")+("checked" to JsonPrimitive(on)))) )})},enabled=canEdit&&!busy);Text(stringResource(R.string.be_done),Modifier.padding(top=12.dp))}}
+                        if(taskPath!=null){val item=BlockTree.at(d,taskPath);Row{NxCheckbox(item.objectAt("attrs").flag("checked"),{on->edit(BlockTree.update(d,taskPath){JsonObject(it+("attrs" to JsonObject(it.objectAt("attrs")+("checked" to JsonPrimitive(on)))) )})},enabled=canEdit&&!busy);Text(stringResource(R.string.be_done),Modifier.padding(top=12.dp))}}
                         if(canEdit){
                             if(line.editable)BlockFormat(line.node,!busy){next->edit(BlockTree.update(d,line.path){next})}
                             if(line.editable)BlockWriting(api,kind,id,BlockTree.text(line.node),!busy,{value->edit(BlockTree.update(d,line.path){BlockTree.replaceText(it,value)})},{value->edit(BlockTree.append(d,BlockTree.paragraph(value)))})

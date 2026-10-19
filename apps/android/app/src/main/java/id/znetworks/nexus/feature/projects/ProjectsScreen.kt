@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
 import id.znetworks.nexus.ui.components.NxTextField
 
 import id.znetworks.nexus.core.i18n.AppDateFormats
@@ -629,7 +631,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                 if (type == ProjectType.TASK) StartingTabs(hidden.toSet(), enabled = !busy) { hidden = ProjectTabsLogic.KEYS.filter { k -> k in it } }
                 if (template != null && TemplateLogic.hasStarter(template)) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp))
                     .clickable(enabled = !busy) { starter = !starter }.padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(starter, { starter = it }, enabled = !busy)
+                    NxCheckbox(starter, { starter = it }, enabled = !busy)
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.tg_starter), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(template.starterDocs.joinToString(", ") { TemplateLogic.say(it.title, lang) }.ifEmpty { stringResource(R.string.tg_starter_tasks) },
@@ -722,7 +724,7 @@ internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
         PROJECT_COLORS.forEach { hex ->
             val col = parseColor(hex, Color.Gray)
             Box(Modifier.size(28.dp).clip(CircleShape).background(col)
-                .border(if (hex.equals(selected, true)) 3.dp else 0.dp, Nx.colors.foreground, CircleShape).clickable { onPick(hex) })
+                .border(if (hex.equals(selected, true)) 3.dp else 0.dp, Nx.colors.violetText, CircleShape).clickable { onPick(hex) })
         }
     }
 }
