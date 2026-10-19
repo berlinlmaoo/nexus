@@ -2,6 +2,10 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "You can view this form but not change it.": "Kamu bisa melihat form ini tapi tidak bisa mengubahnya.",
+        "Also editing: %@": "Ikut mengedit: %1$@",
+        "%@ is editing": "%1$@ sedang mengedit",
+        "%@ and %@ more are editing": "%1$@ dan %2$@ lainnya sedang mengedit",
         "%@’s location trail": "Jejak lokasi %1$@",
 
         "GIDEON stops using the 1 thing it remembers about you. It's deleted for good after 30 days.": "GIDEON berhenti memakai 1 hal yang diingat tentangmu. Hal itu dihapus permanen setelah 30 hari.",

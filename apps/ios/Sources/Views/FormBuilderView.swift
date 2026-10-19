@@ -114,11 +114,7 @@ struct ProjectFormsBuilderTab: View {
                 Section {
                     ForEach(forms) { f in
                         NavigationLink {
-                            if canEdit {
-                                FormBuilderView(projectId: projectId, projectName: projectName, formId: f.id)
-                            } else {
-                                FormFillView(formId: f.id, title: f.name)
-                            }
+                            FormBuilderView(projectId: projectId, projectName: projectName, formId: f.id)
                         } label: {
                             FormBuilderRow(form: f, busy: busyId == f.id)
                         }
@@ -264,7 +260,12 @@ struct FormBuilderView: View {
     /// The form as the server last returned it; nil until a new form is created.
     @State private var saved: BuilderForm?
     @State private var formConflict: BuilderForm?
-    @State private var canChangeForm = true
+    @State private var canChangeForm = false
+    @State private var formRoom = FormRoomLease()
+    @State private var editorTab = UUID().uuidString
+    @State private var editors: [FormEditor] = []
+    @State private var inflightSnapshot: FormStudioDraft?
+    @State private var acknowledgedDocument: FormCoedit.Object?
     @State private var loaded = false
     @State private var loadError: String?
 
@@ -363,6 +364,14 @@ struct FormBuilderView: View {
         // Once: coming back from a pushed screen must not reload over the edits.
         .task { if !loaded { await load() } }
         .onChange(of: draft) { _, _ in scheduleSave() }
+        .modifier(FormCoeditLifecycle(lease: formRoom, room: loaded && canChangeForm ? currentId.map { "form:" + $0 } : nil,
+            selectedId: selectedId, openFieldId: openFieldId, onOps: receiveForm, onPresence: receivePresence,
+            onReconnect: { await catchUpForm(); sendFocus() }, onRevoked: { note in
+                if note.userInfo?[RealtimeKey.room] as? String == currentId.map({ "form:" + $0 }) {
+                    canChangeForm = false; editors = []; tab = .preview
+                    saveState = .failed(T("You can view this form but not change it."))
+                }
+            }, onFocus: sendFocus))
         .onAppear { scheduleSave(); AppRouter.shared.formOnScreen = formId }
         .onDisappear {
             leaving()
@@ -428,7 +437,7 @@ struct FormBuilderView: View {
                 if barTabs {
                     ToolbarItem(placement: .principal) {
                         // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
-                        FormStudioTabBar(selection: $tab, responseCount: responseCount).fixedSize()
+                        FormStudioTabBar(selection: $tab, responseCount: responseCount, canEdit: canChangeForm).fixedSize()
                     }
                 }
             } else {
@@ -452,9 +461,11 @@ struct FormBuilderView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 // "Saved" in words on an iPad / Mac, as the web's bar (UI tour run 15, Q-IA32).
                 // "Saved" in words on the phone too, as the web's bar (UI tour run 19, iPhone R19-I-21).
-                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: false) { retry() }
-                previewButton
-                moreMenu
+                if canChangeForm {
+                    FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: false) { retry() }
+                    previewButton
+                    moreMenu
+                } else { NexusChip(text: T("View only"), tone: .neutral, systemImage: "lock") }
             }
             .nxPlainOnMac()
         }
@@ -540,13 +551,14 @@ struct FormBuilderView: View {
     // MARK: body
 
     private var tabItems: [NXTabItem<FormStudioTab>] {
-        FormStudioTab.allCases.map { t in
+        (canChangeForm ? FormStudioTab.editableTabs : [.preview, .responses]).map { t in
             NXTabItem(id: t, label: t.label, count: t == .responses && responseCount > 0 ? responseCount : nil)
         }
     }
 
     private var studio: some View {
         VStack(spacing: 0) {
+            if !editors.isEmpty { FormEditorsRow(editors: editors) }
             if !barTabs {
                 NXUnderlineTabs(items: tabItems, selection: $tab, accessibilityName: T("Form builder"))
             } else {
@@ -560,6 +572,8 @@ struct FormBuilderView: View {
 
     @ViewBuilder private var tabContent: some View {
         switch tab {
+        case .preview:
+            FormFillView(formId: currentId ?? "", title: displayName, preview: true)
         case .questions:
             questionsTab
         case .settings:
@@ -662,6 +676,7 @@ struct FormBuilderView: View {
                                 onOpenSettings: { openFieldId = id },
                                 onDuplicate: { duplicate(id) },
                                 onDelete: { remove(id) })
+            .overlay(alignment: .topTrailing) { FormQuestionEditors(editors: editors.filter { $0.questionId == id }).allowsHitTesting(false) }
     }
 
     @ViewBuilder private var panel: some View {
@@ -812,16 +827,15 @@ struct FormBuilderView: View {
         async let customFieldsCall = APIClient.shared.projectCustomFields(projectId)
         if let formId {
             do {
-                let all = try await APIClient.shared.builderForms(projectId: projectId)
-                if let f = all.first(where: { $0.id == formId }) {
+                let f = try await APIClient.shared.builderForm(formId)
+                guard f.projectId == projectId else { loaded = true; loadError = T("This form no longer exists."); return }
+                do {
                     saved = f
                     responseCount = f.submissionCount
                     let d = FormStudioDraft(form: f)
                     draft = d
                     baseline = d
                     saveState = .saved
-                } else {
-                    loadError = T("This form no longer exists.")
                 }
             } catch APIError.unauthorized {
                 auth.logout()
@@ -835,7 +849,8 @@ struct FormBuilderView: View {
             baseline = d
         }
         let detail = try? await detailCall
-        canChangeForm = detail?.canEditProject ?? true
+        canChangeForm = detail?.canEditProject ?? false
+        if !canChangeForm { tab = .preview }
         sections = detail?.taskLists ?? []
         members = (detail?.members ?? []).filter { !$0.uid.isEmpty }
         customFields = (try? await customFieldsCall) ?? []
@@ -845,7 +860,7 @@ struct FormBuilderView: View {
     // MARK: autosave
 
     private func scheduleSave() {
-        guard loaded, loadError == nil, !stopped, let base = baseline else { return }
+        guard loaded, canChangeForm, loadError == nil, !stopped, let base = baseline else { return }
         debounce?.cancel()
         guard draft != base else {
             if saveState == .pending { saveState = currentId == nil ? .idle : .saved }
@@ -869,12 +884,18 @@ struct FormBuilderView: View {
         let creating = currentId == nil
         var requestBody = payload(snapshot, base: base, creating: creating)
         inflight = true
+        inflightSnapshot = snapshot
+        defer { inflightSnapshot = nil; acknowledgedDocument = nil }
         saveState = .saving
         do {
             let out: BuilderForm
             if let id = currentId {
-                if let updatedAt = saved?.updatedAt { requestBody["baseUpdatedAt"] = updatedAt }
-                out = try await APIClient.shared.updateForm(id, requestBody)
+                let ops = FormCoedit.diff(document(base), document(snapshot))
+                guard !ops.isEmpty else { inflight = false; saveState = .saved; return }
+                let batch = Array(ops.prefix(200))
+                acknowledgedDocument = FormCoedit.applying(batch, to: document(base))
+                let reply = try await APIClient.shared.applyFormOps(id, ops: batch, version: saved?.version ?? 0, tab: editorTab)
+                out = reply.form
             } else {
                 requestBody["projectId"] = projectId
                 out = try await APIClient.shared.createForm(requestBody)
@@ -885,16 +906,20 @@ struct FormBuilderView: View {
                 try? await APIClient.shared.deleteForm(out.id, force: false)
                 return
             }
-            saved = out
-            baseline = snapshot
-            if creating { NotificationCenter.default.post(name: .nexusFormsChanged, object: nil) }
-            if draft != snapshot { saveState = .pending; scheduleSave() } else { saveState = .saved }
+            if creating || (out.version ?? 0) > (saved?.version ?? -1) { acceptForm(out, acknowledging: snapshot) }
+            if creating { NotificationCenter.default.post(name: .nexusFormsChanged, object: nil); sendFocus() }
+            if draft != baseline { saveState = .pending; scheduleSave() } else { saveState = .saved }
         } catch APIError.unauthorized {
             inflight = false
             auth.logout()
             return
         } catch let failure {
             inflight = false
+            if let api = failure as? APIError, case .http(403, _) = api {
+                canChangeForm = false; editors = []; tab = .preview
+                saveState = .failed(T("You can view this form but not change it."))
+                alert = .failed(title: T("View only"), message: T("You can view this form but not change it.")); return
+            }
             if let api = failure as? APIError, case .http(409, _) = api, let id = currentId,
                let latest = try? await APIClient.shared.builderForms(projectId: projectId).first(where: { $0.id == id }) {
                 formConflict = latest
@@ -932,6 +957,52 @@ struct FormBuilderView: View {
         if creating || d.branding != base.branding { p["branding"] = d.branding.json }
         if creating || d.settings != base.settings { p["settings"] = d.settings.json }
         return p
+    }
+
+    private func document(_ d: FormStudioDraft) -> FormCoedit.Object {
+        FormCoedit.decodeObject(["name": d.name, "description": d.description.isEmpty ? NSNull() : d.description as Any,
+            "fields": d.fields.map { $0.cleanJSON() }, "isPublic": d.isPublic, "requireAuth": d.requireAuth,
+            "accessSchedule": d.schedule.json, "branding": d.branding.json, "settings": d.settings.json])
+    }
+
+    private func acceptForm(_ incoming: BuilderForm, acknowledging snapshot: FormStudioDraft? = nil) {
+        guard let base = baseline else { return }
+        let theirs = FormStudioDraft(form: incoming)
+        let merged = FormCoedit.rebase(snapshot != nil ? (acknowledgedDocument ?? document(snapshot!)) : document(base), document(draft), document(theirs))
+        // Decode the merged builder content through the same lossless models used when opening it.
+        var object = merged.mapValues(\.any)
+        object["id"] = incoming.id
+        if let data = try? JSONSerialization.data(withJSONObject: object), let form = try? JSONDecoder().decode(BuilderForm.self, from: data) {
+            let nextDraft = FormStudioDraft(form: form)
+            var values = Dictionary(nextDraft.fields.map { ("form.question." + $0.id, $0.name) }, uniquingKeysWith: { _, latest in latest })
+            values["form.title"] = nextDraft.name; values["form.description"] = nextDraft.description
+            let caret = FormCaretSnapshot.capture(expected: values)
+            draft = nextDraft
+            caret?.restoreAfterRender()
+        }
+        saved = incoming; baseline = theirs; responseCount = incoming.submissionCount
+        scheduleSave()
+    }
+    private func receiveForm(_ note: Notification) {
+        guard let raw = note.userInfo?[RealtimeKey.json] as? String,
+              let event = try? JSONDecoder().decode(FormOpsEvent.self, from: Data(raw.utf8)), event.formId == currentId,
+              event.version > (saved?.version ?? -1) else { return }
+        acceptForm(event.form, acknowledging: event.originTab == editorTab ? inflightSnapshot : nil)
+    }
+    private func receivePresence(_ note: Notification) {
+        guard canChangeForm, let raw = note.userInfo?[RealtimeKey.json] as? String,
+              let event = try? JSONDecoder().decode(FormPresenceEvent.self, from: Data(raw.utf8)), event.formId == currentId else { return }
+        editors = event.members.filter { $0.userId != auth.session?.userId }
+        let focus = openFieldId ?? selectedId
+        if let mine = event.members.first(where: { $0.userId == auth.session?.userId }), mine.questionId != focus { sendFocus() }
+    }
+    private func sendFocus() {
+        guard loaded, canChangeForm, let id = currentId else { return }
+        RealtimeClient.shared.formFocus(formId: id, questionId: openFieldId ?? selectedId)
+    }
+    private func catchUpForm() async {
+        guard let id = currentId, let incoming = try? await APIClient.shared.builderForm(id), (incoming.version ?? 0) > (saved?.version ?? -1) else { return }
+        acceptForm(incoming)
     }
 
     /// What a duplicate takes as `accessSchedule`: the stored value while the schedule is untouched
@@ -1067,7 +1138,7 @@ struct FormFieldEditorView: View {
 
     private var basicsSection: some View {
         Section {
-            TextField(T("Question"), text: nameBinding, axis: .vertical)
+            TextField(T("Question"), text: nameBinding, axis: .vertical).accessibilityIdentifier("form.question." + field.id)
                 .font(NXFont.text(16, .semibold))
             Picker(T("Type"), selection: kindBinding) {
                 ForEach(FormQuestionKind.allCases) { k in
