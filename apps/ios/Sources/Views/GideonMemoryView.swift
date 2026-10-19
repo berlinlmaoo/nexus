@@ -191,16 +191,15 @@ private struct GideonMemorySummaryView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .bottom) {
-                TextField(T("Add or update…"), text: $text, axis: .vertical).lineLimit(1...4).textFieldStyle(.roundedBorder).accessibilityIdentifier("memory.text")
-                    .onChange(of: text) { _, _ in while text.utf16.count > store.textMax { text.removeLast() } }
-                Button { Task { if await store.add(text: text.trimmingCharacters(in: .whitespacesAndNewlines), kind: "FACT", date: "") { text = ""; updated = Date() } } } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
-                    .buttonStyle(.nxPrimary).accessibilityLabel(T("Add")).accessibilityIdentifier("memory.add")
-                    .disabled(store.busy || store.paused || !store.available || store.full || !store.loaded || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            MemoryComposerField(text: $text, textMax: store.textMax, canSend: canAdd) {
+                Task { if await store.add(text: text.trimmingCharacters(in: .whitespacesAndNewlines), kind: "FACT", date: "") { text = ""; updated = Date() } }
             }
-            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
-        }.padding(16).background(NX.background)
+            if store.paused { Text(T("GIDEON Memory is paused.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.horizontal, 14) }
+            else if store.full { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.horizontal, 14) }
+        }.padding(.horizontal, 16).padding(.vertical, 10).background(NX.background)
+    }
+    private var canAdd: Bool {
+        !(store.busy || store.paused || !store.available || store.full || !store.loaded || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
     @ViewBuilder private func row(_ memory: GideonMemory) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -239,6 +238,36 @@ private struct GideonMemorySummaryView: View {
         guard let value else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
         return f.date(from: "2024-" + value).map { AppDateLocale.formatter("d MMM", timeZone: TimeZone(secondsFromGMT: 0)).string(from: $0) }
+    }
+}
+
+/// One rounded capsule as the GIDEON chat composer: soft fill, no outline, the round send button inside it
+/// (accent with text, grey while it can't send).
+private struct MemoryComposerField: View {
+    @Binding var text: String
+    let textMax: Int
+    let canSend: Bool
+    let send: () -> Void
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField(T("Add or update…"), text: $text, axis: .vertical)
+                .lineLimit(1...4).textFieldStyle(.plain).font(NXFont.text(15))
+                .padding(.leading, 16).padding(.vertical, 11)
+                .accessibilityIdentifier("memory.text")
+                .onChange(of: text) { _, _ in while text.utf16.count > textMax { text.removeLast() } }
+            Button(action: send) {
+                Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(canSend ? NX.violet : NX.mutedFg.opacity(0.35), in: Circle())
+                    .frame(width: 40, height: 40).contentShape(Circle())
+            }
+            .buttonStyle(NXPlainPressStyle()).disabled(!canSend)
+            .padding(.trailing, 2).padding(.bottom, 1)
+            .accessibilityLabel(T("Add")).accessibilityIdentifier("memory.add")
+        }
+        .background(NX.muted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .animation(.easeOut(duration: 0.15), value: canSend)
     }
 }
 
