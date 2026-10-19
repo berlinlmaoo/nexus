@@ -154,4 +154,6 @@ export const ID_MEETINGS: Record<string, string> = {
   "This meeting note was deleted": "Catatan meeting ini sudah dihapus",
   "It was deleted, or you no longer have access to it.": "Sudah dihapus, atau kamu tidak punya akses lagi.",
   "All meeting notes": "Semua catatan meeting",
+  "Locked: these minutes were saved to the project, so the names stay as they are.": "Terkunci: notulen ini sudah diterapkan ke project, jadi nama tetap seperti ini.",
+  "These minutes were already saved, so the speaker names can't change anymore.": "Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.",
 };

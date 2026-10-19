@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import {
   audioBytesMatch, buildMinutesDoc, chunkLines, chunkNotesPrompt, cleanProposals, cleanSegments, clock, compactNotes, draftToProposals,
-  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines, introNames, matchHeardName, autoMatchCandidates, mergeSpeakers, cleanSpeakers, cleanMom,
+  matchMember, meetingAudioExt, minutesPrompt, parseMinutes, sniffAudio, transcriptLines, introNames, matchHeardName, autoMatchCandidates, sameSpeakers, mergeSpeakers, cleanSpeakers, cleanMom,
 } from "./meeting-notes-core.ts"
 
 const bytes = (s, pad = 16) => { const b = new Uint8Array(Math.max(pad, s.length)); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b }
@@ -137,3 +137,8 @@ console.log("mom attendees ok")
   const map = introNames(segs, 10, autoMatchCandidates(cands, "up", true))
   assert.equal(map["Speaker 1"]?.userId ?? null, null)
 }
+
+// D-Q4: the same names sent back are not a change
+assert.equal(sameSpeakers({ "Speaker 1": { name: "Berlin", userId: "u1", auto: true } }, { "Speaker 1": { name: "Berlin", userId: "u1" } }), true)
+assert.equal(sameSpeakers({ "Speaker 1": { name: "Berlin", userId: "u1" } }, { "Speaker 1": { name: "Sinta", userId: null } }), false)
+assert.equal(sameSpeakers({}, { "Speaker 1": { name: "Berlin", userId: null } }), false)

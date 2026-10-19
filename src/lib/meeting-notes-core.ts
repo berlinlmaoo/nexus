@@ -261,6 +261,13 @@ export function cleanSpeakers(raw: unknown): SpeakerMap {
   return out
 }
 
+/** Two speaker maps name the same voices the same way (name + person; the auto flag does not count). */
+export function sameSpeakers(a: SpeakerMap, b: SpeakerMap): boolean {
+  const ka = Object.keys(a).sort(), kb = Object.keys(b).sort()
+  if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) return false
+  return ka.every((k) => a[k].name === b[k].name && (a[k].userId ?? null) === (b[k].userId ?? null))
+}
+
 /** Lines grouped into chunks of at most `maxChars` (a single over-long line is cut). */
 export function chunkLines(lines: string[], maxChars: number): string[] {
   const chunks: string[] = []
