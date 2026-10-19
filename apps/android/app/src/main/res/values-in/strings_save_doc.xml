@@ -1,0 +1,7 @@
+<resources>
+    <string name="gsd_save">Simpan sebagai halaman</string>
+    <string name="gsd_title">Judul halaman</string>
+    <string name="gsd_search">Cari proyek</string>
+    <string name="gsd_this_project">Proyek ini: %1$s</string>
+    <string name="gsd_no_project">Tidak ada proyek yang cocok.</string>
+</resources>
