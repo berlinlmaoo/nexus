@@ -45,3 +45,22 @@ export async function advanceLastReadAt(client: Prisma.TransactionClient, member
   const ms = rows[0]?.ms
   return typeof ms === "number" ? new Date(Math.round(ms)) : at
 }
+
+/**
+ * A chat write that lost a race with the group being deleted (QA final 19 Oct 2026: a group deleted while
+ * 8 messages, a rename and a removal were in flight answered 8 x 500). The room is gone (foreign key / not
+ * found) -> 404; Postgres broke a lock cycle with the delete (40P01) -> 409 RETRY, nothing was written.
+ * Anything else -> null (the route's own 500).
+ */
+export function chatRaceResponse(error: unknown): { status: 404 | 409; body: { error: string; code: string } } | null {
+  const e = error as { code?: unknown; message?: unknown; cause?: { originalCode?: unknown; code?: unknown } } | null
+  const code = typeof e?.code === "string" ? e.code : ""
+  const text = `${typeof e?.message === "string" ? e.message : ""} ${String(e?.cause?.originalCode ?? e?.cause?.code ?? "")}`
+  if (code === "P2003" || code === "P2025" || /Message_conversationId_fkey|ConversationMember_conversationId_fkey/.test(text)) {
+    return { status: 404, body: { error: "This chat no longer exists.", code: "CONVERSATION_GONE" } }
+  }
+  if (code === "40P01" || /40P01|deadlock detected/.test(text)) {
+    return { status: 409, body: { error: "The chat changed at the same moment. Try again.", code: "RETRY" } }
+  }
+  return null
+}

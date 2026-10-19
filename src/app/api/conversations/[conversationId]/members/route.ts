@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { chatRaceResponse } from "@/lib/chat-order"
 import { resolveLegacyId, resolveLegacyIds } from "@/lib/legacy-ids"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
@@ -129,6 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       added: added.length,
     })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation members POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -198,6 +201,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     })
     return NextResponse.json({ conversation: conversation ? { ...conversation, canManageMembers: manages } : conversation })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation members DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

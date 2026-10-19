@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { chatRaceResponse } from "@/lib/chat-order"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
@@ -110,6 +111,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     else emitConversationUpdated(memberIds, { conversationId, lastMessageAt: updated.updatedAt.toISOString(), reason: "membership" })
     return NextResponse.json({ conversation: updated })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation PATCH error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -196,6 +199,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     emitConversationUpdated(memberIds, { conversationId, lastMessageAt: null, reason: "deleted" })
     return NextResponse.json({ ok: true, conversationId, members: members.length, messages })
   } catch (error) {
+    const race = chatRaceResponse(error)
+    if (race) return NextResponse.json(race.body, { status: race.status })
     console.error("conversation DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
