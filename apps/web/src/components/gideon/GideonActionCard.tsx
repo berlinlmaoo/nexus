@@ -108,7 +108,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
 
   return (
     <div className={cn("overflow-hidden rounded-2xl border bg-card", open ? (kind.danger ? "border-destructive/40 shadow-soft" : "border-border shadow-soft") : "border-border opacity-90")}>
-      <div className="flex items-start gap-2.5 px-3 pb-2 pt-2.5">
+      <div className="@container flex flex-wrap items-start gap-x-2.5 gap-y-1 px-3 pb-2 pt-2.5">
         <span className={cn("mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border", open ? (kind.danger ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-sidebar-primary/25 bg-sidebar-primary/10 text-sidebar-primary") : "border-border bg-background text-muted-foreground")}>
           <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
@@ -117,7 +117,7 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
           <span className="mt-0.5 block break-words text-[13px] text-muted-foreground">{proposalSummary(proposal, lang)}</span>
           {proposal.noChange && <span className="mt-0.5 block text-xs font-medium text-amber-700 dark:text-amber-300">{t("No changes: everything is already like this")}</span>}
         </span>
-        {open && <span className="mt-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />{t("Waiting for your approval")}</span>}
+        {open && <span className="mt-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground @max-[26rem]:mt-0 @max-[26rem]:basis-full @max-[26rem]:pl-[34px]"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />{t("Waiting for your approval")}</span>}
       </div>
       {rows.length > 0 && (
         <dl className="space-y-1 px-3 pb-2.5 text-[13px]">
