@@ -148,9 +148,9 @@ function OAuthAuthorizePage() {
             </div>
             <form className="space-y-3" onSubmit={onLogin}>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("Email")} autoComplete="username"
-                className="w-full rounded-xl border border-border bg-white/70 dark:bg-card/90 px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20" />
+                className="w-full rounded-xl border border-border bg-white/70 dark:bg-card/90 px-4 py-3 text-sm outline-none focus:border-ring/50 focus:ring-2 focus:ring-primary/20" />
               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("Password")} autoComplete="current-password"
-                className="w-full rounded-xl border border-border bg-white/70 dark:bg-card/90 px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20" />
+                className="w-full rounded-xl border border-border bg-white/70 dark:bg-card/90 px-4 py-3 text-sm outline-none focus:border-ring/50 focus:ring-2 focus:ring-primary/20" />
               {loginErr && <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{loginErr}</p>}
               <button type="submit" disabled={loggingIn} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] disabled:opacity-60">
                 {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {t("Sign in")}

@@ -864,7 +864,7 @@ export function ChatThread({
         title={t("Jump to that message")}
         className={cn(
           "mb-1 flex w-full items-center gap-2 rounded-lg border-l-2 px-2 py-1 text-left text-[11px] leading-snug transition-colors",
-          mine ? "border-primary-foreground/50 bg-primary-foreground/10 hover:bg-primary-foreground/20" : "border-primary/60 bg-background/60 hover:bg-background",
+          mine ? "border-primary-foreground/50 bg-primary-foreground/10 hover:bg-primary-foreground/20" : "border-ring/60 bg-background/60 hover:bg-background",
         )}
       >
         <span className="min-w-0 flex-1">
@@ -1179,7 +1179,7 @@ export function ChatThread({
             }}
             rows={1}
             aria-label={t("Type a message…  (@ to tag someone)")}
-            className="block max-h-32 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
+            className="block max-h-32 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-ring"
           />
           {!input && (
             <span aria-hidden className="pointer-events-none absolute left-[13px] right-[13px] top-[9px] truncate text-sm leading-5 text-muted-foreground">

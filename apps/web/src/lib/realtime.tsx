@@ -204,7 +204,7 @@ export function RealtimeProvider({
           );
         };
         // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
-        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, bookings: false, projectIds: new Set<string>() };
+        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, bookings: false, tasks: false, projectIds: new Set<string>() };
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let burstStartedAt = 0;
         const flushPings = () => {
@@ -221,6 +221,13 @@ export function RealtimeProvider({
           // The Legal request board (14 Oct 2026; only Legal members' rooms get it): the board, an open request.
           if (pending.legal) { queryClient.invalidateQueries({ queryKey: ["legal", "requests"] }); queryClient.invalidateQueries({ queryKey: ["legal", "request"] }); }
           if (pending.bookings) queryClient.invalidateQueries({ queryKey: ["room-bookings"] });
+          // R-13 (19 Oct 2026): a task assigned to me changed in a project whose room I am not in — the Home tiles
+          // (Tasks, Quests) and My Tasks refetch, if on screen.
+          if (pending.tasks) {
+            void queryClient.invalidateQueries({ predicate: (q) => isOtherTaskList(q.queryKey) });
+            void queryClient.invalidateQueries({ queryKey: ["gamification", "me"] });
+          }
+          pending.tasks = false;
           pending.bookings = false;
           pending.submissions = false;
           pending.legal = false;
@@ -252,6 +259,9 @@ export function RealtimeProvider({
           } else if (data.kind === "bookings") {
             // Server since 19 Oct 2026: a room booking was made, moved or deleted — the Room Booking page refetches.
             pending.bookings = true;
+          } else if (data.kind === "tasks") {
+            // Server since 19 Oct 2026 (R-13): a task assigned to me was made or changed. Nothing in the tree moved.
+            pending.tasks = true;
           } else if (data.kind === "vault") {
             // Server since 9 Oct 2026: a file or folder in Z Vault was added, moved, renamed, trashed,
             // restored or locked. Nothing about projects moved, so the project tree stays as it is.

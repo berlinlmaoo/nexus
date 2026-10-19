@@ -247,7 +247,7 @@ export function AuditLogView() {
             <div className="relative w-full sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search entity, action or type…")} aria-label={t("Search the audit log")}
-                className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-9 text-sm outline-none focus:border-primary" />
+                className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-9 text-sm outline-none focus:border-ring" />
               {q && <button type="button" onClick={() => setQ("")} aria-label={t("Clear search")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}
             </div>
             <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
@@ -627,7 +627,7 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore, ca
     : (what ? t("It comes back as it was when it was deleted: {what}.", { what }) : t("It comes back as it was when it was deleted."));
 
   return (
-    <section className="rounded-xl border border-primary/25 bg-primary/[0.04] px-3 py-3">
+    <section className="rounded-xl border border-ring/25 bg-primary/[0.04] px-3 py-3">
       <h3 className="text-sm font-semibold text-foreground">{t("Bring it back")}</h3>
       <p className="mt-1.5 text-sm">{explanation}</p>
       {note && <p className="mt-1 text-xs text-muted-foreground">{t(note)}</p>}

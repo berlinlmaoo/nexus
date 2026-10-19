@@ -140,7 +140,7 @@ function WorkspaceMembersSection() {
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex-1 min-w-[200px]"><span className="text-xs font-medium text-muted-foreground">{t("Email")}</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("someone@patsgroup.id")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("someone@patsgroup.id")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             </label>
             <label><span className="text-xs font-medium text-muted-foreground">{t("Role")}</span>
               <SelectPicker variant="field" value={inviteRole} onChange={(v) => setInviteRole(v as OrgRole)} ariaLabel={t("Role")} options={[...myAssignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="mt-1 flex px-3 py-2" />
@@ -164,7 +164,7 @@ function WorkspaceMembersSection() {
       <div className="rounded-xl border border-border bg-card shadow-soft">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div><h2 className="font-semibold">{t("Workspace members")}</h2><p className="text-xs text-muted-foreground">{tn(data?.members.length ?? 0, "{n} person", "{n} people")} · {t("your role:")} <RoleBadge role={myRole} /></p></div>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring" />
         </div>
         {q.isLoading ? (
           <div className="grid place-items-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -217,7 +217,7 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   return (
     // Wide enough for "+62 8xx xxxx xxxx" (QA B11: the number was cut on a phone).
     <div className="flex min-w-0 items-center gap-1 max-sm:basis-full">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-36 min-w-0 rounded-lg tabular-nums max-sm:flex-1 border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-36 min-w-0 rounded-lg tabular-nums max-sm:flex-1 border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring" />
       {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label={t("Save number")} title={t("Save")}>{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
@@ -261,7 +261,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
             <>
               <p className="text-sm text-muted-foreground">{t("Set a new password for {name}. At least 8 characters.", { name: target.name })}</p>
               <div className="flex items-center gap-2">
-                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={t("New password")} autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={t("New password")} autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
                 <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent">{show ? t("Hide") : t("Show")}</button>
               </div>
               <button onClick={() => { setPw(randomPassword()); setShow(true); }} className="text-xs font-semibold text-primary hover:underline">{t("Generate a random password")}</button>
@@ -322,7 +322,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
             disabled={mode === "sent" || request.isPending}
             type="email"
             placeholder={t("Your new email")}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring disabled:opacity-60"
           />
           {mode === "editing" && (
             <>
@@ -333,7 +333,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
               type="password"
               autoComplete="current-password"
               placeholder={t("Your current password")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring disabled:opacity-60"
             />
             <p className="text-[11px] text-muted-foreground">{t("To make sure it's you. Your old email will be told about this change.")}</p>
             <div className="flex items-center gap-2">
@@ -350,7 +350,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 inputMode="numeric"
                 placeholder="______"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-bold tracking-[0.4em] outline-none focus:border-primary"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-bold tracking-[0.4em] outline-none focus:border-ring"
               />
               <div className="flex items-center gap-2">
                 <button type="button" disabled={code.length !== 6 || verify.isPending} onClick={() => verify.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{verify.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Verify & change")}</button>
@@ -411,7 +411,7 @@ function ProfileSection() {
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Full name")}</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
+          <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Full name")}</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" /></label>
           <EmailChangeField currentEmail={u?.email ?? ""} onChanged={refreshProfile} />
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">Google Workspace</span>
@@ -423,7 +423,7 @@ function ProfileSection() {
           </label>
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">{t("Phone number")}</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={() => setPhone((p) => formatPhone(p))} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={() => setPhone((p) => formatPhone(p))} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             <span className="mt-1 block text-[11px] text-muted-foreground">{t("For numbers outside Indonesia, type + and the country code.")}</span>
           </label>
         </div>
@@ -480,7 +480,7 @@ function JoinWorkspaceSection() {
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">{t("Workspace code")}</span>
             <input value={code} onChange={(e) => { setCode(e.target.value); setConfirming(false); }} autoComplete="off" autoCapitalize="characters" spellCheck={false}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm uppercase tracking-wider outline-none focus:border-primary" />
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm uppercase tracking-wider outline-none focus:border-ring" />
           </label>
           {joinError && <p role="alert" className="text-sm font-medium text-destructive">{joinError}</p>}
           {confirming ? (
@@ -575,7 +575,7 @@ function PasswordSection() {
   // characters at least; the button allowed 6 and the server then refused it.
   const tooShort = next.length > 0 && next.length < 8;
   const mismatch = repeat.length > 0 && repeat !== next;
-  const field = "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary aria-[invalid=true]:border-destructive";
+  const field = "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring aria-[invalid=true]:border-destructive";
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <h2 className="font-semibold">{t("Password")}</h2>
@@ -625,7 +625,7 @@ function PasskeysSection() {
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Device name (e.g. MacBook Pro)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Device name (e.g. MacBook Pro)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             <button disabled={add.isPending} onClick={() => add.mutate()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
               {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {t("Add passkey")}
             </button>
@@ -860,7 +860,7 @@ function McpTokensSection() {
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
         <h2 className="font-semibold">{t("Generate a token")}</h2>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Label (e.g. My laptop)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Label (e.g. My laptop)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           <SelectPicker variant="field" value={String(expiresInDays)} onChange={(v) => setExpiresInDays(Number(v))} options={[30, 90, 180, 365].map((d) => ({ value: String(d), label: t("Expires in {n} days", { n: d }) }))} className="px-3 py-2 font-semibold" />
         </div>
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">

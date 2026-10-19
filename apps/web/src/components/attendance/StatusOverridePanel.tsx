@@ -41,11 +41,11 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId:
     if (window.confirm(what)) override.mutate(action);
   };
   return (
-    <div className="mt-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
+    <div className="mt-4 rounded-2xl border border-dashed border-ring/40 bg-primary/5 p-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> {t("Change status (board)")}</div>
       <div className="flex flex-wrap gap-1.5">
         {(["PRESENT", "PERMIT", "LEAVE", "SICK", "DAY_OFF"] as const).map((a) => (
-          <button key={a} disabled={override.isPending} onClick={() => ask(a)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold transition hover:border-primary hover:text-primary disabled:opacity-50">
+          <button key={a} disabled={override.isPending} onClick={() => ask(a)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold transition hover:border-ring hover:text-primary disabled:opacity-50">
             {label(a)}
           </button>
         ))}

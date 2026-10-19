@@ -73,7 +73,7 @@ function ProposalCard({ doc, p, onDone, onAnswer, answering }: { doc: LegalDocum
 
   if (p.status === "CLARIFY") {
     return (
-      <div className="space-y-2 rounded-md border border-primary/30 bg-background p-3 text-sm">
+      <div className="space-y-2 rounded-md border border-ring/30 bg-background p-3 text-sm">
         <div className="flex items-start gap-2"><MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> <span>{p.question}</span></div>
         <div className="flex gap-2">
           <Input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={t("Your answer")} onKeyDown={(e) => { if (e.key === "Enter" && answer.trim()) onAnswer(answer.trim()); }} />

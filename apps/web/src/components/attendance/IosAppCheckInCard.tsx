@@ -42,7 +42,7 @@ export function IosAppCheckInCard({ className }: { className?: string }) {
   if (isAndroidBrowser()) return <AndroidAppCheckInCard className={className} />;
   if (!isIosBrowser()) return <PhoneAppCheckInCard className={className} />;
   return (
-    <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+    <div className={cn("rounded-2xl border border-ring/20 bg-card p-4 shadow-soft", className)}>
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
         <div className="min-w-0">
@@ -101,7 +101,7 @@ export function AndroidAppBanner({ className }: { className?: string }) {
     setHidden(true);
   };
   return (
-    <div className={cn("relative rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+    <div className={cn("relative rounded-2xl border border-ring/20 bg-card p-4 shadow-soft", className)}>
       <button type="button" onClick={close} aria-label={t("Hide")} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent">
         <X className="h-4 w-4" />
       </button>
@@ -124,7 +124,7 @@ export function AndroidAppCheckInNote({ className }: { className?: string }) {
   useLang();
   if (!isAndroidBrowser()) return null;
   return (
-    <a href={NEXUS_ANDROID_DOWNLOAD} className={cn("flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm transition hover:bg-primary/10", className)}>
+    <a href={NEXUS_ANDROID_DOWNLOAD} className={cn("flex items-center justify-between gap-3 rounded-xl border border-ring/20 bg-primary/5 px-3 py-2.5 text-sm transition hover:bg-primary/10", className)}>
       <span className="flex min-w-0 items-center gap-2">
         <Smartphone className="h-4 w-4 shrink-0 text-primary" />
         <span className="min-w-0 font-semibold text-foreground">{t("Check in from the NEXUS app for Android")}</span>
@@ -139,7 +139,7 @@ export function AndroidAppCheckInNote({ className }: { className?: string }) {
 function AndroidAppCheckInCard({ className }: { className?: string }) {
   useLang();
   return (
-    <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+    <div className={cn("rounded-2xl border border-ring/20 bg-card p-4 shadow-soft", className)}>
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
         <div className="min-w-0">
@@ -155,7 +155,7 @@ function AndroidAppCheckInCard({ className }: { className?: string }) {
 function PhoneAppCheckInCard({ className }: { className?: string }) {
   useLang();
   return (
-    <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+    <div className={cn("rounded-2xl border border-ring/20 bg-card p-4 shadow-soft", className)}>
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
         <div className="min-w-0">

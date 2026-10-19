@@ -147,7 +147,7 @@ export function SelectPicker({
 
   const triggerCls = {
     ghost: "rounded-md border border-transparent px-1.5 hover:bg-muted data-[state=open]:bg-muted",
-    field: "rounded-lg border border-border bg-background px-2.5 hover:border-primary/40 data-[state=open]:border-primary",
+    field: "rounded-lg border border-border bg-background px-2.5 hover:border-ring/40 data-[state=open]:border-primary",
     pill: "rounded-full border border-border bg-card px-3 hover:bg-muted data-[state=open]:bg-muted",
   }[variant];
   const chosen = renderValue ? renderValue(isEmpty ? null : current) : isEmpty ? (

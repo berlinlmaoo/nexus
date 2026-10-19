@@ -118,8 +118,8 @@ export function SocialSettings({
   };
 
   const iconBtn = "grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-30 pointer-coarse:size-10";
-  const inputCls = "h-9 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition-colors hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-10";
-  const numCls = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  const inputCls = "h-9 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition-colors hover:border-border focus-visible:border-ring focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-10";
+  const numCls = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
   const savedActive = data.config.platforms.filter((p) => !p.archived);
 
   return (

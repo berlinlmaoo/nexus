@@ -124,7 +124,7 @@ export function NumberFieldInput({ raw, fieldOptions, onSet, ariaLabel, inline, 
   useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
   const box = inline
     ? "w-full min-w-0 rounded-md border border-primary bg-background px-1.5 py-1 text-sm outline-none"
-    : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
+    : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring";
   const finish = (text: string) => {
     setEditing(false);
     const next = normalizeNumberFieldValue(text, fieldOptions);
@@ -147,7 +147,7 @@ export function NumberFieldInput({ raw, fieldOptions, onSet, ariaLabel, inline, 
   const shown = raw.trim() ? <NumberFieldValue raw={raw} fieldOptions={fieldOptions} align={align} /> : <span className="text-muted-foreground/70">{placeholder ?? ""}</span>;
   return (
     <button type="button" onClick={start} onFocus={start} aria-label={ariaLabel}
-      className={cn("block w-full min-w-0 text-left text-sm", inline ? "min-h-7 rounded-md px-1.5 py-1 hover:bg-muted" : "min-h-[34px] rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-primary/40")}>
+      className={cn("block w-full min-w-0 text-left text-sm", inline ? "min-h-7 rounded-md px-1.5 py-1 hover:bg-muted" : "min-h-[34px] rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-ring/40")}>
       {shown}
     </button>
   );
@@ -176,7 +176,7 @@ function FormatList({ value, onPick }: { value: string; onPick: (f: string) => v
   const list = filterNumberFormats(q, lang);
   return (
     <div>
-      <label className="mb-1 flex items-center gap-1.5 rounded-md border border-border px-2 py-1 focus-within:border-primary">
+      <label className="mb-1 flex items-center gap-1.5 rounded-md border border-border px-2 py-1 focus-within:border-ring">
         <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Filter formats…")} aria-label={t("Filter formats…")} className="w-full bg-transparent text-sm outline-none"
           onKeyDown={(e) => { if (e.key === "Enter" && list[0]) onPick(list[0]); }} />
@@ -272,7 +272,7 @@ export function NumberFieldSettings({ value, onChange }: { value: unknown; onCha
               <label className="flex items-center justify-between gap-2 px-1">
                 <span className="text-sm">{t("Divide by")}</span>
                 <input value={divideBy} inputMode="decimal" onChange={(e) => setDivideBy(e.target.value)} onBlur={commitDivide} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                  className="w-24 rounded-md border border-border bg-background px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-primary" />
+                  className="w-24 rounded-md border border-border bg-background px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-ring" />
               </label>
             )}
             <label className="flex items-center justify-between gap-2 px-1 py-1">

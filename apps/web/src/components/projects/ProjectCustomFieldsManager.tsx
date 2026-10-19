@@ -59,12 +59,12 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-3">
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Field name (e.g. Production Status)")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+    <div className="space-y-3 rounded-2xl border border-ring/30 bg-primary/5 p-3">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Field name (e.g. Production Status)")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring" />
 
       <div className="flex flex-wrap gap-1.5">
         {CUSTOM_FIELD_TYPES.map((t) => (
-          <button key={t} type="button" onClick={() => onTypeChange(t)} className={cn("rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors", type === t ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
+          <button key={t} type="button" onClick={() => onTypeChange(t)} className={cn("rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors", type === t ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-ring/40")}>
             {TYPE_LABELS[t] ? tr(TYPE_LABELS[t]) : t}
           </button>
         ))}
@@ -75,11 +75,11 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Options")}</span>
           {optionList.map((opt, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <input value={opt} onChange={(e) => setOptionList((list) => list.map((o, j) => (j === i ? e.target.value : o)))} placeholder={tr("Option {n}", { n: i + 1 })} className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+              <input value={opt} onChange={(e) => setOptionList((list) => list.map((o, j) => (j === i ? e.target.value : o)))} placeholder={tr("Option {n}", { n: i + 1 })} className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring" />
               <button type="button" onClick={() => setOptionList((list) => list.filter((_, j) => j !== i))} aria-label={tr("Remove option")} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
             </div>
           ))}
-          <button type="button" onClick={() => setOptionList((list) => [...list, ""])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> {tr("Add option")}</button>
+          <button type="button" onClick={() => setOptionList((list) => [...list, ""])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-ring hover:text-primary"><Plus className="h-3.5 w-3.5" /> {tr("Add option")}</button>
         </div>
       )}
 
@@ -130,7 +130,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
     <div className="space-y-2 border-t border-border pt-5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Fields")} · {fields.length}</span>
-        {!adding && <button onClick={() => { setAdding(true); setEditingId(null); }} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {tr("New field")}</button>}
+        {!adding && <button onClick={() => { setAdding(true); setEditingId(null); }} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-ring hover:text-primary active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {tr("New field")}</button>}
       </div>
       <p className="text-xs text-muted-foreground">{tr("Fields just for this project. They show up in every task's details (e.g. Production Status, Budget, Location).")}</p>
 

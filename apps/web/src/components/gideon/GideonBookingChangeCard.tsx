@@ -93,7 +93,7 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
         {isMove && (
           <>
             <div className="flex justify-center text-muted-foreground" aria-hidden><ArrowDown className="h-3.5 w-3.5" /></div>
-            <div className="rounded-lg border border-primary/40 px-2.5 py-1.5">
+            <div className="rounded-lg border border-ring/40 px-2.5 py-1.5">
               <span className="block text-[11px] font-semibold text-muted-foreground">{t("Moves to")}</span>
               {!open && landed ? (
                 <>
@@ -127,7 +127,7 @@ export function GideonBookingChangeCard({ proposal, onDecided }: { proposal: Gid
           <a
             href={`/room-booking?booking=${c.bookingId}`}
             onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); router.history.push(`/room-booking?booking=${c.bookingId}`); }}
-            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition-colors hover:border-primary/40 hover:bg-accent/40"
+            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition-colors hover:border-ring/40 hover:bg-accent/40"
           >
             <CalendarClock className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /><span className="flex-1">{t("Open Room Booking")}</span><ChevronRight className="h-4 w-4 text-muted-foreground" />
           </a>

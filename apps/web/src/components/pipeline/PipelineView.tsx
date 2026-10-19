@@ -274,7 +274,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
     </div>
   );
   const pickerControl = "h-9 rounded-lg bg-card pointer-coarse:h-11";
-  const control = "h-9 rounded-lg border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  const control = "h-9 rounded-lg border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
   // "All PMs" reads as just "PM" on a phone, where the three filters share one row (they were "Semu…").
   const allLabel = (short: string, long: string) => (o: { value: string; label: string } | null) =>
     o && o.value !== ALL ? <span className="truncate">{o.label}</span> : (
@@ -432,7 +432,7 @@ function NewDealDialog({ stage, saving, onCancel, onCreate }: { stage: string | 
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">{t("Deal name")}</span>
             <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder={t("e.g. Brand activation, Jakarta Fair")}
-              className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11" />
+              className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11" />
           </label>
           <DialogFooter className="gap-2 sm:gap-2">
             <button type="button" onClick={onCancel} className="inline-flex h-9 items-center justify-center rounded-lg border border-border px-3.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11">{t("Cancel")}</button>

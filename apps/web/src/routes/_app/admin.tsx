@@ -316,7 +316,7 @@ function Admin() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative max-w-sm flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-ring" />
               </div>
               {roleFilter !== "ALL" && (
                 <button onClick={() => setRoleFilter("ALL")} className="inline-flex items-center gap-1.5 rounded-xl border border-primary bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
@@ -456,7 +456,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
           <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <input type="number" inputMode="numeric" min={0} max={31} value={val} onChange={(e) => setVal(e.target.value)} placeholder="0" className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <input type="number" inputMode="numeric" min={0} max={31} value={val} onChange={(e) => setVal(e.target.value)} placeholder="0" className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring" />
             <span className="text-xs text-muted-foreground">{t("days per staff member this month")}</span>
             <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
               {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Save")}
@@ -561,7 +561,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
 
   const takenBy = (a: GoogleWorkspaceAccount) => (a.linkedTo && a.linkedTo.id !== user.id ? a.linkedTo.name : null);
   const rows = accounts.filter((a) => !q.trim() || a.email.toLowerCase().includes(q.toLowerCase()) || (a.fullName ?? "").toLowerCase().includes(q.toLowerCase()));
-  const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring";
 
   return (
     <>
@@ -575,11 +575,11 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
         )}
         {canEdit && (
           <>
-            <button type="button" onClick={() => { setProblem(null); setQ(""); setOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+            <button type="button" onClick={() => { setProblem(null); setQ(""); setOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-ring hover:text-primary">
               <Link2 className="h-3.5 w-3.5" /> {current ? t("Change account") : t("Choose account")}
             </button>
             {!current && domains.length > 0 && (
-              <button type="button" onClick={() => { setProblem(null); setMaking(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+              <button type="button" onClick={() => { setProblem(null); setMaking(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-ring hover:text-primary">
                 <Plus className="h-3.5 w-3.5" /> {t("Create work email")}
               </button>
             )}
@@ -605,7 +605,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
             <p className="mb-3 text-[11px] text-muted-foreground">{t("The server checks that the address really exists in Google before saving it.")}</p>
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search address or name…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search address or name…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-ring" />
             </div>
             <div className="max-h-80 space-y-0.5 overflow-y-auto">
               {current && !accounts.some((a) => a.email === current) && (
@@ -794,7 +794,7 @@ function UserRow(props: UserRowProps) {
                 tapi tidak di mana pun. Satu tombol, langsung jadi Staff; perannya bisa diubah
                 sesudahnya di panel yang sama. */}
             {deactivated && canReinstate && (
-              <button type="button" onClick={onReinstate} title={t("Reinstate")} aria-label={t("Reinstate")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-bold text-foreground transition hover:border-primary hover:text-primary">
+              <button type="button" onClick={onReinstate} title={t("Reinstate")} aria-label={t("Reinstate")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-bold text-foreground transition hover:border-ring hover:text-primary">
                 <RotateCcw className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{t("Reinstate")}</span>
               </button>
             )}
@@ -809,7 +809,7 @@ function UserRow(props: UserRowProps) {
               </button>
             )}
             {isMember && (
-              <button type="button" onClick={() => setOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary pointer-coarse:min-h-11">
+              <button type="button" onClick={() => setOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-ring hover:text-primary pointer-coarse:min-h-11">
                 <Settings2 className="h-3.5 w-3.5" /> {t("Details")}
               </button>
             )}
@@ -941,7 +941,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
 
               {canManageShift && (
                 <Card title={t("Day-off quota")}>
-                  <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary">
+                  <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground transition hover:border-ring hover:text-primary">
                     <CalendarDays className="h-4 w-4" /> {t("Manage day-off quota and history")}
                   </button>
                 </Card>
@@ -1129,7 +1129,7 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
     onError: (e: unknown) => toast.error(t("Couldn't upload the photo"), { description: e instanceof ApiError ? e.message : t("PNG/JPG/WEBP, up to 5 MB.") }),
   });
   const dirtyIdentity = name.trim() !== (user.name ?? "") || email.trim().toLowerCase() !== (user.email ?? "");
-  const inputCls = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
+  const inputCls = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-ring";
   return (
     <Card title={t("Account")} hint={t("Photo, name, sign-in email and password. Only board members see this card.")}>
       <div className="space-y-3">
@@ -1139,7 +1139,7 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
           ) : (
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
           )}
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:border-ring hover:text-primary">
             {photo.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {t("Change photo")}
           </span>
           <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={photo.isPending} onChange={(e) => { const f = e.target.files?.[0]; if (f) photo.mutate(f); e.target.value = ""; }} />
@@ -1180,15 +1180,15 @@ function ProjectAddPicker({ projects, already, pending, onPick }: { projects: Ar
   const options = projects.filter((p) => !already.has(p.id)).filter((p) => !q.trim() || p.name.toLowerCase().includes(q.toLowerCase()));
   if (!open) {
     return (
-      <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-40">
+      <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-ring hover:text-primary disabled:opacity-40">
         {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {t("project")}
       </button>
     );
   }
   return (
-    <div className="w-full rounded-lg border border-primary/40 bg-background p-2">
+    <div className="w-full rounded-lg border border-ring/40 bg-background p-2">
       <div className="mb-1.5 flex items-center gap-2">
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search projects…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search projects…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring" />
         <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">{t("Close")}</button>
       </div>
       <div className="max-h-44 space-y-0.5 overflow-y-auto">
@@ -1224,21 +1224,21 @@ function TeamAddPicker({ teams, already, pending, onPick, onCreated }: { teams: 
     .filter((t) => !q.trim() || t.name.toLowerCase().includes(q.toLowerCase()) || (t.division?.name ?? "").toLowerCase().includes(q.toLowerCase()));
   if (!open) {
     return (
-      <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-40">
+      <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-ring hover:text-primary disabled:opacity-40">
         {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {tl("team")}
       </button>
     );
   }
   return (
-    <div className="w-full rounded-lg border border-primary/40 bg-background p-2">
+    <div className="w-full rounded-lg border border-ring/40 bg-background p-2">
       <div className="mb-1.5 flex items-center gap-2">
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tl("Search teams…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tl("Search teams…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring" />
         <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">{tl("Close")}</button>
       </div>
       <div className="max-h-44 space-y-0.5 overflow-y-auto">
         {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{teams.length === 0 ? tl("No teams yet.") : tl("Nothing matches.")}</div>}
         {q.trim().length > 1 && !teams.some((t) => t.name.toLowerCase() === q.trim().toLowerCase()) && (
-          <button type="button" disabled={create.isPending} onClick={() => create.mutate(q.trim())} className="mt-0.5 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border px-1.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
+          <button type="button" disabled={create.isPending} onClick={() => create.mutate(q.trim())} className="mt-0.5 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border px-1.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition hover:border-ring hover:text-primary disabled:opacity-50">
             {create.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {tl("Create team “{name}”", { name: q.trim() })}
           </button>
         )}
@@ -1321,7 +1321,7 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
   const hasShift = !!start && !!end;
   // On blur, snap a valid entry to canonical "h:mm AM/PM".
   const snap = (raw: string, set: (v: string) => void) => { const p = parse12h(raw); if (p && p !== "invalid") set(to12h(p)); };
-  const inputCls = (bad: boolean) => cn("w-[6.75rem] rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-50", bad ? "border-rose-400 text-rose-600 dark:text-rose-400" : "border-border");
+  const inputCls = (bad: boolean) => cn("w-[6.75rem] rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-ring disabled:opacity-50", bad ? "border-rose-400 text-rose-600 dark:text-rose-400" : "border-border");
 
   return (
     <div className="flex items-center gap-1">
@@ -1364,7 +1364,7 @@ function QuotaEditor({ userId, quota, override, defaultQuota }: { userId: string
     <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3">
       <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Day-off quota per month")}</div>
       <div className="flex flex-wrap items-center gap-2">
-        <input type="number" min={0} max={366} value={val} onChange={(e) => setVal(e.target.value)} className="w-20 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary" />
+        <input type="number" min={0} max={366} value={val} onChange={(e) => setVal(e.target.value)} className="w-20 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-ring" />
         <span className="text-xs text-muted-foreground">{t("days per month")}</span>
         <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
           {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Save")}
@@ -1562,7 +1562,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
           </div>
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-ring" />
           </div>
           {selected.size > 0 && (
             <div className="mb-2 flex flex-wrap gap-1">
@@ -1590,11 +1590,11 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
         <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
           <label className="block">
             <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Days")}</span>
-            <input type="number" inputMode="numeric" min={1} max={31} value={days} onChange={(e) => setDays(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <input type="number" inputMode="numeric" min={1} max={31} value={days} onChange={(e) => setDays(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Reason (required)")}</span>
-            <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Worked the 3-day Jakarta event")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Worked the 3-day Jakarta event")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           </label>
         </div>
         {!daysValid && days !== "" && <p className="text-[11px] text-rose-600 dark:text-rose-400">{t("Days must be a whole number from 1 to 31.")}</p>}
@@ -1760,7 +1760,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (dayValid && !m.isPending) m.mutate(); }}>
             <p className="text-xs text-muted-foreground">{t("For someone who resigned, whose contract ended, or who was let go. Their history stays.")}</p>
             <label className="block text-xs font-semibold text-muted-foreground">{t("Last working day")}
-              <input type="date" required value={day} max={today} min={minDay} onChange={(e) => setDay(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary" />
+              <input type="date" required value={day} max={today} min={minDay} onChange={(e) => setDay(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-ring" />
             </label>
             <fieldset>
               <legend className="mb-1 text-xs font-semibold text-muted-foreground">{t("Reason")}</legend>
@@ -1773,7 +1773,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
               </div>
             </fieldset>
             <label className="block text-xs font-semibold text-muted-foreground">{t("Note (optional)")}
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring" />
             </label>
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("What happens")}</div>
@@ -1992,7 +1992,7 @@ function AdminQuests() {
     onSuccess: () => { invalidate(); toast.success(tq("Quest deleted")); },
     onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only BoD and up can manage quests") : friendlyError(e) ?? tq("Try again.") }),
   });
-  const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring";
 
   return (
     <div className="space-y-4">
@@ -2007,7 +2007,7 @@ function AdminQuests() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Quest title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
               <label className="text-xs font-semibold text-muted-foreground">{tq("Type")}
-                <SelectPicker variant="field" value={requirementType} onChange={setRequirementType} ariaLabel={tq("Type")} options={REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => ({ value: r.value, label: tq(r.label) }))} className={cn(inputCls, "mt-1 flex w-full font-normal text-foreground hover:border-primary/40")} />
+                <SelectPicker variant="field" value={requirementType} onChange={setRequirementType} ariaLabel={tq("Type")} options={REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => ({ value: r.value, label: tq(r.label) }))} className={cn(inputCls, "mt-1 flex w-full font-normal text-foreground hover:border-ring/40")} />
               </label>
               {!isTasks && (
                 <label className="text-xs font-semibold text-muted-foreground">{tq("Target (number of tasks)")}
@@ -2125,7 +2125,7 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
       disabled={!onClick}
       className={cn(
         "rounded-2xl border bg-card p-4 text-left shadow-soft transition-colors",
-        onClick && "hover:border-primary/60 cursor-pointer",
+        onClick && "hover:border-ring/60 cursor-pointer",
         active ? "border-primary ring-1 ring-primary dark:border-ring dark:ring-ring" : "border-border",
         !onClick && "cursor-default",
       )}
@@ -2185,8 +2185,8 @@ function AnnouncementsAdmin() {
         <>
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
             <div className="text-sm font-bold">{t("Create a pop-up announcement")}</div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Announcement title")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder={t("Announcement text… (several lines are fine)")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Announcement title")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring" />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder={t("Announcement text… (several lines are fine)")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
 
             {/* Audience: everyone, or specific people */}
             <div className="space-y-2">
@@ -2211,7 +2211,7 @@ function AnnouncementsAdmin() {
                   )}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder={t("Search a name to add…")} className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
+                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder={t("Search a name to add…")} className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-ring" />
                   </div>
                   {memberSearch && (
                     <div className="max-h-40 space-y-0.5 overflow-y-auto">
@@ -2274,7 +2274,7 @@ function AnnouncementsAdmin() {
                 {repeatDays > 0 && (
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                     {t("at")}
-                    <input type="time" value={repeatAtTime} onChange={(e) => setRepeatAtTime(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
+                    <input type="time" value={repeatAtTime} onChange={(e) => setRepeatAtTime(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-ring" />
                     WIB
                   </label>
                 )}

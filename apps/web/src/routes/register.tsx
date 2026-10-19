@@ -40,7 +40,7 @@ function RegisterPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   const input =
-    "w-full bg-white/60 dark:bg-card/90 border border-white/80 dark:border-border rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50";
+    "w-full bg-white/60 dark:bg-card/90 border border-white/80 dark:border-border rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-ring/50 transition-all shadow-sm disabled:opacity-50";
   const labelCls = "text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1 block";
 
   const submitForm = async (e: React.FormEvent) => {

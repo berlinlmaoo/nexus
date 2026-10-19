@@ -123,7 +123,7 @@ export function OnboardingWizard() {
                 <h2 className="text-xl font-black tracking-tight">{t("Your full name")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{t("Use your full name, not a nickname, so your team can find you.")}</p>
               </div>
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || t("Full name…")} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || t("Full name…")} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-ring" />
               {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{t("Enter your full name (at least 2 words).")}</p>}
               {saveName.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't save your name.")}</p>}
             </div>

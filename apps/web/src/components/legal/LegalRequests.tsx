@@ -219,7 +219,7 @@ function RequestCard({ r, onOpen }: { r: BoardRequest; onOpen: () => void }) {
   const { t, lang } = useLang();
   return (
     <button type="button" draggable onDragStart={(e) => { e.dataTransfer.setData("text/x-legal-request", r.id); e.dataTransfer.effectAllowed = "move"; }}
-      onClick={onOpen} className="w-full cursor-grab rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md active:cursor-grabbing">
+      onClick={onOpen} className="w-full cursor-grab rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition hover:border-ring/40 hover:shadow-md active:cursor-grabbing">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 text-sm font-semibold leading-snug">{r.templateName || docTypeLabel(r.docType)}</div>
         {r.rejected && <RejectedLabel />}

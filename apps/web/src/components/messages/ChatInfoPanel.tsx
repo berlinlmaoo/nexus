@@ -504,7 +504,7 @@ function Description({ info, onSaved }: { info: Info; onSaved: () => void }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditing(false); } }}
           rows={4}
-          className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -575,7 +575,7 @@ function SearchView({ conversationId, onJump }: { conversationId: string; onJump
             placeholder={t("Search messages")}
             aria-label={t("Search messages")}
             maxLength={100}
-            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-9 text-sm outline-none focus:border-primary"
+            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-9 text-sm outline-none focus:border-ring"
           />
           {text && (
             <button onClick={() => setText("")} title={t("Close")} aria-label={t("Close")} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-3.5 w-3.5" /></button>

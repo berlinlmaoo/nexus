@@ -166,7 +166,7 @@ function AutofillCard({ config, field, canManage, onChanged }: { config: Autofil
             onChange={(e) => setPrompt(e.target.value)}
             onBlur={() => { if ((config.prompt ?? "") !== prompt.trim()) save.mutate({ prompt: prompt.trim() || null }); }}
             placeholder={config.mode === "classify" ? t("e.g. Bug if something is broken, Feature if it is new work.") : config.mode === "extract" ? t("e.g. The invoice amount in rupiah.") : t("e.g. One sentence: what is being delivered, for whom.")}
-            className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary"
+            className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring"
           />
         </label>
         <div className="space-y-1.5">

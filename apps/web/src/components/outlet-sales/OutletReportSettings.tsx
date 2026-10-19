@@ -185,7 +185,7 @@ function Block({ title, hint, children }: { title: string; hint: string; childre
 }
 
 const iconBtn = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-30 pointer-coarse:size-10";
-const inputCls = "h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition-colors hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-10";
+const inputCls = "h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition-colors hover:border-border focus-visible:border-ring focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-10";
 
 function move<T>(list: T[], from: number, to: number): T[] {
   const next = [...list];

@@ -271,12 +271,12 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
 
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Short title")}</label>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder={t("e.g. My leave balance got deducted wrong this month")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder={t("e.g. My leave balance got deducted wrong this month")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         </div>
 
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("What happened")}</label>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder={t("Describe the issue in as much detail as you can: what happened, when, and what you'd like to happen.")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder={t("Describe the issue in as much detail as you can: what happened, when, and what you'd like to happen.")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           <p className="text-right text-[11px] text-muted-foreground">{body.trim().length}/4000</p>
         </div>
 
@@ -295,14 +295,14 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
                 </div>
               ))}
               {evidence.length < MAX_PHOTOS && (
-                <button onClick={() => fileRef.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary">
+                <button onClick={() => fileRef.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-background text-muted-foreground transition hover:border-ring/40 hover:text-primary">
                   <Plus className="h-5 w-5" />
                   <span className="text-[11px] font-semibold">{t("Add photo")}</span>
                 </button>
               )}
             </div>
           ) : (
-            <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
+            <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-ring/40 hover:text-primary">
               <Camera className="h-6 w-6" />
               <span className="text-sm font-semibold">{t("Take or pick photos as evidence")}</span>
               <span className="text-[11px]">{t("Up to {n} photos. You can pick several at once.", { n: MAX_PHOTOS })}</span>
@@ -423,7 +423,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
               <div className="grid grid-cols-2 gap-2">
                 {c.attachments.map((a, i) => (
                   <button key={a.id} onClick={() => setZoom(a.url)} aria-label={t("Open evidence photo {n} full size", { n: i + 1 })}
-                    className="aspect-[4/3] overflow-hidden rounded-xl border border-border transition hover:border-primary/50">
+                    className="aspect-[4/3] overflow-hidden rounded-xl border border-border transition hover:border-ring/50">
                     <img src={a.url} alt={t("Evidence {n}", { n: i + 1 })} className="h-full w-full object-cover" />
                   </button>
                 ))}
@@ -490,7 +490,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
               rows={1}
               maxLength={4000}
               placeholder={viewerIsBod ? t("Reply to this ticket…") : t("Write a reply…")}
-              className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
             />
             <button onClick={() => send.mutate()} disabled={busy || reply.trim().length < 10} aria-label={t("Send")} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">
               {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -561,7 +561,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-2.5 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
+      <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-2.5 text-xs font-bold text-muted-foreground transition hover:border-ring/50 hover:text-foreground">
         <CalendarClock className="h-3.5 w-3.5" /> {t("Request an attendance fix")}
       </button>
     );
@@ -804,7 +804,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
             rows={2}
             maxLength={1000}
             placeholder={t("Note for the reporter (optional). It goes into the thread with your decision.")}
-            className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
           />
           <div className="flex gap-2">
             <button onClick={() => decide.mutate("APPROVE")} disabled={decide.isPending}

@@ -54,7 +54,7 @@ export function DayTargetPanel({ projectId, data, day }: { projectId: string; da
     setEditing(true);
   };
 
-  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
 
   return (
     <section aria-label={t("Day target")} className="mb-3 rounded-xl border border-border bg-card p-4">

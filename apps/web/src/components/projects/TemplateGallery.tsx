@@ -113,7 +113,7 @@ export function TemplateGallery({ onPick, pipeline }: { onPick: (pick: GalleryPi
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("Search templates")}
             aria-label={t("Search templates")}
-            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-8 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-8 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-primary/20"
           />
           {query && (
             <button type="button" onClick={() => setQuery("")} aria-label={t("Clear search")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -206,7 +206,7 @@ function Card({ onClick, wash, icon, iconClass, title, body, preview }: { onClic
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-full w-full flex-col items-stretch overflow-hidden rounded-2xl border border-border bg-background text-left transition hover:border-primary hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.99]"
+      className="group flex h-full w-full flex-col items-stretch overflow-hidden rounded-2xl border border-border bg-background text-left transition hover:border-ring hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.99]"
     >
       <div className={cn("flex w-full items-start gap-2.5 px-3.5 pb-2.5 pt-3", wash)}>
         <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-xl", iconClass)}>{icon}</span>

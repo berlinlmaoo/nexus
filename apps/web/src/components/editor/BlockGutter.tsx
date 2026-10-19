@@ -150,7 +150,7 @@ export function BlockMenu({ editor, target, anchor, onClose }: { editor: Editor;
           onChange={(e) => { setQuery(e.target.value); setIndex(0); }}
           onKeyDown={onKey}
           placeholder={t("Search actions…")}
-          className="w-full rounded-md border border-transparent bg-muted/60 px-2 py-1 text-sm outline-none focus:border-primary/40"
+          className="w-full rounded-md border border-transparent bg-muted/60 px-2 py-1 text-sm outline-none focus:border-ring/40"
         />
       </div>
       <div className="max-h-[min(60vh,360px)] overflow-y-auto p-1">

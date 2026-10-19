@@ -2832,7 +2832,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
       {!docs.isLoading && !docs.isError && items.length === 0 && <Empty title={tr("No pages yet")} message={tr("Add the first page for a brief, an SOP or meeting notes.")} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((doc) => (
-          <Card key={doc.id} onClick={() => onOpen(doc)} className="border border-border bg-card text-left shadow-soft hover:border-primary/40">
+          <Card key={doc.id} onClick={() => onOpen(doc)} className="border border-border bg-card text-left shadow-soft hover:border-ring/40">
             <CardBody className="gap-4 p-5">
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg">{doc.icon || "📄"}</span>

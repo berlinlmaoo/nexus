@@ -40,7 +40,7 @@ function DocsList() {
         <>
           <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search pages…")} className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-full sm:w-56 outline-none focus:border-primary" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search pages…")} className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-full sm:w-56 outline-none focus:border-ring" />
           </div>
           <button onClick={() => setOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New page")}</button>
         </>
@@ -110,7 +110,7 @@ function DocComposer({ onClose }: { onClose: () => void }) {
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
-  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
+  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20";
 
   return (
     <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
@@ -124,9 +124,9 @@ function DocComposer({ onClose }: { onClose: () => void }) {
         </div>
         <div className="mt-5 space-y-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Page title")} className={field} />
-          <SelectPicker variant="field" value={projectId} onChange={setProjectId} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "flex hover:border-primary/40")} />
+          <SelectPicker variant="field" value={projectId} onChange={setProjectId} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "flex hover:border-ring/40")} />
           {(templates.data?.templates?.length ?? 0) > 0 && (
-            <SelectPicker variant="field" value={templateId} onChange={(v) => { setTemplateId(v); if (v) applyTemplate(v); }} placeholder={t("Start from a template (optional)")} ariaLabel={t("Start from a template (optional)")} options={(templates.data?.templates ?? []).map((x) => ({ value: x.id, label: x.name }))} className={cn(field, "flex hover:border-primary/40")} />
+            <SelectPicker variant="field" value={templateId} onChange={(v) => { setTemplateId(v); if (v) applyTemplate(v); }} placeholder={t("Start from a template (optional)")} ariaLabel={t("Start from a template (optional)")} options={(templates.data?.templates ?? []).map((x) => ({ value: x.id, label: x.name }))} className={cn(field, "flex hover:border-ring/40")} />
           )}
           <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("Write a note, an SOP or meeting notes…")} className={cn(field, "min-h-32")} />
           {create.isError && <p className="text-sm text-destructive">{t("Couldn't create the page. Check that you're a member of the project, then try again.")}</p>}
@@ -143,7 +143,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
   const { t } = useLang();
   const author = doc.author || doc.owner;
   return (
-    <Link to="/docs/$docId" params={{ docId: doc.id }} className="block cursor-pointer rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+    <Link to="/docs/$docId" params={{ docId: doc.id }} className="block cursor-pointer rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:-translate-y-0.5 hover:border-ring/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
       <div className="flex items-start gap-3">
         <span className="text-2xl">{emojiForDoc(doc)}</span>
         <div className="flex-1 min-w-0">

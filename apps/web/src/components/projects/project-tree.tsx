@@ -435,7 +435,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
             {photoPreview ? (
               <img src={photoPreview} alt="" className="h-10 w-12 shrink-0 rounded-xl border border-border object-cover" />
             ) : (
-              <input value={form.icon} onChange={(e) => onChange({ icon: e.target.value.slice(0, 4) })} className="h-10 w-12 rounded-xl border border-border bg-background text-center text-xl outline-none focus:border-primary" aria-label={t("Emoji")} />
+              <input value={form.icon} onChange={(e) => onChange({ icon: e.target.value.slice(0, 4) })} className="h-10 w-12 rounded-xl border border-border bg-background text-center text-xl outline-none focus:border-ring" aria-label={t("Emoji")} />
             )}
             <input
               value={form.name}
@@ -444,7 +444,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
               aria-label={t("Folder name")}
               autoFocus
               onKeyDown={(e) => { if (e.key === "Enter" && canSave && !saving) onSave(); }}
-              className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+              className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-ring"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">

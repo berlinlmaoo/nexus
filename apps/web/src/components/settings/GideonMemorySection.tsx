@@ -300,7 +300,7 @@ function MemoryRow({ memory, locale, paused, onDone }: { memory: GideonMemory; l
       <li className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
         <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={200} aria-label={t("Edit memory")}
           onKeyDown={(e) => { if (e.key === "Escape") { setEditing(false); setValue(memory.text); } if (e.key === "Enter" && value.trim()) save.mutate({ text: value.trim() }); }}
-          className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+          className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring" />
         <div className="flex justify-end gap-1">
           <button type="button" onClick={() => { setEditing(false); setValue(memory.text); }} className={iconBtn} aria-label={t("Cancel")} title={t("Cancel")}><X className="h-4 w-4" /></button>
           <button type="button" onClick={() => value.trim() && save.mutate({ text: value.trim() })} disabled={!value.trim() || save.isPending} className={iconBtn} aria-label={t("Save")} title={t("Save")}>

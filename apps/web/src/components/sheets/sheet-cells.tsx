@@ -170,7 +170,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
             if (e.key === "Enter") save();
             if (e.key === "Escape") onClose();
           }}
-          className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-primary"
+          className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-ring"
         />
         <div className="flex flex-wrap gap-1">
           {(Object.keys(COLUMN_TYPE_LABEL) as NexusSheetColumnType[]).map((ty) => (
@@ -232,10 +232,10 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                   if (e.key === "Escape") onClose();
                 }}
                 placeholder={t("Type a choice, Enter")}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-primary"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-ring"
               />
               <button aria-label={t("Add option")} onClick={addOption} disabled={!draft.trim()}
-                className="shrink-0 rounded-lg border border-border px-2 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-40">+</button>
+                className="shrink-0 rounded-lg border border-border px-2 text-xs font-bold text-muted-foreground transition hover:border-ring/50 hover:text-primary disabled:opacity-40">+</button>
             </div>
           </div>
         )}
@@ -301,7 +301,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
           {rules.length < 8 && (
             <button
               onClick={() => setRules((rs) => [...rs, { op: "lt", value: "0", style: "red" }])}
-              className="w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary"
+              className="w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-ring/50 hover:text-primary"
             >{t("+ Rule")}</button>
           )}
         </div>

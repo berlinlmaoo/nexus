@@ -124,8 +124,8 @@ export function SocialDaySheet({
   const set = (id: string, m: SocialMetric, v: string) =>
     setDraft((d) => (d ? { ...d, figures: { ...d.figures, [id]: { ...d.figures[id], [m]: fmt(digitsOf(v)) } } } : d));
 
-  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:bg-muted/40 disabled:text-foreground pointer-coarse:h-11";
-  const area = "min-h-[5.5rem] w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:bg-muted/40";
+  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:bg-muted/40 disabled:text-foreground pointer-coarse:h-11";
+  const area = "min-h-[5.5rem] w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:bg-muted/40";
 
   return (
     <Sheet open={!!date} onOpenChange={close}>
@@ -286,10 +286,10 @@ function DayTargets({
     },
     onError: (error) => toast.error(socialErrorText(error, t("The target wasn't saved. Try again."))),
   });
-  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  const input = "h-10 w-full rounded-lg border border-border bg-background px-3 text-right text-sm tabular-nums outline-none transition-colors hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
   const share = (v: number | null | undefined) => (v == null ? t("No target") : num(v / days, lang));
   return (
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="rounded-xl border border-primary/30 bg-primary/[0.03] p-4">
+    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="rounded-xl border border-ring/30 bg-primary/[0.03] p-4">
       <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Target aria-hidden className="h-4 w-4 text-muted-foreground" /> {t("This day's targets")}</h3>
       <div className="mt-3 flex flex-col gap-3">
         {platformIds.map((id) => {

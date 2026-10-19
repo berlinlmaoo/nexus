@@ -374,7 +374,7 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
       </div>
       <div className={cn("shrink-0 text-sm font-black tabular-nums", removed ? "text-muted-foreground line-through" : pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{signed(e.originalAmount)} XP</div>
       {e.canRemove && (
-        <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (board)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
+        <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (board)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-ring hover:text-primary disabled:opacity-50">
           {remove.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} {tr("Remove")}
         </button>
       )}

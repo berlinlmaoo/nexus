@@ -98,7 +98,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tr("Search people")}
               aria-label={tr("Search people")}
-              className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-sm outline-none focus:border-primary"
+              className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-sm outline-none focus:border-ring"
             />
           </div>
         </div>

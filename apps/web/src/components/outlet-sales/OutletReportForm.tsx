@@ -330,7 +330,7 @@ function FormBody({
           onChange={(e) => setFigure(id, e.target.value)}
           aria-invalid={invalid === `values.${id}` || undefined}
           className={cn(
-            "h-10 w-full rounded-lg border bg-background px-3 text-right text-sm tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11",
+            "h-10 w-full rounded-lg border bg-background px-3 text-right text-sm tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11",
             invalid === `values.${id}` ? "border-destructive" : "border-border",
           )}
         />
@@ -385,7 +385,7 @@ function FormBody({
 
   const control = (f: OutletFormField) => {
     const base = cn(
-      "w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60",
+      "w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60",
       invalid === f.key ? "border-destructive" : "border-border",
     );
     const id = `os-f-${f.key}`;

@@ -677,7 +677,7 @@ function EditPanel({ sections, statusOptions, members, count, busy, start = null
       })}
       {kind === "assignee" && (
         <>
-          <div className="p-1"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search team members…")} className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary" /></div>
+          <div className="p-1"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search team members…")} className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-ring" /></div>
           <div className="max-h-60 overflow-y-auto">
             {shownMembers.map((m) => (
               <button key={m.id} type="button" disabled={busy} onClick={() => onPick("assignee", m.id)} className={row}>
@@ -749,7 +749,7 @@ function DatePopup({ ids, reduce, busy, onClose, onConfirm }: { ids: string[]; r
         <div className="mt-4">
           <span className="mb-1 block text-xs font-semibold text-muted-foreground">{t("Copy's due date")}</span>
           {/* The app's date field (C-BUG-23): the day as text, a calendar on click; no mm/dd/yyyy. */}
-          <DateField value={date} onChange={setDate} ariaLabel={t("Copy's due date")} placeholder={t("Keep the original date")} className="h-10 rounded-xl border border-border bg-background px-3 hover:border-primary/40 hover:bg-background" />
+          <DateField value={date} onChange={setDate} ariaLabel={t("Copy's due date")} placeholder={t("Keep the original date")} className="h-10 rounded-xl border border-border bg-background px-3 hover:border-ring/40 hover:bg-background" />
           <p className="mt-1 text-[11px] text-muted-foreground">{t("Leave blank = keep the task's original date.")}</p>
         </div>
         <div className="mt-5 flex items-center justify-end gap-2">
