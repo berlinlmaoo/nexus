@@ -161,10 +161,13 @@ export function PresenceChip({ userId, className }: { userId: string | null | un
     black: "bg-muted text-muted-foreground ring-border",
   }[s.tone];
   return (
-    <span className={cn("inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1", tone, className)}>
+    // Long statuses wrap to a second line instead of being cut off on phones.
+    <span className={cn("inline-flex max-w-full items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-semibold ring-1", tone, className)}>
       <PresenceDot status={s} size={8} ring={false} />
-      <span className="truncate">{presenceText(s, lang)}</span>
-      {until && <span className="shrink-0 font-normal opacity-80">· {until}</span>}
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+        {presenceText(s, lang)}
+        {until && <span className="font-normal opacity-80"> · {until}</span>}
+      </span>
     </span>
   );
 }
