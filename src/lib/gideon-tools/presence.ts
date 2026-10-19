@@ -7,11 +7,11 @@ import {
   clearManualStatus,
   getManualStatus,
   getPresence,
+  manualWords,
   parseWibTime,
   presenceEnabled,
   setManualStatus,
   visibleUserIds,
-  type PresenceAvailability,
   type PresenceStatus,
 } from "@/lib/presence"
 import { wibDay } from "@/lib/calendar/core"
@@ -55,7 +55,7 @@ function view(name: string | null, s: PresenceStatus) {
     ...(s.state === "dnd" ? { doNotDisturb: true } : {}),
     ...(s.until ? { until: s.until.length === 10 ? dayLabel(s.until) : `${whenWib(s.until)} WIB` } : {}),
     ...(s.since && (s.state === "online" || s.state === "away") ? { since: `${whenWib(s.since)} WIB` } : {}),
-    ...(s.manual && s.reason !== "custom" ? { scheduledStatus: `${s.manual.text} (${whenWib(s.manual.startsAt)}–${whenWib(s.manual.endsAt)} WIB)` } : {}),
+    ...(s.manual && s.reason !== "custom" ? { scheduledStatus: `${manualWords(s.manual.availability ?? "away", s.manual.text)} (${whenWib(s.manual.startsAt)}–${whenWib(s.manual.endsAt)} WIB)` } : {}),
   }
 }
 
@@ -79,7 +79,6 @@ function availabilityOf(input: Input): unknown {
   if (/^(away|pergi|keluar|lagi keluar)$/.test(v)) return "away"
   return v
 }
-const AVAIL_WORD: Record<PresenceAvailability, string> = { online: "Online", away: "Away", dnd: "Do not disturb" }
 
 export const presenceTools: Record<string, ExtraTool> = {
   get_person_status: {
@@ -116,8 +115,8 @@ export const presenceTools: Record<string, ExtraTool> = {
         const cur = await getManualStatus(actor.id)
         if (!cur) throw new Error("This person has no status set; nothing to clear.")
         return {
-          summary: `Clear your status “${cur.text}”`,
-          diff: [{ field: "Status", to: cur.text }, { field: "Until", to: `${whenWib(cur.endsAt)} WIB`, toDay: wibDay(cur.endsAt) }],
+          summary: `Clear your status “${manualWords(availabilityFromDb(cur.availability), cur.text)}”`,
+          diff: [{ field: "Status", to: manualWords(availabilityFromDb(cur.availability), cur.text) }, { field: "Until", to: `${whenWib(cur.endsAt)} WIB`, toDay: wibDay(cur.endsAt) }],
           store: { clear: true, manualId: cur.id },
           note: "NOT cleared yet: it waits on the card below for the person to confirm.",
         }
@@ -126,11 +125,11 @@ export const presenceTools: Record<string, ExtraTool> = {
       const ok = checkManualStatus({ text: textOf(input), ...r, availability: availabilityOf(input) })
       const from = whenWib(ok.startsAt) ?? ok.startsAt.toISOString()
       const to = whenWib(ok.endsAt) ?? ok.endsAt.toISOString()
-      const word = AVAIL_WORD[ok.availability]
+      const words = manualWords(ok.availability, ok.text)
       return {
-        summary: `Set your status “${word} · ${ok.text}” ${from}–${to} WIB`.slice(0, 300),
+        summary: `Set your status “${words}” ${from}–${to} WIB`.slice(0, 300),
         diff: [
-          { field: "Status", to: `${word} · ${ok.text}` },
+          { field: "Status", to: words },
           { field: "From", to: `${from} WIB`, toDay: wibDay(ok.startsAt) },
           { field: "Until", to: `${to} WIB`, toDay: wibDay(ok.endsAt) },
         ],
@@ -146,8 +145,8 @@ export const presenceTools: Record<string, ExtraTool> = {
       }
       const r = rangeOf(input)
       const row = await setManualStatus(actor.id, { text: textOf(input), ...r, availability: availabilityOf(input), source: "gideon" })
-      return { set: true, status: `${AVAIL_WORD[availabilityFromDb(row.availability)]} · ${row.text}`, from: `${whenWib(row.startsAt)} WIB`, until: `${whenWib(row.endsAt)} WIB`, note: "Shown to everyone in the workspace until the end time, then it clears by itself." }
+      return { set: true, status: manualWords(availabilityFromDb(row.availability), row.text), from: `${whenWib(row.startsAt)} WIB`, until: `${whenWib(row.endsAt)} WIB`, note: "Shown to everyone in the workspace until the end time, then it clears by itself." }
     },
-    stepArg: (i) => (wantsClear(i) ? "clear" : textOf(i) ?? null),
+    stepArg: (i) => (wantsClear(i) ? "clear" : textOf(i) ?? str(i.availability) ?? null),
   },
 }

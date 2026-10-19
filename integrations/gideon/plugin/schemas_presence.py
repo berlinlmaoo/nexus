@@ -31,7 +31,7 @@ PRESENCE_SCHEMAS = {
         "sees it until the end, then it clears by itself; nobody is notified. clear=true removes the current one. It "
         "NEVER applies by itself: it always shows a card and is set only when they tap Apply — say so in one sentence.",
         {
-            "text": {"type": "string", "description": "The status text, short (max 80 characters), in the person's words."},
+            "text": {"type": "string", "description": "The status text, short (max 80 characters), in the person's words. May be omitted ONLY when availability is given (e.g. just 'Do not disturb' until 15:00)."},
             "startsAt": {"type": "string", "description": "'YYYY-MM-DD HH:MM' WIB; omit for now."},
             "endsAt": {"type": "string", "description": "'YYYY-MM-DD HH:MM' WIB (required unless clear)."},
             "availability": {"type": "string", "enum": ["online", "away", "dnd"], "description": "What the status shows: online, away (default) or dnd = Do not disturb."},
