@@ -17,4 +17,5 @@
     <string name="rev_meeting_notify">You can close this. We\'ll notify you when the minutes are ready.</string>
     <string name="rev_meeting_cancel_upload">Cancel upload</string>
     <string name="rev_meeting_done">Done</string>
+    <string name="rev_meeting_next">Next in the queue</string>
 </resources>

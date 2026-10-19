@@ -41,7 +41,7 @@ internal fun meetingProgressStep(status: String): Int = when (status) {
                         index == 0 -> MeetingUploadReading(upload)
                         index == 2 -> Text(stringResource(R.string.rev_meeting_ready), color = c.mutedFg, fontSize = 13.sp)
                         meeting.status == "QUEUED" || meeting.queue?.waiting == true -> Text(
-                            if ((meeting.queue?.position ?: 0) > 1) stringResource(R.string.meet_position, meeting.queue!!.position.toString()) else stringResource(R.string.meet_next), color = c.mutedFg, fontSize = 13.sp)
+                            if ((meeting.queue?.position ?: 0) > 1) stringResource(R.string.meet_position, meeting.queue!!.position.toString()) else stringResource(R.string.rev_meeting_next), color = c.mutedFg, fontSize = 13.sp)
                         meeting.status == "SUMMARIZING" -> Text(stringResource(R.string.meet_summarizing), color = c.mutedFg, fontSize = 13.sp)
                         else -> {
                             val minutes = MeetingRules.estimateMinutes(meeting.queue?.etaSec ?: (85 + (meeting.durationSec ?: 0.0) * 2.8 / 60))

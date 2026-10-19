@@ -17,4 +17,5 @@
     <string name="rev_meeting_notify">Kamu bisa menutup halaman ini. Kami akan memberi tahu saat notulen siap.</string>
     <string name="rev_meeting_cancel_upload">Batalkan unggahan</string>
     <string name="rev_meeting_done">Selesai</string>
+    <string name="rev_meeting_next">Berikutnya dalam antrean</string>
 </resources>
