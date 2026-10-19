@@ -389,12 +389,12 @@ private struct LegalSeriesRow: View {
     }
 
     @ViewBuilder private var inUseToggle: some View {
-        // The web's switch: dark, its words on the right (UI tour run 16, R16-B-22).
+        // The web's switch, its words on the right (UI tour run 16, R16-B-22); on in the violet accent (R-18).
         let toggle = Toggle(isOn: Binding(get: { series.active }, set: { v in Task { await patch(["active": v]) } })) {
             Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
         .labelsHidden()
-        .tint(NX.onyx)
+        .tint(NX.violet)
         .accessibilityLabel(T("In use"))
         // Its words beside it on every width, as the web's (UI tour run 17, iPhone R17-I-15), with the standard
         // 8 pt of air: at 6 the label read as part of the switch (R17-B-07).

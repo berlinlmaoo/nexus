@@ -918,7 +918,7 @@ struct FormStudioSettingsTab: View {
                     Text(T("Anyone logged in can submit, and their submissions show in My Submissions.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violet)
             if draft.requireAuth {
                 Label(T("People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions."), systemImage: "lock")
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -976,7 +976,7 @@ struct FormStudioSettingsTab: View {
                         }
                     }
                 }
-                .tint(NX.onyx)
+                .tint(NX.violet)
                 if draft.schedule.enabled {
                     dayChips
                     HStack(spacing: 10) {
@@ -1034,8 +1034,8 @@ struct FormStudioSettingsTab: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 10)
                         .frame(minWidth: 40, minHeight: 30)
-                        .foregroundStyle(on ? NX.background : NX.mutedFg)
-                        .background(on ? NX.onyx : Color.clear, in: Capsule())
+                        .foregroundStyle(on ? .white : NX.mutedFg)
+                        .background(on ? NX.violetFill : Color.clear, in: Capsule())
                         .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
                 }
                 .buttonStyle(.plain)
@@ -1068,7 +1068,7 @@ struct FormStudioSettingsTab: View {
                     Text(String(format: T("%d so far"), responseCount)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violet)
             if draft.settings.responseLimit > 0 {
                 HStack(spacing: 10) {
                     TextField(T("Maximum responses"), text: limitBinding)
@@ -1192,7 +1192,7 @@ struct FormStudioSettingsTab: View {
                 Text(m.displayName).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer(minLength: 6)
                 Image(systemName: on ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 16)).foregroundStyle(on ? NX.onyx : NX.mutedFg)
+                    .font(.system(size: 16)).foregroundStyle(on ? NX.violet : NX.mutedFg)
             }
             .padding(.horizontal, 8).padding(.vertical, 6)
             .contentShape(Rectangle())

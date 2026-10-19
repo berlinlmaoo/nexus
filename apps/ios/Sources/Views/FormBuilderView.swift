@@ -1167,14 +1167,14 @@ struct FormFieldEditorView: View {
 
     private var optionToggles: some View {
         Section {
-            Toggle(T("Required"), isOn: $field.required).tint(NX.onyx)
+            Toggle(T("Required"), isOn: $field.required).tint(NX.violet)
             Toggle(isOn: descriptionOn) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Description"))
                     Text(T("Helper text under the question")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violet)
             if field.description != nil {
                 TextField(T("Description (optional)"), text: Binding(get: { field.description ?? "" }, set: { field.description = $0 }), axis: .vertical)
                     .font(NXFont.text(14))
@@ -1186,7 +1186,7 @@ struct FormFieldEditorView: View {
                         Text(T("On the web form. The apps show a menu.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                 }
-                .tint(NX.onyx)
+                .tint(NX.violet)
             }
             if field.type == "number" {
                 Toggle(isOn: Binding(get: { field.questionKind == .rupiah }, set: { field.applyKind($0 ? .rupiah : .number) })) {
@@ -1195,7 +1195,7 @@ struct FormFieldEditorView: View {
                         Text("Rp 1.500.000").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                 }
-                .tint(NX.onyx)
+                .tint(NX.violet)
             }
             if field.type == "text" || field.type == "email" {
                 Picker(T("Fill from the sender's account"), selection: $field.autofill) {
@@ -1208,7 +1208,7 @@ struct FormFieldEditorView: View {
                 Toggle(isOn: $field.attachmentEnabled) {
                     Label(T("Allow a file with the answer"), systemImage: "paperclip")
                 }
-                .tint(NX.onyx)
+                .tint(NX.violet)
             }
         } header: {
             Text(T("Options"))
@@ -1276,7 +1276,7 @@ struct FormFieldEditorView: View {
     private var branchingSection: some View {
         Section {
             Toggle(T("Show only when…"), isOn: showIfOn)
-                .tint(NX.onyx)
+                .tint(NX.violet)
                 .disabled(field.showIf == nil && parents.isEmpty)
             if let cond = field.showIf {
                 let parent = others.first(where: { $0.id == cond.fieldId })
