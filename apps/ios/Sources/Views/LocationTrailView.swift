@@ -108,7 +108,7 @@ struct LocationTrailView: View {
             .padding(16)
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(T("Location trail"))
+        .navigationTitle(trail?.record.userName.map { String(format: T("%@’s location trail"), $0) } ?? T("Location trail"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }

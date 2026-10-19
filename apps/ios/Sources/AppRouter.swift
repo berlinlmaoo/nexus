@@ -124,6 +124,9 @@ final class AppRouter {
     static let shared = AppRouter()
 
     var tab: PhoneTab = .dashboard
+    var attendanceRecordLink: String?
+    var attendanceFocusDate: String?
+    var bookingFocusId: String?
 
     /// Phone: the launcher screen to push inside the More tab, where everything that is not one of
     /// the four tab roots actually lives. Bound rather than fired-and-forgotten, so swiping back
@@ -273,6 +276,14 @@ final class AppRouter {
         case .legalBoard:
             focus = target
             go(.legal)
+        case .attendanceRecordLink(let path):
+            attendanceRecordLink = path
+            let items = URLComponents(string: "https://nexus" + path)?.queryItems ?? []
+            if let date = items.first(where: { ["absent", "date"].contains($0.name) })?.value { attendanceFocusDate = date; focus = .crewBoard }
+            go(.attendance)
+        case .bookingLink(let id):
+            bookingFocusId = id
+            go(.roomBooking)
         case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }
@@ -301,7 +312,7 @@ final class AppRouter {
         if let id = value("projectId") { open(.project(id)); return }
         // "Budi is outside the office" (approvers, 8 Oct 2026): the crew board, where it shows —
         // not the top of the Attendance screen its "/attendance" link names. Same rule as the Inbox row.
-        if value("type")?.lowercased() == NexusNotification.outsideApproverType { open(.crewBoard); return }
+        if value("type")?.lowercased() == NexusNotification.outsideApproverType, value("link")?.contains("trail=") != true { open(.crewBoard); return }
         // An external link — the App Store, for the "update NEXUS" reminder — leaves the app.
         if let link = value("link"), link.hasPrefix("http"), let url = URL(string: link) { UIApplication.shared.open(url); return }
         if let link = value("link"), let target = NotificationTarget(path: link) { open(target); return }
@@ -412,6 +423,10 @@ final class AppRouter {
         if name.lowercased() == "admin", URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "gideon" && $0.value == "performance" }) == true { open(.gideonPerformance); return }
         if name.lowercased() == "register" { requestSignup(from: url); return }
         if name.lowercased() == "forgot-password" { requestPasswordReset(from: url); return }
+        if ["attendance", "room-booking", "roombooking"].contains(name.lowercased()), let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery {
+            let path = "/" + (name.lowercased() == "roombooking" ? "room-booking" : name.lowercased()) + "?" + query
+            if let target = NotificationTarget(path: path) { open(target); return }
+        }
         // `nexus://attendance?permit=today` — the Live Activity's "File a permit" while outside the
         // office: the same prefilled composer the outside pushes open.
         if name.lowercased() == "attendance",
@@ -441,6 +456,8 @@ final class AppRouter {
             }
             return
         }
+        if name.lowercased() == "messages", let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery,
+           let target = NotificationTarget(path: "/messages?" + query) { open(target); return }
         // `nexus://projects/<id>?view=form&event=…&date=…` — a project, on the tab the link names.
         if name.lowercased() == "projects" {
             let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
