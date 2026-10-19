@@ -447,7 +447,7 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
         groups.forEachIndexed { i, g -> Text(groupLabel(g, cfg.groupBy) + "  " + g.tasks.size,
             fontSize = 13.sp, color = c.foreground, modifier = Modifier.clip(CircleShape).background(c.muted).clickable { scope.launch { state.animateScrollToItem(i + linked.size) } }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 14.dp)) }
     }
-    LazyRow(state = state, contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+    id.znetworks.nexus.ui.components.BoardColumns(state) {
         items(linked.size, key = { "linked-" + linked[it].sourceId }) { i -> LinkedColumn(linked[i], props, access, vm, onOpenTask) }
         items(groups.size, key = { groups[it].key }) { i ->
             val g = groups[i]
@@ -496,7 +496,7 @@ private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access
     val inline = vm.state.collectAsStateWithLifecycle().value.inlineGroup
     run {
             val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
-            Column(Modifier.width(if (collapsed) 64.dp else (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 48).dp.coerceIn(284.dp, 348.dp)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(8.dp)) {
+            id.znetworks.nexus.ui.components.BoardLane(collapsed) {
                 // The status group's name above the first column of each group (iOS).
 
                 Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {

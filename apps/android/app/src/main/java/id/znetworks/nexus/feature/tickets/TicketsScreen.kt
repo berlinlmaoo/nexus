@@ -134,6 +134,7 @@ data class TicketsState(
     val filing: Boolean = false,
     val photos: List<ByteArray> = emptyList(),
     val formError: String? = null,
+    val moving: Set<String> = emptySet(),
 )
 
 class TicketsViewModel(app: Application) : AndroidViewModel(app) {
@@ -142,6 +143,21 @@ class TicketsViewModel(app: Application) : AndroidViewModel(app) {
     private val res get() = getApplication<Application>().resources
     private val _state = MutableStateFlow(TicketsState())
     val state = _state.asStateFlow()
+    val meId get() = c.sessionStore.current?.userId
+
+    fun move(ticket: Ticket, column: String) {
+        val status = TicketBoardRules.destination(ticket, column, _state.value.list?.viewerIsBod == true) ?: return
+        if (ticket.id in _state.value.moving) return
+        _state.update { it.copy(moving = it.moving + ticket.id, error = null) }
+        viewModelScope.launch {
+            try {
+                val updated = api.setStatus(ticket.id, status)
+                _state.update { s -> s.copy(list = s.list?.copy(complaints = s.list.complaints.map { if (it.id == updated.id) updated else it })) }
+                load()
+            } catch (e: ApiError) { _state.update { it.copy(error = e.describe(res)) } }
+            finally { _state.update { it.copy(moving = it.moving - ticket.id) } }
+        }
+    }
 
     fun load() = viewModelScope.launch {
         try {
@@ -185,78 +201,22 @@ class TicketsViewModel(app: Application) : AndroidViewModel(app) {
 fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: TicketsViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
-    var filter by rememberSaveable { mutableStateOf("ALL") }
-    // The BoD's queue: null until chosen, then the first non-empty one (web, 12 Oct).
-    var queue by rememberSaveable { mutableStateOf<TicketRules.Queue?>(null) }
     var composing by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.load() }
-    Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize()) {
-            val all = TicketRules.ordered(s.list?.complaints.orEmpty())
-            val bod = s.list?.viewerIsBod == true
-            LaunchedEffect(s.list, bod) { if (bod && queue == null && s.list != null) queue = TicketRules.landing(all) }
-            val q = queue ?: TicketRules.Queue.INBOX
-            // "New ticket" as the header's primary (near-black) action, like the web; it was a violet FAB.
-            id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
-                actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.tk_new), { vm.resetForm(); composing = true }, primary = true) },
-                tabs = {
-                    if (bod) {
-                        val tabs = listOf(TicketRules.Queue.INBOX to R.string.tq_inbox, TicketRules.Queue.REVIEW to R.string.tq_review, TicketRules.Queue.ALL to R.string.th_tab_all).map { (k, l) ->
-                            id.znetworks.nexus.ui.components.PageTab(k, stringResource(l), count = TicketRules.queueCount(s.list?.counts.orEmpty(), all, k), attention = k == TicketRules.Queue.INBOX)
-                        }
-                        id.znetworks.nexus.ui.components.PageTabs(tabs, q, { queue = it })
-                    } else {
-                        // Staff: their own tickets by status.
-                        val filterTabs = listOf("ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED").map { f ->
-                            id.znetworks.nexus.ui.components.PageTab(f, ticketStatusLabel(f), count = all.count { TicketRules.inFilter(it, f) })
-                        }
-                        id.znetworks.nexus.ui.components.PageTabs(filterTabs, filter, { filter = it })
-                    }
-                })
-            s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
-            Box(Modifier.weight(1f)) {
-                val shown = if (bod) all.filter { TicketRules.inQueue(it, q) } else all.filter { TicketRules.inFilter(it, filter) }
-                when {
-                    (s.loading && s.list == null) || (bod && queue == null) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    s.error != null && s.list == null -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                    bod && shown.isEmpty() -> when (q) {
-                        TicketRules.Queue.ALL -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_none), stringResource(R.string.tq_none_bod_sub), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                        TicketRules.Queue.INBOX -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_inbox_clear), stringResource(R.string.tq_inbox_clear_sub), stringResource(R.string.tq_show_all), { queue = TicketRules.Queue.ALL }, Modifier.fillMaxSize())
-                        TicketRules.Queue.REVIEW -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_review_none), stringResource(R.string.tq_review_none_sub), stringResource(R.string.tq_show_all), { queue = TicketRules.Queue.ALL }, Modifier.fillMaxSize())
-                    }
-                    all.isEmpty() -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_empty), stringResource(R.string.tk_empty_sub), stringResource(R.string.tk_new), { composing = true }, Modifier.fillMaxSize())
-                    shown.isEmpty() -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_empty_filter), stringResource(R.string.tk_empty_filter_sub), stringResource(R.string.tk_show_all), { filter = "ALL" }, Modifier.fillMaxSize())
-                    else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
-                        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(shown, key = { it.id }) { t -> TicketRow(t) { onOpenTicket(t.id) } }
-                        }
-                    }
-                }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
+            actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.tk_new), { vm.resetForm(); composing = true }, primary = true) })
+        s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
+        if (s.error != null && s.list != null) Text(s.error!!, color = c.dangerText, modifier = Modifier.padding(horizontal = 16.dp))
+        Box(Modifier.weight(1f)) {
+            when {
+                s.loading && s.list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                s.error != null && s.list == null -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+                else -> TicketBoard(s, vm.meId, vm::move, onOpenTicket)
             }
         }
     }
     if (composing) NewTicketDialog(s, vm, onDismiss = { composing = false }) { id -> composing = false; onOpenTicket(id) }
-}
-
-@Composable
-private fun TicketRow(t: Ticket, onClick: () -> Unit) {
-    val c = Nx.colors
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Pill(ticketStatusLabel(t.status), ticketStatusColor(t.status)); Spacer(Modifier.width(6.dp))
-            Pill(ticketCategoryLabel(t.category), c.mutedFg)
-            Spacer(Modifier.weight(1f))
-            Text(chatTime(t.lastMessageAt ?: t.createdAt), fontSize = 11.sp, color = c.mutedFg)
-        }
-        Text(t.subject.ifBlank { stringResource(R.string.tk_no_subject) }, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(t.reporter?.name ?: stringResource(R.string.tk_someone), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-            if (t.gideonReplied) { id.znetworks.nexus.ui.components.GideonMark(14.dp, c.violetText); Spacer(Modifier.width(4.dp)) }
-            if (t.pendingCorrection) { Pill(stringResource(R.string.tk_decision_waiting), c.warning); Spacer(Modifier.width(6.dp)) }
-            Text("💬 ${t.messageCount}", fontSize = 12.sp, color = c.mutedFg)
-        }
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
