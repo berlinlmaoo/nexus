@@ -838,6 +838,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         collection.panGestureRecognizer.allowedTouchTypes = []
         #else
         collection.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        collection.panGestureRecognizer.maximumNumberOfTouches = 1
         #endif
         addSubview(collection)
         addSubview(columnStrip)
@@ -1235,6 +1236,11 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
             v = cur.superview
         }
         return true
+    }
+
+    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        (gesture === pinchZoom && other === collection.panGestureRecognizer)
+            || (other === pinchZoom && gesture === collection.panGestureRecognizer)
     }
 
     /// Charts added / removed / redrawn from the input (their drawing follows every change of the sheet).

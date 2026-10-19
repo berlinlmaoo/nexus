@@ -600,6 +600,7 @@ final class NEXUSUITour: XCTestCase {
             }
             pause(2.0)
         }
+        var savedFrames: [String: CGRect] = [:]
         for action in screen.appActions ?? [] {
             let match = NSPredicate(format: "label CONTAINS %@ OR identifier == %@", action.label, action.label)
             let textMatch = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@ OR identifier == %@", action.label, action.label, action.label)
@@ -764,6 +765,19 @@ final class NEXUSUITour: XCTestCase {
                 pause(Double(action.text ?? "3") ?? 3)
                 app.activate()
                 pause(2)
+            case "rememberFrame", "sameFrame":
+                let target = app.descendants(matching: .any).matching(identifier: action.label).firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: missing geometry target \(action.label)" }
+                if action.kind == "rememberFrame" { savedFrames[action.label] = target.frame }
+                else {
+                    guard let before = savedFrames[action.label], abs(before.minX - target.frame.minX) < 2,
+                          abs(before.minY - target.frame.minY) < 2 else { return "wrong-screen: frozen header moved while scrolling" }
+                }
+            case "gridScroll":
+                let target = app.collectionViews.firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no grid to scroll" }
+                if action.label == "up" { target.swipeUp() } else { target.swipeDown() }
+                pause(1)
             case "pinch":
                 #if !targetEnvironment(macCatalyst)
                 let target = app.collectionViews.firstMatch
@@ -789,7 +803,7 @@ final class NEXUSUITour: XCTestCase {
             case "checkValue":
                 let textView = app.textViews.matching(identifier: action.label).firstMatch
                 let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
-                guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
+                guard target.exists, ((target.value as? String) ?? target.label).contains(action.text ?? "") else {
                     return "wrong-screen: missing expected text in \(action.label)"
                 }
             case "checkFrame":
