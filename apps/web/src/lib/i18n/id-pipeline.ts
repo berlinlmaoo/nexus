@@ -78,7 +78,7 @@ export const ID_PIPELINE: Record<string, string> = {
   "Deliverables on track": "Deliverable aman",
   "{n} completed": "{n} selesai",
   "Nothing overdue": "Tidak ada yang lewat tenggat",
-  "None overdue": "Tak ada jatuh tempo",
+  "None overdue": "Tak ada telat",
   "{n}/{total} with costs": "{n}/{total} ada biaya",
 
   // Toolbar and filters
