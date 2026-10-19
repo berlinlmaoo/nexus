@@ -1,8 +1,55 @@
 # Android parity audit ? 19 October 2026
 
-**Overall: PARTIAL parity. Round-2 source work is committed; the required emulator QA is BLOCKED by concurrent UI-round use of emulator-5556.** All 866 JVM tests and assembleDebug pass. G6 remains deferred as instructed; larger gaps outside round 2 remain listed below.
+**Round 3 complete.** G6 personalization and G17 templates/page management are implemented. The build passes 875 JVM tests and assembleDebug. All 152 captures (38 states in English/Indonesian, light/dark) pass the localized-control audit. Live functional results and remaining limits are recorded below.
 
-Branch: feat/android-parity-19oct. Round-2 baseline: hub/dev at 5e989d35 (round 1 merged). The historical round-1 audit baseline was 0d0e6e06 plus 470bf6ff. Source audit uses this checkout, not a claim about a newer deployment. No server edits, release/version changes, APK publication or changes to the other checkout.
+Branch: feat/android-parity-19oct. Round-3 baseline: hub/dev at 56b3e86c (round 2 merged). Source audit and new changes use this checkout. No server edits, version changes, APK publication or edits to the other checkout. Historical round-1/2 evidence is retained below.
+
+## Round-3 implementation and current evidence
+
+- G6: personal name and standing instructions use the existing per-account prefs API. Empty values reset to defaults. The header/empty chat use the chosen name. Review acknowledgement uses the server flag and only persists after successful PUT; a failed request remains retryable.
+- G17: native project/template selection with preview, blank/template creation, subpages, hierarchy, title/emoji/parent/cover/full-width properties, duplication and confirmed deletion. Parent choices exclude descendants. Metadata PATCH carries baseUpdatedAt and never sends content. Deleting a parent promotes its children, matching the server. Known cover gradients and authenticated cover URLs render in the reader.
+- The five existing gallery seeds use legacy blocks. Android converts their headings/text to canonical bodies before creation; canonical templates retain their exact tree. This avoids the server templateId path silently creating blank legacy-template pages.
+- Accidental concurrent edits were reconciled: duplicate GIDEON declarations and the overlapping unfinished preferences/page implementations were removed; working access gates and error handling were retained. Final source has one implementation per entry point.
+- Device QA found outdated web-only instructions in Automation/MCP help; both languages now describe the native controls. Subpage creation is explicitly labelled Add subpage.
+
+Current build: **testDebugUnitTest + assembleDebug PASS, 875 tests, zero failures/errors/skips**, versionCode 13 / versionName 0.1.6. Build log: C:/Users/Berlin/android-parity-r3-build.log. Source head: 87e45c29; documentation changes follow it. No APK published.
+
+DEV integration checks passed for preference save/read/reset/restore and page templates, canonical body roundtrip, subpages, timestamp conflicts, metadata preservation and duplication; temporary pages were deleted. Native checks passed for preference save/header refresh, template creation with nonempty canonical body, confirmed deletion, process-stop draft recovery/discard without server writes, and live writing review/cancel without applying output. Native MCP creation/revocation, FILE upload/authenticated download/removal, disabled rule/schedule/Autofill edits, bundle application to the owned project and authenticated ZIP streaming also pass. The downloaded ZIP is 192,039 bytes and reached the share chooser; no external sharing occurred.
+
+Device evidence: [round-3 screenshot gallery](../../../../nexus-shots/parity3/index.html), [capture manifest](../../../../nexus-shots/parity3/manifest.json), [localized-control audit](../../../../nexus-shots/parity3/audit.json). Captures and UI trees are outside Git. All device operations use the owned emulator-5570; emulator-5556 and the other checkout remain untouched.
+
+Delivery bundle: C:/Users/Berlin/android-parity-19oct.bundle, range hub/dev..feat/android-parity-19oct (prerequisite 56b3e86c). The final report commit follows the tested source head.
+
+## Round-3 verification matrix
+
+Every row below has English/Indonesian and light/dark captures. The manifest records 152 successful captures; the resource-based localized-control audit reports zero findings. Screenshots establish the listed states, rather than exhaustive verification of every role or shared mutation.
+
+| Gaps | Captured states / functional checks |
+|---|---|
+| G1, G2 | Social overview/calendar/platforms/day form; Outlet overview/calendar/board/settings/report form |
+| G3, G20 | Crew start dates/deductions; absence confirmation and live outage dry-run refund preview. Shared attendance changes were not applied |
+| G4, G8, G19 | Credit policies, XP audit and adjustment form. Fixed cold-entry XP audit access: await the viewer role before gating the card. No shared XP/policy changes applied |
+| G5 | Docs/task editor, formatting and writing review. Process-stop local draft recovery/discard passed; server body unchanged. Live writing generation/review/cancel passed |
+| G6 | Personalization dialog; native save refreshes header and persists. API blank reset/read/restore passed. Notice acknowledgement/error preservation has unit coverage; no forced live acknowledgement |
+| G7 | Save-as-page title/project form; native save/open passed with canonical nonempty body; temporary page deleted |
+| G10, G11 | Insights filters and calendar privacy controls; shared privacy unchanged |
+| G12 | FILE field; native picker upload, exact authenticated downloaded bytes and confirmed removal passed |
+| G13-G16 | Automation list/builder, digest list/editor, Autofill and bundles. Native disabled edits/save passed; bundle applied only to the owned project |
+| G17 | Page tree/template gallery/preview, metadata and cover. Native legacy-template creation produces canonical content; confirmed deletion passed. API hierarchy/duplicate/conflict/preservation checks passed |
+| G18 | Token list/create form and native create/revoke passed. One-time plaintext was never copied, captured or logged |
+| G21 | ZIP selection; authenticated native download, ZIP signature and share chooser passed |
+
+Additional QA fixes: legacy template bodies no longer become blank; the digest action says Edit schedule in both languages; automation/MCP help describes native controls; subpage action has an explicit label. The accidental concurrent changes were inspected against Git and reconciled before the successful final build.
+
+Remaining refinements: full web-style WYSIWYG/selection formatting, rich writing-output insertion, live collaboration and background replay in G5 (approximately 2-4 days); FILE previews in Table/Gallery (approximately 1 day). Browser OAuth/public/kiosk routes remain G9 platform scope. Multiple-role and destructive shared admin operations require a separate isolated fixture run; this round used the owned QA account/projects and read-only confirmations.
+
+Final functional ledger: [functional results](../../../../nexus-shots/parity3/functional-results.json). Round-3 temporary pages/tokens were deleted after their checks. Disabled automation/schedule/Autofill configuration, test bundle/empty section and FILE property were removed; all cleanup responses succeeded. Original project hidden tabs, page metadata and personal preferences were restored. Original round-2 fixtures remain.
+
+Resource cleanup: own emulator-5570 stopped; original animation settings restored. Gradle --stop ran from this checkout with JDK 21 and reported no daemons running. Other emulators and the other checkout were left untouched. The RAM watchdog recorded a minimum of 2.67 GB free, above the 2.5 GB floor. No APK was published; Android version remains 13 / 0.1.6.
+
+## Historical audit and previous-round evidence
+
+The audit inventory and earlier estimates below are retained for context. Round-3 results above supersede earlier statements that device QA was blocked or that G6/G17 were deferred.
 
 ## Scope and evidence
 
@@ -19,7 +66,7 @@ U-1 through U-13 from the separately assigned UI round are excluded: status, Mem
 | G3 / medium | Crew start dates and deductions endpoint absent; directors cannot establish leave eligibility or review all deductions from the crew screen | Added board-only employment dates, server eligibility, period-based quota/XP summaries, member logs and confirmed date-wide CLEAR_PENALTY | Device QA; no live attendance mutations performed |
 | G4 / medium | GIDEON Credits lacked bonus grants/history, per-person overrides and web role defaults | Implemented native Credits tab, role policies, per-person limits and bonus history/grants. Privileged controls appear only after the gated admin read succeeds | Device and multiple-role QA, 1?2 h |
 | G5 / high | Canonical Docs/task-body editor with lossless merge base, draft recovery, conflict handling and writing review | BlockEditing.kt, BlockEditorDialog.kt, BlockFormat.kt, BlockWriting.kt | Implemented in round 2; API/JVM/DEV merge checks passed; device QA pending. Background replay and rich insertion of writing output remain refinements |
-| G6 / medium | GIDEON personalization/preferences and cross-device review-notice acknowledgement absent; Android stores acknowledgement locally | /api/gideon/prefs exists; toolbar entry overlaps U7 ownership | Coordinate U7; preference editor and server notice persistence, 2?3 h |
+| G6 / medium | Personal assistant name, standing instructions and server review-notice acknowledgement | Implemented with private per-account GET/PUT, blank-field reset, limits, retry/discard handling and acknowledgement only after successful PUT | Verified in the round-3 matrix above |
 | G7 / medium | GIDEON answer Save as page absent | Implemented title/project search, context project shortcut, save/open/error flow. Read-only review transcripts never show the action; server checks write access | Device QA, 1 h |
 | G8 / low-medium | Ranking existed without the board-only global XP audit card | Implemented sign/period filters, pagination, localized reasons, hidden zero bookkeeping rows, latest-request guards | Device QA, 1 h; manual XP adjustment still left in G19 |
 | G9 / platform | Public web routes: OAuth authorization, agent SSO, room display, downloads, shared forms/docs/Vault | Browser routes, not missing in-app navigation destinations; native link/share handling exists where applicable | Dedicated OAuth consent or room kiosk app only if required; no estimate without product scope |
@@ -259,7 +306,7 @@ These findings come from referenced web components and API call sites, including
 | G14 / medium | Web project GIDEON card has scheduled digests and project-scoped run history (GideonProjectCard.tsx, /api/gideon/schedules and /api/gideon/runs) | Implemented: digest schedules, Run now and project-filtered run history/details. JVM and disabled DEV schedule lifecycle checks passed; device QA pending. |
 | G15 / medium | Web AutofillPanel is called from table/task/form surfaces (/api/gideon/autofill and /run) | Implemented: Autofill configuration, review/automatic modes, fill/refill, polling and results. API tests and DEV read passed; device QA pending. |
 | G16 / low-medium | Project settings workflow-bundle picker (ProjectSettingsDrawer.tsx) | Implemented: native bundle list/apply confirmation and refresh/errors. API test and isolated DEV apply passed; device QA pending. |
-| G17 / medium | Docs template gallery, create/delete/nesting and page metadata; Android Docs.kt only lists/reads | Left with G5: native page management and structured editor, 2?4 days total. Templates GET exists; canonical Android page-body read is now available. Page management remains outside the round-2 G5 content editor |
+| G17 / medium | Docs template gallery, create/delete/nesting and page metadata | Implemented: project/template picker and preview, creation/subpages, cycle-safe tree, rename/icon/cover/full-width/parent updates, duplicate and confirmed deletion. Metadata uses baseUpdatedAt and preserves content. Legacy template seeds convert to canonical bodies before POST | Verified in the round-3 matrix above |
 | G18 / low-medium | Settings MCP access-token create/revoke and browser OAuth consent (settings.tsx/oauth.authorize.tsx) | Implemented: token list/create/one-time copy/revoke. Token lifecycle API and DEV checks passed; device QA pending. OAuth consent remains in the browser. |
 | G19 / low-medium | Web XP audit manual adjustments (/api/gamification/xp-adjust) and automatic personal penalty popup (/api/gamification/my-penalties) | Implemented: BoD manual adjustment and per-account personal penalty acknowledgement. Tests and self-read passed; no shared XP mutations; device QA pending. |
 | G20 / medium | Web attendance manual absence processing and outage-day refund preview/apply | Implemented under crew deductions: explicit confirmations, read-only dry-run preview, separate apply, server result/failure counts. No live attendance mutations tested. Device QA pending, 1 h |
