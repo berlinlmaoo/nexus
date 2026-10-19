@@ -78,7 +78,7 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
     >
       {panel === "link" ? (
         <div className="flex items-center gap-1 p-0.5">
-          <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } if (e.key === "Escape") { e.preventDefault(); setPanel("none"); editor.commands.focus(); } }} placeholder={t("Paste or type a link…")} className="w-56 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } if (e.key === "Escape") { e.preventDefault(); setPanel("none"); editor.commands.focus(); } }} placeholder={t("Paste or type a link…")} className="w-56 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-ring" />
           <button type="button" onClick={applyLink} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground">{st.href && !href.trim() ? t("Remove") : t("Apply")}</button>
         </div>
       ) : panel === "color" ? (

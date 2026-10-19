@@ -85,7 +85,7 @@ function Card({ s, onOpen }: { s: NexusMySubmission; onOpen: () => void }) {
   const date = useDate();
   const amount = money(s.amount);
   return (
-    <button onClick={onOpen} className="w-full rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md active:scale-[0.99]">
+    <button onClick={onOpen} className="w-full rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition hover:border-ring/40 hover:shadow-md active:scale-[0.99]">
       <div className="text-sm font-semibold leading-snug">{s.taskTitle || s.formName || t("Submission")}</div>
       {amount && <div className="mt-1 text-sm font-semibold tabular-nums">{amount}</div>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -250,7 +250,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                   <form onSubmit={(e) => { e.preventDefault(); sendReply(); }} className="flex items-end gap-2">
                     <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder={t("Reply to the team…")} aria-label={t("Reply to the team…")}
                       onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && reply.trim()) { e.preventDefault(); sendReply(); } }}
-                      className="min-h-[44px] flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                      className="min-h-[44px] flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
                     <button type="submit" disabled={!reply.trim() || send.isPending || sending} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
                       {send.isPending || sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{t("Send")}
                     </button>

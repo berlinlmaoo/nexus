@@ -198,7 +198,7 @@ function ScheduleEditor({ draft, onChange, onCancel, onSave, saving }: { draft: 
       <div className="flex flex-wrap gap-3">
         <label className="text-xs font-semibold text-muted-foreground">
           {t("At")}
-          <input type="time" value={draft.time} onChange={(e) => onChange({ ...draft, time: e.target.value })} className="mt-1 block rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none focus:border-primary" />
+          <input type="time" value={draft.time} onChange={(e) => onChange({ ...draft, time: e.target.value })} className="mt-1 block rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none focus:border-ring" />
         </label>
         <label className="text-xs font-semibold text-muted-foreground">
           {t("Time zone")}
@@ -211,7 +211,7 @@ function ScheduleEditor({ draft, onChange, onCancel, onSave, saving }: { draft: 
       </div>
       <label className="block text-xs font-semibold text-muted-foreground">
         {t("Extra focus (optional)")}
-        <textarea value={draft.instructions} onChange={(e) => onChange({ ...draft, instructions: e.target.value })} maxLength={500} rows={2} placeholder={t("e.g. Call out anything that blocks the launch on the 30th.")} className="mt-1 block w-full resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none placeholder:text-muted-foreground focus:border-primary" />
+        <textarea value={draft.instructions} onChange={(e) => onChange({ ...draft, instructions: e.target.value })} maxLength={500} rows={2} placeholder={t("e.g. Call out anything that blocks the launch on the 30th.")} className="mt-1 block w-full resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none placeholder:text-muted-foreground focus:border-ring" />
       </label>
       <p className="text-[11px] text-muted-foreground">{t("It runs as you: GIDEON only reads what you can see. Saving makes you the person it runs as.")}</p>
       <div className="flex justify-end gap-2">

@@ -104,7 +104,7 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
             type="button"
             disabled={disabled || opening}
             onClick={openCamera}
-            className="group relative grid place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-primary/30 bg-muted/40 transition-colors hover:border-primary/60 disabled:opacity-50"
+            className="group relative grid place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-ring/30 bg-muted/40 transition-colors hover:border-ring/60 disabled:opacity-50"
             style={{ width: size, height: size }}
           >
             {preview ? (

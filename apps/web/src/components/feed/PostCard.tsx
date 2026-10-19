@@ -146,7 +146,7 @@ function EditBox({ post, members, onCancel, onSave }: { post: FeedPost; members:
     <div className="mt-1">
       <div className="relative">
         <textarea ref={mention.ref} value={mention.text} onChange={mention.onChange} onKeyDown={mention.onKeyDown} rows={2}
-          className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus:border-primary" />
+          className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-[15px] outline-none focus:border-ring" />
         {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
       </div>
       <div className="mt-1.5 flex justify-end gap-2">
@@ -184,7 +184,7 @@ function CommentsSection({ postId, members, onCommentAdded }: { postId: string; 
       )}
       <div className="relative flex items-end gap-2">
         <textarea ref={mention.ref} value={mention.text} onChange={mention.onChange} onKeyDown={mention.onKeyDown} rows={1} placeholder={t("Reply… (@ to mention)")}
-          className="min-h-9 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          className="min-h-9 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
         <button onClick={mention.submit} disabled={!mention.text.trim() || add.isPending} aria-label={t("Send")} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">
           {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

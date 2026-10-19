@@ -49,7 +49,7 @@ export function MemberMultiPicker({ workspaceId, value, onChange }: { workspaceI
           })}
         </div>
       )}
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 focus-within:border-primary">
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 focus-within:border-ring">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search by name or email")} className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none" />
         {query && <button type="button" onClick={() => setQuery("")} aria-label={t("Clear search")} className="rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}

@@ -176,7 +176,7 @@ function TaskComposer({ myId, onClose, onCreated }: { myId?: string; onClose: ()
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
+  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20";
 
   return (
     <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
@@ -192,13 +192,13 @@ function TaskComposer({ myId, onClose, onCreated }: { myId?: string; onClose: ()
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Task title")}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Finalize booth deck")} className={field} />
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Project")}</label>
-          <SelectPicker variant="field" value={projectId} onChange={(v) => { setProjectId(v); setTaskListId(""); }} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "hover:border-primary/40")} />
+          <SelectPicker variant="field" value={projectId} onChange={(v) => { setProjectId(v); setTaskListId(""); }} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "hover:border-ring/40")} />
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Section")}</label>
-          <SelectPicker variant="field" value={taskListId} onChange={setTaskListId} disabled={!projectId || projectDetail.isLoading} placeholder={t("Pick a section")} ariaLabel={t("Section")} options={lists.map((l) => ({ value: l.id, label: l.name }))} className={cn(field, "hover:border-primary/40 disabled:opacity-50")} />
+          <SelectPicker variant="field" value={taskListId} onChange={setTaskListId} disabled={!projectId || projectDetail.isLoading} placeholder={t("Pick a section")} ariaLabel={t("Section")} options={lists.map((l) => ({ value: l.id, label: l.name }))} className={cn(field, "hover:border-ring/40 disabled:opacity-50")} />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Priority")}</label>
-              <SelectPicker variant="field" value={priority} onChange={(v) => setPriority(v as CreateTaskPayload["priority"])} ariaLabel={t("Priority")} options={(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))} className={cn(field, "mt-1 hover:border-primary/40")} />
+              <SelectPicker variant="field" value={priority} onChange={(v) => setPriority(v as CreateTaskPayload["priority"])} ariaLabel={t("Priority")} options={(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))} className={cn(field, "mt-1 hover:border-ring/40")} />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Due date")}</label>

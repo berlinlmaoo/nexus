@@ -133,7 +133,7 @@ export function TabPreviewCards({ hidden, onChange }: { hidden: string[]; onChan
             onClick={() => onChange(shown ? [...hidden, key] : hidden.filter((k) => k !== key))}
             className={cn(
               "group flex flex-col gap-1.5 rounded-2xl border p-2 text-left transition-[border-color,background-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed",
-              shown ? "border-primary/50 bg-primary/[0.04]" : "border-border bg-background opacity-60 hover:opacity-90",
+              shown ? "border-ring/50 bg-primary/[0.04]" : "border-border bg-background opacity-60 hover:opacity-90",
             )}
           >
             <div className={cn("h-14 rounded-xl bg-muted/60 p-2", !shown && "grayscale")} aria-hidden>

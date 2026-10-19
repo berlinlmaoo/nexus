@@ -734,7 +734,7 @@ function StatusUpdatesCard({ projectId }: { projectId: string }) {
           onChange={(e) => setText(e.target.value)}
           rows={text ? 4 : 2}
           placeholder={t("How is the project going? Wins, blockers, what's next.")}
-          className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+          className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
         />
         {(generate.isError || create.isError) && <p role="alert" className="text-xs text-destructive">{generate.isError ? ((generate.error as { payload?: { code?: string } } | null)?.payload?.code === "GIDEON_UNAVAILABLE" ? t("GIDEON isn't connected on this server. Write the update yourself.") : t("Couldn't draft an update. Try again, or write it yourself.")) : t("Couldn't post the update. Check your connection and try again.")}</p>}
         <div className="flex justify-end">

@@ -734,7 +734,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
           <div className="flex flex-1 flex-col gap-6 px-5 pb-10 pt-3 sm:px-12 sm:pt-6">
             {/* Quest nudge: this task is part of one or more task-bundle quests → motivate finishing it. */}
             {(t.quests ?? []).map((q) => (
-              <div key={q.id} className="flex items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
+              <div key={q.id} className="flex items-center gap-2.5 rounded-2xl border border-ring/30 bg-primary/5 px-3.5 py-2.5">
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
@@ -846,7 +846,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                       <div className="absolute z-20 mt-1 w-64 rounded-xl border border-border bg-popover p-1 shadow-pop">
                         <div className="relative p-1">
                           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder={tr("Search team members…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
+                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder={tr("Search team members…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-ring" />
                         </div>
                         <div className="max-h-56 overflow-y-auto">
                           {assignPickerLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
@@ -1018,7 +1018,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                 // Can view / Can comment: no Upload (it read as live in the disabled fieldset, QA 16 Oct 2026).
                 !canEditTask ? undefined : <div className="flex items-center gap-2">
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
-                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-ring hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
                     <input type="file" multiple className="hidden" disabled={uploadMut.isPending} onChange={(e) => {
                       const picked = Array.from(e.target.files ?? []); e.target.value = "";
@@ -1179,9 +1179,9 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Quest name")} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" placeholder={tr("Quest name")} />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("XP reward (max 50)")}</label>
-        <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Tasks")} ({tasks.length})</label>
         <div className="mb-2 space-y-1">
           {tasks.map((t) => (
@@ -1191,7 +1191,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
             </div>
           ))}
         </div>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("+ Search tasks to add (min 2 letters)…")} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" placeholder={tr("+ Search tasks to add (min 2 letters)…")} />
         {results.length > 0 && (
           <div className="mt-1 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border bg-popover p-1">
             {results.map((r) => (
@@ -1248,8 +1248,8 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   const ghost = hideLabel || bare;
   const empty = hideLabel ? EMPTY_CELL : bare ? tr("Not set") : undefined;
   const cls = ghost
-    ? cn("w-full min-w-0 appearance-none truncate border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background focus:placeholder:text-transparent", bare ? "min-h-8 rounded-lg placeholder:text-muted-foreground/70" : "rounded-md placeholder:text-muted-foreground/60")
-    : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
+    ? cn("w-full min-w-0 appearance-none truncate border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-ring focus:bg-background focus:placeholder:text-transparent", bare ? "min-h-8 rounded-lg placeholder:text-muted-foreground/70" : "rounded-md placeholder:text-muted-foreground/60")
+    : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring";
 
   const strVal = typeof field.value === "string" ? field.value : "";
   const arrVal = Array.isArray(field.value) ? field.value.map(String) : [];
@@ -1293,7 +1293,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         {choices.map((c) => {
           const on = arrVal.includes(c);
           return (
-            <button type="button" key={c} onClick={() => onSet(on ? arrVal.filter((x) => x !== c) : [...arrVal, c])} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors", on ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
+            <button type="button" key={c} onClick={() => onSet(on ? arrVal.filter((x) => x !== c) : [...arrVal, c])} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors", on ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-ring/40")}>
               {c}
             </button>
           );
@@ -1362,7 +1362,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={ghost} align={hideLabel ? "end" : "start"} placeholder={empty ?? tr("Not set")} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
-    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : bare ? "rounded-lg" : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={empty ?? tr("Not set")} />;
+    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : bare ? "rounded-lg" : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-ring/40"} placeholder={empty ?? tr("Not set")} />;
   } else {
     body = (
       <input
@@ -1444,7 +1444,7 @@ function FileFieldEditor({ projectId, value, onSet, compact }: { projectId?: str
                   <img src={f.url} alt={f.name} className="h-14 w-14 rounded-lg border border-border object-cover" />
                 </a>
               ) : (
-                <a href={f.url} target="_blank" rel="noopener noreferrer" title={f.name} className="flex max-w-[10rem] items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40">
+                <a href={f.url} target="_blank" rel="noopener noreferrer" title={f.name} className="flex max-w-[10rem] items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-ring/40">
                   <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{f.name}</span>
                 </a>
@@ -1457,7 +1457,7 @@ function FileFieldEditor({ projectId, value, onSet, compact }: { projectId?: str
         </div>
       )}
       <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPick(e.target.files)} />
-      <button type="button" disabled={busy || !projectId} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50">
+      <button type="button" disabled={busy || !projectId} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50">
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {busy ? tr("Uploading…") : tr("Add files")}
       </button>
     </div>
@@ -1661,7 +1661,7 @@ function CommentItem({ comment, currentUserId, me, members, canReply, onReact, o
       <div className="ml-[34px] mt-1.5 flex flex-wrap items-center gap-1.5">
         {/* Can view is read-only (A-4): viewers see reactions but cannot add one; they may still take back their own. */}
         {grouped.map(([emoji, info]) => (canReply || info.mine ? (
-          <button key={emoji} onClick={() => onReact(comment.id, emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
+          <button key={emoji} onClick={() => onReact(comment.id, emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-ring/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
             {emoji} {info.count}
           </button>
         ) : (

@@ -47,7 +47,7 @@ export function DivisionManager({ divisions, teams }: { divisions: NexusDivision
         <p className="text-xs text-muted-foreground">{tr("A layer above teams. Set the name and color, then move teams into their division with the dropdown on each card.")}</p>
       </div>
       <div className="flex items-center gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder={tr("New division name…")} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder={tr("New division name…")} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         <button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {tr("Add")}</button>
       </div>
       {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? tr("Couldn't create the division.")}</p>}
@@ -71,7 +71,7 @@ function DivisionRow({ division, count, onChange }: { division: NexusDivision; c
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
       <input type="color" value={color} onChange={(e) => setColor(e.target.value)} onBlur={() => { if (color !== (division.color ?? "#64748B")) update.mutate({ color }); }} className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0" title={tr("Division color")} />
       {editing ? (
-        <input value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) update.mutate({ name: name.trim() }); if (e.key === "Escape") { setName(division.name); setEditing(false); } }} className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
+        <input value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) update.mutate({ name: name.trim() }); if (e.key === "Escape") { setName(division.name); setEditing(false); } }} className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-ring" />
       ) : (
         <span className="flex-1 truncate text-sm font-semibold">{division.name}</span>
       )}
@@ -188,7 +188,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:border-primary/30">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:border-ring/30">
       {/* Title row: the name gets nearly the full card width (only icon + delete beside it) so it wraps
           cleanly between words instead of into a squeezed, mid-word-broken column. */}
       <div className="flex items-start gap-2">
@@ -202,7 +202,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
               onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setNameDraft(team.name); setEditingName(false); } }}
               onBlur={commitRename}
               disabled={rename.isPending}
-              className="w-full rounded-md border border-border bg-background px-2 py-1 font-semibold tracking-tight outline-none focus:border-primary disabled:opacity-60"
+              className="w-full rounded-md border border-border bg-background px-2 py-1 font-semibold tracking-tight outline-none focus:border-ring disabled:opacity-60"
             />
           ) : (
             <>
@@ -278,7 +278,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 onBlur={() => setTimeout(() => setMemberOpen(false), 120)}
                 disabled={addMember.isPending}
                 placeholder={tr("Search and add members…")}
-                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-primary"
+                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-ring"
               />
               {addMember.isPending && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />}
             </div>
@@ -332,7 +332,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 onBlur={() => setTimeout(() => setProjectOpen(false), 120)}
                 disabled={linkProject.isPending}
                 placeholder={tr("Search and link projects…")}
-                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-primary"
+                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-ring"
               />
               {linkProject.isPending && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />}
             </div>

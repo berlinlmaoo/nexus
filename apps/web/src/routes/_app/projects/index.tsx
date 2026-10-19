@@ -773,7 +773,7 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
       className={cn("group block h-full", dragging && "opacity-40", dragProps?.draggable && "cursor-grab active:cursor-grabbing")}
       {...dragProps}
     >
-      <Card className="relative min-h-[250px] overflow-hidden rounded-[28px] border border-border bg-card shadow-soft transition-all group-hover:border-primary/30 group-hover:shadow-pop">
+      <Card className="relative min-h-[250px] overflow-hidden rounded-[28px] border border-border bg-card shadow-soft transition-all group-hover:border-ring/30 group-hover:shadow-pop">
         <CardBody className="flex h-full flex-col p-5">
           <div
             className="absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-10"
@@ -915,7 +915,7 @@ function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderI
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary hover:text-primary"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-ring hover:text-primary"
           title={t("Move to folder…")}
           aria-label={t("Move to folder…")}
         >

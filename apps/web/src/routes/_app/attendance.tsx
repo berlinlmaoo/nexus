@@ -660,7 +660,7 @@ function Attendance() {
                     onChange={(e) => setMemberQuery(e.target.value)}
                     aria-label={tr("Search people")}
                     placeholder={tr("Search…")}
-                    className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20"
                   />
                   {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="tap-area absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
                 </div>
@@ -1282,7 +1282,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate(tr("Attendance saved")); onClose(); },
   });
 
-  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
+  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20";
 
   return (
     <MorphPanel origin={origin} onClose={onClose}>
@@ -1404,15 +1404,15 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
       <div role="dialog" aria-modal="true" aria-label={editing ? tr("Edit office") : tr("New office")} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{editing ? tr("Edit office") : tr("New office")}</h2>
         <div className="mt-4 space-y-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Office name")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={tr("Address (optional)")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Office name")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring" />
+          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={tr("Address (optional)")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           <OfficeMapPicker lat={Number.isFinite(Number(lat)) && lat !== "" ? Number(lat) : null} lng={Number.isFinite(Number(lng)) && lng !== "" ? Number(lng) : null}
             radiusMeters={Number(radius) || 100} onChange={(la, lo) => { setLat(la.toFixed(6)); setLng(lo.toFixed(6)); }} />
           <details className="text-[11px] text-muted-foreground">
             <summary className="cursor-pointer font-semibold">{tr("Fine-tune coordinates")}</summary>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder={tr("Latitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder={tr("Longitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder={tr("Latitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring" />
+              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder={tr("Longitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring" />
             </div>
           </details>
           {/* Shift start/end dihilangkan — jam shift sekarang diatur per orang (Control Room → Members),
@@ -1490,7 +1490,7 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
         ) : (
           <>
             {/* Month so far */}
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <div className="rounded-2xl border border-ring/20 bg-primary/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" /> {tr("GIDEON's month summary")}</div>
                 <button type="button" onClick={() => summarize.mutate()} disabled={summarize.isPending}
@@ -1910,7 +1910,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             <div className="relative min-w-0 flex-1 basis-48">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr("Search name or reason")} aria-label={tr("Search requests by name or reason")}
-                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none focus:border-primary" />
+                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none focus:border-ring" />
               {query && (
                 <button type="button" onClick={() => setQuery("")} aria-label={tr("Clear search")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
               )}
@@ -2179,7 +2179,7 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
                 <p className="text-xs font-semibold text-success">{tr("Location locked ({coords})", { coords: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` })}</p>
               ) : (
                 <button type="button" onClick={askLocation} disabled={geoBusy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:border-ring disabled:opacity-50">
                   {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? tr("Getting your location…") : tr("Use my location")}
                 </button>
               )}
@@ -2234,7 +2234,7 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{quotaProblem}
             </p>
           )}
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder={tr("Reason or context…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder={tr("Reason or context…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           {showAttachment && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -2242,7 +2242,7 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
                   ? (attachmentRequired ? tr("Doctor’s note photo (required)") : tr("Doctor’s note photo (optional)"))
                   : (attachmentRequired ? tr("Supporting photo (required)") : tr("Supporting photo (optional)"))}
               </label>
-              <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-primary", attachment ? "border-primary/50 bg-primary/5" : "border-border")}>
+              <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-ring", attachment ? "border-ring/50 bg-primary/5" : "border-border")}>
                 <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className={cn("min-w-0 flex-1 truncate", attachment ? "font-semibold" : "text-muted-foreground")}>{attachment ? attachment.name : tr("Pick a photo or file (max 10 MB)")}</span>
                 {attachment && <button type="button" aria-label={tr("Remove file")} onClick={(e) => { e.preventDefault(); setAttachment(null); }} className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
@@ -2386,7 +2386,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-primary/10 bg-gradient-to-br from-accent via-card to-secondary p-5 shadow-soft">
+    <section className="overflow-hidden rounded-3xl border border-ring/10 bg-gradient-to-br from-accent via-card to-secondary p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {/* No "Attendance" eyebrow: it repeated the page title (run 19 decision 1, R19-WB-4). */}
@@ -2420,15 +2420,15 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
 
           <div className="flex flex-col gap-2">
             {mode === "check-out" && (
-              <div className="rounded-xl border border-primary/20 bg-card/80 p-2.5">
+              <div className="rounded-xl border border-ring/20 bg-card/80 p-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-foreground">{tr("Daily reflection")} <span className="font-medium text-muted-foreground">· {tr("required, min {n} characters", { n: REFLECTION_MIN })}</span></span>
                   <span className={cn("text-[11px] font-semibold", reflection.trim().length >= REFLECTION_MIN ? "text-success" : "text-muted-foreground")}>{reflection.trim().length}/{REFLECTION_MIN}</span>
                 </div>
-                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder={tr("What you worked on today, progress, blockers, and what’s next…")} className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder={tr("What you worked on today, progress, blockers, and what’s next…")} className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-ring focus:ring-2 focus:ring-primary/20" />
               </div>
             )}
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} placeholder={tr("Optional note: traffic, WFH context, etc.")} className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} placeholder={tr("Optional note: traffic, WFH context, etc.")} className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20" />
             <AttendanceButton phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
             <WebCheckInNote />
             <AndroidAppCheckInNote />

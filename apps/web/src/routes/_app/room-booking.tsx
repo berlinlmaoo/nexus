@@ -197,7 +197,7 @@ function RoomBooking() {
                     {items.map((b) => {
                       const s = roomStyle(b.room);
                       return (
-                        <button key={b.id} id={`booking-${b.id}`} onClick={() => setComposer({ booking: b })} className={cn("group flex w-full scroll-mt-24 items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop active:scale-[0.98] motion-reduce:transform-none", flashId === b.id && "border-primary ring-2 ring-primary/40")}>
+                        <button key={b.id} id={`booking-${b.id}`} onClick={() => setComposer({ booking: b })} className={cn("group flex w-full scroll-mt-24 items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:border-ring/30 hover:shadow-pop active:scale-[0.98] motion-reduce:transform-none", flashId === b.id && "border-primary ring-2 ring-primary/40")}>
                           <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                             {fmtTime(b.startsAt)}
                             <span className="block font-normal text-muted-foreground/70">{fmtTime(b.endsAt)}</span>
@@ -325,7 +325,7 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const timesChanged = !editing || date !== startInit.date || startTime !== startInit.time || endTime !== endInit.time;
   const inPast = timesChanged && Number.isFinite(endsAtMs) && endsAtMs <= Date.now();
   const canSave = title.trim() && date && startTime && endTime && endTime > startTime && !inPast && !save.isPending;
-  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary";
+  const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-ring";
 
   return createPortal(
     // Phone: a bottom sheet with rounded top corners, like Add task (audit 12 Oct 2026: it floated mid-screen, square).
@@ -346,7 +346,7 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
         <div className="space-y-3 p-5">
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">{t("Room")}</span>
-            <SelectPicker variant="field" value={room} onChange={setRoom} ariaLabel={t("Room")} options={ROOM_BOOKING_ROOMS.map((r) => ({ value: r, label: t(roomLabel(r)) }))} className={cn(field, "hover:border-primary/40")} />
+            <SelectPicker variant="field" value={room} onChange={setRoom} ariaLabel={t("Room")} options={ROOM_BOOKING_ROOMS.map((r) => ({ value: r, label: t(roomLabel(r)) }))} className={cn(field, "hover:border-ring/40")} />
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">{t("Title")}</span>
@@ -359,11 +359,11 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
           <div className="grid grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">{t("Start")}</span>
-              <TimeSelect value={startTime} label={t("Start")} onChange={(v) => { setStartTime(v); if (endTime <= v) { const i = TIMES.indexOf(v); setEndTime(TIMES[Math.min(i + 4, TIMES.length - 1)] ?? v); } }} className={cn(field, "hover:border-primary/40")} />
+              <TimeSelect value={startTime} label={t("Start")} onChange={(v) => { setStartTime(v); if (endTime <= v) { const i = TIMES.indexOf(v); setEndTime(TIMES[Math.min(i + 4, TIMES.length - 1)] ?? v); } }} className={cn(field, "hover:border-ring/40")} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">{t("End")}</span>
-              <TimeSelect value={endTime} label={t("End")} onChange={setEndTime} className={cn(field, "hover:border-primary/40")} />
+              <TimeSelect value={endTime} label={t("End")} onChange={setEndTime} className={cn(field, "hover:border-ring/40")} />
             </label>
           </div>
           <label className="block space-y-1">

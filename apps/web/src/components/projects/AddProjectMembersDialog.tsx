@@ -128,7 +128,7 @@ export function AddProjectMembersDialog({
           <button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="px-5 pt-3">
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 focus-within:border-primary">
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 focus-within:border-ring">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}

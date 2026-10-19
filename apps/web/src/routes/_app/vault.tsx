@@ -751,7 +751,7 @@ function VaultPage() {
           "group relative flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5 transition-colors",
           lit ? "border-primary ring-2 ring-primary/40 bg-primary/5"
             : on ? "border-primary bg-primary/10 ring-1 ring-primary/40"
-            : "border-border hover:border-primary/50",
+            : "border-border hover:border-ring/50",
           (dragging?.id === item.id || (draggingMany && on)) && "opacity-50",
         )}
       >
@@ -805,7 +805,7 @@ function VaultPage() {
       {...dragProps(item)}
       className={cn(
         "group relative flex flex-col rounded-xl border bg-card overflow-hidden transition-colors",
-        on ? "border-primary ring-2 ring-primary/50" : "border-border hover:border-primary/50",
+        on ? "border-primary ring-2 ring-primary/50" : "border-border hover:border-ring/50",
         (dragging?.id === item.id || (draggingMany && on)) && "opacity-50",
       )}
     >

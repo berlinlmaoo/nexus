@@ -61,7 +61,7 @@ export function UnitTreePicker({ units, value, onChange, disabled }: {
     <div className="flex flex-wrap items-center gap-2">
       <Popover>
         <PopoverTrigger asChild>
-          <button type="button" disabled={disabled} className="inline-flex min-w-[12rem] max-w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-primary/40 disabled:opacity-50 pointer-coarse:min-h-11">
+          <button type="button" disabled={disabled} className="inline-flex min-w-[12rem] max-w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-ring/40 disabled:opacity-50 pointer-coarse:min-h-11">
             <span className="truncate">{summary}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>

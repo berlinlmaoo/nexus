@@ -191,7 +191,7 @@ function WarnDialog({ item, open, onClose, onSent }: { item: NexusSuspectItem; o
           </DialogDescription>
         </DialogHeader>
         <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} maxLength={500}
-          className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         <div className="text-right text-[11px] tabular-nums text-muted-foreground">{len}/500</div>
         <DialogFooter className="gap-2">
           <button onClick={onClose} className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-accent">{t("Cancel")}</button>
@@ -259,7 +259,7 @@ function SuspectCard({ item, onDone }: { item: NexusSuspectItem; onDone: () => v
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300}
             placeholder={fake ? t("Note for them (required for Not valid)") : t("Note (optional)")}
-            className="min-w-[12rem] flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            className="min-w-[12rem] flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           <button disabled={review.isPending} onClick={() => review.mutate("VALID")}
             className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-50">{t("It's fine")}</button>
           <button disabled={review.isPending} onClick={() => setWarning(true)}

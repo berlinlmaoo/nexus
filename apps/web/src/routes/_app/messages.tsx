@@ -539,7 +539,7 @@ function RenameGroup({ conversation, onClose }: { conversation: NexusConversatio
   const valid = name.trim().length > 0 && name.trim().length <= 80;
   return (
     <Shell title={t("Rename group")} hint={t("Everyone in the room sees the new name.")} onClose={onClose}>
-      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={t("Group name")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" onKeyDown={(e) => { if (e.key === "Enter" && valid && !rename.isPending) rename.mutate(); }} />
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={t("Group name")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" onKeyDown={(e) => { if (e.key === "Enter" && valid && !rename.isPending) rename.mutate(); }} />
       <div className="mt-4 flex items-center gap-2">
         <button disabled={!valid || rename.isPending} onClick={() => rename.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{rename.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save")}</button>
         {rename.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't rename it.")}</span>}
@@ -662,7 +662,7 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
           </span>
           <input type="checkbox" role="switch" checked={isGroup} disabled={selected.length > 1} onChange={(e) => setGroupMode(e.target.checked)} className="h-4 w-4 shrink-0 accent-switch-on" />
         </label>
-        {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={t("Group name (optional)")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />}
+        {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={t("Group name (optional)")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />}
         <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
           {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{t("Loading…")}</div>}
           {members.map((m: NexusUser) => (

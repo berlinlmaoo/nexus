@@ -101,7 +101,7 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
           <a
             href={`/room-booking?booking=${b.bookingId}`}
             onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); router.history.push(`/room-booking?booking=${b.bookingId}`); }}
-            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition-colors hover:border-primary/40 hover:bg-accent/40"
+            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition-colors hover:border-ring/40 hover:bg-accent/40"
           >
             <CalendarClock className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /><span className="flex-1">{t("Open Room Booking")}</span><ChevronRight className="h-4 w-4 text-muted-foreground" />
           </a>
@@ -143,7 +143,7 @@ export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvail
           className={cn(
             "flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
             room === r.room && r.free ? "border-ring bg-accent/60" : "border-border",
-            r.free ? "hover:border-primary/40" : "cursor-not-allowed opacity-60",
+            r.free ? "hover:border-ring/40" : "cursor-not-allowed opacity-60",
           )}
         >
           <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border", room === r.room && r.free ? "border-ring" : "border-muted-foreground/50")}>
@@ -171,7 +171,7 @@ export function FreeSlotChips({ slots, onPick }: { slots: RoomAvailability["free
             key={f.startsAt}
             type="button"
             onClick={() => onPick({ startsAt: f.startsAt, endsAt: f.endsAt })}
-            className="rounded-full border border-border px-2 py-0.5 font-medium tabular-nums transition-colors hover:border-primary/40 hover:bg-accent"
+            className="rounded-full border border-border px-2 py-0.5 font-medium tabular-nums transition-colors hover:border-ring/40 hover:bg-accent"
           >
             {wibTime(f.startsAt, locale)}–{wibTime(f.endsAt, locale)}
           </button>

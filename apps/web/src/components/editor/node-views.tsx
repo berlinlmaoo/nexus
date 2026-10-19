@@ -93,7 +93,7 @@ function MediaPlaceholder({ props, kind }: { props: NodeViewProps; kind: "image"
             </>
           ) : (
             <div className="flex gap-2">
-              <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); useLink(); } }} placeholder={t("Paste the link…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary" />
+              <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); useLink(); } }} placeholder={t("Paste the link…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring" />
               <button type="button" onClick={useLink} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">{t("Embed")}</button>
             </div>
           )}
@@ -150,7 +150,7 @@ export function BookmarkView(props: NodeViewProps) {
           </div>
           {editable && (
             <div className="mt-2 flex gap-2">
-              <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} placeholder={t("Paste the link…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary" />
+              <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} placeholder={t("Paste the link…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring" />
               <button type="button" onClick={submit} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">{embed ? t("Embed") : t("Create bookmark")}</button>
             </div>
           )}

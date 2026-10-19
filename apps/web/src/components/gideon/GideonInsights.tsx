@@ -35,7 +35,7 @@ export function GideonInsights() {
   const [status, setStatus] = useState("");
   const q = useQuery({ queryKey: ["nexus", "gideon-runs", "all", trigger, status], queryFn: () => gideonRuns({ trigger, status, limit: 100 }), retry: false });
   const totals = q.data?.totals;
-  const chip = (on: boolean) => cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors", on ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent");
+  const chip = (on: boolean) => cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors", on ? "border-ring/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent");
   return (
     <div lang={L.lang} className="space-y-4">
       {totals && (

@@ -387,7 +387,7 @@ function SharedFolder({ slug, data, folderId, onOpenFolder }: {
                   key={f.id}
                   type="button"
                   onClick={() => open(f)}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:border-ring/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Folder className="h-5 w-5 shrink-0 text-primary" />
                   <span className="min-w-0">

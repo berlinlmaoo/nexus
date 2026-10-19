@@ -428,7 +428,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         className={cn(
           "flex cursor-grab items-center gap-2 rounded-lg text-left transition active:cursor-grabbing disabled:opacity-50",
           compact ? "w-[140px] px-2 py-1.5" : "w-[156px] px-2 py-2",
-          compact && senior ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
+          compact && senior ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-ring",
           dragging && "opacity-40",
         )}
       >
@@ -480,7 +480,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
         <p className="mb-3 text-[11px] text-muted-foreground">{t("Their attendance requests go to this person only. The board can still override.")}</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-ring" />
         </div>
         <div className="max-h-80 space-y-2 overflow-y-auto">
           {groups.map(([role, list]) => (

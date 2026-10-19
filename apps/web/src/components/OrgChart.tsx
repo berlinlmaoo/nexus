@@ -913,7 +913,7 @@ function ViewChip({ active, onClick, title, children }: { active: boolean; onCli
   return (
     <button type="button" role="tab" aria-selected={active} onClick={onClick} title={title}
       className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
-        active ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
+        active ? "border-ring/40 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
       {children}
     </button>
   );
@@ -1255,7 +1255,7 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemo
       className={cn(
         row
           ? "flex w-full min-w-[148px] max-w-[212px] cursor-grab items-center gap-2 rounded-lg px-1.5 py-1 text-left text-foreground transition hover:bg-muted active:cursor-grabbing disabled:opacity-50"
-          : "flex w-[156px] cursor-grab items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-left text-foreground shadow-sm transition hover:border-primary active:cursor-grabbing disabled:opacity-50",
+          : "flex w-[156px] cursor-grab items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-left text-foreground shadow-sm transition hover:border-ring active:cursor-grabbing disabled:opacity-50",
         dragging && "opacity-40")}
     >
       {p.avatar
@@ -1725,7 +1725,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
         <p className="mb-3 text-[11px] text-muted-foreground">{t("Put them under someone, or tick their IPs/Teams. This doesn't change project access.")}</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names, job titles or IPs/Teams…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names, job titles or IPs/Teams…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-ring" />
         </div>
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {canBeUnder && (

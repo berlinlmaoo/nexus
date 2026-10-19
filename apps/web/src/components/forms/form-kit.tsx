@@ -67,7 +67,7 @@ export function FormCard({ form, projectName, onEdit }: { form: NexusForm; proje
   const copy = () => { navigator.clipboard?.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const cover = coverCss(form.branding?.cover);
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-all hover:border-primary/30 hover:shadow-pop">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-all hover:border-ring/30 hover:shadow-pop">
       {cover && <div aria-hidden className="h-10 w-full shrink-0" style={{ background: cover }} />}
       <div className="flex flex-1 flex-col p-5">
         <button onClick={onEdit} className="flex-1 text-left">

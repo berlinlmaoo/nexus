@@ -295,7 +295,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
             rows={4}
             disabled={busy}
             placeholder={t("Today I worked on… the progress was… the blocker was… tomorrow I'll continue…")}
-            className={`mt-2 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:ring-2 focus:ring-primary/20 ${reflectionCount >= REFLECTION_MIN ? "border-emerald-400/60" : "border-border focus:border-primary"}`}
+            className={`mt-2 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:ring-2 focus:ring-primary/20 ${reflectionCount >= REFLECTION_MIN ? "border-emerald-400/60" : "border-border focus:border-ring"}`}
           />
           {reflectionCount < REFLECTION_MIN && (
             <p className="mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">{t("{n} more characters needed before you can check out.", { n: REFLECTION_MIN - reflectionCount })}</p>

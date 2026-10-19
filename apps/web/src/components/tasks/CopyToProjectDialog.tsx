@@ -128,7 +128,7 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
           <>
             <div className="relative mt-4">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search projects…")} className="w-full rounded-xl border border-border bg-background py-2 pl-8 pr-3 text-sm outline-none focus:border-primary" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search projects…")} className="w-full rounded-xl border border-border bg-background py-2 pl-8 pr-3 text-sm outline-none focus:border-ring" />
             </div>
 
             <div className="mt-2 max-h-52 flex-1 space-y-1 overflow-y-auto rounded-xl border border-border p-1">

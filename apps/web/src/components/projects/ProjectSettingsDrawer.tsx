@@ -268,7 +268,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>
-              <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canManage} aria-readonly={!canManage} placeholder={t("Project name")} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary read-only:border-transparent read-only:bg-transparent read-only:px-0" />
+              <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canManage} aria-readonly={!canManage} placeholder={t("Project name")} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-ring read-only:border-transparent read-only:bg-transparent read-only:px-0" />
             </div>
             {canManage && <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />{iconIsImage ? t("Change photo") : t("Add photo")}</button>
@@ -278,7 +278,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             </div>}
             {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{uploadIcon.error instanceof ApiError && uploadIcon.error.status === 403 ? saveErrorText(uploadIcon.error) : friendlyError(uploadIcon.error) ?? t("Icon upload failed.")}</p>}
             {canManage ? (
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             ) : description ? (
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{description}</p>
             ) : null}
@@ -394,7 +394,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 </div>
               ))}
             </div>
-            {canManage && <button onClick={() => setShowPicker(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> {t("Add members")}</button>}
+            {canManage && <button onClick={() => setShowPicker(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-ring hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> {t("Add members")}</button>}
             {removeMember.isError && <p className="text-xs font-semibold text-destructive">{saveErrorText(removeMember.error)}</p>}
             {showPicker && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setShowPicker(false)} onAdded={() => setShowPicker(false)} />}
           </div>
@@ -404,7 +404,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           <div className="space-y-2 border-t border-border pt-5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Invite by email")}</span>
             <div className="flex items-center gap-2">
-              <input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(null); }} type="email" placeholder="teammate@company.com" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              <input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(null); }} type="email" placeholder="teammate@company.com" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
               <AccessLevelPicker value={inviteLevel} onChange={setInviteLevel} ariaLabel={t("Access for the person you invite")} />
               <button disabled={!inviteEmail.includes("@") || invite.isPending} onClick={() => invite.mutate()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-secondary px-3 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
                 {invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} {t("Invite")}

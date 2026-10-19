@@ -1270,12 +1270,12 @@ function PersonalizeDialog({ open, onOpenChange }: { open: boolean; onOpenChange
         <div className="space-y-4">
           <label className="block">
             <span className="text-xs font-semibold">{t("What do you call it?")}</span>
-            <input value={nameValue} maxLength={40} onChange={(e) => setNameValue(e.target.value)} placeholder="GIDEON" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={nameValue} maxLength={40} onChange={(e) => setNameValue(e.target.value)} placeholder="GIDEON" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           </label>
           <label className="block">
             <span className="text-xs font-semibold">{t("Instructions")}</span>
             <span className="block text-[11px] text-muted-foreground">{t("How you like answers: language, length, tone, what to focus on. Applied to every chat of yours.")}</span>
-            <textarea value={instructions} maxLength={2000} rows={6} onChange={(e) => setInstructions(e.target.value)} placeholder={t("e.g. Answer in Indonesian, short bullet points. I lead the Atlas launch, so flag anything that blocks it.")} className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <textarea value={instructions} maxLength={2000} rows={6} onChange={(e) => setInstructions(e.target.value)} placeholder={t("e.g. Answer in Indonesian, short bullet points. I lead the Atlas launch, so flag anything that blocks it.")} className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             <span className="mt-0.5 block text-right text-[10px] tabular-nums text-muted-foreground">{instructions.length}/2000</span>
           </label>
         </div>
@@ -1321,7 +1321,7 @@ function SaveAsDocButton({ markdown, question, projectId, className }: { markdow
       <DropdownMenuContent align="start" side="top" collisionPadding={12} className="flex max-h-80 w-72 flex-col overflow-hidden p-0">
         <div className="border-b border-border p-1.5">
           <DropdownMenuLabel className="px-1.5 pb-1 pt-0.5 text-xs">{t("Save into project")}</DropdownMenuLabel>
-          <label className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 focus-within:border-primary/50">
+          <label className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 focus-within:border-ring/50">
             <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <input
               ref={findRef}

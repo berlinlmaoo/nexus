@@ -33,7 +33,7 @@ export type BuilderContext = {
 
 type Opt = { value: string; label: string; hint?: string; group?: string };
 
-const input = "h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary disabled:opacity-70";
+const input = "h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none transition-colors focus:border-ring disabled:opacity-70";
 const picker = "h-9 rounded-lg px-2.5 text-sm";
 
 function errorText(e: unknown, fallback: string) {
@@ -391,7 +391,7 @@ function ActionConfig({ action, set, ctx, disabled }: { action: Rule; set: (r: R
     case "ADD_COMMENT":
       return (
         <div className="space-y-1">
-          <textarea disabled={disabled} value={action.value ?? ""} onChange={(e) => set({ ...action, value: e.target.value })} rows={2} placeholder={t("Comment text")} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary" />
+          <textarea disabled={disabled} value={action.value ?? ""} onChange={(e) => set({ ...action, value: e.target.value })} rows={2} placeholder={t("Comment text")} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-ring" />
           <p className="text-[11px] text-muted-foreground">{t("Placeholders: {list}", { list: TEMPLATE_HINT })}</p>
         </div>
       );
@@ -399,7 +399,7 @@ function ActionConfig({ action, set, ctx, disabled }: { action: Rule; set: (r: R
       return (
         <div className="space-y-2">
           <PeoplePicker disabled={disabled} value={arr(cfg.to).length ? arr(cfg.to) : ["@assignees"]} onChange={(v) => setCfg({ to: v })} specials={NOTIFY_SPECIALS(t)} members={ctx.members} />
-          <textarea disabled={disabled} value={action.value ?? ""} onChange={(e) => set({ ...action, value: e.target.value })} rows={2} placeholder={t("Message (empty = the task title)")} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary" />
+          <textarea disabled={disabled} value={action.value ?? ""} onChange={(e) => set({ ...action, value: e.target.value })} rows={2} placeholder={t("Message (empty = the task title)")} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-ring" />
           <p className="text-[11px] text-muted-foreground">{t("Placeholders: {list}", { list: TEMPLATE_HINT })}</p>
         </div>
       );

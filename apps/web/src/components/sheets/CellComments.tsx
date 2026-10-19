@@ -144,7 +144,7 @@ export function CellCommentThread({
                   }}
                   rows={1}
                   placeholder={t("Write a comment… (@name to tag)")}
-                  className="max-h-24 min-h-[2rem] flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary"
+                  className="max-h-24 min-h-[2rem] flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
                 />
                 <button aria-label={t("Send comment")}
                   onClick={send}

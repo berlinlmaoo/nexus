@@ -193,7 +193,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const fieldCls = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
+  const fieldCls = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20";
 
   if (typeof document === "undefined") return null;
   return createPortal(

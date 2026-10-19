@@ -413,7 +413,7 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
                   {filtered.filter((a) => a.group === g).map((a) => {
                     const i = filtered.indexOf(a);
                     return (
-                      <button key={a.id} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => void run(a, "")} className={cn("rounded-full border px-2.5 py-1 text-xs", i === index ? "border-primary/50 bg-muted" : "border-border hover:bg-muted/60")}>
+                      <button key={a.id} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => void run(a, "")} className={cn("rounded-full border px-2.5 py-1 text-xs", i === index ? "border-ring/50 bg-muted" : "border-border hover:bg-muted/60")}>
                         {t(TONE_LABEL[a.tone ?? ""] ?? a.label)}
                       </button>
                     );
