@@ -801,13 +801,13 @@ final class NEXUSUITour: XCTestCase {
                 let active = app.staticTexts.matching(identifier: "sheet.activeCell").firstMatch
                 guard active.exists && (active.label == expected || active.value as? String == expected) else { return "wrong-screen: visible cell selection did not match " + expected }
             case "gridScroll":
-                let target = app.collectionViews.firstMatch
+                let target = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
                 guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no grid to scroll" }
                 if action.label == "up" { target.swipeUp() } else { target.swipeDown() }
                 pause(1)
             case "pinch":
                 #if !targetEnvironment(macCatalyst)
-                let target = app.collectionViews.firstMatch
+                let target = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
                 guard target.waitForExistence(timeout: 10), let scale = Double(action.text ?? "") else { return "wrong-screen: no sheet grid for pinch" }
                 target.pinch(withScale: CGFloat(scale), velocity: scale > 1 ? 1 : -1)
                 pause(1)
