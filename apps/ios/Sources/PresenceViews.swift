@@ -137,11 +137,7 @@ struct SetPresenceSheet: View {
             HStack {
                 Text(T("Availability"))
                 Spacer()
-                // Current manual-status contract always publishes Away; Online is unavailable until the API supports it.
-                Menu {
-                    Button(T("Online")) {}.disabled(true)
-                    Button(T("Away")) {}
-                } label: { HStack { PresenceDot(tone: "yellow"); Text(T("Away")); Image(systemName: "chevron.down") } }
+                HStack { PresenceDot(tone: "yellow"); Text(T("Away")) }
             }.font(NXFont.text(14))
             Text(T("A custom status currently sets you as Away.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
