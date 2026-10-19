@@ -114,8 +114,37 @@ export const retryMeeting = (id: string, stage?: "minutes" | "transcript") => mj
 export const deleteMeeting = (id: string) => mjson<{ success: true }>(`/api/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 /**
+ * One chunk over XMLHttpRequest: fetch() has no upload progress, so with 8 MB chunks the bar (and the byte counter
+ * next to it) only moved once per chunk (R-5, 19 Oct 2026). `onBytes` gets the bytes of this chunk sent so far.
+ */
+function putChunk(url: string, body: Blob, onBytes: (sent: number) => void, signal?: AbortSignal): Promise<{ status: number; body: Record<string, unknown> | null }> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+    const xhr = new XMLHttpRequest();
+    const onAbort = () => xhr.abort();
+    xhr.open("PUT", url);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Nexus-Client", "web/1");
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("Accept-Language", getLang());
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onBytes(Math.min(e.loaded, body.size)); };
+    xhr.onload = () => {
+      signal?.removeEventListener("abort", onAbort);
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = JSON.parse(xhr.responseText) as Record<string, unknown>; } catch { parsed = null; }
+      resolve({ status: xhr.status, body: parsed });
+    };
+    xhr.onerror = () => { signal?.removeEventListener("abort", onAbort); reject(new Error("Upload failed (network)")); };
+    xhr.onabort = () => { signal?.removeEventListener("abort", onAbort); reject(new DOMException("Aborted", "AbortError")); };
+    signal?.addEventListener("abort", onAbort);
+    xhr.send(body);
+  });
+}
+
+/**
  * Send the file in chunks (resumable: on a 409 the server says where it is, and the upload continues from there).
- * Three tries per chunk with a pause; `onProgress` gets 0..1.
+ * Three tries per chunk with a pause; `onProgress` gets 0..1, also while a chunk is on its way.
  */
 export async function uploadMeetingAudio(meetingId: string, file: Blob, chunkBytes: number, onProgress: (p: number) => void, signal?: AbortSignal): Promise<Meeting> {
   let offset = 0;
@@ -123,17 +152,12 @@ export async function uploadMeetingAudio(meetingId: string, file: Blob, chunkByt
   while (offset < file.size) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const end = Math.min(file.size, offset + chunkBytes);
+    const base = offset;
     try {
-      const res = await fetch(`/api/meetings/${encodeURIComponent(meetingId)}/audio?offset=${offset}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/octet-stream", "X-Nexus-Client": "web/1" },
-        body: file.slice(offset, end),
-        signal,
-      });
-      const body = (await res.json().catch(() => null)) as { received?: number; error?: string; code?: string } | null;
-      if (res.status === 409 && typeof body?.received === "number") { offset = body.received; continue; }
-      if (!res.ok) {
+      const res = await putChunk(`/api/meetings/${encodeURIComponent(meetingId)}/audio?offset=${offset}`, file.slice(offset, end), (sent) => onProgress((base + sent) / file.size), signal);
+      const body = res.body as { received?: number; error?: string; code?: string } | null;
+      if (res.status === 409 && typeof body?.received === "number") { offset = body.received; onProgress(offset / file.size); continue; }
+      if (res.status < 200 || res.status >= 300) {
         if (res.status >= 400 && res.status < 500) throw new MeetingApiError(body?.error || `Upload failed (${res.status})`, res.status, body?.code ?? null, body as Record<string, unknown> | null);
         throw new Error(body?.error || `Upload failed (${res.status})`);
       }
@@ -142,6 +166,7 @@ export async function uploadMeetingAudio(meetingId: string, file: Blob, chunkByt
       onProgress(offset / file.size);
     } catch (error) {
       if (error instanceof MeetingApiError || (error as Error)?.name === "AbortError") throw error;
+      onProgress(offset / file.size);
       if (++failures >= 4) throw error;
       await new Promise((r) => setTimeout(r, 1500 * failures));
     }
