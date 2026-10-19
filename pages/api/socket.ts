@@ -853,6 +853,38 @@ export function initializeSocketServer(
     emitGuarded(`project:${data.projectId}`, "doc-changed", { projectId: data.projectId, docId: data.docId, actorId: data.actorId })
   })
 
+  // Something inside a project changed that no other event covers (lib/project-realtime.ts, 19 Oct 2026): ids
+  // only, to the project's room (VIEWER access to join). Folded per (project, kind, id): a form builder autosaving
+  // or a tab drag is one ping per 300 ms window, sent after the last write of the window.
+  const projectPings = new Map<string, ReturnType<typeof setTimeout>>()
+  eventBus.on(BUS_EVENTS.PROJECT_CHANGED, (data: { projectId?: unknown; kind?: unknown; id?: unknown; actorId?: unknown }) => {
+    if (typeof data?.projectId !== "string" || !data.projectId || typeof data.kind !== "string") return
+    const payload = {
+      projectId: data.projectId,
+      kind: data.kind,
+      id: typeof data.id === "string" ? data.id : null,
+      actorId: typeof data.actorId === "string" ? data.actorId : null,
+    }
+    const key = `${payload.projectId}|${payload.kind}|${payload.id ?? ""}`
+    const prev = projectPings.get(key)
+    if (prev) clearTimeout(prev)
+    const timer = setTimeout(() => {
+      projectPings.delete(key)
+      emitGuarded(`project:${payload.projectId}`, "project-changed", payload)
+    }, 300)
+    timer.unref?.()
+    projectPings.set(key, timer)
+  })
+
+  // A support ticket changed (lib/complaint-realtime.ts, 19 Oct 2026): to the user rooms the route resolved — the
+  // reporter and the workspace's BoD/OAA — and nowhere else. Ids only.
+  eventBus.on(BUS_EVENTS.COMPLAINT_CHANGED, (data: { userIds?: unknown; payload?: { id?: unknown; kind?: unknown } }) => {
+    const rooms = (Array.isArray(data?.userIds) ? data.userIds : []).filter((u): u is string => typeof u === "string" && !!u).map((u) => `user:${u}`)
+    const id = data?.payload?.id
+    if (!rooms.length || typeof id !== "string") return
+    io.to(rooms).emit("complaint-changed", { id, kind: typeof data.payload?.kind === "string" ? data.payload.kind : null })
+  })
+
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes
   // out once, after the last write in the window has committed. Nothing is looked up per write.
   let auditPing: ReturnType<typeof setTimeout> | null = null
