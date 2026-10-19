@@ -2,6 +2,8 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Profile fields aren't available on this server yet.": "Kolom profil belum tersedia di server ini.",
+        "GIDEON Memory is not available right now.": "Memori GIDEON sedang tidak tersedia.",
         "Zoom %@%%": "Zoom %1$@%%",
         "Your nickname": "Nama panggilanmu",
         "Your role / occupation": "Peran / pekerjaanmu",

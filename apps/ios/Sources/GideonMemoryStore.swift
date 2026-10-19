@@ -5,6 +5,9 @@ import Observation
 final class GideonMemoryStore {
     static let shared = GideonMemoryStore()
     private(set) var memories: [GideonMemory] = []
+    private(set) var available = true
+    private(set) var profileAvailable = false
+    private(set) var updatedAt: String?
     private(set) var paused = false
     private(set) var max = 40
     private(set) var textMax = 200
@@ -20,6 +23,7 @@ final class GideonMemoryStore {
     var full: Bool { memories.count >= max }
     func reset() {
         epoch = UUID(); owner = nil; memories = []; paused = false; max = 40; textMax = 200
+        available = true; profileAvailable = false; updatedAt = nil
         loaded = false; loading = false; busy = false; failure = nil; notice = nil; sessionExpired = false; revision = 0
     }
     private func context() -> String? {
@@ -40,15 +44,29 @@ final class GideonMemoryStore {
             let result: GideonMemories = try await GideonMemoryAPI.request()
             guard current(ticket, uid) else { return }
             if revision != before { loading = false; await refresh(); return }
-            memories = result.memories.filter { $0.status != "DELETED" }; paused = result.paused
-            max = Swift.max(1, result.max); textMax = Swift.max(1, result.textMax); loaded = true; failure = nil
-            // A fresh own list also reconciles chips changed from another device.
-            GideonChat.shared.reconcileMemories(memories)
+            acceptState(result)
         } catch { if current(ticket, uid) { failed(error) } }
+    }
+    private func acceptState(_ result: GideonMemories) {
+        memories = result.memories.filter { $0.status != "DELETED" }; paused = result.paused
+        available = result.available ?? true; profileAvailable = result.profile != nil
+        updatedAt = result.updatedAt ?? memories.map(\.updatedAt).max()
+        max = Swift.max(1, result.max); textMax = Swift.max(1, result.textMax); loaded = true; failure = nil
+        GideonChat.shared.reconcileMemories(memories)
+    }
+    @discardableResult func setProfile(field: String, value: String) async -> Bool {
+        guard ["nickname", "role", "about"].contains(field), profileAvailable else { return false }
+        let uid = context(), ticket = epoch
+        return await mutate {
+            let result: GideonMemories = try await GideonMemoryAPI.request("/profile", method: "PUT", body: [field: value])
+            guard let uid, self.current(ticket, uid) else { return }
+            self.revision += 1; self.acceptState(result)
+        }
     }
     func acceptOwn(_ memory: GideonMemory) {
         guard context() != nil else { return }
         revision += 1
+        updatedAt = memory.status == "DELETED" ? Date().ISO8601Format() : memory.updatedAt
         if memory.status == "DELETED" { memories.removeAll { $0.id == memory.id } }
         else if let i = memories.firstIndex(where: { $0.id == memory.id }) { memories[i] = memory }
         else { memories.append(memory) }
@@ -66,9 +84,7 @@ final class GideonMemoryStore {
         _ = await mutate {
             let result: GideonMemories = try await GideonMemoryAPI.request(method: "PATCH", body: ["paused":value])
             guard let uid, self.current(ticket, uid) else { return }
-            self.revision += 1; self.paused = result.paused; self.memories = result.memories.filter { $0.status != "DELETED" }
-            self.max = result.max; self.textMax = result.textMax; self.loaded = true
-            GideonChat.shared.reconcileMemories(self.memories)
+            self.revision += 1; self.acceptState(result)
         }
     }
     @discardableResult func add(text: String, kind: String, date: String) async -> Bool {

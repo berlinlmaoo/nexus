@@ -11,7 +11,15 @@ struct GideonMemory: Decodable, Identifiable, Equatable, Sendable {
     let createdAt: String
     let updatedAt: String
 }
+struct GideonMemoryProfile: Decodable {
+    let nickname: String?
+    let role: String?
+    let about: String?
+}
 struct GideonMemories: Decodable {
+    let available: Bool?
+    let profile: GideonMemoryProfile?
+    let updatedAt: String?
     let paused: Bool
     let max: Int
     let textMax: Int
