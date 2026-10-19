@@ -215,9 +215,11 @@ async function handlePOST(req: NextRequest) {
     // Tell each person. After the commit and best-effort: a failed push never undoes a grant.
     const notice = bonusGrantTexts(days, periodKey, reason)
     const sent = await Promise.allSettled(
-      fresh.map((userId) =>
-        createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: "/attendance", push: true }),
-      ),
+      fresh.map((userId) => {
+        // C-7: the grant itself; the web opens the day-off log. Apps that only read the path land on /attendance.
+        const grantId = created.find((c) => c.userId === userId)?.id
+        return createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: grantId ? `/attendance?bonus=${encodeURIComponent(grantId)}` : "/attendance", push: true })
+      }),
     )
     const notified = sent.filter((r) => r.status === "fulfilled").length
     if (notified < fresh.length) console.error("[day-off-bonus] notify failed for", fresh.length - notified, "people")

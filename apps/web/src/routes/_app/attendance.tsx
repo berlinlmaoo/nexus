@@ -65,10 +65,17 @@ export const Route = createFileRoute("/_app/attendance")({
   // is settled, scrolled into view and highlighted, so the tap lands on THE request and not on the
   // page. iOS reads the same two keys (AttendanceRequestsCard).
   // `?view=log` keeps the Board/Log choice across a reload / Back (QA 13 Oct 2026).
-  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string; view?: "log" } => ({
+  // C-7 (19 Oct 2026): `?trail=<recordId>` (an approver's "X is away from the office") opens that record's location
+  // trail; `?date=YYYY-MM-DD` (a BoD changed your day) opens that day's period; `?bonus=<grantId>` (extra day off)
+  // opens the day-off log.
+  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string; view?: "log"; trail?: string; member?: string; date?: string; bonus?: string } => ({
     request: typeof s.request === "string" ? s.request : undefined,
     offsite: typeof s.offsite === "string" ? s.offsite : undefined,
     view: s.view === "log" ? "log" : undefined,
+    trail: typeof s.trail === "string" && s.trail ? s.trail : undefined,
+    member: typeof s.member === "string" && s.member ? s.member : undefined,
+    date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
+    bonus: typeof s.bonus === "string" && s.bonus ? s.bonus : undefined,
   }),
 });
 
@@ -297,6 +304,25 @@ function Attendance() {
   const [correctRecord, setCorrectRecord] = useState<HistRow | null>(null);
   // The viewer's own trail for today, opened from the office card.
   const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+  // C-7: a notification's deep link, handled once and then dropped from the address (Back doesn't reopen it).
+  useEffect(() => {
+    const { trail, date, bonus } = attSearch;
+    if (!trail && !date && !bonus) return;
+    if (trail) {
+      const who = rows.find((r) => r.id === trail)?.user?.name ?? null;
+      setTrailFor({ id: trail, title: who ? tr("{name}'s location trail", { name: who }) : tr("Location trail"), subtitle: tr("Today") });
+    }
+    if (date) {
+      // The payroll period that holds the day (28th → 27th is named after the month it ends in).
+      const [y, m, d] = date.split("-").map(Number);
+      const a = new Date(y, m - 1 + (d > 27 ? 1 : 0), 1);
+      setMonthKey(`${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`);
+    }
+    if (bonus) setLogKind({ kind: "DAY_OFF" });
+    void attNavigate({ search: (prev) => ({ ...prev, trail: undefined, member: undefined, date: undefined, bonus: undefined }), replace: true });
+    // rows: only to name the person when the board is already loaded; the dialog loads the trail itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attSearch.trail, attSearch.date, attSearch.bonus]);
   // Today's place: the office, or the check-in address when it was made away from the office.
   const todayPlace = recordPlace(today.data?.today);
   const todayKey = today.data?.attendanceDateKey?.slice(0, 10) || jakartaDateKey();
