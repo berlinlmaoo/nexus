@@ -353,31 +353,18 @@ struct GideonPanel: View {
             ZStack {
                 NX.background.ignoresSafeArea()
                 VStack(spacing: 0) {
-                    // The phone's bar drops its title for the tier, history, new chat and ⋯ group, so the name
-                    // and the web's "Acts in NEXUS as you" (what GIDEON may do) sit at the top of the page
-                    // (UI tour run 19, R19-I-11).
-                    if GideonSystemTitle.available && hSize == .compact {
-                        title.frame(maxWidth: .infinity).padding(.vertical, 6)
-                    }
                     conversation
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .modifier(GideonSystemTitle(title: displayName, subtitle: subtitleText))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
+                ToolbarItemGroup(placement: .topBarLeading) {
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
-                }
-                if !GideonSystemTitle.available {
-                    ToolbarItem(placement: .principal) { title }
-                }
-                ToolbarItem(placement: .topBarTrailing) { tierChip }
-                // Chat history and New chat as their own buttons, as web's header (UI tour run 7);
-                // the rest stays in ⋯.
-                ToolbarItemGroup(placement: .primaryAction) {
                     Button { showChats = true } label: { Image(systemName: "clock.arrow.circlepath") }
                         .accessibilityLabel(T("Chat history"))
+                }
+                ToolbarItem(placement: .principal) { compactTitle }
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { newChat() } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel(T("New chat"))
                     Menu {
@@ -392,6 +379,13 @@ struct GideonPanel: View {
                 }
             }
         }
+    }
+
+    private var compactTitle: some View {
+        VStack(spacing: 1) {
+            tierChip
+            Text(subtitleText).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        }.frame(maxWidth: 160)
     }
 
     @ViewBuilder private var moreDestructiveItems: some View {
@@ -475,12 +469,11 @@ struct GideonPanel: View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
                 Text(tier.label).font(NXFont.text(13, .semibold)).lineLimit(1)
-                if tier == .luna { tierBadge("Default", experimental: false) }
-                if tier == .experimental { tierBadge("Experimental", experimental: true) }
+                if wide && tier == .luna { tierBadge("Default", experimental: false) }
+                if wide && tier == .experimental { tierBadge("Experimental", experimental: true) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
             }
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(NX.mutedFg)
+            .foregroundStyle(NX.foreground)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
