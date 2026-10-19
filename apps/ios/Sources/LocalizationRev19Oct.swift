@@ -8,5 +8,13 @@ extension AppLanguage {
         "What should GIDEON call you?": "GIDEON sebaiknya memanggilmu apa?",
         "e.g. Finance manager": "mis. Manajer keuangan",
         "Interests, values or preferences to keep in mind": "Minat, nilai, atau preferensi yang perlu diingat",
+        // R-4 Control Room › GIDEON › Performance
+        "Answers 24 h": "Jawaban 24 jam",
+        "Errors 24 h": "Error 24 jam",
+        "Errors (15 min)": "Error (15 mnt)",
+        "No answers in 15 min": "Belum ada jawaban dalam 15 mnt",
+        "Typical time (p50)": "Waktu umumnya (p50)",
+        "Credits / answer": "Kredit / jawaban",
+        "Offline": "Offline",
     ]
 }

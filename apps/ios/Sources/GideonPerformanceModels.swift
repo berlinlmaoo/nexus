@@ -16,6 +16,8 @@ struct GideonPerformanceData: Decodable {
         let inFlight: Int; let answers15m: Int; let failures15m: Int; let answers24h: Int
         let errorRate: Double?; let p50Ms: Double?; let p95Ms: Double?
         let avgCredits15m: Double?; let avgCredits24h: Double?
+        /// Not sent by the server yet; the summary falls back to the 15-minute failures while it is missing.
+        let failures24h: Int?
     }
     struct Live: Decodable {
         let at: String
