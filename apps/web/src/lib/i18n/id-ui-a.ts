@@ -13,4 +13,6 @@ export const ID_UI_A: Record<string, string> = {
   "No emoji": "Tanpa emoji",
   "On the road": "Di jalan",
   "Starts": "Mulai",
+  // U-9 Timeline on phones: show / hide the Name column
+  "Names": "Nama",
 };
