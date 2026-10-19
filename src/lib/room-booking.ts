@@ -54,6 +54,10 @@ export function isRoomOverlapViolation(err: unknown): boolean {
     seen.add(v)
     const o = v as Record<string, unknown>
     if (o.code === "23P01" || o.originalCode === "23P01") return true
+    // Two bookings moved into the same slot at once can each wait on the other's exclusion check; Postgres then
+    // kills one with a deadlock instead of 23P01 (QA final 19 Oct 2026: 1 of 2 runs answered 500). Same outcome.
+    if (o.code === "40P01" || o.originalCode === "40P01") return true
+    if (typeof o.message === "string" && /deadlock detected/.test(o.message)) return true
     if (typeof o.message === "string" && /RoomBooking_no_overlap|violates exclusion constraint/.test(o.message)) return true
     return ["cause", "meta", "driverAdapterError", "error"].some((k) => walk(o[k], depth + 1))
   }
