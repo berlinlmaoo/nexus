@@ -1,4 +1,7 @@
 <resources>
+    <plurals name="qa_gideon_waiting_count"><item quantity="other">%1$d perubahan menunggu persetujuanmu</item></plurals>
+    <string name="qa_gideon_no_change">Tidak ada perubahan: semuanya sudah seperti ini</string>
+    <string name="qa_gideon_waiting">%1$d perubahan menunggu persetujuanmu</string>
     <string name="qa_chat_count">%1$s / 4.000 karakter</string>
     <string name="qa_chat_too_long">Terlalu panjang: %1$s / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.</string>
     <string name="qa_chat_denied">Kamu sudah tidak ada di chat ini</string>

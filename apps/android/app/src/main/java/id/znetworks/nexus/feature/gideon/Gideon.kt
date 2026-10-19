@@ -55,8 +55,10 @@ import java.time.ZoneId
 @Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
                                    val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null,
                                    val booking: GBooking? = null, val bookingChange: GBookingChange? = null,
-                                   val taskDelete: GTaskDelete? = null, val taskTarget: GTaskTarget? = null, val extra: GExtra? = null) {
+                                     val taskDelete: GTaskDelete? = null, val taskTarget: GTaskTarget? = null, val extra: GExtra? = null,
+                                     val summaryEn: String? = null, val summaryId: String? = null, val noChange: Boolean = false) {
     val isPending: Boolean get() = status == "PENDING"
+    fun summaryFor(language: String): String? = (if (language == "id") summaryId else summaryEn)?.takeIf { it.isNotBlank() } ?: summary
 }
 
 /** A room GIDEON wants to book (server GideonBookingView): the slot as ISO instants, the room named or null. */

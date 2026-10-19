@@ -171,7 +171,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
-                s.messages.isEmpty() && !s.thinking && (s.chatId == null || s.pending.isEmpty()) -> FreshChat { send(it) }
+                s.messages.isEmpty() && !s.thinking && (s.chatId == null || s.pending.isEmpty()) -> FreshChat(pending = { PendingApprovals(s, s.pending, true, { a, b, x -> chat.roomAvailability(a, b, x) }) { decision = it } }) { send(it) }
                 else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
@@ -257,7 +257,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
  * reads, and three suggestions as equal outlined rows asked with one tap.
  */
 @Composable
-private fun FreshChat(onAsk: (String) -> Unit) {
+private fun FreshChat(pending: @Composable () -> Unit = {}, onAsk: (String) -> Unit) {
     val c = Nx.colors
     val chips = listOf(stringResource(R.string.gx_chip_calendar), stringResource(R.string.gx_chip_overdue), stringResource(R.string.gx_chip_week), stringResource(R.string.gx_chip_decide))
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
@@ -276,6 +276,7 @@ private fun FreshChat(onAsk: (String) -> Unit) {
                     .border(1.dp, c.border, RoundedCornerShape(12.dp)).clickable { onAsk(q) }.defaultMinSize(minHeight = 44.dp)
                     .padding(horizontal = 14.dp, vertical = 10.dp))
         }
+        pending()
     }
 }
 
@@ -285,15 +286,9 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
     val list = rememberLazyListState()
     val transcriptIds = s.messages.flatMap { it.proposals }.map { it.id }.toSet()
     val pending = s.pending.filter { it.id !in transcriptIds }
-    LaunchedEffect(s.messages.size, s.thinking, pending.size) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem(pending.size + s.messages.lastIndex) }
+    LaunchedEffect(s.messages.size, s.thinking, pending.size) { if (!readOnly && s.messages.isNotEmpty()) list.animateScrollToItem((if (pending.isEmpty()) 0 else 1) + s.messages.lastIndex) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        items(pending, key = { "pending:${it.id}" }) { p ->
-            when {
-                p.action == "create_task" && p.taskTarget != null && p.isPending -> CreateTaskCard(p, p.id in s.deciding, onDecide)
-                p.action == "delete_task" || p.extra != null -> ActionCard(p, p.id in s.deciding, onDecide)
-                else -> ProposalCard(p, p.id in s.deciding) { onDecide(GDecision(p, it)) }
-            }
-        }
+        if (!readOnly && pending.isNotEmpty()) item { PendingApprovals(s, pending, false, loadRooms, onDecide) }
         items(s.messages.withIndex().toList(), key = { it.index }) { (_, m) ->
             if (readOnly) m.createdAt?.let { Text(id.znetworks.nexus.feature.chat.chatTime(it), fontSize = 11.sp, color = c.mutedFg) }
             if (m.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

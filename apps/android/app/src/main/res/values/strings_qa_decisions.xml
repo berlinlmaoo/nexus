@@ -1,4 +1,7 @@
 <resources>
+    <plurals name="qa_gideon_waiting_count"><item quantity="one">%1$d change waiting for your approval</item><item quantity="other">%1$d changes waiting for your approval</item></plurals>
+    <string name="qa_gideon_no_change">No changes: everything is already like this</string>
+    <string name="qa_gideon_waiting">%1$d changes waiting for your approval</string>
     <string name="qa_chat_count">%1$s / 4,000 characters</string>
     <string name="qa_chat_too_long">Too long: %1$s / 4,000 characters. Shorten it or split it into several messages.</string>
     <string name="qa_chat_denied">You\'re no longer in this chat</string>
