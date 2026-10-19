@@ -2065,7 +2065,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <h3 className="mr-auto text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", ...(pickedDate.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }).format(pickedDate).replace(/\bSept\b/, "Sep")}</h3>
-        <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>
+        {canEditDates && <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>}
       </div>
       {pickedTasks.map((task) => {
         const done = isDone(task.status);
@@ -2183,7 +2183,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   className={cn("group/cal relative min-h-[7.5rem] border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth ? "bg-muted/40" : idx % 7 >= 5 && "bg-muted/20", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    {inMonth && canEditDates ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}
                         className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate() === 1 && !isToday ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</button>
