@@ -35,7 +35,7 @@ export function VaultShareDialog({ item, onClose }: { item: VaultItem | null; on
   const { lang } = useLang();
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent lang={lang} className="max-w-lg max-h-[92vh] overflow-y-auto">
+      <DialogContent lang={lang} className="max-w-lg max-h-[92vh] overflow-y-auto grid-cols-[minmax(0,1fr)]">
         {item && <ShareBody key={item.id} item={item} />}
       </DialogContent>
     </Dialog>
