@@ -151,6 +151,26 @@ SCHEMAS = {
         },
         required=["query"],
     ),
+    "nexus_list_docs": object_schema(
+        "LIST NEXUS pages (docs) by date, newest first: the way to find daily updates, weekly reports and \"what was "
+        "posted when\" (a text search misses pages). For daily updates / weekly summaries use nexus_list_docs with "
+        "updatedSince, then nexus_get_doc for the pages you summarise; cite titles and dates. Dates are WIB "
+        "(\"2026-10-19\" = from 00:00 WIB; `today` in the result is today's WIB date). projectQuery matches project "
+        "names (e.g. \"Master\" = every Master IP) and then also returns `projects`: each matching project with its "
+        "page count in the window, so a project with 0 pages (has not posted) is visible. Only pages the person can "
+        "open; each row has id, title, project, createdAt/updatedAt (+ WIB days), author, last editor, a ~200-char "
+        "excerpt and the URL. Paged: `total` and `more`.",
+        {
+            "projectId": {"type": "string", "description": "One project's id (from nexus_list_projects)."},
+            "projectQuery": {"type": "string", "description": "Part of project names, e.g. \"Master\" or \"Master IP Intoo\"."},
+            "updatedSince": {"type": "string", "description": "From this WIB date or date-time, inclusive (\"2026-10-13\")."},
+            "updatedBefore": {"type": "string", "description": "Before this WIB date or date-time, exclusive (\"2026-10-20\" = up to the end of 19 Oct)."},
+            "titleQuery": {"type": "string", "description": "Part of the page title, e.g. \"daily\"."},
+            "sort": {"type": "string", "enum": ["updated", "created"], "description": "Which date filters and sorts (default updated)."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Default 20."},
+            "offset": OFFSET,
+        },
+    ),
     "nexus_search_workspace": object_schema(
         "Search EVERYTHING the person can see in NEXUS at once: projects, tasks, docs/pages, task comments, forms and "
         "chat messages. Use this first for any question about the workspace (who said what, where something is, what "
