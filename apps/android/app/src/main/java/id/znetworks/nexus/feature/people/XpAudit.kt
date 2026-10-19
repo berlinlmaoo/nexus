@@ -21,7 +21,10 @@ import kotlinx.serialization.json.JsonObject
 internal fun XpAuditCard(onChanged: () -> Unit = {}) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
-    if (!container.viewer.isBoD) return
+    val userId = container.sessionStore.current?.userId
+    var canAudit by remember(userId) { mutableStateOf(container.viewer.isBoD) }
+    LaunchedEffect(userId) { container.viewer.load(); canAudit = container.viewer.isBoD }
+    if (!canAudit) return
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
     var sign by remember { mutableStateOf("all") }
