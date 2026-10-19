@@ -370,6 +370,9 @@ function useMyTasks() {
     enabled: !!myId,
     retry: false,
     staleTime: 60_000,
+    // R-13 (19 Oct 2026): back on the tab (focus or visible again) the Tasks tile always re-reads, even inside
+    // staleTime; a change made elsewhere also arrives live (workspace-changed "tasks", lib/realtime.tsx).
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -389,7 +392,7 @@ type StatCard = {
 
 function StatRow(_: { data: NexusDashboardResponse }) {
   // Accurate per-user sources: full project list + tasks assigned to me + my quests.
-  const projectsQ = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1, staleTime: 60_000 });
+  const projectsQ = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1, staleTime: 60_000, refetchOnWindowFocus: "always" });
   const myTasks = useMyTasks();
   const g = useGamification();
   const claim = useClaimQuest();
