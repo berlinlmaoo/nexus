@@ -932,7 +932,7 @@ struct TicketDetailSheet: View {
                         let photos = (ticket.attachments ?? []).compactMap { $0.url }
                         if !photos.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                SectionLabel("Foto bukti · \(photos.count)")
+                                SectionLabel("\(T("Photo evidence")) · \(photos.count)")
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
                                         ForEach(photos, id: \.self) { p in
