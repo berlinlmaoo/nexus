@@ -65,7 +65,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     Row(Modifier.then(if (chip) Modifier.background(dotColor(status.tone).copy(alpha = .08f), CircleShape).border(1.dp, dotColor(status.tone).copy(alpha = .2f), CircleShape).padding(horizontal = 10.dp, vertical = 5.dp) else Modifier),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PresenceDot(status)
-        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), Modifier.weight(1f, fill = false), color = c.mutedFg, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), Modifier.weight(1f, fill = false), color = c.mutedFg, fontSize = 12.sp, softWrap = true)
     }
 }
 /** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
