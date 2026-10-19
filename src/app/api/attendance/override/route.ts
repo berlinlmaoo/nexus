@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
@@ -91,6 +92,7 @@ async function handlePOST(req: NextRequest) {
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))
       touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded })
     }
 
@@ -170,6 +172,7 @@ async function handlePOST(req: NextRequest) {
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "PRESENT", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (present) failed", e))
       touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, canceledRequests: singleDay.length, multiDayRequestsLeft: multiDay })
     }
 
@@ -246,6 +249,7 @@ async function handlePOST(req: NextRequest) {
     if (outcome.kind === "already") {
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, alreadyCovered: true, closedAttendance: closed.count })
       touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, alreadyCovered: true, closedAttendance: closed.count })
     }
     const { conflicting } = outcome
@@ -254,6 +258,7 @@ async function handlePOST(req: NextRequest) {
     notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })
       .catch((e) => console.error("notifyAttendanceOverride (status) failed", e))
     touchPresenceSoon(targetUserId)
+    noteAttendanceChanged(targetUserId, "override", null, dateKey)
     return NextResponse.json({ ok: true, action, date: dateKey, refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
   } catch (error) {
     console.error("attendance override error:", error)

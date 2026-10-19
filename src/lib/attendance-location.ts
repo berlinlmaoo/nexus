@@ -1,3 +1,4 @@
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { buildAttendanceDerivedFields, formatAttendanceDateKey, resolveEffectiveAttendanceShift } from "@/lib/attendance"
@@ -492,6 +493,7 @@ async function autoOffsiteCheckout(
     },
   })
   if (res.count !== 1) return false // they checked out themselves, came back, or another tick won
+  noteAttendanceChanged(record.userId, "auto_check_out", record.id, record.attendanceDate)
 
   const staffName = record.user?.name || record.user?.email || "Staff"
   await logAudit({

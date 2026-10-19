@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -85,6 +86,7 @@ async function handlePATCH(request: NextRequest, { params }: { params: Promise<{
   notifyOffsiteCheckoutReviewed({ recordId: record.id, reviewerId: session.user.id, reviewerName: session.user.name ?? null, approved: nextStatus === "APPROVED" })
     .catch((e) => console.error("notifyOffsiteCheckoutReviewed failed", e))
 
+  noteAttendanceChanged(record.userId, "offsite", record.id, record.attendanceDate)
   return NextResponse.json({ ok: true, id: record.id, approval: nextStatus })
 }
 

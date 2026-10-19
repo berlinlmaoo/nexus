@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -66,6 +67,7 @@ async function handleDELETE(req: NextRequest, { params }: { params: Promise<{ id
     if (!after) return NextResponse.json({ error: "Extra day off tidak ditemukan.", code: "NOT_FOUND" }, { status: 404 })
     if (revoked === 0) return NextResponse.json({ grant: serializeDayOffBonus(after), alreadyRevoked: true })
 
+    noteAttendanceChanged(after.userId, "dayoff_bonus", id, null)
     return NextResponse.json({ grant: serializeDayOffBonus(after), alreadyRevoked: false })
   } catch (error) {
     console.error("Error revoking day-off bonus:", error)
