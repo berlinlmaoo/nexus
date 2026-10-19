@@ -62,7 +62,7 @@ internal fun OutletGuests(d: OutletMonth, fill: () -> Unit, settings: () -> Unit
             if ((guests.number("reportCount") ?: 0.0) == 0.0) {
                 Text(stringResource(R.string.oc_guests_empty))
                 TextButton(onClick = fill) { Text(stringResource(R.string.os_fill_report)) }
-                if (d.raw.flag("canManageSettings")) TextButton(onClick = settings) { Text(stringResource(R.string.oc_settings)) }
+                if (d.raw.flag("canManageSettings")) TextButton(onClick = settings) { Text(outletSettingsLabel()) }
             } else listOf("rsvp" to "RSVP", "hosting" to "Hosting", "communities" to stringResource(R.string.oc_communities)).forEach { (key, title) ->
                 val group = guests.objectAt(key)
                 Text("$title: ${OutletFormat.count(group.number("total"))}")
@@ -123,3 +123,5 @@ internal fun OutletDayTargets(d: OutletMonth, date: String, vm: OutletViewModel)
             }) { Text(stringResource(R.string.sm_save)) } }, dismissButton = { TextButton(onClick = { editing = false }, enabled = !s.busy) { Text(stringResource(R.string.sm_close)) } })
     }
 }
+
+@Composable internal fun outletSettingsLabel() = stringResource(if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600) R.string.qa_outlet_settings_short else R.string.oc_settings)

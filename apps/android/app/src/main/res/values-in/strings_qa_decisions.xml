@@ -1,4 +1,5 @@
 <resources>
+    <string name="qa_outlet_settings_short">Pengaturan</string>
     <string name="qa_term_overpaid">· Dibayar lebih %1$s</string>
     <string name="qa_term_overpaid_warning">Dibayar lebih %1$s. Tetap dihitung lunas.</string>
     <string name="qa_rooms_company_title">Booking ruangan khusus kantor Z Networks</string>

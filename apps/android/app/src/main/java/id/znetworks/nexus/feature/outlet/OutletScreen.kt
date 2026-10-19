@@ -228,7 +228,7 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
             stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
         d == null -> EmptyState(Icons.Filled.Storefront, stringResource(R.string.os_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
         else -> Column(Modifier.fillMaxSize()) {
-            if ((d.raw["canManageSettings"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true") TextButton(onClick = { settings = true }) { Text(stringResource(R.string.oc_settings)) }
+            if ((d.raw["canManageSettings"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true") TextButton(onClick = { settings = true }) { Text(outletSettingsLabel()) }
             if (view != OutletView.FORM) MonthBar(d, vm, onAdd = { addEvent(if (view == OutletView.CALENDAR) s.day else null) })
             when (view) {
                 OutletView.OVERVIEW -> Overview(d, vm, s.busy, onOpen = { detail = it }, onFill = fill, onAdd = { addEvent(null) }, onSettings = { settings = true })

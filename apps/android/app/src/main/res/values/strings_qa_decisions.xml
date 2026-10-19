@@ -1,4 +1,5 @@
 <resources>
+    <string name="qa_outlet_settings_short">Settings</string>
     <string name="qa_term_overpaid">· Overpaid by %1$s</string>
     <string name="qa_term_overpaid_warning">Overpaid by %1$s. It still counts as paid in full.</string>
     <string name="qa_rooms_company_title">Room booking is for the Z Networks office</string>
