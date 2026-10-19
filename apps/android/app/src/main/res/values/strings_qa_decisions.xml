@@ -1,4 +1,6 @@
 <resources>
+    <string name="qa_term_overpaid">· Overpaid by %1$s</string>
+    <string name="qa_term_overpaid_warning">Overpaid by %1$s. It still counts as paid in full.</string>
     <string name="qa_rooms_company_title">Room booking is for the Z Networks office</string>
     <string name="qa_rooms_company_body">The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.</string>
     <string name="qa_booking_delete_body">The room is free again for that time. You can restore the booking from Control Room → Audit.</string>
