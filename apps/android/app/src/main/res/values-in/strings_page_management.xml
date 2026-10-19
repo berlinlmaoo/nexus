@@ -14,4 +14,5 @@
     <string name="pm_duplicate">Duplikat halaman</string>
     <string name="pm_delete">Hapus %1$s?</string>
     <string name="pm_delete_help">Halaman akan dihapus. Subhalaman pindah ke tingkat teratas. Pulihkan halaman dari audit Control Room.</string>
+    <string name="pm_subpage">Tambah subhalaman</string>
 </resources>

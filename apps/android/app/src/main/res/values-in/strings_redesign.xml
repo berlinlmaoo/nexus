@@ -291,7 +291,7 @@
     <string name="st_mcp_url">URL server untuk Claude</string>
     <string name="st_copy">Salin</string>
     <string name="st_copied">Tersalin</string>
-    <string name="st_mcp_body">Hubungkan Claude (aplikasi, Claude Code, atau Claude Desktop) ke NEXUS agar bisa membaca dan mengubah task dan halamanmu dengan aksesmu. Token koneksinya dibuat di web, di Pengaturan › Claude (MCP), dan hanya ditampilkan sekali.</string>
+    <string name="st_mcp_body">Hubungkan Claude (aplikasi, Claude Code, atau Claude Desktop) ke NEXUS agar bisa membaca dan mengubah task dan halamanmu dengan aksesmu. Buat token pribadi di bawah, salin saat ditampilkan sekali, lalu tempelkan ke pengaturan koneksi Claude.</string>
     <!-- Projects summary card (iOS ProjectsSummaryCard), 14 Oct 2026 -->
     <string name="psum_avg_progress">Rata-rata progres</string>
     <string name="psum_tasks_done">Task selesai</string>

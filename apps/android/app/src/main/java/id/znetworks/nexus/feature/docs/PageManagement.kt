@@ -20,7 +20,7 @@ import kotlinx.serialization.json.*
 @Composable
 internal fun NewPageButton(projectId:String?=null,parentId:String?=null,onCreated:(String)->Unit){
     var open by remember{mutableStateOf(false)}
-    TextButton(onClick={open=true}){Text(stringResource(R.string.pm_new))}
+    TextButton(onClick={open=true}){Text(stringResource(if(parentId==null)R.string.pm_new else R.string.pm_subpage))}
     if(open)NewPageDialog(projectId,parentId,onCreated){open=false}
 }
 @Composable
@@ -34,7 +34,7 @@ private fun NewPageDialog(initialProject:String?,parent:String?,created:(String)
     LaunchedEffect(tick){try{projects=projectsApi.projects().value;error=null}catch(e:ApiError){error=e.describe(ctx.resources)};loading=false}
     LaunchedEffect(project,tick,projects){canEdit=false;templates=emptyList();template="";if(project.isNotBlank())try{val detail=projectsApi.project(project).value;canEdit=ProjectAccess.of(detail).canEdit;val workspace=detail.workspaceId?:projects?.find{it.id==project}?.workspaceId;if(workspace!=null)templates=api.templates(workspace);error=null}catch(e:ApiError){error=e.describe(ctx.resources)}}
     fun dismiss(){if(!busy){if(title.isNotBlank()||template.isNotBlank())discard=true else close()}}
-    AlertDialog(onDismissRequest=::dismiss,title={Text(stringResource(R.string.pm_new))},text={Column(Modifier.verticalScroll(rememberScrollState())){
+    AlertDialog(onDismissRequest=::dismiss,title={Text(stringResource(if(parent==null)R.string.pm_new else R.string.pm_subpage))},text={Column(Modifier.verticalScroll(rememberScrollState())){
         if(loading||busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         BuilderPick(stringResource(R.string.pm_project),project,projects.orEmpty().map{it.id to it.name},!busy&&initialProject==null){project=it}
         OutlinedTextField(title,{if(it.length<=200)title=it},label={Text(stringResource(R.string.pm_title))},enabled=!busy,modifier=Modifier.fillMaxWidth())
