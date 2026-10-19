@@ -160,6 +160,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                             }
                         }
                     }
+                    item(key = "xp-audit") { XpAuditCard() }
                 }
             }
         }
@@ -525,7 +526,7 @@ private fun statusLabel(s: String?) = stringResource(when (s) { "APPROVED" -> R.
 
 /** The reason in the app's language, by kind; unknown kinds keep the server's words (iOS RecordXpEntry.title). */
 @Composable
-private fun xpTitle(e: XpEntry): String {
+internal fun xpTitle(e: XpEntry): String {
     val note = e.detail?.trim().orEmpty()
     return when (e.kind) {
         "late" -> stringResource(R.string.rp_pen_late) + (e.lateMinutes?.takeIf { it > 0 }?.let { " · $it min" } ?: note.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
