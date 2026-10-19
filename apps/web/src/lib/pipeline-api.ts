@@ -46,6 +46,8 @@ export type PipelineTerm = {
   status: TermStatus;
   outstanding: number;
   daysOverdue: number;
+  /** Received above the amount; absent from servers before 19 Oct 2026. */
+  overpaid?: number;
 };
 
 /** What a term POST/PATCH may carry. */
