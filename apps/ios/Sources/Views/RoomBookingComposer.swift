@@ -87,7 +87,7 @@ struct RoomBookingComposer: View {
             .alert(T("Delete this booking?"), isPresented: $confirmDelete) {
                 Button(T("Delete"), role: .destructive) { Task { await remove() } }
                 Button(T("Cancel"), role: .cancel) {}
-            }
+            } message: { Text(T("The room is free again for that time. You can restore the booking from Control Room → Audit.")) }
             .interactiveDismissDisabled(saving)
             .onAppear(perform: hydrate)
         }

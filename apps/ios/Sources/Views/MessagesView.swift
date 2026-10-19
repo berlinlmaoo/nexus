@@ -40,6 +40,7 @@ struct MessagesView: View {
     @Environment(AppRouter.self) private var router
     @State private var pushedConvo: FocusedConversation?
     @State private var focusMissing = false
+    @State private var unavailableChat: String?
     /// Conversations fetched one by one because a push pointed at them before the list had them —
     /// a group somebody added you to a minute ago. Kept apart from `convos` so a list refresh that
     /// races the fetch cannot pull the open thread out from under the person reading it.
@@ -66,7 +67,8 @@ struct MessagesView: View {
 
     var body: some View {
         Group {
-            if isSplit {
+            if let unavailableChat, !isSplit { unavailableChatState(unavailableChat) }
+            else if isSplit {
                 splitLayout
             } else if providesOwnStack {
                 NavigationStack { listPane }
@@ -93,6 +95,7 @@ struct MessagesView: View {
             await claimFocus()
         }
         .onChange(of: category) { _, value in
+            unavailableChat = nil
             if meId != nil { UserDefaults.standard.set(value.rawValue, forKey: categoryKey) }
             if isSplit, selected?.type != value.type { selected = items(value).first }
         }
@@ -122,6 +125,14 @@ struct MessagesView: View {
         }
     }
 
+    private func unavailableChatState(_ title: String) -> some View {
+        EmptyState(icon: "bubble.left.and.bubble.right", title: T(title),
+                   subtitle: T("It was deleted, or you no longer have access to it."),
+                   actionTitle: T("Back to chats"), action: { unavailableChat = nil })
+            .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("chat.unavailable")
+    }
+
     /// Opens the chat a notification asked for.
     private func claimFocus() async {
         guard case .conversation(let id) = router.focus else { return }
@@ -133,12 +144,18 @@ struct MessagesView: View {
             return
         }
         var found = convos.first(where: { $0.id == id }) ?? focusedConvos[id]
-        if found == nil, let fetched = try? await APIClient.shared.conversation(id) {
-            // Not in the list this screen has — new, or the list is from before it existed. Ask the
-            // server for that one chat rather than telling the person it does not exist.
-            focusedConvos[fetched.id] = fetched
-            found = fetched
-            Task { await refreshQuietly() }
+        unavailableChat = nil
+        if found == nil {
+            do {
+                _ = try await APIClient.shared.conversationInfo(id)
+                let fetched = try await APIClient.shared.conversation(id)
+                focusedConvos[fetched.id] = fetched; found = fetched
+                Task { await refreshQuietly() }
+            } catch APIError.http(let code, _) where code == 404 || code == 403 {
+                unavailableChat = code == 404 ? "This group was deleted" : "You're no longer in this chat"
+                selected = nil; pushedConvo = nil; return
+            } catch APIError.unauthorized { auth.logout(); return }
+            catch { focusMissing = true; return }
         }
         guard let c = found else { focusMissing = true; return }
         category = MessageCategory(type: c.type)
@@ -265,7 +282,8 @@ struct MessagesView: View {
     }
 
     @ViewBuilder private var threadPane: some View {
-        if let c = selected {
+        if let unavailableChat { unavailableChatState(unavailableChat) }
+        else if let c = selected {
             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                            members: c.members ?? [], projectId: c.projectId, type: c.type,
                            canManageMembers: c.canManageMembers,
@@ -327,7 +345,7 @@ struct MessagesView: View {
     }
     @ViewBuilder private func conversationRow(_ c: Conversation) -> some View {
         if isSplit {
-            Button { selected = c } label: {
+            Button { unavailableChat = nil; selected = c } label: {
                 ConvoRow(convo: c, meId: meId, projectIcon: c.projectId.flatMap { projectIcons[$0] })
             }.buttonStyle(.plain).hoverEffect(.highlight)
                 .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
@@ -828,7 +846,7 @@ struct ChatThreadView: View {
             guard before == " " || before == "\n" else { return nil }
         }
         let tail = input[input.index(after: at)...]
-        guard !tail.contains(" "), !tail.contains("\n") else { return nil }
+        guard !tail.contains("\n"), tail.split(whereSeparator: { $0.isWhitespace }).count <= 4 else { return nil }
         return String(tail)
     }
 
@@ -836,7 +854,9 @@ struct ChatThreadView: View {
     private var mentionMatches: [Conversation.Member] {
         guard let q = mentionQuery else { return [] }
         guard !q.isEmpty else { return mentionable }
-        return mentionable.filter { $0.displayName.localizedCaseInsensitiveContains(q) }
+        return mentionable.filter {
+            $0.displayName.localizedCaseInsensitiveContains(q) || (!q.contains(" ") && $0.displayName.replacingOccurrences(of: " ", with: "").localizedCaseInsensitiveContains(q))
+        }
     }
 
     var body: some View {
@@ -1361,13 +1381,25 @@ struct ChatThreadView: View {
                     Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold))
                         .foregroundStyle(empty ? NX.mutedFg : ChatInk.onMine)
                         .frame(width: 40, height: 40).background(empty ? NX.muted : NX.onyx, in: Circle())
-                }.disabled(empty || sending)
+                }.disabled(empty || sending || input.unicodeScalars.count > 4000)
                 .accessibilityLabel(T("Send"))
             }
             .padding(12)
+            if input.unicodeScalars.count >= 3600 {
+                Text(messageLengthNotice).font(NXFont.text(12)).foregroundStyle(input.unicodeScalars.count > 4000 ? NX.danger : NX.mutedFg)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 12).padding(.bottom, 8)
+                    .accessibilityIdentifier("chat.messageLength")
+            }
         }
         .background(NX.card)
         .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
+    }
+
+    private var messageLengthNotice: String {
+        let n = AppNumber.int(input.unicodeScalars.count)
+        return input.unicodeScalars.count > 4000
+            ? String(format: T("Too long: %@ / 4,000 characters. Shorten it or split it into several messages."), n)
+            : String(format: T("%@ / 4,000 characters"), n)
     }
 
     // MARK: typing
@@ -1718,9 +1750,10 @@ struct ChatThreadView: View {
         catch APIError.unauthorized { auth.logout() }
         // The group itself is gone (deleted while the realtime connection was down): a 404 that says
         // so. A route that is missing says nothing, and a DM or project room is not deleted here.
-        catch APIError.http(let code, let message) where code == 404 && message != nil && type == "GROUP" {
+        catch APIError.http(let code, _) where code == 404 {
             roomWasDeleted()
         }
+        catch APIError.http(let code, _) where code == 403 { notice = T("You're no longer in this chat"); messages = []; serverAnswered = true }
         // A failed refresh leaves whatever was already read on screen rather than blanking it.
         catch {}
         loading = false
@@ -2022,6 +2055,7 @@ struct ChatThreadView: View {
         let v = input.trimmingCharacters(in: .whitespaces)
         // A picture on its own is a message; text is only required when nothing is attached.
         guard !v.isEmpty || pendingAttachment != nil else { return }
+        guard input.unicodeScalars.count <= 4000 else { notice = messageLengthNotice; return }
         let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
         let attachment = pendingAttachment
         let replyId = replyingTo?.id

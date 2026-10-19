@@ -1209,7 +1209,9 @@ struct APIClient {
     }
     func roomBookings(start: String, end: String) async throws -> [RoomBooking] {
         let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
-        return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
+        let response = try await run(makeRequest(path), decode: RoomBookingsResponse.self)
+        if response.roomsAvailable == false { throw APIError.http(403, NativeRefusal.message("ROOMS_NOT_AVAILABLE")) }
+        return response.bookings ?? []
     }
     /// POST /api/room-bookings. `room` is the stored (Indonesian) name; times are ISO instants. Refusals:
     /// 409 ROOM_TAKEN (the room is booked then), 400 BOOKING_IN_PAST (the slot has ended) — RoomBookingError.
@@ -3183,6 +3185,9 @@ extension APIClient {
         // (REPORT_NOT_OPEN, a night after today): the app's language picks one.
         let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
         let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
+        if obj["code"] as? String == "MESSAGE_TOO_LONG", let length = obj["length"] as? Int {
+            return String(format: T("Too long: %@ / 4,000 characters. Shorten it or split it into several messages."), AppNumber.int(length))
+        }
         if let code = obj["code"] as? String, let message = NativeRefusal.message(code, maxBytes: obj["maxBytes"] as? Int) { return message }
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
         // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).

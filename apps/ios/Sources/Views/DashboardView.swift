@@ -1217,7 +1217,7 @@ struct DashboardView: View {
             }
             quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
-            quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
+            if viewer.isCompanyMember { quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() } }
             quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
             quickTile(T("Tickets"), "ticket.fill", NX.blue) { TicketsView() }
         }

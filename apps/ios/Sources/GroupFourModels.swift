@@ -23,7 +23,7 @@ struct RoomBooking: Decodable, Identifiable, Sendable {
         }
     }
 }
-struct RoomBookingsResponse: Decodable, Sendable { let bookings: [RoomBooking]? }
+struct RoomBookingsResponse: Decodable, Sendable { let bookings: [RoomBooking]?; var roomsAvailable: Bool? = nil }
 
 // MARK: Admin (Control Room) — roster + org roles from /api/workspaces/members
 struct WorkspaceRoster: Decodable, Sendable {
