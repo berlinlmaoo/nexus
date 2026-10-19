@@ -1239,11 +1239,20 @@ struct VaultView: View {
     }
 
     /// Keep rich PDF/audio controls; other supported documents use system Quick Look with Share.
+    private func canQuickLook(_ file: URL) -> Bool {
+        #if targetEnvironment(macCatalyst)
+        // Catalyst's SDK imports the same Objective-C method without iOS's Swift rename.
+        return QLPreviewController.canPreviewItem(file as NSURL)
+        #else
+        return QLPreviewController.canPreview(file as NSURL)
+        #endif
+    }
+
     private func openFile(_ item: VaultItem) async {
         guard let file = await fetch(item) else { return }
         if let kind = AttachmentKind(mime: item.mimeType, name: item.name), kind == .pdf || kind == .audio {
             cover = .attachment(AttachmentPreview(id: item.id, name: item.name, kind: kind, source: file))
-        } else if QLPreviewController.canPreview(file as NSURL) {
+        } else if canQuickLook(file) {
             previewURL = file
         } else {
             sheet = .activity(ShareItem(url: file))
