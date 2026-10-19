@@ -748,7 +748,7 @@ struct VaultView: View {
         .overlay {
             if webChrome {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(chosen ? NX.onyx : NX.border, lineWidth: chosen ? 2 : 1)
+                    .strokeBorder(chosen ? NX.violet : NX.border, lineWidth: chosen ? 2 : 1)
             }
         }
         .contextMenu { contextItems(item) }

@@ -94,7 +94,7 @@ private struct GideonPersonChats: View {
                 GideonReadOnlyChat(userId: userId, chat: selected)
             } else {
                 VStack(spacing: 10) {
-                    TextField(T("Search their chats"), text: $query).textFieldStyle(.roundedBorder)
+                    TextField(T("Search their chats"), text: $query).textFieldStyle(.nxSoft)
                     HStack {
                         NativeOptionalDay(label: "From", value: $from)
                         NativeOptionalDay(label: "To", value: $to)
@@ -155,11 +155,33 @@ struct NativeOptionalDay: View {
     let label: String
     @Binding var value: Date?
     var controlID: String? = nil
+    /// A compact row, "Due  [Add date]", the picked day as the system date chip with a clear button; no toggle
+    /// in a box (Berlin device review 19 Oct, R-16).
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(T(label), isOn: Binding(get: { value != nil }, set: { value = $0 ? CalDays.date(CalDays.wibToday()) : nil })).font(NXFont.text(12)).accessibilityIdentifier(controlID ?? "native.day." + label)
-            if value != nil { DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date).labelsHidden().environment(\.timeZone, TimeZone(secondsFromGMT: 0)!).environment(\.locale, AppDateLocale.current) }
-        }.padding(8).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(NX.border))
+        HStack(spacing: 8) {
+            Text(T(label)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            if value != nil {
+                DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date)
+                    .labelsHidden().datePickerStyle(.compact)
+                    .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!).environment(\.locale, AppDateLocale.current)
+                    .accessibilityIdentifier((controlID ?? "native.day." + label) + ".date")
+                Button { value = nil } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(NX.mutedFg).touchTarget44(drawn: 18)
+                }
+                .buttonStyle(.plain).accessibilityLabel(T("Clear date"))
+            } else {
+                Button { value = CalDays.date(CalDays.wibToday()) } label: {
+                    Label(T("Add date"), systemImage: "calendar")
+                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.violetText)
+                        .padding(.horizontal, 10).frame(minHeight: 30)
+                        .background(NX.muted, in: Capsule())
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(controlID ?? "native.day." + label)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -216,14 +238,14 @@ private struct GideonPersonCredits: View {
                     Toggle(T("Role default"), isOn: $roleDefault)
                     if !roleDefault {
                         Toggle(T("Unlimited"), isOn: $unlimited)
-                        if !unlimited { TextField(T("Daily limit"), text: $daily).textFieldStyle(.roundedBorder); TextField(T("Period pool"), text: $monthly).textFieldStyle(.roundedBorder) }
-                        TextField(T("Note"), text: $note).textFieldStyle(.roundedBorder)
+                        if !unlimited { TextField(T("Daily limit"), text: $daily).textFieldStyle(.nxSoft); TextField(T("Period pool"), text: $monthly).textFieldStyle(.nxSoft) }
+                        TextField(T("Note"), text: $note).textFieldStyle(.nxSoft)
                     }
                     Button(T("Save limits")) { Task { await save() } }.buttonStyle(.nxPrimary).disabled(busy || (!roleDefault && !unlimited && (number(daily) == nil || number(monthly) == nil)))
                     Divider()
                     Text(T("Bonus credits")).font(NXFont.display(18, .bold))
-                    TextField(T("Credits"), text: $bonus).textFieldStyle(.roundedBorder)
-                    TextField(T("Reason"), text: $reason).textFieldStyle(.roundedBorder)
+                    TextField(T("Credits"), text: $bonus).textFieldStyle(.nxSoft)
+                    TextField(T("Reason"), text: $reason).textFieldStyle(.nxSoft)
                     Button(T("Grant bonus")) { Task { await grant() } }.buttonStyle(.nxBordered).disabled(busy || (number(bonus) ?? 0) <= 0)
                     ForEach(bonuses) { b in HStack { Text("+" + AppNumber.int(b.credits)); Text(b.reason ?? "—"); Spacer(); Text(LegalLabels.date(b.createdAt)) }.font(NXFont.text(12)) }
                 }

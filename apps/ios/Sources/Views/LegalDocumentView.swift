@@ -430,8 +430,7 @@ private struct LegalDocumentOverview: View {
                         .font(NXFont.text(14)).scrollContentBackground(.hidden)
                         .frame(minHeight: 64)
                         .padding(.horizontal, 6).padding(.vertical, 4)
-                        .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 10)
                 }
                 Button {
                     Task {

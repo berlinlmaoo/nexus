@@ -353,6 +353,10 @@ struct TicketsView: View {
             }
         }
         .task { await load(); claimFocus() }
+        // R-19 `complaint-changed`: a ticket filed, moved, answered or corrected anywhere; list and counts.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusComplaintChanged)) { _ in
+            Task { await load() }
+        }
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
             Text(T("It may have been deleted, or the link is wrong. Your own tickets are in the list."))
@@ -985,6 +989,14 @@ struct TicketDetailSheet: View {
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) } }
         }
         .task { await loadThread() }
+        // R-19 `complaint-changed` for this ticket: the thread and status quietly, the correction card on a
+        // correction; the reply being typed stays.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusComplaintChanged)) { note in
+            if let id = note.userInfo?[RealtimeKey.itemId] as? String, id != ticket.id { return }
+            let kind = note.userInfo?[RealtimeKey.kind] as? String
+            Task { await loadThread(spinner: false) }
+            if kind == nil || kind == "correction" { correctionsToken += 1 }
+        }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
@@ -1086,8 +1098,7 @@ struct TicketDetailSheet: View {
                 TextField(T("Write a reply…"), text: $draft, axis: .vertical)
                     .font(NXFont.text(14)).lineLimit(1...5)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .disabled(sending)
                 Button { Task { await send() } } label: {
                     Image(systemName: sending ? "ellipsis" : "arrow.up")
@@ -1423,8 +1434,7 @@ struct AttendanceCorrectionCard: View {
                       text: Binding(get: { notes[c.id] ?? "" }, set: { notes[c.id] = $0 }),
                       axis: .vertical)
                 .font(NXFont.text(13)).lineLimit(1...3).padding(10)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                .nxSoftField(radius: 10)
             HStack(spacing: 8) {
                 if working {
                     ProgressView().scaleEffect(0.7)
@@ -1549,8 +1559,7 @@ struct CorrectionComposerSheet: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 TextField(T("Why the record is wrong…"), text: $reason, axis: .vertical)
                                     .font(NXFont.text(15)).lineLimit(3...6).padding(12)
-                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                    .nxSoftField(radius: 12)
                                 // Counts only while it is still short, so the ordinary case stays
                                 // quiet instead of counting at people while they type.
                                 if trimmedReason.count < Self.reasonMin {
@@ -1691,8 +1700,7 @@ struct NewTicketSheet: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 TextField(T("Short title for the issue"), text: $subject)
                                     .font(NXFont.text(15)).padding(12)
-                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                    .nxSoftField(radius: 12)
                                 overLimit(trimmedSubject.count, Self.subjectMax)
                             }
                         }
@@ -1700,8 +1708,7 @@ struct NewTicketSheet: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 TextField(T("Tell the board what happened…"), text: $detail, axis: .vertical)
                                     .font(NXFont.text(15)).lineLimit(5...10).padding(12)
-                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                    .nxSoftField(radius: 12)
                                 overLimit(trimmedBody.count, Self.bodyMax)
                             }
                         }

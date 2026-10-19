@@ -225,14 +225,14 @@ struct AppearanceCard: View {
                     Button { store.theme = t } label: {
                         VStack(spacing: 6) {
                             Image(systemName: t.icon).font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(on ? NX.background : NX.mutedFg)
+                                .foregroundStyle(on ? Color.white : NX.mutedFg)
                             Text(t.label).font(NXFont.text(13, .semibold))
-                                .foregroundStyle(on ? NX.background : NX.mutedFg)
+                                .foregroundStyle(on ? Color.white : NX.mutedFg)
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        // The web's primary (near-black) for the chosen theme, not violet.
-                        .background(on ? NX.onyx : NX.muted.opacity(0.5),
+                        // The chosen theme in the violet accent, like every checked choice (R-18, owner 19 Oct 2026).
+                        .background(on ? NX.violetFill : NX.muted.opacity(0.5),
                                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -351,8 +351,7 @@ struct SecurityCard: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
                 .accessibilityLabel(label)
             if let hint {
                 Text(hint).font(NXFont.text(11)).foregroundStyle(hintIsError ? NX.danger : NX.mutedFg)
@@ -492,8 +491,7 @@ struct PasskeyCard: View {
             .font(NXFont.text(14))
             .textInputAutocapitalization(.words).autocorrectionDisabled()
             .padding(.horizontal, 12).frame(minHeight: 40)
-            .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+            .nxSoftField(radius: 10)
         if hSize == .regular {
             HStack(spacing: 8) { field; addButton.fixedSize() }
         } else {

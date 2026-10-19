@@ -995,7 +995,7 @@ struct AttendanceView: View {
                 Button(T("Cancel")) { showOffsite = false; offsiteReason = "" }
                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    .nxSoftField(radius: 10)
                 Button { showOffsite = false; Task { await submitOffsite() } } label: {
                     Text(busy ? T("Sending…") : T("Checkout & request approval")).font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -1069,9 +1069,7 @@ struct AttendanceView: View {
                 .focused($reflectionFocused)
                 .font(NXFont.text(14)).lineLimit(5...12)
                 .padding(10)
-                .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(reflectionOK ? NX.success.opacity(0.45) : NX.border))
+                .nxSoftField(radius: 12, focused: reflectionFocused)
             if !reflectionOK {
                 Text("\(reflectionMin - reflectionCount) \(T("more characters needed before you can check out."))")
                     .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
@@ -2271,8 +2269,7 @@ struct StreakBoardCard: View {
             }
         }
         .padding(.horizontal, 10).frame(minHeight: 36)
-        .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 8)
     }
 
     /// Date row: weekday over day number.

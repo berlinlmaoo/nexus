@@ -469,7 +469,7 @@ struct GideonPanel: View {
 
     /// Tier names with their Default / Experimental badges; live availability is owned by the server.
     @State private var showTierPicker = false
-    /// Wide: the outlined chip beside the page header. Compact: the sheet's plain title (R-1).
+    /// Wide: the soft chip beside the page header. Compact: the sheet's plain title (R-1).
     private var tierChip: some View {
         Button { showTierPicker = true } label: {
             HStack(spacing: 4) {
@@ -482,8 +482,9 @@ struct GideonPanel: View {
             .foregroundStyle(NX.foreground)
             .padding(.horizontal, wide ? 10 : 4)
             .frame(height: wide ? 30 : 24)
-            .overlay {
-                if wide { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border) }
+            // Wide: a soft filled chip, no outline (R-16).
+            .background {
+                if wide { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted) }
             }
             .contentShape(Rectangle())
         }
@@ -1089,9 +1090,11 @@ struct GideonPanel: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                 .accessibilityIdentifier("gideon.reviewNotice")
             }
+            // The credits meter sits ABOVE the composer, small and left-aligned, the disclaimer right under it:
+            // the owner's web decision, now in every state here too (Berlin device review 19 Oct, R-17).
+            GideonCreditMeter().padding(.horizontal, 4)
             mentionPicker
             composer
-            GideonCreditMeter().padding(.horizontal, 4)
             Text(T("GIDEON is AI and can make mistakes."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1154,9 +1157,14 @@ struct GideonPanel: View {
             }
             .padding(.horizontal, 4)
         }
-        .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(composerFocused ? NX.onyx.opacity(0.45) : NX.border))
+        // One soft filled field, no outline; an accent ring only while typing (R-16 / R-17: the grey outline
+        // read as a hard border).
+        .background(NX.muted, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            if composerFocused {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.violet.opacity(0.55), lineWidth: 1.5)
+            }
+        }
     }
 
     /// One menu rather than three icons (web "+"). A PhotosPicker nested in a Menu draws its row but never

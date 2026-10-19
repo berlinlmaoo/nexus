@@ -115,6 +115,11 @@ struct AdminSuspectSection: View {
             }
         }
         .task { await load() }
+        // Control Room › Attendance monitor: a check-in, check-out or verdict anywhere refetches the month on
+        // screen (R-15: `attendance-board-changed`), and on return to the app.
+        .liveRefresh(every: 120, on: [.nexusAttendanceChanged, .nexusRealtimeConnected], refreshOnReturn: true) {
+            if list != nil && !loading { await load() }
+        }
         .alert(T("Make this day TK?"), isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), presenting: confirming) { item in
             Button(T("Not valid — make it TK"), role: .destructive) { confirming = nil; Task { await review(item, verdict: "INVALID") } }
             Button(T("Cancel"), role: .cancel) { confirming = nil }

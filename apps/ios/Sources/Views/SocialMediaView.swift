@@ -957,8 +957,7 @@ struct SocialDaySheet: View {
                                 .multilineTextAlignment(.trailing)
                                 .monospacedDigit()
                                 .padding(.horizontal, 10).frame(minHeight: 36)
-                                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                                .nxSoftField(radius: 8)
                                 .disabled(!editable)
                                 .accessibilityLabel("\(p.name) \(m.label)")
                         }
@@ -1264,8 +1263,7 @@ struct SocialSettingsSheet: View {
                 .keyboardType(.numberPad).multilineTextAlignment(.trailing).monospacedDigit()
                 .font(NXFont.text(14))
                 .padding(.horizontal, 10).frame(height: 36)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
         }
         .frame(maxWidth: .infinity)
     }

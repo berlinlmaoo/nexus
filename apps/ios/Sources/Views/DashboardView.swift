@@ -17,7 +17,6 @@ struct DashboardView: View {
     @State private var profile: AppUser?
     @State private var game: Gamification?
     @State private var projectCount = 0
-    @State private var mission: (done: Int, total: Int) = (0, 0)
     @State private var unread = 0
     @State private var loaded = false
     @State private var selectedDay = Date()
@@ -75,12 +74,21 @@ struct DashboardView: View {
     /// a list of five notifications squeezed into a tile is the wrong shape for reading anyway.
     private static let bellMaxWidth: CGFloat = 640
     @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
+    /// The stat modal's layer height, for its ~70 % cap.
+    @State private var statModalSpace: CGFloat = 640
 
     private var name: String { profile?.name ?? auth.session?.userName ?? "" }
 
     private struct StatDatum {
         let value: Int; let total: Int?; let label: String; let icon: String
         let from: String; let to: String; let glow: String
+    }
+    /// The Tasks tile counts from the same list its card opens, so "3/5" always matches the rows it shows
+    /// and moves the moment the list does (Berlin device review 19 Oct, R-13: a task done in My Tasks
+    /// left Home at 0/1 while the card already said "Done").
+    private var mission: (done: Int, total: Int) {
+        let shown = cardTasks
+        return (shown.filter(\.isDone).count, shown.count)
     }
     private var statData: [StatDatum] {
         [
@@ -248,8 +256,11 @@ struct DashboardView: View {
             .task { await viewer.loadIfNeeded() }
             .modifier(HomeRealtimeRefresh(onXP: {
                 if let fresh = try? await APIClient.shared.gamification() { game = fresh; GlancePresence.refresh(tasks: tasksList, unread: unread, game: game) }
-            }, onCalendar: {
-                if let me = auth.session?.userId, let tasks = try? await APIClient.shared.myTasks(assigneeId: me) { tasksList = tasks }
+            }, onTasks: {
+                await refreshTasks()
+            }, onStats: {
+                guard loaded else { return }
+                await refreshStats()
             }, onAttendance: {
                 if let today = try? await APIClient.shared.attendanceToday() { attToday = today }
             }))
@@ -278,6 +289,7 @@ struct DashboardView: View {
             // two-column width (owner, 16 Oct 2026); the phone keeps its level card.
             if hSize == .regular { greetingWithLevel } else { greeting }
             attendanceBar
+            statusPanel
             if hSize != .regular { levelCard }
             searchRow(bell: true)
             statCards
@@ -339,6 +351,7 @@ struct DashboardView: View {
                 // calendar; the person (level, profile) in the rail on the right.
                 VStack(alignment: .leading, spacing: 18) {
                     attendanceBar
+                    statusPanel
                     searchRow(bell: false)
                     statCards
                     xpRulesCard
@@ -371,6 +384,7 @@ struct DashboardView: View {
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 18) {
                     attendanceBar
+                    statusPanel
                     searchRow(bell: false)
                     statCards
                     quickActions
@@ -510,6 +524,12 @@ struct DashboardView: View {
             .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
+    }
+
+    /// Right under the Attendance card (Berlin device review 19 Oct, R-14): Settings' "Set a status" row as a
+    /// card of the same style and height, opening the Status sheet.
+    @ViewBuilder private var statusPanel: some View {
+        if PresenceStore.shared.enabled { SetPresenceRow(homeCard: true) }
     }
 
     private func attendanceLine(now: Date) -> (text: String, tint: Color, action: String) {
@@ -690,6 +710,7 @@ struct DashboardView: View {
                         .morphSource("stat-\(i)", in: morphSpace, store: morphFrames)
                 }
                 .buttonStyle(PressableCardStyle())
+                .accessibilityIdentifier("home.stat.\(i)")
                 .opacity(activeStat == i && morphShowModal ? 0 : 1)
             }
         }
@@ -712,6 +733,7 @@ struct DashboardView: View {
                 statModalCard(a)
                     .padding(.horizontal, 18)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { statModalSpace = $0 }
             .zIndex(20)
         }
     }
@@ -738,8 +760,14 @@ struct DashboardView: View {
             }
             // Header is part of the morphing card (scales with it via the FLIP) like the web's layoutId.
             // The detail is a separate element that fades in just after the card lands (web: delay 0.15).
-            ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320)
-                .opacity(morphReady ? 1 : 0)
+            // As tall as its rows and no taller (R-13: one task left a tall empty green card): the rows
+            // as they are while they fit, a scroll inside once the card would pass ~70 % of the screen.
+            ViewThatFits(in: .vertical) {
+                statDetail(a).padding(2)
+                ScrollView { statDetail(a).padding(2) }
+            }
+            .frame(maxHeight: max(120, statModalSpace * 0.7 - 106))
+            .opacity(morphReady ? 1 : 0)
         }
         .padding(18)
         .frame(maxWidth: Self.morphMaxWidth)
@@ -1459,6 +1487,30 @@ struct DashboardView: View {
 
     // MARK: data
 
+    private func applyTasks(_ tasks: [MyTask]) {
+        tasksList = tasks
+        tasksByDay = Self.bucketByDay(tasks)
+    }
+
+    /// The person's tasks read again (a task realtime event): the Tasks tile, its card, the agenda and the
+    /// Home Screen follow. A failed request leaves what is shown.
+    private func refreshTasks() async {
+        guard let me = auth.session?.userId, let tasks = try? await APIClient.shared.myTasks(assigneeId: me) else { return }
+        applyTasks(tasks)
+        GlancePresence.refresh(tasks: tasksList, unread: unread, game: game)
+    }
+
+    /// The three stat tiles read again, quietly, when Home is back on screen or the app returns to the
+    /// front (R-13): a task finished in My Tasks or on another device shows here without a pull.
+    private func refreshStats() async {
+        async let projs = try? APIClient.shared.projects()
+        async let g = try? APIClient.shared.gamification()
+        await refreshTasks()
+        if let list = await projs { projectsList = list; projectCount = list.count }
+        if let fresh = await g { game = fresh }
+        GlancePresence.refresh(tasks: tasksList, unread: unread, game: game)
+    }
+
     private func load() async {
         async let p = try? APIClient.shared.profile()
         async let g = try? APIClient.shared.gamification()
@@ -1478,11 +1530,7 @@ struct DashboardView: View {
         bellTabs = notificationFilterTabs(notifs)
 
         if let myId = prof?.user.id, let tasks = try? await APIClient.shared.myTasks(assigneeId: myId) {
-            tasksList = tasks
-            tasksByDay = Self.bucketByDay(tasks)
-            // Count from the same list the card opens, so "3/5" always matches the rows it shows.
-            let shown = Self.taskCardRows(tasks)
-            mission = (shown.filter(\.isDone).count, shown.count)
+            applyTasks(tasks)
         }
         loaded = true
 

@@ -175,8 +175,7 @@ struct TemplateGallery: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .nxSoftField(radius: 12)
     }
 
     private var categoryChips: some View {
@@ -199,14 +198,14 @@ struct TemplateGallery: View {
     }
 }
 
-/// The gallery's category filter: the picked one solid dark, as the web's (a pale wash read as unpicked;
-/// UI tour run 14, P-I32).
+/// The gallery's category filter: the picked one solid violet (R-18: checked choices use the accent, not
+/// near-black; a pale wash read as unpicked, UI tour run 14, P-I32).
 private struct GalleryCategoryChip: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
         content
-            .foregroundStyle(on ? NX.background : NX.mutedFg)
-            .background(on ? NX.onyx : NX.card, in: Capsule())
+            .foregroundStyle(on ? Color.white : NX.mutedFg)
+            .background(on ? NX.violetFill : NX.card, in: Capsule())
             .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
     }
 }

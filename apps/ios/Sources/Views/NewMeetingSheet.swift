@@ -78,7 +78,7 @@ struct NewMeetingSheet: View {
                     } else {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(T("Meeting title")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                            TextField(T("Meeting title"), text: $title).textFieldStyle(.roundedBorder).accessibilityIdentifier("meetings.title")
+                            TextField(T("Meeting title"), text: $title).textFieldStyle(.nxSoft).accessibilityIdentifier("meetings.title")
                         }
                         HStack {
                             Text(T("Project (optional)"))

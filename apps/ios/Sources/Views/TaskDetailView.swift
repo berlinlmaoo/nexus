@@ -95,7 +95,7 @@ struct TaskDetailView: View {
                         subtasksCard(task)
                         // Payout proofs are ordinary attachments since 12 Oct 2026 (owner); Blocked by and
                         // Time tracked are gone from the task, as on the web.
-                        TaskAttachmentsCard(taskId: task.id, canEdit: canEditTask)
+                        TaskAttachmentsCard(taskId: task.id, canEdit: canEditTask, refreshToken: fieldsRefresh)
                         commentsCard(task)
                         TaskActivityCard(logs: task.activityLogs ?? [])
                     }
@@ -215,6 +215,13 @@ struct TaskDetailView: View {
         .gideonPage(task.flatMap { t in t.projectId.map { GideonContext(projectId: $0, projectName: nil, taskId: t.id, taskTitle: t.title) } })
         .liveRefresh(every: 60, on: [.nexusProjectTasksChanged], projectId: task?.projectId, taskId: taskId) {
             await reloadQuietly()
+        }
+        // A custom field deleted or renamed elsewhere leaves the open task (R-19: `workspace-changed`
+        // { kind: "projects", projectId }).
+        .onReceive(NotificationCenter.default.publisher(for: .nexusWorkspaceChanged)) { note in
+            guard let pid = task?.projectId, note.userInfo?[RealtimeKey.kind] as? String == RealtimeKind.projects,
+                  note.userInfo?[RealtimeKey.projectId] as? String == pid else { return }
+            fieldsRefresh += 1
         }
     }
 
@@ -934,16 +941,14 @@ struct QuestComposerSheet: View {
                     SectionLabel(T("Quest title"))
                     TextField(T("Quest title"), text: $title, axis: .vertical)
                         .font(NXFont.text(15)).padding(12)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 12)
 
                     SectionLabel(T("XP reward"))
                     Stepper(value: $xp, in: 1...50) {
                         HStack { Text(T("Reward")).font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); QuestXPChip(xp: xp) }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .nxSoftField(radius: 12)
 
                     Text(T("The quest completes when this task is done. XP goes to the assignee, and the quest is visible to every project member. Max 50 XP."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

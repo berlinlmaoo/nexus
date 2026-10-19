@@ -73,7 +73,8 @@ extension NXPageHeader where Actions == EmptyView {
 
 /// The web's buttons: `.primary` = near-black fill, `.bordered` = outline on the card, `.ghost` = text only.
 struct NXButtonStyle: ButtonStyle {
-    enum Kind { case primary, bordered, ghost, destructive }
+    /// `accent`: the violet primary, for the one action a screen ends on (R-16, meeting notes Apply).
+    enum Kind { case primary, accent, bordered, ghost, destructive }
     var kind: Kind = .bordered
     var compact = false
 
@@ -104,12 +105,13 @@ private struct NXButtonBody: View {
             .contentShape(Rectangle())
             // A disabled primary draws its own muted state (below); dimming its white label on top of a
             // half-strength fill left white on light grey, hard to read (UI tour run 15, Q-M10 / P-M23).
-            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : (kind == .primary ? 1 : 0.5))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : (kind == .primary || kind == .accent ? 1 : 0.5))
     }
 
     private var foreground: Color {
         switch kind {
         case .primary: return isEnabled ? NX.background : NX.mutedFg
+        case .accent: return isEnabled ? .white : NX.mutedFg
         case .destructive: return .white
         case .bordered, .ghost: return NX.foreground
         }
@@ -118,6 +120,7 @@ private struct NXButtonBody: View {
     private func background(pressed: Bool) -> Color {
         switch kind {
         case .primary: return isEnabled ? NX.onyx.opacity(pressed ? 0.9 : 1) : NX.muted
+        case .accent: return isEnabled ? NX.violetFill.opacity(pressed ? 0.9 : 1) : NX.muted
         case .destructive: return NX.danger.opacity(pressed ? 0.9 : 1)
         case .bordered: return pressed ? NX.muted : NX.card
         case .ghost: return pressed ? NX.muted : .clear
@@ -127,6 +130,7 @@ private struct NXButtonBody: View {
 
 extension ButtonStyle where Self == NXButtonStyle {
     static var nxPrimary: NXButtonStyle { NXButtonStyle(kind: .primary) }
+    static var nxAccent: NXButtonStyle { NXButtonStyle(kind: .accent) }
     static var nxBordered: NXButtonStyle { NXButtonStyle(kind: .bordered) }
     static var nxGhost: NXButtonStyle { NXButtonStyle(kind: .ghost) }
     static var nxDestructive: NXButtonStyle { NXButtonStyle(kind: .destructive) }

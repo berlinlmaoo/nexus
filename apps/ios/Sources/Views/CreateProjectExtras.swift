@@ -316,8 +316,7 @@ struct NewProjectMembersPicker: View {
                 }
             }
             .padding(12)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+            .nxSoftField(radius: 12)
 
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)

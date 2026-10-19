@@ -307,7 +307,7 @@ struct FormStudioHead: View {
             LinearGradient(colors: p.colors.map { Color(uiColor: UIColor(rgb: $0)) }, startPoint: .topLeading, endPoint: .bottomTrailing)
                 .frame(height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(on ? NX.foreground : Color.clear, lineWidth: 2))
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(on ? NX.violet : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(T(p.label))
@@ -918,7 +918,7 @@ struct FormStudioSettingsTab: View {
                     Text(T("Anyone logged in can submit, and their submissions show in My Submissions.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violet)
             if draft.requireAuth {
                 Label(T("People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions."), systemImage: "lock")
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -944,7 +944,7 @@ struct FormStudioSettingsTab: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(on ? NX.muted.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? NX.foreground.opacity(0.6) : NX.border))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? NX.violet.opacity(0.6) : NX.border))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -976,7 +976,7 @@ struct FormStudioSettingsTab: View {
                         }
                     }
                 }
-                .tint(NX.onyx)
+                .tint(NX.violet)
                 if draft.schedule.enabled {
                     dayChips
                     HStack(spacing: 10) {
@@ -1034,8 +1034,8 @@ struct FormStudioSettingsTab: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 10)
                         .frame(minWidth: 40, minHeight: 30)
-                        .foregroundStyle(on ? NX.background : NX.mutedFg)
-                        .background(on ? NX.onyx : Color.clear, in: Capsule())
+                        .foregroundStyle(on ? .white : NX.mutedFg)
+                        .background(on ? NX.violetFill : Color.clear, in: Capsule())
                         .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
                 }
                 .buttonStyle(.plain)
@@ -1068,14 +1068,14 @@ struct FormStudioSettingsTab: View {
                     Text(String(format: T("%d so far"), responseCount)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violet)
             if draft.settings.responseLimit > 0 {
                 HStack(spacing: 10) {
                     TextField(T("Maximum responses"), text: limitBinding)
                         .keyboardType(.numberPad)
                         .font(NXFont.text(15)).monospacedDigit()
                         .padding(.horizontal, 10).frame(width: 110, height: 36)
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 10)
                     Text(T("then the form closes by itself")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
@@ -1121,8 +1121,7 @@ struct FormStudioSettingsTab: View {
             field()
                 .font(NXFont.text(15))
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
         }
     }
 
@@ -1150,7 +1149,7 @@ struct FormStudioSettingsTab: View {
                 TextField(T("Search project members"), text: $who).font(NXFont.text(15))
             }
             .padding(.horizontal, 12).frame(height: 38)
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            .nxSoftField(radius: 10)
             VStack(spacing: 0) {
                 let list = shownMembers
                 if list.isEmpty {
@@ -1193,7 +1192,7 @@ struct FormStudioSettingsTab: View {
                 Text(m.displayName).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer(minLength: 6)
                 Image(systemName: on ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 16)).foregroundStyle(on ? NX.onyx : NX.mutedFg)
+                    .font(.system(size: 16)).foregroundStyle(on ? NX.violet : NX.mutedFg)
             }
             .padding(.horizontal, 8).padding(.vertical, 6)
             .contentShape(Rectangle())

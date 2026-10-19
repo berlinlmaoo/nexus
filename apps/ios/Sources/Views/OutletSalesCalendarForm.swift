@@ -527,16 +527,13 @@ struct OutletReportFormView: View {
                     .lineLimit(2...6)
                     .font(NXFont.text(15)).foregroundStyle(NX.foreground)
                     .padding(12)
-                    .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .nxSoftField(radius: 12)
             default:
                 TextField("", text: value(f.key))
                     .font(NXFont.text(15)).foregroundStyle(NX.foreground)
                     .submitLabel(.done)
                     .padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(f.key == "name" && fieldError != nil ? NX.danger : NX.border))
+                    .nxSoftField(radius: 12, error: f.key == "name" && fieldError != nil)
             }
             if let hint = f.hint?.text, !hint.isEmpty {
                 Text(hint).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)

@@ -78,6 +78,18 @@ extension Notification.Name {
     static let nexusRoomRevoked = Notification.Name("nexus.room.revoked")
     /// `form-responses-changed` { projectId, formId }: a form got (or lost) a response.
     static let nexusFormResponsesChanged = Notification.Name("nexus.form.responses.changed")
+
+    /// `project-changed` (server since 19 Oct 2026, R-19), from the project's room: something of a project
+    /// besides its task rows changed. userInfo: `RealtimeKey.projectId`, `RealtimeKey.kind` ("task", "tasks",
+    /// "forms", "sheets", "sheet-comments", "status-updates", "members", "pages", "files"; unknown kinds are
+    /// posted too and ignored by the screens) and, when the server names one, `RealtimeKey.itemId`. Without
+    /// userInfo (the reconnect catch-up): every open project screen refetches.
+    static let nexusProjectChanged = Notification.Name("nexus.project.changed")
+
+    /// `complaint-changed` (R-19), to this person's own room only, when a ticket they may open was filed,
+    /// moved, answered or got an attendance correction. userInfo: `RealtimeKey.itemId` (the ticket) and
+    /// `RealtimeKey.kind` ("created" | "status" | "message" | "correction"). None = refetch every open ticket.
+    static let nexusComplaintChanged = Notification.Name("nexus.complaint.changed")
 }
 
 /// The userInfo keys of the notifications above.
@@ -100,6 +112,9 @@ enum RealtimeKey {
     static let room = "room"
     /// On `.nexusFormResponsesChanged`: the form.
     static let formId = "formId"
+    /// On `.nexusProjectChanged` / `.nexusComplaintChanged`: the thing that changed (a task, form, sheet,
+    /// status update or ticket id).
+    static let itemId = "itemId"
 }
 
 /// The values of `RealtimeKey.kind`.

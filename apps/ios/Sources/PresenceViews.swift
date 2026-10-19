@@ -22,11 +22,13 @@ struct PresenceDot: View {
 struct PresenceLine: View {
     let userId: String?
     var showUntil = false
+    /// Off where the row already leads with the same dot (Set a status, R-14).
+    var showDot = true
     private var status: PresenceStatus? { PresenceStore.shared.status(userId) }
     var body: some View {
         if let status {
             HStack(spacing: 6) {
-                PresenceDot(tone: status.tone)
+                if showDot { PresenceDot(tone: status.tone) }
                 Text(displayText(status)).lineLimit(nil).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             }.font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine).accessibilityIdentifier("presence.status." + (userId ?? ""))
@@ -49,22 +51,52 @@ struct PresenceChip: View {
 }
 
 /// This row owns its sheet, so it can be reused inside screens with another presentation.
+/// It leads with the person's CURRENT presence dot (R-14: an orange ring next to "Offline · Checked out"
+/// read as a second state), or a neutral status icon before the first presence read.
 struct SetPresenceRow: View {
     var showCurrent = true
+    /// Home's panel under the Attendance card: the Attendance card's tile, type and height (R-14).
+    var homeCard = false
     var onOpen: (() -> Void)? = nil
     @State private var showing = false
+    private var current: PresenceStatus? { PresenceStore.shared.status(Keychain.load()?.userId) }
     var body: some View {
         if PresenceStore.shared.enabled {
             Button { if let onOpen { onOpen() } else { showing = true } } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "circle.inset.filled").foregroundStyle(NX.warning)
-                    Text(T("Set a status")).foregroundStyle(NX.foreground)
-                    Spacer(minLength: 4)
-                    if showCurrent { PresenceLine(userId: Keychain.load()?.userId).lineLimit(2).multilineTextAlignment(.trailing) }
-                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
-                }.font(NXFont.text(14)).frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityIdentifier("presence.set")
+                if homeCard { cardLabel } else { rowLabel }
+            }.buttonStyle(.plain).accessibilityIdentifier(homeCard ? "home.presence" : "presence.set")
                 .sheet(isPresented: $showing) { SetPresenceSheet() }
+        }
+    }
+    private var rowLabel: some View {
+        HStack(spacing: 10) {
+            leading(size: 10).frame(width: 20)
+            Text(T("Set a status")).foregroundStyle(NX.foreground)
+            Spacer(minLength: 4)
+            if showCurrent { PresenceLine(userId: Keychain.load()?.userId, showDot: false).lineLimit(2).multilineTextAlignment(.trailing) }
+            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+        }.font(NXFont.text(14)).frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+    }
+    private var cardLabel: some View {
+        HStack(spacing: 12) {
+            leading(size: 14)
+                .frame(width: 44, height: 44)
+                .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(T("Set a status")).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Spacer(minLength: 8)
+            PresenceLine(userId: Keychain.load()?.userId, showDot: false)
+                .lineLimit(2).multilineTextAlignment(.trailing)
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+        }
+        .nexusCard(padding: 12, radius: 18)
+        .contentShape(Rectangle())
+    }
+    @ViewBuilder private func leading(size: CGFloat) -> some View {
+        if let current {
+            PresenceDot(tone: current.tone, size: size)
+        } else {
+            Image(systemName: "person.crop.circle.badge.clock").font(.system(size: size + 4)).foregroundStyle(NX.mutedFg)
+                .accessibilityHidden(true)
         }
     }
 }
@@ -132,7 +164,7 @@ struct SetPresenceSheet: View {
                 } label: { Text(emoji).font(.system(size: 26)).frame(width: 44, height: 44) }
                     .accessibilityLabel(T("Status emoji"))
                 TextField(T("What are you up to?"), text: $text).textFieldStyle(.plain).accessibilityIdentifier("presence.text")
-            }.padding(8).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+            }.padding(8).nxSoftField(radius: 12)
             Text(AppNumber.int(statusText.utf16.count) + "/80")
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -169,7 +201,7 @@ struct SetPresenceSheet: View {
             Divider(); pick("🍽️", "Lunch", minutes: 60)
             Divider(); pick("🎬", "Out for a shoot", minutes: 180)
             Divider(); pick("🚗", "On the road", minutes: 60)
-        }.background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+        }.nxSoftField(radius: 12)
     }
     /// Text, emoji and duration, and Away unless the person changes it after (R-11b).
     private func pick(_ icon: String, _ label: String, minutes: Int) -> some View {
@@ -258,7 +290,7 @@ private struct PresenceScheduleGroup: View {
                         .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity).accessibilityIdentifier("presence.startsAt")
                 }
             }
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+            .nxSoftField(radius: 12)
             Text(summary).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.horizontal, 4).accessibilityIdentifier("presence.summary")
         }.font(NXFont.text(14))
     }

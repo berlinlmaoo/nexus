@@ -41,6 +41,9 @@ final class RealtimeClient {
     @ObservationIgnored private var meId: String?
     @ObservationIgnored private var chatFlush: Task<Void, Never>?
     @ObservationIgnored private var calendarFlush: Task<Void, Never>?
+    /// Attendance events folded into one refetch (R-15); `attendanceOwn` = one of them was this person's own.
+    @ObservationIgnored private var attendanceFlush: Task<Void, Never>?
+    @ObservationIgnored private var attendanceOwn = false
 
     private init() {
         engine = RealtimeEngine()
@@ -117,6 +120,7 @@ final class RealtimeClient {
         engine.stop()
         engine.clearRefusal()
         calendarFlush?.cancel(); calendarFlush = nil
+        attendanceFlush?.cancel(); attendanceFlush = nil; attendanceOwn = false
         chatFlush?.cancel()
         chatFlush = nil
         chatNews.removeAll()
@@ -195,6 +199,8 @@ final class RealtimeClient {
         center.post(name: .nexusDocChanged, object: nil)
         center.post(name: .nexusSheetStructure, object: nil, userInfo: [RealtimeKey.json: "{}"])
         center.post(name: .nexusFormResponsesChanged, object: nil)
+        center.post(name: .nexusProjectChanged, object: nil)
+        center.post(name: .nexusComplaintChanged, object: nil)
         Task { await CalendarWidgetPresence.refresh(force: true) }
         SheetOutbox.shared.flushAll()
         chatMoved(nil)
@@ -272,8 +278,22 @@ final class RealtimeClient {
                 NotificationCenter.default.post(name: .nexusCalendarChanged, object: nil)
                 await CalendarWidgetPresence.refresh(force: true)
             }
-        case "attendance-changed":
-            center.post(name: .nexusAttendanceChanged, object: nil)
+        case "attendance-changed", "attendance-board-changed":
+            // R-15 (server since 19 Oct 2026, both only in this person's `user:` room): `attendance-changed`
+            // is their own attendance (check-in/out, a request, an override, …), `attendance-board-changed`
+            // someone whose attendance they may see ({ userIds, dates }, folded to one a second on the
+            // server). Ids only: every loaded attendance screen refetches through the API, ~400 ms after
+            // the last event so a burst is one refetch. Their own: the widgets and Live Activity follow.
+            if name == "attendance-changed" { attendanceOwn = true }
+            attendanceFlush?.cancel()
+            attendanceFlush = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(400))
+                guard let self, !Task.isCancelled else { return }
+                let own = self.attendanceOwn
+                self.attendanceOwn = false
+                NotificationCenter.default.post(name: .nexusAttendanceChanged, object: nil)
+                if own { await Self.refreshOwnAttendance() }
+            }
         case "xp-changed":
             center.post(name: .nexusXPChanged, object: nil)
             if let meId, payload?["userIds"]?.array?.contains(where: { $0.string == meId }) == true {
@@ -291,6 +311,14 @@ final class RealtimeClient {
             tasksChanged(taskId: payload?["id"]?.string, parentId: payload?["parentId"]?.string)
         case "task-deleted", "comment-added":
             tasksChanged(taskId: payload?["taskId"]?.string, parentId: nil)
+        case "project-changed":
+            projectChanged(payload)
+        case "complaint-changed":
+            // R-19: a ticket this person may open (theirs, or any of the workspace's for the board). Ids only.
+            var info: [String: String] = [:]
+            if let id = payload?["id"]?.string { info[RealtimeKey.itemId] = id }
+            if let kind = payload?["kind"]?.string { info[RealtimeKey.kind] = kind }
+            center.post(name: .nexusComplaintChanged, object: nil, userInfo: info)
         case "pipeline-changed":
             // A Pipeline Dashboard deal changed (owner, 9 Oct 2026). Ids only, like every event: the
             // open pipeline refetches GET …/pipeline. Unlike a task, a deal belongs to exactly one
@@ -339,6 +367,39 @@ final class RealtimeClient {
         default:
             // presence-*, sheet-presence / sheet-cursor, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.
+            break
+        }
+    }
+
+    /// The person's own today, read again for the widgets, the Watch and the Live Activity (R-15). Only
+    /// while connected, which is only while the app is in front.
+    private static func refreshOwnAttendance() async {
+        guard let today = try? await APIClient.shared.attendanceToday() else { return }
+        AttendancePresence.refresh(today: today)
+    }
+
+    /// `project-changed` { projectId, kind, id, actorId } (R-19, folded on the server to one per 300 ms per
+    /// thing). Not skipped for this person's own changes: their other devices must move too. Task kinds also
+    /// reach the screens that already follow task events (an open task detail by its id, the project's views),
+    /// forms the forms lists, and members the project payload's own path.
+    private func projectChanged(_ payload: SIOJSON?) {
+        guard let projectId = payload?["projectId"]?.string, let kind = payload?["kind"]?.string else { return }
+        let id = payload?["id"]?.string
+        let center = NotificationCenter.default
+        var info: [String: String] = [RealtimeKey.projectId: projectId, RealtimeKey.kind: kind]
+        if let id { info[RealtimeKey.itemId] = id }
+        center.post(name: .nexusProjectChanged, object: nil, userInfo: info)
+        switch kind {
+        case "task", "tasks":
+            var tasks: [String: String] = [RealtimeKey.projectId: projectId]
+            if let id { tasks[RealtimeKey.taskId] = id }
+            center.post(name: .nexusProjectTasksChanged, object: nil, userInfo: tasks)
+        case "forms":
+            center.post(name: .nexusFormsChanged, object: nil)
+        case "members":
+            center.post(name: .nexusWorkspaceChanged, object: nil,
+                        userInfo: [RealtimeKey.kind: RealtimeKind.projects, RealtimeKey.projectId: projectId])
+        default:
             break
         }
     }

@@ -386,8 +386,7 @@ struct AdminUsersSection: View {
                             }
                         }
                         .padding(.horizontal, 12).padding(.vertical, 9)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                        .nxSoftField(radius: 12)
                         VStack(spacing: 0) {
                             ForEach(Array(rows.enumerated()), id: \.element.idv) { idx, m in
                                 if idx > 0 { Divider().overlay(NX.border) }
@@ -741,18 +740,18 @@ struct CreateQuestSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f(T("TITLE")) { TextField(T("e.g. Finish 5 tasks this week"), text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                        f(T("TITLE")) { TextField(T("e.g. Finish 5 tasks this week"), text: $title).font(NXFont.text(15)).padding(12).nxSoftField(radius: 12) }
                         f("JENIS") {
                             Menu {
                                 ForEach(types, id: \.0) { t in Button(t.1) { reqType = t.0 } }
                             } label: {
                                 HStack { Text(types.first { $0.0 == reqType }?.1 ?? reqType).font(NXFont.text(15)).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(NX.mutedFg) }
-                                    .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                    .padding(12).nxSoftField(radius: 12)
                             }
                         }
                         HStack(spacing: 12) {
-                            f("TARGET") { TextField("5", text: $count).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
-                            f("XP (maks 50)") { TextField("50", text: $xp).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                            f("TARGET") { TextField("5", text: $count).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).nxSoftField(radius: 12) }
+                            f("XP (maks 50)") { TextField("50", text: $xp).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).nxSoftField(radius: 12) }
                         }
                         f(T("For")) {
                             Text(T("(pick divisions from the IP & Division Chart · none = everyone · people in a sub-division count too)"))
@@ -805,8 +804,7 @@ struct CreateQuestSheet: View {
         TextField(T("Search people to add…"), text: $peopleQuery)
             .font(NXFont.text(15)).padding(12)
             .textInputAutocapitalization(.never).autocorrectionDisabled()
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            .nxSoftField(radius: 12)
         let q = peopleQuery.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {
             let hits = people.filter { !pickedPeople.contains($0.id) && $0.name.localizedCaseInsensitiveContains(q) }.prefix(8)
@@ -976,8 +974,8 @@ struct CreateAnnouncementSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f(T("TITLE")) { TextField(T("Announcement title"), text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
-                        f(T("BODY")) { TextField(T("Announcement body…"), text: $body_, axis: .vertical).font(NXFont.text(15)).lineLimit(3...8).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                        f(T("TITLE")) { TextField(T("Announcement title"), text: $title).font(NXFont.text(15)).padding(12).nxSoftField(radius: 12) }
+                        f(T("BODY")) { TextField(T("Announcement body…"), text: $body_, axis: .vertical).font(NXFont.text(15)).lineLimit(3...8).padding(12).nxSoftField(radius: 12) }
                         f(T("AUDIENCE")) { audiencePicker }
                         f(T("PDF (SP)")) { pdfRow }
                         f(T("TONE")) {
@@ -1062,8 +1060,7 @@ struct CreateAnnouncementSheet: View {
             if !everyone {
                 TextField(T("Search name or email…"), text: $search)
                     .font(NXFont.text(14)).padding(10)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    .nxSoftField(radius: 10)
                 if !picked.isEmpty {
                     Text(String(format: T("%d selected"), picked.count)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                 }

@@ -262,8 +262,7 @@ struct GideonChatListColumn: View {
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 36)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 8)
                 Button(action: onNew) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 14, weight: .medium))

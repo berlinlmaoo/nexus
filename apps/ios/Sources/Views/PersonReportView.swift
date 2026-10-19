@@ -192,6 +192,16 @@ struct PersonReportPane: View {
             }
         }
         .task(id: "\(userId)|\(periodKey ?? "current")") { await load() }
+        // The person's attendance moved (R-15): the period on screen, quietly.
+        .liveRefresh(every: 120, on: [.nexusAttendanceChanged, .nexusRealtimeConnected], refreshOnReturn: true) { await refreshQuietly() }
+    }
+
+    /// A failure leaves what is shown; a period switched meanwhile is not overwritten.
+    private func refreshQuietly() async {
+        guard !loading, report != nil else { return }
+        let key = periodKey
+        guard let fresh = try? await APIClient.shared.personReport(userId: userId, period: key), key == periodKey else { return }
+        show(fresh, for: key, savedAt: nil)
     }
 
     private func load() async {

@@ -406,7 +406,7 @@ struct SubmissionsView: View {
             .foregroundStyle(on ? NX.foreground : NX.mutedFg)
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(on ? NX.accentBg : NX.card, in: Capsule())
-            .overlay(Capsule().strokeBorder(on ? NX.foreground.opacity(0.25) : NX.border))
+            .overlay(Capsule().strokeBorder(on ? NX.violet.opacity(0.35) : NX.border))
             .frame(minHeight: 44)
             .contentShape(Rectangle())
     }
@@ -860,8 +860,7 @@ struct SubmissionDetailSheet: View {
                     TextField(T("Reply to the team…"), text: $reply, axis: .vertical)
                         .font(NXFont.text(14)).lineLimit(1...5)
                         .padding(10)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        .nxSoftField(radius: 12)
                     Button { Task { await sendReply() } } label: {
                         Group {
                             if sending { ProgressView().tint(.white).scaleEffect(0.7) }

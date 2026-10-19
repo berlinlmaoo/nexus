@@ -217,8 +217,7 @@ struct GideonWriteSheet: View {
             TextField(T("Ask GIDEON to write…"), text: $prompt, axis: .vertical)
                 .lineLimit(2...6)
                 .padding(10)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 10)
         }
     }
 

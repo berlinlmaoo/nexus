@@ -139,8 +139,7 @@ private struct SheetCellThreadView: View {
                 .focused($composing)
                 .font(NXFont.text(14))
                 .padding(.horizontal, 10).padding(.vertical, 8)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+                .nxSoftField(radius: 10)
             Button {
                 let text = draft
                 Task { if await model.add(rowId: rowId, columnId: columnId, body: text) { draft = "" } }
