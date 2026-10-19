@@ -87,6 +87,7 @@ import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.requests.AttachmentReader
+import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.HeaderIconButton
 import id.znetworks.nexus.ui.components.PageHeader
@@ -105,6 +106,10 @@ import kotlinx.coroutines.withContext
 fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
+    val personalApi = remember { GideonPersonalApi(container.api) }
+    var personal by remember { mutableStateOf<GideonPersonalPrefs?>(null) }
+    var personalizing by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { personal = runCatching { personalApi.load() }.getOrNull() }
     val chat = container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
     val tiers by container.gideonTiers.state.collectAsStateWithLifecycle()
@@ -127,8 +132,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew(project) } }
     // "Review before writing" is remembered on the device (iOS @AppStorage "gideon.approval", web localStorage).
     val prefs = remember { context.getSharedPreferences(GIDEON_PREFS, android.content.Context.MODE_PRIVATE) }
-    val reviewNoticeKey = "review-notice-bod-v1:" + container.sessionStore.current?.userId.orEmpty()
-    var showReviewNotice by remember(reviewNoticeKey) { mutableStateOf(!prefs.getBoolean(reviewNoticeKey, false)) }
+    var reviewError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { chat.setApproval(GideonApprovalMode.of(prefs.getString(KEY_APPROVAL, null))) }
     var decision by remember { mutableStateOf<GDecision?>(null) }
     val focus = remember { FocusRequester() }
@@ -144,12 +148,13 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         val title = if (showChats) stringResource(R.string.gx_chats)
-            else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
+            else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: (personal?.name ?: "GIDEON")
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
         PageHeader(if (showChats) title else "$title ⌄", onBack = back, onTitleClick = { showChats = !showChats; if (showChats) chat.loadChats() }, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
             Box {
                 HeaderIconButton(Icons.Outlined.MoreVert, stringResource(R.string.more), { moreMenu = true })
                 DropdownMenu(moreMenu, { moreMenu = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.gp_personalize)) }, onClick = { moreMenu = false; personalizing = true })
                     DropdownMenuItem(text = { Text(stringResource(R.string.gm_title)) }, onClick = { moreMenu = false; container.router.open(Target.GideonMemory) })
                 }
             }
@@ -167,7 +172,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
-                s.messages.isEmpty() && s.pending.isEmpty() && !s.thinking -> FreshChat { send(it) }
+                s.messages.isEmpty() && s.pending.isEmpty() && !s.thinking -> FreshChat(personal?.name ?: "GIDEON") { send(it) }
                 else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
@@ -251,10 +256,9 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))
     }
-    if (showReviewNotice) AlertDialog(onDismissRequest = {
-        prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false
-    }, text = { Text(stringResource(R.string.gc_review_notice)) }, confirmButton = {
-        TextButton(onClick = { prefs.edit().putBoolean(reviewNoticeKey, true).apply(); showReviewNotice = false }) { Text("OK") }
+    if (personalizing) GideonPersonalDialog(personalApi, personal, { personal = it }, { personalizing = false })
+    if (personal?.reviewNotice == true && !id.znetworks.nexus.core.tour.TourMode.active) AlertDialog(onDismissRequest = {}, text = { Column { Text(stringResource(R.string.gc_review_notice)); reviewError?.let { Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error) } } }, confirmButton = {
+        TextButton(onClick = { scope.launch { try { personal = personalApi.acknowledge(); reviewError = null } catch (e: id.znetworks.nexus.core.net.ApiError) { reviewError = e.describe(res) } } }) { Text(stringResource(R.string.xad_got_it)) }
     })
     decision?.let { d -> DecisionDialog(d.proposal, d.apply, onConfirm = { chat.decide(d.proposal, d.apply, d.booking, d.task) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
@@ -265,7 +269,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
  * reads, and three suggestions as equal outlined rows asked with one tap.
  */
 @Composable
-private fun FreshChat(onAsk: (String) -> Unit) {
+private fun FreshChat(assistantName: String, onAsk: (String) -> Unit) {
     val c = Nx.colors
     val chips = listOf(stringResource(R.string.gx_chip_calendar), stringResource(R.string.gx_chip_overdue), stringResource(R.string.gx_chip_week), stringResource(R.string.gx_chip_decide))
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
@@ -273,7 +277,7 @@ private fun FreshChat(onAsk: (String) -> Unit) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(c.background).border(1.dp, c.border, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center) { id.znetworks.nexus.ui.components.GideonMark(24.dp, c.foreground.copy(alpha = 0.8f)) }
         Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.gx_empty_title, "GIDEON"), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.foreground,
+        Text(stringResource(R.string.gx_empty_title, assistantName), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.foreground,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(6.dp))
         Text(stringResource(R.string.gx_empty_sub), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center)

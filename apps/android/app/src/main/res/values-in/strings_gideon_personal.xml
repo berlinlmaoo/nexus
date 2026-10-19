@@ -1,0 +1,7 @@
+<resources>
+    <string name="gp_personalize">Personalisasi GIDEON</string>
+    <string name="gp_help">Pilih nama dan instruksi tetap untuk asisten Anda.</string>
+    <string name="gp_name">Nama asisten (40 karakter)</string>
+    <string name="gp_instructions">Instruksi (2000 karakter)</string>
+    <string name="gp_private">Hanya akun Anda yang memakai preferensi ini. Izin proyek tetap berlaku. Nilai kosong mengembalikan pengaturan bawaan.</string>
+</resources>
