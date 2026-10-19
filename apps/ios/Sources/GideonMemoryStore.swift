@@ -7,6 +7,7 @@ final class GideonMemoryStore {
     private(set) var memories: [GideonMemory] = []
     private(set) var available = true
     private(set) var profileAvailable = false
+    private(set) var profile: GideonMemoryProfile?
     private(set) var updatedAt: String?
     private(set) var paused = false
     private(set) var max = 40
@@ -23,7 +24,7 @@ final class GideonMemoryStore {
     var full: Bool { memories.count >= max }
     func reset() {
         epoch = UUID(); owner = nil; memories = []; paused = false; max = 40; textMax = 200
-        available = true; profileAvailable = false; updatedAt = nil
+        available = true; profileAvailable = false; profile = nil; updatedAt = nil
         loaded = false; loading = false; busy = false; failure = nil; notice = nil; sessionExpired = false; revision = 0
     }
     private func context() -> String? {
@@ -49,7 +50,7 @@ final class GideonMemoryStore {
     }
     private func acceptState(_ result: GideonMemories) {
         memories = result.memories.filter { $0.status != "DELETED" }; paused = result.paused
-        available = result.available ?? true; profileAvailable = result.profile != nil
+        available = result.available ?? true; profileAvailable = result.profile != nil; profile = result.profile
         updatedAt = result.updatedAt ?? memories.map(\.updatedAt).max()
         max = Swift.max(1, result.max); textMax = Swift.max(1, result.textMax); loaded = true; failure = nil
         GideonChat.shared.reconcileMemories(memories)
@@ -65,7 +66,7 @@ final class GideonMemoryStore {
     }
     func acceptOwn(_ memory: GideonMemory) {
         guard context() != nil else { return }
-        revision += 1
+        revision += 1; profile = nil
         updatedAt = memory.status == "DELETED" ? Date().ISO8601Format() : memory.updatedAt
         if memory.status == "DELETED" { memories.removeAll { $0.id == memory.id } }
         else if let i = memories.firstIndex(where: { $0.id == memory.id }) { memories[i] = memory }

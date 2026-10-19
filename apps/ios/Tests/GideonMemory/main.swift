@@ -54,6 +54,7 @@ func page(_ text: String = raw, paused: Bool = false) -> Data { Data("{\"paused\
     profileState["available"] = true
     let profileData = try JSONSerialization.data(withJSONObject: profileState)
     GideonMemoryAPI.replies = [.init(data: profileData)]; await store.refresh()
+    check(store.profile?.nickname == "Example" && store.profile?.role == nil, "Server profile values are retained independently of legacy row sources")
     check(store.profileAvailable && store.available, "Shared profile contract is detected without guessing text prefixes")
     GideonMemoryAPI.replies = [.init(data: profileData)]
     let saved = await store.setProfile(field: "nickname", value: "Example")
@@ -64,6 +65,7 @@ func page(_ text: String = raw, paused: Bool = false) -> Data { Data("{\"paused\
     try await Task.sleep(nanoseconds: 5_000_000)
     store.reset(); Keychain.session = Session(userId: "third")
     let oldSaved = await oldProfile.value
+    check(store.profile == nil, "Logout clears private fixed-field values as well as memory rows")
     check(!oldSaved && store.memories.isEmpty && !store.profileAvailable, "An old-session profile response cannot repopulate private state")
 }
 try await run()

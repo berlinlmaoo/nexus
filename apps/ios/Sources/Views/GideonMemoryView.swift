@@ -26,10 +26,15 @@ private enum MemoryProfileField: String, CaseIterable, Identifiable {
     var key: String { self == .occupation ? "role" : rawValue }
     var source: String { self == .nickname ? "PROFILE_NICKNAME" : self == .occupation ? "PROFILE_ROLE" : "PROFILE_ABOUT" }
     var prefix: String { self == .nickname ? "Nickname: " : self == .occupation ? "Role / occupation: " : "More about me: " }
-    func memory(in items: [GideonMemory]) -> GideonMemory? { items.first { $0.status == "ACTIVE" && $0.source == source } }
-    func value(in items: [GideonMemory]) -> String {
+    func memory(in items: [GideonMemory]) -> GideonMemory? {
+        items.first { $0.status == "ACTIVE" && ($0.source == source || ($0.source == "SETTINGS" && ($0.text.hasPrefix(prefix) || (self == .about && $0.text.hasPrefix("About me: "))))) }
+    }
+    func value(in items: [GideonMemory], profile: GideonMemoryProfile? = nil) -> String {
+        if let profile { return (self == .nickname ? profile.nickname : self == .occupation ? profile.role : profile.about) ?? "" }
         guard let memory = memory(in: items) else { return "" }
-        return memory.text.hasPrefix(prefix) ? String(memory.text.dropFirst(prefix.count)) : memory.text
+        if memory.text.hasPrefix(prefix) { return String(memory.text.dropFirst(prefix.count)) }
+        if self == .about && memory.text.hasPrefix("About me: ") { return String(memory.text.dropFirst("About me: ".count)) }
+        return memory.text
     }
 }
 
@@ -54,7 +59,7 @@ struct GideonMemoryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(T("Use GIDEON Memory"), isOn: Binding(get: { !store.paused && store.available }, set: { on in Task { await store.setPaused(!on) } }))
                     .tint(NX.violet).disabled(store.busy || !store.loaded || !store.available).accessibilityIdentifier("memory.enabled")
-                Text(T("Off: GIDEON doesn't remember anything new and doesn't use what's here.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T(store.paused ? "Off: GIDEON doesn't remember anything new and doesn't use what's here." : "GIDEON uses what it remembers to personalize your answers.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }.padding(16).background(NX.card, in: RoundedRectangle(cornerRadius: 14))
             VStack(alignment: .leading, spacing: 8) {
                 NavigationLink { GideonMemorySummaryView() } label: {
@@ -68,7 +73,7 @@ struct GideonMemoryView: View {
                     NavigationLink { MemoryProfileEditor(field: field) } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack { Text(field.label).foregroundStyle(NX.foreground); Spacer(); Image(systemName: "chevron.right").foregroundStyle(NX.mutedFg) }
-                            let value = field.value(in: store.memories)
+                            let value = field.value(in: store.memories, profile: store.profile)
                             Text(value.isEmpty ? T("Not set") : value).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                     }.disabled(!store.loaded || store.paused || !store.available || !store.profileAvailable).accessibilityIdentifier("memory.profile." + field.rawValue)
@@ -105,7 +110,7 @@ private struct MemoryProfileEditor: View {
             if store.full && original == nil { Text(String(format: T("GIDEON Memory is full (%@). Delete something to add more."), AppNumber.int(store.max))) }
         }.navigationTitle(field.label).navigationBarTitleDisplayMode(.inline).keyboardDoneBar()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(T("Save")) { Task { await save() } }.disabled(store.busy || store.paused || !store.available || !store.profileAvailable || (store.full && original == nil) || (!store.loaded)).accessibilityIdentifier("memory.profile.save") } }
-            .onAppear { original = field.memory(in: store.memories); value = field.value(in: store.memories) }
+            .onAppear { original = field.memory(in: store.memories); value = field.value(in: store.memories, profile: store.profile) }
     }
     private func save() async {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
