@@ -1,6 +1,10 @@
 import { DateField } from "@/components/DateField";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
@@ -121,13 +125,16 @@ function RoomBooking() {
   }, [flashId]);
 
   const shiftMonth = (delta: number) => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  // The rooms belong to the Z Networks workspace only (B-6, 19 Oct 2026): anybody else gets no bookings and
+  // can't book, so the page says so instead of offering a booking the server refuses.
+  const roomsAvailable = bookingsQ.data?.roomsAvailable !== false;
 
   return (
     <div>
       <PageHeader
         title={t("Room Booking")}
         subtitle={t("Book a meeting room and see who has it when.")}
-        actions={
+        actions={roomsAvailable &&
           <>
             <SelectPicker
               variant="field"
@@ -153,12 +160,16 @@ function RoomBooking() {
 
         {bookingsQ.isLoading && <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
         {bookingsQ.isError && <EmptyState icon={AlertTriangle} tone="muted" title={t("Couldn't load bookings")} message={t("Your session may have ended. Sign in again, then try again. If it keeps happening, tell your admin.")} />}
-        {!bookingsQ.isLoading && !bookingsQ.isError && earlierCount > 0 && !showEarlier && (
+        {!bookingsQ.isLoading && !bookingsQ.isError && !roomsAvailable && (
+          <EmptyState icon={MapPin} title={t("Room booking is for the Z Networks office")}
+            message={t("The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.")} />
+        )}
+        {!bookingsQ.isLoading && !bookingsQ.isError && roomsAvailable && earlierCount > 0 && !showEarlier && (
           <button onClick={() => setShowEarlier(true)} className="mb-4 inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:h-7">
             {tn(earlierCount, "Show {n} earlier booking this month", "Show {n} earlier bookings this month")}
           </button>
         )}
-        {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
+        {!bookingsQ.isLoading && !bookingsQ.isError && roomsAvailable && agenda.length === 0 && (
           <EmptyState icon={CalendarDays} title={t(earlierCount > 0 && !showEarlier ? "Nothing else booked in {month}" : "Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
             message={t("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.")}
             action={<EmptyAction secondary onClick={() => setComposer({ date: todayKey })}>{t("New booking")}</EmptyAction>} />
@@ -241,6 +252,7 @@ function bookingError(e: unknown, room: string, t: ReturnType<typeof useLang>["t
     if (e.status === 409) return p.conflict?.title
       ? t("{room} is already booked at that time ({title}).", { room: t(roomLabel(room)), title: p.conflict.title })
       : t("{room} is already booked at that time.", { room: t(roomLabel(room)) });
+    if (p.code === "ROOMS_NOT_AVAILABLE") return t("The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.");
     if (p.code === "BOOKING_IN_PAST") return t("That time has already passed. Pick a time later today or another day.");
     if (e.status === 403) return t("Only the person who booked it or a manager can change this booking.");
     if (e.status === 400) return t("Check the date and times, then try again.");
@@ -272,9 +284,14 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const [endTime, setEndTime] = useState(endInit.time || slot[1]);
   const [description, setDescription] = useState(booking?.description ?? "");
   const [err, setErr] = useState<string | null>(null);
+  // B-D1 (19 Oct 2026): the delete confirmation is NEXUS's own centred dialog, not the browser's confirm().
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmOpenRef = useRef(false);
+  confirmOpenRef.current = confirmDelete;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    // Escape inside the confirmation closes only the confirmation, not the whole booking sheet.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !confirmOpenRef.current) onClose(); };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -364,13 +381,25 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? <><Pencil className="h-4 w-4" /> {t("Update")}</> : t("Book room")}
             </button>
             {editing && (
-              <button onClick={() => { if (confirm(t("Delete this booking?"))) del.mutate(); }} disabled={del.isPending} aria-label={t("Delete booking")} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
+              <button onClick={() => setConfirmDelete(true)} disabled={del.isPending} aria-label={t("Delete booking")} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
           </div>
         </div>
       </motion.div>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Delete this booking?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("The room is free again for that time. You can restore the booking from Control Room → Audit.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => del.mutate()}>{t("Delete")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>,
     document.body,
   );
