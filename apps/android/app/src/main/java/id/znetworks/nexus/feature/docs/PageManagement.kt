@@ -32,7 +32,7 @@ private fun NewPageDialog(initialProject:String?,parent:String?,created:(String)
     var busy by remember{mutableStateOf(false)};var loading by remember{mutableStateOf(true)};var canEdit by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<String?>(null)};var tick by remember{mutableIntStateOf(0)};var discard by remember{mutableStateOf(false)}
     LaunchedEffect(tick){try{projects=projectsApi.projects().value;error=null}catch(e:ApiError){error=e.describe(ctx.resources)};loading=false}
-    LaunchedEffect(project,tick,projects){canEdit=false;templates=emptyList();template="";if(project.isNotBlank())try{val detail=projectsApi.project(project).value;canEdit=ProjectAccess.of(detail).canEdit;val workspace=projects?.find{it.id==project}?.workspaceId;if(workspace!=null)templates=api.templates(workspace);error=null}catch(e:ApiError){error=e.describe(ctx.resources)}}
+    LaunchedEffect(project,tick,projects){canEdit=false;templates=emptyList();template="";if(project.isNotBlank())try{val detail=projectsApi.project(project).value;canEdit=ProjectAccess.of(detail).canEdit;val workspace=detail.workspaceId?:projects?.find{it.id==project}?.workspaceId;if(workspace!=null)templates=api.templates(workspace);error=null}catch(e:ApiError){error=e.describe(ctx.resources)}}
     fun dismiss(){if(!busy){if(title.isNotBlank()||template.isNotBlank())discard=true else close()}}
     AlertDialog(onDismissRequest=::dismiss,title={Text(stringResource(R.string.pm_new))},text={Column(Modifier.verticalScroll(rememberScrollState())){
         if(loading||busy)LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -42,7 +42,7 @@ private fun NewPageDialog(initialProject:String?,parent:String?,created:(String)
         templates.find{it.text("id")==template}?.let{t->val content=t.objectAt("content");Text(if(content.text("type")=="doc")BlockTree.text(content).take(2000)else content.rows("blocks").joinToString("\n"){it.text("content")}.take(2000))}
         if(project.isNotBlank()&&!canEdit)Text(stringResource(R.string.be_readonly))
         error?.let{Text(it,color=MaterialTheme.colorScheme.error);TextButton(onClick={tick++}){Text(stringResource(R.string.try_again))}}
-    }},confirmButton={TextButton(onClick={busy=true;scope.launch{try{val id=api.create(project,title,template.ifBlank{null},parent);created(id);close()}catch(e:ApiError){error=e.describe(ctx.resources)}finally{busy=false}}},enabled=!busy&&canEdit&&title.isNotBlank()){Text(stringResource(R.string.pm_create))}},dismissButton={TextButton(onClick=::dismiss,enabled=!busy){Text(stringResource(R.string.cancel))}})
+    }},confirmButton={TextButton(onClick={busy=true;scope.launch{try{val id=api.create(project,title,template.ifBlank{null},parent,templates.find{it.text("id")==template}?.objectAt("content")?.let{PageTemplates.canonical(it)});created(id);close()}catch(e:ApiError){error=e.describe(ctx.resources)}finally{busy=false}}},enabled=!busy&&canEdit&&title.isNotBlank()){Text(stringResource(R.string.pm_create))}},dismissButton={TextButton(onClick=::dismiss,enabled=!busy){Text(stringResource(R.string.cancel))}})
     if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(stringResource(R.string.ab_discard))},confirmButton={TextButton(onClick=close){Text(stringResource(R.string.ab_discard_action))}},dismissButton={TextButton(onClick={discard=false}){Text(stringResource(R.string.cancel))}})
 }
 @Composable
