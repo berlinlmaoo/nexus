@@ -170,7 +170,10 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            // Type-erased in two places: Home's three layouts plus this modifier chain made one generic
+            // view type so deep that resolving its metadata overflowed the iPhone's main-thread stack on
+            // launch after login (simulators and Macs have a larger stack, so tours never saw it).
+            AnyView(ScrollView {
                 if hSize == .regular {
                     // A full-screen Mac left most of the window as empty margins either side of one
                     // phone-width column (owner, 29 Sep 2026). Two columns once there is room; a narrow
@@ -181,13 +184,13 @@ struct DashboardView: View {
                     // shows its work column beside the profile rail (UI tour run 4). An iPad in
                     // landscape gets the two columns too; in portrait it keeps one.
                     ViewThatFits(in: .horizontal) {
-                        threeColumns.frame(minWidth: 1500, idealWidth: 1500, maxWidth: .infinity)
-                        wideColumns.frame(minWidth: 860, idealWidth: 860, maxWidth: .infinity)
-                        singleColumn
+                        AnyView(threeColumns.frame(minWidth: 1500, idealWidth: 1500, maxWidth: .infinity))
+                        AnyView(wideColumns.frame(minWidth: 860, idealWidth: 860, maxWidth: .infinity))
+                        AnyView(singleColumn)
                     }
                     .padding(.horizontal, 28).padding(.vertical, 16)
                 } else {
-                    singleColumn.padding(16)
+                    AnyView(singleColumn.padding(16))
                 }
             }
             // Phone: room under the last card for the floating GIDEON button (52 pt, 76 pt above the
@@ -215,7 +218,7 @@ struct DashboardView: View {
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }
-            .overlay { bellModal }
+            .overlay { bellModal })
             .navigationBarHidden(true)
             .navigationDestination(item: $openTarget) { target in
                 switch target {

@@ -169,7 +169,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       return NextResponse.json({ error: "You can view this project but not post in it.", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
     }
 
-    const { content, mentionedUserIds, attachmentUrl, attachmentType, attachmentName, replyToId } = await req.json()
+    const { content, mentionedUserIds, attachmentUrl, attachmentType, attachmentName, replyToId } = ((await req.json().catch(() => null)) ?? {}) as Record<string, any>
     const text = typeof content === "string" ? content.trim() : ""
     // Only accept an attachment path this server itself handed out. Taking an arbitrary URL here
     // would turn every message into an open redirect and let anyone point the chat at a remote host.
