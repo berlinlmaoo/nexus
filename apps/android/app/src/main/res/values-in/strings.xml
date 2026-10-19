@@ -996,7 +996,9 @@
     <string name="vault_load_failed">Vault gagal dibuka.</string>
     <string name="vault_empty">Belum ada apa-apa. Unggah file atau buat folder.</string>
     <string name="vault_trash_empty">Tempat sampah kosong.</string>
-    <string name="vault_items_n">%1$d item</string>
+    <plurals name="vault_items_n">
+        <item quantity="other">%1$d item</item>
+    </plurals>
     <string name="vault_restore">Pulihkan</string>
     <string name="vault_delete_forever">Hapus permanen</string>
     <string name="vault_share_link">Link berbagi</string>
