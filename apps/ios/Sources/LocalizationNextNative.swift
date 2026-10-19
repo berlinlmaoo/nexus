@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Storage": "Penyimpanan",
         "number = tasks that day": "angka = task pada hari itu",
         "Couldn't load notification preferences.": "Preferensi notifikasi tidak bisa dimuat.",
         "Automation notification preferences aren't available on this server.": "Preferensi notifikasi otomatis belum tersedia di server ini.",

@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
+import QuickLook
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Z Vault on the phone, the iPad and the Mac.
@@ -74,6 +75,7 @@ struct VaultView: View {
     @State private var sheet: VaultSheet?
     @State private var vaultAlert: VaultAlert?
     @State private var cover: VaultCover?
+    @State private var previewURL: URL?
     @State private var renameText = ""
     @State private var newFolderName = ""
 
@@ -154,6 +156,7 @@ struct VaultView: View {
                     await load()
                 }
             }
+            .quickLookPreview($previewURL)
             .sheet(item: $sheet) { which in sheetContent(which) }
             .fullScreenCover(item: $cover) { which in
                 switch which {
@@ -191,32 +194,9 @@ struct VaultView: View {
                     .buttonStyle(.nxBordered)
                 Button { endSelecting() } label: { Label(T("Done"), systemImage: "checklist") }
                     .buttonStyle(.nxPrimary)
-            } else if canSelect {
-                Button { startSelecting() } label: { Label(T("Select"), systemImage: "checklist") }
-                    .buttonStyle(.nxBordered)
-            }
-            Button { trash.toggle(); endSelecting(); Task { await load() } } label: {
-                Label(T("Trash"), systemImage: "trash")
-            }
-            .buttonStyle(trash ? NXButtonStyle(kind: .primary) : NXButtonStyle(kind: .bordered))
-            .accessibilityAddTraits(trash ? .isSelected : [])
-            if listing?.canWrite == true && !trash {
-                Button { newFolderName = ""; vaultAlert = .newFolder } label: {
-                    Label(T("Folder"), systemImage: "folder.badge.plus")
-                }
-                .buttonStyle(.nxBordered)
-                // A click uploads files, as the web's button; the arrow beside it offers Photos too.
-                Menu {
-                    Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "tray.and.arrow.up") }
-                    Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
-                } label: {
-                    Label(T("Upload"), systemImage: "tray.and.arrow.up")
-                } primaryAction: {
-                    sheet = .importer
-                }
-                .menuStyle(.button)
-                .buttonStyle(.nxPrimary)
-                .fixedSize()
+            } else {
+                uploadMenu
+                addMenu
             }
         }
     }
@@ -231,31 +211,7 @@ struct VaultView: View {
                     .foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 8) {
-                Button { trash.toggle(); endSelecting(); Task { await load() } } label: {
-                    Label(T("Trash"), systemImage: "trash")
-                }
-                .buttonStyle(trash ? NXButtonStyle(kind: .primary) : NXButtonStyle(kind: .bordered))
-                .accessibilityAddTraits(trash ? .isSelected : [])
-                if listing?.canWrite == true && !trash {
-                    Button { newFolderName = ""; vaultAlert = .newFolder } label: {
-                        Label(T("Folder"), systemImage: "folder.badge.plus")
-                    }
-                    .buttonStyle(.nxBordered)
-                    Menu {
-                        Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "tray.and.arrow.up") }
-                        Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
-                    } label: {
-                        Label(T("Upload"), systemImage: "tray.and.arrow.up")
-                    } primaryAction: {
-                        sheet = .importer
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.nxPrimary)
-                    .fixedSize()
-                }
-                Spacer(minLength: 0)
-            }
+
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -339,12 +295,12 @@ struct VaultView: View {
                 } else {
                     if webChrome {
                         HStack(spacing: 12) {
-                            if let quota = listing?.quota { quotaBar(quota).padding(.horizontal, -gutter) } else { Spacer(minLength: 0) }
+                            Spacer(minLength: 0)
                             webSearchField
                         }
                         .padding(.horizontal, gutter)
-                    } else if let quota = listing?.quota { quotaBar(quota) }
-                    if !trash && query.isEmpty { breadcrumb }
+                    }
+                    if parentId != nil && !trash && query.isEmpty { breadcrumb }
                     if trash { trashBanner }
 
                     if let items = listing?.items, !items.isEmpty {
@@ -408,33 +364,35 @@ struct VaultView: View {
             ToolbarItemGroup(placement: .bottomBar) { selectionBar }
         }
         if !selecting && !webChrome {
-            if canSelect {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(T("Select")) { startSelecting() }
-                }
-            }
+            ToolbarItem(placement: .topBarTrailing) { uploadMenu }
             ToolbarItem(placement: .topBarTrailing) { addMenu }
+        }
+    }
+
+    @ViewBuilder private var uploadMenu: some View {
+        if listing?.canWrite == true && !trash {
+            Menu {
+                Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "tray.and.arrow.up") }
+                Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
+                Button { newFolderName = ""; vaultAlert = .newFolder } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
+            } label: { Image(systemName: "plus") }
+                .accessibilityLabel(T("Add")).accessibilityIdentifier("vault.add")
         }
     }
 
     private var addMenu: some View {
         Menu {
-            if listing?.canWrite == true && !trash {
-                Button { newFolderName = ""; vaultAlert = .newFolder } label: {
-                    Label(T("New folder"), systemImage: "folder.badge.plus")
-                }
-                Button { sheet = .importer } label: {
-                    Label(T("Upload file"), systemImage: "tray.and.arrow.up")
-                }
-                Button { showPhotos = true } label: {
-                    Label(T("Upload from Photos"), systemImage: "photo.on.rectangle")
-                }
-            }
-            Divider()
+            if canSelect { Button { startSelecting() } label: { Label(T("Select"), systemImage: "checklist") } }
             Button { trash.toggle(); endSelecting(); Task { await load() } } label: {
                 Label(trash ? T("Back to files") : T("Trash"), systemImage: "trash")
             }
+            if let quota = listing?.quota {
+                Button {
+                    vaultAlert = .problem(title: T("Storage"), message: String(format: T("%@ of %@ used"), Self.human(quota.usedBytes), Self.human(quota.totalBytes)))
+                } label: { Label(T("Storage"), systemImage: "externaldrive") }
+            }
         } label: { Image(systemName: "ellipsis.circle") }
+            .accessibilityLabel(T("More")).accessibilityIdentifier("vault.options")
     }
 
     /// The bottom bar while selecting. Share and Save act on files: a folder has no bytes to hand to
@@ -666,22 +624,6 @@ struct VaultView: View {
                 Image(systemName: item.isRestricted ? "lock.fill" : "pencil.slash")
                     .font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     .accessibilityLabel(T("Locked"))
-            }
-
-            // Share, in plain sight on every row (owner, 9 Oct 2026: behind "…" nobody found it).
-            // Not while selecting: a tap anywhere on the row chooses it then.
-            if !trash && !selecting {
-                Button { sheet = .shareLink(item) } label: {
-                    // The web's own share glyph (lucide Share2), grey: SF Symbols has none like it, and the
-                    // stand-in read as a graph (UI tour runs 7 and 12, IP4).
-                    Image("ShareNodesGlyph").renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 16, height: 16)
-                        .foregroundStyle(NX.mutedFg)
-                        .frame(width: 40, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(format: T("Share link to %@"), item.name))
             }
 
             if selecting {
@@ -1299,14 +1241,16 @@ struct VaultView: View {
         cover = .media(items: media.isEmpty ? [item] : media, start: start)
     }
 
-    /// A PDF or a sound opens in the app's own viewer; anything else goes to the share sheet.
+    /// Keep rich PDF/audio controls; other supported documents use system Quick Look with Share.
     private func openFile(_ item: VaultItem) async {
-        guard let kind = AttachmentKind(mime: item.mimeType, name: item.name), kind == .pdf || kind == .audio else {
-            await save(item)
-            return
-        }
         guard let file = await fetch(item) else { return }
-        cover = .attachment(AttachmentPreview(id: item.id, name: item.name, kind: kind, source: file))
+        if let kind = AttachmentKind(mime: item.mimeType, name: item.name), kind == .pdf || kind == .audio {
+            cover = .attachment(AttachmentPreview(id: item.id, name: item.name, kind: kind, source: file))
+        } else if QLPreviewController.canPreview(file as NSURL) {
+            previewURL = file
+        } else {
+            sheet = .activity(ShareItem(url: file))
+        }
     }
 
     private func save(_ item: VaultItem) async {
@@ -1452,7 +1396,7 @@ struct VaultView: View {
     private static func subtitle(_ item: VaultItem) -> String {
         var parts: [String] = []
         if item.isFolder {
-            parts.append("\(item.childCount) \(T("items"))")
+            parts.append(item.childCount == 1 ? T("1 item") : String(format: T("%d items"), item.childCount))
         } else if let size = item.size {
             parts.append(human(size))
         }
