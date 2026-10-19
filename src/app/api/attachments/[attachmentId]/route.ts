@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess } from "@/lib/rbac"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function DELETE(
   request: NextRequest,
@@ -39,6 +40,7 @@ export async function DELETE(
       remove: (tx) => tx.attachment.delete({ where: { id: attachmentId } }),
     })
 
+    void pingTaskDetail(attachment.taskId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting attachment:", error)

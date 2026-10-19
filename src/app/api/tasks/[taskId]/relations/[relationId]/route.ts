@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { taskEditRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function DELETE(
   req: NextRequest,
@@ -31,6 +32,8 @@ export async function DELETE(
 
     logAudit({ action: "delete", entityType: "task_relation", entityId: (await params).relationId, userId: session.user.id, request: req })
 
+    void pingTaskDetail(relationRef.sourceTaskId, session.user.id)
+    void pingTaskDetail(relationRef.targetTaskId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting relation:", error)

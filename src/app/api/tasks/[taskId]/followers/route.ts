@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { taskWriteRefusal } from "@/lib/write-access"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function GET(
   _request: NextRequest,
@@ -50,6 +51,7 @@ export async function POST(
     if (existing) {
       // deleteMany: a concurrent toggle may have removed it already (delete would throw P2025 → 500).
       await prisma.taskFollower.deleteMany({ where: { id: existing.id } })
+      void pingTaskDetail((await params).taskId, session.user.id)
       return NextResponse.json({ following: false })
     }
 
@@ -59,6 +61,7 @@ export async function POST(
       skipDuplicates: true,
     })
 
+    void pingTaskDetail((await params).taskId, session.user.id)
     return NextResponse.json({ following: true }, { status: 201 })
   } catch (error) {
     console.error("Error toggling follow:", error)

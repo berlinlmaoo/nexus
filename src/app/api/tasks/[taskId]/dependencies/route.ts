@@ -7,6 +7,7 @@ import { isUniqueViolation } from '@/lib/prisma-errors'
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   try {
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
 
     logAudit({ action: "create", entityType: "task_dependency", entityId: dep.id, userId: session.user.id, request: req, metadata: { taskId: (await params).taskId, dependsOnTaskId } })
 
+    void pingTaskDetail((await params).taskId, session.user.id)
+    void pingTaskDetail(dependsOnTaskId, session.user.id)
     return NextResponse.json({ dependency: dep }, { status: 201 })
   } catch (error) {
     console.error("Error creating dependency:", error)
@@ -83,6 +86,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
 
     logAudit({ action: "delete", entityType: "task_dependency", entityId: id, userId: session.user.id, request: req })
 
+    void pingTaskDetail(depRef.taskId, session.user.id)
+    void pingTaskDetail(depRef.dependsOnTaskId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting dependency:", error)
