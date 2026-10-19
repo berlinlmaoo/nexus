@@ -996,7 +996,9 @@
     <string name="vault_load_failed">Vault gagal dibuka.</string>
     <string name="vault_empty">Belum ada apa-apa. Unggah file atau buat folder.</string>
     <string name="vault_trash_empty">Tempat sampah kosong.</string>
-    <string name="vault_items_n">%1$d item</string>
+    <plurals name="vault_items_n">
+        <item quantity="other">%1$d item</item>
+    </plurals>
     <string name="vault_restore">Pulihkan</string>
     <string name="vault_delete_forever">Hapus permanen</string>
     <string name="vault_share_link">Link berbagi</string>
@@ -1080,7 +1082,7 @@
     <string name="pf_message">Pesan</string>
     <string name="pf_outside_ranking">BoD &amp; One Above All di luar peringkat.</string>
     <string name="pf_no_points">Belum ada poin periode ini.</string>
-    <string name="pf_period_note">Attendance period · 28th to 27th</string>
+    <string name="pf_period_note">Periode absensi · tanggal 28 sampai 27</string>
     <string name="pf_score">Skor</string>
     <string name="pf_day_of">Hari ke-%1$d dari %2$d</string>
     <string name="pf_absent_tk">Absent (TK)</string>
@@ -3280,7 +3282,9 @@
     <string name="gm_empty_hint">Bilang ke GIDEON di chat, mis. “ingat ya, aku lebih suka jawaban singkat”, atau tambahkan di sini.</string>
     <string name="gm_forget_all">Lupakan semua</string>
     <string name="gm_forget_title">Lupakan semua?</string>
-    <string name="gm_forget_body">GIDEON berhenti memakai %1$s hal yang ia ingat tentang kamu. Semuanya dihapus permanen setelah 30 hari.</string>
+    <plurals name="gm_forget_body">
+        <item quantity="other">GIDEON berhenti memakai %1$d hal yang ia ingat tentang kamu. Semuanya dihapus permanen setelah 30 hari.</item>
+    </plurals>
     <string name="gm_remember">Ingat ini?</string>
     <string name="gm_dont">Jangan</string>
     <string name="gm_saved">Disimpan ke Memori GIDEON: %1$s</string>

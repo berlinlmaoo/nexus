@@ -177,7 +177,7 @@ internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit, hasLe
             return@Column
         }
         val state = rememberLazyListState()
-        val dark = androidx.compose.foundation.isSystemInDarkTheme()
+        val dark = Nx.isDark
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val colWidth = minOf(300.dp, maxWidth * 0.82f)
             LazyRow(state = state, contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),

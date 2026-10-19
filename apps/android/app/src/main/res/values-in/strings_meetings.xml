@@ -9,7 +9,7 @@
     <string name="meet_beta">Beta</string>
     <string name="meet_new">Catatan meeting baru</string>
     <string name="meet_upload">Unggah file</string>
-    <string name="meet_record">Rekap</string>
+    <string name="meet_record">Rekam</string>
     <string name="meet_title_field">Judul</string>
     <string name="meet_project">Project</string>
     <string name="meet_language">Bahasa yang diucapkan</string>
@@ -45,7 +45,7 @@
     <string name="meet_uploaded">Terunggah</string>
     <string name="meet_close">Tutup</string>
     <string name="meet_open">Buka meeting</string>
-    <string name="meet_status">Section</string>
+    <string name="meet_status">Status</string>
     <string name="meet_date">Tanggal</string>
     <string name="meet_duration">Durasi</string>
     <string name="meet_recorded_by">Direkam oleh</string>
