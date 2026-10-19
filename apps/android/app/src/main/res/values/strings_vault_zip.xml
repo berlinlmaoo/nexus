@@ -1,0 +1,8 @@
+<resources>
+    <string name="vz_title">Download as ZIP</string>
+    <string name="vz_help">Select files or folders from this location. Only items you can read are included.</string>
+    <string name="vz_progress">Downloaded %1$d / %2$d KB</string>
+    <string name="vz_download">Download %1$d selected</string>
+    <string name="vz_failed">Could not save the archive. Try again.</string>
+    <string name="vz_no_app">No app can share this archive.</string>
+</resources>

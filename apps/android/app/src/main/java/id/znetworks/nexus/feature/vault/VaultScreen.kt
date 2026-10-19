@@ -255,6 +255,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                 }
             }
         }
+        if (!vm.trash && l != null) VaultZipButton(l.items)
         if (!vm.trash) {
             if (l != null && l.breadcrumb.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 Text(l.breadcrumb.joinToString(" › ") { it.name }, fontSize = 12.sp, color = c.mutedFg)
