@@ -289,6 +289,7 @@ struct DashboardView: View {
             // two-column width (owner, 16 Oct 2026); the phone keeps its level card.
             if hSize == .regular { greetingWithLevel } else { greeting }
             attendanceBar
+            statusPanel
             if hSize != .regular { levelCard }
             searchRow(bell: true)
             statCards
@@ -350,6 +351,7 @@ struct DashboardView: View {
                 // calendar; the person (level, profile) in the rail on the right.
                 VStack(alignment: .leading, spacing: 18) {
                     attendanceBar
+                    statusPanel
                     searchRow(bell: false)
                     statCards
                     xpRulesCard
@@ -382,6 +384,7 @@ struct DashboardView: View {
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 18) {
                     attendanceBar
+                    statusPanel
                     searchRow(bell: false)
                     statCards
                     quickActions
@@ -521,6 +524,12 @@ struct DashboardView: View {
             .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
+    }
+
+    /// Right under the Attendance card (Berlin device review 19 Oct, R-14): Settings' "Set a status" row as a
+    /// card of the same style and height, opening the Status sheet.
+    @ViewBuilder private var statusPanel: some View {
+        if PresenceStore.shared.enabled { SetPresenceRow(homeCard: true) }
     }
 
     private func attendanceLine(now: Date) -> (text: String, tint: Color, action: String) {
