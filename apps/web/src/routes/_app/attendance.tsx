@@ -1971,8 +1971,17 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
       ];
   useEffect(() => { if (!TYPES.includes(type)) setType("DAY_OFF"); }, [TYPES.join(","), type]); // eslint-disable-line react-hooks/exhaustive-deps
   const leaveBlocked = !granting && type === "LEAVE" && !leaveUsable;
+  // A day off is counted in the period (28th → 27th) of the day asked for: next period's numbers come from
+  // dayOffNextPeriod (C-D4); a period further out is only checked by the server on submit.
+  const periodIndex = (k: string) => { const [y, m, d] = k.split("-").map(Number); return y * 12 + m + (d >= 28 ? 1 : 0); };
+  const periodAhead = type === "DAY_OFF" && date ? periodIndex(date) - periodIndex(today) : 0;
+  const nextPeriod = todayQ.data?.dayOffNextPeriod ?? null;
+  const dayOffQuotaShown = periodAhead === 1 && nextPeriod ? nextPeriod.quota : (todayQ.data?.dayOffQuota ?? 0);
   const remainingDays =
-    type === "DAY_OFF" ? Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
+    type === "DAY_OFF"
+      ? periodAhead === 1 && nextPeriod ? Math.max(0, nextPeriod.remaining)
+        : periodAhead > 1 ? null
+        : Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
     : type === "RED_DATE" ? redLeft
     : type === "LEAVE" ? (leave?.remaining ?? null)
     : null;
@@ -1980,8 +1989,8 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
   // The day-off numbers above are this attendance period's (28th → 27th). A date in a later period has
   // its own allowance, which the server checks on submit: with this period used up, a staff could not
   // file a day off for the 29th at all — the button stayed disabled although the server would accept it.
-  const periodIndex = (k: string) => { const [y, m, d] = k.split("-").map(Number); return y * 12 + m + (d >= 28 ? 1 : 0); };
-  const otherPeriod = type === "DAY_OFF" && Boolean(date) && periodIndex(date) !== periodIndex(today);
+  // A period with no numbers from the server (two or more ahead) is left to the server's check on submit.
+  const otherPeriod = type === "DAY_OFF" && periodAhead !== 0 && !(periodAhead === 1 && nextPeriod);
   const quotaProblem = !granting && !otherPeriod && remainingDays != null && remainingDays < 1
     ? tr("You have no {type} days left.", { type: tr(REQ_LABEL[type] ?? "days").toLowerCase() })
     : null;
@@ -1991,7 +2000,11 @@ function RequestComposer({ onClose, onCreated, viewerId, initialType }: { onClos
     : type === "LEAVE" ? (!leave ? tr("Uses one day of your annual leave.") : !leave.eligible ? (leave.reason ?? tr("Annual leave needs 12 months of service.")) : tr("Annual leave: {left} of {quota} days left this year.", { left: leave.remaining, quota: leave.quota }))
     : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a board member.")
     : type === "PERMIT" ? tr("Today or later, with a photo and your location.")
-    : type === "DAY_OFF" ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: todayQ.data?.dayOffQuota ?? 0 })
+    : type === "DAY_OFF" ? (periodAhead === 0
+        ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: dayOffQuotaShown })
+        : remainingDays != null
+          ? tr("Day off: {left} of {quota} left in the period of that date.", { left: remainingDays, quota: dayOffQuotaShown })
+          : tr("That date is in a later period — its day-off allowance is checked when you submit."))
     : tr("Public holiday: {left} of {quota} left this month.", { left: remainingDays ?? 0, quota: redQuota });
   const pickType = (t: string) => {
     setType(t);
