@@ -312,6 +312,16 @@ final class SheetStore {
         }
     }
 
+    /// The project's tabs read again, quietly (R-19): a failure leaves them; the open sheet stays open unless it
+    /// was deleted or hidden, then the first visible one opens.
+    func refreshTabs() async {
+        guard let list = try? await APIClient.shared.projectSheets(projectId) else { return }
+        tabs = list.sorted { $0.position < $1.position }
+        let visible = tabs.filter { !$0.hidden }
+        if let current = sheetId, visible.contains(where: { $0.id == current }) { return }
+        if let first = visible.first ?? tabs.first, first.id != sheetId { await open(first.id) }
+    }
+
     func open(_ id: String) async {
         if editing { commitEdit(move: nil) }
         sheetId = id

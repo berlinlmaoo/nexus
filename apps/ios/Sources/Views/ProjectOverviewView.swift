@@ -1262,6 +1262,13 @@ private struct OverviewStatusUpdatesCard: View {
             .padding(16)
         }
         .task(id: projectId) { await load() }
+        // A status update posted elsewhere (R-19 `project-changed` "status-updates"); the draft stays.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusProjectChanged)) { note in
+            let info = note.userInfo
+            if let pid = info?[RealtimeKey.projectId] as? String, pid != projectId { return }
+            if let kind = info?[RealtimeKey.kind] as? String, kind != "status-updates" { return }
+            Task { await load() }
+        }
     }
 
     private func load() async {

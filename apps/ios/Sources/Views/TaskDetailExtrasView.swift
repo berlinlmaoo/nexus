@@ -226,6 +226,9 @@ struct TaskAttachmentsCard: View {
     /// Can edit or more in the task's project (access levels round 2): false = files open and share, but
     /// no add and no delete.
     var canEdit = true
+    /// Bumped by the task screen when the task changed elsewhere (R-19 `project-changed` "task": a file
+    /// added or removed on another device): the list is read again.
+    var refreshToken = 0
     @State private var items: [TaskAttachment] = []
     @State private var loading = true
     @State private var busy = false
@@ -280,6 +283,7 @@ struct TaskAttachmentsCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         .task { await load() }
+        .onChange(of: refreshToken) { _, _ in Task { await load() } }
         .sheet(isPresented: $showImporter) {
             // Several files in one pick, uploaded one after another (bughunt C-BUG-31).
             DocumentPicker(types: [.item], multiple: true) { urls in

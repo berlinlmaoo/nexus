@@ -199,6 +199,8 @@ final class RealtimeClient {
         center.post(name: .nexusDocChanged, object: nil)
         center.post(name: .nexusSheetStructure, object: nil, userInfo: [RealtimeKey.json: "{}"])
         center.post(name: .nexusFormResponsesChanged, object: nil)
+        center.post(name: .nexusProjectChanged, object: nil)
+        center.post(name: .nexusComplaintChanged, object: nil)
         Task { await CalendarWidgetPresence.refresh(force: true) }
         SheetOutbox.shared.flushAll()
         chatMoved(nil)
@@ -309,6 +311,14 @@ final class RealtimeClient {
             tasksChanged(taskId: payload?["id"]?.string, parentId: payload?["parentId"]?.string)
         case "task-deleted", "comment-added":
             tasksChanged(taskId: payload?["taskId"]?.string, parentId: nil)
+        case "project-changed":
+            projectChanged(payload)
+        case "complaint-changed":
+            // R-19: a ticket this person may open (theirs, or any of the workspace's for the board). Ids only.
+            var info: [String: String] = [:]
+            if let id = payload?["id"]?.string { info[RealtimeKey.itemId] = id }
+            if let kind = payload?["kind"]?.string { info[RealtimeKey.kind] = kind }
+            center.post(name: .nexusComplaintChanged, object: nil, userInfo: info)
         case "pipeline-changed":
             // A Pipeline Dashboard deal changed (owner, 9 Oct 2026). Ids only, like every event: the
             // open pipeline refetches GET …/pipeline. Unlike a task, a deal belongs to exactly one
@@ -366,6 +376,32 @@ final class RealtimeClient {
     private static func refreshOwnAttendance() async {
         guard let today = try? await APIClient.shared.attendanceToday() else { return }
         AttendancePresence.refresh(today: today)
+    }
+
+    /// `project-changed` { projectId, kind, id, actorId } (R-19, folded on the server to one per 300 ms per
+    /// thing). Not skipped for this person's own changes: their other devices must move too. Task kinds also
+    /// reach the screens that already follow task events (an open task detail by its id, the project's views),
+    /// forms the forms lists, and members the project payload's own path.
+    private func projectChanged(_ payload: SIOJSON?) {
+        guard let projectId = payload?["projectId"]?.string, let kind = payload?["kind"]?.string else { return }
+        let id = payload?["id"]?.string
+        let center = NotificationCenter.default
+        var info: [String: String] = [RealtimeKey.projectId: projectId, RealtimeKey.kind: kind]
+        if let id { info[RealtimeKey.itemId] = id }
+        center.post(name: .nexusProjectChanged, object: nil, userInfo: info)
+        switch kind {
+        case "task", "tasks":
+            var tasks: [String: String] = [RealtimeKey.projectId: projectId]
+            if let id { tasks[RealtimeKey.taskId] = id }
+            center.post(name: .nexusProjectTasksChanged, object: nil, userInfo: tasks)
+        case "forms":
+            center.post(name: .nexusFormsChanged, object: nil)
+        case "members":
+            center.post(name: .nexusWorkspaceChanged, object: nil,
+                        userInfo: [RealtimeKey.kind: RealtimeKind.projects, RealtimeKey.projectId: projectId])
+        default:
+            break
+        }
     }
 
     /// Something changed among a project's tasks. Which project is told by the ROOM it came through,

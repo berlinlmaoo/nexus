@@ -71,6 +71,20 @@ private struct SheetScreen: View {
         .onReceive(NotificationCenter.default.publisher(for: .nexusSheetCells)) { note in
             if let o = Self.payload(note) { store.receiveCells(o) }
         }
+        // R-19 `project-changed`: tabs added, renamed, reordered or deleted elsewhere, and cell comments.
+        // The grid itself stays on `sheet-cells` / `sheet-structure`.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusProjectChanged)) { note in
+            let info = note.userInfo
+            if let pid = info?[RealtimeKey.projectId] as? String, pid != store.projectId { return }
+            switch info?[RealtimeKey.kind] as? String {
+            case "sheets": Task { await store.refreshTabs() }
+            case "sheet-comments":
+                if let id = info?[RealtimeKey.itemId] as? String, id != store.sheetId { return }
+                Task { await comments.reload() }
+            case nil: Task { await store.refreshTabs() }
+            default: break
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .nexusRoomRevoked)) { note in
             guard let id = store.sheetId, (note.userInfo?[RealtimeKey.room] as? String) == "sheet:\(id)" else { return }
             store.notice = T("Your access to this project changed")

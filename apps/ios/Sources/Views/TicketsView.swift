@@ -353,6 +353,10 @@ struct TicketsView: View {
             }
         }
         .task { await load(); claimFocus() }
+        // R-19 `complaint-changed`: a ticket filed, moved, answered or corrected anywhere; list and counts.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusComplaintChanged)) { _ in
+            Task { await load() }
+        }
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
             Text(T("It may have been deleted, or the link is wrong. Your own tickets are in the list."))
@@ -985,6 +989,14 @@ struct TicketDetailSheet: View {
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) } }
         }
         .task { await loadThread() }
+        // R-19 `complaint-changed` for this ticket: the thread and status quietly, the correction card on a
+        // correction; the reply being typed stays.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusComplaintChanged)) { note in
+            if let id = note.userInfo?[RealtimeKey.itemId] as? String, id != ticket.id { return }
+            let kind = note.userInfo?[RealtimeKey.kind] as? String
+            Task { await loadThread(spinner: false) }
+            if kind == nil || kind == "correction" { correctionsToken += 1 }
+        }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
