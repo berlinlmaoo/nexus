@@ -378,6 +378,7 @@ fun CalendarScreen(
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val config by container.remoteConfig.body.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.CALENDAR_CHANGED }) { delay(300); vm.refresh().join() }
     // Runs again on every return to this entry and on rotation; the VM applies a link only once.
     LaunchedEffect(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) { vm.applyLink(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) }
     // On show and every return to the foreground, then every calendarPollSeconds while visible (with ETag).

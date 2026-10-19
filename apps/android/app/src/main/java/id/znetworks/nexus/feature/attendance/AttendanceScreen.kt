@@ -132,6 +132,7 @@ fun AttendanceScreen(
     // A push / inbox row about attendance: the request with its buttons, the offsite review, or
     // the prefilled permit composer. Claimed here, so it survives a cold start and a sign-in.
     val context = LocalContext.current
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED }) { vm.load(); requests.load(); board.load() }
     val router = (context.applicationContext as NexusApplication).container.router
     val pending by router.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -58,6 +59,7 @@ data class RealtimeEvent(
     /** The payload as JSON text, for screens that read more than the ids (the Spreadsheet's `sheet-cells`). */
     val raw: String? = null,
     val updatedAt: String? = null,
+    val userIds: List<String> = emptyList(),
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -84,9 +86,12 @@ object RealtimeEvents {
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
     const val FORM_OPS = "form-ops"
     const val FORM_PRESENCE = "form-presence"
+    const val ATTENDANCE_CHANGED = "attendance-changed"
+    const val XP_CHANGED = "xp-changed"
+    const val CALENDAR_CHANGED = "calendar-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, ATTENDANCE_CHANGED, XP_CHANGED, CALENDAR_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -128,6 +133,9 @@ object RealtimeEvents {
             // { projectId, formId } (the form's id rides in taskId)
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             FORM_OPS, FORM_PRESENCE -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"), raw = json)
+            ATTENDANCE_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), taskId = o.str("id"), raw = json)
+            XP_CHANGED -> RealtimeEvent(name, userIds = (o["userIds"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }, raw = json)
+            CALENDAR_CHANGED -> RealtimeEvent(name, userId = o.str("actorId"), raw = json)
             // { room: "project:<id>" | "sheet:<id>", reason }
             JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
                 projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:"), raw = json) }

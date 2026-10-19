@@ -13,6 +13,17 @@ import java.io.File
 
 /** ANDROID-REALTIME (owner, 8 Oct): Socket.IO pings, rooms, fallback pace, the creator line. */
 class RealtimeTest {
+    @Test fun qaDecisionPingsAndFormSnapshotsKeepTheirRoutingData() {
+        val xp = RealtimeEvents.parse(RealtimeEvents.XP_CHANGED, """{"userIds":["u1","u2",null,5]}""")
+        assertEquals(listOf("u1", "u2"), xp.userIds)
+        val attendance = RealtimeEvents.parse(RealtimeEvents.ATTENDANCE_CHANGED, """{"kind":"offsite","id":"r"}""")
+        assertEquals("offsite", attendance.kind); assertEquals("r", attendance.taskId)
+        val calendar = RealtimeEvents.parse(RealtimeEvents.CALENDAR_CHANGED, """{"kinds":["tasks"],"actorId":"u"}""")
+        assertEquals("u", calendar.userId)
+        val form = RealtimeEvents.parse(RealtimeEvents.FORM_OPS, """{"formId":"f","version":8,"form":{"name":"New"}}""")
+        assertEquals("f", form.taskId); assertTrue(form.raw!!.contains("version"))
+        assertTrue(RealtimeEvents.LISTENED.containsAll(listOf(RealtimeEvents.XP_CHANGED, RealtimeEvents.ATTENDANCE_CHANGED, RealtimeEvents.CALENDAR_CHANGED, RealtimeEvents.FORM_OPS, RealtimeEvents.FORM_PRESENCE)))
+    }
     @Test fun pingsReadAsTheServerSendsThem() {
         val w = RealtimeEvents.parse("workspace-changed", """{"kind":"folders","folderId":"f1","actorId":"u"}""")
         assertEquals("folders", w.kind); assertEquals("f1", w.folderId)
