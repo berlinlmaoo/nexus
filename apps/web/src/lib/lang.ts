@@ -78,6 +78,7 @@ import { ID_MEETINGS } from "@/lib/i18n/id-meetings";
 import { ID_MEETING_SPEAKERS } from "@/lib/i18n/id-meeting-speakers";
 import { ID_GIDEON_PERF } from "@/lib/i18n/id-gideon-perf";
 import { ID_PRESENCE } from "@/lib/i18n/id-presence";
+import { ID_UI_A } from "@/lib/i18n/id-ui-a";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -102,6 +103,7 @@ Object.assign(ID, ID_MEETING_SPEAKERS);
 Object.assign(ID, ID_GIDEON_PERF);
 // Presence status (19 Oct 2026).
 Object.assign(ID, ID_PRESENCE);
+Object.assign(ID, ID_UI_A);
 
 function read(): Lang {
   try {
