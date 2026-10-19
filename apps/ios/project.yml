@@ -1,6 +1,12 @@
 # XcodeGen spec — regenerate the Xcode project anytime with:  xcodegen generate
 # (run from apps/nexus-ios). The .xcodeproj is NOT committed; this file is the source of truth.
 name: NEXUS
+# ReleaseDev = Release (-O) plus the Production / Dev server switch. ⌘R on the phone uses it;
+# Archive always uses plain Release, so the App Store build never carries the switch.
+configs:
+  Debug: debug
+  Release: release
+  ReleaseDev: release
 options:
   bundleIdPrefix: id.znetworks
   deploymentTarget:
@@ -144,10 +150,12 @@ targets:
         # this ever goes to the App Store. The app still installs on iPad, in an iPhone-sized window.
         TARGETED_DEVICE_FAMILY: "1,2"
       configs:
-        # Debug only: turns on the Production / Dev server switch (Sources/Config.swift ServerEnvironment,
+        # Debug and ReleaseDev (⌘R) only: the Production / Dev server switch (Sources/Config.swift ServerEnvironment,
         # Tuning Room → Server, long press on the login title). It used to sit in `base`, so an Archive
-        # (Release) from branch dev would have shipped the switch to the App Store.
+        # (Release) from branch dev would have shipped the switch to the App Store; ⌘R uses ReleaseDev so the phone build keeps it.
         Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
+        ReleaseDev:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
 
   # Live Activities (Dynamic Island + Lock Screen). iOS only, by construction.
@@ -274,7 +282,7 @@ targets:
 
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
 # (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).
-#   • NEXUS       → Release (-O; default ⌘R — the build to actually use on the phone)
+#   • NEXUS       → ReleaseDev for ⌘R (-O + server switch), Release for Archive
 #   • NEXUS-Debug → Debug (use only when you need breakpoints / fast incremental builds)
 schemes:
   NEXUS:
@@ -282,7 +290,7 @@ schemes:
       targets:
         NEXUS: all
     run:
-      config: Release
+      config: ReleaseDev
     archive:
       config: Release
   NEXUS-Debug:
