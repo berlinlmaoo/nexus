@@ -135,6 +135,7 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
         d == null && loadError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         d == null -> EmptyState(Icons.Filled.Bolt, stringResource(R.string.au_load_failed), loadError.orEmpty(), stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { id.znetworks.nexus.feature.gideon.GideonProjectTools(projectId) }
             item {
                 Text(stringResource(R.string.au_intro), fontSize = 13.sp, color = c.mutedFg)
                 if (d.canEdit) Row {

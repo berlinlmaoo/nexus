@@ -1,0 +1,32 @@
+<resources>
+    <string name="gpt_schedules">GIDEON schedules</string>
+    <string name="gpt_autofill">AI Autofill</string>
+    <string name="gpt_digest_help">GIDEON posts a digest of completed, ongoing and overdue tasks to project status updates.</string>
+    <string name="gpt_autofill_help">Fill fields from task titles and descriptions, with the access of whoever runs it.</string>
+    <string name="gpt_disconnected">GIDEON is not connected on this server.</string>
+    <string name="gpt_digest">Weekly digest</string>
+    <string name="gpt_digest_started">GIDEON is writing the digest. It will appear in project status updates.</string>
+    <string name="gpt_delete_schedule">Delete this digest schedule?</string>
+    <string name="gpt_new_schedule">Add digest schedule</string>
+    <string name="gpt_mentions">Mention @GIDEON in task comments to ask about that task.</string>
+    <string name="gpt_fill_started">Processing %1$d tasks; %2$d remain for the next batch.</string>
+    <string name="gpt_refill_confirm">Refill all values? Existing values may be replaced.</string>
+    <string name="gpt_remove_confirm">Remove Autofill from this field? Existing values remain.</string>
+    <string name="gpt_no_fields">No Autofill fields yet. Add a Text, Number, Select, Date or URL field in project settings.</string>
+    <string name="gpt_add_field">Add Autofill: %1$s</string>
+    <string name="gpt_time">Time (HH:mm)</string>
+    <string name="gpt_timezone">Time zone</string>
+    <string name="gpt_language">Language</string>
+    <string name="gpt_instructions">Instructions (optional)</string>
+    <string name="gpt_on_create">When a task is created</string>
+    <string name="gpt_on_update">When task text changes</string>
+    <string name="gpt_mode">Mode</string>
+    <string name="gpt_summary">Summarize</string>
+    <string name="gpt_classify">Classify into an option</string>
+    <string name="gpt_extract">Extract a value</string>
+    <string name="gpt_review">Review before writing</string>
+    <string name="gpt_running">Filling fields?</string>
+    <string name="gpt_result">Filled: %1$d ? Proposed: %2$d ? Skipped: %3$d</string>
+    <string name="gpt_fill_empty">Fill empty</string>
+    <string name="gpt_refill">Refill all</string>
+</resources>

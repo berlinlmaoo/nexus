@@ -22,7 +22,7 @@ import kotlinx.serialization.json.JsonObject
 import java.net.URLEncoder
 
 class GideonInsightsApi(private val api: ApiClient) {
-    suspend fun runs(trigger: String, status: String) = api.get("/api/gideon/runs?limit=100&trigger=$trigger&status=$status", JsonObject.serializer())
+    suspend fun runs(trigger: String, status: String, projectId: String? = null) = api.get("/api/gideon/runs?limit=100&trigger=$trigger&status=$status" + (projectId?.let { "&projectId=" + URLEncoder.encode(it, "UTF-8") } ?: ""), JsonObject.serializer())
     suspend fun detail(id: String) = api.get("/api/gideon/runs/" + URLEncoder.encode(id, "UTF-8"), JsonObject.serializer())
 }
 
@@ -34,10 +34,10 @@ object InsightPrivacy {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun GideonInsightsTab() {
+internal fun GideonInsightsTab(projectId: String? = null) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
-    if (!container.viewer.isBoD) return
+    if (projectId == null && !container.viewer.isBoD) return
     val api = remember { GideonInsightsApi(container.api) }
     var trigger by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
@@ -46,9 +46,9 @@ internal fun GideonInsightsTab() {
     var loading by remember { mutableStateOf(true) }
     var retry by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(trigger, status, retry) {
+    LaunchedEffect(projectId, trigger, status, retry) {
         loading = true; data = null
-        try { data = api.runs(trigger, status); error = null }
+        try { data = api.runs(trigger, status, projectId); error = null }
         catch (e: ApiError) { error = e.describe(context.resources) }
         loading = false
     }

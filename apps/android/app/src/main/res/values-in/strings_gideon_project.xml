@@ -1,0 +1,32 @@
+<resources>
+    <string name="gpt_schedules">Jadwal GIDEON</string>
+    <string name="gpt_autofill">Isi otomatis AI</string>
+    <string name="gpt_digest_help">GIDEON menulis ringkasan task selesai, berjalan, dan terlambat di pembaruan status proyek.</string>
+    <string name="gpt_autofill_help">Isi kolom dari judul dan deskripsi task, dengan akses orang yang menjalankannya.</string>
+    <string name="gpt_disconnected">GIDEON belum terhubung di server ini.</string>
+    <string name="gpt_digest">Ringkasan mingguan</string>
+    <string name="gpt_digest_started">GIDEON sedang menulis ringkasan. Hasilnya akan muncul di pembaruan status proyek.</string>
+    <string name="gpt_delete_schedule">Hapus jadwal ringkasan ini?</string>
+    <string name="gpt_new_schedule">Tambah jadwal ringkasan</string>
+    <string name="gpt_mentions">Sebut @GIDEON di komentar task untuk bertanya tentang task tersebut.</string>
+    <string name="gpt_fill_started">Memproses %1$d task; %2$d tersisa untuk batch berikutnya.</string>
+    <string name="gpt_refill_confirm">Isi ulang semua nilai? Nilai yang ada dapat diganti.</string>
+    <string name="gpt_remove_confirm">Hapus pengisian otomatis dari kolom ini? Nilai yang ada tetap disimpan.</string>
+    <string name="gpt_no_fields">Belum ada kolom pengisian otomatis. Tambahkan kolom Teks, Angka, Pilihan, Tanggal, atau URL di pengaturan proyek.</string>
+    <string name="gpt_add_field">Tambah pengisian otomatis: %1$s</string>
+    <string name="gpt_time">Waktu (HH:mm)</string>
+    <string name="gpt_timezone">Zona waktu</string>
+    <string name="gpt_language">Bahasa</string>
+    <string name="gpt_instructions">Instruksi (opsional)</string>
+    <string name="gpt_on_create">Saat task dibuat</string>
+    <string name="gpt_on_update">Saat teks task berubah</string>
+    <string name="gpt_mode">Mode</string>
+    <string name="gpt_summary">Ringkas</string>
+    <string name="gpt_classify">Klasifikasikan ke pilihan</string>
+    <string name="gpt_extract">Ambil nilai</string>
+    <string name="gpt_review">Tinjau sebelum menulis</string>
+    <string name="gpt_running">Mengisi kolom?</string>
+    <string name="gpt_result">Terisi: %1$d ? Diusulkan: %2$d ? Dilewati: %3$d</string>
+    <string name="gpt_fill_empty">Isi yang kosong</string>
+    <string name="gpt_refill">Isi ulang semua</string>
+</resources>
