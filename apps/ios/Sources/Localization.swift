@@ -1698,7 +1698,7 @@ final class AppLanguage {
         "Penalty restored.": "Penalti dikembalikan.",
         "Couldn't change the status.": "Status gagal diubah.",
         // Control Room: Extra day off (web ExtraDayOffAdmin, 28 Sep 2026)
-        "Extra day off": "Extra day off",
+        "Extra day off": "Day off tambahan",
         "current": "sekarang",
         "previous": "lalu",
         "next": "berikutnya",
