@@ -17,7 +17,7 @@ class ChatModelsTest {
         assertEquals("ali", Mentions.query("hi @ali"))
         assertEquals("", Mentions.query("hi @"))
         assertNull(Mentions.query("mail a@b"))
-        assertNull(Mentions.query("hi @ali done"))
+        assertEquals("ali done", Mentions.query("hi @ali done"))
         assertEquals("hi @AliFawan ", Mentions.insert("hi @ali", "Ali Fawan"))
         assertEquals("ok @Budi ", Mentions.insert("ok", "Budi"))
         assertEquals(listOf("u1"), Mentions.ids("hey @Budi", mapOf("u1" to "@Budi", "u2" to "@Citra")))

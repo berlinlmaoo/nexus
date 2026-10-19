@@ -183,7 +183,14 @@ object Mentions {
         if (at < 0) return null
         if (at > 0 && !input[at - 1].isWhitespace()) return null
         val q = input.substring(at + 1)
-        return if (q.any { it.isWhitespace() }) null else q
+        return q.takeIf { '\n' !in it && '\r' !in it && '\t' !in it && it.trim().split(Regex("\\s+")).size <= 4 }
+    }
+
+    fun matches(name: String, query: String): Boolean {
+        val words = query.trim().split(Regex("\\s+"))
+        val normal = words.joinToString(" ")
+        return normal.isEmpty() || name.contains(normal, ignoreCase = true) ||
+            (words.size == 1 && name.replace(Regex("\\s+"), "").contains(normal, ignoreCase = true))
     }
 
     /** Replaces the half-typed "@ali" with the full tag (or appends it). */
@@ -195,6 +202,13 @@ object Mentions {
 
     /** The members whose tag is still in the final text. */
     fun ids(text: String, picked: Map<String, String>) = picked.filterValues { it in text }.keys.toList()
+}
+
+object ChatComposerLimit {
+    const val MAX_LENGTH = 4000
+    const val COUNTER_FROM = 3600
+    fun length(value: String) = value.codePointCount(0, value.length)
+    fun tooLong(value: String) = length(value) > MAX_LENGTH
 }
 
 /** Who may grow a room (ANDROID-GROUP-ADMINS, owner 8 Oct; iOS showsAddPeople). */

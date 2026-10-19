@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_chat_count">%1$s / 4.000 karakter</string>
+    <string name="qa_chat_too_long">Terlalu panjang: %1$s / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.</string>
+    <string name="qa_chat_denied">Kamu sudah tidak ada di chat ini</string>
     <string name="qa_form_readonly">Kamu bisa melihat form ini tapi tidak bisa mengubahnya.</string>
     <string name="qa_form_editors">Ikut mengedit: %1$s</string>
     <string name="qa_form_editing">%1$s sedang mengedit</string>

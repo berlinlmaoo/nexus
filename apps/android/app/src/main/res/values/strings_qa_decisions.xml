@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_chat_count">%1$s / 4,000 characters</string>
+    <string name="qa_chat_too_long">Too long: %1$s / 4,000 characters. Shorten it or split it into several messages.</string>
+    <string name="qa_chat_denied">You\'re no longer in this chat</string>
     <string name="qa_form_readonly">You can view this form but not change it.</string>
     <string name="qa_form_editors">Also editing: %1$s</string>
     <string name="qa_form_editing">%1$s is editing</string>
