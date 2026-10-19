@@ -315,6 +315,7 @@ class FormAutosave<D : Any>(
     private val hasId: () -> Boolean,
     private val describe: (Throwable) -> String,
     private val debounceMs: Long = 700,
+    private val serverAuthoritative: Boolean = false,
 ) {
     private val _state = MutableStateFlow<FormSaveState>(FormSaveState.Idle)
     val state = _state.asStateFlow()
@@ -337,6 +338,13 @@ class FormAutosave<D : Any>(
     }
 
     fun update(d: D) { draft = d; schedule() }
+
+    /** A live event or receipt advances the server base without losing unsaved typing. */
+    fun receive(server: D, from: D? = baseline, merge: (D, D, D) -> D) {
+        draft = if (from != null && draft != null) merge(from, draft!!, server) else server
+        baseline = server
+        if (!inflight) schedule()
+    }
 
     fun schedule() {
         val base = baseline ?: return
@@ -361,14 +369,14 @@ class FormAutosave<D : Any>(
         inflight = true
         _state.value = FormSaveState.Saving
         val failure = withContext(NonCancellable) {
-            try { send(snapshot, base, force); baseline = snapshot; null }
+            try { send(snapshot, base, force); if (!serverAuthoritative) baseline = snapshot; null }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { e }
             finally { inflight = false }
         }
         _state.value = when {
             failure != null -> FormSaveState.Failed(describe(failure))
-            draft != snapshot -> FormSaveState.Pending.also { schedule() }
+            dirty -> FormSaveState.Pending.also { schedule() }
             else -> FormSaveState.Saved
         }
         if (again) {

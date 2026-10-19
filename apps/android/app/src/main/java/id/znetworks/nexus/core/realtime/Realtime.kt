@@ -82,9 +82,11 @@ object RealtimeEvents {
     const val JOIN_DENIED = "join-denied"
     /** A form got (or lost) a response (project room, 13 Oct): `{ projectId, formId }`. */
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
+    const val FORM_OPS = "form-ops"
+    const val FORM_PRESENCE = "form-presence"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -125,6 +127,7 @@ object RealtimeEvents {
             "sheet-cells", "sheet-structure" -> RealtimeEvent(name, taskId = o.str("sheetId"), userId = o.str("actorId"), raw = json)
             // { projectId, formId } (the form's id rides in taskId)
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
+            FORM_OPS, FORM_PRESENCE -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"), raw = json)
             // { room: "project:<id>" | "sheet:<id>", reason }
             JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
                 projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:"), raw = json) }
@@ -307,6 +310,13 @@ class Realtime(
     fun sendTyping(conversationId: String, typing: Boolean): Boolean {
         val sock = socket?.takeIf { connected } ?: return false
         sock.emit(RealtimeEvents.TYPING, JSONObject().put("conversationId", conversationId).put("typing", typing))
+        return true
+    }
+
+    @Synchronized
+    fun sendFormFocus(formId: String, questionId: String?): Boolean {
+        val sock = socket?.takeIf { connected && rooms.containsKey("form:$formId") } ?: return false
+        sock.emit("form-focus", JSONObject().put("formId", formId).put("questionId", questionId ?: JSONObject.NULL))
         return true
     }
 

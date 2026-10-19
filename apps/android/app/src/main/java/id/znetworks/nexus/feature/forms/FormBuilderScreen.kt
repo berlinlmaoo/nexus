@@ -3,6 +3,7 @@ package id.znetworks.nexus.feature.forms
 import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.core.net.NexusJson
+import id.znetworks.nexus.core.realtime.RealtimeEvents
+import id.znetworks.nexus.core.realtime.RealtimeRoom
+import id.znetworks.nexus.core.realtime.LiveRefresh
 import id.znetworks.nexus.feature.projects.ProjectsApi
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.HeaderIconButton
@@ -96,7 +101,7 @@ sealed interface StudioAlert {
     data class Failed(val title: String, val message: String) : StudioAlert
 }
 
-enum class StudioTab { QUESTIONS, SETTINGS, SHARE, RESPONSES }
+enum class StudioTab { PREVIEW, QUESTIONS, SETTINGS, SHARE, RESPONSES }
 
 data class BuilderState(
     val canEdit: Boolean = false,
@@ -113,6 +118,7 @@ data class BuilderState(
     val draft: FormStudioDraft = FormStudioDraft.blank(""),
     val sections: List<Named> = emptyList(),
     val members: List<StudioMember> = emptyList(),
+    val editors: List<FormEditorPresence> = emptyList(),
     val customFields: List<id.znetworks.nexus.feature.projects.CustomFieldDef> = emptyList(),
     val busy: Boolean = false,
     val toast: String? = null,
@@ -142,11 +148,54 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
     private var toastJob: Job? = null
     private var undoJob: Job? = null
     private var baseUpdatedAt: JsonElement? = null
+    private var version = -1
+    private val owner = c.sessionStore.current?.userId
+    private val tabId = "android_" + java.util.UUID.randomUUID().toString().replace("-", "")
+    private var sending: Pair<FormStudioDraft, FormStudioDraft>? = null
+    private var focusedQuestion: String? = null
 
     val autosave = FormAutosave<FormStudioDraft>(viewModelScope, send = { snap, base, _ -> send(snap, base) },
-        hasId = { _state.value.formId != null }, describe = ::describe)
+        hasId = { _state.value.formId != null }, describe = ::describe, serverAuthoritative = true)
 
-    init { load() }
+    init {
+        load()
+        viewModelScope.launch { c.realtime.events.collect { event ->
+            if (c.sessionStore.current?.userId != owner) return@collect
+            val id = _state.value.formId ?: return@collect
+            val raw = event.raw?.let { runCatching { NexusJson.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            when {
+                event.name == RealtimeEvents.JOIN_DENIED && (raw?.get("room") as? JsonPrimitive)?.content == "form:$id" -> readOnly()
+                event.taskId != id -> Unit
+                event.name == RealtimeEvents.FORM_OPS -> (raw?.get("form") as? JsonObject)?.let {
+                    val own = (raw["originTab"] as? JsonPrimitive)?.content == tabId
+                    receive(BuilderForm(it), if (own) sending else null)
+                }
+                event.name == RealtimeEvents.FORM_PRESENCE -> {
+                    val presence = runCatching { NexusJson.decodeFromString(FormPresence.serializer(), event.raw!!) }.getOrNull() ?: return@collect
+                    _state.update { it.copy(editors = presence.members.filter { p -> p.userId != owner }) }
+                    if (presence.members.firstOrNull { it.userId == owner }?.questionId != focusedQuestion) focus(focusedQuestion)
+                }
+            }
+        } }
+    }
+
+    private fun readOnly() { autosave.stopped = true; c.realtime.leave("form:${_state.value.formId}"); _state.update { it.copy(canEdit = false, editors = emptyList(), toast = res.getString(R.string.qa_form_readonly)) } }
+    fun focus(id: String?) { focusedQuestion = id; if (_state.value.canEdit) _state.value.formId?.let { c.realtime.sendFormFocus(it, id) } }
+    suspend fun refreshLive() {
+        val id = _state.value.formId ?: return
+        if (c.sessionStore.current?.userId != owner) return
+        try { receive(api.builderForm(id)); focus(focusedQuestion) }
+        catch (e: ApiError.Http) { if (e.status == 403) readOnly() }
+        catch (_: ApiError) { }
+    }
+    private fun receive(form: BuilderForm, acknowledgement: Pair<FormStudioDraft, FormStudioDraft>? = null) {
+        if (form.version <= version || c.sessionStore.current?.userId != owner) return
+        val server = FormStudioDraft.of(form)
+        val from = acknowledgement?.let { (base, sent) -> FormCoedit.rebase(base, sent, autosave.baseline ?: base) } ?: autosave.baseline
+        autosave.receive(server, from, FormCoedit::rebase)
+        version = form.version; baseUpdatedAt = form.raw["updatedAt"]
+        _state.update { it.copy(formId = form.id, slug = form.slug, storedSchedule = form.schedule, responseCount = if (form.raw.containsKey("_count")) form.submissions else it.responseCount, draft = autosave.draft ?: server) }
+    }
 
     private fun describe(e: Throwable): String =
         (e as? ApiError)?.describe(res) ?: res.getString(R.string.fs_try_moment)
@@ -155,12 +204,12 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
         _state.update { it.copy(loading = true, error = null, conflict = false) }
         if (openedId != null) {
             try {
-                val f = api.builderForms(projectId).firstOrNull { it.id == openedId }
-                if (f == null) { _state.update { it.copy(loading = false, error = res.getString(R.string.fb_gone)) }; return@launch }
+                val f = api.builderForm(openedId)
                 val d = FormStudioDraft.of(f)
                 baseUpdatedAt = f.raw["updatedAt"]
                 _state.update { it.copy(slug = f.slug, storedSchedule = f.schedule, responseCount = f.submissions, draft = d) }
                 autosave.start(d, saved = true)
+                version = f.version
             } catch (e: ApiError) { _state.update { it.copy(loading = false, error = e.describe(res)) }; return@launch }
         } else if (autosave.baseline == null) {
             val d = FormStudioDraft.blank(res.getString(R.string.fs_what_need))
@@ -173,26 +222,41 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
                 members = d.members.mapNotNull { m -> m.uid.takeIf { it.isNotEmpty() }?.let { StudioMember(it, m.user?.name ?: "—", m.user?.avatar) } }) }
         }
         runCatching { projects.customFields(projectId) }.getOrNull()?.let { l -> _state.update { it.copy(customFields = l) } }
+        autosave.stopped = !_state.value.canEdit
         _state.update { it.copy(loading = false) }
     }
 
     /** One save: PATCH what changed, or create the form (its first save). Bookkeeping happens here, even after the screen left. */
     private suspend fun send(snap: FormStudioDraft, base: FormStudioDraft) {
+        if (!_state.value.canEdit || c.sessionStore.current?.userId != owner) return
         val id = _state.value.formId
-        val changes = FormStudioLogic.payload(snap, base, creating = id == null, untitled = res.getString(R.string.fs_untitled_form))
-        val body = JsonObject(changes + if (id != null && baseUpdatedAt != null) mapOf("baseUpdatedAt" to baseUpdatedAt!!) else emptyMap())
-        val out = try { if (id != null) api.updateForm(id, body) else api.createForm(JsonObject(body + ("projectId" to JsonPrimitive(projectId)))) }
-        catch (e: ApiError.Http) { if (e.code == "FORM_CHANGED") _state.update { it.copy(conflict = true) }; throw e }
-        if (id == null && autosave.stopped) {
+        if (id != null) {
+            val operations = FormCoedit.diff(FormCoedit.document(base), FormCoedit.document(snap))
+            if (operations.isEmpty()) { autosave.receive(base, snap, FormCoedit::rebase); return }
+            try {
+                val batches = operations.chunked(200)
+                batches.forEachIndexed { index, ops ->
+                    sending = if (index == batches.lastIndex) base to snap else null
+                    receive(api.updateOps(id, ops, version.coerceAtLeast(0), tabId), sending)
+                }
+            } catch (e: ApiError.Http) { if (e.status == 403) readOnly(); throw e }
+            finally { sending = null }
+            return
+        }
+        val changes = FormStudioLogic.payload(snap, base, creating = true, untitled = res.getString(R.string.fs_untitled_form))
+        val out = api.createForm(JsonObject(changes + ("projectId" to JsonPrimitive(projectId))))
+        if (autosave.stopped) {
             // Discarded while it was being created: don't leave it behind.
             runCatching { api.deleteForm(out.id, force = false) }
             return
         }
         _state.update { it.copy(formId = out.id, slug = out.slug, storedSchedule = out.schedule) }
         baseUpdatedAt = out.raw["updatedAt"]
+        receive(out, base to snap)
     }
 
     fun edit(f: (FormStudioDraft) -> FormStudioDraft) {
+        if (!_state.value.canEdit || c.sessionStore.current?.userId != owner) return
         _state.update { it.copy(draft = f(it.draft)) }
         autosave.update(_state.value.draft)
     }
@@ -307,10 +371,15 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
     val save by vm.autosave.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var tab by rememberSaveable { mutableStateOf(StudioTab.QUESTIONS) }
+    val visibleTab = if (!s.canEdit && tab != StudioTab.RESPONSES) StudioTab.PREVIEW else tab
     var openField by rememberSaveable { mutableStateOf<String?>(null) }
     var duplicating by remember { mutableStateOf(false) }
     var reloadLatest by remember { mutableStateOf(false) }
     LaunchedEffect(s.done) { if (s.done) onBack() }
+    RealtimeRoom(s.formId?.takeIf { s.canEdit }?.let { "form:$it" })
+    LiveRefresh(s.formId, null, null, { false }) { vm.refreshLive() }
+    LaunchedEffect(s.loading, s.canEdit) { if (!s.loading && !s.canEdit) { tab = StudioTab.PREVIEW; openField = null } }
+    LaunchedEffect(openField, s.formId, s.canEdit) { vm.focus(openField) }
     BackHandler(onBack = onBack)
     val untitled = stringResource(R.string.fs_untitled_form)
     val displayName = s.draft.name.trim().ifEmpty { untitled }
@@ -324,7 +393,7 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
                 Text(if (s.draft.branding.icon.isEmpty()) displayName else "${s.draft.branding.icon} $displayName", fontFamily = TextFont,
                     fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { heading() })
-                if (!s.loading && s.error == null) FormSaveIndicator(save, s.formId != null, vm::retry)
+                if (!s.loading && s.error == null) { if (s.canEdit) FormSaveIndicator(save, s.formId != null, vm::retry) else Text(stringResource(R.string.acc_view_only), color = c.mutedFg, fontSize = 12.sp) }
             }
             if (!s.loading && s.error == null) {
                 HeaderIconButton(Icons.Filled.Visibility, stringResource(R.string.fb_preview), { vm.openSaved(onOpenForm) })
@@ -337,10 +406,11 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
                 Text((save as FormSaveState.Failed).message, color = c.warningFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
                 if (s.conflict) TextButton(onClick = { reloadLatest = true }) { Text(stringResource(R.string.r21_load_latest)) }
             }
-            val tabs = listOf(PageTab(StudioTab.QUESTIONS, stringResource(R.string.fs_tab_questions)), PageTab(StudioTab.SETTINGS, stringResource(R.string.fs_tab_settings)),
+            if (s.editors.isNotEmpty() && s.canEdit) FormEditors(s.editors)
+            val tabs = if (!s.canEdit) listOf(PageTab(StudioTab.PREVIEW, stringResource(R.string.fb_preview)), PageTab(StudioTab.RESPONSES, stringResource(R.string.fr_title), count = s.responseCount.takeIf { it > 0 })) else listOf(PageTab(StudioTab.QUESTIONS, stringResource(R.string.fs_tab_questions)), PageTab(StudioTab.SETTINGS, stringResource(R.string.fs_tab_settings)),
                 PageTab(StudioTab.SHARE, stringResource(R.string.fs_tab_share)),
                 PageTab(StudioTab.RESPONSES, stringResource(R.string.fr_title), count = s.responseCount.takeIf { it > 0 }))
-            Box(Modifier.padding(horizontal = 16.dp)) { PageTabs(tabs, tab, { tab = it }) }
+            Box(Modifier.padding(horizontal = 16.dp)) { PageTabs(tabs, visibleTab, { tab = it }) }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -348,7 +418,8 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
                 s.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.error != null -> EmptyState(Icons.Outlined.Description, stringResource(R.string.fs_load_failed), s.error.orEmpty(),
                     stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                else -> when (tab) {
+                else -> when (visibleTab) {
+                    StudioTab.PREVIEW -> FormReadOnlyPreview(s.draft)
                     StudioTab.QUESTIONS -> QuestionsCanvas(s, vm, onOpenField = { openField = it }, onChangeAccess = { tab = StudioTab.SETTINGS })
                     StudioTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(c.muted.copy(alpha = 0.25f))) {
                         FormStudioSettingsTab(s.draft, s.projectName, s.members, s.responseCount, vm::edit)
@@ -361,7 +432,7 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
                         val id = s.formId
                         if (id == null) EmptyState(Icons.Outlined.Inbox, stringResource(R.string.fr_empty), stringResource(R.string.fs_no_responses_sub),
                             stringResource(R.string.fs_go_share), { tab = StudioTab.SHARE }, Modifier.fillMaxSize())
-                        else FormResponsesList(vm.projectId, id, onOpenTask, emptyActionLabel = stringResource(R.string.fs_go_share), onEmptyAction = { tab = StudioTab.SHARE },
+                        else FormResponsesList(vm.projectId, id, onOpenTask, emptyActionLabel = stringResource(if (s.canEdit) R.string.fs_go_share else R.string.fb_preview), onEmptyAction = { tab = if (s.canEdit) StudioTab.SHARE else StudioTab.PREVIEW },
                             emptyMessage = stringResource(R.string.fs_no_responses_sub), onCount = vm::setResponseCount)
                     }
                 }
@@ -374,12 +445,12 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenTa
         }
     }
 
-    openField?.let { id ->
+    openField?.takeIf { s.canEdit }?.let { id ->
         val i = s.draft.fields.indexOfFirst { it.id == id }
         if (i < 0) openField = null
         else FormQuestionSettings(s.draft.fields[i], i, s.draft.fields.size, s.draft.fields, s.sections, s.members.map { Named(it.id, it.name) }, s.customFields,
             onChange = vm::putField, onMove = { vm.moveQuestion(id, it) }, onDuplicate = { vm.duplicateQuestion(id) },
-            onDelete = { openField = null; vm.removeQuestion(id) }, onClose = { openField = null })
+            onDelete = { openField = null; vm.removeQuestion(id) }, onClose = { openField = null }, editors = s.editors.filter { it.questionId == id })
     }
     s.alert?.let { a -> StudioAlertDialog(a, vm) }
     if (duplicating) DuplicateDialog(s.draft.name, { vm.otherProjects() }, onDismiss = { duplicating = false }) { name, target -> duplicating = false; vm.duplicate(name, target) }
@@ -424,9 +495,14 @@ private fun QuestionsCanvas(s: BuilderState, vm: FormBuilderViewModel, onOpenFie
             Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 d.fields.forEachIndexed { i, f ->
                     androidx.compose.runtime.key(f.id) {
+                        Column {
+                        FormQuestionEditors(s.editors.filter { it.questionId == f.id })
+                        Box(Modifier.then(s.editors.firstOrNull { it.questionId == f.id }?.let { Modifier.border(1.dp, formEditorColor(it.color), RoundedCornerShape(12.dp)) } ?: Modifier)) {
                         FormQuestionCard(f, i, d.fields.filter { it.id != f.id }, s.customFields, sectionNames,
                             onOpen = { onOpenField(f.id) }, onDuplicate = { vm.duplicateQuestion(f.id) }, onDelete = { vm.removeQuestion(f.id) },
                             onOptions = { opts -> vm.putField(f.copy(options = opts)) })
+                        }
+                        }
                     }
                 }
                 if (d.fields.isEmpty()) Text(stringResource(R.string.fs_no_questions), fontSize = 15.sp, color = c.mutedFg)

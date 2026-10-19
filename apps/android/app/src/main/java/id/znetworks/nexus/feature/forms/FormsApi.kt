@@ -28,6 +28,13 @@ class FormsApi(private val context: Context, private val api: ApiClient, private
     suspend fun createForm(body: JsonObject) = BuilderForm(builderSend("POST", "/api/forms", body))
     /** Only the keys sent are written: `{ isPublic: false }` alone unpublishes. */
     suspend fun updateForm(id: String, body: JsonObject) = BuilderForm(builderSend("PATCH", "/api/forms/$id", body))
+    suspend fun builderForm(id: String) = BuilderForm(api.get("/api/forms/${URLEncoder.encode(id, "UTF-8")}?lite=1", JsonObject.serializer()))
+    suspend fun updateOps(id: String, ops: List<JsonObject>, version: Int, tab: String): BuilderForm {
+        val body = JsonObject(mapOf("ops" to JsonArray(ops), "baseVersion" to JsonPrimitive(version)))
+        val out = api.send(Request.Builder().url(api.url("/api/forms/$id")).header("X-Nexus-Tab", tab)
+            .patch(with(ApiClient) { body.toString().toJsonBody() }).build(), JsonObject.serializer())
+        return BuilderForm(out["form"] as JsonObject)
+    }
     /**
      * 409 `{ submissionCount }` when it has submissions: ask again with the count, then [force]. [expect] = the count the
      * person saw: when more came in since, the server answers 409 again instead of deleting them unseen.

@@ -60,6 +60,7 @@ fun FormQuestionSettings(
     field: BuilderField, index: Int, total: Int, allFields: List<BuilderField>,
     sections: List<Named>, members: List<Named>, customFields: List<CustomFieldDef>,
     onChange: (BuilderField) -> Unit, onMove: (Int) -> Unit, onDuplicate: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit,
+    editors: List<FormEditorPresence> = emptyList(),
 ) {
     val c = Nx.colors
     val f = field
@@ -74,6 +75,7 @@ fun FormQuestionSettings(
                 TextButton(onClick = onClose) { Text(stringResource(R.string.fb_done), fontWeight = FontWeight.SemiBold, color = c.foreground) }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
+            FormQuestionEditors(editors)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(c.muted.copy(alpha = 0.25f)).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 BasicsCard(f, index, onChange)
@@ -304,7 +306,7 @@ private fun RoutingCard(f: BuilderField, sections: List<Named>, members: List<Na
 
 /** How the question will look on the form, drawn (not interactive). */
 @Composable
-private fun QuestionPreview(f: BuilderField) {
+internal fun QuestionPreview(f: BuilderField) {
     val c = Nx.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics(mergeDescendants = true) {}) {
         if (f.type != "checkbox") Row {

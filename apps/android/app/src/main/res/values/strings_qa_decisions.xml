@@ -1,0 +1,6 @@
+<resources>
+    <string name="qa_form_readonly">You can view this form but not change it.</string>
+    <string name="qa_form_editors">Also editing: %1$s</string>
+    <string name="qa_form_editing">%1$s is editing</string>
+    <string name="qa_form_editing_more">%1$s and %2$d more are editing</string>
+</resources>

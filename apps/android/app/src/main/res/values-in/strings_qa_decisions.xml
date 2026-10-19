@@ -1,0 +1,6 @@
+<resources>
+    <string name="qa_form_readonly">Kamu bisa melihat form ini tapi tidak bisa mengubahnya.</string>
+    <string name="qa_form_editors">Ikut mengedit: %1$s</string>
+    <string name="qa_form_editing">%1$s sedang mengedit</string>
+    <string name="qa_form_editing_more">%1$s dan %2$d lainnya sedang mengedit</string>
+</resources>

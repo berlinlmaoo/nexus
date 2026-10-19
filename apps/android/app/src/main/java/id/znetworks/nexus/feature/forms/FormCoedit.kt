@@ -2,6 +2,11 @@ package id.znetworks.nexus.feature.forms
 
 import kotlinx.serialization.json.*
 
+@kotlinx.serialization.Serializable
+data class FormEditorPresence(val userId: String, val name: String = "", val avatar: String? = null, val color: String = "#8b5cf6", val questionId: String? = null)
+@kotlinx.serialization.Serializable
+data class FormPresence(val formId: String, val members: List<FormEditorPresence> = emptyList())
+
 /** Field-level operations and three-way rebase shared by HTTP receipts and live form events. */
 object FormCoedit {
     private val scalars = listOf("name", "description", "isPublic", "requireAuth", "accessSchedule")
@@ -64,7 +69,7 @@ object FormCoedit {
         scalars.forEach { key -> if (ours[key] != base[key]) { if (key in ours) out[key] = ours.getValue(key) else out.remove(key) } }
         maps.forEach { key ->
             val merged = merge(objectOf(base[key]), objectOf(ours[key]), objectOf(theirs[key]))
-            out[key] = if (merged.isEmpty()) JsonNull else merged
+            if (key in base || key in ours || key in theirs) out[key] = if (merged.isEmpty()) JsonNull else merged
         }
         val b = base.questions().associateBy { it.id() }; val o = ours.questions().associateBy { it.id() }; val t = theirs.questions().associateBy { it.id() }
         val fields = linkedMapOf<String, JsonObject>()
