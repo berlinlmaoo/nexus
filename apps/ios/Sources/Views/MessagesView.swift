@@ -1351,6 +1351,8 @@ struct ChatThreadView: View {
                 // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20), whole in the iPad's conversation pane:
                 // at 15 pt it was cut to "(@ to tag someo…" (UI tour run 16, R16-I-21).
                 TextField(T("Type a message…  (@ to tag someone)"), text: $input, axis: .vertical)
+                    .accessibilityIdentifier("chat.composer")
+                    .accessibilityLabel(T("Type a message…  (@ to tag someone)"))
                     .font(NXFont.text(14)).lineLimit(1...4)
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
