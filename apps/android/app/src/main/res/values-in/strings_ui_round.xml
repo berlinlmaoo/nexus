@@ -13,4 +13,20 @@
     <string name="ui_status_3h">3 jam</string>
     <string name="ui_status_starts">Mulai</string>
     <string name="ui_status_until">Sampai %1$s</string>
+    <string name="ui_memory_summary">Ringkasan memori</string>
+    <string name="ui_memory_summary_hint">Lihat apa yang GIDEON pelajari tentang kamu. Tambahkan di sini atau bilang di chat.</string>
+    <string name="ui_memory_nickname">Nama panggilanmu</string>
+    <string name="ui_memory_role">Peran / pekerjaanmu</string>
+    <string name="ui_memory_about">Tentang kamu</string>
+    <string name="ui_memory_about_hint">Minat, nilai dan preferensimu.</string>
+    <string name="ui_memory_optional">Opsional</string>
+    <string name="ui_memory_about_section">Tentang kamu</string>
+    <string name="ui_memory_people">Orang</string>
+    <string name="ui_memory_loading">Memuat…</string>
+    <string name="ui_memory_updated">Diperbarui %1$s</string>
+    <string name="ui_memory_just_now">baru saja</string>
+    <string name="ui_memory_add_update">Tambah atau perbarui…</string>
+    <plurals name="ui_memory_minutes_ago"><item quantity="other">%1$d menit lalu</item></plurals>
+    <plurals name="ui_memory_hours_ago"><item quantity="other">%1$d jam lalu</item></plurals>
+    <plurals name="ui_memory_days_ago"><item quantity="other">%1$d hari lalu</item></plurals>
 </resources>

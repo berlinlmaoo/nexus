@@ -13,4 +13,20 @@
     <string name="ui_status_3h">3 hours</string>
     <string name="ui_status_starts">Starts</string>
     <string name="ui_status_until">Until %1$s</string>
+    <string name="ui_memory_summary">Memory summary</string>
+    <string name="ui_memory_summary_hint">See what GIDEON has learned about you. Add things here or tell it in a chat.</string>
+    <string name="ui_memory_nickname">Your nickname</string>
+    <string name="ui_memory_role">Your role / occupation</string>
+    <string name="ui_memory_about">More about you</string>
+    <string name="ui_memory_about_hint">Your interests, values and preferences.</string>
+    <string name="ui_memory_optional">Optional</string>
+    <string name="ui_memory_about_section">About you</string>
+    <string name="ui_memory_people">People</string>
+    <string name="ui_memory_loading">Loading…</string>
+    <string name="ui_memory_updated">Updated %1$s</string>
+    <string name="ui_memory_just_now">just now</string>
+    <string name="ui_memory_add_update">Add or update…</string>
+    <plurals name="ui_memory_minutes_ago"><item quantity="one">%1$d minute ago</item><item quantity="other">%1$d minutes ago</item></plurals>
+    <plurals name="ui_memory_hours_ago"><item quantity="one">%1$d hour ago</item><item quantity="other">%1$d hours ago</item></plurals>
+    <plurals name="ui_memory_days_ago"><item quantity="one">%1$d day ago</item><item quantity="other">%1$d days ago</item></plurals>
 </resources>
