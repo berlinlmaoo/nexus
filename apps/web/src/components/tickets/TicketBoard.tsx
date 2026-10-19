@@ -133,7 +133,7 @@ export function TicketBoard({
         onPointerCancel={endPan}
         className="snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain px-4 pb-3 outline-none [scrollbar-width:thin] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 md:cursor-grab md:snap-none md:px-8"
       >
-        <div className="flex w-max gap-3 md:h-[max(26rem,calc(100dvh-15rem))]">
+        <div className="flex w-max gap-3 md:h-[max(26rem,calc(100dvh-15rem))] md:min-w-full">
           {TICKET_COLUMNS.map((col) => {
             const list = byCol.get(col.key) ?? [];
             const system = col.key === "AWAITING_DECISION";
@@ -142,11 +142,13 @@ export function TicketBoard({
                 key={col.key}
                 data-ticket-column={col.key}
                 aria-label={t("{status}, {n} tickets", { status: t(col.label), n: list.length })}
-                onDragOver={canEdit ? (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = system ? "none" : "move"; setOver(col.key); } } : undefined}
+                // Awaiting decision accepts the drop on purpose and refuses it in `drop` with a toast: a dropEffect of
+                // "none" there made the browser skip the drop, so nothing said why the card went back (QA 19 Oct 2026).
+                onDragOver={canEdit ? (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(col.key); } } : undefined}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null); }}
                 onDrop={canEdit ? drop(col.key) : undefined}
                 style={{ backgroundColor: col.lane, ...(over === col.key ? { boxShadow: `inset 0 0 0 1.5px ${system ? "var(--border)" : col.dot}` } : {}) }}
-                className="flex w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 snap-start flex-col rounded-lg transition-shadow md:h-full md:w-[17.5rem] md:max-w-none"
+                className="flex w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 snap-start flex-col rounded-lg transition-shadow md:h-full md:w-0 md:min-w-[15rem] md:max-w-none md:flex-1"
               >
                 <header className="flex items-center gap-2 px-3 pb-1.5 pt-2.5" style={{ color: col.text }}>
                   <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: col.dot }} />

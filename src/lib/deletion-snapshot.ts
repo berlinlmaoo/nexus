@@ -167,9 +167,13 @@ export async function softDeleteKeepingSnapshot(
     const db = dbOf(tx)
     const schema = await schemaOf(db)
     const pk = schema.pk.get(table)?.[0] ?? "id"
-    const read = async () => {
+    // The first read locks the rows (FOR UPDATE): two revokes of the same row at once (double tap, two
+    // BoD) used to both read the row as "not revoked yet" and then, after the other one committed, see it
+    // revoked — a phantom change with its own copy (QA final 19 Oct C-15: 5 parallel revokes = 3 copies).
+    // Locked, the second one reads the committed state and finds nothing to change.
+    const read = async (lock = false) => {
       const rows = await db.query<{ r: Record<string, unknown> | string }>(
-        `select to_jsonb(t) as r from "${table}" t where t."${pk}"::text = any($1::text[])`,
+        `select to_jsonb(t) as r from "${table}" t where t."${pk}"::text = any($1::text[])${lock ? " for update of t" : ""}`,
         [ids],
       )
       const out = new Map<string, Record<string, unknown>>()
@@ -179,7 +183,7 @@ export async function softDeleteKeepingSnapshot(
       }
       return out
     }
-    const before = await read()
+    const before = await read(true)
     await input.apply(tx)
     const after = await read()
     const rows: SoftRow[] = []
@@ -303,6 +307,12 @@ export async function restorableSoftDelete(
     metadata: input.metadata,
   })
   const { changed } = await softDeleteKeepingSnapshot({ ...input, deletedById: input.userId, auditLogId })
+  // Nothing changed (already revoked/trashed, or a parallel request got there first): the audit row
+  // would only show an action that never happened, with a Restore that has nothing to put back.
+  if (!changed) {
+    if (auditLogId) await prisma.auditLog.deleteMany({ where: { id: auditLogId } }).catch(() => {})
+    return { auditLogId: null, changed }
+  }
   return { auditLogId, changed }
 }
 

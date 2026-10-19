@@ -6,6 +6,7 @@ import { docWriteRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
+import { nextDocPosition } from "@/lib/doc-position"
 
 export async function POST(
   req: NextRequest,
@@ -28,6 +29,8 @@ export async function POST(
 
     const duplicate = await prisma.doc.create({
       data: {
+        // The copy goes to the bottom of its siblings (A-26).
+        position: await nextDocPosition(original.projectId, original.parentId),
         title: `${original.title} (copy)`,
         content: original.content ?? undefined,
         projectId: original.projectId,

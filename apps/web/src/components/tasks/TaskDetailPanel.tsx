@@ -1659,12 +1659,15 @@ function CommentItem({ comment, currentUserId, me, members, canReply, onReact, o
       <CommentLine comment={comment} isMine={mine(comment)} size={24} onEdit={(content) => onEdit(comment.id, content)} onDelete={() => onDelete(comment.id)}
         actions={canReply ? <button type="button" onClick={() => setReplying(true)} aria-label={tr("Reply")} title={tr("Reply")} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"><Reply className="h-3.5 w-3.5" /></button> : null} />
       <div className="ml-[34px] mt-1.5 flex flex-wrap items-center gap-1.5">
-        {grouped.map(([emoji, info]) => (
+        {/* Can view is read-only (A-4): viewers see reactions but cannot add one; they may still take back their own. */}
+        {grouped.map(([emoji, info]) => (canReply || info.mine ? (
           <button key={emoji} onClick={() => onReact(comment.id, emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
             {emoji} {info.count}
           </button>
-        ))}
-        <div className="relative">
+        ) : (
+          <span key={emoji} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs">{emoji} {info.count}</span>
+        )))}
+        {canReply && <div className="relative">
           <button onClick={() => setShowEmoji((v) => !v)} aria-label={tr("Add reaction")} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-[opacity,background-color] hover:bg-accent focus-visible:opacity-100 pointer-coarse:opacity-100", grouped.length === 0 && !showEmoji && "opacity-0 group-hover/comment:opacity-100")}><Plus className="h-3 w-3" /></button>
           {showEmoji && (
             <div className="absolute z-20 mt-1 flex gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-pop">
@@ -1673,7 +1676,7 @@ function CommentItem({ comment, currentUserId, me, members, canReply, onReact, o
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
       {((comment.replies?.length ?? 0) > 0 || replying) && (
         <div className="ml-[34px] mt-2 space-y-2 border-l-2 border-border pl-3">

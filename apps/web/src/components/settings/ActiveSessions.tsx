@@ -5,6 +5,10 @@ import { formatCount } from "@/lib/number-format";
 import { nexusApi, type NexusSession } from "@/lib/nexus-api";
 import { describeDevice, type DeviceLabel } from "@/lib/device-label";
 import { useLang } from "@/lib/lang";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type T = ReturnType<typeof useLang>["t"];
 
@@ -148,6 +152,8 @@ export function ActiveSessions() {
     onSuccess: (_r, ids) => { const gone = new Set(ids); drop((s) => gone.has(s.id)); qc.invalidateQueries({ queryKey: key }); },
   });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Every sign-out asks in the app's own centre dialog, not the browser's confirm (QA final 19 Oct 2026, C-D3).
+  const [ask, setAsk] = useState<{ title: string; body: string; action: string; run: () => void } | null>(null);
   const rows = sessions.data?.sessions ?? [];
   const others = rows.filter((s) => !s.current).length;
   const groups = useMemo(() => groupSessions(rows, t), [rows, t]);
@@ -180,7 +186,7 @@ export function ActiveSessions() {
         {!s.current && (
           <button
             disabled={pending}
-            onClick={() => { if (confirm(t("Sign out “{name}”? That device will need to sign in again.", { name }))) revoke.mutate(s.id); }}
+            onClick={() => setAsk({ title: t("Sign out this device?"), body: t("Sign out “{name}”? That device will need to sign in again.", { name }), action: t("Sign out"), run: () => revoke.mutate(s.id) })}
             className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50"
           >
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Sign out")}
@@ -200,7 +206,7 @@ export function ActiveSessions() {
         {others > 0 && (
           <button
             disabled={revokeOthers.isPending}
-            onClick={() => { if (confirm(t("Sign out of every other device? They will need to sign in again. This device stays signed in."))) revokeOthers.mutate(); }}
+            onClick={() => setAsk({ title: t("Sign out other sessions?"), body: t("Sign out of every other device? They will need to sign in again. This device stays signed in."), action: t("Sign out other sessions"), run: () => revokeOthers.mutate() })}
             className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50"
           >
             {revokeOthers.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />} {t("Sign out other sessions")}
@@ -246,7 +252,7 @@ export function ActiveSessions() {
                   </div>
                   <button
                     disabled={pending}
-                    onClick={() => { if (confirm(t("Sign out all {n} sessions of “{name}”? Those devices will need to sign in again.", { n: formatCount(g.sessions.length), name: g.name }))) revokeMany.mutate(ids); }}
+                    onClick={() => setAsk({ title: t("Sign out all sessions?"), body: t("Sign out all {n} sessions of “{name}”? Those devices will need to sign in again.", { n: formatCount(g.sessions.length), name: g.name }), action: t("Sign out all"), run: () => revokeMany.mutate(ids) })}
                     className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50"
                   >
                     {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Sign out all")}
@@ -263,6 +269,18 @@ export function ActiveSessions() {
         </ul>
       )}
       {(revoke.isError || revokeOthers.isError || revokeMany.isError) && <p className="text-xs font-semibold text-destructive">{t("Couldn't sign that out. Try again.")}</p>}
+      <AlertDialog open={ask !== null} onOpenChange={(o) => { if (!o) setAsk(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{ask?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{ask?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { ask?.run(); setAsk(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{ask?.action}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

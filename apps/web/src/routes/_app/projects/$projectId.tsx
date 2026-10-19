@@ -2730,7 +2730,10 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                                 // Above today's line, which used to run through "4 May" (UI tour run 15, R15-WM-4).
                                 className="absolute top-1/2 z-[6] inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground ring-2 ring-card transition-colors hover:bg-accent hover:text-foreground"
                                 style={before ? { left: port.left + 6 } : { left: port.left + port.width - 6, transform: "translate(-100%, -50%)" }}>
-                                {before && <ChevronLeft className="h-3 w-3" aria-hidden />}{when}{!before && <ChevronRight className="h-3 w-3" aria-hidden />}
+                                {before && <ChevronLeft className="h-3 w-3" aria-hidden />}
+                                {/* No Name column on a phone: the chip names its task, or the row says nothing (U-9 fix). */}
+                                {noNames && <span className={cn("max-w-[52vw] truncate text-[11px] font-medium text-foreground", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>}
+                                {noNames ? <span className="shrink-0">· {when}</span> : when}{!before && <ChevronRight className="h-3 w-3" aria-hidden />}
                               </button>
                             );
                           })()}

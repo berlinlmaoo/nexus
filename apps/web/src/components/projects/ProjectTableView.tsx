@@ -350,7 +350,7 @@ function NameCell({ task, handle, onRename, onOpen, className }: { task: NexusTa
   const xp = questXp(task);
   const filteredOut = useFilteredOut(task.id);
   return (
-    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1", handle && "gap-1 pl-0.5", className)}>
+    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1 max-md:px-1", handle && "gap-1 pl-0.5", className)}>
       {handle}
       {editing ? (
         <input
@@ -371,7 +371,7 @@ function NameCell({ task, handle, onRename, onOpen, className }: { task: NexusTa
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>

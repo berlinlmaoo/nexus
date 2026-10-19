@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { nextDocPosition } from "@/lib/doc-position"
 import { sectionForStatus } from '@/lib/status-sections'
 import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { isCheckInAway, placeLabel } from '@/lib/attendance-place'
@@ -39,7 +40,7 @@ import { legalActor } from '@/lib/legal/access'
 import { ORG_WORKSPACE_ID } from '@/lib/org'
 import { listDocuments } from '@/lib/legal/archive'
 import {
-  cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
+  cardFromResult, needsApproval, parseApprovalMode, proposalLang, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, WRITE_ACTIONS, type GideonDiffRow } from '@/lib/gideon-runs'
 import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
@@ -471,6 +472,8 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
       authorId: await getGideonUserId(),
       ownerId: actor.id,
       parentId: typeof input.parentId === 'string' && input.parentId ? input.parentId : null,
+      // New pages go to the bottom of their siblings (A-26).
+      position: await nextDocPosition(projectId, typeof input.parentId === 'string' && input.parentId ? input.parentId : null),
     },
     select: { id: true, title: true, createdAt: true },
   })
@@ -1554,7 +1557,7 @@ export async function POST(req: Request) {
     const merged = action === 'update_task' ? await mergeIntoCreateProposal(auth.actor, run.id, input) : null
     if (merged) {
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
-      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(merged.proposal) })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(merged.proposal, await proposalLang(auth.actor.id, req.headers)) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
       return ok({
         proposed: true,
@@ -1572,7 +1575,7 @@ export async function POST(req: Request) {
       const picker = action === 'create_task' && (proposal.input as { pickProject?: unknown } | null)?.pickProject === true
       const pre = picker ? ((proposal.input as { taskTarget?: { preselectedProjectName?: string | null } }).taskTarget?.preselectedProjectName ?? null) : null
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
-      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal, await proposalLang(auth.actor.id, req.headers)) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
       return ok({
         proposed: true,

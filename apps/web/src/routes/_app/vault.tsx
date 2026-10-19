@@ -768,7 +768,8 @@ function VaultPage() {
         >
           <Icon className={cn("h-5 w-5 shrink-0", isFolder ? "text-primary" : "text-muted-foreground", !selecting && !trash && "pointer-fine:group-hover:opacity-0")} />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium">{item.name}</span>
+            {/* Two lines before the cut, full name on hover (B-D2, 19 Oct 2026: "Ringkasan Rapat…" at 1440). */}
+            <span className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]" title={item.name}>{item.name}</span>
             <span className="block truncate text-xs text-muted-foreground">
               {isFolder ? tn(item.childCount, "{n} item", "{n} items") : humanSize(item.size)}
               {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
@@ -828,7 +829,7 @@ function VaultPage() {
       </div>
       <div className="flex items-center gap-1 pl-2.5 pr-1 py-1.5">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium" title={item.name}>{item.name}</p>
+          <p className="line-clamp-2 text-xs font-medium [overflow-wrap:anywhere]" title={item.name}>{item.name}</p>
           <p className="truncate text-[11px] text-muted-foreground">
             {humanSize(item.size)}
             {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
@@ -1176,7 +1177,7 @@ function VaultPage() {
               </div>
               <p className="text-sm">
                 {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
-                <span className="text-muted-foreground"> · {quotaPct}%</span>
+                <span className="text-muted-foreground"> · {quotaPct === 0 && data.quota.usedBytes > 0 ? "<1" : quotaPct}%</span>
               </p>
             </div>
           )}
@@ -1384,8 +1385,9 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
   const pdfUrl = item ? (isPdf(item) ? item.url : item.previewUrl && office.isSuccess ? item.previewUrl : null) : null;
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent lang={lang} className="max-w-3xl">
-        <DialogHeader><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
+      {/* One shrinkable column: a long file name (truncate = nowrap) used to widen the grid past a phone's screen. */}
+      <DialogContent lang={lang} className="max-w-3xl grid-cols-[minmax(0,1fr)]">
+        <DialogHeader className="min-w-0"><DialogTitle className="truncate pr-8">{item?.name}</DialogTitle></DialogHeader>
         {item && (
           <div className="max-h-[65vh] overflow-auto rounded-lg bg-muted/40">
             {mime.startsWith("image/") ? (

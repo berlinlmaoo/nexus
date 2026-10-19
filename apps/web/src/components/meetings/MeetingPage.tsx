@@ -15,8 +15,9 @@ import { DateField } from "@/components/DateField";
 import { Avatar } from "@/components/Avatar";
 import { PeoplePicker } from "@/components/tasks/TaskComposer";
 import { LoadError } from "@/components/LoadError";
+import { EmptyAction } from "@/components/EmptyState";
 import { GideonMark } from "@/components/gideon/GideonMark";
-import { nexusApi } from "@/lib/nexus-api";
+import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
@@ -192,7 +193,22 @@ export function MeetingPage({ id }: { id: string }) {
   };
 
   if (q.isLoading) return <div className="mx-auto w-full max-w-[860px] space-y-3 px-4 py-10 md:px-8" aria-busy>{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>;
-  if (q.isError || !m || !draft) return <div className="mx-auto w-full max-w-[860px] px-4 py-10 md:px-8"><LoadError error={q.error} onRetry={() => void q.refetch()} /></div>;
+  if (q.isError || !m || !draft) {
+    // A deleted meeting (or one the person can no longer see: the server answers 404 for both) is not a server
+    // error: say so, without Try again (QA final 19 Oct 2026, D-12 — a "notes ready" notification outlives it).
+    const err = q.error instanceof MeetingApiError ? new ApiError(q.error.status, q.error.message, q.error.body) : q.error;
+    return (
+      <div className="mx-auto w-full max-w-[860px] px-4 py-10 md:px-8">
+        <LoadError
+          error={err}
+          onRetry={() => void q.refetch()}
+          notFoundTitle={t("This meeting note was deleted")}
+          notFoundMessage={t("It was deleted, or you no longer have access to it.")}
+          action={err instanceof ApiError && err.status === 404 ? <EmptyAction to="/meetings" secondary>{t("All meeting notes")}</EmptyAction> : undefined}
+        />
+      </div>
+    );
+  }
 
   const included = draft.proposals.filter((p) => p.include);
   const members = m.members ?? [];
@@ -211,6 +227,11 @@ export function MeetingPage({ id }: { id: string }) {
         const fresh = (e.body?.meeting ?? null) as MeetingFull | null;
         if (fresh) { qc.setQueryData(meetingKey(m.id), fresh); version.current = fresh.version; }
         toast.warning(t("Someone else changed this meeting. It has been reloaded."));
+      } else if (e instanceof MeetingApiError && e.code === "ALREADY_APPLIED") {
+        // Saved to the project meanwhile (another tab or person): the names are locked now (D-Q4).
+        const fresh = (e.body?.meeting ?? null) as MeetingFull | null;
+        if (fresh) { qc.setQueryData(meetingKey(m.id), fresh); version.current = fresh.version; }
+        toast.warning(t("These minutes were already saved, so the speaker names can't change anymore."));
       } else toast.error(e instanceof Error ? e.message : t("Couldn't save."));
     }
   };
@@ -379,7 +400,7 @@ export function MeetingPage({ id }: { id: string }) {
           </>
         )}
 
-        {voices.length > 0 && <Speakers voices={voices} map={speakerMap} segments={m.transcript} members={members} readOnly={!canNameSpeakers} onChange={(v) => void saveSpeakers(v)} onSeek={m.audio.available ? seek : undefined} />}
+        {voices.length > 0 && <Speakers voices={voices} map={speakerMap} segments={m.transcript} members={members} readOnly={!canNameSpeakers} locked={m.status === "APPLIED" || m.status === "APPLYING"} onChange={(v) => void saveSpeakers(v)} onSeek={m.audio.available ? seek : undefined} />}
         {m.transcript.length > 0 && <Transcript segments={m.transcript} speakers={speakerMap} onSeek={m.audio.available ? seek : undefined} />}
       </div>
 
@@ -605,9 +626,9 @@ function useVoiceLabel() {
  * field to correct it. A name typed by hand wins over the introductions (also after a retry); clearing it goes
  * back to "Speaker N".
  */
-function Speakers({ voices, map, segments, members, readOnly, onChange, onSeek }: {
+function Speakers({ voices, map, segments, members, readOnly, locked, onChange, onSeek }: {
   voices: string[]; map: SpeakerMap; segments: MeetingFull["transcript"]; members: Array<{ id: string; name: string | null }>;
-  readOnly?: boolean; onChange: (next: SpeakerMap) => void; onSeek?: (sec: number) => void;
+  readOnly?: boolean; locked?: boolean; onChange: (next: SpeakerMap) => void; onSeek?: (sec: number) => void;
 }) {
   const { t } = useLang();
   const voiceLabel = useVoiceLabel();
@@ -639,6 +660,7 @@ function Speakers({ voices, map, segments, members, readOnly, onChange, onSeek }
     <section className="mb-8">
       <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Users className="h-5 w-5 text-muted-foreground" />{t("Speakers")}<span className="text-sm font-normal text-muted-foreground">{voices.length === 1 ? t("1 voice") : t("{n} voices", { n: voices.length })}</span></h2>
       <p className="mt-1 text-xs text-muted-foreground">{t("GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.")}</p>
+      {locked && <p className="mt-1 text-xs font-medium text-muted-foreground">{t("Locked: these minutes were saved to the project, so the names stay as they are.")}</p>}
       <datalist id={listId}>{members.filter((p) => p.name).map((p) => <option key={p.id} value={p.name as string} />)}</datalist>
       <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
         {voices.map((label) => {

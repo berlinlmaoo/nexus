@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
-import { getUserWorkspaceIds } from "@/lib/workspace-scope"
+import { roomWorkspaceIds } from "@/lib/room-booking"
 
 // Every project's tasks: BoD / One Above All only; Managers see their own projects (owner 13 Oct 2026).
 const ADMIN_ROLES: readonly string[] = ["BOD", "ONE_ABOVE_ALL"]
@@ -84,11 +84,11 @@ export async function GET(request: NextRequest) {
       projectIcon: t.taskList.project.icon,
     }))
 
-    // Room bookings for the picked rooms. Scope = the viewer's own workspaces (same rule as
-    // /api/room-bookings): a booking is workspace-wide info, not project-scoped, so there's no
+    // Room bookings for the picked rooms. Scope = the company workspace, for its members only (same rule
+    // as /api/room-bookings, B-6): a booking is company-wide info, not project-scoped, so there's no
     // per-project membership to intersect here. Cancelled bookings never reach the calendar.
     const bookings = rooms.length === 0 ? [] : await (async () => {
-      const workspaceIds = await getUserWorkspaceIds(userId)
+      const workspaceIds = await roomWorkspaceIds(userId)
       if (workspaceIds.length === 0) return []
       const rows = await prisma.roomBooking.findMany({
         where: {

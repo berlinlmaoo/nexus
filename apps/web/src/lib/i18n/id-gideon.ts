@@ -57,6 +57,7 @@ export const ID_GIDEON: Record<string, string> = {
   "1 change is waiting for your approval": "1 perubahan menunggu persetujuanmu",
   "{n} changes are waiting for your approval": "{n} perubahan menunggu persetujuanmu",
   "Waiting for your approval": "Menunggu persetujuanmu",
+  "No changes: everything is already like this": "Tidak ada perubahan: semuanya sudah seperti ini",
   "Create a task": "Buat task",
   "Change a task": "Ubah task",
   "Post a comment": "Kirim komentar",

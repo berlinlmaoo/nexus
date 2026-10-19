@@ -147,7 +147,7 @@ export function AppSidebar() {
       <SidebarContent ref={navRef} className={cn("[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
         {/* Collapsed to icons, the rail spreads its icons evenly over the full height (owner, 18 Oct 2026): each group
             grows by its number of items, and the items share the group's height. */}
-        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")); return (
+        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")); return (
           <SidebarGroup key={g.label} style={{ ["--n" as string]: items.length } as import("react").CSSProperties} className="group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:[flex:var(--n)_1_0px]">
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
             <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-1">

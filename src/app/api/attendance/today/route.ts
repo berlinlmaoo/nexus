@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { attendancePeriodKey, attendancePeriodRange, endOfAttendanceMonth, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, getMemberNoGeofence, resolveEffectiveAttendanceShift, serializeAttendanceRequest, startOfAttendanceMonth, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
-import { effectiveDayOffQuota } from "@/lib/day-off-usage"
+import { dayOffBalances, dayOffUsageKey, effectiveDayOffQuota } from "@/lib/day-off-usage"
 
 export async function GET() {
   try {
@@ -135,6 +135,12 @@ export async function GET() {
     })
     // This period's allowance: the member's quota + any extra day off granted for this period.
     const dayOffAllowance = await effectiveDayOffQuota(context.workspace.id, session.user.id, dayOffPeriodKey)
+    // The NEXT period's balance too (QA final 19 Oct 2026, C-D4): a day off filed for the 28th or later
+    // counts against that period, so the form shows that period's numbers instead of "0 left" from this one.
+    const [npY, npM] = dayOffPeriodKey.split("-").map(Number)
+    const nextPeriodKey = npM === 12 ? `${npY + 1}-01` : `${npY}-${String(npM + 1).padStart(2, "0")}`
+    const nextBalance = (await dayOffBalances(context.workspace.id, [{ userId: session.user.id, periodKey: nextPeriodKey }]))
+      .get(dayOffUsageKey(session.user.id, nextPeriodKey))
 
     // Tanggal merah (RED_DATE): this user's usage + the month's BoD-set quota (same for all staff).
     const currentMonthKey = formatAttendanceDateKey().slice(0, 7)
@@ -224,6 +230,14 @@ export async function GET() {
         base: dayOffAllowance.base,
         bonus: dayOffAllowance.bonus,
         grants: dayOffAllowance.grants.map((g) => ({ days: g.days, reason: g.reason })),
+      },
+      // Additive (19 Oct 2026, C-D4): the following period (28th → 27th) — quota, days used (capped like
+      // dayOffUsedThisMonth) and days left. A form picking a date in that period shows these numbers.
+      dayOffNextPeriod: {
+        period: nextPeriodKey,
+        quota: nextBalance?.quota ?? dayOffAllowance.base,
+        used: nextBalance?.used ?? 0,
+        remaining: nextBalance?.remaining ?? dayOffAllowance.base,
       },
       // Fixed weekly rest days (ISO 1=Mon..7=Sun) and whether today is one — so a client can say so
       // instead of showing a check-in button the person does not need.

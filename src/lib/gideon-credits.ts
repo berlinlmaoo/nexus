@@ -424,6 +424,13 @@ export type TierDecision = { tier: string; fallback: boolean; blocked: boolean; 
 /**
  * With `gideonCreditsEnforced` off (phase 1) this is always the requested tier. On: the free tier is
  * always allowed; a person with no credits left gets terra (at most fallbackPerDay a day), then a refusal.
+ *
+ * Soft, not strict (owner decision 19 Oct 2026, QA final E-3): the check reads the balance when a question
+ * starts and the usage row is written when it ends, so N questions sent at the same moment by someone at 29
+ * Aphrodite answers (or at their last credit) all pass and the cap is overshot by at most N-1. Accepted: an
+ * Aphrodite answer costs 1 credit. Nothing is counted twice: recordGideonUsage serialises a person's rows
+ * (advisory lock) and is idempotent per runId. A strict cap (reserve a slot here, release it on failure)
+ * is only needed if phase 2 is really switched on — revisit this before turning the flag on.
  */
 export async function decideTier(userId: string, requested: string): Promise<TierDecision> {
   if (FREE_TIERS.has(requested)) return { tier: requested, fallback: false, blocked: false, summary: null }

@@ -27,7 +27,7 @@ import {
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
   isAcceptedGideonFile,
   type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonContextRef, type GideonFile, type GideonMessage,
-  type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
+  proposalSummary, type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
 } from "@/lib/gideon";
 import {
   deleteGideonChat, getGideonPrefs, listGideonChats, markdownToDoc, renameGideonChat, saveGideonAnswerAsDoc, saveGideonPrefs, setCachedGideonPrefs,
@@ -102,6 +102,15 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return extraStepLabel(s.tool, a, t) ?? (s.label || s.tool);
   }
+}
+
+/** A tool's name in words ("search_workspace" → "Searching your workspace"), for lists of tools used — Control Room
+ *  › GIDEON › Insights (QA final 19 Oct 2026, C-D6). An unknown tool reads as its words, never as snake_case. */
+export function toolLabel(tool: string, t: LangApi["t"]): string {
+  const label = stepText({ id: "", tool, arg: null, label: "", status: "done" }, t);
+  if (label && label !== tool) return label;
+  const words = tool.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : tool;
 }
 
 const STATUS_WORD: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
@@ -532,9 +541,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     el.style.height = `${el.scrollHeight}px`;
   }, [input, view]);
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
-  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going.
+  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going,
+  // and in a new chat too when there are more than 2 (QA final 19 Oct 2026, E-D1: 13 open cards pushed the box
+  // ~2,400 px down). The header still says how many and opens them.
   const [waitingOpen, setWaitingOpen] = useState<boolean | null>(null);
-  const waitingShown = waitingOpen ?? turns.length === 0;
+  const waitingShown = waitingOpen ?? (turns.length === 0 && openWaiting.length <= 2);
 
   // "@" in the composer: the word after it is a search for a page to attach.
   const onInputChange = (value: string, caret: number) => {
@@ -683,6 +694,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   // The full page with nothing asked yet is Notion AI's home: the greeting, the box under it in the middle
   // of the page, the starters under the box. Once a question is sent the box moves to the bottom.
   const centeredHome = isPage && isEmpty;
+  // Menus under the box only where the home block is centred (sm+); on a phone the box sits at the bottom (U-13).
+  const menusBelow = centeredHome && typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 640px)").matches;
   // Sending from the centred box moves it to the bottom; keep the cursor in it (keyboard devices only).
   useEffect(() => {
     if (!isPage || centeredHome || window.matchMedia?.("(pointer: coarse)").matches) return;
@@ -692,7 +705,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const waitingSection = openWaiting.length > 0 && (
     <section className="space-y-2 rounded-xl border border-border bg-muted/30 p-2.5">
-      <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
+      <button type="button" onClick={() => setWaitingOpen(!waitingShown)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
         <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
         {waitingShown ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
@@ -703,7 +716,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {prefs?.reviewNotice && <ReviewNotice />}
-        {mention && <MentionPicker query={mention.query} below={centeredHome} onPick={addRef} onClose={() => setMention(null)} />}
+        {mention && <MentionPicker query={mention.query} below={menusBelow} onPick={addRef} onClose={() => setMention(null)} />}
         {/* GIDEON credits sit above the composer (owner, 18 Oct 2026); the pool on hover / tap. */}
         <div className="flex min-h-6 items-center px-1 pb-1"><GideonCreditMeter /></div>
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--ring)_14%,transparent)]">
@@ -775,7 +788,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuTrigger>
               {/* One line per action with a quiet hint under it; opens below the composer on the centred home so it
                   never covers the greeting (owner, 18 Oct 2026: "berantakan"). */}
-              <DropdownMenuContent align="start" side={centeredHome ? "bottom" : "top"} sideOffset={6} className="w-80 p-1">
+              <DropdownMenuContent align="start" side={menusBelow ? "bottom" : "top"} sideOffset={6} className="w-80 p-1">
                 {([
                   { icon: ImagePlus, label: t("Upload a photo"), hint: t("Screenshots and pictures"), run: () => imageInput.current?.click() },
                   { icon: Paperclip, label: t("Upload a file"), hint: t("PDF, Word, Excel or text"), run: () => fileInput.current?.click() },
@@ -793,11 +806,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuContent>
             </DropdownMenu>
             <button type="button" onClick={startMention} title={t("Add a page, task or project")} aria-label={t("Add a page, task or project")} className={iconBtn}><AtSign className="h-4 w-4" /></button>
-            {/* Notion AI's approval mode: an icon in the narrow panel, the mode's name on the full page. */}
+            {/* Notion AI's approval mode: an icon in the narrow panel and on phones (< 400 px, E-9: "Tinjau sebelum
+                menulis" was cut off), the mode's name on the full page. The name stays in the menu and the label. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label={`${t("Choose approval mode")}: ${t(modeDef.name)}`} title={`${t(modeDef.name)}. ${t(modeDef.blurb)}`} className={cn("inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === "dont_ask" && "text-amber-700 dark:text-amber-400")}>
-                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
+                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate max-[399px]:sr-only", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-72">
@@ -858,22 +872,24 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       onNew={() => { newChat(); if (isPage) router.history.replace("/gideon"); }}
     />
   ) : centeredHome ? (
-    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-6">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 py-8">
+    // U-13 (owner, 19 Oct 2026): heading, the privacy line and the suggestions first; the composer with its credits
+    // and "can make mistakes" lines last, together. On a phone the block sits at the bottom, by the thumb.
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-3 sm:pb-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 py-6 sm:justify-center sm:gap-6 sm:py-8">
         {waitingSection}
         <div className="flex flex-col items-center text-center">
           <span className="mb-4 grid h-16 w-16 place-items-center rounded-full border border-border bg-background shadow-sm"><GideonMark className="h-8 w-8 text-foreground" /></span>
           <h1 className="text-balance font-display text-2xl font-bold tracking-tight sm:text-[2rem] sm:leading-tight">{greeting}</h1>
+          <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
         </div>
-        {composerBox}
-        <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
+        <div role="menu" aria-label={t("Suggestions")} className="flex flex-wrap justify-center gap-x-1 gap-y-1">
           {suggestions.map((s) => (
-            <button key={s.text} type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button key={s.text} role="menuitem" type="button" onClick={() => void send(s.text)} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-soft transition-colors hover:border-ring/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <s.icon className="h-4 w-4 shrink-0" /><span className="min-w-0 text-left">{s.text}</span>
             </button>
           ))}
         </div>
-        <p className="mx-auto max-w-md text-center text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
+        {composerBox}
       </div>
     </div>
   ) : (
@@ -1568,7 +1584,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
 }
 
 function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const decide = async (d: "apply" | "discard") => {
@@ -1591,7 +1607,8 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
     proposal.status === "APPLYING" ? t("Applying…") : null;
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
-      <ProposalHead open={open} title={title} summary={proposal.summary} />
+      <ProposalHead open={open} title={title} summary={proposalSummary(proposal, lang)} />
+      {open && proposal.noChange && <p className="px-3 pb-2 text-xs font-medium text-amber-700 dark:text-amber-300">{t("No changes: everything is already like this")}</p>}
       {open && proposal.diff.length > 0 && (
         <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
           {proposal.diff.map((row, i) => (
@@ -1660,7 +1677,7 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
  * change, and what the person did with it. No Apply / Discard.
  */
 function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const status =
     proposal.status === "APPLIED" ? { text: t("Applied by them"), tone: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300" } :
     proposal.status === "DISCARDED" ? { text: t("Discarded by them"), tone: "bg-muted text-muted-foreground" } :
@@ -1673,7 +1690,7 @@ function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
         <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background"><GideonMark className="h-3.5 w-3.5" /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">{proposalTitle(proposal.action, t)}</span>
-          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposal.summary}</span>
+          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposalSummary(proposal, lang)}</span>
         </span>
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", status.tone)}>{status.text}</span>
       </div>

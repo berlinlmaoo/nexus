@@ -155,7 +155,12 @@ function fileProblemText(p: LocalFileProblem): string {
 }
 
 /** The token being typed right after an "@", or null when the caret isn't in one. */
-const MENTION_TAIL = /(^|\s)@([\p{L}\p{N}._-]*)$/u;
+// The "@name" being typed at the end of the box. Up to four words, so a full name with spaces ("@QA Dev 2")
+// keeps the list open the way WhatsApp does (B-D3, 19 Oct 2026); it closes as soon as no member matches.
+const MENTION_TAIL = /(^|\s)@((?:[\p{L}\p{N}._-]+(?: [\p{L}\p{N}._-]*){0,3})?)$/u;
+/** One message is at most 4,000 characters (B-15, 19 Oct 2026; the server refuses more with MESSAGE_TOO_LONG). */
+export const MESSAGE_MAX_CHARS = 4000;
+const charCount = (s: string) => Array.from(s).length;
 
 // ---------------------------------------------------------------------------------------------
 // Thread cache: ["messages", conversationId] holds every message fetched so far, merged by id.
@@ -740,7 +745,13 @@ export function ChatThread({
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
-    return members.filter((u) => u.id !== meId && (u.name ?? u.email ?? "").toLowerCase().includes(q)).slice(0, 6);
+    // As typed ("qa dev"), or without spaces ("qadev") when the query has none, so "@QADev" still finds
+    // "QA Dev 2". A trailing space right after a picked tag ("@QADev2 ") matches nobody, so the list closes.
+    return members.filter((u) => {
+      if (u.id === meId) return false;
+      const name = (u.name ?? u.email ?? "").toLowerCase();
+      return name.includes(q) || (!/\s/.test(q) && name.replace(/\s+/g, "").includes(q));
+    }).slice(0, 6);
   }, [mentionQuery, members, meId]);
 
   const pickMention = (u: NexusUser) => {
@@ -811,7 +822,9 @@ export function ChatThread({
 
   const busy = !!uploading;
   // A picture on its own is a message, so an empty box is only a problem when nothing is attached.
-  const canSend = (input.trim().length > 0 || !!pending) && !busy;
+  const length = charCount(input.trim());
+  const tooLong = length > MESSAGE_MAX_CHARS;
+  const canSend = (input.trim().length > 0 || !!pending) && !busy && !tooLong;
   const submit = () => {
     if (!canSend) return;
     const content = input.trim();
@@ -1114,6 +1127,13 @@ export function ChatThread({
           );
         })()}
         {uploadError && <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
+        {length > MESSAGE_MAX_CHARS - 400 && (
+          <p role={tooLong ? "alert" : undefined} data-message-length="" className={cn("mb-2 text-xs tabular-nums", tooLong ? "font-semibold text-destructive" : "text-muted-foreground")}>
+            {tooLong
+              ? t("Too long: {n} / 4,000 characters. Shorten it or split it into several messages.", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })
+              : t("{n} / 4,000 characters", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })}
+          </p>
+        )}
 
         <div className="flex items-end gap-2">
           <input
