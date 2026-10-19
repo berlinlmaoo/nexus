@@ -1080,7 +1080,7 @@
     <string name="pf_message">Pesan</string>
     <string name="pf_outside_ranking">BoD &amp; One Above All di luar peringkat.</string>
     <string name="pf_no_points">Belum ada poin periode ini.</string>
-    <string name="pf_period_note">Attendance period · 28th to 27th</string>
+    <string name="pf_period_note">Periode absensi · tanggal 28 sampai 27</string>
     <string name="pf_score">Skor</string>
     <string name="pf_day_of">Hari ke-%1$d dari %2$d</string>
     <string name="pf_absent_tk">Absent (TK)</string>

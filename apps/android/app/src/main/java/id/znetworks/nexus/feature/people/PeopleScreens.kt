@@ -348,7 +348,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                 IconButton(onClick = { period = r.period.previousKey }, enabled = prev, modifier = Modifier.size(48.dp).alpha(if (prev) 1f else 0.35f)) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(r.period.label ?: r.period.key, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
+                    Text(PeopleLogic.recordPeriodLabel(r.period, Locale.getDefault()), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
                     Text(stringResource(R.string.pf_period_note), fontSize = 11.sp, color = c.mutedFg)
                 }
                 IconButton(onClick = { period = r.period.nextKey }, enabled = next, modifier = Modifier.size(48.dp).alpha(if (next) 1f else 0.35f)) {
