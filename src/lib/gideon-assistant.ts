@@ -39,9 +39,9 @@ export async function resolveGideonChat(userId: string, opts: { chatId?: string 
       return own
     }
   }
-  // A question sent from a chat that was deleted meanwhile starts a fresh one rather than landing in another.
-  const fromDeleted = opts.chatId ? Boolean(await prisma.gideonChat.findFirst({ where: { id: opts.chatId, userId }, select: { id: true } })) : false
-  if (!opts.newChat && !fromDeleted) {
+  // A question sent from a chat that is not a live chat of this person (deleted meanwhile, purged, or not
+  // theirs at all) starts a fresh one rather than landing in another of their chats (QA final 19 Oct, E-4).
+  if (!opts.newChat && !opts.chatId) {
     const latest = await prisma.gideonChat.findFirst({ where: { userId, deletedAt: null }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true } })
     if (latest) return latest
   }
