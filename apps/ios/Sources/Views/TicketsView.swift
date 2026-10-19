@@ -858,6 +858,7 @@ struct TicketDetailSheet: View {
                 }
             }
             .disabled(movingStatus)
+            .accessibilityIdentifier("ticket.status")
         } else {
             NexusChip(text: ticketStatusLabel(statusKey), tone: ticketStatusTone(statusKey))
         }
