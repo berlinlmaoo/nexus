@@ -12,14 +12,27 @@ import { patchPresence, presenceApi, presenceText, usePresence, type PresenceAva
  * "Recently used" (this browser's own last statuses, only when there are any), then Clear after / Starts and one
  * summary line. Times are WIB (the company's clock), whatever the browser's zone. Everyone in the workspace sees it;
  * nobody is notified; it ends by itself. Availability (N-1, owner 19 Oct 2026) is a segmented choice Online · Away ·
- * Do not disturb (green / amber / red, the same dots as everywhere); Away is the default, as before. The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
+ * Do not disturb (green / amber / red, the same dots as everywhere). R-11 (19 Oct 2026, same as iOS): an availability
+ * alone saves (N-1b), tapping one clears a quick pick's text but keeps a typed one, quick picks default to Away, and
+ * Clear after / Starts sit in one compact group with a single summary line. The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
  * The emoji is stored as the start of the text ("🗓️ Meeting") — the API has one text field.
  */
 
 const TEXT_MAX = 80;
 
-type EndChoice = "30m" | "1h" | "2h" | "3h" | "today" | "custom";
-const END_MINUTES: Partial<Record<EndChoice, number>> = { "30m": 30, "1h": 60, "2h": 120, "3h": 180 };
+type EndChoice = "30m" | "1h" | "2h" | "3h" | "4h" | "today" | "week" | "custom";
+const END_MINUTES: Partial<Record<EndChoice, number>> = { "30m": 30, "1h": 60, "2h": 120, "3h": 180, "4h": 240 };
+/** The Clear after menu (R-11). "3h" stays valid for the "Out for a shoot" pick and is listed only while chosen. */
+const END_MENU: ReadonlyArray<{ value: EndChoice; label: string }> = [
+  { value: "30m", label: "30 minutes" },
+  { value: "1h", label: "1 hour" },
+  { value: "2h", label: "2 hours" },
+  { value: "3h", label: "3 hours" },
+  { value: "4h", label: "4 hours" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "This week" },
+  { value: "custom", label: "Custom…" },
+];
 
 /** Quick picks: tap fills text + emoji + duration. No WFH/sick: those are attendance requests. */
 const QUICK: ReadonlyArray<{ emoji: string; text: string; end: EndChoice }> = [
@@ -81,7 +94,10 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
 
   const [emoji, setEmoji] = useState("");
   const [text, setText] = useState("");
-  const [availability, setAvailability] = useState<PresenceAvailability>("away");
+  // null = none chosen yet (a new status). Save needs an availability or a text (N-1b: availability alone is a status).
+  const [availability, setAvailability] = useState<PresenceAvailability | null>(null);
+  // The text a quick pick filled in: tapping an availability replaces it, a typed text is kept (R-11).
+  const [quickText, setQuickText] = useState<string | null>(null);
   const [pickEmoji, setPickEmoji] = useState(false);
   const [later, setLater] = useState(false);
   const [startDay, setStartDay] = useState("");
@@ -101,7 +117,8 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
     const cur = splitEmoji(manual?.text ?? "");
     setEmoji(cur.emoji);
     setText(cur.text);
-    setAvailability(manual?.availability ?? "away");
+    setAvailability(manual ? manual.availability ?? "away" : null);
+    setQuickText(null);
     setPickEmoji(false);
     setLater(false);
     setStartDay(nowP.day);
@@ -119,6 +136,13 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
     const mins = END_MINUTES[end];
     if (mins) return new Date(from.getTime() + mins * 60e3);
     if (end === "today") return wibInstant(wibParts(from).day, "23:59");
+    if (end === "week") {
+      // Sunday 23:59 WIB of the week the status starts in (Mon–Sun).
+      const day = wibParts(from).day;
+      const dow = new Date(`${day}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+      const sunday = new Date(new Date(`${day}T00:00:00Z`).getTime() + ((7 - dow) % 7) * 864e5).toISOString().slice(0, 10);
+      return wibInstant(sunday, "23:59");
+    }
     return wibInstant(endDay, endTime);
   }, [end, endDay, endTime, startAt]);
 
@@ -128,12 +152,12 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
       text: full,
       startsAt: startAt ? startAt.toISOString() : null,
       endsAt: endAt ? endAt.toISOString() : "",
-      availability,
+      availability: availability ?? "away",
     }),
     onSuccess: (r) => {
       patchPresence(qc, r.status);
       const isQuick = QUICK.some((q) => q.emoji === emoji && t(q.text) === text.trim());
-      if (!isQuick) pushRecent({ emoji, text: text.trim(), end: end === "custom" ? "1h" : end });
+      if (!isQuick && text.trim()) pushRecent({ emoji, text: text.trim(), end: end === "custom" ? "1h" : end });
       onOpenChange(false);
     },
     onError: (e) => setError(e instanceof Error ? e.message : t("Could not save. Try again.")),
@@ -146,17 +170,21 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
 
   const fmt = (d: Date | null) => d ? `${d.toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Jakarta" })} ${wibParts(d).time}` : "—";
   const busy = save.isPending || clear.isPending;
-  const canSave = text.trim().length > 0 && !!endAt && !busy;
+  const canSave = (availability != null || text.trim().length > 0) && !!endAt && !busy;
   const pick = (p: { emoji: string; text: string; end: EndChoice }, translate: boolean) => {
+    const filled = translate ? t(p.text) : p.text;
     setEmoji(p.emoji);
-    setText(translate ? t(p.text) : p.text);
+    setText(filled);
+    setQuickText(translate ? filled : null);
     setEnd(p.end);
+    // Quick picks are Away unless an availability was already chosen (R-11).
+    if (translate) setAvailability((a) => a ?? "away");
     setError(null);
     inputRef.current?.focus();
   };
   const durationLabel = (e: EndChoice) => {
     const m = END_MINUTES[e];
-    return m ? (m < 60 ? t("{n} min", { n: m }) : t("{n} h", { n: m / 60 })) : e === "today" ? t("Today") : "";
+    return m ? (m < 60 ? t("{n} min", { n: m }) : t("{n} h", { n: m / 60 })) : e === "today" ? t("Today") : e === "week" ? t("This week") : "";
   };
   const select = "h-9 appearance-none rounded-lg border border-border bg-background pl-3 pr-8 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
   const field = "h-9 rounded-lg border border-border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
@@ -199,7 +227,7 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
                 ref={inputRef}
                 value={text}
                 maxLength={TEXT_MAX}
-                onChange={(e) => { setText(e.target.value); setError(null); }}
+                onChange={(e) => { setText(e.target.value); setQuickText(null); setError(null); }}
                 onKeyDown={(e) => { if (e.key === "Enter" && canSave) save.mutate(); }}
                 placeholder={t("What are you up to?")}
                 aria-label={t("What are you up to?")}
@@ -207,7 +235,7 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
                 autoFocus
               />
               {(text || emoji) && (
-                <button type="button" onClick={() => { setText(""); setEmoji(""); inputRef.current?.focus(); }} aria-label={t("Clear text")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent">
+                <button type="button" onClick={() => { setText(""); setEmoji(""); setQuickText(null); inputRef.current?.focus(); }} aria-label={t("Clear text")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -237,7 +265,12 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
                     type="button"
                     role="radio"
                     aria-checked={on}
-                    onClick={() => { setAvailability(a.value); setError(null); }}
+                    onClick={() => {
+                      setAvailability(a.value);
+                      // An availability alone is a status: a quick pick's text goes, a typed text stays.
+                      if (quickText != null && text === quickText) { setText(""); setEmoji(""); setQuickText(null); }
+                      setError(null);
+                    }}
                     className={cn(
                       "inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1.5 py-1.5 text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       on ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
@@ -292,47 +325,47 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
             </div>
           )}
 
-          <div className="space-y-2 border-t border-border pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="presence-end" className="text-sm font-medium">{t("Clear after")}</label>
-              <span className="relative">
-                <select id="presence-end" value={end} onChange={(e) => setEnd(e.target.value as EndChoice)} className={select}>
-                  <option value="30m">{t("30 minutes")}</option>
-                  <option value="1h">{t("1 hour")}</option>
-                  <option value="2h">{t("2 hours")}</option>
-                  <option value="3h">{t("3 hours")}</option>
-                  <option value="today">{t("Today")}</option>
-                  <option value="custom">{t("Pick a time")}</option>
-                </select>
-                <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              </span>
-            </div>
-            {end === "custom" && (
-              <div className="flex items-center justify-end gap-1.5">
-                <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} className={field} aria-label={t("End date")} />
-                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} aria-label={t("End time")} />
+          {/* One compact group: Clear after · Starts; date/time inputs only for Custom / Later; one summary line. */}
+          <div className="space-y-2">
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <label htmlFor="presence-end" className="text-sm font-medium">{t("Clear after")}</label>
+                <span className="relative">
+                  <select id="presence-end" value={end} onChange={(e) => setEnd(e.target.value as EndChoice)} className={select}>
+                    {END_MENU.filter((o) => o.value !== "3h" || end === "3h").map((o) => (
+                      <option key={o.value} value={o.value}>{t(o.label)}</option>
+                    ))}
+                  </select>
+                  <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </span>
               </div>
-            )}
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="presence-start" className="text-sm font-medium">{t("Starts")}</label>
-              <span className="relative">
-                <select id="presence-start" value={later ? "later" : "now"} onChange={(e) => setLater(e.target.value === "later")} className={select}>
-                  <option value="now">{t("Now")}</option>
-                  <option value="later">{t("Later")}</option>
-                </select>
-                <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              </span>
-            </div>
-            {later && (
-              <div className="flex items-center justify-end gap-1.5">
-                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} className={field} aria-label={t("Start date")} />
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} aria-label={t("Start time")} />
+              {end === "custom" && (
+                <div className="flex flex-wrap items-center justify-end gap-1.5 px-3 py-2">
+                  <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} className={field} aria-label={t("End date")} />
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} aria-label={t("End time")} />
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <label htmlFor="presence-start" className="text-sm font-medium">{t("Starts")}</label>
+                <span className="relative">
+                  <select id="presence-start" value={later ? "later" : "now"} onChange={(e) => setLater(e.target.value === "later")} className={select}>
+                    <option value="now">{t("Now")}</option>
+                    <option value="later">{t("Later…")}</option>
+                  </select>
+                  <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </span>
               </div>
-            )}
-            <p className="pt-1 text-xs text-muted-foreground">
+              {later && (
+                <div className="flex flex-wrap items-center justify-end gap-1.5 px-3 py-2">
+                  <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} className={field} aria-label={t("Start date")} />
+                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} aria-label={t("Start time")} />
+                </div>
+              )}
+            </div>
+            <p className="px-1 text-xs font-medium text-foreground/80">
               {later ? t("{from} – {to} WIB", { from: fmt(startAt), to: fmt(endAt) }) : t("Until {when} WIB", { when: fmt(endAt) })}
             </p>
-            <p className="text-xs text-muted-foreground">{t("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")}</p>
+            <p className="px-1 text-xs text-muted-foreground">{t("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")}</p>
           </div>
 
           {error && <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
