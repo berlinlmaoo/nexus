@@ -292,7 +292,32 @@ export type SocialOverview = {
  * cutoff, against the sum of the daily targets in force over the same days. Active platforms always show;
  * an archived one only when the month has figures for it.
  */
-export function summarizeSocial(month: string, today: string, config: SocialReportConfig, days: SocialDay[]): SocialOverview {
+export function summarizeSocial(
+  month: string,
+  today: string,
+  config: SocialReportConfig,
+  days: SocialDay[],
+  monthTargets?: SocialMonthTargetRow[],
+): SocialOverview {
+  const monthly = new Map((monthTargets ?? []).map((t) => [t.platformId, t]))
+  // The month's target: the days' own targets plus the typed month target for the days that use its share.
+  // Summing the rounded daily shares instead drifted (5.000 → 4.999,99, 30 posts → 30,07) and made the web
+  // card say "incl. day targets" on a month without any (QA 19 Oct 2026).
+  const monthTotal = (pid: string, key: "engagementTarget" | "postsTarget", source: "engagementTargetSource" | "postsTargetSource") => {
+    if (!monthTargets) return sumTargets(days.map((d) => d.platforms[pid]?.[key] ?? null))
+    const base = monthly.get(pid)?.[key] ?? null
+    let own = 0, shareDays = 0, any = false
+    for (const d of days) {
+      const x = d.platforms[pid]
+      if (!x || x[key] === null) continue
+      any = true
+      if (x[source] === "day") own += x[key] ?? 0
+      else shareDays++
+    }
+    if (!any) return null
+    const share = base === null ? 0 : (base * shareDays) / daysInMonth(month)
+    return Math.round((own + share) * 100) / 100
+  }
   const cutoff = cutoffOf(month, today)
   const counted = cutoff === null ? [] : days.filter((d) => d.date <= cutoff)
   const platforms: SocialPlatformOverview[] = []
@@ -332,8 +357,8 @@ export function summarizeSocial(month: string, today: string, config: SocialRepo
       postsTargetToDate,
       engagementPct: pctOf(engagement, engagementTargetToDate),
       postsPct: pctOf(posts, postsTargetToDate),
-      engagementTargetMonth: sumTargets(days.map((d) => d.platforms[p.id]?.engagementTarget ?? null)),
-      postsTargetMonth: sumTargets(days.map((d) => d.platforms[p.id]?.postsTarget ?? null)),
+      engagementTargetMonth: monthTotal(p.id, "engagementTarget", "engagementTargetSource"),
+      postsTargetMonth: monthTotal(p.id, "postsTarget", "postsTargetSource"),
       trend,
       recordedDays,
     })
