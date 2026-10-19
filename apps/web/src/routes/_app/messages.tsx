@@ -14,6 +14,7 @@ import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
 import { ApiError, nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
 import { isMuted, usePageVisible } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
+import { isDocAttachment } from "@/lib/chat-files";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtime } from "@/lib/realtime";
 import { useTypingRooms } from "@/lib/chat-typing";
@@ -72,6 +73,8 @@ function lastLine(c: NexusConversation, meId?: string): string {
   if (isSystemMessage(m)) return systemSentence(m, meId);
   const text = (m.content ?? "").trim();
   if (text) return text;
+  // A document sent on its own is not a photo (QA final 19 Oct 2026: a PDF showed as "📷 Photo" in the list).
+  if (m.attachmentName && isDocAttachment(m.attachmentType)) return `📎 ${m.attachmentName}`;
   return m.attachmentUrl || m.attachmentType ? `📷 ${t("Photo")}` : "";
 }
 
