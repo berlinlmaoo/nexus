@@ -19,8 +19,16 @@ struct MeetingProgressPanel: View {
         _store = State(initialValue: MeetingStore(id: created.id))
     }
 
-    private var meeting: MeetingNote { store.meeting ?? uploads.completed[created.id] ?? created }
+    private var meeting: MeetingNote { tourFixture ? created : store.meeting ?? uploads.completed[created.id] ?? created }
     private var uploaded: Bool { uploads.completed[created.id] != nil || meeting.status != "UPLOADING" }
+    /// Debug UI tour: the screen drawn from a fixture, without uploading anything (MeetingProgressTourFixture).
+    private var tourFixture: Bool {
+        #if DEBUG
+        return MeetingProgressTourFixture.state != nil
+        #else
+        return false
+        #endif
+    }
     private var step: MeetingProgressStep {
         guard uploaded else { return .upload }
         switch meeting.status {
@@ -54,7 +62,7 @@ struct MeetingProgressPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("meetings.progress")
         .task(id: "\(phase)|\(uploaded)") {
-            guard uploaded, LiveRefresh.inFront(phase) else { return }
+            guard uploaded, !tourFixture, LiveRefresh.inFront(phase) else { return }
             await store.load()
             while !Task.isCancelled && store.meeting?.working != false {
                 try? await Task.sleep(for: .seconds(15))
@@ -89,7 +97,8 @@ struct MeetingProgressPanel: View {
 
     private var uploadDetail: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MeetingUploadStatus(meetingId: created.id)
+            if tourFixture { MeetingUploadBytes(sent: 13_002_342, total: 32_610_713) }
+            else { MeetingUploadStatus(meetingId: created.id) }
             Button(T("Cancel upload"), role: .destructive) { confirmCancel = true }
                 .font(NXFont.text(13, .semibold)).buttonStyle(.plain).foregroundStyle(NX.danger)
                 .disabled(cancelling).accessibilityIdentifier("meetings.progress.cancelUpload")
@@ -168,3 +177,26 @@ struct MeetingProgressStepRow<Detail: View>: View {
         }
     }
 }
+
+#if DEBUG
+/// Debug UI tour only: the progress screen in one state ("r6-progress-upload|queued|transcribing|ready" as the
+/// tour screen id) without creating a meeting or uploading audio to the server.
+enum MeetingProgressTourFixture {
+    static var state: String? {
+        guard TourMode.isActive, let screen = TourMode.argument("nexusTourScreen"), screen.hasPrefix("r6-progress-") else { return nil }
+        return String(screen.dropFirst("r6-progress-".count))
+    }
+    static func meeting() -> MeetingNote? {
+        guard let state else { return nil }
+        let status = ["upload": "UPLOADING", "queued": "QUEUED", "transcribing": "TRANSCRIBING"][state] ?? "READY"
+        let queue = state == "queued" ? #"{"waiting":true,"position":1,"etaSec":360}"# : state == "transcribing" ? #"{"waiting":false,"etaSec":360}"# : "null"
+        let json = """
+        {"id":"tour-meeting","title":"Meeting Notes QA","status":"\(status)","progress":\(state == "transcribing" ? 0.4 : 0),"language":"auto",
+         "source":"upload","createdBy":{"id":"tour"},"audio":{"name":"meeting.m4a","mime":"audio/mp4","bytes":32610713,"received":0,"available":true},
+         "taskCount":0,"version":1,"createdAt":"2026-10-19T10:00:00Z","updatedAt":"2026-10-19T10:00:00Z",
+         "can":{"edit":true,"apply":true,"delete":true,"retry":true},"queue":\(queue)}
+        """
+        return try? JSONDecoder().decode(MeetingNote.self, from: Data(json.utf8))
+    }
+}
+#endif

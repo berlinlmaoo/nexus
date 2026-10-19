@@ -197,13 +197,23 @@ struct MeetingUploadStatus: View {
         VStack(alignment: .leading, spacing: 6) {
             if let job = uploads.jobs[meetingId], uploads.isCurrent(job) {
                 // Bar and label read the same live byte count (R-5: the label stayed at 0 B while the bar moved).
-                let sent = uploads.sentBytes(meetingId) ?? job.received
-                let fraction = Double(sent) / Double(max(1, job.bytes))
-                ProgressView(value: fraction).tint(NX.violet)
-                Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(job.bytes), AppNumber.int(Int((fraction * 100).rounded(.down))) + " %"))
-                    .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
+                MeetingUploadBytes(sent: uploads.sentBytes(meetingId) ?? job.received, total: job.bytes)
             }
             if let failure = uploads.failures[meetingId] { Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger); Button(T("Resume upload")) { Task { await uploads.retry(meetingId) } }.buttonStyle(.nxBordered) }
+        }
+    }
+}
+
+/// The upload bar and "12.4 MB of 31.1 MB · 40 %", drawn from one byte count.
+struct MeetingUploadBytes: View {
+    let sent: Int
+    let total: Int
+    var body: some View {
+        let fraction = Double(sent) / Double(max(1, total))
+        VStack(alignment: .leading, spacing: 6) {
+            ProgressView(value: fraction).tint(NX.violet)
+            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(Int((fraction * 100).rounded(.down))) + " %"))
+                .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
         }
     }
 }
