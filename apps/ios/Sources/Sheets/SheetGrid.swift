@@ -816,6 +816,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor(NX.card)
+        accessibilityIdentifier = "sheet.grid"
         let cv = SheetCollectionView(frame: .zero, collectionViewLayout: layout)
         collection = cv
         collection.backgroundColor = UIColor(NX.card)
@@ -974,6 +975,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     /// Everything from the store: sizes, frozen panes, merges, contents and the selection.
     func reload(_ next: SheetGridInput, selection: SheetSelection) {
         input = next
+        accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
         gridColor = next.showGrid ? UIColor(NX.border) : .clear
         rowDisplays = [:]
         rowSpills = [:]

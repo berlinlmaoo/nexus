@@ -764,6 +764,23 @@ final class NEXUSUITour: XCTestCase {
                 pause(Double(action.text ?? "3") ?? 3)
                 app.activate()
                 pause(2)
+            case "pinch":
+                #if !targetEnvironment(macCatalyst)
+                let target = app.collectionViews.firstMatch
+                guard target.waitForExistence(timeout: 10), let scale = Double(action.text ?? "") else { return "wrong-screen: no sheet grid for pinch" }
+                target.pinch(withScale: CGFloat(scale), velocity: scale > 1 ? 1 : -1)
+                pause(1)
+                #endif
+            case "twoFingerReset":
+                #if !targetEnvironment(macCatalyst)
+                let target = app.collectionViews.firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no sheet grid for reset" }
+                target.tap(withNumberOfTaps: 2, numberOfTouches: 2)
+                pause(1)
+                #endif
+            case "swipePage":
+                if action.label == "left" { app.swipeLeft() } else { app.swipeRight() }
+                pause(1)
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
