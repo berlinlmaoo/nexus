@@ -817,9 +817,10 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor(NX.card)
-        accessibilityIdentifier = "sheet.grid"
+        accessibilityIdentifier = "sheet.grid.host"
         let cv = SheetCollectionView(frame: .zero, collectionViewLayout: layout)
         collection = cv
+        collection.accessibilityIdentifier = "sheet.grid"
         collection.backgroundColor = UIColor(NX.card)
         collection.dataSource = self
         collection.delegate = self
@@ -968,7 +969,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         collection.setContentOffset(CGPoint(x: min(max(0, target.x), max(0, size.width - collection.bounds.width)),
                                           y: min(max(0, target.y), max(0, size.height - collection.bounds.height))), animated: false)
         refreshVisibleCells(); drawSelection(); syncStrips(); updatePanes(); layoutCharts()
-        accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
+        collection.accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
     }
 
     // MARK: data
@@ -976,7 +977,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     /// Everything from the store: sizes, frozen panes, merges, contents and the selection.
     func reload(_ next: SheetGridInput, selection: SheetSelection) {
         input = next
-        accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
+        collection.accessibilityValue = String(format: T("Zoom %@%%"), AppNumber.int(Int((zoom * 100).rounded())))
         gridColor = next.showGrid ? UIColor(NX.border) : .clear
         rowDisplays = [:]
         rowSpills = [:]

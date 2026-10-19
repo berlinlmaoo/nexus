@@ -787,7 +787,8 @@ final class NEXUSUITour: XCTestCase {
             case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
             case "tree": persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-\(action.label).txt")
             case "checkValue":
-                let target = app.textViews.matching(identifier: action.label).firstMatch
+                let textView = app.textViews.matching(identifier: action.label).firstMatch
+                let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
                 guard target.exists, (target.value as? String)?.contains(action.text ?? "") == true else {
                     return "wrong-screen: missing expected text in \(action.label)"
                 }
