@@ -324,7 +324,7 @@ private fun SheetCell(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, 
     val deco = listOfNotNull(if (sv("s") == "1") TextDecoration.LineThrough else null,
         if (sv("u") == "1" || SheetCells.linkUrl(r.cells[col.id]) != null) TextDecoration.Underline else null)
     Box(Modifier.width((colWidth(col) * zoom)).height(ht).background(bg ?: c.card).border((if (selected) 2.dp else 0.5.dp) * zoom, if (selected) c.onyx else c.border)
-        .combinedClickable(
+        .sheetCellActions(
             onClick = {
                 if (!selected) store.selectCell(key)
                 else if (store.canEdit() && !mergedAway) when {
