@@ -8,4 +8,6 @@ export const ID_QA_DEC_B: Record<string, string> = {
   // B-15 4,000 characters per chat message
   "Too long: {n} / 4,000 characters. Shorten it or split it into several messages.": "Terlalu panjang: {n} / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.",
   "{n} / 4,000 characters": "{n} / 4.000 karakter",
+  // B-13 a link to a chat that is gone
+  "You're no longer in this chat": "Kamu sudah tidak ada di chat ini",
 };

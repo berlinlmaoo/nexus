@@ -139,6 +139,8 @@ function Messages() {
   // The open group was deleted while it was on screen (by someone else, or in another tab): the thread
   // closes and this note stands in its place until another chat is opened.
   const [goneId, setGoneId] = useState<string | null>(null);
+  // Why it is gone (B-13, 19 Oct 2026): deleted (the server answers 404), or the reader is no longer in it (403).
+  const [goneWhy, setGoneWhy] = useState<"deleted" | "left">("deleted");
   const visible = usePageVisible();
   // Other rooms move through the socket (`conversation-updated` on servers since 8 Oct 2026).
   // The poll is the fallback: every 30 s while this page is in front (never in a background tab),
@@ -151,6 +153,7 @@ function Messages() {
   });
   const rows = convos.data?.conversations ?? [];
   const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [activeId, setActiveId] = useState<string | null>(search.c ?? null);
   // On a phone the list and the open chat take turns on the screen; from md up they sit side by side.
   const [phoneThread, setPhoneThread] = useState<boolean>(!!search.c);
@@ -160,7 +163,31 @@ function Messages() {
   // first and a room opens only when tapped — a thread mounted out of sight would mark it read.
   const phone = useIsMobile();
   useEffect(() => { if (!activeId && !goneId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, goneId, rows, phone]);
-  const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
+  // A link to a chat that is not in the list (B-13, 19 Oct 2026): a deleted group's ?c= used to open some
+  // other chat without a word. The room is asked for once: 404 = deleted, 403 = no longer a member; then the
+  // note below stands in its place and ?c= leaves the address. Found after all (the list was just stale) →
+  // the list is refetched and the room opens as usual.
+  const linkMissing = !!search.c && convos.isSuccess && !rows.some((c) => c.id === search.c);
+  const linkProbe = useQuery({
+    queryKey: ["conversation-link-probe", search.c],
+    queryFn: () => nexusApi.conversationInfo(search.c as string),
+    enabled: linkMissing,
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  useEffect(() => {
+    if (!linkMissing || !search.c) return;
+    if (linkProbe.isSuccess) { void qc.invalidateQueries({ queryKey: ["conversations"] }); return; }
+    if (!linkProbe.isError) return;
+    const status = linkProbe.error instanceof ApiError ? linkProbe.error.status : 0;
+    if (status !== 404 && status !== 403) return;
+    setGoneWhy(status === 404 ? "deleted" : "left");
+    setGoneId(search.c);
+    setActiveId(null);
+    void navigate({ search: {}, replace: true });
+  }, [linkMissing, linkProbe.isSuccess, linkProbe.isError, linkProbe.error, search.c, qc, navigate]);
+  const active = goneId || (phone && !phoneThread) || (linkMissing && activeId === search.c) ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
   const activeKey = active?.id ?? null;
   // The other person's presence status shows under a DM's name (19 Oct 2026).
   const dmPeerStatus = usePresence(active?.type === "DM" ? dmPeer(active, meId)?.id : null);
@@ -175,7 +202,9 @@ function Messages() {
       const data = (payload && typeof payload === "object" ? payload : {}) as { conversationId?: unknown; reason?: unknown };
       if (data.reason !== "deleted" || typeof data.conversationId !== "string") return;
       if (data.conversationId !== activeKeyRef.current) return;
+      setGoneWhy("deleted");
       setGoneId(data.conversationId);
+      void navigate({ search: {}, replace: true });
       setInfoOpen(false);
       setAdding(false);
       setRenaming(false);
@@ -183,7 +212,7 @@ function Messages() {
     };
     socket.on("conversation-updated", onUpdated);
     return () => { socket.off("conversation-updated", onUpdated); };
-  }, [socket]);
+  }, [socket, navigate]);
 
   const threadMembers = useMemo(
     () => (active?.members ?? []).map((m) => m.user).filter(Boolean) as NexusUser[],
@@ -220,7 +249,8 @@ function Messages() {
     setInfoOpen(false);
     setActiveId(null);
     setPhoneThread(false);
-  }, [qc]);
+    void navigate({ search: {}, replace: true });
+  }, [qc, navigate]);
 
   const groups = {
     DM: rows.filter((c) => c.type === "DM"),
@@ -430,7 +460,7 @@ function Messages() {
               <button onClick={() => { setGoneId(null); setPhoneThread(false); }} title={t("Back to chats")} aria-label={t("Back to chats")} className="absolute left-2 top-2.5 rounded-lg p-2 transition-colors hover:bg-accent md:hidden"><ArrowLeft className="h-4 w-4" /></button>
               <div role="status">
                 <Trash2 className="mx-auto mb-3 h-9 w-9 opacity-40" />
-                <p className="text-sm">{t("This group was deleted")}</p>
+                <p className="text-sm">{goneWhy === "deleted" ? t("This group was deleted") : t("You're no longer in this chat")}</p>
               </div>
             </div>
           ) : convos.isLoading ? (
