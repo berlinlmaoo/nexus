@@ -71,7 +71,6 @@ struct NewMeetingSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack { Text(T("Meeting notes")).font(NXFont.display(26, .bold)); MeetingBetaBadge() }
                     if !RemoteConfig.shared.meetingNotesEnabled { EmptyState(icon: "mic.slash", title: T("Meeting notes is unavailable right now."), subtitle: T("Try again later.")) }
                     else if let created {
                         let current = uploads.completed[created.id] ?? created
@@ -81,11 +80,25 @@ struct NewMeetingSheet: View {
                         else { MeetingUploadStatus(meetingId: created.id); Text(T("The upload continues in the background. Keep the recording on this device until it finishes.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                         HStack { Button(T("Close")) { dismiss() }.buttonStyle(.nxBordered); Button(T("Open meeting")) { open(created.id) }.buttonStyle(.nxPrimary) }
                     } else {
-                        TextField(T("Title"), text: $title).font(NXFont.display(22, .bold)).textFieldStyle(.plain)
-                        Button { projectPicker = true } label: { Label(chosenProject?.name ?? T("Project (optional)"), systemImage: "folder") }.buttonStyle(.nxBordered)
-                        Picker(T("Spoken language"), selection: $language) { Text(T("Detect automatically")).tag("auto"); Text(T("Indonesian")).tag("id"); Text(T("English")).tag("en") }
-                        Text(T("Detect automatically works best for Indonesian mixed with English.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        HStack { Button { filePicker = true } label: { Label(T("Upload a file"), systemImage: "doc.badge.arrow.up") }.buttonStyle(.nxBordered).disabled(recorder.recording || recorder.paused || recorder.preparing); Button { source = "record"; recorder.setSpeakerLabels(speakerLabels); Task { await recorder.start() } } label: { Label(T("Record"), systemImage: "mic") }.buttonStyle(.nxBordered).disabled(recorder.recording || recorder.paused || recorder.preparing) }
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(T("Meeting title")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            TextField(T("Meeting title"), text: $title).textFieldStyle(.roundedBorder).accessibilityIdentifier("meetings.title")
+                        }
+                        HStack {
+                            Text(T("Project (optional)"))
+                            Spacer()
+                            Button { projectPicker = true } label: { Text(chosenProject?.name ?? T("Pick a project")); Image(systemName: "chevron.down") }
+                                .accessibilityIdentifier("meetings.project")
+                        }.font(NXFont.text(14))
+                        HStack {
+                            Text(T("Language"))
+                            Spacer()
+                            Picker(T("Language"), selection: $language) {
+                                Text(T("Automatic (ID + EN)")).tag("auto")
+                                Text(T("Indonesian")).tag("id"); Text(T("English")).tag("en")
+                            }.labelsHidden().accessibilityIdentifier("meetings.language")
+                        }.font(NXFont.text(14))
+                        speakerOptions
                         if recorder.preparing { HStack { ProgressView(); Text(T("Starting the microphone…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) } }
                         if recorder.recording || recorder.paused {
                             MeetingRecordingControls {
@@ -98,15 +111,18 @@ struct NewMeetingSheet: View {
                             HStack { Image(systemName: "waveform"); VStack(alignment: .leading) { Text(file.lastPathComponent).font(NXFont.text(13, .semibold)); Text(AppNumber.bytes(APIClient.fileSize(of: file))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }; Spacer(); Button { self.file = nil } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel(T("Remove")) }.nexusCard()
                             Button { Task { await upload(file) } } label: { HStack { if busy { ProgressView() }; Text(T("Upload recording")) } }.buttonStyle(.nxPrimary).disabled(busy || recorder.recording || recorder.paused).accessibilityIdentifier("meetings.upload")
                         }
-                        speakerOptions
-                        Text(String(format: T("Up to %@ min · %@"), AppNumber.int(RemoteConfig.shared.meetingMaxMinutes), AppNumber.bytes(RemoteConfig.shared.meetingMaxBytes))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        Text(T("Audio is transcribed on the company's own server. Review the minutes and tasks before Apply.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         if let failure = failure ?? recorder.failure { Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger) }
                     }
                 }.padding(20).frame(maxWidth: 720).frame(maxWidth: .infinity)
             }.background(NX.background)
-                .navigationTitle(T("New meeting notes")).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { if recorder.recording || recorder.paused { confirmClose = true } else { recorder.cancelPreparation(); dismiss() } } } }
+                .navigationTitle("").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { if recorder.recording || recorder.paused { confirmClose = true } else { recorder.cancelPreparation(); dismiss() } } }
+                    ToolbarItem(placement: .principal) { HStack(spacing: 6) { Text(T("Meeting notes")).font(NXFont.text(16, .semibold)); MeetingBetaBadge() } }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if created == nil && RemoteConfig.shared.meetingNotesEnabled { recordingActions }
+                }
                 .interactiveDismissDisabled(recorder.recording || recorder.paused || busy)
                 .alert(T("Stop recording?"), isPresented: $confirmClose) { Button(T("Stop")) { recorder.stop(); file = recorder.file; source = "record" }; Button(T("Cancel"), role: .cancel) {} } message: { Text(T("The recording stays on this device until you upload it.")) }
                 .sheet(isPresented: $filePicker) { DocumentPicker(types: [.item], multiple: false) { urls in if let url = urls.first { chooseFile(url) } } }
@@ -117,13 +133,27 @@ struct NewMeetingSheet: View {
                 .onChange(of: recorder.recording) { _, recording in if !recording && !recorder.paused && source == "record" { file = recorder.file } }
         }.accessibilityIdentifier("meetings.new").keyboardDoneBar()
     }
+    private var recordingActions: some View {
+        VStack(spacing: 10) {
+            Button {
+                source = "record"; recorder.setSpeakerLabels(speakerLabels)
+                Task { await recorder.start() }
+            } label: { Label(T("Start recording"), systemImage: "mic.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.nxPrimary).accessibilityIdentifier("meetings.record")
+                .disabled(recorder.recording || recorder.paused || recorder.preparing || busy)
+            Button { filePicker = true } label: { Label(T("Upload an audio file"), systemImage: "doc.badge.arrow.up").frame(maxWidth: .infinity) }
+                .buttonStyle(.nxBordered).disabled(recorder.recording || recorder.paused || recorder.preparing || busy)
+            Text(String(format: T("Up to %@ min · %@ · processed on the company's own server. Check the minutes and tasks before Apply."), AppNumber.int(RemoteConfig.shared.meetingMaxMinutes), AppNumber.bytes(RemoteConfig.shared.meetingMaxBytes)))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        }.padding(16).frame(maxWidth: 720).frame(maxWidth: .infinity).background(NX.background)
+    }
+
     private var speakerOptions: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $speakerLabels) { Label(T("Tell speakers apart"), systemImage: "person.2") }.accessibilityIdentifier("meetings.speakerLabels")
             if speakerLabels {
-                Text(T("Start with a quick round of introductions so GIDEON can tell voices apart.") + " “" + T("Hi, I'm Berlin…") + "”").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                Text(T("Voices are only used to label this recording.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                if !recorder.recording && !recorder.paused && file == nil { Text(T("Start with a round of introductions.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                Text(T("Start with quick introductions: “Hi, I'm Berlin…”. Voices only label this recording."))
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 if source == "record", file == recorder.file, let end = recorder.introEndSec {
                     Text("· " + String(format: T("introductions until %@"), MeetingLabels.clock(end))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }

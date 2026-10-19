@@ -2,6 +2,12 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Meeting title": "Judul rapat",
+        "Automatic (ID + EN)": "Otomatis (ID + EN)",
+        "Start with quick introductions: “Hi, I'm Berlin…”. Voices only label this recording.": "Mulai dengan perkenalan singkat: “Halo, saya Berlin…”. Suara hanya dipakai untuk melabeli rekaman ini.",
+        "Start recording": "Mulai merekam",
+        "Upload an audio file": "Unggah file audio",
+        "Up to %@ min · %@ · processed on the company's own server. Check the minutes and tasks before Apply.": "Maksimal %1$@ menit · %2$@ · diproses di server perusahaan sendiri. Periksa notulen dan task sebelum Terapkan.",
         "Storage": "Penyimpanan",
         "number = tasks that day": "angka = task pada hari itu",
         "Couldn't load notification preferences.": "Preferensi notifikasi tidak bisa dimuat.",
