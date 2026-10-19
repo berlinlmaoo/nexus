@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,13 +10,14 @@ import { nexusApi, ApiError, type NexusForm, type NexusFormBranding } from "@/li
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectPicker } from "@/components/SelectPicker";
 import { DateField } from "@/components/DateField";
-import { Avatar } from "@/components/Avatar";
+import { Avatar, AvatarFace } from "@/components/Avatar";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { fieldChoices } from "@/lib/project-views";
 import { qrMatrix, qrSvgPath } from "@/lib/qr";
 import { useLang } from "@/lib/lang";
-import { useRealtimeRoom } from "@/lib/realtime";
+import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
+import { canEditLevel } from "@/components/projects/project-access";
 import { cn } from "@/lib/utils";
 import { SnapTail } from "@/components/SnapTail";
 import { FormHead, FormRenderer, QuestionControl } from "./FormRenderer";
@@ -26,6 +27,7 @@ import {
   categoryFieldForSectionQuestion, optionsAreSections, projectCategoryField, selectChoices,
   withMappedRupiah,
 } from "./form-model";
+import { diffOps, rebaseDraft } from "./form-coedit";
 
 /**
  * The form builder, rebuilt Notion-style (owner, 12 Oct 2026: "copy Notion's"). A full-page canvas that
@@ -44,6 +46,8 @@ type Tab = "questions" | "settings" | "share" | "responses";
 type SaveState = "idle" | "pending" | "saving" | "saved" | "error";
 type CustomFieldLite = { id: string; name: string; type?: string; options?: unknown };
 type MemberLite = { userId: string; name: string; email?: string | null; avatar?: string | null };
+/** Someone else in this form's builder right now (`form-presence`, live co-editing) and the question they are on. */
+type FormPeer = { userId: string; name: string; avatar: string | null; color: string; questionId: string | null };
 const SETTABLE_FIELD_TYPES = ["SELECT", "MULTI_SELECT", "STATUS", "TEXT"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -82,6 +86,16 @@ function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, auto
   keepFont?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  // Where the caret was (live co-editing): when someone else's change replaces this text while it has focus,
+  // the caret stays where it was instead of jumping to the end.
+  const caret = useRef<[number, number] | null>(null);
+  const remember = (el: HTMLTextAreaElement) => { caret.current = [el.selectionStart, el.selectionEnd]; };
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || document.activeElement !== el || !caret.current) return;
+    const [a, b] = caret.current;
+    if (el.selectionStart !== a || el.selectionEnd !== b) el.setSelectionRange(Math.min(a, value.length), Math.min(b, value.length));
+  }, [value]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -97,7 +111,8 @@ function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, auto
       aria-label={ariaLabel}
       data-keep-font={keepFont ? "" : undefined}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => { remember(e.target); onChange(e.target.value); }}
+      onSelect={(e) => remember(e.currentTarget)}
       onKeyDown={onKeyDown}
       className={cn("block w-full resize-none overflow-hidden bg-transparent outline-none placeholder:text-muted-foreground/50", className)}
     />
@@ -278,8 +293,10 @@ function Chip({ icon, children, tone = "muted" }: { icon?: ReactNode; children: 
   return <span className={cn("inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", tone === "accent" ? "bg-accent text-accent-foreground" : tone === "warn" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground")}>{icon}<span className="truncate">{children}</span></span>;
 }
 
-function QuestionCard({ field, index, total, selected, others, customFields, taskLists, onSelect, onChange, onDuplicate, onDelete, onOpenPanel, dragProps, slashFor, setSlashFor }: {
+function QuestionCard({ field, index, total, selected, others, customFields, taskLists, onSelect, onChange, onDuplicate, onDelete, onOpenPanel, dragProps, slashFor, setSlashFor, editors }: {
   field: RichField; index: number; total: number; selected: boolean; others: RichField[]; customFields: CustomFieldLite[]; taskLists: { id: string; name: string }[];
+  /** Other people on this question right now (live co-editing): a coloured outline and their name. */
+  editors?: FormPeer[];
   onSelect: () => void; onChange: (patch: Partial<RichField> | ((f: RichField) => RichField)) => void; onDuplicate: () => void; onDelete: () => void; onOpenPanel: () => void;
   dragProps: { onGripDragStart: () => void; onGripDragEnd: () => void };
   slashFor: { id: string; before: string } | null; setSlashFor: (v: { id: string; before: string } | null) => void;
@@ -324,7 +341,14 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
         "group/q relative rounded-xl border bg-card px-4 pb-4 pt-3.5 transition-[border-color,box-shadow] @lg:px-6",
         selected ? "border-accent-foreground/50 shadow-[0_0_0_1px_var(--accent-foreground)]" : "border-border hover:border-foreground/20",
       )}
+      style={editors?.length && !selected ? { borderColor: editors[0].color, boxShadow: `0 0 0 1px ${editors[0].color}` } : undefined}
     >
+      {editors && editors.length > 0 && (
+        <span className="pointer-events-none absolute -top-2.5 left-3 z-10 inline-flex max-w-[70%] items-center gap-1 rounded-full py-px pl-0.5 pr-2 text-[11px] font-semibold text-white shadow-soft" style={{ backgroundColor: editors[0].color }}>
+          <AvatarFace name={editors[0].name} avatar={editors[0].avatar} size={16} decorative />
+          <span className="truncate">{editors.length === 1 ? t("{name} is editing", { name: editors[0].name }) : t("{name} and {n} more are editing", { name: editors[0].name, n: editors.length - 1 })}</span>
+        </span>
+      )}
       {/* Drag handle: in the left gutter on wide screens, Move up/down in the panel on a phone. */}
       <span
         draggable
@@ -997,10 +1021,11 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const again = useRef(false);
   const [rev, setRev] = useState(0);
 
-  // What the server holds, key by key (JSON), and its updatedAt: the base of every save (race audit 16 Oct
-  // 2026, H7). Only the keys changed since are sent, with `baseUpdatedAt`; when someone else saved meanwhile
-  // the server answers 409 FORM_CHANGED with its copy. If they changed other parts, theirs is taken in and this
-  // change goes again on top; if they changed the same part, theirs is shown and the person is told.
+  // Live co-editing (A-12, 19 Oct 2026; form-coedit.ts). `base` = the form as the server last told us, at
+  // `version`; a save sends only what changed since (diffOps) as field-level ops, which the server merges with
+  // whatever others changed meanwhile, so nobody's edit is lost and nobody gets a 409. A newer copy (the save's
+  // reply, or someone else's `form-ops` event) is folded in by rebaseDraft: what this person is changing stays
+  // on screen, everything else becomes theirs.
   type Payload = ReturnType<typeof payloadOf>;
   const payloadOf = useCallback((d: FormDraft) => ({
     name: d.name.trim() || t("Untitled form"),
@@ -1012,67 +1037,55 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     branding: d.branding,
     settings: d.settings,
   }), [t]);
-  const snapshotOf = useCallback((f: NexusForm) => {
-    const p = payloadOf(initialDraft(f, t)) as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(p).map((k) => [k, JSON.stringify(p[k] ?? null)])) as Record<keyof Payload, string>;
-  }, [payloadOf, t]);
-  const savedRef = useRef<Record<string, string> | null>(form ? snapshotOf(form) : null);
-  const baseRef = useRef<string | undefined>(form?.updatedAt);
+  const baseDraft = useRef<FormDraft | null>(form ? initialDraft(form, t) : null);
+  const version = useRef<number>(form?.version ?? 0);
+  /** A newer server copy: rebase the screen on it. Older or equal versions (an echo, a late reply) change nothing. */
+  const takeServer = useCallback((f: NexusForm, v: number | undefined) => {
+    if (v !== undefined && baseDraft.current && v <= version.current) return false;
+    const theirs = initialDraft(f, t);
+    const before = baseDraft.current;
+    if (before) setDraft((cur) => rebaseDraft(before, cur, theirs));
+    baseDraft.current = theirs;
+    if (v !== undefined) version.current = v;
+    if (typeof f._count?.submissions === "number") setMeta((m) => ({ ...m, slug: f.slug ?? m.slug, count: f._count?.submissions ?? m.count }));
+    else if (f.slug) setMeta((m) => ({ ...m, slug: f.slug ?? m.slug }));
+    return true;
+  }, [t]);
 
   const flush = useCallback(async (): Promise<void> => {
     if (inflight.current) { again.current = true; return inflight.current; }
     if (!dirty.current) return;
     dirty.current = false;
-    const full = payloadOf(draftRef.current) as Record<string, unknown>;
+    const full = payloadOf(draftRef.current);
     setSave("saving");
     inflight.current = (async () => {
       const id = metaRef.current.id;
-      const saved = savedRef.current;
-      const changed = id && saved ? Object.keys(full).filter((k) => JSON.stringify(full[k] ?? null) !== saved[k]) : Object.keys(full);
       try {
-        if (id && changed.length === 0) { setSave(dirty.current ? "pending" : "saved"); return; }
-        const patch = Object.fromEntries(changed.map((k) => [k, full[k]]));
-        const out = id
-          ? await nexusApi.updateForm(id, { ...(patch as Parameters<typeof nexusApi.updateForm>[1]), ...(baseRef.current ? { baseUpdatedAt: baseRef.current } : {}) })
-          : await nexusApi.createForm({ ...(full as Payload), projectId });
-        savedRef.current = snapshotOf(out);
-        baseRef.current = out.updatedAt ?? baseRef.current;
-        setMeta((m) => ({ ...m, id: out.id, slug: out.slug ?? m.slug }));
-        if (!id) onCreatedRef.current?.(out.id);
+        if (!id) {
+          const out = await nexusApi.createForm({ ...(full as Payload), projectId });
+          baseDraft.current = initialDraft(out, t);
+          version.current = out.version ?? 0;
+          setMeta((m) => ({ ...m, id: out.id, slug: out.slug ?? m.slug }));
+          onCreatedRef.current?.(out.id);
+        } else {
+          const base = baseDraft.current;
+          const ops = base ? diffOps(payloadOf(base), full) : [];
+          if (ops.length === 0) { setSave(dirty.current ? "pending" : "saved"); return; }
+          const out = await nexusApi.formOps(id, ops, version.current);
+          takeServer(out.form, out.version);
+        }
         setSave(dirty.current ? "pending" : "saved");
         qc.invalidateQueries({ queryKey: ["nexus", "forms"] });
       } catch (e) {
-        const server = e instanceof ApiError && e.status === 409 ? (e.payload as { code?: string; form?: NexusForm } | null) : null;
-        if (server?.code === "FORM_CHANGED" && server.form && saved) {
-          const theirs = snapshotOf(server.form);
-          const theirDraft = initialDraft(server.form, t);
-          const clash = changed.filter((k) => theirs[k as keyof Payload] !== saved[k]);
-          // What is changed here (against the old base) stays; everything else becomes theirs.
-          setDraft((cur) => {
-            const mine = payloadOf(cur) as Record<string, unknown>;
-            const next = { ...theirDraft } as Record<string, unknown>;
-            if (!clash.length) for (const k of Object.keys(mine)) if (JSON.stringify(mine[k] ?? null) !== saved[k]) next[k] = (cur as Record<string, unknown>)[k];
-            return next as FormDraft;
-          });
-          savedRef.current = theirs;
-          baseRef.current = server.form.updatedAt ?? baseRef.current;
-          if (clash.length) {
-            setSave("saved");
-            toast.warning(t("Someone else changed this form at the same time"), { description: t("Their version is shown now. Make your change again.") });
-          } else {
-            dirty.current = true;
-            again.current = true;
-          }
-          return;
-        }
         dirty.current = true;
         setSave("error");
+        if (e instanceof ApiError && e.status === 403) toast.error(t("You can view this form but not change it."));
       }
     })();
     await inflight.current;
     inflight.current = null;
     if (again.current) { again.current = false; await flush(); }
-  }, [payloadOf, projectId, qc, snapshotOf, t]);
+  }, [payloadOf, projectId, qc, t, takeServer]);
 
   useEffect(() => {
     if (!dirty.current) return;
@@ -1295,6 +1308,70 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const rendererForm = { name: draft.name, description: draft.description, fields: cleanFields(draft.fields).map((f) => withMappedRupiah(f, customFields)), branding: draft.branding, settings: draft.settings as { confirmationTitle?: string; confirmationMessage?: string; submitLabel?: string } | null };
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
 
+  /* ---------- live co-editing (A-12, 19 Oct 2026) ---------- */
+  // Only people who can edit join the builder's room (the server checks too): they hear the others' changes
+  // (`form-ops`, folded in by takeServer) and who is on which question (`form-presence`).
+  const { socket, connected } = useRealtime();
+  const canEditForm = projectQ.data ? canEditLevel(projectQ.data.viewerAccessLevel) : false;
+  const liveRoom = canEditForm && meta.id ? `form:${meta.id}` : null;
+  useRealtimeRoom(liveRoom);
+  const [peers, setPeers] = useState<FormPeer[]>([]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const meId = me?.id;
+  const resentFocus = useRef("");
+  useEffect(() => {
+    if (!socket || !liveRoom || !meta.id) { setPeers([]); return; }
+    const formId = meta.id;
+    const onOps = (d: { formId?: string; version?: number; form?: NexusForm } | null) => {
+      if (!d || d.formId !== formId || !d.form) return;
+      takeServer(d.form, d.version);
+    };
+    const onPresence = (d: { formId?: string; members?: FormPeer[] } | null) => {
+      if (!d || d.formId !== formId) return;
+      const list = Array.isArray(d.members) ? d.members : [];
+      // Our focus was sent before the room let us in: say it again, once per question (two tabs of the same
+      // person on different questions would otherwise keep correcting each other).
+      const mine = list.find((m) => m.userId === meId);
+      const want = selectedRef.current ?? null;
+      if (mine && mine.questionId !== want && resentFocus.current !== `${formId}|${want}`) {
+        resentFocus.current = `${formId}|${want}`;
+        socket.emit("form-focus", { formId, questionId: want });
+      }
+      setPeers(list.filter((m) => m.userId !== meId));
+    };
+    socket.on("form-ops", onOps);
+    socket.on("form-presence", onPresence);
+    return () => { socket.off("form-ops", onOps); socket.off("form-presence", onPresence); setPeers([]); };
+  }, [socket, liveRoom, meta.id, meId, takeServer]);
+  useEffect(() => {
+    if (socket && liveRoom && connected && meta.id) socket.emit("form-focus", { formId: meta.id, questionId: selected ?? null });
+  }, [socket, liveRoom, connected, meta.id, selected]);
+  // Catch up on opening (the list's copy may be older) and after every reconnect (events sent while offline are gone).
+  const caughtUp = useRef("");
+  useEffect(() => {
+    const key = connected && liveRoom ? liveRoom : "";
+    if (key === caughtUp.current) return;
+    caughtUp.current = key;
+    if (!key || !meta.id) return;
+    nexusApi.formLite(meta.id).then((f) => { takeServer(f, f.version); }).catch(() => { /* the next event or save brings it */ });
+  }, [connected, liveRoom, meta.id, takeServer]);
+  const peersOn = useMemo(() => {
+    const m = new Map<string, FormPeer[]>();
+    for (const p of peers) if (p.questionId) m.set(p.questionId, [...(m.get(p.questionId) ?? []), p]);
+    return m;
+  }, [peers]);
+  const peerStack = peers.length > 0 && (
+    <div className="mr-1 flex items-center -space-x-1.5" role="group" aria-label={t("Also editing: {names}", { names: peers.map((p) => p.name).join(", ") })}>
+      {peers.slice(0, 3).map((p) => (
+        <span key={p.userId} title={t("{name} is editing", { name: p.name })} className="rounded-full ring-2 ring-background" style={{ boxShadow: `0 0 0 2px ${p.color}` }}>
+          <AvatarFace name={p.name} avatar={p.avatar} size={24} decorative />
+        </span>
+      ))}
+      {peers.length > 3 && <span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[11px] font-semibold text-muted-foreground ring-2 ring-background">+{peers.length - 3}</span>}
+    </div>
+  );
+
   const panel = sel ? (
     <QuestionPanel
       key={sel.id}
@@ -1341,6 +1418,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
             ))}
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
+            {peerStack}
             {saveIndicator}
             <button type="button" onClick={() => setPreview((p) => (p ? null : "desktop"))} aria-pressed={!!preview}
               className={cn("ml-1 inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors", preview ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
@@ -1468,6 +1546,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                         dragProps={{ onGripDragStart: () => { dragFrom.current = f.id; }, onGripDragEnd: () => { dragFrom.current = null; setDropAt(null); } }}
                         slashFor={slashFor}
                         setSlashFor={setSlashFor}
+                        editors={peersOn.get(f.id)}
                       />
                     </div>
                   ))}
