@@ -61,11 +61,15 @@ export const fetchGideonReviewTranscript = (userId: string, chatId: string, befo
 // ── GIDEON Memory (19 Oct 2026) ─────────────────────────────────────────────────────────────────────────
 // Only ever the signed-in person's own memories (server: src/app/api/gideon/memory, lib/gideon-memory.ts).
 
-export type GideonMemoryState = { paused: boolean; available?: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[] };
+/** The fixed fields of Settings › GIDEON Memory (U-2, 19 Oct 2026); null = not set. Older servers omit it. */
+export type GideonMemoryProfile = { nickname: string | null; role: string | null; about: string | null };
+export type GideonMemoryState = { paused: boolean; available?: boolean; max: number; textMax: number; memories: import("@/lib/gideon").GideonMemory[]; profile?: GideonMemoryProfile; updatedAt?: string | null };
 export const GIDEON_MEMORY_KEY = ["gideon-memory"] as const;
 export const getGideonMemory = () => gjson<GideonMemoryState>("/api/gideon/memory");
-export const addGideonMemory = (p: { text: string; kind?: string; date?: string | null }) => gjson<{ memory: import("@/lib/gideon").GideonMemory }>("/api/gideon/memory", { method: "POST", body: JSON.stringify(p) });
+export const addGideonMemory = (p: { text: string; kind?: string; date?: string | null }) => gjson<{ memory: import("@/lib/gideon").GideonMemory; created?: boolean }>("/api/gideon/memory", { method: "POST", body: JSON.stringify(p) });
 export const setGideonMemoryPaused = (paused: boolean) => gjson<GideonMemoryState>("/api/gideon/memory", { method: "PATCH", body: JSON.stringify({ paused }) });
+/** Set / clear the fixed fields ("" clears; a missing key is left alone). Returns the whole state. */
+export const setGideonMemoryProfile = (p: Partial<Record<keyof GideonMemoryProfile, string>>) => gjson<GideonMemoryState>("/api/gideon/memory/profile", { method: "PUT", body: JSON.stringify(p) });
 export const forgetAllGideonMemory = () => gjson<{ deleted: number }>("/api/gideon/memory", { method: "DELETE" });
 export const updateGideonMemory = (id: string, p: { text?: string; kind?: string; date?: string | null; status?: "ACTIVE" }) =>
   gjson<{ memory: import("@/lib/gideon").GideonMemory }>(`/api/gideon/memory/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(p) });
