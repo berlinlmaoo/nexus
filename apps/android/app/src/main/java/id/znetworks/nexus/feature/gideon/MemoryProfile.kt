@@ -15,4 +15,7 @@ object MemoryProfile {
     }.maxByOrNull { it.updatedAt ?: it.createdAt.orEmpty() }
     fun payload(field: Field, value: String) = field.prefix + value.trim()
     fun limit(field: Field, textMax: Int) = (textMax - field.prefix.length).coerceAtLeast(0)
+    fun field(memory: GMemory): Field? = Field.entries.firstOrNull { field ->
+        memory.source == "SETTINGS" && memory.kind == field.kind && field.aliases.any { memory.text.startsWith(it, ignoreCase = true) }
+    }
 }

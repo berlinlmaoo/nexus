@@ -7,11 +7,13 @@ class MemoryProfileTest {
     @Test fun profileFieldsDoNotClaimUnrelatedPeopleOrFacts() {
         val unrelated = GMemory("a", "My sister is Alice", "PERSON", status = "ACTIVE", source = "SETTINGS")
         assertNull(MemoryProfile.find(MemoryProfile.Field.NICKNAME, listOf(unrelated)))
+        assertNull(MemoryProfile.field(unrelated))
     }
     @Test fun existingLocalizedFieldIsEditableAfterLanguageChange() {
         val old = GMemory("a", "Nama panggilan: Berlin", "PERSON", status = "ACTIVE", source = "SETTINGS")
         assertEquals(old, MemoryProfile.find(MemoryProfile.Field.NICKNAME, listOf(old)))
         assertEquals("Berlin", MemoryProfile.value(MemoryProfile.Field.NICKNAME, old))
+        assertEquals(MemoryProfile.Field.NICKNAME, MemoryProfile.field(old))
     }
     @Test fun pendingOrChatSuggestionsDoNotReplaceTheSavedProfileField() {
         val active = GMemory("a", "Nickname: Berlin", "PERSON", status = "ACTIVE", source = "SETTINGS", updatedAt = "2026-10-19T01:00:00Z")

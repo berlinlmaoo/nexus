@@ -59,19 +59,26 @@ internal fun memoryError(error: ApiError, id: Boolean, fallback: String): String
     val context = LocalContext.current
     val store = (context.applicationContext as NexusApplication).container.gideonMemories
     val c = Nx.colors
+    val profileField = MemoryProfile.field(memory)
+    val initialDraft = if (profileField == null) memory.text else MemoryProfile.value(profileField, memory)
     var editing by remember(memory.id) { mutableStateOf(false) }
     var menu by remember(memory.id) { mutableStateOf(false) }
-    var draft by remember(memory.id, memory.text) { mutableStateOf(memory.text) }
-    fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, draft); editing = false } }
+    var draft by remember(memory.id, memory.text) { mutableStateOf(initialDraft) }
+    fun save() { if (busy || draft.isBlank()) return; act { store.edit(memory, if (profileField == null) draft else MemoryProfile.payload(profileField, draft)); editing = false } }
     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (editing) {
-            OutlinedTextField(draft, { draft = it.take(limit.coerceAtLeast(1)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
-                if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = memory.text; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
+            OutlinedTextField(draft, { draft = it.take(if (profileField == null) limit.coerceAtLeast(1) else MemoryProfile.limit(profileField, limit)) }, enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.gm_edit_memory)) }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown) false else when (it.key) { Key.Escape -> { draft = initialDraft; editing = false; true }; Key.Enter, Key.NumPadEnter -> { save(); true }; else -> false }
             }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }))
-            Row { TextButton(onClick = { draft = memory.text; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
+            Row { TextButton(onClick = { draft = initialDraft; editing = false }, enabled = !busy) { Text(stringResource(R.string.cancel)) }; TextButton(onClick = ::save, enabled = !busy && draft.isNotBlank()) { Text(stringResource(R.string.gm_save)) } }
         } else {
             Row(verticalAlignment = Alignment.Top) {
-                Text(memory.text, color = c.foreground, modifier = Modifier.weight(1f))
+                val text = if (profileField == null) memory.text else stringResource(when (profileField) {
+                    MemoryProfile.Field.NICKNAME -> R.string.ui_memory_nickname
+                    MemoryProfile.Field.ROLE -> R.string.ui_memory_role
+                    MemoryProfile.Field.ABOUT -> R.string.ui_memory_about
+                }) + ": " + MemoryProfile.value(profileField, memory)
+                Text(text, color = c.foreground, modifier = Modifier.weight(1f))
                 Box {
                     IconButton(onClick = { menu = true }, enabled = !busy, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreHoriz, stringResource(R.string.more), tint = c.mutedFg) }
                     DropdownMenu(menu, { menu = false }) {

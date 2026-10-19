@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -94,7 +95,7 @@ import kotlin.math.abs
                     }
                 }
                 if (data.memories.isEmpty()) item {
-                    EmptyState(Icons.Outlined.ArrowUpward, stringResource(R.string.gm_empty), stringResource(R.string.gm_empty_hint), stringResource(R.string.gm_add),
+                    EmptyState(Icons.Outlined.Psychology, stringResource(R.string.gm_empty), stringResource(R.string.gm_empty_hint), stringResource(R.string.gm_add),
                         { addFocus.requestFocus() }, actionEnabled = MemoryRules.canAdd(data) && !busy)
                 }
                 (failed ?: error)?.let { message -> item {
