@@ -40,4 +40,10 @@
     <string name="ui_vault_storage">Storage</string>
     <plurals name="ui_vault_selected"><item quantity="one">%1$d selected</item><item quantity="other">%1$d selected</item></plurals>
     <plurals name="ui_vault_trash_selected"><item quantity="one">Move %1$d item to Trash?</item><item quantity="other">Move %1$d items to Trash?</item></plurals>
+    <string name="ui_meeting_title">Meeting title</string>
+    <string name="ui_meeting_auto">Automatic (ID + EN)</string>
+    <string name="ui_meeting_speaker_caption">Start with quick introductions: “Hi, I’m Berlin…”. Voices only label this recording.</string>
+    <string name="ui_meeting_start_recording">Start recording</string>
+    <string name="ui_meeting_upload_audio">Upload an audio file</string>
+    <string name="ui_meeting_footer">Up to %1$d min · %2$d MB · processed on the company’s own server. Check the minutes and tasks before Apply.</string>
 </resources>

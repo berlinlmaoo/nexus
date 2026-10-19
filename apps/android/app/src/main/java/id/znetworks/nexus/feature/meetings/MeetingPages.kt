@@ -177,28 +177,25 @@ import java.io.File
     }
     val c = Nx.colors
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        PageHeader(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_new), onBack = onBack, leading = { MeetingBeta() })
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text(stringResource(R.string.cancel)) }
+            Text(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+            MeetingBeta()
+        }
+        HorizontalDivider(color = c.border)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!config.meetingNotesEnabled) { Text(stringResource(R.string.meet_not_available)); return@Column }
             if (uploadedId == null) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.meet_title_field)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.ui_meeting_title)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 MeetingProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
-                MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.meet_auto) }, listOf("auto" to stringResource(R.string.meet_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
+                MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.ui_meeting_auto) }, listOf("auto" to stringResource(R.string.ui_meeting_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.People, null, tint = c.mutedFg)
                     Text(stringResource(R.string.meet_tell_speakers), Modifier.weight(1f), color = c.foreground)
                     Switch(speakerLabels, { speakerLabels = it }, enabled = !busy)
                 }
-                if (speakerLabels) {
-                    Text(stringResource(R.string.meet_intro_hint), color = c.mutedFg, fontSize = 12.sp)
-                    Text(stringResource(R.string.meet_voice_privacy), color = c.mutedFg, fontSize = 12.sp)
-                }
-                if (!recording.recording && speakerLabels && localName == null) Text(stringResource(R.string.meet_intro_start), color = c.mutedFg, fontSize = 12.sp)
-                if (!recording.recording) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NxButton(stringResource(R.string.meet_upload), { if (localName != null) discard = "upload" else picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, enabled = !busy)
-                    NxButton(stringResource(R.string.meet_record), { if (localName != null) discard = "record" else permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy, icon = Icons.Outlined.Mic)
-                }
+                Text(stringResource(R.string.ui_meeting_speaker_caption), color = c.mutedFg, fontSize = 12.sp)
                 if (recording.recording) {
                     if (speakerLabels) {
                         if (recording.introEndSec == null) Column(Modifier.fillMaxWidth().background(c.accentBg, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,9 +221,7 @@ import java.io.File
                     if (speakerLabels && source == "record") introEndSec?.let { Text(stringResource(R.string.meet_intro_until, MeetingRules.timestamp(it)), color = c.mutedFg, fontSize = 12.sp) }
                     TextButton(onClick = { discard = "remove" }, enabled = !busy) { Text(stringResource(R.string.meet_remove), color = c.dangerText) }
                 }
-                Text(stringResource(R.string.meet_max, config.meetingMaxMinutes.toString()), fontSize = 12.sp, color = c.mutedFg)
-                Text(stringResource(R.string.meet_retention, config.meetingAudioRetentionDays.toString()), fontSize = 12.sp, color = c.mutedFg)
-                NxButton(stringResource(R.string.meet_send), {
+                if (localName != null) NxButton(stringResource(R.string.meet_send), {
                     val file = localName?.let { File(MeetingFiles.directory(context), it) } ?: return@NxButton
                     if (!file.isFile) { problem = R.string.meet_audio_missing; return@NxButton }
                     busy = true; problem = null
@@ -256,6 +251,11 @@ import java.io.File
             }
             if (busy) CircularProgressIndicator()
             problem?.let { Text(stringResource(it), color = c.dangerText) }
+        }
+        if (uploadedId == null && !recording.recording && config.meetingNotesEnabled) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            NxButton(stringResource(R.string.ui_meeting_start_recording), { if (localName != null) discard = "record" else permission.launch(Manifest.permission.RECORD_AUDIO) }, modifier = Modifier.fillMaxWidth(), kind = NxButtonKind.PRIMARY, enabled = !busy, icon = Icons.Outlined.Mic)
+            NxButton(stringResource(R.string.ui_meeting_upload_audio), { if (localName != null) discard = "upload" else picker.launch(arrayOf("audio/*", "video/mp4", "video/quicktime")) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+            Text(stringResource(R.string.ui_meeting_footer, config.meetingMaxMinutes, config.meetingMaxBytes / (1024 * 1024)), color = c.mutedFg, fontSize = 11.sp)
         }
     }
     discard?.let { next -> AlertDialog(onDismissRequest = { discard = null }, title = { Text(stringResource(R.string.meet_cancel_recording)) }, text = { Text(stringResource(R.string.meet_cancel_recording_hint)) }, confirmButton = {

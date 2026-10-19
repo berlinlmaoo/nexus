@@ -40,4 +40,10 @@
     <string name="ui_vault_storage">Penyimpanan</string>
     <plurals name="ui_vault_selected"><item quantity="other">%1$d dipilih</item></plurals>
     <plurals name="ui_vault_trash_selected"><item quantity="other">Pindahkan %1$d item ke Sampah?</item></plurals>
+    <string name="ui_meeting_title">Judul rapat</string>
+    <string name="ui_meeting_auto">Otomatis (ID + EN)</string>
+    <string name="ui_meeting_speaker_caption">Mulai dengan perkenalan singkat: “Hai, saya Berlin…”. Suara hanya dipakai untuk memberi label rekaman ini.</string>
+    <string name="ui_meeting_start_recording">Mulai merekam</string>
+    <string name="ui_meeting_upload_audio">Unggah file audio</string>
+    <string name="ui_meeting_footer">Maks. %1$d menit · %2$d MB · diproses di server milik perusahaan. Periksa notula dan tugas sebelum Terapkan.</string>
 </resources>
