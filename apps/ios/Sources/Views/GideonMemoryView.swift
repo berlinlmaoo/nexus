@@ -243,7 +243,7 @@ private struct MemoryLoadingGrid: View {
                 for row in 0..<Int(size.height / 22) {
                     for col in 0..<Int(size.width / 22) {
                         let alpha = reduceMotion ? 0.12 : 0.08 + (sin(phase - Double(row + col) * 0.35) + 1) * 0.06
-                        context.fill(Path(ellipseIn: CGRect(x: col * 22 + 10, y: row * 22 + 10, width: 2, height: 2)), with: .color(NX.mutedFg.opacity(alpha)))
+                        context.fill(Path(ellipseIn: CGRect(x: CGFloat(col * 22 + 10), y: CGFloat(row * 22 + 10), width: 2, height: 2)), with: .color(NX.mutedFg.opacity(alpha)))
                     }
                 }
             }
