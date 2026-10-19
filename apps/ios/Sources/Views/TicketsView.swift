@@ -392,8 +392,8 @@ struct TicketsView: View {
                                             canManage: isBod && !movingTicket, onOpen: { selected = $0 },
                                             onMove: { id, target in Task { await moveTicket(id, to: target) } })
                         }
-                    }.padding(.horizontal, NXSidebarPage.gutter(isRoot)).padding(.bottom, 16)
-                }.refreshable { await load() }.accessibilityIdentifier("tickets.board")
+                    }.scrollTargetLayout().padding(.horizontal, NXSidebarPage.gutter(isRoot)).padding(.bottom, 16)
+                }.scrollTargetBehavior(.viewAligned).refreshable { await load() }.accessibilityIdentifier("tickets.board")
             }
         }
     }
@@ -680,6 +680,7 @@ private struct TicketBoardLane: View {
     let onOpen: (Complaint) -> Void
     let onMove: (String, String) -> Void
     @State private var targeted = false
+    @Environment(\.horizontalSizeClass) private var hSize
     private var label: String { status == "OPEN" ? T("New") : status == "DONE" ? T("Done") : ticketStatusLabel(status) }
     private var target: String { status == "DONE" ? "RESOLVED" : status }
     var body: some View {
@@ -694,7 +695,7 @@ private struct TicketBoardLane: View {
                     }
                 }.padding(.bottom, 8)
             }
-        }.padding(10).frame(width: 280).frame(maxHeight: .infinity, alignment: .top)
+        }.padding(10).frame(width: hSize == .compact && items.isEmpty ? 200 : 280).frame(maxHeight: .infinity, alignment: .top)
             .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(targeted ? NX.violet : NX.border, lineWidth: targeted ? 2 : 1))
             .dropDestination(for: String.self) { ids, _ in
