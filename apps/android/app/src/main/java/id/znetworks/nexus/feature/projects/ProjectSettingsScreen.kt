@@ -239,6 +239,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (ro) Text(stringResource(R.string.acc_settings_readonly), fontSize = 13.sp, color = c.warningFg,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warningBg).padding(12.dp))
+            if (!ro) WorkflowBundleButton(d.id, vm::load)
             // Identity
             Section(stringResource(R.string.ps_identity)) {
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
