@@ -219,8 +219,13 @@ export function emitMeetingChanged(row: { id: string; createdById: string; proje
   }
 }
 
-async function patchMeeting(id: string, data: Prisma.MeetingNoteUpdateInput, where: Prisma.MeetingNoteWhereInput = {}): Promise<boolean> {
-  const res = await prisma.meetingNote.updateMany({ where: { id, ...where }, data: { ...data, version: { increment: 1 } } as Prisma.MeetingNoteUpdateManyMutationInput })
+/**
+ * `bumpVersion: false` for the transcriber's own progress readings (QA final 19 Oct 2026, D-9): they are not an
+ * edit, so they must not turn a person's title edit made meanwhile into a 409 VERSION_CONFLICT.
+ */
+async function patchMeeting(id: string, data: Prisma.MeetingNoteUpdateInput, where: Prisma.MeetingNoteWhereInput = {}, opts: { bumpVersion?: boolean } = {}): Promise<boolean> {
+  const bump = opts.bumpVersion !== false
+  const res = await prisma.meetingNote.updateMany({ where: { id, ...where }, data: { ...data, ...(bump ? { version: { increment: 1 } } : {}) } as Prisma.MeetingNoteUpdateManyMutationInput })
   if (res.count) {
     const row = await prisma.meetingNote.findUnique({ where: { id } })
     if (row) {
@@ -443,6 +448,12 @@ const WHISPER_ERRORS: Record<string, { code: string; text: string }> = {
   gpu_busy: { code: "gpu_busy", text: "The office GPU was busy for too long. Try again." },
 }
 
+/** Whether the transcriber's queue reading differs from the stored one in state, stage or queue position. */
+export function transcribeStatsChanged(stored: unknown, next: { position: number | null; state: string; stage?: string }): boolean {
+  const o = (stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {}) as { position?: unknown; state?: unknown; stage?: unknown }
+  return (o.position ?? null) !== (next.position ?? null) || (o.state ?? null) !== (next.state ?? null) || (o.stage ?? null) !== (next.stage ?? null)
+}
+
 async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
   let res: Response
   try {
@@ -463,8 +474,11 @@ async function pollTranscript(row: NonNullable<MeetingRow>): Promise<void> {
     const stats = { position: job.position ?? null, state: job.state, ...(job.stage ? { stage: job.stage } : {}) }
     // The transcriber knows the real length once it opened the file: the ETA uses it from then on.
     const learnedDuration = !row.durationSec && typeof job.durationSec === "number" && job.durationSec > 0 ? job.durationSec : undefined
-    if (learnedDuration || Math.abs(progress - row.progress) >= 0.02 || JSON.stringify(row.transcribeStats ?? {}) !== JSON.stringify(stats)) {
-      await patchMeeting(row.id, { progress, transcribeStats: stats as Prisma.InputJsonValue, ...(learnedDuration ? { durationSec: learnedDuration } : {}) }, { status: "TRANSCRIBING" })
+    // Compared field by field (QA final 19 Oct 2026, D-9): the stored JSON comes back from jsonb with its keys
+    // re-ordered, so comparing JSON strings saw a change on every poll and sent `meeting-changed` (and bumped the
+    // version) every ~12 s for as long as the job waited in the GPU queue.
+    if (learnedDuration || Math.abs(progress - row.progress) >= 0.02 || transcribeStatsChanged(row.transcribeStats, stats)) {
+      await patchMeeting(row.id, { progress, transcribeStats: stats as Prisma.InputJsonValue, ...(learnedDuration ? { durationSec: learnedDuration } : {}) }, { status: "TRANSCRIBING" }, { bumpVersion: false })
     }
     return
   }

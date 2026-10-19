@@ -163,12 +163,15 @@ export function useMeeting(id: string) {
     const on = (p: MeetingPing) => {
       if (p?.meetingId !== id) return;
       const cur = qc.getQueryData<MeetingFull>(meetingKey(id));
-      // Progress only: patch in place (no refetch per percent).
-      if (cur && !p.deleted && cur.status === p.status && (p.status === "TRANSCRIBING" || p.status === "SUMMARIZING" || p.status === "UPLOADING") && p.version > cur.version) {
-        qc.setQueryData<MeetingFull>(meetingKey(id), { ...cur, progress: p.progress, version: p.version });
+      // Progress only: patch in place (no refetch per percent). Since D-9 (QA final 19 Oct 2026) the transcriber's
+      // readings no longer bump the version: same version + same status = a progress or queue-position reading.
+      // A reading at 0 % is a queue move, which needs the new position from the server.
+      const working = p.status === "TRANSCRIBING" || p.status === "SUMMARIZING" || p.status === "UPLOADING";
+      if (cur && !p.deleted && cur.status === p.status && working && p.version >= cur.version && !(p.progress === 0 && cur.progress === 0 && p.version === cur.version)) {
+        qc.setQueryData<MeetingFull>(meetingKey(id), { ...cur, progress: p.progress, version: Math.max(p.version, cur.version) });
         return;
       }
-      if (!cur || p.deleted || p.version > cur.version || p.status !== cur.status) void qc.invalidateQueries({ queryKey: meetingKey(id) });
+      if (!cur || p.deleted || p.version >= cur.version || p.status !== cur.status) void qc.invalidateQueries({ queryKey: meetingKey(id) });
     };
     socket.on("meeting-changed", on);
     return () => { socket.off("meeting-changed", on); };
