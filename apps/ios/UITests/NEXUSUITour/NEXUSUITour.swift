@@ -17,6 +17,7 @@ import UIKit
 ///   TOUR_PROJECT_ID / TOUR_FORM_ID   optional: replace the project / form in the list
 ///   TOUR_SERVER                 optional: "dev" (default) or "production"
 ///   TOUR_LANG                   optional: "en" (default) or "id"
+///   TOUR_THEME                  optional: "light" (default) or "dark"
 ///   TOUR_WEB_BASE               required for the Safari tour: the dev web it opens (ui-tour.sh passes it)
 ///   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form to show
 ///   TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID   optional: the Outlet Sales / Social Media Report project
@@ -968,7 +969,7 @@ final class NEXUSUITour: XCTestCase {
             "-nexusTourStep", step,
             // UserDefaults' argument domain: read by the app for this launch, never saved.
             "-nexus.language", setting("TOUR_LANG") ?? "en",
-            "-nexus.theme", "light",
+            "-nexus.theme", setting("TOUR_THEME") == "dark" ? "dark" : "light",
         ]
         if let screen { args += ["-nexusTourScreen", screen] }
         if let route { args += ["-nexusTourRoute", route] }

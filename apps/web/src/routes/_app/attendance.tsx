@@ -1954,7 +1954,12 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     : type === "LEAVE" ? (leave?.remaining ?? null)
     : null;
   // Said before the submit, not after: a day asked for with none left is caught here.
-  const quotaProblem = !granting && remainingDays != null && remainingDays < 1
+  // The day-off numbers above are this attendance period's (28th → 27th). A date in a later period has
+  // its own allowance, which the server checks on submit: with this period used up, a staff could not
+  // file a day off for the 29th at all — the button stayed disabled although the server would accept it.
+  const periodIndex = (k: string) => { const [y, m, d] = k.split("-").map(Number); return y * 12 + m + (d >= 28 ? 1 : 0); };
+  const otherPeriod = type === "DAY_OFF" && Boolean(date) && periodIndex(date) !== periodIndex(today);
+  const quotaProblem = !granting && !otherPeriod && remainingDays != null && remainingDays < 1
     ? tr("You have no {type} days left.", { type: tr(REQ_LABEL[type] ?? "days").toLowerCase() })
     : null;
   const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };

@@ -64,6 +64,10 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null)
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Isi permintaan tidak valid." }, { status: 400 })
+    // Read, merge and write under one lock: two saves at once (two BoD, or two quick toggles) used to each
+    // merge into the same old copy, and the later write dropped the other's change (QA final 19 Oct 2026).
+    return await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('admin-calendar-settings')::int8)`
     const current = await getCalendarSettings()
     let next = normalizeCalendarSettings(body, current)
 
@@ -98,6 +102,7 @@ export async function PATCH(req: NextRequest) {
     const retired = stored && typeof stored === "object" ? Object.fromEntries(RETIRED_KEYS.filter((k) => k in stored).map((k) => [k, stored[k]])) : {}
     await setAppSetting(CALENDAR_SETTING_KEY, { ...retired, ...next })
     return NextResponse.json(await payload(next))
+    }, { timeout: 20_000, maxWait: 20_000 })
   } catch (error) {
     console.error("[admin/calendar-settings] PATCH", error)
     return NextResponse.json({ error: "Pengaturan kalender gagal disimpan." }, { status: 500 })

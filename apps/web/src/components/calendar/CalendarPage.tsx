@@ -702,7 +702,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       : monthItems.length === 0 && filters.scope === "division" ? <Banner text={t("Your division has nothing due in {month}.", { month: monthName })} />
       : null;
     const truncated = itemsQ.data?.truncated ? <Banner text={t("This month has more tasks than the calendar can show at once.")} /> : null;
-    const legendKey = <Legend holiday={lay.gridCompact && monthHasHoliday} />;
+    const legendKey = <Legend holiday={lay.gridCompact && monthHasHoliday} count={!lay.gridCompact} />;
     const panel = (
       <DayPanel day={date} today={today} nowMs={nowMs} windowDays={windowDays} holiday={holidays.get(date) ?? null} tree={tree} rail={rail} ix={ix}
         lens={lens} onLens={setLens} meId={meId} scope={filters.scope} onShowEveryone={showEveryone}
@@ -785,7 +785,7 @@ function FilterButton({ count, className, iconOnly, ...rest }: { count: number; 
  * What the month's marks mean, under the grid on every screen size: the phone has the same dots, bar
  * and chips. A compact grid has no room for a holiday's name, so its dotted day number is explained too.
  */
-function Legend({ holiday }: { holiday: boolean }) {
+function Legend({ holiday, count }: { holiday: boolean; count: boolean }) {
   const { t } = useLang();
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
@@ -794,6 +794,9 @@ function Legend({ holiday }: { holiday: boolean }) {
       <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-[2px] w-4 rounded-full bg-cal-overdue" />{t("overdue")}</span>
       {holiday && (
         <span className="inline-flex items-center gap-1.5"><span aria-hidden className={cn("font-semibold tabular-nums text-cal-holiday", HOLIDAY_CUE)}>1</span>{t("public holiday")}</span>
+      )}
+      {count && (
+        <span className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1.5 text-2xs font-semibold leading-none tabular-nums">3</span>{t("number = tasks that day")}</span>
       )}
       <span>{t("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.")}</span>
     </div>

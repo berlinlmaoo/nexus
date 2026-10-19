@@ -1,21 +1,59 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChevronDown, Clock, Loader2, Smile, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
-import { PresenceChip, patchPresence, presenceApi, usePresence } from "@/lib/presence";
+import { patchPresence, presenceApi, presenceText, usePresence } from "@/lib/presence";
 
 /**
- * Set / clear one's own manual status, "Away · <text>" from a start to an end (owner, 19 Oct 2026). Times are WIB
- * (the company's clock), whatever the browser's zone. Everyone in the workspace sees it; nobody is notified; it ends
- * by itself. The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
+ * Set / clear one's own manual status from a start to an end (owner, 19 Oct 2026; layout of the UI round of the same
+ * day, U-1: Slack-like). Top bar Cancel · Status · Save, one text field with an emoji button, quick picks as a list,
+ * "Recently used" (this browser's own last statuses, only when there are any), then Clear after / Starts and one
+ * summary line. Times are WIB (the company's clock), whatever the browser's zone. Everyone in the workspace sees it;
+ * nobody is notified; it ends by itself. A manual status always shows as Away (the server has no other availability
+ * for it). The server checks the same rules (src/lib/presence-core.ts checkManualStatus) and says why when it refuses.
+ * The emoji is stored as the start of the text ("🗓️ Meeting") — the API has one text field.
  */
 
-const SUGGESTIONS = ["Meeting", "Lunch", "Out for a shoot", "At the dentist", "Potong rambut"] as const;
 const TEXT_MAX = 80;
 
-type EndChoice = "30m" | "1h" | "2h" | "today" | "custom";
+type EndChoice = "30m" | "1h" | "2h" | "3h" | "today" | "custom";
+const END_MINUTES: Partial<Record<EndChoice, number>> = { "30m": 30, "1h": 60, "2h": 120, "3h": 180 };
+
+/** Quick picks: tap fills text + emoji + duration. No WFH/sick: those are attendance requests. */
+const QUICK: ReadonlyArray<{ emoji: string; text: string; end: EndChoice }> = [
+  { emoji: "🗓️", text: "Meeting", end: "1h" },
+  { emoji: "🍽️", text: "Lunch", end: "1h" },
+  { emoji: "🎬", text: "Out for a shoot", end: "3h" },
+  { emoji: "🚗", text: "On the road", end: "1h" },
+];
+
+const EMOJIS = ["🗓️", "🍽️", "🎬", "🚗", "💬", "🎧", "📞", "✈️", "🏃", "☕", "📍", "🎯"] as const;
+
+/** This browser's last statuses (a per-viewer convenience; the server keeps only the running one). */
+const RECENT_KEY = "nexus-presence-recent";
+type Recent = { emoji: string; text: string; end: EndChoice };
+function readRecent(): Recent[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((r) => r && typeof r.text === "string" && r.text).slice(0, 5) : [];
+  } catch { return []; }
+}
+function pushRecent(r: Recent) {
+  try {
+    const key = (x: Recent) => `${x.emoji} ${x.text}`.trim().toLowerCase();
+    const list = [r, ...readRecent().filter((x) => key(x) !== key(r))].slice(0, 5);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch { /* storage blocked: no recents */ }
+}
+
+/** "🗓️ Meeting" → { emoji: "🗓️", text: "Meeting" }. */
+const LEADING_EMOJI = /^(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}|\p{Emoji_Modifier})*)\s*/u;
+function splitEmoji(s: string): { emoji: string; text: string } {
+  const m = LEADING_EMOJI.exec(s);
+  return m ? { emoji: m[1], text: s.slice(m[0].length) } : { emoji: "", text: s };
+}
 
 /** "YYYY-MM-DD" and "HH:MM" of an instant on the WIB clock. */
 function wibParts(d: Date): { day: string; time: string } {
@@ -34,7 +72,9 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
   const current = usePresence(meId);
   const manual = current?.manual ?? null;
 
+  const [emoji, setEmoji] = useState("");
   const [text, setText] = useState("");
+  const [pickEmoji, setPickEmoji] = useState(false);
   const [later, setLater] = useState(false);
   const [startDay, setStartDay] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -42,13 +82,18 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
   const [endDay, setEndDay] = useState("");
   const [endTime, setEndTime] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<Recent[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const now = new Date();
     const inHour = wibParts(new Date(now.getTime() + 3600e3));
     const nowP = wibParts(now);
-    setText(manual?.text ?? "");
+    const cur = splitEmoji(manual?.text ?? "");
+    setEmoji(cur.emoji);
+    setText(cur.text);
+    setPickEmoji(false);
     setLater(false);
     setStartDay(nowP.day);
     setStartTime(nowP.time);
@@ -56,25 +101,31 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
     setEndDay(inHour.day);
     setEndTime(inHour.time);
     setError(null);
+    setRecent(readRecent());
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startAt = useMemo(() => (later ? wibInstant(startDay, startTime) : null), [later, startDay, startTime]);
   const endAt = useMemo(() => {
     const from = startAt ?? new Date();
-    if (end === "30m") return new Date(from.getTime() + 30 * 60e3);
-    if (end === "1h") return new Date(from.getTime() + 3600e3);
-    if (end === "2h") return new Date(from.getTime() + 2 * 3600e3);
+    const mins = END_MINUTES[end];
+    if (mins) return new Date(from.getTime() + mins * 60e3);
     if (end === "today") return wibInstant(wibParts(from).day, "23:59");
     return wibInstant(endDay, endTime);
   }, [end, endDay, endTime, startAt]);
 
+  const full = `${emoji ? `${emoji} ` : ""}${text.trim()}`;
   const save = useMutation({
     mutationFn: () => presenceApi.setManual({
-      text: text.trim(),
+      text: full,
       startsAt: startAt ? startAt.toISOString() : null,
       endsAt: endAt ? endAt.toISOString() : "",
     }),
-    onSuccess: (r) => { patchPresence(qc, r.status); onOpenChange(false); },
+    onSuccess: (r) => {
+      patchPresence(qc, r.status);
+      const isQuick = QUICK.some((q) => q.emoji === emoji && t(q.text) === text.trim());
+      if (!isQuick) pushRecent({ emoji, text: text.trim(), end: end === "custom" ? "1h" : end });
+      onOpenChange(false);
+    },
     onError: (e) => setError(e instanceof Error ? e.message : t("Could not save. Try again.")),
   });
   const clear = useMutation({
@@ -86,90 +137,176 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
   const fmt = (d: Date | null) => d ? `${d.toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Jakarta" })} ${wibParts(d).time}` : "—";
   const busy = save.isPending || clear.isPending;
   const canSave = text.trim().length > 0 && !!endAt && !busy;
-  const chip = "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
-  const chipOn = "border-primary bg-primary/10 text-primary";
-  const chipOff = "border-border bg-background text-foreground hover:bg-accent";
+  const pick = (p: { emoji: string; text: string; end: EndChoice }, translate: boolean) => {
+    setEmoji(p.emoji);
+    setText(translate ? t(p.text) : p.text);
+    setEnd(p.end);
+    setError(null);
+    inputRef.current?.focus();
+  };
+  const durationLabel = (e: EndChoice) => {
+    const m = END_MINUTES[e];
+    return m ? (m < 60 ? t("{n} min", { n: m }) : t("{n} h", { n: m / 60 })) : e === "today" ? t("Today") : "";
+  };
+  const select = "h-9 appearance-none rounded-lg border border-border bg-background pl-3 pr-8 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
   const field = "h-9 rounded-lg border border-border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  const row = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  const sectionLabel = "px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-2xl p-5 sm:p-6" lang={lang}>
-        <DialogHeader className="space-y-1 text-left">
-          <DialogTitle className="text-base font-bold tracking-tight">{t("Set a status")}</DialogTitle>
-          <DialogDescription className="text-xs">{t("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")}</DialogDescription>
-        </DialogHeader>
-
-        {current && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{t("Now:")}</span>
-            <PresenceChip userId={meId} />
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label htmlFor="presence-text" className="text-xs font-semibold text-muted-foreground">{t("What are you up to?")}</label>
-          <div className="relative">
-            <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-amber-600 dark:text-amber-300">{t("Away ·")}</span>
-            <input
-              id="presence-text"
-              value={text}
-              maxLength={TEXT_MAX}
-              onChange={(e) => { setText(e.target.value); setError(null); }}
-              placeholder={t("e.g. Potong rambut")}
-              className={cn(field, "h-10 w-full pl-[4.25rem] pr-12")}
-              autoFocus
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground">{[...text].length}/{TEXT_MAX}</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} type="button" onClick={() => setText(t(s))} className={cn(chip, chipOff, "py-1 font-medium")}>{t(s)}</button>
-            ))}
-          </div>
+      <DialogContent className="flex max-h-[92dvh] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0 [&>button:last-child]:hidden" lang={lang}>
+        {/* Top bar: Cancel · Status · Save. No bottom buttons. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-border px-3 py-2.5">
+          <button type="button" onClick={() => onOpenChange(false)} className="justify-self-start rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{t("Cancel")}</button>
+          <DialogTitle className="text-sm font-bold tracking-tight">{t("Status")}</DialogTitle>
+          <button
+            type="button"
+            onClick={() => save.mutate()}
+            disabled={!canSave}
+            className={cn("inline-flex items-center gap-1.5 justify-self-end rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors", canSave ? "bg-primary text-primary-foreground hover:opacity-90" : "text-muted-foreground/60")}
+          >
+            {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Save")}
+          </button>
         </div>
+        <DialogDescription className="sr-only">{t("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")}</DialogDescription>
 
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-muted-foreground">{t("From")}</div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" onClick={() => setLater(false)} className={cn(chip, !later ? chipOn : chipOff)} aria-pressed={!later}>{t("Now")}</button>
-            <button type="button" onClick={() => setLater(true)} className={cn(chip, later ? chipOn : chipOff)} aria-pressed={later}>{t("Later")}</button>
-            {later && (
-              <span className="flex items-center gap-1.5">
-                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} className={field} aria-label={t("Start date")} />
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} aria-label={t("Start time")} />
-              </span>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          {/* The text field: emoji button + text + counter. */}
+          <div className="space-y-2">
+            <div className="flex h-11 items-center gap-1 rounded-xl border border-border bg-background pl-1.5 pr-3 focus-within:ring-2 focus-within:ring-primary/40">
+              <button
+                type="button"
+                onClick={() => setPickEmoji((v) => !v)}
+                aria-label={t("Choose an emoji")}
+                aria-expanded={pickEmoji}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-lg transition-colors hover:bg-accent"
+              >
+                {emoji || <Smile className="h-4.5 w-4.5 text-muted-foreground" />}
+              </button>
+              <input
+                id="presence-text"
+                ref={inputRef}
+                value={text}
+                maxLength={TEXT_MAX}
+                onChange={(e) => { setText(e.target.value); setError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && canSave) save.mutate(); }}
+                placeholder={t("What are you up to?")}
+                aria-label={t("What are you up to?")}
+                className="h-full min-w-0 flex-1 bg-transparent text-sm focus-visible:outline-none"
+                autoFocus
+              />
+              {(text || emoji) && (
+                <button type="button" onClick={() => { setText(""); setEmoji(""); inputRef.current?.focus(); }} aria-label={t("Clear text")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{[...full].length}/{TEXT_MAX}</span>
+            </div>
+            {pickEmoji && (
+              <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-muted/40 p-1.5" role="group" aria-label={t("Choose an emoji")}>
+                {EMOJIS.map((e) => (
+                  <button key={e} type="button" onClick={() => { setEmoji(e); setPickEmoji(false); inputRef.current?.focus(); }} className={cn("grid h-8 w-8 place-items-center rounded-lg text-lg transition-colors hover:bg-background", emoji === e && "bg-background ring-1 ring-primary/40")}>{e}</button>
+                ))}
+                {emoji && (
+                  <button type="button" onClick={() => { setEmoji(""); setPickEmoji(false); }} className="rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-background">{t("No emoji")}</button>
+                )}
+              </div>
             )}
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-muted-foreground">{t("Clear after")}</div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {([["30m", t("30 minutes")], ["1h", t("1 hour")], ["2h", t("2 hours")], ["today", t("Today")], ["custom", t("Pick a time")]] as const).map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setEnd(k)} className={cn(chip, end === k ? chipOn : chipOff)} aria-pressed={end === k}>{label}</button>
-            ))}
+          {/* Availability: its own line, not a prefix in the field. A manual status always shows as Away. */}
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
+            <span className="text-sm font-medium">{t("Availability")}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-semibold">
+              <span aria-hidden className="h-2 w-2 rounded-full bg-amber-400" /> Away
+            </span>
           </div>
-          {end === "custom" && (
-            <div className="flex items-center gap-1.5">
-              <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} className={field} aria-label={t("End date")} />
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} aria-label={t("End time")} />
+
+          {manual && current && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("Now:")}</div>
+                <div className="truncate text-sm font-medium">{presenceText(current, lang)}</div>
+              </div>
+              <button type="button" onClick={() => clear.mutate()} disabled={busy} className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50">
+                {clear.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Clear status")}
+              </button>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">{t("{from} – {to} WIB", { from: later ? fmt(startAt) : t("Now"), to: fmt(endAt) })}</p>
-        </div>
 
-        {error && <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
+          <div>
+            <div className={sectionLabel}>{t("Quick picks")}</div>
+            <div className="-mx-1">
+              {QUICK.map((q) => (
+                <button key={q.text} type="button" onClick={() => pick(q, true)} className={row}>
+                  <span aria-hidden className="w-6 text-center text-lg leading-none">{q.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{t(q.text)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{durationLabel(q.end)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-          {manual && (
-            <button type="button" onClick={() => clear.mutate()} disabled={busy} className="mr-auto rounded-lg px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50">
-              {clear.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Clear status")}
-            </button>
+          {recent.length > 0 && (
+            <div>
+              <div className={sectionLabel}>{t("Recently used")}</div>
+              <div className="-mx-1">
+                {recent.map((r) => (
+                  <button key={`${r.emoji}${r.text}`} type="button" onClick={() => pick(r, false)} className={row}>
+                    <span aria-hidden className="w-6 text-center text-lg leading-none">{r.emoji || <Clock className="mx-auto h-4 w-4 text-muted-foreground" />}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{r.text}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{durationLabel(r.end)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-          <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{t("Cancel")}</button>
-          <button type="button" onClick={() => save.mutate()} disabled={!canSave} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50">
-            {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save status")}
-          </button>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="presence-end" className="text-sm font-medium">{t("Clear after")}</label>
+              <span className="relative">
+                <select id="presence-end" value={end} onChange={(e) => setEnd(e.target.value as EndChoice)} className={select}>
+                  <option value="30m">{t("30 minutes")}</option>
+                  <option value="1h">{t("1 hour")}</option>
+                  <option value="2h">{t("2 hours")}</option>
+                  <option value="3h">{t("3 hours")}</option>
+                  <option value="today">{t("Today")}</option>
+                  <option value="custom">{t("Pick a time")}</option>
+                </select>
+                <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </span>
+            </div>
+            {end === "custom" && (
+              <div className="flex items-center justify-end gap-1.5">
+                <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} className={field} aria-label={t("End date")} />
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} aria-label={t("End time")} />
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="presence-start" className="text-sm font-medium">{t("Starts")}</label>
+              <span className="relative">
+                <select id="presence-start" value={later ? "later" : "now"} onChange={(e) => setLater(e.target.value === "later")} className={select}>
+                  <option value="now">{t("Now")}</option>
+                  <option value="later">{t("Later")}</option>
+                </select>
+                <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </span>
+            </div>
+            {later && (
+              <div className="flex items-center justify-end gap-1.5">
+                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} className={field} aria-label={t("Start date")} />
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} aria-label={t("Start time")} />
+              </div>
+            )}
+            <p className="pt-1 text-xs text-muted-foreground">
+              {later ? t("{from} – {to} WIB", { from: fmt(startAt), to: fmt(endAt) }) : t("Until {when} WIB", { when: fmt(endAt) })}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")}</p>
+          </div>
+
+          {error && <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
         </div>
       </DialogContent>
     </Dialog>

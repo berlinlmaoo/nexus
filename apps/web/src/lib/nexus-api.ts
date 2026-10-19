@@ -35,6 +35,8 @@ export type VaultItem = {
   /** `/api/vault/items/<id>/thumb?v=…` for a picture the server can shrink; add `&w=`. Absent from
    *  servers before 9 Oct 2026, and null for everything that is not such a picture. */
   thumbUrl?: string | null;
+  /** An office file as a PDF to show inline (`/api/vault/items/<id>/preview?v=…`); null otherwise. Since 19 Oct 2026. */
+  previewUrl?: string | null;
   uploader: VaultPerson | null;
   owner: VaultPerson | null;
   childCount: number;
@@ -705,6 +707,11 @@ export type NexusConversation = {
   canManageMembers?: boolean;
   /** false = a project room you can read but not post in (Can view). Missing = allowed. */
   canPost?: boolean;
+  /**
+   * DM only, GET /api/conversations since 19 Oct 2026: the other person, or — when they are no longer
+   * in the room — the last one who wrote in it (`left: true`). null = nobody to name. Missing on older servers.
+   */
+  peer?: { id: string; name: string | null; avatar: string | null; left: boolean } | null;
   /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
   description?: string | null;
 };

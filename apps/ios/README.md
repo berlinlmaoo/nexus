@@ -35,7 +35,7 @@ curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
 
 ### Dev server
 
-Branch `dev` builds (the `NEXUS_DEV_SERVER` flag) can switch to the DEV server (Tuning Room → Server). Its
+Debug builds from branch `dev` (the `NEXUS_DEV_SERVER` flag, Debug configuration only; Archive never has it) can switch to the DEV server (Tuning Room → Server). Its
 address is not in this repo: `project.yml` commits the placeholder `https://nexus-dev.invalid`
 (`NEXUS_DEV_SERVER_URL`, Info.plist key `NEXUSDevServerURL`), and the build phase "Dev server address" writes
 the real one into the built Info.plist from a file outside every checkout:

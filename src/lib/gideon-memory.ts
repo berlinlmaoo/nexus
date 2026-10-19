@@ -221,7 +221,7 @@ const isUnique = (e: unknown) => !!e && typeof e === "object" && (e as { code?: 
  */
 export async function saveMemory(
   userId: string,
-  input: { text: unknown; kind?: unknown; date?: unknown; status: "ACTIVE" | "PENDING"; source: "CHAT" | "SETTINGS"; explicit: boolean; chatId?: string | null; runId?: string | null },
+  input: { text: unknown; kind?: unknown; date?: unknown; status: "ACTIVE" | "PENDING"; source: "CHAT" | "SETTINGS" | ProfileSource; explicit: boolean; chatId?: string | null; runId?: string | null },
 ): Promise<{ memory: MemoryView; created: boolean }> {
   const text = cleanMemoryText(input.text)
   if (!text) throw new MemoryRefusal("empty", "Nothing to remember.")
@@ -335,6 +335,59 @@ export async function forgetMemories(userId: string, input: { id?: unknown; quer
   if (loose.length > 3 && !hit.length) throw new MemoryRefusal("not_found", `Several memories match "${q}": ${loose.slice(0, 6).map((r) => r.text.slice(0, 50)).join("; ")}. Ask which one.`)
   await prisma.gideonMemory.updateMany({ where: { id: { in: loose.map((r) => r.id) }, userId, deletedAt: null }, data: { deletedAt: new Date() } })
   return loose.map((r) => memoryView({ ...r, deletedAt: new Date() }))
+}
+
+// ── Fixed profile fields (owner, 19 Oct 2026: GIDEON Memory "like ChatGPT") ──────────────────────────────
+// "Your nickname", "Your role / occupation", "More about you" are ordinary memories (GIDEON uses them the same way
+// and they count toward MEMORY_MAX), tagged by `source` so Settings can show them as fields. No AI writes these.
+
+export type ProfileField = "nickname" | "role" | "about"
+export type ProfileSource = "PROFILE_NICKNAME" | "PROFILE_ROLE" | "PROFILE_ABOUT"
+const PROFILE: Record<ProfileField, { source: ProfileSource; kind: MemoryKind; prefix: string }> = {
+  nickname: { source: "PROFILE_NICKNAME", kind: "PERSON", prefix: "Nickname: " },
+  role: { source: "PROFILE_ROLE", kind: "PERSON", prefix: "Role / occupation: " },
+  about: { source: "PROFILE_ABOUT", kind: "FACT", prefix: "About me: " },
+}
+export const PROFILE_FIELDS = Object.keys(PROFILE) as ProfileField[]
+/** Room for the prefix inside MEMORY_TEXT_MAX (200). */
+export const PROFILE_TEXT_MAX = 170
+
+/** The three field values (without their prefix) read from the live memories; null = not set. */
+export function profileFromMemories(memories: MemoryView[]): Record<ProfileField, string | null> {
+  const out = { nickname: null, role: null, about: null } as Record<ProfileField, string | null>
+  for (const f of PROFILE_FIELDS) {
+    const m = memories.find((x) => x.source === PROFILE[f].source && x.status === "ACTIVE")
+    if (m) out[f] = m.text.startsWith(PROFILE[f].prefix) ? m.text.slice(PROFILE[f].prefix.length) : m.text
+  }
+  return out
+}
+
+/**
+ * Set / clear the fixed fields. Only the keys present change; "" or null clears (soft delete). Same rules as any
+ * typed memory: secrets refused, cap MEMORY_MAX, refused while paused.
+ */
+export async function setProfileMemories(userId: string, input: Partial<Record<ProfileField, unknown>>): Promise<void> {
+  for (const f of PROFILE_FIELDS) {
+    if (!(f in input)) continue
+    const raw = input[f]
+    const value = typeof raw === "string" ? cleanMemoryText(raw).slice(0, PROFILE_TEXT_MAX).trim() : ""
+    const { source, kind, prefix } = PROFILE[f]
+    const live = await prisma.gideonMemory.findMany({ where: { userId, source, deletedAt: null }, select: { id: true }, orderBy: { createdAt: "desc" } })
+    if (!value) {
+      if (live.length) await prisma.gideonMemory.updateMany({ where: { id: { in: live.map((r) => r.id) }, userId, deletedAt: null }, data: { deletedAt: new Date() } })
+      continue
+    }
+    if (await isMemoryPaused(userId)) throw new MemoryRefusal("paused", "GIDEON Memory is paused.")
+    const text = prefix + value
+    if (live[0]) {
+      await updateMemory(userId, live[0].id, { text, kind })
+      if (live.length > 1) await prisma.gideonMemory.updateMany({ where: { id: { in: live.slice(1).map((r) => r.id) }, userId, deletedAt: null }, data: { deletedAt: new Date() } })
+    } else {
+      const { memory, created } = await saveMemory(userId, { text, kind, status: "ACTIVE", source, explicit: true })
+      // The same text already lived as an ordinary memory: adopt it as the field.
+      if (!created) await prisma.gideonMemory.updateMany({ where: { id: memory.id, userId }, data: { source } })
+    }
+  }
 }
 
 export async function setMemoryPaused(userId: string, paused: boolean): Promise<void> {

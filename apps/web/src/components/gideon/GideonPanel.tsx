@@ -9,8 +9,6 @@ import {
   AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
   ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, Info, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
   MoreHorizontal, Mic, Brain, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
@@ -575,89 +573,109 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   );
   const iconBtn = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const headerTitle = chatTitle && !fresh ? chatTitleText(chatTitle) || t("Untitled chat") : t("New chat");
-  // On the full page from md up the chat list is its own column, so the title is only a label there.
-  const titleIsToggle = !isPage;
   // The full page's chat list column folds away (owner, 16 Oct 2026), remembered per browser.
   const [listOpen, setListOpenState] = useState(() => { try { return localStorage.getItem("gideon-chatlist-open") !== "0"; } catch { return true; } });
   const setListOpen = (open: boolean) => { setListOpenState(open); try { localStorage.setItem("gideon-chatlist-open", open ? "1" : "0"); } catch { /* private mode */ } };
 
+  // The tier menu (U-7, owner 19 Oct 2026): Artemis / Phaëthon (Default) / Aphrodite / Model 0 (Experimental).
+  const tierMenuContent = (
+              <DropdownMenuContent align="center" side="bottom" className="w-64">
+                <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("GIDEON tier")}</DropdownMenuLabel>
+                {GIDEON_TIERS.map((x) => {
+                  const st = tierStatus.data?.[x.id as keyof NonNullable<typeof tierStatus.data>];
+                  const away = st ? !st.available : false;
+                  return (
+                  <DropdownMenuItem
+                    key={x.id}
+                    disabled={away}
+                    onSelect={() => pickTier(x.id)}
+                    className="flex items-start gap-2 py-2"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm">{x.name}{x.id === GIDEON_DEFAULT_TIER && <span className="ml-1.5 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-sidebar-primary">{t("Default")}</span>}{x.id === "experimental" && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">{t("Experimental")}</span>}</span>
+                      {away ? (
+                        <span className="block text-xs font-medium text-amber-700 dark:text-amber-400">{t("Unavailable right now")}{st?.reason && TIER_REASON[st.reason] ? ` · ${t(TIER_REASON[st.reason])}` : ""}</span>
+                      ) : (
+                        <span className="block text-xs text-muted-foreground">{t(x.blurb)}</span>
+                      )}
+                    </span>
+                    <Check className={cn("mt-0.5 h-4 w-4 shrink-0", x.id === tier ? "opacity-100" : "opacity-0")} />
+                  </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+  );
+  // Header (U-7): at most two controls per side so nothing collapses on a phone. Left: Close · History.
+  // Centre: the tier picker as the title, the chat title under it. Right: New chat · ⋯.
+  const historyOpen = isPage ? listOpen : view === "history";
+  const toggleHistory = () => {
+    if (!isPage) { setView((v) => (v === "history" ? "chat" : "history")); return; }
+    // The full page: from md up the chat list column folds; below md (no column) the history replaces the chat.
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) setListOpen(!listOpen);
+    else setView((v) => (v === "history" ? "chat" : "history"));
+  };
   const header = (
-    <div className={cn("flex h-11 shrink-0 items-center gap-0.5 px-2", isPage && "border-b border-border/60 md:px-3")}>
-      {isPage && (
-        <button type="button" onClick={() => setListOpen(!listOpen)} aria-expanded={listOpen}
-          title={listOpen ? t("Hide chat list") : t("Show chat list")} aria-label={listOpen ? t("Hide chat list") : t("Show chat list")}
-          className={cn(iconBtn, "mr-1 hidden md:grid")}>
-          {listOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-        </button>
-      )}
-      {/* Notion AI: the chat's title is the way into the history ("New AI chat ⌄"). On the full page the
-          title stays a toggle below md, where the chat list column is hidden (UI tour 13 Oct 2026). */}
-      <button
-        type="button"
-        onClick={() => setView((v) => (v === "history" ? "chat" : "history"))}
-        title={t("Chat history")}
-        aria-label={`${headerTitle}. ${t("Chat history")}`}
-        aria-expanded={view === "history"}
-        className={cn(
-          "flex min-w-0 items-center gap-1.5 rounded-md py-1 pl-1 pr-1.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          view === "history" && "bg-accent",
-          !titleIsToggle && listOpen && "md:pointer-events-none",
+    <div className={cn("grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2", isPage && "border-b border-border/60 md:px-3")}>
+      <div className="flex items-center gap-0.5">
+        {onClose && !isPage && (
+          <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} title={t("Close GIDEON")} className={iconBtn}>
+            {variant === "side" ? <ChevronsRight className="h-4 w-4" /> : <X className="h-4 w-4" />}
+          </button>
         )}
-      >
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground"><GideonMark className="h-3.5 w-3.5" /></span>
-        {isPage && <><span className="hidden shrink-0 text-sm font-medium text-muted-foreground sm:inline">{name}</span><span aria-hidden className="hidden px-0.5 text-muted-foreground/60 sm:inline">/</span></>}
-        <span className="truncate text-sm font-medium">{headerTitle}</span>
-        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", view === "history" && "rotate-180", !titleIsToggle && listOpen && "md:hidden")} />
-      </button>
-      <div className="min-w-2 flex-1" />
-      <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className={iconBtn}><SquarePen className="h-4 w-4" /></button>
-      {!isPage && (
-        <button
-          type="button"
-          onClick={() => setGideonLayout(layout === "side" ? "float" : "side")}
-          title={layout === "side" ? t("Floating window") : t("Side panel")}
-          aria-label={layout === "side" ? t("Floating window") : t("Side panel")}
-          className={cn(iconBtn, "hidden md:grid")}
-        >
-          {layout === "side" ? <Minimize2 className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+        <button type="button" onClick={toggleHistory} aria-expanded={historyOpen} title={t("Chat history")} aria-label={t("Chat history")}
+          className={cn(iconBtn, (isPage ? view === "history" : historyOpen) && "bg-accent text-foreground", isPage && listOpen && "md:bg-accent md:text-foreground")}>
+          <Clock className="h-4 w-4" />
         </button>
-      )}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" aria-label={t("More")} title={t("More")} className={iconBtn}><MoreHorizontal className="h-4 w-4" /></button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => { onClose?.(); void router.navigate({ to: "/settings", search: { section: "gideon-memory" } }); }}><Brain className="mr-2 h-4 w-4" />{t("GIDEON Memory")}</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs">{t("Open as")}</DropdownMenuLabel>
-          {!isPage && (
-            <DropdownMenuItem onSelect={() => setGideonLayout(layout === "side" ? "float" : "side")}>
-              {layout === "side" ? <Minimize2 className="mr-2 h-4 w-4" /> : <PanelRight className="mr-2 h-4 w-4" />}{layout === "side" ? t("Floating window") : t("Side panel")}
-            </DropdownMenuItem>
-          )}
-          {!isPage && variant === "float" && onToggleWide && (
-            <DropdownMenuItem onSelect={onToggleWide}><Maximize2 className="mr-2 h-4 w-4" />{wide ? t("Narrow") : t("Widen")}</DropdownMenuItem>
-          )}
-          {!isPage && (
-            <DropdownMenuItem onSelect={() => { onClose?.(); router.history.push(chatId && !fresh ? `/gideon?chat=${chatId}` : "/gideon"); }}>
-              <ExternalLink className="mr-2 h-4 w-4" />{t("Full page")}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          {chatId && !fresh && (
-            <DropdownMenuItem onSelect={() => setConfirmDelete(true)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t("Delete this chat")}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => !busy && setConfirmClear(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />{t("Clear all chat history")}</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {onClose && !isPage && (
-        <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} title={t("Close GIDEON")} className={iconBtn}>
-          {variant === "side" ? <ChevronsRight className="h-4 w-4" /> : <X className="h-4 w-4" />}
-        </button>
-      )}
+      </div>
+      <div className="flex min-w-0 flex-col items-center justify-center">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`${t("GIDEON tier")}: ${tierDef.name}${tierAway ? ` (${t("Unavailable right now")})` : ""}`} title={tierAway ? t("Unavailable right now") : t(tierDef.blurb)}
+              className={cn("inline-flex max-w-full min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", tierAway && "text-amber-700 dark:text-amber-400")}>
+              <GideonMark className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{tierDef.name}</span>
+              {tier === "experimental" && <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">{t("Experimental")}</span>}
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          {tierMenuContent}
+        </DropdownMenu>
+        <span className="max-w-full truncate px-1 text-[11px] leading-tight text-muted-foreground">{headerTitle}</span>
+      </div>
+      <div className="flex items-center justify-end gap-0.5">
+        <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className={iconBtn}><SquarePen className="h-4 w-4" /></button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={t("More")} title={t("More")} className={iconBtn}><MoreHorizontal className="h-4 w-4" /></button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => { onClose?.(); void router.navigate({ to: "/settings", search: { section: "gideon-memory" } }); }}><Brain className="mr-2 h-4 w-4" />{t("GIDEON Memory")}</DropdownMenuItem>
+            {!isPage && <DropdownMenuSeparator />}
+            {!isPage && <DropdownMenuLabel className="text-xs">{t("Open as")}</DropdownMenuLabel>}
+            {!isPage && (
+              <DropdownMenuItem onSelect={() => setGideonLayout(layout === "side" ? "float" : "side")} className="hidden md:flex">
+                {layout === "side" ? <Minimize2 className="mr-2 h-4 w-4" /> : <PanelRight className="mr-2 h-4 w-4" />}{layout === "side" ? t("Floating window") : t("Side panel")}
+              </DropdownMenuItem>
+            )}
+            {!isPage && variant === "float" && onToggleWide && (
+              <DropdownMenuItem onSelect={onToggleWide} className="hidden md:flex"><Maximize2 className="mr-2 h-4 w-4" />{wide ? t("Narrow") : t("Widen")}</DropdownMenuItem>
+            )}
+            {!isPage && (
+              <DropdownMenuItem onSelect={() => { onClose?.(); router.history.push(chatId && !fresh ? `/gideon?chat=${chatId}` : "/gideon"); }}>
+                <ExternalLink className="mr-2 h-4 w-4" />{t("Full page")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            {chatId && !fresh && (
+              <DropdownMenuItem onSelect={() => setConfirmDelete(true)}>
+                <Trash2 className="mr-2 h-4 w-4" />{t("Delete this chat")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => !busy && setConfirmClear(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />{t("Clear all chat history")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 
@@ -800,39 +818,6 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="min-w-1 flex-1" />
-            {/* The tier (model) picker sits by the send button, where Notion AI keeps its model menu. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" aria-label={`${t("GIDEON tier")}: ${tierDef.name}${tierAway ? ` (${t("Unavailable right now")})` : ""}`} title={tierAway ? t("Unavailable right now") : t(tierDef.blurb)} className={cn("inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", tierAway && "text-amber-700 dark:text-amber-400")}>
-                  {tierDef.name}<ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top" className="w-64">
-                <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("GIDEON tier")}</DropdownMenuLabel>
-                {GIDEON_TIERS.map((x) => {
-                  const st = tierStatus.data?.[x.id as keyof NonNullable<typeof tierStatus.data>];
-                  const away = st ? !st.available : false;
-                  return (
-                  <DropdownMenuItem
-                    key={x.id}
-                    disabled={away}
-                    onSelect={() => pickTier(x.id)}
-                    className="flex items-start gap-2 py-2"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm">{x.name}{x.id === GIDEON_DEFAULT_TIER && <span className="ml-1.5 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-sidebar-primary">{t("Default")}</span>}{x.id === "experimental" && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">{t("Experimental")}</span>}</span>
-                      {away ? (
-                        <span className="block text-xs font-medium text-amber-700 dark:text-amber-400">{t("Unavailable right now")}{st?.reason && TIER_REASON[st.reason] ? ` · ${t(TIER_REASON[st.reason])}` : ""}</span>
-                      ) : (
-                        <span className="block text-xs text-muted-foreground">{t(x.blurb)}</span>
-                      )}
-                    </span>
-                    <Check className={cn("mt-0.5 h-4 w-4 shrink-0", x.id === tier ? "opacity-100" : "opacity-0")} />
-                  </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
             {busy ? (
               <button
                 type="button"

@@ -554,6 +554,23 @@ export async function POST(req: NextRequest) {
         reply = (data.reply || '').trim()
         usage = parseShimUsage(data.usage)
       }
+      // Hermes gives up on a model call and hands back its own error text as the "answer" (seen on Model 0 after
+      // long tool rounds: "API call failed after 3 retries: HTTP 500: {…Jinja…}", QA final 19 Oct E-8). Never shown
+      // to the person or stored as a turn: it is an error, said plainly.
+      if (/^API call failed after \d+ retr/i.test(reply)) {
+        failure = `upstream: ${reply.slice(0, 200)}`
+        reply = ''
+        // What the model calls before the failure used is still billed, like any failed run below.
+        if (usage && runId) await recordGideonUsage({ userId, runId, trigger: 'CHAT', tier, requestedTier, fallback: decision.fallback, usage }).catch(() => null)
+        if (streamClient) await sendEvent({ type: 'reset' })
+        await sendEvent({
+          type: 'error',
+          content: tier === 'experimental'
+            ? (uiLang === 'en' ? "GIDEON Model 0 couldn't finish this answer. Try again, or switch to GIDEON Phaëthon." : 'GIDEON Model 0 tidak bisa menyelesaikan jawaban ini. Coba lagi, atau pakai GIDEON Phaëthon.')
+            : (uiLang === 'en' ? "GIDEON couldn't finish this answer. Try again." : 'GIDEON tidak bisa menyelesaikan jawaban ini. Coba lagi.'),
+        })
+        return
+      }
       if (!reply) failure = failure || 'empty reply'
       if (reply && preSearch && runId) {
         const used = citedRefs(reply, preSearch.refs)

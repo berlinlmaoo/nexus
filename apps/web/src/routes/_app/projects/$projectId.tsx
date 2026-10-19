@@ -1636,7 +1636,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
-            disabled={draft}
+            disabled={draft || !canEditHere}
             className="mt-px grid shrink-0 place-items-center rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:size-11"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
@@ -1805,6 +1805,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   const tint = cardTint(task, cfg, defs, ctx);
   const filteredOut = useFilteredOut(task.id);
   const toggleDone = useDoneToggle(task, task.taskList?.projectId ?? undefined);
+  // Can view / Can comment: the circle shows the state but doesn't toggle (it answered 403, QA final 19 Oct).
+  const canEditRow = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const handle = dragGroup !== null && onDragTask ? (
     <DragHandle
@@ -1831,7 +1833,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         aria-label={done ? t("Mark as not done") : t("Mark as done")}
         title={done ? t("Mark as not done") : t("Mark as done")}
         tabIndex={-1}
-        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
+        aria-disabled={!canEditRow || undefined}
+        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft || !canEditRow) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
         className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:p-3.5"
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
@@ -2065,7 +2068,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <h3 className="mr-auto text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", ...(pickedDate.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }).format(pickedDate).replace(/\bSept\b/, "Sep")}</h3>
-        <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>
+        {canEditDates && <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>}
       </div>
       {pickedTasks.map((task) => {
         const done = isDone(task.status);
@@ -2183,7 +2186,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   className={cn("group/cal relative min-h-[7.5rem] border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth ? "bg-muted/40" : idx % 7 >= 5 && "bg-muted/20", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    {inMonth && canEditDates ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}
                         className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-sm tabular-nums", isToday ? todayMark : "text-foreground hover:bg-muted")}>{day.getDate() === 1 && !isToday ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(day) : day.getDate()}</button>
@@ -2373,10 +2376,14 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const canEditBars = useProjectCanEdit();
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
-  // Phone: the frozen column is the title only, ~40% of the width, so the bars have room (Duration and
-  // Progress are hidden; the bar's tooltip and the task itself still say both). Audit 12 Oct 2026.
+  // Phone (UI round 19 Oct 2026, U-9, like Notion mobile): no frozen Name column by default — each bar carries its
+  // title — and a "Names" toggle shows a narrow one (120 px, title on 2 lines, no date line). Remembered on the device.
+  // Duration and Progress stay desktop-only (the bar's tooltip and the task itself still say both).
   const compact = useIsMobile();
-  const leftW = compact ? Math.round(Math.min(200, Math.max(120, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.4))) : GANTT_LEFT_W;
+  const [showNames, setShowNames] = useState(() => { try { return localStorage.getItem("nexus-tl-names") === "1"; } catch { return false; } });
+  const toggleNames = () => setShowNames((v) => { const n = !v; try { localStorage.setItem("nexus-tl-names", n ? "1" : "0"); } catch { /* not remembered */ } return n; });
+  const noNames = compact && !showNames;
+  const leftW = compact ? (showNames ? 120 : 0) : GANTT_LEFT_W;
   // A task with neither of the view's dates but with a date field the List shows (a request's usage date) is a
   // one-day marker on that day, as a due-only task is, instead of "No date" beside a date the List and Board
   // show (UI tour run 16, R16-WB-2). Read-only: a drag would write the view's own dates.
@@ -2531,6 +2538,14 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // height, so on a phone the page scrolled and left the banner half under the pinned tab strip.
   return (
     <div className="flex max-h-[max(22rem,calc(100dvh-10.5rem))] flex-col nx-gx py-3 max-md:max-h-[max(18rem,calc(100dvh-var(--tabbar-room)-7.5rem))]">
+      {compact && (
+        <div className="mb-2 flex shrink-0 justify-end">
+          <button type="button" onClick={toggleNames} aria-pressed={showNames}
+            className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors", showNames ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-accent")}>
+            {t("Names")}
+          </button>
+        </div>
+      )}
       {port && inView === 0 && firstWin && (
         <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           <GanttChart className="h-4 w-4 shrink-0" aria-hidden />
@@ -2562,11 +2577,11 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
         <div style={{ width: leftW + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
-            <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: leftW }}>
+            {!noNames && <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: leftW }}>
               <div className={cn("flex flex-1 items-end pb-2 pt-6 text-xs text-muted-foreground", compact ? "px-3" : "px-4")}>{t("Name")}</div>
               {!compact && <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-xs text-muted-foreground">{t("Duration")}</div>}
               {!compact && <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-xs text-muted-foreground">{t("Progress")}</div>}
-            </div>
+            </div>}
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
                 {months.map((m, i) => (
@@ -2610,6 +2625,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
                   {!single && <div className="flex snap-start border-b border-border bg-muted/40">
+                    {noNames ? (
+                      // No Name column: the group's toggle rides at the left edge, over its track.
+                      <div className="sticky left-0 z-10 w-0 shrink-0 overflow-visible">
+                        <button onClick={() => toggle(g.list.id)} className="relative flex max-w-[70vw] items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-left">
+                          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
+                          <span className="truncate text-sm font-bold tracking-tight">{g.list.name}</span>
+                        </button>
+                      </div>
+                    ) : (
                     <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted" style={{ width: leftW }}>
                       <button onClick={() => toggle(g.list.id)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
@@ -2620,14 +2644,17 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                         <TlProgressCell pct={gPct} />
                       </div>}
                     </div>
+                    )}
                     <div className="relative" style={{ width: timelineW }}>
-                      {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
+                      {gStart && !noNames && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
                     </div>
                   </div>}
                   {/* An empty group says so, as an empty Board column does (UI tour run 16, R16-WB-3). */}
                   {!isCollapsed && !single && g.tasks.length === 0 && (
                     <div className="flex snap-start border-b border-border/50">
-                      <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>
+                      {noNames
+                        ? <div className="sticky left-0 z-10 w-0 shrink-0 overflow-visible"><span className="block whitespace-nowrap px-3 py-2.5 pl-9 text-sm text-muted-foreground">{t("No tasks")}</span></div>
+                        : <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>}
                       <div style={{ width: timelineW }} />
                     </div>
                   )}
@@ -2648,26 +2675,23 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const canMove = canEditBars && (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
-                        <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
-                          <button {...cp} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
+                        {!noNames && <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
+                          <button {...cp} className={cn("flex min-w-0 flex-1 items-center gap-2 text-left", compact ? "px-2 py-2" : "px-3 py-2.5")}>
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                             {/* Two lines, so names that start alike ("REIMBURSE Q…") stay told apart (W-M17; desktop too
                                 since UI tour run 14, WD-8). Phone: the hidden Duration and Progress columns are a small
                                 line under the name (WM-10). */}
                             <span className="min-w-0" title={task.title}>
                               <span className={cn("line-clamp-2 break-words text-sm font-medium leading-snug", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
-                              {compact && (win || pct !== null) && (
-                                <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{[win ? tn(dur, "{n} day", "{n} days") : null, pct !== null ? `${pct}%` : null].filter(Boolean).join(" · ")}</span>
-                              )}
                             </span>
                           </button>
                           {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{win ? tn(dur, "{n} day", "{n} days") : t("No date")}</div>}
                           {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                             <TlProgressCell pct={pct} />
                           </div>}
-                        </div>
+                        </div>}
                         <div
-                          className="relative py-2"
+                          className={cn("relative py-2", noNames && "min-h-11")}
                           style={{ width: timelineW }}
                           onPointerMove={(e) => {
                             if (win || !endW) return;
@@ -2687,8 +2711,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                           {/* Phone: the Duration column (which says "No date") is hidden, so an undated row says it
                               in its track, beside today's line where the view opens, as the iPhone app does (UI tour
                               run 7, 14 Oct 2026). */}
-                          {compact && !win && ghost?.id !== task.id && (
+                          {compact && !win && ghost?.id !== task.id && !noNames && (
                             <span aria-hidden className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" style={{ left: xOf(today) + GANTT_DAY_W }}>{t("No date")}</span>
+                          )}
+                          {/* No Name column: an undated row still says which task it is, at the left edge of what shows. */}
+                          {noNames && !win && (
+                            <button type="button" {...cp} className="sticky left-2 z-[6] my-0.5 inline-flex max-w-[80vw] items-center gap-1.5 whitespace-nowrap rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                              <span className={cn("truncate font-medium text-foreground", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
+                              <span className="shrink-0">· {t("No date")}</span>
+                            </button>
                           )}
                           {win && port && (xOf(win.end) + GANTT_DAY_W <= port.left || xOf(win.start) >= port.left + port.width) && (() => {
                             const before = xOf(win.end) + GANTT_DAY_W <= port.left;

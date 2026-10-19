@@ -194,7 +194,9 @@ export const MonthGrid = memo(function MonthGrid({
                       )}>
                         {+day.slice(8)}
                       </span>
-                      {!compact && cell && cell.count > 0 && <span className="pt-1 text-2xs font-semibold tabular-nums text-muted-foreground">{cell.count}</span>}
+                      {/* The day's task count as a small grey pill, so it never reads as a date (UI round 19 Oct 2026, U-11).
+                          A phone (compact) has none: the dots and "+N" say it. */}
+                      {!compact && cell && cell.count > 0 && <span aria-hidden className="mt-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1.5 text-2xs font-semibold leading-none tabular-nums text-muted-foreground">{cell.count}</span>}
                     </span>
                     {cell?.overdue && <span aria-hidden className="mt-0.5 h-[2px] w-4 rounded-full bg-cal-overdue" />}
                     {!compact && holiday && (
