@@ -237,14 +237,14 @@ private fun Grid(d: SheetData, s: SheetUi, store: SheetStore) {
     val fixedHeight = with(density) { ((if (showNames) 50.dp else 24.dp) + topRows.fold(0.dp) { total, row -> total + rowHeight(row) } + if (topRows.isEmpty()) 0.dp else 2.dp).toPx() }
     val heights = bodyRows.map { with(density) { rowHeight(it).toPx() } }
     val zoom = rememberSheetZoom(d.id, fixedWidth, fixedHeight, heights, h, vertical)
-    androidx.compose.runtime.CompositionLocalProvider(LocalSheetZoom provides zoom.scale) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSheetZoom provides zoom.scale, LocalSheetMultiTouch provides zoom.multiTouch) {
     Column(Modifier.fillMaxSize().then(zoom.modifier)) {
         // Letters (and the column names, when any column has one or a non-text type), sticky.
         HeaderRow(leftCols, rightCols, h, shape) { col -> SheetFormula.colLetter(shape.columnIds.indexOf(col.id)) }
         if (showNames) HeaderRow(leftCols, rightCols, h, shape, names = true) { col -> col.name }
         topRows.forEach { r -> GridRow(d, s, store, r, leftCols, rightCols, h, away) }
         if (topRows.isNotEmpty()) HorizontalDivider(color = c.boundary, thickness = 2.dp * zoom.scale)
-        LazyColumn(Modifier.weight(1f), state = vertical) {
+        LazyColumn(Modifier.weight(1f), state = vertical, userScrollEnabled = !zoom.multiTouch) {
             items(bodyRows, key = { it.id }) { r -> GridRow(d, s, store, r, leftCols, rightCols, h, away) }
         }
     }
@@ -263,7 +263,7 @@ private fun HeaderRow(left: List<SheetColumn>, right: List<SheetColumn>, h: Scro
     Row {
         Box(Modifier.width(NUM_W * zoom).height((if (names) 26.dp else 24.dp) * zoom).background(c.muted).border(0.5.dp * zoom, c.border))
         left.forEach { cell(it) }
-        Row(Modifier.horizontalScroll(h)) { right.forEach { cell(it) } }
+        Row(Modifier.horizontalScroll(h, enabled = !LocalSheetMultiTouch.current)) { right.forEach { cell(it) } }
     }
 }
 
@@ -278,7 +278,7 @@ private fun GridRow(d: SheetData, s: SheetUi, store: SheetStore, r: SheetRow, le
             Text("${d.rows.indexOf(r) + 1}", fontSize = 11.sp * zoom, color = c.mutedFg)
         }
         left.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) }
-        Row(Modifier.horizontalScroll(h)) { right.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) } }
+        Row(Modifier.horizontalScroll(h, enabled = !LocalSheetMultiTouch.current)) { right.forEach { col -> SheetCell(d, s, store, r, col, ht, (r.id to col.id) in away) } }
     }
 }
 

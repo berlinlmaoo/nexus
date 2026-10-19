@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal val LocalSheetZoom = staticCompositionLocalOf { 1f }
+internal val LocalSheetMultiTouch = staticCompositionLocalOf { false }
 
 object SheetZoomMath {
     fun clamp(value: Float, fallback: Float = 1f) = if (value.isFinite()) value.coerceIn(.5f, 2f) else fallback
@@ -41,7 +42,7 @@ private class ZoomGesture {
     var scrollJob: Job? = null
 }
 
-internal data class SheetZoomControl(val scale: Float, val modifier: Modifier)
+internal data class SheetZoomControl(val scale: Float, val modifier: Modifier, val multiTouch: Boolean)
 
 /** Scale grid metrics; standard transformable owns pinch recognition and gesture arbitration. */
 @Composable
@@ -53,6 +54,7 @@ internal fun rememberSheetZoom(sheetId: String, fixedWidth: Float, fixedHeight: 
     val prefs = remember { context.getSharedPreferences("sheet-zoom", Context.MODE_PRIVATE) }
     var scale by remember(key) { mutableFloatStateOf(SheetZoomMath.clamp(prefs.getFloat(key, SheetZoomMath.default(compact)), SheetZoomMath.default(compact))) }
     val gesture = remember(key) { ZoomGesture() }
+    var multiTouch by remember(key) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun applyScale(next: Float, resetAnchor: Boolean = false) {
         val center = gesture.center
@@ -86,6 +88,7 @@ internal fun rememberSheetZoom(sheetId: String, fixedWidth: Float, fixedHeight: 
         var previousTap = 0L
         var previousCenter = Offset.Zero
         awaitEachGesture {
+            try {
             var start = 0L
             var maximum = 0
             var moved = false
@@ -98,6 +101,7 @@ internal fun rememberSheetZoom(sheetId: String, fixedWidth: Float, fixedHeight: 
                 if (start == 0L) start = time
                 end = time
                 maximum = maxOf(maximum, pressed.size)
+                if (pressed.size >= 2) multiTouch = true
                 if (pressed.size >= 2) {
                     gesture.center = pressed.map { it.position }.reduce(Offset::plus) / pressed.size.toFloat()
                     pressed.forEach { change ->
@@ -108,13 +112,15 @@ internal fun rememberSheetZoom(sheetId: String, fixedWidth: Float, fixedHeight: 
                 // A two-finger tap must not also select/edit the cell beneath either finger.
                 if (maximum >= 2) event.changes.filter { !it.pressed && it.previousPressed }.forEach { it.consume() }
             } while (event.changes.any { it.pressed })
+            multiTouch = false
             val center = gesture.center
             if (maximum == 2 && !moved && end - start <= viewConfiguration.longPressTimeoutMillis) {
                 if (previousTap != 0L && end - previousTap in viewConfiguration.doubleTapMinTimeMillis..viewConfiguration.doubleTapTimeoutMillis && (center - previousCenter).getDistance() < viewConfiguration.touchSlop * 4) {
                     reset(); previousTap = 0L
                 } else { previousTap = end; previousCenter = center }
             } else previousTap = 0L
+            } finally { multiTouch = false }
         }
     }
-    return SheetZoomControl(scale, observer.transformable(transform, canPan = { false }))
+    return SheetZoomControl(scale, observer.transformable(transform, canPan = { false }), multiTouch)
 }
