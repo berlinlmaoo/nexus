@@ -248,7 +248,8 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     // The board's day sheet for this person's days (audit S6, iOS MemberProfileView).
     val dayBoard: id.znetworks.nexus.feature.attendance.history.BoardViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "member-days-$userId")
     var dayRows by remember { mutableStateOf<Map<String, id.znetworks.nexus.feature.attendance.history.HistoryRow>>(emptyMap()) }
-    LaunchedEffect(rec) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to period) { tick++ }
+    LaunchedEffect(rec, tick) {
         val r = rec ?: return@LaunchedEffect
         dayBoard.manageOverride = r.viewer?.canManageAttendance == true
         dayBoard.onChanged = { tick++ }

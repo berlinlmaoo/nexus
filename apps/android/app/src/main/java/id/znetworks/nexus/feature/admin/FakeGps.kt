@@ -202,6 +202,7 @@ fun FakeGpsTab() {
     var confirming by remember { mutableStateOf<SuspectItem?>(null) }
     var warning by remember { mutableStateOf<SuspectItem?>(null) }
     var tick by remember { mutableIntStateOf(0) }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(period) { tick++ }
     LaunchedEffect(period, tick) {
         loading = true
         try { val l = api.list(period); list = l; if (period == null) period = l.periodKey; loadError = null }

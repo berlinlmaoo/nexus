@@ -111,7 +111,7 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
     var rosterError by remember { mutableStateOf<String?>(null) }
     var rosterSavedAt by remember { mutableStateOf<Long?>(null) }
     var q by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(offset) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(offset) {
         try { val got = api.roster(periodKey(offset)); roster = got.value; rosterSavedAt = got.savedAtMillis; rosterError = null }
         catch (e: ApiError) {
             // Staff: not a fault, there is simply no team view.
@@ -215,7 +215,7 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
     var r by remember(userId, period) { mutableStateOf<PersonReport?>(null) }
     var error by remember(userId, period) { mutableStateOf<String?>(null) }
     var savedAt by remember(userId, period) { mutableStateOf<Long?>(null) }
-    LaunchedEffect(userId, period) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to period) {
         try { val got = api.person(userId, period); r = got.value; savedAt = got.savedAtMillis } catch (e: ApiError) {
             error = if (e is ApiError.Http && e.code == "REPORT_OUT_OF_SCOPE") res.getString(R.string.rp_out_of_scope) else e.describe(res)
         }

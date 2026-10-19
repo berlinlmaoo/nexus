@@ -150,22 +150,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val state = _state.asStateFlow()
     val shortcuts = c.shortcuts
 
-    fun refreshPersonal() = viewModelScope.launch {
-        val owner = c.sessionStore.current?.userId ?: return@launch
-        val game = async { runCatching { c.api.getCached("/api/gamification/me", "gamification", Gamification.serializer()).value }.getOrNull() }
-        val today = async { runCatching { c.attendanceApi.today() }.getOrNull() }
-        val tasks = async { runCatching { projectsApi.myTasks(owner) }.getOrNull() }
-        val projects = async { runCatching { projectsApi.projects() }.getOrNull() }
-        val g = game.await(); val t = today.await()
-        val freshTasks = tasks.await()
-        val freshProjects = projects.await()
-        if (c.sessionStore.current?.userId == owner) _state.update {
-            it.copy(game = g ?: it.game, today = t ?: it.today,
-                tasks = freshTasks?.value ?: it.tasks, projects = freshProjects?.value ?: it.projects,
-                savedAt = freshTasks?.savedAtMillis)
-        }
-    }
-
     fun load() = viewModelScope.launch {
         shortcuts.refresh()
         val me = c.sessionStore.current?.userId ?: return@launch
@@ -250,18 +234,14 @@ fun HomeScreen(
     val homeScroll = rememberScrollState()
     var stat by rememberSaveable { mutableStateOf<Int?>(null) }
     var levelOpen by rememberSaveable { mutableStateOf(false) }
-    // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
-    LaunchedEffect(Unit) { vm.load() }
     val liveContainer = (LocalContext.current.applicationContext as NexusApplication).container
-    // Task changes are scoped to project rooms. Keep the accessible projects joined while Home
-    // is visible, including projects where a first assignment may arrive after the list loaded.
-    s.projects.forEach { id.znetworks.nexus.core.realtime.RealtimeRoom("project:${it.id}") }
     id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { e ->
-        e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED ||
+        id.znetworks.nexus.core.realtime.RealtimeEvents.isAttendance(e) ||
             e.name in id.znetworks.nexus.core.realtime.RealtimeEvents.TASK ||
+            id.znetworks.nexus.core.realtime.RealtimeEvents.isMyTasks(e) ||
             id.znetworks.nexus.core.realtime.RealtimeEvents.isProjectsOrFolders(e) ||
             (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED && liveContainer.sessionStore.current?.userId in e.userIds)
-    }, refreshOnResume = true, debounceMs = 350) { vm.refreshPersonal().join() }
+    }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
 
     // Card rects, not state: written on every scroll frame, read only when a card is tapped (iOS MorphFrameStore).
     val statRects = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }

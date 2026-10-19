@@ -88,11 +88,12 @@ object RealtimeEvents {
     const val FORM_OPS = "form-ops"
     const val FORM_PRESENCE = "form-presence"
     const val ATTENDANCE_CHANGED = "attendance-changed"
+    const val ATTENDANCE_BOARD_CHANGED = "attendance-board-changed"
     const val XP_CHANGED = "xp-changed"
     const val CALENDAR_CHANGED = "calendar-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, SOCIAL_MEDIA_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, ATTENDANCE_CHANGED, XP_CHANGED, CALENDAR_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
+        OUTLET_SALES_CHANGED, SOCIAL_MEDIA_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, ATTENDANCE_CHANGED, ATTENDANCE_BOARD_CHANGED, XP_CHANGED, CALENDAR_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
 
     /**
@@ -136,6 +137,7 @@ object RealtimeEvents {
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             FORM_OPS, FORM_PRESENCE -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"), raw = json)
             ATTENDANCE_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), taskId = o.str("id"), raw = json)
+            ATTENDANCE_BOARD_CHANGED -> RealtimeEvent(name, raw = json)
             XP_CHANGED -> RealtimeEvent(name, userIds = (o["userIds"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }, raw = json)
             CALENDAR_CHANGED -> RealtimeEvent(name, userId = o.str("actorId"), raw = json)
             // { room: "project:<id>" | "sheet:<id>", reason }
@@ -153,7 +155,11 @@ object RealtimeEvents {
         e.name == CONVERSATION_UPDATED && e.reason == "deleted" && (conversationId == null || e.conversationId == conversationId)
 
     fun isAudit(e: RealtimeEvent) = e.name == AUDIT_CHANGED || (e.name == WORKSPACE_CHANGED && e.kind == "audit")
+    /** Both are server-scoped pings. Unknown kinds and old payloads still require an API refetch. */
+    fun isAttendance(e: RealtimeEvent) = e.name == ATTENDANCE_CHANGED || e.name == ATTENDANCE_BOARD_CHANGED
     fun isProjectsOrFolders(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && (e.kind == "projects" || e.kind == "folders")
+    /** The server sends this only to the task's assignees, including assignment changes. */
+    fun isMyTasks(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && e.kind == "tasks"
     /** Something about this project: its tasks (project room) or the project itself (workspace room). */
     fun touchesProject(e: RealtimeEvent, projectId: String) =
         e.name in TASK || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId)) || revoked(e, projectId)

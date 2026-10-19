@@ -39,6 +39,7 @@ internal fun AttendanceCrew(api: AttendanceAdminApi, month: String, employment: 
     var editing by remember { mutableStateOf<JsonObject?>(null) }
     var clear by remember { mutableStateOf<JsonObject?>(null) }
     var search by remember { mutableStateOf("") }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(month) { retry++ }
     LaunchedEffect(month, retry) {
         loading = true
         try {

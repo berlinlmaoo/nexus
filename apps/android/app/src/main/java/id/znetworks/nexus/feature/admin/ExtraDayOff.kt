@@ -151,6 +151,7 @@ fun ExtraDayOffTab(isBoD: Boolean) {
     var problem by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<Pending?>(null) }
     var tick by remember { mutableIntStateOf(0) }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(period) { tick++ }
 
     LaunchedEffect(tick) {
         loadError = null

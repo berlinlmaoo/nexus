@@ -139,7 +139,9 @@ fun AttendanceScreen(
     LaunchedEffect(boardState.highlightDay, boardState.loading) {
         if (boardState.highlightDay != null && !boardState.loading) { androidx.compose.runtime.withFrameNanos { }; boardInView.bringIntoView() }
     }
-    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED }) { vm.load(); requests.load(); board.load() }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh {
+        vm.load().join(); requests.load().join(); board.load()
+    }
     val router = (context.applicationContext as NexusApplication).container.router
     val pending by router.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {

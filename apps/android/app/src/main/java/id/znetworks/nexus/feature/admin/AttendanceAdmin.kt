@@ -129,11 +129,14 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
     var notice by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(month) { tick++ }
     LaunchedEffect(month, tick) {
         hol = runCatching { api.holidays(month.toString()) }.getOrNull()
-        quota = runCatching { api.redQuota(month.toString()).quota }.getOrNull(); quotaDraft = quota?.toString().orEmpty()
+        val untouched = quotaDraft == quota?.toString().orEmpty()
+        quota = runCatching { api.redQuota(month.toString()).quota }.getOrNull()
+        if (untouched) quotaDraft = quota?.toString().orEmpty()
     }
-    LaunchedEffect(Unit) { roster = runCatching { admin.roster(includeRegistered = false) }.getOrNull() }
+    LaunchedEffect(tick) { roster = runCatching { admin.roster(includeRegistered = false) }.getOrNull() }
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         MonthBar(monthLabel(month), { offset-- }, { offset++ })
@@ -219,8 +222,13 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
     var notice by remember { mutableStateOf<String?>(null) }
     var exporting by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to period) { tick++ }
     LaunchedEffect(tick) { roster = runCatching { admin.roster(includeRegistered = false) }.getOrNull() }
-    LaunchedEffect(period, tick) { d = runCatching { api.dayoffs(userId, period) }.getOrNull(); quotaDraft = d?.quotaOverride?.toString().orEmpty() }
+    LaunchedEffect(period, tick) {
+        val untouched = quotaDraft == d?.quotaOverride?.toString().orEmpty()
+        d = runCatching { api.dayoffs(userId, period) }.getOrNull()
+        if (untouched) quotaDraft = d?.quotaOverride?.toString().orEmpty()
+    }
     val m = roster?.members?.firstOrNull { it.userId == userId }; val ws = roster?.workspaceId
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
@@ -458,7 +466,7 @@ fun ReflectionsScreen(userId: String?, onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var summarizing by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(month) { data = null; try { data = api.reflections(userId, month.toString()); error = null } catch (e: ApiError) { error = e.describe(res) } }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to month) { try { data = api.reflections(userId, month.toString()); error = null } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }

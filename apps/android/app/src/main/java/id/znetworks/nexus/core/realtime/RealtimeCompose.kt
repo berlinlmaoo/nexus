@@ -21,6 +21,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 @Composable
 fun rememberRealtime(): Realtime = (LocalContext.current.applicationContext as NexusApplication).container.realtime
 
+/** Attendance data is always re-read through permission-checked APIs, never patched from a ping. */
+@Composable
+fun AttendanceRefresh(key: Any? = Unit, refresh: suspend () -> Unit) {
+    LiveRefresh(key, null, null, RealtimeEvents::isAttendance,
+        refreshOnResume = true, debounceMs = 400, refresh = refresh)
+}
+
 /** Sit in [room] (e.g. `project:<id>`) while this screen is on display and the app in front. */
 @Composable
 fun RealtimeRoom(room: String?) {

@@ -13,6 +13,29 @@ import java.io.File
 
 /** ANDROID-REALTIME (owner, 8 Oct): Socket.IO pings, rooms, fallback pace, the creator line. */
 class RealtimeTest {
+    @Test fun assigneePingsRefreshPersonalTasksWithoutJoiningProjectRooms() {
+        assertTrue(RealtimeEvents.isMyTasks(RealtimeEvents.parse("workspace-changed", """{"kind":"tasks"}""")))
+        assertFalse(RealtimeEvents.isMyTasks(RealtimeEvents.parse("workspace-changed", """{"kind":"projects"}""")))
+        assertFalse(RealtimeEvents.isMyTasks(RealtimeEvents.parse("task-updated", "{}")))
+    }
+    @Test fun attendanceRefreshAcceptsLegacyAndExtendedOwnPingsWithoutTrustingTheirKind() {
+        listOf("""{"kind":"offsite","id":"r"}""",
+            """{"kind":"check_in","id":"r","userId":"me","date":"2026-10-19"}""",
+            """{"kind":"future_kind","id":null,"userId":null,"date":null}""").forEach { payload ->
+            val event = RealtimeEvents.parse(RealtimeEvents.ATTENDANCE_CHANGED, payload)
+            assertTrue(RealtimeEvents.isAttendance(event))
+            assertEquals(payload, event.raw)
+        }
+    }
+    @Test fun scopedBoardPingIsListenedToAndTriggersAttendanceRefresh() {
+        val payload = """{"userIds":["crew1","crew2"],"dates":["2026-10-18","2026-10-19"]}"""
+        assertTrue(RealtimeEvents.LISTENED.contains(RealtimeEvents.ATTENDANCE_BOARD_CHANGED))
+        val event = RealtimeEvents.parse(RealtimeEvents.ATTENDANCE_BOARD_CHANGED, payload)
+        assertTrue(RealtimeEvents.isAttendance(event))
+        assertEquals(payload, event.raw)
+        assertFalse(RealtimeEvents.isAttendance(RealtimeEvents.parse("task-updated", "{}")))
+        assertTrue(RealtimeEvents.isAttendance(RealtimeEvents.parse(RealtimeEvents.ATTENDANCE_BOARD_CHANGED, null)))
+    }
     @Test fun qaDecisionPingsAndFormSnapshotsKeepTheirRoutingData() {
         val xp = RealtimeEvents.parse(RealtimeEvents.XP_CHANGED, """{"userIds":["u1","u2",null,5]}""")
         assertEquals(listOf("u1", "u2"), xp.userIds)

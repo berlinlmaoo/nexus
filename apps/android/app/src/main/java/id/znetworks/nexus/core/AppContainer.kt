@@ -132,6 +132,7 @@ class AppContainer(private val context: Context) {
     /** "… is typing" per conversation, fed only by the socket; cleared when it drops (TYPING.md). */
     val typing = id.znetworks.nexus.feature.chat.TypingStore()
     private var calendarLiveRefresh: kotlinx.coroutines.Job? = null
+    private var attendanceLiveRefresh: kotlinx.coroutines.Job? = null
 
     init {
         appScope.launch { realtime.state.collect { if (it != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typing.clear() } }
@@ -146,7 +147,11 @@ class AppContainer(private val context: Context) {
                         calendarLiveRefresh?.cancel()
                         calendarLiveRefresh = appScope.launch { kotlinx.coroutines.delay(300); refreshCalendarWidgets(force = true) }
                     }
-                    id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED -> appScope.launch { presence.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED,
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_BOARD_CHANGED -> {
+                        attendanceLiveRefresh?.cancel()
+                        attendanceLiveRefresh = appScope.launch { kotlinx.coroutines.delay(400); reconcileTrail() }
+                    }
                     id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED -> appScope.launch {
                         if (responseCache.load("leaderboard") != null) runCatching { id.znetworks.nexus.feature.people.PeopleApi(api).leaderboard() }
                         if (sessionStore.current?.userId in e.userIds) runCatching { api.getCached("/api/gamification/me", "gamification", id.znetworks.nexus.feature.home.Gamification.serializer()) }
@@ -345,10 +350,12 @@ class AppContainer(private val context: Context) {
 
     /** Re-reads today and lets the trail start or stop accordingly (foreground, queue replay, push). */
     fun reconcileTrail() {
-        if (sessionStore.current == null) return
+        val owner = sessionStore.current?.userId ?: return
         appScope.launch {
             val today = runCatching { attendanceApi.today() }.getOrNull() ?: return@launch
-            todayCache.save(sessionStore.current?.userId.orEmpty(), today)
+            if (sessionStore.current?.userId != owner) return@launch
+            todayCache.save(owner, today)
+            presence.refresh(today, forceRecent = true).join()
             workTrail.sync(today, attendanceQueue.state.value.has(AttendanceKind.CHECK_OUT))
         }
     }
