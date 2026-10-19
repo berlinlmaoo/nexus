@@ -104,7 +104,7 @@ export class PresenceRefusal extends Error {
 /** The manual status exactly as setting it would store it, or a refusal the person can act on. */
 export function checkManualStatus(input: { text: unknown; startsAt: Date | null; endsAt: Date | null }, now: Date = new Date()): { text: string; startsAt: Date; endsAt: Date } {
   const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : ""
-  if (!text) throw new PresenceRefusal("Write the status, e.g. “Potong rambut”.", "TEXT")
+  if (!text) throw new PresenceRefusal("Write the status, e.g. “Meeting with a client”.", "TEXT")
   if ([...text].length > MANUAL_TEXT_MAX) throw new PresenceRefusal(`A status is at most ${MANUAL_TEXT_MAX} characters.`, "TEXT")
   const startsAt = input.startsAt && !Number.isNaN(input.startsAt.getTime()) ? input.startsAt : now
   const endsAt = input.endsAt

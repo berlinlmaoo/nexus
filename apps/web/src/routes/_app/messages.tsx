@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEscape } from "@/hooks/use-escape";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
@@ -38,7 +38,11 @@ function initialsOf(name?: string | null) {
 
 /** The other person of a DM: their photo stands for the chat, as in the iOS app. */
 function dmPeer(c: NexusConversation, meId?: string) {
-  return (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId)?.user ?? null;
+  const member = (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId)?.user ?? null;
+  if (member) return member;
+  // The other person is no longer in the room (left the workspace, account deleted): the server names
+  // who it was with (`peer`, 19 Oct 2026), so the row is not "Direct message" / "DM".
+  return c.peer?.id ? ({ id: c.peer.id, name: c.peer.name ?? undefined, avatar: c.peer.avatar ?? undefined } as NexusUser) : null;
 }
 
 /**
@@ -60,8 +64,7 @@ function ConvoAvatar({ c, meId, size }: { c: NexusConversation; meId?: string; s
 function convoTitle(c: NexusConversation, meId?: string): string {
   if (c.name) return c.name;
   if (c.type === "DM") {
-    const other = (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId);
-    return other?.user?.name ?? t("Direct message");
+    return dmPeer(c, meId)?.name ?? t("Direct message");
   }
   return (c.members ?? []).map((m) => m.user?.name).filter(Boolean).slice(0, 3).join(", ") || t("Conversation");
 }
@@ -94,6 +97,16 @@ function isManagerRequired(e: unknown): boolean {
 }
 
 type ConversationList = { conversations: NexusConversation[]; totalUnread?: number };
+
+/** The list's tabs (UI round 19 Oct 2026, U-8): Direct · Groups · Projects, the last one kept per browser. */
+type ChatTab = "DM" | "GROUP" | "PROJECT";
+const TAB_KEY = "nexus-messages-tab";
+function readTab(): ChatTab {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === "GROUP" || v === "PROJECT" || v === "DM" ? v : "DM";
+  } catch { return "DM"; }
+}
 
 /** The info panel sits beside the thread from this width; below it covers the screen. */
 const WIDE = "(min-width: 1024px)";
@@ -214,6 +227,27 @@ function Messages() {
     GROUP: rows.filter((c) => c.type === "GROUP"),
     PROJECT: rows.filter((c) => c.type === "PROJECT"),
   };
+  const [tab, setTabState] = useState<ChatTab>(readTab);
+  const setTab = useCallback((next: ChatTab) => {
+    setTabState(next);
+    try { localStorage.setItem(TAB_KEY, next); } catch { /* private mode: this visit only */ }
+  }, []);
+  // A chat opened from a link (a notification) shows its own tab, so the open room is in the list beside it.
+  const linkedType = search.c ? rows.find((c) => c.id === search.c)?.type : undefined;
+  useEffect(() => { if (linkedType) setTabState(linkedType); }, [linkedType]);
+  // A tab's count: its unread rooms' messages, muted rooms left out as in the nav badge; the open room is being read.
+  const tabUnread = (kind: ChatTab) =>
+    groups[kind].reduce((n, c) => n + (isMuted(c) || (activeKey === c.id && visible) ? 0 : c.unreadCount ?? 0), 0);
+  const tabLabel = (kind: ChatTab) => (kind === "DM" ? t("Direct") : kind === "GROUP" ? t("Groups") : t("Projects"));
+  const onTabKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const order: ChatTab[] = ["DM", "GROUP", "PROJECT"];
+    const i = order.indexOf(tab);
+    const next = e.key === "ArrowRight" ? order[(i + 1) % 3] : e.key === "ArrowLeft" ? order[(i + 2) % 3] : e.key === "Home" ? order[0] : e.key === "End" ? order[2] : null;
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    document.getElementById(`chat-tab-${next}`)?.focus();
+  };
 
   return (
     // The page itself never scrolls: it fills the screen under the app header (above the phone's tab
@@ -256,38 +290,88 @@ function Messages() {
                 action={<EmptyAction onClick={() => setComposer(true)}>{t("New chat")}</EmptyAction>} />
             </div>
           )}
-          {(["DM", "GROUP", "PROJECT"] as const).map((kind) => groups[kind].length > 0 && (
-            <div key={kind} className="py-1">
-              <div className="px-4 py-1 md:pl-8 text-xs font-semibold text-muted-foreground">{kind === "DM" ? t("Direct") : kind === "GROUP" ? t("Groups") : t("Projects")}</div>
-              {groups[kind].map((c) => {
-                const muted = isMuted(c);
-                // The open room is being read as it arrives; its count would only flicker.
-                const unread = activeKey === c.id && visible ? 0 : c.unreadCount ?? 0;
-                return (
-                  <button key={c.id} onClick={() => openRoom(c.id)} className={cn("flex w-full items-center gap-2.5 px-4 py-2.5 md:pl-8 text-left transition-colors hover:bg-accent", activeKey === c.id && "md:bg-accent")}>
-                    <ConvoAvatar c={c} meId={meId} size={36} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1">
-                        <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
-                        {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("Muted")} />}
-                      </div>
-                      {typingRooms.get(c.id)?.length ? (
-                        <div className="truncate text-xs font-medium text-primary">{t("typing…")}</div>
-                      ) : (
-                        <div className={cn("truncate text-xs text-muted-foreground", isSystemMessage(c.lastMessage) && "italic")}>{lastLine(c, meId)}</div>
+          {rows.length > 0 && (
+            <div className="sticky top-0 z-10 bg-background/95 px-3 pb-2 pt-2 backdrop-blur md:pl-6">
+              <div role="tablist" aria-label={t("Chats")} className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+                {(["DM", "GROUP", "PROJECT"] as const).map((kind) => {
+                  const n = tabUnread(kind);
+                  const on = tab === kind;
+                  return (
+                    <button
+                      key={kind}
+                      id={`chat-tab-${kind}`}
+                      role="tab"
+                      type="button"
+                      aria-selected={on}
+                      aria-controls="chat-tab-panel"
+                      tabIndex={on ? 0 : -1}
+                      onClick={() => setTab(kind)}
+                      onKeyDown={onTabKey}
+                      className={cn(
+                        "flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        on ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
                       )}
-                    </div>
-                    {/* A muted room still counts its unread, quietly: grey, and left out of the nav badge. */}
-                    {unread > 0 && (
-                      <span className={cn("grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] font-bold", muted ? "bg-muted text-muted-foreground ring-1 ring-border" : "bg-destructive text-destructive-foreground")}>
-                        {unread > 99 ? "99+" : unread}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                    >
+                      <span className="truncate">{tabLabel(kind)}</span>
+                      {n > 0 && (
+                        <span className="grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground" aria-label={tn(n, "{n} unread", "{n} unread")}>
+                          {n > 99 ? "99+" : n}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ))}
+          )}
+          {rows.length > 0 && (
+            <div id="chat-tab-panel" role="tabpanel" aria-labelledby={`chat-tab-${tab}`} className="pb-1">
+              {groups[tab].length === 0 ? (
+                <div className="px-4 py-3 md:pl-8">
+                  {tab === "DM" ? (
+                    <EmptyState icon={MessageCircle} title={t("No direct messages yet")} compact
+                      message={t("A direct message is a chat between you and one colleague.")}
+                      action={<EmptyAction onClick={() => setComposer(true)}>{t("New chat")}</EmptyAction>} />
+                  ) : tab === "GROUP" ? (
+                    <EmptyState icon={UsersIcon} title={t("No groups yet")} compact
+                      message={t("Start a group to talk with several colleagues at once.")}
+                      action={<EmptyAction onClick={() => setComposer(true)}>{t("New chat")}</EmptyAction>} />
+                  ) : (
+                    <EmptyState icon={MessageSquare} title={t("No project rooms yet")} compact
+                      message={t("Every project you're in has a room here. Join a project to see its room.")} />
+                  )}
+                </div>
+              ) : (
+                groups[tab].map((c) => {
+                  const muted = isMuted(c);
+                  // The open room is being read as it arrives; its count would only flicker.
+                  const unread = activeKey === c.id && visible ? 0 : c.unreadCount ?? 0;
+                  return (
+                    <button key={c.id} onClick={() => openRoom(c.id)} className={cn("flex w-full items-center gap-2.5 px-4 py-2.5 md:pl-8 text-left transition-colors hover:bg-accent", activeKey === c.id && "md:bg-accent")}>
+                      <ConvoAvatar c={c} meId={meId} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1">
+                          <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
+                          {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("Muted")} />}
+                        </div>
+                        {typingRooms.get(c.id)?.length ? (
+                          <div className="truncate text-xs font-medium text-primary">{t("typing…")}</div>
+                        ) : (
+                          <div className={cn("truncate text-xs text-muted-foreground", isSystemMessage(c.lastMessage) && "italic")}>{lastLine(c, meId)}</div>
+                        )}
+                      </div>
+                      {/* A muted room still counts its unread, quietly: grey, and left out of the nav badge. */}
+                      {unread > 0 && (
+                        <span className={cn("grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] font-bold", muted ? "bg-muted text-muted-foreground ring-1 ring-border" : "bg-destructive text-destructive-foreground")}>
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </aside>
         {/* active thread */}
         <section className={cn("min-h-0 min-w-0 flex-col", phoneThread ? "flex" : "hidden md:flex")}>

@@ -3,13 +3,16 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import {
-  MEMORY_MAX, MEMORY_TEXT_MAX, MemoryRefusal, deleteAllMemories, isMemoryPaused, listMemories, memoryFeatureOn, saveMemory, setMemoryPaused,
+  MEMORY_MAX, MEMORY_TEXT_MAX, MemoryRefusal, profileFromMemories, deleteAllMemories, isMemoryPaused, listMemories, memoryFeatureOn, saveMemory, setMemoryPaused,
 } from "@/lib/gideon-memory"
 
 /**
  * GIDEON Memory (owner, 19 Oct 2026): what GIDEON remembers about the SESSION USER. Only ever their own — there is
  * no way to ask for anyone else's (not for OAA/BoD either; Control Room never reads this table).
- *   GET                         → { paused, available, max, textMax, memories: MemoryView[] }   (ACTIVE + PENDING)
+ *   GET                         → { paused, available, max, textMax, memories: MemoryView[], profile, updatedAt }   (ACTIVE + PENDING)
+ *     profile: { nickname, role, about } (string | null) — the fixed fields, also listed in `memories` (source PROFILE_*)
+ *     updatedAt: ISO time of the newest change, null when empty (added 19 Oct 2026; older clients ignore both)
+ *   PUT /api/gideon/memory/profile { nickname?, role?, about? } → same state (see that route)
  *     available=false: the remote-config kill switch is off (adding refused; listing and deleting still work)
  *   POST  { text, kind?, date? } → { memory }       add one (typed in Settings; saved as ACTIVE)
  *   PATCH { paused: boolean }   → { paused, ... }   pause / resume GIDEON Memory
@@ -19,7 +22,9 @@ import {
 
 async function state(userId: string) {
   const [paused, available, memories] = await Promise.all([isMemoryPaused(userId), memoryFeatureOn(), listMemories(userId, { includePending: true })])
-  return { paused, available, max: MEMORY_MAX, textMax: MEMORY_TEXT_MAX, memories }
+  // updatedAt: the newest change among the live memories (null when there are none) — "Updated 2 h ago".
+  const updatedAt = memories.reduce<string | null>((a, m) => (!a || m.updatedAt > a ? m.updatedAt : a), null)
+  return { paused, available, max: MEMORY_MAX, textMax: MEMORY_TEXT_MAX, memories, profile: profileFromMemories(memories), updatedAt }
 }
 
 function refusal(e: unknown) {
