@@ -99,6 +99,7 @@ export function GideonPerformance() {
   return (
     <div lang={L.lang} className="gp-root space-y-5">
       <style>{TIER_CSS}</style>
+      <SummaryStrip d={d} />
       <LiveBar d={d} />
       <Alerts d={d} />
       <section aria-label={t("Tiers")} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -161,19 +162,53 @@ function Alerts({ d }: { d: PerfSummary }) {
   );
 }
 
+/**
+ * The summary strip on top (Berlin device review R-4, 19 Oct 2026): the whole picture in one line before the
+ * per-tier cards — how many tiers are up, answering now, answers in 15 min and 24 h, and the overall error rate.
+ */
+function SummaryStrip({ d }: { d: PerfSummary }) {
+  const { t } = useLang();
+  const tiers = PERF_TIERS.map((id) => d.tiers.find((x) => x.id === id)).filter((x): x is PerfTier => !!x);
+  const up = tiers.filter((x) => x.status !== "unavailable").length;
+  const inFlight = tiers.reduce((s, x) => s + x.inFlight, 0);
+  const a15 = tiers.reduce((s, x) => s + x.answers15m, 0);
+  const a24 = tiers.reduce((s, x) => s + x.answers24h, 0);
+  const f15 = tiers.reduce((s, x) => s + x.failures15m, 0);
+  const err = a15 > 0 ? f15 / a15 : null;
+  const items: { label: string; value: string; warn?: boolean }[] = [
+    { label: t("Tiers up"), value: `${formatCount(up)} / ${formatCount(tiers.length)}`, warn: up < tiers.length },
+    { label: t("Answering now"), value: formatCount(inFlight) },
+    { label: t("Answers · 15 min"), value: formatCount(a15) },
+    { label: t("Answers · 24 h"), value: formatCount(a24) },
+    { label: t("Error rate · 15 min"), value: err == null ? "—" : pct(err, 1), warn: err != null && err > 0.05 },
+  ];
+  return (
+    <section aria-label={t("Summary")} className={cn(card, "grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-3 lg:grid-cols-5")}>
+      {items.map((it) => (
+        <div key={it.label} className="min-w-0">
+          <div className="truncate text-[11px] font-medium text-muted-foreground">{it.label}</div>
+          <div className={cn("font-display text-lg font-bold tabular-nums", it.warn && "text-destructive")}>{it.value}</div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function TierCard({ tier }: { tier: PerfTier }) {
   const L = useLang();
   const { t } = L;
   const st = STATUS[tier.status];
   const Icon = st.icon;
   const errorHigh = tier.errorRate != null && tier.errorRate > 0.05;
+  // Idle in the window: one line instead of six tiles of dashes (R-4).
+  const idle = tier.answers15m === 0 && tier.inFlight === 0;
   return (
-    <div className={cn(card, "flex min-w-0 flex-col gap-3")}>
-      {/* Wraps instead of cutting the name: "Unavailable" / "Tidak tersedia" next to "GIDEON Model 0" is too wide for a quarter row. */}
+    <div className={cn(card, "flex min-w-0 flex-col gap-3 p-3.5")}>
+      {/* Wraps instead of cutting the name when the status pill is long ("Tidak tersedia"). */}
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
         <div className="flex items-center gap-2">
           <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: TIER_VAR[tier.id] }} />
-          <div className="whitespace-nowrap font-display text-[15px] font-semibold">GIDEON {PERF_TIER_NAME[tier.id]}</div>
+          <div className="whitespace-nowrap font-display text-[15px] font-semibold">{PERF_TIER_NAME[tier.id]}</div>
         </div>
         <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", st.cls)}>
           <Icon className={cn("h-3.5 w-3.5", tier.status === "loading" && "animate-spin motion-reduce:animate-none")} />
@@ -181,20 +216,22 @@ function TierCard({ tier }: { tier: PerfTier }) {
         </span>
       </div>
       {tier.reason && REASON[tier.reason] && <div className="-mt-1 text-xs text-muted-foreground">{t(REASON[tier.reason])}</div>}
-      <div>
-        <div className="font-display text-2xl font-bold tabular-nums">{ms(tier.p50Ms)}</div>
-        <div className="text-xs text-muted-foreground">{t("Typical answer time (p50)")}</div>
-      </div>
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-        <Metric label={t("Slowest 5% (p95)")} value={ms(tier.p95Ms)} />
-        <Metric label={t("Error rate")} value={tier.errorRate == null ? "—" : pct(tier.errorRate, 1)} warn={errorHigh} hint={tier.failures15m ? L.tn(tier.failures15m, "1 failed", "{n} failed") : undefined} />
-        <Metric label={t("Answering now")} value={formatCount(tier.inFlight)} />
-        <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? formatCount(tier.avgCredits15m, 1) : "—"} hint={tier.id !== "experimental" && tier.avgCredits15m == null && tier.avgCredits24h != null ? t("Avg {n} over 24 h", { n: formatCount(tier.avgCredits24h, 1) }) : undefined} />
-      </dl>
-      <div className="mt-auto border-t border-border/70 pt-2 text-xs text-muted-foreground">
-        {tier.answers15m === 0 && tier.inFlight === 0
-          ? t("No answers in the last 15 min · {n} in 24 h", { n: formatCount(tier.answers24h) })
-          : t("{a} answers in 15 min · {n} in 24 h", { a: formatCount(tier.answers15m), n: formatCount(tier.answers24h) })}
+      {idle ? (
+        <div className="grid min-h-[7.5rem] place-items-center rounded-xl bg-muted/50 px-3 text-center text-sm font-medium text-muted-foreground">
+          {t("No answers in 15 min")}
+        </div>
+      ) : (
+        <dl className="grid grid-cols-2 gap-1.5 text-sm">
+          <Metric label={t("Typical (p50)")} value={ms(tier.p50Ms)} />
+          <Metric label={t("Slowest 5% (p95)")} value={ms(tier.p95Ms)} />
+          <Metric label={t("Error rate")} value={tier.errorRate == null ? "—" : pct(tier.errorRate, 1)} warn={errorHigh} hint={tier.failures15m ? L.tn(tier.failures15m, "1 failed", "{n} failed") : undefined} />
+          <Metric label={t("Answering now")} value={formatCount(tier.inFlight)} />
+          <Metric label={t("Answers · 15 min")} value={formatCount(tier.answers15m)} />
+          <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? formatCount(tier.avgCredits15m, 1) : "—"} />
+        </dl>
+      )}
+      <div className="mt-auto text-xs text-muted-foreground">
+        {t("{n} answers in 24 h", { n: formatCount(tier.answers24h) })}
         {/* Answers lost to a shim restart: shown apart, never counted as errors. */}
         {(tier.restarts15m ?? 0) > 0 && (
           <span title={t("Restarts aren't counted as errors.")}>{" · "}{L.tn(tier.restarts15m ?? 0, "1 restart", "{n} restarts")}</span>
@@ -206,10 +243,10 @@ function TierCard({ tier }: { tier: PerfTier }) {
 
 function Metric({ label, value, hint, warn }: { label: string; value: string; hint?: string; warn?: boolean }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 rounded-xl bg-muted/50 px-2.5 py-2">
       <dt className="truncate text-[11px] font-medium text-muted-foreground">{label}</dt>
       <dd className={cn("truncate font-semibold tabular-nums", warn && "text-destructive")}>{value}</dd>
-      {hint && <dd className="text-[11px] leading-tight text-muted-foreground">{hint}</dd>}
+      {hint && <dd className="truncate text-[11px] leading-tight text-muted-foreground">{hint}</dd>}
     </div>
   );
 }
