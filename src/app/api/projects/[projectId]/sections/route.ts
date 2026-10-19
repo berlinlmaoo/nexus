@@ -173,6 +173,10 @@ export async function PATCH(
   }
 }
 
+class SectionGoneError extends Error {
+  constructor(message: string, readonly status: 404 | 409) { super(message) }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -228,6 +232,11 @@ export async function DELETE(
       before: async (tx) => {
         // The sections lock (see PATCH), so the renumbering below works on the order as it is now.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sections:${projectId}`})::int8)`
+        // Read again under the lock: someone may have deleted this section, or the one its tasks go to,
+        // a moment ago (two people deleting A->B and B->A at once answered 500, QA final 19 Oct).
+        const still = await tx.taskList.findMany({ where: { id: { in: [id, firstRemaining.id] } }, select: { id: true } })
+        if (!still.some((s) => s.id === id)) throw new SectionGoneError("Section not found", 404)
+        if (!still.some((s) => s.id === firstRemaining.id)) throw new SectionGoneError("The section to move the tasks to was just deleted. Pick another one.", 409)
         const moved = await tx.task.findMany({ where: { taskListId: id }, select: { id: true } })
         await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id, ...(firstRemaining.taskStatus ? { status: firstRemaining.taskStatus } : {}) } })
         return moved.map((t) => ({ table: "Task", column: "taskListId", key: t.id, value: id, movedTo: firstRemaining.id }))
@@ -247,6 +256,7 @@ export async function DELETE(
     void emitProjectChanged((await params).projectId, { actorId: session.user.id! })
     return NextResponse.json({ message: "Section deleted", movedTo: firstRemaining.id })
   } catch (error) {
+    if (error instanceof SectionGoneError) return NextResponse.json({ error: error.message, code: "SECTION_GONE" }, { status: error.status })
     console.error("Error deleting section:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
