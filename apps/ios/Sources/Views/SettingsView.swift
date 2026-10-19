@@ -148,7 +148,8 @@ struct SettingsView: View {
                 Button { tab = t } label: {
                     HStack(spacing: 10) {
                         Image(systemName: t.icon).font(.system(size: 15)).frame(width: 20)
-                        Text(t.label).font(NXFont.text(15, on ? .medium : .regular)).lineLimit(1)
+                        // "Memori GIDEON" is a little wider than the 176 pt column on an iPad: shrink, don't cut.
+                        Text(t.label).font(NXFont.text(15, on ? .medium : .regular)).lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 0)
                     }
                     .foregroundStyle(on ? NX.foreground : NX.mutedFg)
