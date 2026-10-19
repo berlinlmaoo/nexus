@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
 @Composable
-internal fun XpAuditCard() {
+internal fun XpAuditCard(onChanged: () -> Unit = {}) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     if (!container.viewer.isBoD) return
@@ -52,6 +52,7 @@ internal fun XpAuditCard() {
     }
     Card(Modifier.fillMaxWidth().padding(top = 16.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            XpAdjustButton { onChanged(); sequence++; rows = emptyList(); next = null; if (open) scope.launch { load(false) } }
             TextButton(onClick = { open = !open }) { Text(stringResource(R.string.xpa_title)) }
             Text(stringResource(R.string.xpa_description))
             if (open) {

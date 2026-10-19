@@ -1,0 +1,36 @@
+<resources>
+    <string name="ab_new">Automasi baru</string>
+    <string name="ab_edit">Edit automasi</string>
+    <string name="ab_name">Nama</string>
+    <string name="ab_enabled">Aktif</string>
+    <string name="ab_conditions">Kondisi (opsional)</string>
+    <string name="ab_match">Pencocokan</string>
+    <string name="ab_field">Kolom</string>
+    <string name="ab_operator">Operator</string>
+    <string name="ab_remove">Hapus</string>
+    <string name="ab_add_condition">Tambah kondisi</string>
+    <string name="ab_add_action">Tambah aksi</string>
+    <string name="ab_schedule_hint">Tanpa kondisi, jadwal berjalan sekali. Dengan kondisi, jadwal berjalan pada setiap task yang cocok. Aksi yang memerlukan task dilewati jika tidak ada task.</string>
+    <string name="ab_up">Pindah ke atas</string>
+    <string name="ab_delete_confirm">Hapus automasi ini?</string>
+    <string name="ab_discard">Buang perubahan?</string>
+    <string name="ab_discard_action">Buang</string>
+    <string name="ab_value">Nilai</string>
+    <string name="ab_any">Apa saja / bawaan</string>
+    <string name="ab_trigger">Pemicu</string>
+    <string name="ab_action">Aksi</string>
+    <string name="ab_repeat">Ulangi</string>
+    <string name="ab_time">Waktu (HH:mm, WIB)</string>
+    <string name="ab_weekdays">1 = Senin, 7 = Minggu</string>
+    <string name="ab_month_day">Tanggal bulanan (1-28)</string>
+    <string name="ab_from">Dari status</string>
+    <string name="ab_section">Bagian</string>
+    <string name="ab_due">Tenggat (+3, today, YYYY-MM-DD)</string>
+    <string name="ab_priority">Prioritas</string>
+    <string name="ab_suggestions">Saran</string>
+    <string name="ab_no_suggestions">Belum ada saran. Tambahkan aktivitas proyek terlebih dahulu.</string>
+    <string name="ab_monthly">Bulanan</string>
+    <string name="ab_required">Lengkapi kolom wajib. Jam: 1-720; waktu: HH:mm; tanggal bulanan: 1-28; pilih minimal satu hari mingguan.</string>
+    <string name="ab_to">Ke status</string>
+    <string name="ab_form">Formulir</string>
+</resources>

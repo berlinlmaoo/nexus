@@ -1,0 +1,7 @@
+<resources>
+    <string name="wb_title">Workflow bundles</string>
+    <string name="wb_help">Apply a saved bundle to this project. It can add sections, fields and automation rules.</string>
+    <string name="wb_empty">No workflow bundles in this workspace.</string>
+    <string name="wb_confirm">Apply %1$s?</string>
+    <string name="wb_apply">Apply bundle</string>
+</resources>

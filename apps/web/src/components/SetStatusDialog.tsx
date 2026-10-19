@@ -239,12 +239,13 @@ export function SetStatusDialog({ open, onOpenChange, meId }: { open: boolean; o
                     aria-checked={on}
                     onClick={() => { setAvailability(a.value); setError(null); }}
                     className={cn(
-                      "inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      "inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1.5 py-1.5 text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       on ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", a.dot)} />
-                    <span className="truncate">{lang === "id" ? a.id : a.en}</span>
+                    {/* Wraps instead of truncating: "Jangan diganggu" does not fit one line on a 390 px phone. */}
+                    <span className="min-w-0 text-center [overflow-wrap:anywhere]">{lang === "id" ? a.id : a.en}</span>
                   </button>
                 );
               })}

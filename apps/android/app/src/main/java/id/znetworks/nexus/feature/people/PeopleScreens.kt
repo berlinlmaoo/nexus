@@ -161,7 +161,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                             }
                         }
                     }
-                    item(key = "xp-audit") { XpAuditCard() }
+                    item(key = "xp-audit") { XpAuditCard { tick++ } }
                 }
             }
         }

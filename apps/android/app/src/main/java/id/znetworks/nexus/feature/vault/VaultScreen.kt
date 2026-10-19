@@ -258,6 +258,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                 IconButton(onClick = { confirmSelected = true }, enabled = picked.isNotEmpty() && !s.busy) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.dangerText) }
             }
         }
+        if (!vm.trash && l != null) VaultZipButton(l.items)
         if (!vm.trash) {
             if (l != null && vm.folder != null && l.breadcrumb.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 Text("Vault › " + l.breadcrumb.joinToString(" › ") { it.name }, fontSize = 12.sp, color = c.mutedFg)

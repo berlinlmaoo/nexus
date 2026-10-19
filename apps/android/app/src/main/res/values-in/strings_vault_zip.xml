@@ -1,0 +1,8 @@
+<resources>
+    <string name="vz_title">Unduh sebagai ZIP</string>
+    <string name="vz_help">Pilih file atau folder dari lokasi ini. Hanya item yang dapat Anda baca yang disertakan.</string>
+    <string name="vz_progress">Diunduh %1$d / %2$d KB</string>
+    <string name="vz_download">Unduh %1$d pilihan</string>
+    <string name="vz_failed">Arsip gagal disimpan. Coba lagi.</string>
+    <string name="vz_no_app">Tidak ada aplikasi untuk membagikan arsip ini.</string>
+</resources>

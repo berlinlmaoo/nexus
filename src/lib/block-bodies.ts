@@ -8,6 +8,7 @@ import { emitTaskUpdated } from "@/lib/socket-emitter"
 import { notifyDocMention, notifyMention } from "@/lib/notification-service"
 import { createLogger } from "@/lib/logger"
 import { parseClientTag } from "@/lib/client-version"
+import { DOC_FORMAT_HEADER, DOC_FORMAT_PARAM, docContentFor, docReadFormat, type DocReadFormat } from "@/lib/doc-read-format"
 import {
   EMPTY_DOC, canonicalDoc, docToBlockNote, collectMentions, collectReminders, descriptionOf, docToText, inlineText,
   resolveTaskBody, sanitizeDoc, type BlockDoc, type BlockNode,
@@ -260,12 +261,26 @@ export function sameDoc(a: unknown, b: unknown): boolean {
 export { docToText }
 
 /**
- * The released Android app reads `Doc.content` as BlockNote blocks and shows TipTap JSON as one run-on
- * paragraph (feature/docs/Docs.kt DocBlocks). It gets the same document in the shape it reads; every
- * other client gets the stored TipTap JSON (format: lib/blockdoc.ts).
+ * The shape a doc read gives its body (lib/doc-read-format.ts). The released Android app reads `Doc.content`
+ * as BlockNote blocks and shows TipTap JSON as one run-on paragraph (feature/docs/Docs.kt DocBlocks), so it
+ * gets the same document in the shape it reads; every other client gets the stored TipTap JSON
+ * (format: lib/blockdoc.ts). A client that opts in (`?format=canonical` / `X-Nexus-Doc-Format: canonical`)
+ * gets the lossless canonical document whatever its platform: the base for POST /api/collab/edit.
  */
+export function docReadFormatOf(req: Request): DocReadFormat {
+  let formatParam: string | null = null
+  try { formatParam = new URL(req.url).searchParams.get(DOC_FORMAT_PARAM) } catch { /* no URL: no opt-in */ }
+  return docReadFormat({
+    platform: parseClientTag(req.headers.get("x-nexus-client"))?.platform,
+    formatParam,
+    formatHeader: req.headers.get(DOC_FORMAT_HEADER),
+  })
+}
+
+const DOC_SHAPE_DEPS = { sanitize: sanitizeDoc, empty: EMPTY_DOC, toBlockNote: docToBlockNote }
+
 export function contentForClient<T extends { content?: unknown }>(req: Request, doc: T): T {
-  if (parseClientTag(req.headers.get("x-nexus-client"))?.platform !== "android") return doc
-  const c = doc.content as { type?: unknown } | null | undefined
-  return c && typeof c === "object" && c.type === "doc" ? { ...doc, content: docToBlockNote(c) } : doc
+  const format = docReadFormatOf(req)
+  if (format === "stored") return doc
+  return { ...doc, content: docContentFor(format, doc.content, DOC_SHAPE_DEPS) }
 }

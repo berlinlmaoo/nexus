@@ -351,6 +351,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     }
 
     var startupModal by rememberSaveable { mutableStateOf<StartupModal?>(null) }
+    var xpLoading by remember { mutableStateOf(!id.znetworks.nexus.core.tour.TourMode.active) }
+    var xpPending by remember { mutableStateOf(false) }
     var trailModalBusy by remember { mutableStateOf(false) }
     val disclosure by container.workTrail.disclosureFor.collectAsStateWithLifecycle()
     val announcementQueue by container.announcements.queue.collectAsStateWithLifecycle()
@@ -368,10 +370,16 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     // Once per version, after the location disclosure and announcements have had their turn.
     val version = container.identity.versionName
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version) && !id.znetworks.nexus.core.tour.TourMode.active) }
-    LaunchedEffect(announcementQueue, announcementsLoading, disclosure, trailModalBusy, alwaysAgain, whatsNew) {
-        startupModal = StartupModals.next(startupModal, announcementsLoading, announcementQueue.isNotEmpty(), disclosure != null || trailModalBusy, alwaysAgain, whatsNew)
+    LaunchedEffect(announcementQueue, announcementsLoading, disclosure, trailModalBusy, alwaysAgain, whatsNew, xpLoading, xpPending) {
+        startupModal = StartupModals.next(startupModal, announcementsLoading, announcementQueue.isNotEmpty(), disclosure != null || trailModalBusy, alwaysAgain, whatsNew, xpLoading, xpPending)
     }
     if (startupModal == StartupModal.PROMO) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
+
+    id.znetworks.nexus.feature.people.XpPenaltyHost(startupModal == StartupModal.XP_PENALTY) { loading, pending ->
+        val enabled = !id.znetworks.nexus.core.tour.TourMode.active
+        xpLoading = enabled && loading
+        xpPending = enabled && pending
+    }
 
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
     // web's sidebar with every destination instead (dev web AppSidebar).

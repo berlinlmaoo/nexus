@@ -147,6 +147,7 @@ fun ClaudeMcpCard() {
                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("MCP", url)); copied = true
             }) { Icon(if (copied) Icons.Filled.Check else Icons.Outlined.ContentCopy, stringResource(if (copied) R.string.st_copied else R.string.st_copy), tint = c.mutedFg) }
         }
+        McpTokensCard()
         NxButton(stringResource(R.string.open_on_web), { id.znetworks.nexus.ui.shell.openWeb(context, "/settings?section=mcp") }, compact = true,
             icon = Icons.AutoMirrored.Filled.OpenInNew)
     }

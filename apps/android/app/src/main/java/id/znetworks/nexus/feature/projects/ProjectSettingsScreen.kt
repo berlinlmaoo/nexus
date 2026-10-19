@@ -239,6 +239,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (ro) Text(stringResource(R.string.acc_settings_readonly), fontSize = 13.sp, color = c.warningFg,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warningBg).padding(12.dp))
+            if (!ro) WorkflowBundleButton(d.id, vm::load)
             // Identity
             Section(stringResource(R.string.ps_identity)) {
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
@@ -285,6 +286,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 }
                 if (s.roleKnown && !canChange) Text(stringResource(R.string.ps_tabs_managers), fontSize = 11.sp, color = c.mutedFg)
             }
+            if (!ro) id.znetworks.nexus.feature.gideon.GideonAutofillButton(d.id)
             // Custom fields
             Section(stringResource(R.string.ps_fields), action = { if (!ro) TextButton(onClick = { addingField = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.add)) } }) {
                 if (s.fields.isEmpty()) Text(stringResource(R.string.ps_no_fields), fontSize = 12.sp, color = c.mutedFg)
