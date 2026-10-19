@@ -2,6 +2,12 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Status emoji": "Emoji status",
+        "What are you up to?": "Lagi apa?",
+        "A custom status currently sets you as Away.": "Status khusus saat ini mengatur ketersediaan menjadi Pergi.",
+        "On the road": "Di jalan",
+        "3 hours": "3 jam",
+        "Starts": "Mulai",
         "Meeting title": "Judul rapat",
         "Automatic (ID + EN)": "Otomatis (ID + EN)",
         "Start with quick introductions: “Hi, I'm Berlin…”. Voices only label this recording.": "Mulai dengan perkenalan singkat: “Halo, saya Berlin…”. Suara hanya dipakai untuk melabeli rekaman ini.",
@@ -361,8 +367,6 @@ extension AppLanguage {
         "Everyone in your workspace sees it next to your name until it ends. Nobody is notified.": "Semua orang di workspace-mu melihatnya di samping namamu sampai selesai. Tidak ada yang diberi notifikasi.",
         "Lunch": "Makan siang",
         "Out for a shoot": "Lagi shooting",
-        "At the dentist": "Ke dokter gigi",
-        "Potong rambut": "Potong rambut",
         "Clear after": "Hapus setelah",
         "30 minutes": "30 menit",
         "1 hour": "1 jam",

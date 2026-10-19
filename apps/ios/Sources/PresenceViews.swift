@@ -48,10 +48,11 @@ struct PresenceChip: View {
 /// This row owns its sheet, so it can be reused inside screens with another presentation.
 struct SetPresenceRow: View {
     var showCurrent = true
+    var onOpen: (() -> Void)? = nil
     @State private var showing = false
     var body: some View {
         if PresenceStore.shared.enabled {
-            Button { showing = true } label: {
+            Button { if let onOpen { onOpen() } else { showing = true } } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "circle.inset.filled").foregroundStyle(NX.warning)
                     Text(T("Set a status")).foregroundStyle(NX.foreground)
@@ -84,60 +85,113 @@ struct SetPresenceSheet: View {
         default: return starts.addingTimeInterval(Double(clearAfter).map { $0 * 60 } ?? 3600)
         }
     }
+    @State private var emoji = "💬"
+    private var statusText: String { emoji + " " + text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var valid: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && statusText.utf16.count <= 80 }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text(T("Everyone in your workspace sees it next to your name until it ends. Nobody is notified.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 6) {
-                            Text("Away ·").foregroundStyle(NX.warning).font(NXFont.text(14, .semibold))
-                            TextField(T("Your status"), text: $text).textFieldStyle(.plain).accessibilityIdentifier("presence.text")
-                        }.padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NX.border))
-                        Text("\(text.count)/80").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .trailing)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(["Meeting", "Lunch", "Out for a shoot", "At the dentist", "Potong rambut"], id: \.self) { suggestion in
-                                    Button(T(suggestion)) { text = T(suggestion) }.buttonStyle(.nxBordered)
-                                }
-                            }
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(T("From")).font(NXFont.text(13, .semibold))
-                        Picker(T("From"), selection: $later) { Text(T("Now")).tag(false); Text(T("Later")).tag(true) }.pickerStyle(.segmented).accessibilityIdentifier("presence.from")
-                        if later { DatePicker(T("Starts at"), selection: $start, displayedComponents: [.date, .hourAndMinute]).accessibilityIdentifier("presence.startsAt") }
-                        Text(T("Clear after")).font(NXFont.text(13, .semibold))
-                        Picker(T("Clear after"), selection: $clearAfter) {
-                            Text(T("30 minutes")).tag("30"); Text(T("1 hour")).tag("60"); Text(T("2 hours")).tag("120"); Text(T("Today")).tag("today"); Text(T("Pick a time")).tag("pick")
-                        }.pickerStyle(.menu).accessibilityIdentifier("presence.clearAfter")
-                        if clearAfter == "pick" { DatePicker(T("Until"), selection: $end, displayedComponents: [.date, .hourAndMinute]).accessibilityIdentifier("presence.endsAt") }
-                        Text((later ? PresenceTime.format(start, "EEE d MMM HH:mm 'WIB'", language: language) : T("Now")) + " – " + PresenceTime.format(ends, "EEE d MMM HH:mm 'WIB'", language: language)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityIdentifier("presence.summary")
-                    }.nexusCard()
+                    statusEntry
+                    availability
+                    quickPicks
+                    schedule
                     if let failure { Text(failure).font(NXFont.text(13)).foregroundStyle(NX.danger).accessibilityIdentifier("presence.error") }
                     if !PresenceStore.shared.enabled { Text(T("Presence is switched off.")).foregroundStyle(NX.mutedFg) }
-                    HStack(spacing: 12) {
-                        if let displayedManualId { Button(T("Clear status"), role: .destructive) { mutate { try await PresenceStore.shared.clear(id: displayedManualId) } }.disabled(busy).accessibilityIdentifier("presence.clear") }
-                        Spacer()
-                        Button(T("Cancel")) { dismiss() }.buttonStyle(.nxBordered).disabled(busy)
-                        Button { mutate { try await PresenceStore.shared.save(text: text.trimmingCharacters(in: .whitespacesAndNewlines), startsAt: later ? start : nil, endsAt: ends) } } label: {
-                            HStack { if busy { ProgressView() }; Text(T("Save status")) }
-                        }.buttonStyle(.nxPrimary).disabled(busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !PresenceStore.shared.enabled).accessibilityIdentifier("presence.save")
+                    if let displayedManualId {
+                        Button(T("Clear status"), role: .destructive) { mutate { try await PresenceStore.shared.clear(id: displayedManualId) } }
+                            .disabled(busy).accessibilityIdentifier("presence.clear")
                     }
                 }.padding(20).frame(maxWidth: 640).frame(maxWidth: .infinity)
-            }.background(NX.background).navigationTitle(T("Set a status")).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.disabled(busy) } }
-                .environment(\.timeZone, PresenceTime.zone)
-                .environment(\.locale, AppDateLocale.current)
-                .onChange(of: text) { _, value in if value.count > 80 { text = String(value.prefix(80)) } }
-                .task {
-                    await PresenceStore.shared.refresh()
-                    guard let manual = PresenceStore.shared.status(Keychain.load()?.userId)?.manual else { return }
-                    displayedManualId = manual.id; text = manual.text
-                    if let date = PresenceTime.instant(manual.startsAt), date > Date() { later = true; start = date }
-                    if let date = PresenceTime.instant(manual.endsAt) { clearAfter = "pick"; end = date }
+            }.background(NX.background).navigationTitle(T("Status")).navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.disabled(busy) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { mutate { try await PresenceStore.shared.save(text: statusText, startsAt: later ? start : nil, endsAt: ends) } } label: {
+                            if busy { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
+                        }.tint(NX.violetText).disabled(busy || !valid || !PresenceStore.shared.enabled).accessibilityIdentifier("presence.save")
+                    }
                 }
+                .environment(\.timeZone, PresenceTime.zone).environment(\.locale, AppDateLocale.current)
+                .onChange(of: text) { _, _ in
+                    while statusText.utf16.count > 80 && !text.isEmpty { text.removeLast() }
+                }
+                .task { await restore() }
         }.accessibilityIdentifier("presence.sheet").keyboardDoneBar().presentationDetents([.large]).interactiveDismissDisabled(busy)
+    }
+    private var statusEntry: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(["💬", "🗓️", "🍽️", "🎬", "🚗", "💻"], id: \.self) { item in Button(item) { emoji = item } }
+                } label: { Text(emoji).font(.system(size: 26)).frame(width: 44, height: 44) }
+                    .accessibilityLabel(T("Status emoji"))
+                TextField(T("What are you up to?"), text: $text).textFieldStyle(.plain).accessibilityIdentifier("presence.text")
+            }.padding(8).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+            Text(AppNumber.int(text.isEmpty ? 0 : statusText.utf16.count) + "/80")
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+    private var availability: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(T("Availability"))
+                Spacer()
+                // Current manual-status contract always publishes Away; Online is unavailable until the API supports it.
+                Menu {
+                    Button(T("Online")) {}.disabled(true)
+                    Button(T("Away")) {}
+                } label: { HStack { PresenceDot(tone: "yellow"); Text(T("Away")); Image(systemName: "chevron.down") } }
+            }.font(NXFont.text(14))
+            Text(T("A custom status currently sets you as Away.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        }
+    }
+    private var quickPicks: some View {
+        VStack(spacing: 0) {
+            pick("🗓️", "Meeting", minutes: 60)
+            Divider(); pick("🍽️", "Lunch", minutes: 60)
+            Divider(); pick("🎬", "Out for a shoot", minutes: 180)
+            Divider(); pick("🚗", "On the road", minutes: 60)
+        }.background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+    }
+    private func pick(_ icon: String, _ label: String, minutes: Int) -> some View {
+        Button { emoji = icon; text = T(label); clearAfter = String(minutes) } label: {
+            HStack(spacing: 12) {
+                Text(icon); Text(T(label)).foregroundStyle(NX.foreground); Spacer()
+                Text(T(minutes == 180 ? "3 hours" : "1 hour")).foregroundStyle(NX.mutedFg)
+            }.font(NXFont.text(14)).padding(14).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier("presence.preset." + String(minutes) + "." + label)
+    }
+    private var schedule: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(T("Clear after")); Spacer()
+                Picker(T("Clear after"), selection: $clearAfter) {
+                    Text(T("30 minutes")).tag("30"); Text(T("1 hour")).tag("60"); Text(T("2 hours")).tag("120")
+                    Text(T("3 hours")).tag("180"); Text(T("Today")).tag("today"); Text(T("Pick a time")).tag("pick")
+                }.labelsHidden().accessibilityIdentifier("presence.clearAfter")
+            }
+            if clearAfter == "pick" { DatePicker(T("Until"), selection: $end, displayedComponents: [.date, .hourAndMinute]).accessibilityIdentifier("presence.endsAt") }
+            HStack {
+                Text(T("Starts")); Spacer()
+                Picker(T("Starts"), selection: $later) { Text(T("Now")).tag(false); Text(T("Later")).tag(true) }
+                    .labelsHidden().accessibilityIdentifier("presence.from")
+            }
+            if later { DatePicker(T("Starts at"), selection: $start, displayedComponents: [.date, .hourAndMinute]).accessibilityIdentifier("presence.startsAt") }
+            Text(String(format: T("Until %@"), PresenceTime.format(ends, "EEE d MMM HH:mm 'WIB'", language: language)))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityIdentifier("presence.summary")
+        }.font(NXFont.text(14))
+    }
+    private func restore() async {
+        await PresenceStore.shared.refresh()
+        guard let manual = PresenceStore.shared.status(Keychain.load()?.userId)?.manual else { return }
+        displayedManualId = manual.id
+        let first = manual.text.first
+        if let first, first.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) {
+            emoji = String(first); text = String(manual.text.dropFirst()).trimmingCharacters(in: .whitespaces)
+        } else { text = manual.text }
+        if let date = PresenceTime.instant(manual.startsAt), date > Date() { later = true; start = date }
+        if let date = PresenceTime.instant(manual.endsAt) { clearAfter = "pick"; end = date }
     }
     private func mutate(_ operation: @escaping @MainActor () async throws -> Void) {
         busy = true; failure = nil
