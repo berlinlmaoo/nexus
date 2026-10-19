@@ -67,6 +67,7 @@ struct NewMeetingSheet: View {
     @State private var failure: String?
     @State private var created: MeetingNote?
     @State private var confirmClose = false
+    @State private var confirmReplaceRecording = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -123,6 +124,12 @@ struct NewMeetingSheet: View {
                 .safeAreaInset(edge: .bottom) {
                     if created == nil && RemoteConfig.shared.meetingNotesEnabled { recordingActions }
                 }
+                .background {
+                    Color.clear.alert(T("Start a new recording?"), isPresented: $confirmReplaceRecording) {
+                        Button(T("Cancel"), role: .cancel) {}
+                        Button(T("Start new recording"), role: .destructive) { startRecording() }
+                    } message: { Text(T("A recording is saved on this device. Upload it before starting over if you want to keep it.")) }
+                }
                 .interactiveDismissDisabled(recorder.recording || recorder.paused || busy)
                 .alert(T("Stop recording?"), isPresented: $confirmClose) { Button(T("Stop")) { recorder.stop(); file = recorder.file; source = "record" }; Button(T("Cancel"), role: .cancel) {} } message: { Text(T("The recording stays on this device until you upload it.")) }
                 .sheet(isPresented: $filePicker) { DocumentPicker(types: [.item], multiple: false) { urls in if let url = urls.first { chooseFile(url) } } }
@@ -133,11 +140,16 @@ struct NewMeetingSheet: View {
                 .onChange(of: recorder.recording) { _, recording in if !recording && !recorder.paused && source == "record" { file = recorder.file } }
         }.accessibilityIdentifier("meetings.new").keyboardDoneBar()
     }
+    private func startRecording() {
+        file = nil; source = "record"; recorder.setSpeakerLabels(speakerLabels)
+        Task { await recorder.start() }
+    }
+
     private var recordingActions: some View {
         VStack(spacing: 10) {
             Button {
-                source = "record"; recorder.setSpeakerLabels(speakerLabels)
-                Task { await recorder.start() }
+                if recorder.file != nil { confirmReplaceRecording = true }
+                else { startRecording() }
             } label: { Label(T("Start recording"), systemImage: "mic.fill").frame(maxWidth: .infinity) }
                 .buttonStyle(.nxPrimary).accessibilityIdentifier("meetings.record")
                 .disabled(recorder.recording || recorder.paused || recorder.preparing || busy)

@@ -3,6 +3,9 @@ import Foundation
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
         "GIDEON stops using the 1 thing it remembers about you. It's deleted for good after 30 days.": "GIDEON berhenti memakai 1 hal yang diingat tentangmu. Hal itu dihapus permanen setelah 30 hari.",
+        "Start a new recording?": "Mulai rekaman baru?",
+        "Start new recording": "Mulai rekaman baru",
+        "A recording is saved on this device. Upload it before starting over if you want to keep it.": "Ada rekaman tersimpan di perangkat ini. Unggah dulu sebelum mulai lagi jika ingin menyimpannya.",
         "Profile fields aren't available on this server yet.": "Kolom profil belum tersedia di server ini.",
         "GIDEON Memory is not available right now.": "Memori GIDEON sedang tidak tersedia.",
         "Zoom %@%%": "Zoom %1$@%%",
