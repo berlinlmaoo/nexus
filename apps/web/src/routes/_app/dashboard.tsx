@@ -51,6 +51,8 @@ import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
 import { thumbUrl } from "@/lib/thumb";
 import { formatCount } from "@/lib/number-format";
 import { monthTitle } from "@/lib/month-title";
+import { PresenceDot, presenceText, usePresence } from "@/lib/presence";
+import { SetStatusDialog } from "@/components/SetStatusDialog";
 
 export const Route = createFileRoute("/_app/dashboard")({
   // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
@@ -95,6 +97,7 @@ function Dashboard() {
   const data: NexusDashboardResponse = live ?? emptyDashboard;
   const userName = profile.data?.user?.name ?? "";
   const phone = useIsMobile();
+  const showStatus = !!usePresence(profile.data?.user?.id);
 
   return (
     <div className="w-full px-5 py-6 md:px-8 md:py-8 2xl:px-10">
@@ -110,6 +113,8 @@ function Dashboard() {
             R18-WB-1, dashboard-3). Not from md: the computer layout keeps scrolling freely. */}
         <div data-snap-rows={phone ? "" : undefined} className="space-y-6">
           <StatRow data={data} />
+          {/* Phone and tablet: the status row sits right under the tiles (on a wide screen it is in the rail). */}
+          {showStatus && <div className="xl:hidden"><StatusCard meId={profile.data?.user?.id} /></div>}
           <Reveal delay={0.1}><XpRulesCard /></Reveal>
           {/* The calendar and schedule sit under XP rules on every width, as on the desktop (QA S-26 put
               them in the main column; the UI tour of 13 Oct 2026 found the phone showing them only after
@@ -125,6 +130,7 @@ function Dashboard() {
         {/* right rail */}
         <aside data-snap-rows={phone ? "" : undefined} className="space-y-6">
           <Reveal delay={0.05}><ProfileCard avatarUrl={profile.data?.user?.avatar} /></Reveal>
+          {showStatus && <Reveal delay={0.08} className="max-xl:hidden"><StatusCard meId={profile.data?.user?.id} /></Reveal>}
           <Reveal delay={0.1}><MessagesCard /></Reveal>
           <Reveal delay={0.15}><LeaderboardCard /></Reveal>
         </aside>
@@ -832,6 +838,35 @@ function ProfileCard({ avatarUrl }: { avatarUrl?: string | null }) {
       </Link>
       {/* No name caption under the button: the greeting above already says who this is (UI tour run 14, R14-WD-13). */}
     </section>
+  );
+}
+
+/**
+ * R-14 (19 Oct 2026, as on iOS): one's presence status on Home — the dot in the colour everyone sees now, "Set a
+ * status", the current status and a chevron; it opens the status dialog. Nothing when presence is off.
+ */
+function StatusCard({ meId }: { meId?: string }) {
+  const { t, lang } = useLang();
+  const status = usePresence(meId);
+  const [open, setOpen] = useState(false);
+  if (!status) return null;
+  const now = presenceText(status, lang);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={`${t("Set a status")}: ${now}`}
+        className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-3xl border border-border bg-card px-4 py-3 text-left shadow-soft transition-shadow hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted"><PresenceDot status={status} size={12} ring={false} /></span>
+        <span className="shrink-0 font-semibold">{t("Set a status")}</span>
+        <span className="min-w-0 flex-1 truncate text-right text-sm text-muted-foreground">{now}</span>
+        <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+      <SetStatusDialog open={open} onOpenChange={setOpen} meId={meId} />
+    </>
   );
 }
 
