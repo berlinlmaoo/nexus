@@ -1282,6 +1282,12 @@ struct CalendarView: View {
         // The web's key, in its order: ● has tasks to do, ✓ done or no status, — overdue (phone too).
         legendKey(filled: true, T("has tasks to do"))
         legendKey(filled: false, T("done or no status"))
+        if wideCells {
+            HStack(spacing: 5) {
+                keyBadge("2", fill: NX.muted, fg: NX.mutedFg)
+                Text(T("number = tasks that day"))
+            }
+        }
         HStack(spacing: 5) {
             Capsule().fill(CalTone.overdue).frame(width: 16, height: 2).accessibilityHidden(true)
             Text(T("overdue"))
