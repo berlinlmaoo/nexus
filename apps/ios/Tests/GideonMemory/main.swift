@@ -49,6 +49,22 @@ func page(_ text: String = raw, paused: Bool = false) -> Data { Data("{\"paused\
     GideonMemoryAPI.replies = [.init(data:page())]; await store.refresh()
     GideonMemoryAPI.replies = [.init(data: Data("{\"deleted\":1}".utf8))]; await store.forgetEverything()
     check(store.memories.isEmpty && GideonMemoryAPI.requests.last?.1 == "DELETE" && GideonMemoryAPI.requests.last?.0 == "", "Forget-all own route clears local records")
+    var profileState = try JSONSerialization.jsonObject(with: page(activeRaw)) as! [String: Any]
+    profileState["profile"] = ["nickname": "Example"]
+    profileState["available"] = true
+    let profileData = try JSONSerialization.data(withJSONObject: profileState)
+    GideonMemoryAPI.replies = [.init(data: profileData)]; await store.refresh()
+    check(store.profileAvailable && store.available, "Shared profile contract is detected without guessing text prefixes")
+    GideonMemoryAPI.replies = [.init(data: profileData)]
+    let saved = await store.setProfile(field: "nickname", value: "Example")
+    check(saved && GideonMemoryAPI.requests.last?.0 == "/profile" && GideonMemoryAPI.requests.last?.1 == "PUT", "Profile uses the shared own-user PUT route")
+    check(Set(GideonMemoryAPI.requests.last!.2.keys) == ["nickname"], "Saving one profile field leaves the other fields alone and has no user selector")
+    GideonMemoryAPI.replies = [.init(data: profileData, delay: 30_000_000)]
+    let oldProfile = Task { await store.setProfile(field: "nickname", value: "Old session") }
+    try await Task.sleep(nanoseconds: 5_000_000)
+    store.reset(); Keychain.session = Session(userId: "third")
+    let oldSaved = await oldProfile.value
+    check(!oldSaved && store.memories.isEmpty && !store.profileAvailable, "An old-session profile response cannot repopulate private state")
 }
 try await run()
 print("\(checks) private memory, history exclusion, save/delete and session race checks passed")
