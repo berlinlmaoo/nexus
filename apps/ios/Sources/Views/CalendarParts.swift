@@ -702,13 +702,10 @@ private struct CalMonthGridBody: View {
             // 2 pt inside the 54 pt phone cell ran into today's disc (owner, 8 Oct 2026: "nabrak sama
             // tanggal hari ini yang bulet"). The tall cell has room for an edge as well, well clear of
             // the disc, so the pick is seen at a glance across a big grid.
-            // As the dev web's grid (MonthGrid.tsx `ring-2 ring-inset`): the picked day is an outlined cell
-            // in the near-black of the web's primary, on the phone too (one month-grid style, UI tour run 16,
-            // R16-I-06; the phone's lavender tile was a third way of marking a day).
-            .overlay {
-                if isSel {
-                    Rectangle().strokeBorder(NX.onyx, lineWidth: g.wide ? 2 : 1.5)
-                }
+            // The picked day is a soft rounded accent tint, no outline (Berlin device review 19 Oct, R-12: the
+            // near-black square read as a hard border). The number keeps its own style, today its disc.
+            .background {
+                if isSel { NXMonthSelection() }
             }
             .contentShape(Rectangle())
         }
@@ -725,14 +722,14 @@ private struct CalMonthGridBody: View {
     private func number(_ day: String, inMonth: Bool, isToday: Bool, isSel: Bool, holiday: String?) -> some View {
         let wide = grid.wide
         // Regular width: today is a near-black disc (web `bg-cal-accent` / dark `bg-primary`) and the
-        // pick is the cell's outline, so the number itself is not tinted.
+        // pick is the cell's soft tint, so the number itself is not tinted.
         // Today is the navy disc on every width (one month-grid style, UI tour run 16, R16-I-06).
         let todayFg: Color = NX.background
         let picked: Color = NX.foreground
         let color: Color = isToday ? todayFg : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? picked : NX.foreground))
         let side = CalType.size(min(disc, wide ? 36 : 32))
         return Text("\(Int(day.suffix(2)) ?? 0)")
-            .font(NXFont.text(CalType.size(13), inMonth ? (isToday || isSel ? .bold : .semibold) : .regular)).monospacedDigit()
+            .font(NXFont.text(CalType.size(13), inMonth ? (isToday ? .bold : .semibold) : .regular)).monospacedDigit()
             .lineLimit(1).minimumScaleFactor(0.7)
             .foregroundStyle(color)
             .frame(minWidth: side, minHeight: side)
