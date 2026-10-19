@@ -3,6 +3,7 @@ import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attenda
 import type { Prisma } from "@/generated/prisma/client"
 import { uuidv7 } from "@/lib/uuid7"
 import { attendanceDayBlockedTx, attendanceDayOfReason, lockAttendanceDay, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
+import { noteXpChanged } from "@/lib/xp-realtime"
 
 // ===== Levels (mirror apps/web/src/lib/levels.ts) =====
 // Period-based scoring: every user starts each period at PERIOD_BASELINE_XP (1000 =
@@ -108,6 +109,7 @@ export async function applyXpDelta(tx: Prisma.TransactionClient, userId: string,
       SET "totalXp" = "UserXp"."totalXp" + EXCLUDED."totalXp",
           "currentLevel" = EXCLUDED."currentLevel",
           "updatedAt" = NOW()`
+  noteXpChanged(userId)
 }
 
 /** The period level of a user right now (what UserXp.currentLevel holds, recomputed: a new period resets it). */
