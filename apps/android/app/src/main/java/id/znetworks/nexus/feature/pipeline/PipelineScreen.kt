@@ -368,7 +368,7 @@ internal fun StageChip(stage: String) {
  * the others through `pipeline-changed` on the project room the board screen already sits in.
  */
 @Composable
-fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, vm: PipelineViewModel = viewModel()) {
+fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, vm: PipelineViewModel = viewModel(), presentation: Boolean = false) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
@@ -384,6 +384,7 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
         matches = { it.name == RealtimeEvents.PIPELINE_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }
 
     val d = s.data
+    androidx.compose.runtime.CompositionLocalProvider(LocalPipelinePresentation provides presentation) {
     when {
         s.loading && d == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Text(stringResource(R.string.pl_loading), fontSize = 12.sp, color = c.mutedFg) }
@@ -442,6 +443,7 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
     }
     s.openDealId?.let { id -> d?.deals?.firstOrNull { it.id == id }?.let { deal -> DealSheet(deal, d, s.people, vm, onOpenProject = { pid -> vm.open(null); onOpenProject(pid) }, onOpenFolder = { fid -> vm.open(null); onOpenFolder(fid) }) { vm.open(null) } } }
     s.notice?.let { androidx.compose.material3.AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
+    }
 }
 
 /** One icon menu: Filter by PM ›, Filter by BD ›, Clear filters, Download Excel (a sub-list replaces the menu's items). */
@@ -491,16 +493,16 @@ private fun Kpis(sm: PipelineSummary) {
     val profit = sm.n("realProfit")
     val noNet = sm.i("costNoNetCount")
     val tiles = listOf(
-        Tile(stringResource(R.string.pl_k_open), PipelineFormat.idr(sm.n("openValue")), pluralStringResource(R.plurals.pl_k_in_play, sm.i("openCount"), sm.i("openCount")), sm.n("openValue") == 0.0),
-        Tile(stringResource(R.string.pl_k_weighted), PipelineFormat.idr(sm.n("weightedValue")), stringResource(R.string.pl_k_weighted_sub), sm.n("weightedValue") == 0.0),
-        Tile(stringResource(R.string.pl_k_won), PipelineFormat.idr(sm.n("wonValue")), stringResource(R.string.pl_k_won_sub, sm.i("activeCount"), sm.i("lostCount")), sm.n("wonValue") == 0.0),
-        Tile(stringResource(R.string.pl_k_receivable), PipelineFormat.idr(sm.n("receivable")),
-            if (overdue > 0) stringResource(R.string.pl_k_overdue, PipelineFormat.idr(overdue)) else stringResource(R.string.pl_k_nothing_overdue), sm.n("receivable") == 0.0),
+        Tile(stringResource(R.string.pl_k_open), pipelineMoney(sm.n("openValue")), pluralStringResource(R.plurals.pl_k_in_play, sm.i("openCount"), sm.i("openCount")), sm.n("openValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_weighted), pipelineMoney(sm.n("weightedValue")), stringResource(R.string.pl_k_weighted_sub), sm.n("weightedValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_won), pipelineMoney(sm.n("wonValue")), stringResource(R.string.pl_k_won_sub, sm.i("activeCount"), sm.i("lostCount")), sm.n("wonValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_receivable), pipelineMoney(sm.n("receivable")),
+            if (overdue > 0) stringResource(R.string.pl_k_overdue, pipelineMoney(overdue)) else stringResource(R.string.pl_k_nothing_overdue), sm.n("receivable") == 0.0),
         // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost with costs and a net value, red
         // below zero; under it the real cost of the same deals. Deals with costs but no net value are left out, named in amber.
-        Tile(stringResource(R.string.pc_k_real_profit), PipelineFormat.idr(profit),
+        Tile(stringResource(R.string.pc_k_real_profit), pipelineMoney(profit),
             pluralStringResource(R.plurals.pc_k_have_costs, sm.i("costEligibleCount"), sm.i("costDealCount"), sm.i("costEligibleCount")), profit == 0.0,
-            tone = if (profit < 0) c.danger else null, detail = stringResource(R.string.pc_k_real_cost, PipelineFormat.idr(sm.n("realCost"))),
+            tone = if (profit < 0) c.danger else null, detail = stringResource(R.string.pc_k_real_cost, pipelineMoney(sm.n("realCost"))),
             warn = if (noNet > 0) pluralStringResource(R.plurals.pc_k_no_net, noNet, noNet) else null),
         Tile(stringResource(R.string.pl_critical), "${sm.i("criticalCount")}", stringResource(R.string.pl_k_attention, sm.i("attentionCount")), sm.i("criticalCount") == 0),
         Tile(stringResource(R.string.pl_k_ready), "${sm.i("readyCount")}", stringResource(R.string.pl_k_blocked, sm.i("blockedCount")), sm.i("readyCount") == 0),
@@ -553,13 +555,13 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
             Text(name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (d.brand.isNotBlank() || d.value > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.brand, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                if (d.value > 0) Text(pipelineMoney(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
             }
             // The margin on the net value (Control Tower v6): only with at least one cost line and a net value.
-            PipelineCosts.cardMargin(d)?.let { (m, pct) ->
+            if (!LocalPipelinePresentation.current) PipelineCosts.cardMargin(d)?.let { (m, pct) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.pc_margin) + ": ", fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
-                    Text("${PipelineFormat.idr(m)} (${PipelineFormat.pct(pct)})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = marginColor(m), maxLines = 1)
+                    Text("${pipelineMoney(m)} (${PipelineFormat.pct(pct)})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = marginColor(m), maxLines = 1)
                 }
             }
             PhaseTrack(d.progressPhases, Modifier.fillMaxWidth().padding(vertical = 2.dp))
@@ -617,7 +619,7 @@ private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel
         Spacer(Modifier.width(6.dp))
         Text("${col.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
         val total = col.sumOf { it.value }
-        if (total > 0) Text(" · " + PipelineFormat.idr(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
+        if (total > 0) Text(" · " + pipelineMoney(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         Spacer(Modifier.weight(1f))
         if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
@@ -680,7 +682,7 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stageLabel(st), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.weight(1f))
                     val total = col.sumOf { it.value }
-                    Text(pluralStringResource(R.plurals.pl_n_deals, col.size, col.size) + if (total > 0) " · " + PipelineFormat.idr(total) else "", fontSize = 11.sp, color = c.mutedFg)
+                    Text(pluralStringResource(R.plurals.pl_n_deals, col.size, col.size) + if (total > 0) " · " + pipelineMoney(total) else "", fontSize = 11.sp, color = c.mutedFg)
                 }
             }
             items(col, key = { it.id }) { d ->
@@ -691,10 +693,10 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         // Blank instead of "–" / "Rp0"; "Not started" as plain grey text, pills for the rest.
-                        if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                        if (d.value > 0) Text(pipelineMoney(d.value), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                         if (d.healthKey == "NOT_STARTED") Text(stringResource(R.string.pl_not_started), fontSize = 11.sp, color = c.mutedFg) else HealthPill(d.healthKey)
                         // The receivable: the terms' when the deal has them (§11.2), else the typed one.
-                        if (d.receivable > 0) Text(stringResource(R.string.pl_t_outstanding, PipelineFormat.idr(d.receivable)), fontSize = 10.sp,
+                        if (d.receivable > 0) Text(stringResource(R.string.pl_t_outstanding, pipelineMoney(d.receivable)), fontSize = 10.sp,
                             color = if (d.daysOverdue > 0) c.danger else c.mutedFg, maxLines = 1)
                     }
                 }
@@ -741,7 +743,7 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
             late.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable { vm.open(d.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(d.name, fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text(PipelineFormat.idr(d.receivable) + " · " + pluralStringResource(R.plurals.pl_n_days, d.daysOverdue, d.daysOverdue), fontSize = 12.sp, color = c.danger)
+                    Text(pipelineMoney(d.receivable) + " · " + pluralStringResource(R.plurals.pl_n_days, d.daysOverdue, d.daysOverdue), fontSize = 12.sp, color = c.danger)
                 }
             }
         }

@@ -62,19 +62,19 @@ internal fun PaymentTerms(deal: PipelineDeal, vm: PipelineViewModel) {
     val ts = deal.termSummary
     var adding by remember { mutableStateOf(false) }
     if (ts != null && terms.isNotEmpty()) {
-        Text(stringResource(R.string.pl_t_paid_of, PipelineFormat.idrFull(ts.totalPaid), PipelineFormat.idrFull(ts.totalAmount)), fontSize = 13.sp,
+        Text(stringResource(R.string.pl_t_paid_of, pipelineFullMoney(ts.totalPaid), pipelineFullMoney(ts.totalAmount)), fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold, color = c.foreground)
     }
     if (PipelineTerms.mismatch(deal)) {
-        val sum = PipelineFormat.idrFull(terms.sumOf { it.amount })
-        val ref = PipelineFormat.idrFull(deal.termsReference)
+        val sum = pipelineFullMoney(terms.sumOf { it.amount })
+        val ref = pipelineFullMoney(deal.termsReference)
         Text(if (deal.invoiceValue > 0) stringResource(R.string.pl_t_vs_invoice, sum, ref) else stringResource(R.string.pl_t_vs_contract, sum, ref),
             fontSize = 12.sp, color = c.warning)
     }
     if (terms.isEmpty()) Text(stringResource(R.string.pl_t_empty), fontSize = 12.sp, color = c.mutedFg)
     terms.forEach { t -> key(t.id) { TermCard(deal, t, vm) } }
-    TextButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
-    if (adding) NewTerm(deal, vm) { adding = false }
+    TextButton(onClick = { adding = true }, enabled = !LocalPipelinePresentation.current) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
+    if (adding && !LocalPipelinePresentation.current) NewTerm(deal, vm) { adding = false }
 }
 
 @Composable
@@ -105,10 +105,10 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
             TermPill(t)
             IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.pl_t_delete), tint = c.dangerText) }
         }
-        Text(if (t.isPaid) stringResource(R.string.pl_t_paid_full, t.paidAt?.let(::dayLabel) ?: "–") else stringResource(R.string.pl_t_still_owed, PipelineFormat.idrFull(t.outstanding)),
+        Text(if (t.isPaid) stringResource(R.string.pl_t_paid_full, t.paidAt?.let(::dayLabel) ?: "–") else stringResource(R.string.pl_t_still_owed, pipelineFullMoney(t.outstanding)),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (t.isPaid) c.success else if (t.daysOverdue > 0) c.danger else c.mutedFg)
         TextSave(stringResource(R.string.pl_f_name), t.label) { save(f("label" to JsonPrimitive(it))) }
-        if (t.overpaid > 0) Text(stringResource(R.string.qa_term_overpaid, PipelineFormat.idrFull(t.overpaid)), color = c.warningFg, fontSize = 12.sp)
+        if (t.overpaid > 0) Text(stringResource(R.string.qa_term_overpaid, pipelineFullMoney(t.overpaid)), color = c.warningFg, fontSize = 12.sp)
         Money(stringResource(R.string.pl_t_amount), t.amount) { save(f("amount" to JsonPrimitive(it))) }
         DateSave(stringResource(R.string.pl_f_due_date), t.dueDate) { save(f("dueDate" to day(it))) }
         TextSave(stringResource(R.string.pl_t_invoice_no), t.invoiceNo) { save(f("invoiceNo" to JsonPrimitive(it))) }
@@ -119,12 +119,12 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
             DateSave(stringResource(R.string.pl_t_paid_at), t.paidAt) { save(f("paidAt" to day(it))) }
         }
         TextSave(stringResource(R.string.pl_t_note), t.note, multiline = true) { save(f("note" to JsonPrimitive(it))) }
-        if (!t.isPaid) TextButton(onClick = { paying = true }) {
+        if (!t.isPaid) TextButton(onClick = { paying = true }, enabled = !LocalPipelinePresentation.current) {
             Icon(Icons.Filled.CheckCircle, null, Modifier.size(16.dp), tint = c.success); Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.pl_t_mark_paid), color = c.success, fontWeight = FontWeight.SemiBold)
         }
     }
-    if (paying) MarkPaid(t, onDismiss = { paying = false }) { amount, date ->
+    if (paying && !LocalPipelinePresentation.current) MarkPaid(t, onDismiss = { paying = false }) { amount, date ->
         vm.updateTerm(deal.id, t.id, f("paidAmount" to JsonPrimitive(amount), "paidAt" to JsonPrimitive(date))) { ok -> if (ok) paying = false }
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
@@ -148,7 +148,7 @@ private fun MarkPaid(t: PipelineTerm, onDismiss: () -> Unit, onSave: (Double, St
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 DateSave(stringResource(R.string.pl_t_paid_at), date) { it?.let { d -> date = d } }
-                if (parsed != null && parsed > t.amount) Text(stringResource(R.string.qa_term_overpaid_warning, PipelineFormat.idrFull(parsed - t.amount)), color = Nx.colors.warningFg, fontSize = 12.sp)
+                if (parsed != null && parsed > t.amount) Text(stringResource(R.string.qa_term_overpaid_warning, pipelineFullMoney(parsed - t.amount)), color = Nx.colors.warningFg, fontSize = 12.sp)
             }
         },
         confirmButton = { TextButton(onClick = { parsed?.let { onSave(it, date) } }, enabled = parsed != null) { Text(stringResource(R.string.save)) } },

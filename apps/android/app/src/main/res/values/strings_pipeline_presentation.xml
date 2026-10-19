@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pl_hide_amounts">Hide amounts</string>
+    <string name="pl_show_amounts">Show amounts</string>
+</resources>

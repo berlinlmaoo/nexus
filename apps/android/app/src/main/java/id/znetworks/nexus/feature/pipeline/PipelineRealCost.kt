@@ -56,7 +56,7 @@ internal fun marginColor(m: Double?): Color = when (PipelineCosts.tone(m)) {
 /** A `costs` value in the History tab: "3 cost lines · Rp12.500.000", or "empty". */
 @Composable
 internal fun costsShown(e: JsonElement?): String = PipelineCosts.historyLines(e)?.let { (n, total) ->
-    pluralStringResource(R.plurals.pc_h_lines, n, n, PipelineFormat.idrFull(total))
+    pluralStringResource(R.plurals.pc_h_lines, n, n, pipelineFullMoney(total))
 } ?: stringResource(R.string.pl_empty_value)
 
 /**

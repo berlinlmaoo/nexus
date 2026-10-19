@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewKanban
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -502,6 +504,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     // A selection belongs to the task views; leaving them drops it.
     LaunchedEffect(tab) { if (!tab.searches || tab == ProjectTab.CALENDAR || tab == ProjectTab.TIMELINE) { vm.clearSelection() }; if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.setDrill(null) }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
+    var pipelinePresentation by remember(vm.projectId) { mutableStateOf(false) }
+    LaunchedEffect(tab) { if (tab != ProjectTab.PIPELINE) pipelinePresentation = false }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -622,7 +626,15 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
-                onAdd = onAdd, addInTabs = tabsShown)
+                onAdd = onAdd, addInTabs = tabsShown, extraActions = {
+                    if (tab == ProjectTab.PIPELINE) {
+                        id.znetworks.nexus.ui.components.HeaderIconButton(
+                            if (pipelinePresentation) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            stringResource(if (pipelinePresentation) R.string.pl_show_amounts else R.string.pl_hide_amounts),
+                            { pipelinePresentation = !pipelinePresentation }, size = 36.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                })
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
                     onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null,
@@ -695,7 +707,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> if (canAddTask) { createDue = d; creating = true } }
                                 ProjectTab.TIMELINE -> TimelineTab(groups.map { groupLabel(it, cfg.groupBy) to it.tasks }, onOpenTask)
                                 ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId, s.lanes, s.detail!!.members)
-                                ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
+                                ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder, presentation = pipelinePresentation)
                                 ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
                                     val outletViews = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,
                                         ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,

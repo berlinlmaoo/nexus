@@ -137,6 +137,7 @@ fun ProjectPageHeader(
     detail: ProjectDetail?, onBack: () -> Unit, onMembers: () -> Unit, onGideon: () -> Unit, onSettings: () -> Unit,
     onAdd: (() -> Unit)?,
     addInTabs: Boolean = false,
+    extraActions: @Composable () -> Unit = {},
 ) {
     val c = Nx.colors
     val access = ProjectAccess.of(detail)
@@ -160,6 +161,7 @@ fun ProjectPageHeader(
                 }
             }
             if (detail != null) {
+                extraActions()
                 MemberFaces(detail.members, onMembers)
                 Spacer(Modifier.width(6.dp))
                 HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp, painter = id.znetworks.nexus.ui.components.gideonPainter())
