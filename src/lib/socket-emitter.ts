@@ -254,6 +254,21 @@ export function emitRemindersChanged(userId: string, id: string) {
   publishSafely(BUS_EVENTS.REMINDERS_CHANGED, { userId, id })
 }
 
+/**
+ * `attendance-changed` { kind, id } to each `user:<id>` (QA final 19 Oct 2026, C-17): the person just decided or
+ * changed something in attendance, so their other devices refetch the approval queue / board / today card.
+ * kind: "request" | "offsite" | "override" | "correction" | "dayoff_bonus" | "dayoff".
+ */
+export function emitAttendanceChanged(userIds: Array<string | null | undefined>, kind: string, id: string | null) {
+  const ids = [...new Set(userIds.filter((u): u is string => typeof u === "string" && u.length > 0))]
+  if (ids.length) publishSafely(BUS_EVENTS.ATTENDANCE_CHANGED, { userIds: ids, kind, id })
+}
+
+/** `xp-changed` { userIds } to `workspace:<id>` rooms (C-D2): open leaderboards refetch. Use lib/xp-realtime.ts noteXpChanged. */
+export function emitXpChanged(workspaceIds: string[], userIds: string[]) {
+  if (workspaceIds.length && userIds.length) publishSafely(BUS_EVENTS.XP_CHANGED, { workspaceIds, userIds })
+}
+
 function publishSafely(event: string, data: unknown) {
   try {
     eventBus.emit(event, data)

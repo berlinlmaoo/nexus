@@ -105,7 +105,7 @@ export async function notifyAttendanceOverride(input: {
   }
   // Pushed: a day flipped to Cuti/Sakit/Day-off (which also closes their open record) is not
   // something to discover by opening the app.
-  await createInAppNotification({ userId: target.id, type: "attendance_override", ...bi(en, [title, message]), link: "/attendance", push: true }).catch(() => {})
+  await createInAppNotification({ userId: target.id, type: "attendance_override", ...bi(en, [title, message]), link: `/attendance?date=${encodeURIComponent(input.dateKey)}`, push: true }).catch(() => {})
 }
 
 /** An offsite checkout was approved/rejected → tell the staff member. */

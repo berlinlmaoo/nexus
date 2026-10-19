@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -14,7 +15,7 @@ import { notifyOffsiteCheckoutReviewed } from "@/lib/attendance-review-notify"
 // Semantics: APPROVE = the offsite checkout is valid, nothing else changes. REJECT = treated like a
 // no-checkout → a one-time -25 XP penalty (applied here, event-driven, so it doesn't depend on the
 // nightly cron's rolling lookback window). Reject does NOT rewrite the late/early/worked ledger.
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ recordId: string }> }) {
+async function handlePATCH(request: NextRequest, { params }: { params: Promise<{ recordId: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -86,3 +87,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   return NextResponse.json({ ok: true, id: record.id, approval: nextStatus })
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const PATCH = pingActorAfter("offsite", handlePATCH)

@@ -126,6 +126,7 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "±{m}m from the office": "±{m} m dari kantor",
   "map": "peta",
   "Location trail": "Jejak lokasi",
+  "{name}'s location trail": "Jejak lokasi {name}",
   "Hide": "Sembunyikan",
   "Unknown user.": "Pengguna tidak dikenal.",
   "Attendance detail": "Detail absensi",

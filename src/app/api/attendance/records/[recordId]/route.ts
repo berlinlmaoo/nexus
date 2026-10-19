@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -19,7 +20,7 @@ import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetai
 import { isHoliday } from "@/lib/holidays"
 import { attendanceCorrectionSchema, validateBody } from "@/lib/validations"
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   { params }: { params: Promise<{ recordId: string }> }
 ) {
@@ -238,7 +239,7 @@ export async function PATCH(
  * check-out). `?part=checkout` clears ONLY the check-out (reopens the record → CHECKED_IN); no `part`
  * deletes the whole record and waives the day so the nightly cron won't re-derive an absence on it.
  */
-export async function DELETE(
+async function handleDELETE(
   request: NextRequest,
   { params }: { params: Promise<{ recordId: string }> }
 ) {
@@ -335,3 +336,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const PATCH = pingActorAfter("correction", handlePATCH)
+export const DELETE = pingActorAfter("correction", handleDELETE)

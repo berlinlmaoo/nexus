@@ -157,7 +157,7 @@ vi.mock("@/lib/deletion-snapshot", () => ({
   }),
 }))
 
-import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitAttendanceChanged, emitWorkspaceChanged, emitXpChanged } from "@/lib/socket-emitter"
 import { logAudit } from "@/lib/audit"
 import { PATCH as patchProject } from "@/app/api/projects/[projectId]/route"
 import { PATCH as patchVaultItem } from "@/app/api/vault/items/[itemId]/route"
@@ -299,6 +299,33 @@ describe("workspace rooms (server-assigned from WorkspaceMember)", () => {
     expect(seen.get("u-carol")!.workspace).toEqual([{ kind: "folders", folderId: "f-9", actorId: "u-carol" }])
     expect(seen.get("u-alice")!.workspace).toHaveLength(0)
     expect(seen.get("u-erin")!.workspace).toHaveLength(0)
+  })
+
+  it("attendance-changed (C-17) reaches only the actor's own user room, ids only", async () => {
+    const got: Record<string, unknown[]> = { alice: [], carol: [] }
+    const onA = (p: unknown) => got.alice.push(p)
+    const onC = (p: unknown) => got.carol.push(p)
+    clients[0].on("attendance-changed", onA)
+    clients[2].on("attendance-changed", onC)
+    emitAttendanceChanged(["u-carol", "u-carol", null], "request", "r-1")
+    await settle()
+    clients[0].off("attendance-changed", onA)
+    clients[2].off("attendance-changed", onC)
+    expect(got.carol).toEqual([{ kind: "request", id: "r-1" }])
+    expect(got.alice).toHaveLength(0)
+  })
+
+  it("xp-changed (C-D2) reaches that workspace's sockets and no other", async () => {
+    const got: Record<string, unknown[]> = { alice: [], bob: [], carol: [] }
+    const on = (k: string) => (p: unknown) => got[k].push(p)
+    const handlers = [on("alice"), on("bob"), on("carol")]
+    ;[0, 1, 2].forEach((i) => clients[i].on("xp-changed", handlers[i]))
+    emitXpChanged(["W1"], ["u-bob"])
+    await settle()
+    ;[0, 1, 2].forEach((i) => clients[i].off("xp-changed", handlers[i]))
+    expect(got.alice).toEqual([{ userIds: ["u-bob"] }])
+    expect(got.bob).toEqual([{ userIds: ["u-bob"] }])
+    expect(got.carol).toHaveLength(0)
   })
 
   it("refuses an offboarded user, as the handshake always has", async () => {

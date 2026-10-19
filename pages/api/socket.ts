@@ -623,6 +623,18 @@ export function initializeSocketServer(
     if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("gideon-credits", { summary: data.summary ?? null })
   })
 
+  // C-17 (19 Oct 2026): the actor's own other devices drop decisions they already made. Ids only.
+  eventBus.on(BUS_EVENTS.ATTENDANCE_CHANGED, (data: { userIds?: string[]; kind?: string; id?: string | null }) => {
+    const rooms = (Array.isArray(data?.userIds) ? data.userIds : []).filter((u) => typeof u === "string" && u).map((u) => `user:${u}`)
+    if (rooms.length) io.to(rooms).emit("attendance-changed", { kind: data.kind ?? null, id: data.id ?? null })
+  })
+
+  // C-D2 (19 Oct 2026): XP moved for these people — open leaderboards in their workspaces refetch. Ids only.
+  eventBus.on(BUS_EVENTS.XP_CHANGED, (data: { workspaceIds?: string[]; userIds?: string[] }) => {
+    const rooms = (Array.isArray(data?.workspaceIds) ? data.workspaceIds : []).filter((w) => typeof w === "string" && w).map((w) => `workspace:${w}`)
+    if (rooms.length) io.to(rooms).emit("xp-changed", { userIds: Array.isArray(data.userIds) ? data.userIds : [] })
+  })
+
   eventBus.on(BUS_EVENTS.REMINDERS_CHANGED, (data: { userId: string; id: string }) => {
     if (typeof data?.userId === "string" && data.userId) io.to(`user:${data.userId}`).emit("reminders-changed", { id: data.id ?? null })
   })
