@@ -795,11 +795,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuContent>
             </DropdownMenu>
             <button type="button" onClick={startMention} title={t("Add a page, task or project")} aria-label={t("Add a page, task or project")} className={iconBtn}><AtSign className="h-4 w-4" /></button>
-            {/* Notion AI's approval mode: an icon in the narrow panel, the mode's name on the full page. */}
+            {/* Notion AI's approval mode: an icon in the narrow panel and on phones (< 400 px, E-9: "Tinjau sebelum
+                menulis" was cut off), the mode's name on the full page. The name stays in the menu and the label. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label={`${t("Choose approval mode")}: ${t(modeDef.name)}`} title={`${t(modeDef.name)}. ${t(modeDef.blurb)}`} className={cn("inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === "dont_ask" && "text-amber-700 dark:text-amber-400")}>
-                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
+                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate max-[399px]:sr-only", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-72">
