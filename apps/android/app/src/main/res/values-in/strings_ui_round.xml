@@ -33,4 +33,11 @@
     <string name="ui_ticket_new">Baru</string>
     <string name="ui_ticket_done">Selesai</string>
     <string name="ui_ticket_gideon_replied">GIDEON sudah membalas</string>
+    <string name="ui_vault_add">Tambahkan ke Vault</string>
+    <string name="ui_vault_upload_file">Unggah file</string>
+    <string name="ui_vault_from_photos">Dari Foto</string>
+    <string name="ui_vault_select">Pilih</string>
+    <string name="ui_vault_storage">Penyimpanan</string>
+    <plurals name="ui_vault_selected"><item quantity="other">%1$d dipilih</item></plurals>
+    <plurals name="ui_vault_trash_selected"><item quantity="other">Pindahkan %1$d item ke Sampah?</item></plurals>
 </resources>

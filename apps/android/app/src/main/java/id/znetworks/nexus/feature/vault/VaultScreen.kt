@@ -160,6 +160,7 @@ class VaultViewModel(app: Application, private val handle: SavedStateHandle) : A
     fun newFolder(name: String) = act { api.createFolder(name, folder) }
     fun rename(i: VaultItem, name: String) = act { api.rename(i.id, name) }
     fun delete(i: VaultItem) = act { api.delete(i.id, purge = trash) }
+    fun deleteSelected(items: List<VaultItem>) = act { items.filter { it.canModify == true }.forEach { api.delete(it.id, purge = false) } }
     fun restore(i: VaultItem) = act { api.restore(i.id) }
     fun emptyTrash() = act { api.emptyTrash() }
 
@@ -220,8 +221,14 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     var sharing by remember { mutableStateOf<VaultItem?>(null) }
     var confirm by remember { mutableStateOf<VaultItem?>(null) }
     var confirmEmpty by remember { mutableStateOf(false) }
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var confirmSelected by remember { mutableStateOf(false) }
+    var batchMoving by remember { mutableStateOf<List<VaultItem>>(emptyList()) }
+    fun toggle(i: VaultItem) { if (i.canModify == true) selected = if (i.id in selected) selected - i.id else selected + i.id }
     var q by rememberSaveable { mutableStateOf("") }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
+    val photos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { vm.upload(it) }
     var moving by remember { mutableStateOf<VaultItem?>(null) }
     var viewing by remember { mutableStateOf<Int?>(null) }
     var linkedViewing by remember { mutableStateOf<VaultItem?>(null) }
@@ -238,39 +245,23 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     LaunchedEffect(q) { if (q != s.query) { kotlinx.coroutines.delay(300); vm.search(q) } }
     val l = s.list
     Column(Modifier.fillMaxSize().background(c.background)) {
-        // The shelf's subtitle at the root only; a folder or the trash is named by its title.
-        PageHeader(if (vm.trash) stringResource(R.string.vault_trash) else l?.breadcrumb?.lastOrNull()?.name ?: "Z Vault",
-            subtitle = if (!vm.trash && vm.folder == null) stringResource(R.string.sub_vault) else null, onBack = onBack) {
-            if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            if (vm.trash && l?.items?.isNotEmpty() == true) TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.vault_empty_trash), color = c.danger) }
-        }
-        // iOS phoneHeader: Trash · Folder · Upload as labelled buttons (they were three bare icons); Upload is the primary.
-        if (!vm.trash && (vm.folder == null || l?.canWrite == true)) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (vm.folder == null) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.vault_trash), onOpenTrash, compact = true, icon = Icons.Filled.Delete)
-                if (l?.canWrite == true) {
-                    id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.vault_folder_short), { creating = true }, compact = true, icon = Icons.Filled.CreateNewFolder)
-                    id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.td_upload), { pick.launch(arrayOf("*/*")) }, compact = true, icon = Icons.Filled.Upload,
-                        kind = id.znetworks.nexus.ui.components.NxButtonKind.PRIMARY, enabled = s.upload == null)
-                }
+        VaultHeader(vm.trash, vm.folder, l, s.busy, s.upload != null, onBack,
+            onUpload = { pick.launch(arrayOf("*/*")) }, onPhotos = { photos.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onNewFolder = { creating = true }, onTrash = onOpenTrash, onSelect = { selecting = true; selected = emptySet() }, onEmptyTrash = { confirmEmpty = true })
+        if (selecting) {
+            val picked = l?.items.orEmpty().filter { it.id in selected && it.canModify == true }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { selecting = false; selected = emptySet() }) { Text(stringResource(R.string.cancel)) }
+                Text(pluralStringResource(R.plurals.ui_vault_selected, picked.size, picked.size), color = c.mutedFg, modifier = Modifier.weight(1f))
+                TextButton(onClick = { batchMoving = picked }, enabled = picked.isNotEmpty() && !s.busy) { Text(stringResource(R.string.vm_menu)) }
+                IconButton(onClick = { confirmSelected = true }, enabled = picked.isNotEmpty() && !s.busy) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.dangerText) }
             }
         }
         if (!vm.trash) {
-            if (l != null && l.breadcrumb.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-                Text(l.breadcrumb.joinToString(" › ") { it.name }, fontSize = 12.sp, color = c.mutedFg)
+            if (l != null && vm.folder != null && l.breadcrumb.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                Text("Vault › " + l.breadcrumb.joinToString(" › ") { it.name }, fontSize = 12.sp, color = c.mutedFg)
             }
             id.znetworks.nexus.ui.components.CompactSearchField(q, { q = it }, stringResource(R.string.vault_search), Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
-        }
-        // The shelf's use against its 5 GB, in every mode (trash counts too); red past 90 % (web).
-        VaultRules.usage(l?.quota)?.let { u ->
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                LinearProgressIndicator(progress = { if (u.used > 0) (u.percent / 100f).coerceAtLeast(0.006f) else 0f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
-                    // No Material stop dot at the far end: with a tiny share used it read as a lone dot (run 5).
-                    drawStopIndicator = {}, gapSize = 0.dp,
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
-                Text(stringResource(R.string.vault_quota, VaultRules.humanSize(u.used), VaultRules.humanSize(u.total)), fontSize = 12.sp, color = c.mutedFg,
-                    modifier = Modifier.padding(top = 4.dp))
-            }
         }
         if (vm.trash) Text(stringResource(R.string.vault_trash_note), fontSize = 13.sp, color = c.mutedFg,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.muted).padding(10.dp))
@@ -300,8 +291,9 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                         // One Column: a grid cell stacks its children like a Box, so the divider sat on top of the row.
                         Column {
                         Row(Modifier.fillMaxWidth().clickable {
-                            when { vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); i.isMedia -> viewing = media.indexOf(i); else -> vm.open(i, false) }
+                            when { selecting -> toggle(i); vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); i.isMedia -> viewing = media.indexOf(i); else -> vm.open(i, false) }
                         }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (selecting) androidx.compose.material3.Checkbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
                             Box(Modifier.size(42.dp).background(if (i.isFolder) c.violet.copy(alpha = 0.14f) else c.muted, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                 // The server's small thumbnail (never the whole file); without one, the type icon.
                                     val t = VaultRules.thumb(i, 160)
@@ -325,7 +317,6 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                                     } else {
                                         if (!i.isFolder) {
                                             DropdownMenuItem(text = { Text(stringResource(R.string.td_open_file)) }, onClick = { menu = false; vm.open(i, false) })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.td_save_share)) }, onClick = { menu = false; vm.open(i, true) })
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
                                         }
                                         if (i.canModify == true) {
@@ -350,11 +341,11 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                         }
                         gridItems(media, key = { it.id }) { i ->
                             Box(Modifier.padding(horizontal = 2.dp)) {
-                                VaultTile(i, onOpen = { viewing = media.indexOf(i) }) {
+                                VaultTile(i, onOpen = { if (selecting) toggle(i) else viewing = media.indexOf(i) }) {
                                     var menu by remember { mutableStateOf(false) }
-                                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = Color.White) }
+                                    if (selecting) androidx.compose.material3.Checkbox(i.id in selected, { toggle(i) }, enabled = i.canModify == true)
+                                    else IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = Color.White) }
                                     DropdownMenu(menu, { menu = false }) {
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.td_save_share)) }, onClick = { menu = false; vm.open(i, true) })
                                         DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
                                         if (i.canModify == true) {
                                             DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
@@ -370,6 +361,13 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                 }
             }
         }
+    }
+    if (confirmSelected) AlertDialog(onDismissRequest = { confirmSelected = false }, title = { Text(pluralStringResource(R.plurals.ui_vault_trash_selected, selected.size, selected.size)) },
+        text = { Text(stringResource(R.string.vault_to_trash_body)) }, confirmButton = { TextButton(onClick = {
+            vm.deleteSelected(l?.items.orEmpty().filter { it.id in selected }); confirmSelected = false; selecting = false; selected = emptySet()
+        }) { Text(stringResource(R.string.delete), color = c.dangerText) } }, dismissButton = { TextButton(onClick = { confirmSelected = false }) { Text(stringResource(R.string.cancel)) } })
+    if (batchMoving.isNotEmpty()) VaultMoveDialog(batchMoving.first(), vm.api, items = batchMoving, onDismiss = { batchMoving = emptyList() }) { item, folder ->
+        batchMoving = emptyList(); selecting = false; selected = emptySet(); vm.moved(item, folder)
     }
     s.notice?.let { AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
     if (creating || naming != null) {

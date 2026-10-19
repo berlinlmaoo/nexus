@@ -33,4 +33,11 @@
     <string name="ui_ticket_new">New</string>
     <string name="ui_ticket_done">Done</string>
     <string name="ui_ticket_gideon_replied">GIDEON replied</string>
+    <string name="ui_vault_add">Add to Vault</string>
+    <string name="ui_vault_upload_file">Upload file</string>
+    <string name="ui_vault_from_photos">From Photos</string>
+    <string name="ui_vault_select">Select</string>
+    <string name="ui_vault_storage">Storage</string>
+    <plurals name="ui_vault_selected"><item quantity="one">%1$d selected</item><item quantity="other">%1$d selected</item></plurals>
+    <plurals name="ui_vault_trash_selected"><item quantity="one">Move %1$d item to Trash?</item><item quantity="other">Move %1$d items to Trash?</item></plurals>
 </resources>

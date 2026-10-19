@@ -130,7 +130,7 @@ fun VaultTile(i: VaultItem, onOpen: () -> Unit, onMenu: @Composable () -> Unit) 
  * The item itself is never listed, so its own subtree can't be reached.
  */
 @Composable
-fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMoved: (VaultItem, String) -> Unit) {
+fun VaultMoveDialog(item: VaultItem, api: VaultApi, items: List<VaultItem> = listOf(item), onDismiss: () -> Unit, onMoved: (VaultItem, String) -> Unit) {
     val c = Nx.colors
     val res = LocalContext.current.resources
     val scope = rememberCoroutineScope()
@@ -138,6 +138,8 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
     var list by remember { mutableStateOf<VaultList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var remaining by remember(items) { mutableStateOf(items) }
+    var firstMoved by remember(items) { mutableStateOf<VaultItem?>(null) }
     LaunchedEffect(at) {
         list = null; error = null
         try { list = api.list(at) } catch (e: ApiError) { error = e.describe(res) }
@@ -158,7 +160,7 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
                             overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable(enabled = b.id != at) { at = b.id })
                     }
                 }
-                val folders = list?.items?.filter { it.isFolder && it.id != item.id }.orEmpty()
+                val folders = list?.items?.filter { it.isFolder && items.none { selected -> selected.id == it.id } }.orEmpty()
                 when {
                     list == null && error == null -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     list != null && folders.isEmpty() -> Text(stringResource(R.string.vm_no_folders), fontSize = 13.sp, color = c.mutedFg)
@@ -180,7 +182,14 @@ fun VaultMoveDialog(item: VaultItem, api: VaultApi, onDismiss: () -> Unit, onMov
         confirmButton = { TextButton(onClick = {
             busy = true; error = null
             scope.launch {
-                try { onMoved(api.move(item.id, at), here) }
+                try {
+                    for (selected in remaining.toList()) {
+                        val moved = api.move(selected.id, at)
+                        if (firstMoved == null) firstMoved = moved
+                        remaining = remaining.filterNot { it.id == selected.id }
+                    }
+                    firstMoved?.let { onMoved(it, here) }
+                }
                 catch (e: ApiError) { error = e.describe(res) }
                 busy = false
             }
