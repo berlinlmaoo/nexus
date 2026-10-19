@@ -27,20 +27,23 @@ struct PresenceLine: View {
         if let status {
             HStack(spacing: 6) {
                 PresenceDot(tone: status.tone)
-                Text(status.localizedLabel(AppLanguage.shared.lang.rawValue)).lineLimit(2).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
-                if showUntil, let until = PresenceTime.until(status.until, language: AppLanguage.shared.lang.rawValue) {
-                    Text("· " + String(format: T("until %@"), until))
-                }
+                Text(displayText(status)).lineLimit(nil).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             }.font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine).accessibilityIdentifier("presence.status." + (userId ?? ""))
         }
+    }
+    private func displayText(_ status: PresenceStatus) -> String {
+        let language = AppLanguage.shared.lang.rawValue
+        let label = status.localizedLabel(language)
+        guard showUntil, let until = PresenceTime.until(status.until, language: language) else { return label }
+        return label + " · " + String(format: T("until %@"), until)
     }
 }
 struct PresenceChip: View {
     let userId: String?
     var body: some View {
         if PresenceStore.shared.status(userId) != nil {
-            PresenceLine(userId: userId, showUntil: true).padding(.horizontal, 10).padding(.vertical, 6).background(NX.muted, in: Capsule())
+            PresenceLine(userId: userId, showUntil: true).padding(.horizontal, 10).padding(.vertical, 6).background(NX.muted, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }
