@@ -7,7 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { PIPELINE_STAGES, daysBetween, dealValue, marginOf, stageGroupOf } from "@/lib/pipeline";
 import { servicesOf, type PipelineDeal } from "@/lib/pipeline-api";
 import { COLOR_PRESETS } from "@/lib/project-views";
-import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtIdr, fmtIdrFull, fmtMarginPct, marginTone, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { useMoneyFmt } from "./presentation";
+import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtMarginPct, marginTone, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 
 const DRAG_TYPE = "application/x-nexus-deal";
 
@@ -39,6 +40,7 @@ export function PipelineBoard({
   canEdit: boolean;
 }) {
   const { t, lang } = useLang();
+  const { fmtIdr, fmtIdrFull } = useMoneyFmt();
   const labels = useVocabLabels();
   const [over, setOver] = useState<string | null>(null);
   const byStage = new Map<string, PipelineDeal[]>(PIPELINE_STAGES.map((s) => [s, []]));
@@ -205,6 +207,7 @@ const DealCard = memo(function DealCard({
   deal, today, onOpen, onMove, canEdit,
 }: { deal: PipelineDeal; today: string; onOpen: (id: string) => void; onMove: (id: string, stage: string) => void; canEdit: boolean }) {
   const { t, lang, locale } = useLang();
+  const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
   const reason = useReasonText();
   const [dragging, setDragging] = useState(false);
   const pm = personName(deal.pm, deal.pmName);
@@ -267,7 +270,8 @@ const DealCard = memo(function DealCard({
       )}
       {/* Margin on the net value (Control Tower v6, 14 Oct 2026), live with the cost lines; only on a deal
           that has cost lines and a net value — none is better than a misleading 100% or 0. */}
-      {margin.costCount > 0 && margin.margin !== null && (
+      {/* Presenting: no margin line at all (its percentage gives the money away too). */}
+      {!hidden && margin.costCount > 0 && margin.margin !== null && (
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground" title={t("Net value − real cost")}>
           {t("Margin")}:{" "}
           <span className={cn("font-medium", marginTone(margin.margin))}>

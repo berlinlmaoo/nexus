@@ -305,4 +305,9 @@ export const ID_PIPELINE: Record<string, string> = {
   "{n} cost lines · {amount}": "{n} baris biaya · {amount}",
   "{n} of {total} deals have costs": "{n} dari {total} deal sudah ada biaya",
   "{n} deals have costs but no net value": "{n} deal ada biaya tapi nilai bersih kosong",
+  "Presentation mode": "Mode Presentasi",
+  "Presentation mode is on: amounts are hidden. Click to show them.": "Mode Presentasi aktif: semua nominal disembunyikan. Klik untuk menampilkannya.",
+  "Presentation mode: hide every amount on screen": "Mode Presentasi: sembunyikan semua nominal di layar",
+  "hidden in presentation mode": "disembunyikan di Mode Presentasi",
+  "Hidden in presentation mode": "Disembunyikan di Mode Presentasi",
 };

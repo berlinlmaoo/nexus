@@ -22,10 +22,11 @@ import {
   type PipelineTerm, type PipelineTermPatch,
 } from "@/lib/pipeline-api";
 import { DealDocuments } from "./DealDocuments";
+import { useMoneyFmt } from "./presentation";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
-  BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtIdr, fmtIdrFull, fmtMarginPct, fmtPct, marginTone, useReasonText, useVocabLabels,
+  BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtMarginPct, fmtPct, marginTone, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
 /** English names of the fields, for the history ("Budi changed Stage …"). Translated with t(). */
@@ -278,6 +279,7 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
 
 function Details({ deal, projectId, people, canEdit, onPatch }: { deal: PipelineDeal; projectId: string; people: PersonOption[]; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
   const { t, lang, locale } = useLang();
+  const { fmtIdrFull, hidden } = useMoneyFmt();
   const labels = useVocabLabels();
   const reason = useReasonText();
   const off = !canEdit;
@@ -372,7 +374,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
             <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
           </Section>
 
-          <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />
+          {/* Presentation mode: the cost lines are not rendered at all, not blurred. */}
+          {!hidden && <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />}
 
           <Section title={t("Closing")} owner="PM">
             <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
@@ -428,7 +431,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
         </Section>
 
-        <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />
+        {!hidden && <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />}
 
         <Section title={t("Closing")} owner="PM">
           <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
@@ -453,6 +456,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
 
 function HistoryList({ projectId, deal, people }: { projectId: string; deal: PipelineDeal; people: PersonOption[] }) {
   const { t, lang, locale } = useLang();
+  const { fmtIdrFull } = useMoneyFmt();
   const labels = useVocabLabels();
   const q = useQuery({ queryKey: dealKey(projectId, deal.id), queryFn: () => pipelineApi.detail(projectId, deal.id), staleTime: 10_000 });
   const nameOf = (id: unknown) => (typeof id === "string" ? people.find((p) => p.id === id)?.name ?? t("someone") : null);
@@ -556,11 +560,13 @@ function newCostId(): string {
  */
 function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
   const { t, lang } = useLang();
+  const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
   const costs: PipelineCostItem[] = deal.costs ?? [];
   const m = marginOf({ netValue: deal.netValue, costs });
   const off = !canEdit;
   const save = (next: PipelineCostItem[]) => onPatch({ costs: next });
   const edit = (id: string, p: Partial<PipelineCostItem>) => save(costs.map((c) => (c.id === id ? { ...c, ...p } : c)));
+  if (hidden) return null;
   return (
     <Section title={t("Real cost & margin")} owner="Finance">
       <dl className="grid grid-cols-3 gap-2 sm:col-span-2">
@@ -662,6 +668,7 @@ function termErrorText(error: unknown, fallback: string): string {
  */
 function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projectId: string; canEdit: boolean }) {
   const { t, lang } = useLang();
+  const { fmtIdrFull, hidden } = useMoneyFmt();
   const qc = useQueryClient();
   const terms = deal.terms ?? [];
   const sum = deal.termSummary ?? null;
@@ -727,7 +734,8 @@ function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projec
         </p>
       )}
 
-      {canEdit && (
+      {/* A new term starts with an amount: not while presenting. */}
+      {canEdit && !hidden && (
         <button
           type="button"
           onClick={add}
@@ -765,6 +773,7 @@ function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projec
 
 function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; canEdit: boolean; onPatch: (p: PipelineTermPatch) => void; onDelete: () => void }) {
   const { t, lang, locale } = useLang();
+  const { fmtIdrFull, hidden } = useMoneyFmt();
   const labels = useVocabLabels();
   const off = !canEdit;
   // "Mark paid": the total received so far (prefilled with the full amount) and the day it came in.
@@ -807,7 +816,7 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
             <span className="ml-1.5 font-medium text-amber-700 dark:text-amber-300">· {t("Overpaid by {amount}", { amount: fmtIdrFull(term.overpaid ?? 0, lang) })}</span>
           )}
         </p>
-        {canEdit && !paid && !paying && (
+        {canEdit && !paid && !paying && !hidden && (
           <button
             type="button"
             onClick={() => { setPaidDraft(term.amount); setPaidOn(term.paidAt ?? pipelineToday()); setPaying(true); }}
@@ -817,7 +826,7 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
           </button>
         )}
       </div>
-      {paying && (
+      {paying && !hidden && (
         <form
           onSubmit={(e) => { e.preventDefault(); setPaying(false); onPatch({ paidAmount: paidDraft, paidAt: paidOn }); }}
           className="mt-2 grid gap-2 rounded-md bg-muted/60 p-2.5 sm:grid-cols-[1fr_1fr_auto] sm:items-end"

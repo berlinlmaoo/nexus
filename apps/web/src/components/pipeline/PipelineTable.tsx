@@ -11,7 +11,8 @@ import {
 } from "@/lib/pipeline";
 import { servicesOf, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
 import { CELL, DateField, MoneyField, SelectField } from "./fields";
-import { HEALTH_ORDER, HEALTH_TEXT, HealthPill, dealPayment, fmtIdr, fmtIdrFull, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
+import { useMoneyFmt } from "./presentation";
+import { HEALTH_ORDER, HEALTH_TEXT, HealthPill, dealPayment, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
 
 type SortKey = "code" | "name" | "stage" | "probability" | "netValue" | "outstandingReceivable" | "daysOverdue" | "nextActionDate" | "health" | "pm";
 
@@ -29,6 +30,7 @@ export function PipelineTable({
   canEdit: boolean;
 }) {
   const { t, lang } = useLang();
+  const { fmtIdr, fmtIdrFull } = useMoneyFmt();
   const labels = useVocabLabels();
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "stage", dir: 1 });
 
