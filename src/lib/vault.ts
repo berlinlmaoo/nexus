@@ -83,6 +83,25 @@ export async function deleteStoredFile(storageKey: string | null | undefined): P
     await unlink(thumb).catch(() => {})
     await unlink(`${thumb}.failed`).catch(() => {})
   }
+  const preview = previewPath(storageKey)
+  await unlink(preview).catch(() => {})
+  await unlink(`${preview}.failed`).catch(() => {})
+}
+
+/** Office files a web browser cannot draw but the PDF converter can turn into a preview (U-5, 19 Oct 2026). */
+const OFFICE_PREVIEW_EXTS = new Set([
+  ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp", ".pages", ".key", ".numbers",
+])
+export function canOfficePreview(name: string | null | undefined): boolean {
+  return OFFICE_PREVIEW_EXTS.has(path.extname(name || "").toLowerCase())
+}
+
+/** Where an office file's PDF preview lives (lib/vault-preview.ts): `.previews/YYYY/MM/<uuid>.pdf`. */
+export function previewPath(storageKey: string): string {
+  const stem = storageKey.replace(/\.[a-z0-9]{1,8}$/i, "")
+  const full = path.resolve(VAULT_DIR, ".previews", `${stem}.pdf`)
+  if (!full.startsWith(VAULT_DIR + path.sep)) throw new Error("Vault preview escaped the vault directory")
+  return full
 }
 
 /**
@@ -508,6 +527,10 @@ export function serializeVaultItem(row: VaultItemRow, actor: VaultActor) {
     // Pictures only; the client adds `&w=`. Absent from servers before 9 Oct 2026: clients draw the icon.
     thumbUrl: isFile && row.deletedAt === null && canThumbnail(row.mimeType, row.name)
       ? `/api/vault/items/${row.id}/thumb?v=${version}`
+      : null,
+    // Office files as a PDF the browser can show (web, 19 Oct 2026). Absent from older servers.
+    previewUrl: isFile && row.deletedAt === null && !!process.env.GOTENBERG_URL?.trim() && canOfficePreview(row.name)
+      ? `/api/vault/items/${row.id}/preview?v=${version}`
       : null,
     /** The content version in the URLs above (since 9 Oct 2026). Changes on Replace file…, only then. */
     fileVersion: isFile ? version : null,

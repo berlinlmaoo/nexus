@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { failureText, toastFailure } from "@/lib/failure";
-import { LoadError } from "@/components/LoadError";
+import { LoadError, retryTransient } from "@/components/LoadError";
 import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -664,7 +664,7 @@ function PasskeysSection() {
 
 function NotificationsSection() {
   const qc = useQueryClient();
-  const prefs = useQuery({ queryKey: ["nexus", "notif-prefs"], queryFn: nexusApi.notificationPreferences, retry: false });
+  const prefs = useQuery({ queryKey: ["nexus", "notif-prefs"], queryFn: nexusApi.notificationPreferences, retry: retryTransient });
   const p = prefs.data?.preferences;
   const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }), onError: (e) => { toastFailure(t("Couldn't save that setting"), e); void qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }); } });
   const { t } = useLang();
@@ -678,8 +678,12 @@ function NotificationsSection() {
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <h2 className="font-semibold">{t("Notifications")}</h2>
-      {prefs.isLoading && <p className="text-sm text-muted-foreground">{t("Loading preferences…")}</p>}
-      <div className="space-y-2">
+      {/* Loading: a row that says so; failed: why + Try again. The toggles only show what the server said — they
+          used to show their defaults while loading or after a failure, and a tap then saved a guess (UI round
+          19 Oct 2026, U-3, the same bug as the iPhone's blank tab). */}
+      {prefs.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("Loading preferences…")}</p>}
+      {prefs.isError && <LoadError error={prefs.error} what={t("the notification settings")} onRetry={() => void prefs.refetch()} />}
+      {prefs.isSuccess && <div className="space-y-2">
         {toggles.map((o) => {
           const on = p?.[o.key] === undefined ? !!o.defaultOn : Boolean(p?.[o.key]);
           return (
@@ -692,7 +696,7 @@ function NotificationsSection() {
             </label>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

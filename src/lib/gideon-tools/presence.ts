@@ -18,7 +18,7 @@ import type { ExtraTool, Input } from "./types"
 
 /**
  * Presence status through GIDEON (owner, 19 Oct 2026): "Berlin ke mana?" is answered from the same status everyone
- * sees on the avatars (lib/presence.ts), and "set status gw potong rambut 18:00–20:00" becomes a card.
+ * sees on the avatars (lib/presence.ts), and "set status gw meeting klien 18:00–20:00" becomes a card.
  * Actor-scoped: only people who share a workspace with the asker exist here. The owner's rule is that everyone in the
  * workspace may see the status AND its reason (sick, the custom text); location is only "in / out of the office".
  */
