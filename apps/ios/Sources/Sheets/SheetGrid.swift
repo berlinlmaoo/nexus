@@ -798,6 +798,11 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
 
     private var zoom: CGFloat = 1
     private var pinchStartZoom: CGFloat = 1
+    private var pinchStartPoint = CGPoint.zero
+    private var pinchStartOffset = CGPoint.zero
+    private var pinchFrozenX = false
+    private var pinchFrozenY = false
+    private var scrollingBeforePinch = true
     private var zoomKey: String?
     private lazy var pinchZoom = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
     private lazy var resetZoom = UITapGestureRecognizer(target: self, action: #selector(resetZoomTapped(_:)))
@@ -942,12 +947,22 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         return true
     }
     @objc private func pinched(_ recognizer: UIPinchGestureRecognizer) {
-        if recognizer.state == .began { pinchStartZoom = zoom }
-        guard [.began, .changed, .ended].contains(recognizer.state) else { return }
         let point = recognizer.location(in: collection)
         let viewport = CGPoint(x: point.x - collection.bounds.minX, y: point.y - collection.bounds.minY)
-        setZoom(pinchStartZoom * recognizer.scale, anchor: viewport)
-        if recognizer.state == .ended { rememberZoom() }
+        if recognizer.state == .began {
+            pinchStartZoom = zoom; pinchStartOffset = collection.contentOffset; pinchStartPoint = viewport
+            pinchFrozenX = viewport.x < layout.frozenWidth; pinchFrozenY = viewport.y < layout.frozenHeight
+            scrollingBeforePinch = collection.isScrollEnabled
+            // The native pan/deceleration must not move the viewport while grid metrics change.
+            collection.isScrollEnabled = false
+        }
+        if [.began, .changed, .ended].contains(recognizer.state) {
+            setZoom(pinchStartZoom * recognizer.scale, anchor: viewport, fromPinch: true)
+        }
+        if [.ended, .cancelled, .failed].contains(recognizer.state) {
+            collection.isScrollEnabled = scrollingBeforePinch
+            rememberZoom()
+        }
     }
     @objc private func resetZoomTapped(_ recognizer: UITapGestureRecognizer) {
         let point = recognizer.location(in: collection)
@@ -955,18 +970,22 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         rememberZoom()
     }
     private func rememberZoom() { if let zoomKey { UserDefaults.standard.set(Double(zoom), forKey: zoomKey) } }
-    private func setZoom(_ value: CGFloat, anchor: CGPoint) {
+    private func setZoom(_ value: CGFloat, anchor: CGPoint, fromPinch: Bool = false) {
         let next = SheetGridZoom.clamped(value)
         guard abs(next - zoom) > 0.0001 else { return }
         let old = zoom, offset = collection.contentOffset
-        let inFrozenX = anchor.x < layout.frozenWidth, inFrozenY = anchor.y < layout.frozenHeight
+        let inFrozenX = fromPinch ? pinchFrozenX : anchor.x < layout.frozenWidth
+        let inFrozenY = fromPinch ? pinchFrozenY : anchor.y < layout.frozenHeight
+        let baseZoom = fromPinch ? pinchStartZoom : old
+        let baseOffset = fromPinch ? pinchStartOffset : offset
+        let basePoint = fromPinch ? pinchStartPoint : anchor
         zoom = next; rowDisplays = [:]; rowSpills = [:]
         applyGeometry()
         collection.layoutIfNeeded()
         let size = layout.collectionViewContentSize
         let target = CGPoint(
-            x: inFrozenX ? offset.x : SheetGridZoom.anchoredOffset(offset.x, point: anchor.x, from: old, to: next),
-            y: inFrozenY ? offset.y : SheetGridZoom.anchoredOffset(offset.y, point: anchor.y, from: old, to: next))
+            x: inFrozenX ? baseOffset.x : SheetGridZoom.anchoredOffset(baseOffset.x, point: basePoint.x, from: baseZoom, to: next, currentPoint: anchor.x),
+            y: inFrozenY ? baseOffset.y : SheetGridZoom.anchoredOffset(baseOffset.y, point: basePoint.y, from: baseZoom, to: next, currentPoint: anchor.y))
         collection.setContentOffset(CGPoint(x: min(max(0, target.x), max(0, size.width - collection.bounds.width)),
                                           y: min(max(0, target.y), max(0, size.height - collection.bounds.height))), animated: false)
         refreshVisibleCells(); drawSelection(); syncStrips(); updatePanes(); layoutCharts()
@@ -1236,11 +1255,6 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
             v = cur.superview
         }
         return true
-    }
-
-    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        (gesture === pinchZoom && other === collection.panGestureRecognizer)
-            || (other === pinchZoom && gesture === collection.panGestureRecognizer)
     }
 
     /// Charts added / removed / redrawn from the input (their drawing follows every change of the sheet).

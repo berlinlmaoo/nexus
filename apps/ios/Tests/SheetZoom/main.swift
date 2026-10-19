@@ -8,6 +8,11 @@ for old: CGFloat in [0.5, 0.8, 1, 2] {
                 // The logical sheet point under the fingers must not move after a zoom or reset.
                 close((offset + point) / old, (moved + point) / next)
                 close(SheetGridZoom.anchoredOffset(moved, point: point, from: next, to: old), offset)
+                for current: CGFloat in [0, 80, 200] {
+                    let translated = SheetGridZoom.anchoredOffset(offset, point: point, from: old, to: next, currentPoint: current)
+                    close((offset + point) / old, (translated + current) / next)
+                    close(SheetGridZoom.anchoredOffset(translated, point: current, from: next, to: old, currentPoint: point), offset)
+                }
             }
         }
     }
