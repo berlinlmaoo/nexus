@@ -314,14 +314,14 @@ function Attendance() {
   };
   const [correctRecord, setCorrectRecord] = useState<HistRow | null>(null);
   // The viewer's own trail for today, opened from the office card.
-  const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+  const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string; memberId?: string } | null>(null);
   // C-7: a notification's deep link, handled once and then dropped from the address (Back doesn't reopen it).
   useEffect(() => {
     const { trail, date, bonus } = attSearch;
     if (!trail && !date && !bonus) return;
     if (trail) {
-      const who = rows.find((r) => r.id === trail)?.user?.name ?? null;
-      setTrailFor({ id: trail, title: who ? tr("{name}'s location trail", { name: who }) : tr("Location trail"), subtitle: tr("Today") });
+      // The title names the person once the board or the member list has loaded (trailTitle below).
+      setTrailFor({ id: trail, title: tr("Location trail"), subtitle: tr("Today"), memberId: attSearch.member });
     }
     if (date) {
       // The payroll period that holds the day (28th → 27th is named after the month it ends in).
@@ -347,6 +347,17 @@ function Attendance() {
   // Rows plus the server's roster: everyone on the board even before they have a single day in the
   // period (the first day of a period used to list only whoever had already checked in).
   const roster = (history.data?.roster ?? []) as Array<NonNullable<(typeof rows)[number]["user"]>>;
+  // C-7: a trail opened from an approver's notification (`?trail=&member=`) is titled with that person's name: from the
+  // board row of the record, the board roster, or the workspace member list (fetched only for such a link).
+  const trailMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 300_000, enabled: Boolean(trailFor?.memberId) });
+  const trailTitle = (t: { id: string; title: string; memberId?: string }) => {
+    if (!t.memberId) return t.title;
+    const who = rows.find((r) => r.id === t.id)?.user?.name
+      ?? roster.find((u) => u.id === t.memberId)?.name
+      ?? trailMembers.data?.members?.find((m) => m.userId === t.memberId)?.name
+      ?? null;
+    return who ? tr("{name}'s location trail", { name: who }) : t.title;
+  };
   const allMembers = [...rows.map((row) => row.user), ...roster]
     .filter((user, index, arr): user is NonNullable<typeof user> => Boolean(user?.id) && arr.findIndex((other) => other?.id === user?.id) === index)
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
@@ -963,7 +974,7 @@ function Attendance() {
           </div>
         )}
       </AnimatePresence>
-      {trailFor && <LocationTrailDialog recordId={trailFor.id} title={trailFor.title} subtitle={trailFor.subtitle} onClose={() => setTrailFor(null)} />}
+      {trailFor && <LocationTrailDialog recordId={trailFor.id} title={trailTitle(trailFor)} subtitle={trailFor.subtitle} onClose={() => setTrailFor(null)} />}
       <AnimatePresence>
         {logKind && <DayOffLogModal key={logKind.kind} kind={logKind.kind} origin={logKind.origin} onClose={() => setLogKind(null)} />}
       </AnimatePresence>
