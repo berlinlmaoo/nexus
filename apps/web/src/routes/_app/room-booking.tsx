@@ -389,7 +389,8 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
         </div>
       </motion.div>
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
+        {/* Above the booking sheet (z-[70]); the default z-50 opened it behind the sheet. */}
+        <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Delete this booking?")}</AlertDialogTitle>
             <AlertDialogDescription>{t("The room is free again for that time. You can restore the booking from Control Room → Audit.")}</AlertDialogDescription>
