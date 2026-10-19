@@ -256,7 +256,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                   {/* Sentence case, as the sidebar (UI tour run 20, R20-WM-2: "HOME", "WORK" in small caps). */}
                   <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t(g.label)}</div>
                   <div className="grid grid-cols-1 gap-0.5">
-                    {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads")) && (canAccessLegal || item.url !== "/legal")).map((item) => {
+                    {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking")) && (canAccessLegal || item.url !== "/legal")).map((item) => {
                       const active = isActive(item.url);
                       return (
                         <Link

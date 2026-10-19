@@ -476,4 +476,12 @@ test("around: split, then a page with the anchor in it and a cursor each way", (
   assert.equal(edge.newerCursor, null)
 })
 
+test("B-15: a message is at most 4,000 characters, counted as people see them", () => {
+  assert.equal(R.MESSAGE_MAX_CHARS, 4000)
+  assert.equal(R.messageLength("a".repeat(4000)), 4000)
+  assert.equal(R.messageLength("\u{1F600}".repeat(4000)), 4000, "an emoji is one character")
+  assert.ok(R.messageLength("a".repeat(4001)) > R.MESSAGE_MAX_CHARS)
+  assert.match(R.messageTooLongMessage(100000), /4\.000/)
+})
+
 console.log(`chat-rules: ${passed} passed`)

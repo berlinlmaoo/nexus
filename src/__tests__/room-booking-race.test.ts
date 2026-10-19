@@ -63,7 +63,9 @@ run('room booking: two requests for one slot (real Postgres)', () => {
     prisma = (await import('@/lib/prisma')).default
     POST = (await import('@/app/api/room-bookings/route')).POST
     PATCH = (await import('@/app/api/room-bookings/[bookingId]/route')).PATCH
-    const ws = await prisma.workspace.create({ data: { name: `Race ${tag}`, slug: `race-${tag}` } })
+    // Rooms belong to the company workspace only (B-6): the race runs in it.
+    const { ORG_WORKSPACE_ID } = await import('@/lib/org')
+    const ws = await prisma.workspace.upsert({ where: { id: ORG_WORKSPACE_ID }, update: {}, create: { id: ORG_WORKSPACE_ID, name: `Race ${tag}`, slug: `race-${tag}` } })
     workspaceId = ws.id
     const user = await prisma.user.create({ data: { name: 'Race Tester', email: `${tag}@example.test` } })
     await prisma.workspaceMember.create({ data: { userId: user.id, workspaceId, role: 'STAFF' } })

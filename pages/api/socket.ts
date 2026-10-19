@@ -13,7 +13,8 @@ import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { sessionVersionRejects } from "@/lib/session-version"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { resolveAuditAccess } from "@/lib/audit-query"
-import { isOrgBodPlus } from "@/lib/org"
+import { isOrgBodPlus, ORG_WORKSPACE_ID } from "@/lib/org"
+import { createCalendarPinger } from "@/lib/calendar-realtime"
 import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
 import { attachCollabSocket } from "@/lib/collab-rooms"
 import { onSlotDemoted } from "@/lib/bluegreen"
@@ -590,16 +591,27 @@ export function initializeSocketServer(
   // API routes publish to the event bus; we relay to Socket.IO rooms.
   // Project rooms: emitGuarded (above) skips a socket whose user lost access; people in the payload are cut
   // down to id/name/avatar (lib/realtime-payload.ts) — the task routes load full user rows.
+  // Calendar (B-12, 19 Oct 2026): every task change in a company project, and the company's room bookings
+  // and projects, also reach every open Calendar as one folded `calendar-changed` ping (lib/calendar-realtime.ts).
+  const calendarPing = createCalendarPinger({
+    companyWorkspaceId: ORG_WORKSPACE_ID,
+    emit: (payload) => { io.to(`workspace:${ORG_WORKSPACE_ID}`).emit("calendar-changed", payload) },
+    workspaceOf: async (projectId) => (await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } }))?.workspaceId ?? null,
+  })
+
   eventBus.on(BUS_EVENTS.TASK_CREATED, (data: { projectId: string; task: unknown }) => {
     emitGuarded(`project:${data.projectId}`, "task-created", stripPrivatePeople(data.task))
+    void calendarPing.task(data.projectId)
   })
 
   eventBus.on(BUS_EVENTS.TASK_UPDATED, (data: { projectId: string; task: unknown }) => {
     emitGuarded(`project:${data.projectId}`, "task-updated", stripPrivatePeople(data.task))
+    void calendarPing.task(data.projectId)
   })
 
   eventBus.on(BUS_EVENTS.TASK_DELETED, (data: { projectId: string; taskId: string }) => {
     emitGuarded(`project:${data.projectId}`, "task-deleted", { taskId: data.taskId })
+    void calendarPing.task(data.projectId)
   })
 
   eventBus.on(BUS_EVENTS.COMMENT_ADDED, (data: { projectId: string; taskId: string; comment: unknown }) => {
@@ -738,6 +750,8 @@ export function initializeSocketServer(
     const rooms = (data.userIds ?? []).map((id) => `user:${id}`)
     if (data.workspaceId) rooms.push(`workspace:${data.workspaceId}`)
     if (rooms.length > 0) io.to(rooms).emit("workspace-changed", data.payload)
+    const ping = (data.payload && typeof data.payload === "object" ? data.payload : {}) as { kind?: unknown; actorId?: unknown }
+    calendarPing.workspace(data.workspaceId, ping.kind, ping.actorId)
   })
 
   // A deal of a Pipeline Dashboard project changed (lib/socket-emitter.ts emitPipelineChanged): ids only,

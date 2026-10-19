@@ -3330,7 +3330,7 @@ export const nexusApi = {
   calendarSettings: () => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings"),
   updateCalendarSettings: (body: Partial<CalendarSettings> | { projectId: string; private: boolean }) => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings", { method: "PATCH", body: JSON.stringify(body) }),
   // --- Room bookings ---
-  roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[] }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
+  roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[]; roomsAvailable?: boolean }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
   createRoomBooking: (payload: RoomBookingPayload) => apiFetch<{ booking: NexusRoomBooking }>("/api/room-bookings", { method: "POST", body: JSON.stringify(payload) }),
   updateRoomBooking: (bookingId: string, payload: Partial<RoomBookingPayload> & { status?: string }) => apiFetch<{ booking: NexusRoomBooking }>(`/api/room-bookings/${bookingId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteRoomBooking: (bookingId: string) => apiFetch<{ success?: boolean }>(`/api/room-bookings/${bookingId}`, { method: "DELETE" }),
