@@ -22,7 +22,7 @@
     <string name="ab_repeat">Ulangi</string>
     <string name="ab_time">Waktu (HH:mm, WIB)</string>
     <string name="ab_weekdays">1 = Senin, 7 = Minggu</string>
-    <string name="ab_month_day">Tanggal bulanan (1?28)</string>
+    <string name="ab_month_day">Tanggal bulanan (1-28)</string>
     <string name="ab_from">Dari status</string>
     <string name="ab_section">Bagian</string>
     <string name="ab_due">Tenggat (+3, today, YYYY-MM-DD)</string>
@@ -30,4 +30,7 @@
     <string name="ab_suggestions">Saran</string>
     <string name="ab_no_suggestions">Belum ada saran. Tambahkan aktivitas proyek terlebih dahulu.</string>
     <string name="ab_monthly">Bulanan</string>
+    <string name="ab_required">Lengkapi kolom wajib. Jam: 1-720; waktu: HH:mm; tanggal bulanan: 1-28; pilih minimal satu hari mingguan.</string>
+    <string name="ab_to">Ke status</string>
+    <string name="ab_form">Formulir</string>
 </resources>

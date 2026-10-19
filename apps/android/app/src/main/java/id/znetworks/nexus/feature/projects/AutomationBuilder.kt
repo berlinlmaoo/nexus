@@ -45,7 +45,7 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
             Column(Modifier.safeDrawingPadding().imePadding()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = ::dismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) }
-                    TextButton(onClick = { mutate() }, enabled = !busy && name.isNotBlank() && name.length <= 200 && actions.isNotEmpty()) { Text(stringResource(R.string.save)) }
+                    TextButton(onClick = { mutate() }, enabled = !busy && name.isNotBlank() && name.length <= 200 && AutomationDraft.valid(trigger, actions, conditions)) { Text(stringResource(R.string.save)) }
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(if (original == null) R.string.ab_new else R.string.ab_edit), style = MaterialTheme.typography.titleLarge)
@@ -58,9 +58,9 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
                     val fields = AutomationText.FIELDS.map { it.key to stringResource(it.value) } + names.fields.map { "cf:${it.key}" to it.value }
                     conditions.rules.forEachIndexed { i, rule ->
                         Card { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BuilderPick(stringResource(R.string.ab_field), rule.field, fields, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(field = value, op = "is", value = null) else r }) }
-                            BuilderPick(stringResource(R.string.ab_operator), rule.op, AutomationText.OPS.map { it.key to stringResource(it.value) }, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(op = value) else r }) }
-                            if (rule.op !in listOf("is_empty", "is_not_empty", "overdue")) BuilderValue(rule.field, rule.text.orEmpty(), names, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(value = JsonPrimitive(value)) else r }) }
+                            BuilderPick(stringResource(R.string.ab_field), rule.field, fields, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(field = value, op = AutomationDraft.operators(value, names.fieldDefs).first(), value = null) else r }) }
+                            BuilderPick(stringResource(R.string.ab_operator), rule.op, AutomationDraft.operators(rule.field, names.fieldDefs).map { it to stringResource(AutomationText.OPS.getValue(it)) }, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(op = value) else r }) }
+                            if (rule.op !in listOf("is_empty", "is_not_empty", "overdue")) BuilderValue(if (rule.op == "within_days") null else rule.field, rule.text.orEmpty(), names, !busy) { value -> conditions = conditions.copy(rules = conditions.rules.mapIndexed { n, r -> if (n == i) r.copy(value = JsonPrimitive(value)) else r }) }
                             TextButton(onClick = { conditions = conditions.copy(rules = conditions.rules.filterIndexed { n, _ -> n != i }) }, enabled = !busy) { Text(stringResource(R.string.ab_remove)) }
                         } }
                     }
@@ -80,6 +80,7 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
                     TextButton(onClick = { actions = actions + Rule("MARK_COMPLETE") }, enabled = !busy && actions.size < 10) { Text(stringResource(R.string.ab_add_action)) }
                     if (original?.id?.isNotEmpty() == true) TextButton(onClick = { deleting = true }, enabled = !busy) { Text(stringResource(R.string.au_delete)) }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (!AutomationDraft.valid(trigger, actions, conditions)) Text(stringResource(R.string.ab_required), color = MaterialTheme.colorScheme.error)
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
@@ -108,7 +109,7 @@ private fun BuilderValue(field: String?, value: String, names: AutomationNames, 
         "priority" -> AutomationText.PRIORITIES.map { it.key to stringResource(it.value) }
         "section" -> names.sections.toList()
         "assignee", "creator" -> names.people.toList()
-        else -> emptyList()
+        else -> names.fieldDefs.firstOrNull { "cf:${it.id}" == field }?.choices.orEmpty().map { it to it }
     }
     if (opts.isNotEmpty()) BuilderPick(stringResource(R.string.ab_value), value, listOf("" to stringResource(R.string.ab_any)) + opts, enabled, change)
     else OutlinedTextField(value, { if (it.length <= 2000) change(it) }, label = { Text(stringResource(R.string.ab_value)) }, enabled = enabled, modifier = Modifier.fillMaxWidth())
@@ -117,12 +118,17 @@ private fun BuilderValue(field: String?, value: String, names: AutomationNames, 
 @Composable
 private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lanes: List<Lane>, enabled: Boolean, change: (Rule) -> Unit) {
     val types = (if (trigger) AutomationText.TRIGGERS.filterKeys { it !in listOf("TASK_COMPLETED", "WEBHOOK_RECEIVED") } else AutomationText.ACTIONS).map { it.key to stringResource(it.value) }
-    BuilderPick(stringResource(if (trigger) R.string.ab_trigger else R.string.ab_action), rule.type.orEmpty(), types, enabled) { type -> change(if (type == "SCHEDULED") Rule(type, config = buildJsonObject { put("frequency", "daily"); put("time", "09:00") }) else Rule(type)) }
+    BuilderPick(stringResource(if (trigger) R.string.ab_trigger else R.string.ab_action), rule.type.orEmpty(), types, enabled) { type -> change(if (type == "SCHEDULED") Rule(type, config = buildJsonObject { put("frequency", "daily"); put("time", "09:00") }) else if (type == "DUE_DATE_APPROACHING") Rule(type, value = JsonPrimitive("24")) else Rule(type)) }
     val cfg = rule.config ?: buildJsonObject { }
     fun config(key: String, value: JsonElement) = change(rule.copy(config = JsonObject(cfg + (key to value))))
     @Composable fun input(label: Int, key: String, default: String = "") { OutlinedTextField((cfg[key] as? JsonPrimitive)?.content ?: default, { if (it.length <= 2000) config(key, JsonPrimitive(it)) }, label = { Text(stringResource(label)) }, enabled = enabled, modifier = Modifier.fillMaxWidth()) }
     @Composable fun value(field: String?) { BuilderValue(field, rule.text.orEmpty(), names, enabled) { change(rule.copy(value = JsonPrimitive(it), config = if (rule.type == "STATUS_CHANGED") JsonObject(cfg - "toSection" - "bySection") else if (rule.type == "SET_STATUS") JsonObject(cfg - "sectionId") else rule.config)) } }
-    val fields = AutomationText.FIELDS.map { it.key to stringResource(it.value) } + names.fields.map { "cf:${it.key}" to it.value }
+    val fields = AutomationText.FIELDS.filterKeys { key -> if (rule.type == "SET_FIELD") key in listOf("title", "description", "dueDate", "startDate") else key !in listOf("creator", "status", "assignee") }.map { it.key to stringResource(it.value) } + names.fieldDefs.filter { rule.type != "SET_FIELD" || it.kind !in listOf("FILE", "CREATED", "PLACE") }.map { "cf:${it.id}" to it.name }
+    val statusOptions = listOf("" to stringResource(R.string.ab_any)) + lanes.filter { it.taskStatus != null }.map { it.id to it.name } + AutomationText.STATUSES.map { "status:${it.key}" to stringResource(it.value) }
+    @Composable fun statusPick(side: String, label: Int) {
+        val selected = if (side == "action") (cfg["sectionId"] as? JsonPrimitive)?.content ?: rule.text?.let { "status:$it" }.orEmpty() else if (side == "from") (cfg["fromSection"] as? JsonPrimitive)?.content ?: (cfg["from"] as? JsonPrimitive)?.content?.let { "status:$it" }.orEmpty() else (cfg["toSection"] as? JsonPrimitive)?.content ?: rule.text?.let { "status:$it" }.orEmpty()
+        BuilderPick(stringResource(label), selected, statusOptions, enabled) { change(AutomationDraft.status(rule, side, it, lanes)) }
+    }
     when (rule.type) {
         "SCHEDULED" -> {
             BuilderPick(stringResource(R.string.ab_repeat), (cfg["frequency"] as? JsonPrimitive)?.content ?: "daily", listOf("daily" to stringResource(R.string.au_s_daily), "weekdays" to stringResource(R.string.au_s_weekdays), "weekly" to stringResource(R.string.au_s_weekly), "monthly" to stringResource(R.string.ab_monthly)), enabled) { config("frequency", JsonPrimitive(it)) }
@@ -132,8 +138,8 @@ private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lan
                 "monthly" -> input(R.string.ab_month_day, "dayOfMonth", "1")
             }
         }
-        "STATUS_CHANGED" -> { BuilderPick(stringResource(R.string.ab_from), (cfg["from"] as? JsonPrimitive)?.content.orEmpty(), listOf("" to stringResource(R.string.ab_any)) + AutomationText.STATUSES.map { it.key to stringResource(it.value) }, enabled) { change(rule.copy(config = JsonObject((cfg - "fromSection" - "bySection") + ("from" to JsonPrimitive(it))))) }; value("status") }
-        "SET_STATUS" -> { value("status"); BuilderPick(stringResource(R.string.ab_section), (cfg["sectionId"] as? JsonPrimitive)?.content.orEmpty(), listOf("" to stringResource(R.string.ab_any)) + names.sections.toList(), enabled) { id -> val lane = lanes.find { it.id == id }; change(rule.copy(value = JsonPrimitive(lane?.taskStatus ?: rule.text.orEmpty()), config = JsonObject(cfg + ("sectionId" to JsonPrimitive(id))))) } }
+        "STATUS_CHANGED" -> { statusPick("from", R.string.ab_from); statusPick("to", R.string.ab_to) }
+        "SET_STATUS" -> statusPick("action", R.string.au_f_status)
         "SET_PRIORITY" -> value("priority")
         "MOVE_TO_SECTION" -> value("section")
         "FIELD_CHANGED", "SET_FIELD" -> { BuilderPick(stringResource(R.string.ab_field), rule.field.orEmpty(), fields, enabled) { change(rule.copy(field = it, value = null)) }; value(rule.field) }
@@ -146,7 +152,8 @@ private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lan
                 Row { Checkbox(id in picked, { on -> change(rule.copy(value = JsonPrimitive((if (on) picked + id else picked - id).distinct().joinToString(",")))) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
             }
         }
-        "FORM_SUBMITTED", "DUE_DATE_APPROACHING", "ADD_TAG", "REMOVE_TAG", "ADD_COMMENT", "CREATE_SUBTASK" -> value(null)
+        "FORM_SUBMITTED" -> BuilderPick(stringResource(R.string.ab_form), rule.text.orEmpty(), listOf("" to stringResource(R.string.ab_any)) + names.forms.toList(), enabled) { change(rule.copy(value = it.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) })) }
+        "DUE_DATE_APPROACHING", "ADD_TAG", "REMOVE_TAG", "ADD_COMMENT", "CREATE_SUBTASK" -> value(null)
         "SEND_NOTIFICATION" -> { value(null); PeopleConfig(cfg, "to", names, enabled, listOf("@assignees", "@actor", "@creator", "@leads")) { key, v -> config(key, v) } }
         "CREATE_TASK", "DUPLICATE_TASK" -> {
             if (rule.type == "CREATE_TASK") value(null)

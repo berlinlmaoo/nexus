@@ -81,11 +81,13 @@ private fun ProjectToolsDialog(project: String, kind: String, close: () -> Unit)
                         if (d.flag("canManage")) TextButton(onClick = { showRuns = true }) { Text(stringResource(R.string.au_tab_runs)) }
                         d.rows("schedules").forEach { row -> Card { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.gpt_digest))
-                            Text(row["weekdays"].toString() + " · " + row.text("time") + " · " + row.text("timezone"))
+                            val dayLabels = listOf(R.string.au_d7,R.string.au_d1,R.string.au_d2,R.string.au_d3,R.string.au_d4,R.string.au_d5,R.string.au_d6)
+                            val dayText = (row["weekdays"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.intOrNull }.filter { it in 0..6 }.map { stringResource(dayLabels[it]) }.joinToString(", ")
+                            Text(dayText + " / " + row.text("time") + " / " + row.text("timezone"))
                             Text(row.text("instructions"))
                             Row { Text(stringResource(R.string.ab_enabled), Modifier.weight(1f)); Switch(row.flag("enabled"), { on -> perform { api.saveSchedule(project,row.text("id"),buildJsonObject { put("enabled",on) }) } }, enabled = manage) }
-                            row.text("nextRunAt").takeIf { it.isNotBlank() }?.let { Text(stringResource(R.string.au_next_run, it)) }
-                            if (row.text("lastStatus").isNotBlank()) Text(row.text("lastStatus") + " · " + row.text("lastRunAt"))
+                            row.text("nextRunAt").takeIf { it.isNotBlank() }?.let { Text(stringResource(R.string.au_next_run, id.znetworks.nexus.feature.chat.chatTime(it))) }
+                            if (row.text("lastStatus").isNotBlank()) Text(scheduleStatus(row.text("lastStatus")) + " / " + id.znetworks.nexus.feature.chat.chatTime(row.text("lastRunAt")))
                             Text(row.objectAt("runsAs").text("name"))
                             if (d.flag("canManage")) {
                                 TextButton(onClick = { editSchedule = row }, enabled = manage) { Text(stringResource(R.string.ab_edit)) }
@@ -111,12 +113,12 @@ private fun ProjectToolsDialog(project: String, kind: String, close: () -> Unit)
             }
         } }
     }
-    editSchedule?.let { row -> ScheduleEditor(row, busy, { editSchedule = null }, { patch -> perform { api.saveSchedule(project,row.text("id").ifBlank { null },patch); editSchedule = null } }) }
+    editSchedule?.let { row -> ScheduleEditor(row, busy, error, { editSchedule = null }, { patch -> perform { api.saveSchedule(project,row.text("id").ifBlank { null },patch); editSchedule = null } }) }
     confirmation?.let { (title,action) -> AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(title) }, confirmButton = { TextButton(onClick = { confirmation = null; perform(action) }) { Text(stringResource(R.string.confirm)) } }, dismissButton = { TextButton(onClick = { confirmation = null }) { Text(stringResource(R.string.cancel)) } }) }
 }
 
 @Composable
-private fun ScheduleEditor(row: JsonObject, busy: Boolean, close: () -> Unit, save: (JsonObject) -> Unit) {
+private fun ScheduleEditor(row: JsonObject, busy: Boolean, error: String?, close: () -> Unit, save: (JsonObject) -> Unit) {
     val ctx = LocalContext.current
     var days by remember { mutableStateOf((row["weekdays"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.intOrNull } ?: listOf(1)) }
     var time by remember { mutableStateOf(row.text("time").ifBlank { "09:00" }) }
@@ -126,6 +128,7 @@ private fun ScheduleEditor(row: JsonObject, busy: Boolean, close: () -> Unit, sa
     var discard by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = { if (!busy) discard = true }, title = { Text(stringResource(R.string.gpt_digest)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             listOf(1,2,3,4,5,6,0).forEach { day -> Row { Checkbox(day in days,{ on -> days = if(on) days + day else days - day },enabled = !busy); Text(stringResource(listOf(R.string.au_d7,R.string.au_d1,R.string.au_d2,R.string.au_d3,R.string.au_d4,R.string.au_d5,R.string.au_d6)[day]),Modifier.padding(top=12.dp)) } }
             OutlinedTextField(time,{ time=it },label={Text(stringResource(R.string.gpt_time))},enabled=!busy)
             BuilderPick(stringResource(R.string.gpt_timezone),zone,listOf("Asia/Jakarta","Asia/Makassar","Asia/Jayapura","Asia/Singapore","UTC").map{it to it},!busy){zone=it}
@@ -146,13 +149,16 @@ private fun AutofillConfigCard(c: JsonObject, field: CustomFieldDef, manage: Boo
         listOf("enabled" to R.string.ab_enabled,"onCreate" to R.string.gpt_on_create,"onUpdate" to R.string.gpt_on_update).forEach{(key,label)->Row{Text(stringResource(label),Modifier.weight(1f));Switch(c.flag(key),{toggle(key,it)},enabled=manage)}}
         val modes=when(field.kind){"SELECT","DROPDOWN","MULTI_SELECT","STATUS"->listOf("classify");"TEXT"->listOf("summary","extract","classify");else->listOf("extract")}
         BuilderPick(stringResource(R.string.gpt_mode),c.text("mode"),modes.map{it to stringResource(when(it){"summary"->R.string.gpt_summary;"classify"->R.string.gpt_classify;else->R.string.gpt_extract})},manage){save(buildJsonObject{put("mode",it)})}
-        OutlinedTextField(prompt,{if(it.length<=2000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=manage,modifier=Modifier.fillMaxWidth())
+        OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=manage,modifier=Modifier.fillMaxWidth())
         TextButton(onClick={save(buildJsonObject{put("prompt",prompt)})},enabled=manage&&prompt!=c.text("prompt")){Text(stringResource(R.string.save))}
         Row{Text(stringResource(R.string.gpt_review),Modifier.weight(1f));Switch(c.text("approval")!="auto",{save(buildJsonObject{put("approval",if(it)"review" else "auto")})},enabled=manage)}
-        if(c.text("lastRunAt").isNotBlank())Text(c.text("lastStatus")+" · "+c.text("lastRunAt"))
+        if(c.text("lastRunAt").isNotBlank())Text(scheduleStatus(c.text("lastStatus")) + " / " + id.znetworks.nexus.feature.chat.chatTime(c.text("lastRunAt")))
         val last=c.objectAt("lastResult")
         if(running)Text(stringResource(R.string.gpt_running)) else if(last.isNotEmpty())Text(stringResource(R.string.gpt_result,last.number("filled")?.toInt()?:0,last.number("proposed")?.toInt()?:0,last.number("skipped")?.toInt()?:0))
         last.text("error").takeIf{it.isNotBlank()}?.let{Text(it,color=MaterialTheme.colorScheme.error)}
         if(manage){TextButton(onClick={run(false)},enabled=configured&&!running&&!busy){Text(stringResource(R.string.gpt_fill_empty))};TextButton(onClick={run(true)},enabled=configured&&!running&&!busy){Text(stringResource(R.string.gpt_refill))};TextButton(onClick=remove,enabled=!running&&!busy){Text(stringResource(R.string.ab_remove))}}
     } }
 }
+
+@Composable
+private fun scheduleStatus(status: String): String = stringResource(when(status) { "RUNNING" -> R.string.gi_running; "SUCCEEDED", "SUCCESS" -> R.string.gi_succeeded; "FAILED" -> R.string.gi_failed; else -> R.string.au_never_ran })

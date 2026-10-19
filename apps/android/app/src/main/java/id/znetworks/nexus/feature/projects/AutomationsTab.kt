@@ -114,6 +114,8 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
     var tick by remember { mutableIntStateOf(0) }
     var data by remember(projectId) { mutableStateOf<AutomationsResponse?>(null) }
     var loadError by remember(projectId) { mutableStateOf<String?>(null) }
+    var fieldDefs by remember(projectId) { mutableStateOf<List<CustomFieldDef>>(emptyList()) }
+    var forms by remember(projectId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var fields by remember(projectId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
     var open by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -122,13 +124,21 @@ fun AutomationsTab(projectId: String, lanes: List<Lane>, members: List<ProjectMe
     LaunchedEffect(projectId, tick) {
         try { data = api.automations(projectId); loadError = null } catch (e: ApiError) { loadError = e.describe(ctx.resources) }
     }
-    LaunchedEffect(projectId) { fields = runCatching { api.customFields(projectId) }.getOrDefault(emptyList()).associate { it.id to it.name } }
+    LaunchedEffect(projectId) {
+        fieldDefs = runCatching { api.customFields(projectId) }.getOrDefault(emptyList())
+        fields = fieldDefs.associate { it.id to it.name }
+        forms = runCatching { api.automationForms(projectId) }.getOrNull()?.mapNotNull { row ->
+            val obj = row as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+            id to ((obj["title"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: (obj["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty())
+        }?.toMap().orEmpty()
+    }
     LiveRefresh(projectId, liveMs = null, fallbackMs = 60_000,
         matches = { it.name == RealtimeEvents.AUTOMATIONS_CHANGED && it.projectId == projectId }) { tick++; runsTick++ }
     val names = AutomationNames(
         sections = lanes.associate { it.id to it.name },
         people = members.filter { it.uid.isNotEmpty() }.associate { it.uid to (it.user?.name ?: it.user?.email ?: "—") },
-        fields = fields,
+        fields = fields, fieldDefs = fieldDefs, forms = forms,
     )
     val d = data
     when {

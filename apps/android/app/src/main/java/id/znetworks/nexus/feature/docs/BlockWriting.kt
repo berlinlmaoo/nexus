@@ -22,15 +22,15 @@ internal fun BlockWriting(api:BlockEditorApi,kind:String,id:String,text:String,e
     var open by remember{mutableStateOf(false)}
     var action by remember{mutableStateOf("improve")}
     var prompt by remember{mutableStateOf("")}
-    var language by remember{mutableStateOf("en")}
+    var language by remember{mutableStateOf(if(ctx.resources.configuration.locales[0].language in listOf("id","in"))"id"else"en")}
     var result by remember{mutableStateOf<String?>(null)}
     var busy by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<String?>(null)}
     TextButton(onClick={open=true},enabled=enabled){Text(stringResource(R.string.be_ask))}
     if(open)AlertDialog(onDismissRequest={if(!busy)open=false},title={Text(stringResource(R.string.be_ask))},text={Column(Modifier.verticalScroll(rememberScrollState())){
-        BuilderPick(stringResource(R.string.ab_action),action,listOf("improve" to R.string.be_improve,"fix" to R.string.be_fix,"shorter" to R.string.be_shorter,"longer" to R.string.be_longer,"summarize" to R.string.be_summarize,"translate" to R.string.be_translate,"continue" to R.string.be_continue,"explain" to R.string.be_explain,"action_items" to R.string.be_actions,"custom" to R.string.be_custom).map{it.first to stringResource(it.second)},!busy){action=it}
+        BuilderPick(stringResource(R.string.ab_action),action,listOf("improve" to R.string.be_improve,"fix" to R.string.be_fix,"shorter" to R.string.be_shorter,"longer" to R.string.be_longer,"summarize" to R.string.be_summarize,"translate" to R.string.be_translate,"continue" to R.string.be_continue,"explain" to R.string.be_explain,"action_items" to R.string.be_actions,"tone" to R.string.be_tone,"custom" to R.string.be_custom).map{it.first to stringResource(it.second)},!busy){action=it}
         if(action=="translate")BuilderPick(stringResource(R.string.gpt_language),language,listOf("en" to "English","id" to "Bahasa Indonesia"),!busy){language=it}
-        if(action=="custom")OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=!busy)
+        if(action=="custom"||action=="tone")OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=!busy)
         TextButton(onClick={busy=true;error=null;result=null;scope.launch{try{result=api.write(kind,id,action,text,prompt,language).text("content")}catch(e:ApiError){error=e.describe(ctx.resources)}finally{busy=false}}},enabled=!busy&&(text.isNotBlank()||action=="continue"||action=="custom"&&prompt.isNotBlank())){Text(stringResource(R.string.be_generate))}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let{Text(it,color=MaterialTheme.colorScheme.error)}

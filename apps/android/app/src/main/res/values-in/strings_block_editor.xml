@@ -37,4 +37,13 @@
     <string name="be_generate">Buat</string>
     <string name="be_replace">Ganti blok ini</string>
     <string name="be_insert">Tambahkan ke dokumen</string>
+    <string name="be_format">Format</string>
+    <string name="be_bold">Tebal</string>
+    <string name="be_italic">Miring</string>
+    <string name="be_underline">Garis bawah</string>
+    <string name="be_strike">Coret</string>
+    <string name="be_link">Tambah atau edit tautan</string>
+    <string name="be_level">Tingkat judul</string>
+    <string name="be_url">URL tautan</string>
+    <string name="be_tone">Ubah nada</string>
 </resources>

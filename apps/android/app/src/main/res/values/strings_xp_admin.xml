@@ -2,14 +2,14 @@
     <string name="xad_adjust">Adjust XP</string>
     <string name="xad_help">Add or deduct XP. This is recorded in the audit log.</string>
     <string name="xad_person">Person</string>
-    <string name="xad_amount">XP amount (1?1000)</string>
+    <string name="xad_amount">XP amount (1-1000)</string>
     <string name="xad_note">Note (optional)</string>
     <string name="xad_confirm">Apply %1$d XP to %2$s?</string>
     <string name="xad_penalties">Your XP went down</string>
     <string name="xad_late">Checked in %1$s minutes late</string>
     <string name="xad_nocheckout">Forgot to check out</string>
     <string name="xad_absent">Absent without notice</string>
-    <string name="xad_admin">XP deducted by admin ? %1$s</string>
+    <string name="xad_admin">XP deducted by admin - %1$s</string>
     <string name="xad_lost">XP lost</string>
     <string name="xad_total">Total: %1$d XP</string>
     <string name="xad_got_it">Got it</string>

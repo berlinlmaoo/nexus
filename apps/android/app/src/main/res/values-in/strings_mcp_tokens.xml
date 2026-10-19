@@ -6,7 +6,7 @@
     <string name="mt_never">Belum pernah</string>
     <string name="mt_revoke">Cabut</string>
     <string name="mt_create">Buat token</string>
-    <string name="mt_days">Kedaluwarsa dalam hari (1?365)</string>
+    <string name="mt_days">Kedaluwarsa dalam hari (1-365)</string>
     <string name="mt_once">Salin token ini sekarang</string>
     <string name="mt_once_help">Token hanya ditampilkan sekali dan dihapus dari layar saat Anda meninggalkan aplikasi. Token memakai izin task Anda.</string>
     <string name="mt_revoke_confirm">Cabut %1$s?</string>

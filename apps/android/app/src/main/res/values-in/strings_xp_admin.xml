@@ -2,14 +2,14 @@
     <string name="xad_adjust">Sesuaikan XP</string>
     <string name="xad_help">Tambah atau potong XP. Perubahan dicatat di log audit.</string>
     <string name="xad_person">Orang</string>
-    <string name="xad_amount">Jumlah XP (1?1000)</string>
+    <string name="xad_amount">Jumlah XP (1-1000)</string>
     <string name="xad_note">Catatan (opsional)</string>
     <string name="xad_confirm">Terapkan %1$d XP ke %2$s?</string>
     <string name="xad_penalties">XP Anda berkurang</string>
     <string name="xad_late">Check-in terlambat %1$s menit</string>
     <string name="xad_nocheckout">Lupa check-out</string>
     <string name="xad_absent">Absen tanpa kabar</string>
-    <string name="xad_admin">XP dipotong admin ? %1$s</string>
+    <string name="xad_admin">XP dipotong admin - %1$s</string>
     <string name="xad_lost">XP berkurang</string>
     <string name="xad_total">Total: %1$d XP</string>
     <string name="xad_got_it">Mengerti</string>

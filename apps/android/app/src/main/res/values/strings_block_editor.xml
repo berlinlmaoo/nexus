@@ -37,4 +37,13 @@
     <string name="be_generate">Generate</string>
     <string name="be_replace">Replace this block</string>
     <string name="be_insert">Append to document</string>
+    <string name="be_format">Formatting</string>
+    <string name="be_bold">Bold</string>
+    <string name="be_italic">Italic</string>
+    <string name="be_underline">Underline</string>
+    <string name="be_strike">Strikethrough</string>
+    <string name="be_link">Add or edit link</string>
+    <string name="be_level">Heading level</string>
+    <string name="be_url">Link URL</string>
+    <string name="be_tone">Change tone</string>
 </resources>

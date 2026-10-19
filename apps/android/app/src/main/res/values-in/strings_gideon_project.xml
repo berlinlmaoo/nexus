@@ -25,8 +25,8 @@
     <string name="gpt_classify">Klasifikasikan ke pilihan</string>
     <string name="gpt_extract">Ambil nilai</string>
     <string name="gpt_review">Tinjau sebelum menulis</string>
-    <string name="gpt_running">Mengisi kolom?</string>
-    <string name="gpt_result">Terisi: %1$d ? Diusulkan: %2$d ? Dilewati: %3$d</string>
+    <string name="gpt_running">Mengisi kolom...</string>
+    <string name="gpt_result">Terisi: %1$d - Diusulkan: %2$d - Dilewati: %3$d</string>
     <string name="gpt_fill_empty">Isi yang kosong</string>
     <string name="gpt_refill">Isi ulang semua</string>
 </resources>

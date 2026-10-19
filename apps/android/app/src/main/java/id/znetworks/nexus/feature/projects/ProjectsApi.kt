@@ -159,6 +159,7 @@ class ProjectsApi(private val api: ApiClient) {
     }
 
     suspend fun deleteAutomation(id: String) = delete("/api/automations?id=" + URLEncoder.encode(id, "UTF-8"))
+    suspend fun automationForms(projectId: String) = api.get("/api/forms?projectId=$projectId", kotlinx.serialization.json.JsonArray.serializer())
     suspend fun automationSuggestions(projectId: String) = api.get("/api/automations/suggestions?projectId=$projectId", AutomationSuggestions.serializer())
 
     suspend fun setAutomation(id: String, enabled: Boolean) = patch("/api/automations", buildJsonObject { put("id", id); put("enabled", enabled) })

@@ -82,7 +82,7 @@ data class AutomationRunsResponse(val runs: List<AutomationRun> = emptyList(), v
 data class RunNowResponse(val run: AutomationRun? = null, val skipped: Boolean = false)
 
 /** Who and what the ids in a rule are, from the project (sections, members, custom fields). */
-data class AutomationNames(val sections: Map<String, String> = emptyMap(), val people: Map<String, String> = emptyMap(), val fields: Map<String, String> = emptyMap())
+data class AutomationNames(val sections: Map<String, String> = emptyMap(), val people: Map<String, String> = emptyMap(), val fields: Map<String, String> = emptyMap(), val fieldDefs: List<CustomFieldDef> = emptyList(), val forms: Map<String, String> = emptyMap())
 
 /** A string resource with its arguments: [say] turns it into text (Context.getString in the app, a fake in tests). */
 typealias Say = (Int, Array<out Any>) -> String

@@ -22,7 +22,7 @@
     <string name="ab_repeat">Repeat</string>
     <string name="ab_time">Time (HH:mm, WIB)</string>
     <string name="ab_weekdays">1 = Monday, 7 = Sunday</string>
-    <string name="ab_month_day">Day of month (1?28)</string>
+    <string name="ab_month_day">Day of month (1-28)</string>
     <string name="ab_from">From status</string>
     <string name="ab_section">Section</string>
     <string name="ab_due">Due date (+3, today, YYYY-MM-DD)</string>
@@ -30,4 +30,7 @@
     <string name="ab_suggestions">Suggestions</string>
     <string name="ab_no_suggestions">No suggestions yet. Add more project activity first.</string>
     <string name="ab_monthly">Monthly</string>
+    <string name="ab_required">Complete the required fields. Hours: 1-720; time: HH:mm; monthly day: 1-28; pick at least one weekly day.</string>
+    <string name="ab_to">To status</string>
+    <string name="ab_form">Form</string>
 </resources>
