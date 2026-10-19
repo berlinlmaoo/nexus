@@ -326,7 +326,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
               )}
               {(draft.kind === "list" || draft.kind === "listRange") && (
                 <label className="flex items-center gap-2 pt-1 text-xs">
-                  <input type="checkbox" disabled={!canEdit} checked={draft.multiple} onChange={(e) => set({ multiple: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />
+                  <input type="checkbox" disabled={!canEdit} checked={draft.multiple} onChange={(e) => set({ multiple: e.target.checked })} className="h-3.5 w-3.5 accent-ring" />
                   {t("Allow multiple selections")}
                 </label>
               )}
@@ -357,7 +357,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
               {draft.kind === "checkbox" && (
                 <div className="space-y-1.5 pt-1">
                   <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" disabled={!canEdit} checked={draft.customCheckbox} onChange={(e) => set({ customCheckbox: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />
+                    <input type="checkbox" disabled={!canEdit} checked={draft.customCheckbox} onChange={(e) => set({ customCheckbox: e.target.checked })} className="h-3.5 w-3.5 accent-ring" />
                     {t("Use custom cell values")}
                   </label>
                   {draft.customCheckbox && (
@@ -381,7 +381,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
                 {advanced && (
                   <div className="space-y-3">
                     <label className="flex items-center gap-2 text-xs">
-                      <input type="checkbox" disabled={!canEdit} checked={draft.helpOn} onChange={(e) => set({ helpOn: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />
+                      <input type="checkbox" disabled={!canEdit} checked={draft.helpOn} onChange={(e) => set({ helpOn: e.target.checked })} className="h-3.5 w-3.5 accent-ring" />
                       {t("Show help text for a selected cell")}
                     </label>
                     {draft.helpOn && (
@@ -393,7 +393,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
                       <legend className="mb-1 text-xs text-muted-foreground">{t("If the data is invalid:")}</legend>
                       {([[false, t("Show a warning")], [true, t("Reject the input")]] as const).map(([v, l]) => (
                         <label key={String(v)} className="flex items-center gap-2 text-xs">
-                          <input type="radio" disabled={!canEdit} checked={draft.strict === v} onChange={() => set({ strict: v })} className="accent-primary" /> {l}
+                          <input type="radio" disabled={!canEdit} checked={draft.strict === v} onChange={() => set({ strict: v })} className="accent-ring" /> {l}
                         </label>
                       ))}
                     </fieldset>
@@ -402,7 +402,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
                         <legend className="mb-1 text-xs text-muted-foreground">{t("Display style")}</legend>
                         {([["chip", t("Chip")], ["arrow", t("Arrow")], ["plain", t("Plain text")]] as const).map(([v, l]) => (
                           <label key={v} className="flex items-center gap-2 text-xs">
-                            <input type="radio" disabled={!canEdit} checked={draft.display === v} onChange={() => set({ display: v })} className="accent-primary" /> {l}
+                            <input type="radio" disabled={!canEdit} checked={draft.display === v} onChange={() => set({ display: v })} className="accent-ring" /> {l}
                           </label>
                         ))}
                       </fieldset>

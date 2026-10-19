@@ -91,7 +91,7 @@ function ProposalCard({ doc, p, onDone, onAnswer, answering }: { doc: LegalDocum
       <ul className="space-y-2">
         {p.changes.map((c) => (
           <li key={c.index} className="flex gap-2">
-            <input type="checkbox" className="mt-1 h-3.5 w-3.5 shrink-0 accent-primary" checked={chosen.has(c.index)} aria-label={t("Apply the change to paragraph {n}", { n: c.index + 1 })}
+            <input type="checkbox" className="mt-1 h-3.5 w-3.5 shrink-0 accent-ring" checked={chosen.has(c.index)} aria-label={t("Apply the change to paragraph {n}", { n: c.index + 1 })}
               onChange={() => setChosen((cur) => { const n = new Set(cur); if (n.has(c.index)) n.delete(c.index); else n.add(c.index); return n; })} />
             <div className="min-w-0 flex-1 leading-relaxed">
               <div className="mb-0.5 text-[11px] text-muted-foreground">{t("Paragraph {n}", { n: c.index + 1 })}</div>

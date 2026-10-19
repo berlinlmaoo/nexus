@@ -113,10 +113,10 @@ export function AlternatingColorsPanel({ banding, selectionRange, shape, onPrevi
           <div className="text-xs font-semibold">{t("Styles")}</div>
           <div className="flex items-center gap-5 text-xs">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={draft.headerOn} onChange={(e) => set({ headerOn: e.target.checked })} className="h-3.5 w-3.5 accent-primary" /> {t("Header")}
+              <input type="checkbox" checked={draft.headerOn} onChange={(e) => set({ headerOn: e.target.checked })} className="h-3.5 w-3.5 accent-ring" /> {t("Header")}
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={draft.footerOn} onChange={(e) => set({ footerOn: e.target.checked })} className="h-3.5 w-3.5 accent-primary" /> {t("Footer")}
+              <input type="checkbox" checked={draft.footerOn} onChange={(e) => set({ footerOn: e.target.checked })} className="h-3.5 w-3.5 accent-ring" /> {t("Footer")}
             </label>
           </div>
         </section>

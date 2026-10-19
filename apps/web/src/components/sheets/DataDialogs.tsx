@@ -13,7 +13,7 @@ export type DataColumn = { index: number; letter: string; header: string };
 const colName = (c: DataColumn, header: boolean, t: (en: string, vars?: Record<string, string | number>) => string) =>
   header && c.header.trim() ? c.header : t("Column {c}", { c: c.letter });
 
-const checkbox = "h-3.5 w-3.5 accent-primary";
+const checkbox = "h-3.5 w-3.5 accent-ring";
 
 // ── Sort range (advanced) ──────────────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ export function SortRangeDialog({ columns, defaultHeader, onSort, onClose }: {
             <div className="flex items-center gap-3 text-xs" role="radiogroup">
               {([["asc", "A → Z"], ["desc", "Z → A"]] as const).map(([d, l]) => (
                 <label key={d} className="flex items-center gap-1.5">
-                  <input type="radio" name={`sort-dir-${i}`} checked={k.dir === d} onChange={() => setKeys(keys.map((x, j) => (j === i ? { ...x, dir: d } : x)))} className="accent-primary" />
+                  <input type="radio" name={`sort-dir-${i}`} checked={k.dir === d} onChange={() => setKeys(keys.map((x, j) => (j === i ? { ...x, dir: d } : x)))} className="accent-ring" />
                   {l}
                 </label>
               ))}

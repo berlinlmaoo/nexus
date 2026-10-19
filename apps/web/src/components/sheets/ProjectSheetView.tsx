@@ -1166,7 +1166,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
               ["replace", t("Replace current sheet"), t("Everything in this sheet is replaced by the file. Ctrl+Z can't bring it back; Audit can.")],
             ] as const).map(([mode, label, hint]) => (
               <label key={mode} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/60 has-[:checked]:border-primary/60 has-[:checked]:bg-primary/5">
-                <input type="radio" name="sheet-import-mode" checked={importAsk.mode === mode} onChange={() => setImportAsk({ ...importAsk, mode })} className="mt-0.5 accent-primary" />
+                <input type="radio" name="sheet-import-mode" checked={importAsk.mode === mode} onChange={() => setImportAsk({ ...importAsk, mode })} className="mt-0.5 accent-ring" />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{label}</span>
                   <span className="block text-xs text-muted-foreground">{hint}</span>

@@ -692,7 +692,7 @@ function NotificationsSection() {
                 <div className="text-sm font-medium">{o.label}</div>
                 <div className="text-xs text-muted-foreground">{o.desc}</div>
               </div>
-              <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate({ [o.key]: e.target.checked })} className="h-4 w-4 accent-primary mt-1" />
+              <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate({ [o.key]: e.target.checked })} className="h-4 w-4 accent-ring mt-1" />
             </label>
           );
         })}
