@@ -11,11 +11,12 @@ object MemoryProfile {
         field.aliases.firstOrNull { text.startsWith(it, ignoreCase = true) }?.let { text.drop(it.length) }
     }.orEmpty()
     fun find(field: Field, memories: List<GMemory>): GMemory? = memories.filter { m ->
-        m.kind == field.kind && m.status == "ACTIVE" && m.source == "SETTINGS" && field.aliases.any { m.text.startsWith(it, ignoreCase = true) }
+        m.kind == field.kind && m.status == "ACTIVE" && profileSource(field, m) && field.aliases.any { m.text.startsWith(it, ignoreCase = true) }
     }.maxByOrNull { it.updatedAt ?: it.createdAt.orEmpty() }
     fun payload(field: Field, value: String) = field.prefix + value.trim()
-    fun limit(field: Field, textMax: Int) = (textMax - field.prefix.length).coerceAtLeast(0)
+    fun limit(field: Field, textMax: Int) = (textMax - field.prefix.length).coerceIn(0, 170)
+    private fun profileSource(field: Field, memory: GMemory) = memory.source == "SETTINGS" || memory.source == "PROFILE_${field.name}"
     fun field(memory: GMemory): Field? = Field.entries.firstOrNull { field ->
-        memory.source == "SETTINGS" && memory.kind == field.kind && field.aliases.any { memory.text.startsWith(it, ignoreCase = true) }
+        profileSource(field, memory) && memory.kind == field.kind && field.aliases.any { memory.text.startsWith(it, ignoreCase = true) }
     }
 }

@@ -22,6 +22,18 @@ class MemoryProfileTest {
         assertEquals(active, MemoryProfile.find(MemoryProfile.Field.NICKNAME, listOf(active, pending, chat)))
     }
     @Test fun fieldValueLimitReservesTheCanonicalPrefix() {
-        for (field in MemoryProfile.Field.entries) assertEquals(200, MemoryProfile.payload(field, "x".repeat(MemoryProfile.limit(field, 200))).length)
+        for (field in MemoryProfile.Field.entries) {
+            assertEquals(170, MemoryProfile.limit(field, 200))
+            assertTrue(MemoryProfile.payload(field, "x".repeat(MemoryProfile.limit(field, 200))).length <= 200)
+            assertEquals(0, MemoryProfile.limit(field, 1))
+        }
+    }
+    @Test fun webAdoptedProfileRowsKeepTheirNativeBinding() {
+        for (field in MemoryProfile.Field.entries) {
+            val row = GMemory("profile", MemoryProfile.payload(field, "Berlin"), field.kind, status = "ACTIVE", source = "PROFILE_${field.name}")
+            assertEquals(row, MemoryProfile.find(field, listOf(row)))
+            assertEquals(field, MemoryProfile.field(row))
+            assertEquals("Berlin", MemoryProfile.value(field, row))
+        }
     }
 }
