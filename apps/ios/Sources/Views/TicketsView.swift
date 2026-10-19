@@ -398,7 +398,11 @@ struct TicketsView: View {
         }
     }
     private func moveTicket(_ id: String, to status: String) async {
-        guard isBod, !movingTicket, status != "AWAITING_DECISION", let item = items.first(where: { $0.id == id }), item.statusKey != status else { return }
+        guard isBod, !movingTicket, let item = items.first(where: { $0.id == id }), item.statusKey != status else { return }
+        guard status != "AWAITING_DECISION" else {
+            boardFailure = T("Only the system can move a ticket to Awaiting decision.")
+            return
+        }
         movingTicket = true; boardFailure = nil
         defer { movingTicket = false }
         do { _ = try await APIClient.shared.updateComplaintStatus(id, status: status); await load() }
@@ -698,8 +702,9 @@ private struct TicketBoardLane: View {
         }.modifier(BoardColumnStyle(fill: NX.card.opacity(0.6), targeted: targeted))
             .frame(width: hSize == .compact && items.isEmpty ? 200 : 280)
             .dropDestination(for: String.self) { ids, _ in
-                guard canManage, target != "AWAITING_DECISION", let id = ids.first, ids.count == 1 else { return false }
-                onMove(id, target); return true
+                guard canManage, let id = ids.first, ids.count == 1 else { return false }
+                onMove(id, target)
+                return target != "AWAITING_DECISION"
             } isTargeted: { targeted = canManage && target != "AWAITING_DECISION" && $0 }
             .accessibilityIdentifier("tickets.lane." + status)
     }

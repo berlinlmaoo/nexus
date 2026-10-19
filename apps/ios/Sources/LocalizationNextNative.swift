@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Only the system can move a ticket to Awaiting decision.": "Hanya sistem yang bisa memindahkan tiket ke Menunggu keputusan.",
         "Do not disturb": "Jangan diganggu",
         "GIDEON uses what it remembers to personalize your answers.": "GIDEON memakai yang diingatnya untuk menyesuaikan jawaban buatmu.",
         "No changes: everything is already like this": "Tidak ada perubahan: semuanya sudah seperti ini",
