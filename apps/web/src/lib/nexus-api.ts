@@ -707,6 +707,11 @@ export type NexusConversation = {
   canManageMembers?: boolean;
   /** false = a project room you can read but not post in (Can view). Missing = allowed. */
   canPost?: boolean;
+  /**
+   * DM only, GET /api/conversations since 19 Oct 2026: the other person, or — when they are no longer
+   * in the room — the last one who wrote in it (`left: true`). null = nobody to name. Missing on older servers.
+   */
+  peer?: { id: string; name: string | null; avatar: string | null; left: boolean } | null;
   /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
   description?: string | null;
 };
