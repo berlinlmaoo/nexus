@@ -26,21 +26,25 @@ const DRAG_TYPE = "application/x-nexus-ticket";
 const tone = (c: string) => ({ dot: `var(--st-${c}-dot)`, lane: `var(--st-${c}-lane)`, text: `var(--st-${c}-fg)` });
 export type TicketColumnKey = "OPEN" | "AWAITING_DECISION" | "IN_REVIEW" | "DONE";
 export const TICKET_COLUMNS: { key: TicketColumnKey; label: string; empty: string; dot: string; lane: string; text: string }[] = [
-  { key: "OPEN", label: "New", empty: "No new tickets", ...tone("yellow") },
+  { key: "OPEN", label: "New", empty: "No new tickets", ...tone("gray") },
   { key: "AWAITING_DECISION", label: "Awaiting decision", empty: "Nothing waiting for a decision", ...tone("purple") },
-  { key: "IN_REVIEW", label: "In review", empty: "Nothing in review", ...tone("blue") },
+  { key: "IN_REVIEW", label: "In review", empty: "Nothing in review", ...tone("yellow") },
   { key: "DONE", label: "Done", empty: "Nothing done yet", ...tone("green") },
 ];
 export const columnOf = (status: string): TicketColumnKey =>
   status === "RESOLVED" || status === "CLOSED" ? "DONE" : status === "AWAITING_DECISION" || status === "IN_REVIEW" ? status : "OPEN";
 /** The status a drop into a column writes. Done = Resolved; Closed is picked from the ⇄ menu or the thread. */
 const DROP_STATUS: Record<TicketColumnKey, string | null> = { OPEN: "OPEN", AWAITING_DECISION: null, IN_REVIEW: "IN_REVIEW", DONE: "RESOLVED" };
-/** The ⇄ menu: every status a director may set by hand (AWAITING_DECISION is the system's). */
-const MOVE_TARGETS: { status: string; label: string }[] = [
-  { status: "OPEN", label: "New" },
-  { status: "IN_REVIEW", label: "In review" },
-  { status: "RESOLVED", label: "Resolved" },
-  { status: "CLOSED", label: "Closed" },
+/**
+ * The ⇄ menu in the board's own words and colours (Berlin device review R-9, 19 Oct 2026): New (grey) · Awaiting
+ * decision (violet, shown but disabled: only the system sets it) · In review (amber) · Done (green) · Closed (grey).
+ */
+const MOVE_TARGETS: { status: string; label: string; dot: string; system?: boolean }[] = [
+  { status: "OPEN", label: "New", dot: "var(--st-gray-dot)" },
+  { status: "AWAITING_DECISION", label: "Awaiting decision", dot: "var(--st-purple-dot)", system: true },
+  { status: "IN_REVIEW", label: "In review", dot: "var(--st-yellow-dot)" },
+  { status: "RESOLVED", label: "Done", dot: "var(--st-green-dot)" },
+  { status: "CLOSED", label: "Closed", dot: "var(--st-gray-dot)" },
 ];
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(localeOf(), { day: "numeric", month: "short" });
@@ -275,12 +279,21 @@ function MoveMenu({ c, onMove }: { c: Complaint; onMove: (id: string, status: st
           <button
             key={m.status}
             type="button"
-            disabled={m.status === c.status}
+            disabled={m.status === c.status || m.system}
             onClick={() => onMove(c.id, m.status)}
-            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted disabled:cursor-default disabled:font-semibold disabled:hover:bg-transparent pointer-coarse:min-h-[44px]"
+            title={m.system ? t("Set automatically when GIDEON answers or a correction is proposed") : undefined}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent pointer-coarse:min-h-[44px]",
+              m.status === c.status && "font-semibold",
+              m.system && m.status !== c.status && "text-muted-foreground",
+            )}
           >
-            {t(m.label)}
-            {m.status === c.status && <Check aria-hidden className="h-3.5 w-3.5" />}
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: m.dot }} />
+            <span className="min-w-0 flex-1">
+              {t(m.label)}
+              {m.system && <span className="block text-[11px] font-normal leading-tight text-muted-foreground">{t("Set by the system")}</span>}
+            </span>
+            {m.status === c.status && <Check aria-hidden className="h-3.5 w-3.5 shrink-0" />}
           </button>
         ))}
       </PopoverContent>
