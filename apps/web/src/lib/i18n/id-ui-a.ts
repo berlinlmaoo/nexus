@@ -15,6 +15,8 @@ export const ID_UI_A: Record<string, string> = {
   "Starts": "Mulai",
   // U-9 Timeline on phones: show / hide the Name column
   "Names": "Nama",
+  // U-3 Settings › Notifications: the failed-load state
+  "the notification settings": "pengaturan notifikasi",
   // U-11 Calendar month legend (wide screens): the grey pill in a day
   "number = tasks that day": "angka = jumlah task hari itu",
 };
