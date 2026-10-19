@@ -790,12 +790,12 @@ struct PipelineKpiStrip: View {
             Tile(id: "won", label: T("Won"), value: PipelineFormat.idr(s.wonValue),
                  sub: String(format: T("%d active · %d lost"), s.activeCount, s.lostCount), zero: s.wonValue == 0),
             Tile(id: "receivable", label: T("Receivable"), value: PipelineFormat.idr(s.receivable),
-                 sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("Nothing overdue"),
+                 sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("None overdue"),
                  zero: s.receivable == 0, tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
             // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost that have costs and a
             // net value; red below zero. Deals with costs but no net value are left out and named in the warning.
             Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
-                 sub: String(format: T("%d of %d deals have costs"), s.costDealCount, s.costEligibleCount),
+                 sub: String(format: T("%d/%d with costs"), s.costDealCount, s.costEligibleCount),
                  zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil,
                  warn: s.costNoNetCount > 0 ? String(format: T("%d deals have costs but no net value"), s.costNoNetCount) : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",

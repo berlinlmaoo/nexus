@@ -336,9 +336,10 @@ struct PipelineTerm: Decodable, Identifiable, Hashable, Sendable {
     var status: String
     var outstanding: Double
     var daysOverdue: Int
+    var overpaid: Double = 0
 
     private enum CodingKeys: String, CodingKey {
-        case id, position, label, amount, dueDate, invoiceNo, invoiceDate, paidAmount, paidAt, note, status, outstanding, daysOverdue
+        case id, position, label, amount, dueDate, invoiceNo, invoiceDate, paidAmount, paidAt, note, status, outstanding, daysOverdue, overpaid
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -354,6 +355,7 @@ struct PipelineTerm: Decodable, Identifiable, Hashable, Sendable {
         note = s(.note); status = o(.status) ?? "Not Invoiced"
         outstanding = (try? c.decodeIfPresent(Double.self, forKey: .outstanding)) ?? max(0, amount - paidAmount)
         daysOverdue = Int(n(.daysOverdue))
+        overpaid = n(.overpaid)
     }
 
     var isPaid: Bool { status == "Paid" }
