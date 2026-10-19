@@ -436,6 +436,13 @@ export function RealtimeProvider({
             if (evt === "new-notification" && typeof data.type === "string" && data.type.startsWith("MESSAGE")) {
               terms.push("conversation");
             }
+            // An attendance signal (a request or offsite check-out filed, reviewed, handled by another
+            // approver, escalated; an override; a day-off grant): the approval queue, the board and today's
+            // card move with it. Nothing else pings these lists, so an approver's open /attendance stayed
+            // frozen until a reload and offered Approve on requests someone else had already decided.
+            if (evt === "new-notification" && typeof data.type === "string" && /^(attendance|offsite|dayoff)/i.test(data.type)) {
+              terms.push("attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history");
+            }
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) });
             // A deleted group (server since 9 Oct 2026): out of every list at once, its cached thread and
             // info dropped. An open thread closes itself (routes/_app/messages.tsx).
