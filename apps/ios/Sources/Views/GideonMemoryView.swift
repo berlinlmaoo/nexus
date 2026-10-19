@@ -22,6 +22,7 @@ private enum MemoryProfileField: String, CaseIterable, Identifiable {
     case nickname, occupation, about
     var id: String { rawValue }
     var label: String { T(self == .nickname ? "Your nickname" : self == .occupation ? "Your role / occupation" : "More about you") }
+    var maxLength: Int { self == .nickname ? 60 : self == .occupation ? 120 : 170 }
     var key: String { self == .occupation ? "role" : rawValue }
     var source: String { self == .nickname ? "PROFILE_NICKNAME" : self == .occupation ? "PROFILE_ROLE" : "PROFILE_ABOUT" }
     var prefix: String { self == .nickname ? "Nickname: " : self == .occupation ? "Role / occupation: " : "About me: " }
@@ -97,7 +98,7 @@ private struct MemoryProfileEditor: View {
         Form {
             Section(field.label) {
                 TextField(field.label, text: $value, axis: .vertical).lineLimit(3...8).accessibilityIdentifier("memory.profile.text")
-                    .onChange(of: value) { _, _ in while value.utf16.count > min(170, store.textMax - field.prefix.utf16.count) && !value.isEmpty { value.removeLast() } }
+                    .onChange(of: value) { _, _ in while value.utf16.count > min(field.maxLength, store.textMax - field.prefix.utf16.count) && !value.isEmpty { value.removeLast() } }
             }
             Section { Text(T("Saved directly as a private memory. Only you can see this.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             if let failure = store.failure { Text(failure).foregroundStyle(NX.danger) }
@@ -163,7 +164,7 @@ private struct GideonMemorySummaryView: View {
             .alert(T("Forget everything?"), isPresented: $confirmAll) {
                 Button(T("Cancel"), role: .cancel) {}
                 Button(T("Forget everything"), role: .destructive) { Task { await store.forgetEverything() } }
-            } message: { Text(String(format: T("GIDEON stops using the %@ things it remembers about you. They're deleted for good after 30 days."), AppNumber.int(store.memories.count))) }
+            } message: { Text(store.memories.count == 1 ? T("GIDEON stops using the 1 thing it remembers about you. It's deleted for good after 30 days.") : String(format: T("GIDEON stops using the %@ things it remembers about you. They're deleted for good after 30 days."), AppNumber.int(store.memories.count))) }
     }
     private var summarySubtitle: some View {
         Group {
@@ -207,13 +208,14 @@ private struct GideonMemorySummaryView: View {
                 if editKind == .date { TextField(T("MM-DD (optional)"), text: $editDay).textFieldStyle(.roundedBorder) }
                 HStack { Button(T("Cancel")) { editing = nil }.buttonStyle(.nxBordered).keyboardShortcut(.cancelAction); Button(T("Save")) { saveEdit(memory) }.buttonStyle(.nxPrimary).disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy).accessibilityIdentifier("memory.edit.save") }
             } else {
-                Text(profileDisplay(memory)).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-                if memory.status == "PENDING" {
-                    HStack { NexusChip(text: T("Suggested, not saved yet"), tone: .neutral); Button(T("Save")) { Task { await store.save(memory) } }.font(NXFont.text(12, .semibold)).disabled(store.busy || store.paused).accessibilityIdentifier("memory.save." + memory.id); Spacer() }
-                }
-                HStack {
-                    Spacer()
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(profileDisplay(memory)).font(NXFont.text(14)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        if memory.kind == "DATE", let day = memoryDay(memory.monthDay) { Label(day, systemImage: "calendar").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                        if memory.status == "PENDING" {
+                            HStack { NexusChip(text: T("Suggested, not saved yet"), tone: .neutral); Button(T("Save")) { Task { await store.save(memory) } }.font(NXFont.text(12, .semibold)).disabled(store.busy || store.paused).accessibilityIdentifier("memory.save." + memory.id); Spacer() }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
                     Menu {
                         Button { editing = memory.id; editText = memory.text; editKind = MemoryKind(rawValue: memory.kind) ?? .fact; editDay = memory.monthDay ?? "" } label: { Label(T("Edit"), systemImage: "pencil") }.accessibilityIdentifier("memory.edit." + memory.id)
                         Button(role: .destructive) { Task { await store.remove(memory) } } label: { Label(T("Delete"), systemImage: "trash") }.accessibilityIdentifier("memory.delete." + memory.id)
