@@ -754,23 +754,17 @@ private struct TicketLaneHeader: View {
     }
 }
 
-/// A status in a menu: its colour dot, the board's name, a tick on the current one; Awaiting decision says
-/// why it can't be chosen (the server sets it, 422 otherwise).
+/// A status in a menu: its colour dot and the board's name (the current one is the disabled row).
 struct TicketStatusMenuLabel: View {
     let status: String
     let current: Bool
     var body: some View {
-        if status == "AWAITING_DECISION" {
-            Label {
-                Text(ticketStatusLabel(status, menu: true))
-                Text(T("Set automatically when GIDEON answers or a proposal arrives"))
-            } icon: { dot }
-        } else {
-            Label { Text(ticketStatusLabel(status, menu: true) + (current ? "  ✓" : "")) } icon: { dot }
-        }
+        Label { Text(ticketStatusLabel(status, menu: true)) } icon: { dot }
     }
-    private var dot: some View {
-        Image(systemName: "circle.fill").symbolRenderingMode(.palette).foregroundStyle(ticketStatusTone(status).fg)
+    /// A system menu tints template icons with the accent: an original-colour image keeps each status's colour.
+    private var dot: Image {
+        let image = UIImage(systemName: "circle.fill")?.withTintColor(UIColor(ticketStatusTone(status).fg), renderingMode: .alwaysOriginal)
+        return image.map { Image(uiImage: $0) } ?? Image(systemName: "circle.fill")
     }
 }
 
@@ -845,7 +839,12 @@ struct TicketDetailSheet: View {
                     } label: {
                         TicketStatusMenuLabel(status: key, current: key == statusKey)
                     }
-                    .disabled(key == statusKey || key == "AWAITING_DECISION")
+                    .disabled(key == statusKey)
+                }
+                // Not settable here (the server answers 422): shown disabled, under why.
+                Section(T("Set automatically when GIDEON answers or a proposal arrives")) {
+                    Button {} label: { TicketStatusMenuLabel(status: "AWAITING_DECISION", current: statusKey == "AWAITING_DECISION") }
+                        .disabled(true)
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -868,8 +867,8 @@ struct TicketDetailSheet: View {
     /// AWAITING_DECISION is missing on purpose and the server refuses it too (422): it is written
     /// when GIDEON answers or a proposal lands, and a director setting it by hand would be saying
     /// "somebody else decide this" about a ticket they are already holding.
-    /// Shown disabled with its hint, so the menu reads like the board's columns (R-9).
-    private static let menuStatuses = ["OPEN", "AWAITING_DECISION", "IN_REVIEW", "RESOLVED", "CLOSED"]
+    /// The settable ones in the board's column order; Awaiting decision follows, disabled with its hint (R-9).
+    private static let menuStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
 
     private func move(to status: String) async {
         guard status != statusKey, !movingStatus else { return }
