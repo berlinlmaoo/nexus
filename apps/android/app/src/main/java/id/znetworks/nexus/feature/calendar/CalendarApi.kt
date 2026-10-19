@@ -12,6 +12,11 @@ import java.util.concurrent.ConcurrentHashMap
  * 401 (signed out) and 426 go through ApiClient as everywhere else.
  */
 class CalendarApi(private val api: ApiClient) {
+    suspend fun resolveLegacyFolders(ids: List<String>): Map<String, String> {
+        val out = api.get("/api/legacy-ids?ids=${enc(ids.joinToString(","))}", kotlinx.serialization.json.JsonObject.serializer())
+        val values = out["ids"] as? kotlinx.serialization.json.JsonObject ?: return emptyMap()
+        return values.mapNotNull { (key, value) -> (value as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString && it.content.isNotBlank() }?.let { key to it.content } }.toMap()
+    }
     /** A response and whether it changed since the last time this path was asked. */
     data class Fetched<T>(val value: T, val changed: Boolean)
 

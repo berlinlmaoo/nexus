@@ -29,6 +29,15 @@ import kotlinx.serialization.builtins.serializer
 @kotlinx.serialization.Serializable private data class Pd(val unitId: String, val why: String? = null)
 
 class CalendarApiTest {
+    @Test fun legacyFolderIdsResolveFromTheAdditiveMapWithoutTreatingUnknownsAsNames() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse.Builder().body("""{"ids":{"cm_jagain_folder":"new-folder","bad":null,"number":3}}""").build())
+            val client = CalendarApi(ApiClient(server.url("/"), ClientIdentity("0.1.6", 13, 36), { Session("t", "c", "u") }, mayCarrySession = { true }))
+            assertEquals(mapOf("cm_jagain_folder" to "new-folder"), client.resolveLegacyFolders(listOf("cm_jagain_folder", "unknown")))
+            assertTrue(server.takeRequest().target.contains("cm_jagain_folder%2Cunknown"))
+        }
+    }
     private fun res(name: String) = javaClass.classLoader!!.getResource("calendar/$name")!!.readText()
 
     private fun itemsBody(day: String, who: String, access: String) = """{"v":1,"tz":"Asia/Jakarta","today":"$day","now":"${day}T05:00:00.000Z",
