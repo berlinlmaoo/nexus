@@ -1,0 +1,13 @@
+<resources>
+    <string name="mt_title">Personal MCP tokens</string>
+    <string name="mt_empty">No personal tokens.</string>
+    <string name="mt_expires">Expires: %1$s</string>
+    <string name="mt_last_used">Last used: %1$s</string>
+    <string name="mt_never">Never</string>
+    <string name="mt_revoke">Revoke</string>
+    <string name="mt_create">Create token</string>
+    <string name="mt_days">Expires in days (1?365)</string>
+    <string name="mt_once">Copy this token now</string>
+    <string name="mt_once_help">It is shown once and cleared when you leave the app. The token acts with your task permissions.</string>
+    <string name="mt_revoke_confirm">Revoke %1$s?</string>
+</resources>
