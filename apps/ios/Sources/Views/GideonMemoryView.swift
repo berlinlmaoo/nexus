@@ -132,10 +132,16 @@ private struct GideonMemorySummaryView: View {
                     ForEach(Array(sections.enumerated()), id: \.element.kind) { index, section in
                         let memories = store.memories.filter { $0.kind == section.kind }
                         if !memories.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(T(section.title)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                                ForEach(memories) { row($0) }
-                            }.opacity(revealed ? 1 : 0).offset(y: revealed ? 0 : 8)
+                            ZStack(alignment: .topLeading) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(T(section.title)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                    ForEach(memories) { row($0) }
+                                }.opacity(revealed ? 1 : 0).offset(y: revealed ? 0 : 8)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    RoundedRectangle(cornerRadius: 4).fill(NX.muted).frame(width: 100, height: 14)
+                                    RoundedRectangle(cornerRadius: 6).fill(NX.muted).frame(height: 34)
+                                }.opacity(revealed ? 0 : 1).accessibilityHidden(true)
+                            }
                                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2).delay(Double(index) * 0.05), value: revealed)
                         }
                     }
