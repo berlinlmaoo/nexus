@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { isUniqueViolation } from "@/lib/prisma-errors"
 import { emitCommentAdded } from "@/lib/socket-emitter"
 
@@ -27,6 +27,11 @@ export async function POST(
     }
     if (!(await checkProjectAccess(session.user.id, commentRef.task.taskList.projectId, ["VIEWER"])).allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+    // Can view is strictly read-only (A-4, owner 19 Oct 2026, as in Notion): reacting needs Can comment,
+    // the same level as writing a comment. Removing one's own earlier reaction (DELETE) stays allowed.
+    if (!(await hasProjectLevel(session.user.id, commentRef.task.taskList.projectId, "COMMENT"))) {
+      return NextResponse.json({ error: "You can view this project but not react. Ask for Can comment access.", code: "VIEW_ONLY" }, { status: 403 })
     }
 
     const { emoji } = await request.json()
