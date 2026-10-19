@@ -814,8 +814,8 @@ final class NEXUSUITour: XCTestCase {
                 #endif
             case "twoFingerReset":
                 #if !targetEnvironment(macCatalyst)
-                let target = app.collectionViews.firstMatch
-                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no sheet grid for reset" }
+                let target = app.collectionViews.matching(identifier: "sheet.grid").cells.matching(identifier: "sheet.cell.0.0").firstMatch
+                guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no visible frozen cell for reset" }
                 target.tap(withNumberOfTaps: 2, numberOfTouches: 2)
                 pause(1)
                 #endif
