@@ -31,6 +31,8 @@ _ACTION_BY_TOOL = {
     "nexus_get_task": "get_task",
     "nexus_search_docs": "search_docs",
     "nexus_get_doc": "get_doc",
+    # Pages by date / project, newest first (19 Oct 2026): daily updates, weekly summaries. Read only.
+    "nexus_list_docs": "list_docs",
     # Workspace Q&A (12 Oct 2026): one search over projects, tasks, docs, comments, forms and chat,
     # with the asker's visibility only.
     "nexus_search_workspace": "search_workspace",

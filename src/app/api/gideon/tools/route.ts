@@ -25,6 +25,7 @@ import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
+import { listDocs } from '@/lib/gideon-list-docs'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import { deleteTaskAs, TaskDeleteRefusal } from '@/lib/task-delete'
 import { createTaskNeedsProject, editableTaskProjects } from '@/lib/gideon-task-target'
@@ -63,6 +64,7 @@ type GideonAction =
   | 'resolve_ticket'
   | 'get_task'
   | 'search_docs'
+  | 'list_docs'
   | 'get_doc'
   | 'create_document'
   | 'search_workspace'
@@ -1407,6 +1409,9 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return getTaskDetail(actor, input)
     case 'search_docs':
       return searchDocs(actor, input)
+    // Pages by date / project (19 Oct 2026): daily updates, weekly summaries. The docs API's access rule.
+    case 'list_docs':
+      return listDocs(actor.id, input, PUBLIC_BASE)
     case 'get_doc':
       return getDoc(actor, input)
     case 'search_workspace':

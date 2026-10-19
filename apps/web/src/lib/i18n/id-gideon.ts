@@ -84,6 +84,8 @@ export const ID_GIDEON: Record<string, string> = {
   "Reading a task": "Membaca task",
   "Reading task {name}": "Membaca task {name}",
   "Searching docs": "Mencari dokumen",
+  "Listing pages": "Melihat daftar halaman",
+  "Listing pages in {name}": "Melihat daftar halaman di {name}",
   "Searching docs for “{q}”": "Mencari dokumen “{q}”",
   "Reading a doc": "Membaca dokumen",
   "Reading doc {name}": "Membaca dokumen {name}",
