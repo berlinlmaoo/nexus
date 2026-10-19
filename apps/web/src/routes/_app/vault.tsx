@@ -1176,7 +1176,7 @@ function VaultPage() {
               </div>
               <p className="text-sm">
                 {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
-                <span className="text-muted-foreground"> · {quotaPct}%</span>
+                <span className="text-muted-foreground"> · {quotaPct === 0 && data.quota.usedBytes > 0 ? "<1" : quotaPct}%</span>
               </p>
             </div>
           )}
