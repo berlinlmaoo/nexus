@@ -6,7 +6,8 @@
     <string name="ui_status_no_emoji">Tanpa emoji</string>
     <string name="ui_status_availability">Ketersediaan</string>
     <string name="ui_status_online">Online</string>
-    <string name="ui_status_away">Tidak di tempat</string>
+    <string name="ui_status_away">Away</string>
+    <string name="ui_status_dnd">Jangan diganggu</string>
     <string name="ui_status_away_hint">Status buatanmu saat ini menandai kamu tidak di tempat.</string>
     <string name="ui_status_quick">Pilihan cepat</string>
     <string name="ui_status_road">Di jalan</string>

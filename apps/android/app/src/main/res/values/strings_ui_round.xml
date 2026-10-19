@@ -7,6 +7,7 @@
     <string name="ui_status_availability">Availability</string>
     <string name="ui_status_online">Online</string>
     <string name="ui_status_away">Away</string>
+    <string name="ui_status_dnd">Do not disturb</string>
     <string name="ui_status_away_hint">Custom statuses currently show you as away.</string>
     <string name="ui_status_quick">Quick picks</string>
     <string name="ui_status_road">On the road</string>

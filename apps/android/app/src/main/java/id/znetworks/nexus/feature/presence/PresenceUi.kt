@@ -65,7 +65,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     Row(Modifier.then(if (chip) Modifier.background(dotColor(status.tone).copy(alpha = .08f), CircleShape).border(1.dp, dotColor(status.tone).copy(alpha = .2f), CircleShape).padding(horizontal = 10.dp, vertical = 5.dp) else Modifier),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PresenceDot(status)
-        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), color = c.mutedFg, fontSize = 12.sp)
+        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), Modifier.weight(1f, fill = false), color = c.mutedFg, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 /** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
@@ -93,6 +93,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     val initial = remember { PresenceDraft.split(manual?.text.orEmpty()) }
     var text by remember { mutableStateOf(initial.second) }
     var emoji by remember { mutableStateOf(initial.first) }
+    var availability by remember { mutableStateOf(manual?.availability?.lowercase()?.takeIf { it in listOf("online", "away", "dnd") } ?: "away") }
     var emojiMenu by remember { mutableStateOf(false) }
     var durationMenu by remember { mutableStateOf(false) }
     var startMenu by remember { mutableStateOf(false) }
@@ -112,7 +113,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     val payload = PresenceDraft.payload(emoji, text)
     val canSave = !busy && snapshot.enabled && payload.isNotBlank() && payload.length <= 80 && end > from && end > now
     fun submit(clear: Boolean) { busy = true; error = null; scope.launch {
-        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(payload, if (later) from else null, end); onDismiss() }
+        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(payload, if (later) from else null, end, availability); onDismiss() }
         catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: context.getString(R.string.prs_failed); if ((e as? ApiError.Http)?.code == "PRESENCE_OFF") container.presenceStatuses.refresh() }
         finally { busy = false }
     } }
@@ -133,10 +134,14 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                             listOf("🗓️", "🍽️", "🎬", "🚗", "").forEach { e -> DropdownMenuItem(text = { Text(e.ifBlank { context.getString(R.string.ui_status_no_emoji) }) }, onClick = { emoji = e; emojiMenu = false }) }
                         }
                     } }, supportingText = { Text("${payload.length}/80", color = if (payload.length > 80) c.dangerText else c.mutedFg) }, enabled = !busy, isError = payload.length > 80, modifier = Modifier.fillMaxWidth())
-                // Native API notes: manual statuses have fixed Away availability.
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.ui_status_availability), Modifier.weight(1f), color = c.mutedFg, fontSize = 12.sp)
-                    Text(stringResource(R.string.ui_status_away), color = c.foreground)
+                Text(stringResource(R.string.ui_status_availability), color = c.mutedFg, fontSize = 12.sp)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
+                        SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
+                            shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.size(7.dp).background(dotColor(tone), CircleShape)) }) {
+                            Text(stringResource(label), maxLines = 2, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
                 }
                 Text(stringResource(R.string.ui_status_quick), color = c.mutedFg, fontSize = 12.sp)
                 Column {
