@@ -269,8 +269,10 @@ function shown(raw: unknown, comp: ComputedCell | undefined, shape: SheetShape):
   return clip(comp?.d ?? (typeof raw === "string" ? raw : JSON.stringify(raw)), 80) ?? ""
 }
 
-function afterText(value: unknown): string {
+function afterText(value: unknown, stored?: unknown): string {
   if (value === null || value === undefined || value === "") return "(empty)"
+  // A plain number is shown the way the grid shows the old value ("2,5" → "1,5", not "1.5"; QA final 19 Oct, E-5).
+  if (typeof stored === "number" && Number.isFinite(stored)) return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 10, useGrouping: false }).format(stored)
   return clip(String(value), 80) ?? ""
 }
 
@@ -311,7 +313,7 @@ async function describeEdit(actor: User, input: Input) {
     const before = row.cells[col.id]
     const ref = `${colLetter(ci)}${ri + 1}`
     if (sameCell(before, after)) { byCell.delete(ref); return }
-    byCell.set(ref, { rowId: row.id, colId: col.id, ref, before: before ?? null, after, beforeText: shown(before, comp[row.id]?.[col.id], shape), afterText: afterText(value) })
+    byCell.set(ref, { rowId: row.id, colId: col.id, ref, before: before ?? null, after, beforeText: shown(before, comp[row.id]?.[col.id], shape), afterText: afterText(value, after) })
   }
 
   // 1) Single cells: [{ cell: "B5", value }]
