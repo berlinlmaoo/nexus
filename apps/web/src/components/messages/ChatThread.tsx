@@ -155,7 +155,9 @@ function fileProblemText(p: LocalFileProblem): string {
 }
 
 /** The token being typed right after an "@", or null when the caret isn't in one. */
-const MENTION_TAIL = /(^|\s)@([\p{L}\p{N}._-]*)$/u;
+// The "@name" being typed at the end of the box. Up to four words, so a full name with spaces ("@QA Dev 2")
+// keeps the list open the way WhatsApp does (B-D3, 19 Oct 2026); it closes as soon as no member matches.
+const MENTION_TAIL = /(^|\s)@((?:[\p{L}\p{N}._-]+(?: [\p{L}\p{N}._-]*){0,3})?)$/u;
 /** One message is at most 4,000 characters (B-15, 19 Oct 2026; the server refuses more with MESSAGE_TOO_LONG). */
 export const MESSAGE_MAX_CHARS = 4000;
 const charCount = (s: string) => Array.from(s).length;
@@ -743,7 +745,13 @@ export function ChatThread({
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
-    return members.filter((u) => u.id !== meId && (u.name ?? u.email ?? "").toLowerCase().includes(q)).slice(0, 6);
+    // As typed ("qa dev"), or without spaces ("qadev") when the query has none, so "@QADev" still finds
+    // "QA Dev 2". A trailing space right after a picked tag ("@QADev2 ") matches nobody, so the list closes.
+    return members.filter((u) => {
+      if (u.id === meId) return false;
+      const name = (u.name ?? u.email ?? "").toLowerCase();
+      return name.includes(q) || (!/\s/.test(q) && name.replace(/\s+/g, "").includes(q));
+    }).slice(0, 6);
   }, [mentionQuery, members, meId]);
 
   const pickMention = (u: NexusUser) => {
