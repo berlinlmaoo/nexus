@@ -1,8 +1,8 @@
 # Android parity audit ? 19 October 2026
 
-**Overall: PARTIAL parity.** The prioritized implementations below are complete in source and build-tested; live/device QA and the explicitly listed larger feature gaps remain.
+**Overall: PARTIAL parity. Round-2 source work is committed; the required emulator QA is BLOCKED by concurrent UI-round use of emulator-5556.** All 866 JVM tests and assembleDebug pass. G6 remains deferred as instructed; larger gaps outside round 2 remain listed below.
 
-Branch: feat/android-parity-19oct. Baseline: 0d0e6e06 plus the merged Android QA work (470bf6ff). Source audit uses this checkout, not a claim about a newer deployment. No server edits, release/version changes, APK publication or changes to the other checkout.
+Branch: feat/android-parity-19oct. Round-2 baseline: hub/dev at 5e989d35 (round 1 merged). The historical round-1 audit baseline was 0d0e6e06 plus 470bf6ff. Source audit uses this checkout, not a claim about a newer deployment. No server edits, release/version changes, APK publication or changes to the other checkout.
 
 ## Scope and evidence
 
@@ -324,3 +324,9 @@ Refinement validation: 864 JVM tests, zero failures, and assembleDebug passed wi
 Isolation check: local body drafts and penalty acknowledgements are scoped by server origin as well as user ID, so DEV and production copies cannot reuse one another's saved state. Language names and token clipboard labels are resources in both locales. Validation remains 864 tests and assembleDebug passing.
 
 Autofill review flow: project field settings opens Autofill directly, and review-mode configurations link to the existing GIDEON proposal cards for preview/apply/discard. Writing stream tests cover malformed frames, final-vs-partial results, task context/tone/language, explicit errors and empty finals; partial or empty output cannot become replacement text. Validation: 866 tests and assembleDebug passed.
+
+## Pending device window (13:17 WIB)
+
+A 30-minute observer from 12:46 to 13:16 found no sustained two-minute idle window: U-10, late/wide and subsequent native runners continued using emulator-5556. At 13:17 a short guarded attempt installed the parity APK, then detected the new ui-round-phase2-native runner before any capture and stopped. The previous APK and language/theme XML were restored successfully. No screenshots from that attempt count as QA. No emulator was started, stopped or replaced; emulator-5554 was not used.
+
+Required to finish CODEX-TASK-2: a reserved emulator-5556 window of approximately 15-20 minutes for round-1 EN/ID light/dark checks, fixes if needed, and round-2 smoke/mutation checks on isolated fixtures. The ready harness stops if another UI runner appears or its installed APK path changes. The source task is not being represented as fully QA-complete. Owned isolated projects, editor fixtures and their ownership journal remain ready for that pass at C:/Users/Berlin/Documents/Dev/parity2-owned.json. No live crew dates, deductions, shared credit defaults, grants or XP adjustments were performed.
