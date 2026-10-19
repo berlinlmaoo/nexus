@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useModalTurn } from "@/lib/modal-queue";
 import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -49,7 +50,10 @@ export function XpPenaltyModal() {
 
   const penalties = q.data?.penalties ?? [];
   const fresh = useMemo(() => penalties.filter((p) => !seenIds.includes(p.id)), [penalties, seenIds]);
-  const shouldShow = !dismissedSession && fresh.length > 0;
+  const wanted = !dismissedSession && fresh.length > 0;
+  // First in the start-up modal queue (C-D1): the others wait until this one is closed.
+  const turn = useModalTurn("xpPenalty", q.isLoading ? "pending" : wanted ? "want" : "idle");
+  const shouldShow = wanted && turn;
 
   useEffect(() => {
     if (!shouldShow) return;

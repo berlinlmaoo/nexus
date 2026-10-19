@@ -574,7 +574,8 @@ function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string,
                       {/* The "Project Owner" pill wraps under the name when both don't fit (UI tour run 11, WM-20:
                           beside it the name was cut to "Budi …"). */}
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                        <span className="min-w-0 max-w-full truncate text-sm font-medium">{r.name}</span>
+                        {/* Up to 2 lines on a phone instead of an ellipsis (A-24, owner 19 Oct 2026: the column is ~74px there). */}
+                        <span className="line-clamp-2 min-w-0 max-w-full text-sm font-medium leading-snug [overflow-wrap:anywhere]" title={r.name}>{r.name}</span>
                         {r.role === "LEAD" && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold leading-4 text-primary">{t("Project Owner")}</span>}
                       </span>
                       <span className="mt-1 block h-1 max-w-40 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary/70" style={{ width: `${(r.open / max) * 100}%` }} /></span>
@@ -592,7 +593,7 @@ function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string,
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span aria-hidden className="h-7 w-7 shrink-0 rounded-full border-2 border-dashed border-control-border" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-muted-foreground">{t("Unassigned")}</span>
+                      <span className="line-clamp-2 text-sm font-medium leading-snug text-muted-foreground [overflow-wrap:anywhere]">{t("Unassigned")}</span>
                       <span className="mt-1 block h-1 max-w-40 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-muted-foreground/40" style={{ width: `${(unassigned / max) * 100}%` }} /></span>
                     </span>
                   </span>

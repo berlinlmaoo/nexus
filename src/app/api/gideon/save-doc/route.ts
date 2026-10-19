@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { nextDocPosition } from "@/lib/doc-position"
 import { checkProjectAccess } from "@/lib/rbac"
 import { markdownToTipTap } from "@/lib/tiptap-utils"
 import { docToText, sanitizeDoc } from "@/lib/blockdoc"
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const content = sanitizeDoc(markdownToTipTap(markdown))
   if (!content) return NextResponse.json({ error: "That answer is too long to save as a page." }, { status: 400 })
   const doc = await prisma.doc.create({
-    data: { title, content: content as never, contentText: docToText(content) || null, projectId, authorId: session.user.id, ownerId: session.user.id },
+    data: { title, content: content as never, contentText: docToText(content) || null, projectId, authorId: session.user.id, ownerId: session.user.id, position: await nextDocPosition(projectId, null) },
     select: { id: true, title: true },
   })
   return NextResponse.json({ doc: { ...doc, url: `/docs/${doc.id}` } })

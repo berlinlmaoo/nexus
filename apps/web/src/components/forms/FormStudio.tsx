@@ -12,6 +12,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { DateField } from "@/components/DateField";
 import { Avatar } from "@/components/Avatar";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
+import { canEditLevel } from "@/components/projects/project-access";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { fieldChoices } from "@/lib/project-views";
 import { qrMatrix, qrSvgPath } from "@/lib/qr";
@@ -961,7 +962,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const [tab, setTab] = useState<Tab>("questions");
   const [selected, setSelected] = useState<string | null>(null);
   const [panelSheet, setPanelSheet] = useState(false);
-  const [preview, setPreview] = useState<null | "desktop" | "phone">(null);
+  const [previewState, setPreview] = useState<null | "desktop" | "phone">(null);
   const [save, setSave] = useState<SaveState>("idle");
   const [slashFor, setSlashFor] = useState<{ id: string; before: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -986,6 +987,10 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const customFieldsQ = useQuery({ queryKey: ["nexus", "custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), enabled: !!projectId, retry: false });
   const customFields = useMemo<CustomFieldLite[]>(() => (customFieldsQ.data?.fields ?? []).map((c) => ({ id: c.id, name: c.name, type: c.type, options: c.options })), [customFieldsQ.data]);
   const projectName = projectQ.data?.name ?? "";
+  // Can view / Can comment (A-18, owner 19 Oct 2026): the form opens as its Preview plus Responses, with no
+  // editing controls — every save would be refused (PATCH needs Can edit). Undefined level = allowed, as before.
+  const readOnly = !canEditLevel(projectQ.data?.viewerAccessLevel);
+  const preview = previewState ?? (readOnly && tab === "questions" ? "desktop" : null);
 
   /* ---------- autosave ---------- */
   const draftRef = useRef(draft);
@@ -1113,7 +1118,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
       if (taskOpen || confirmDelete || dupOpen) return;
-      if (preview) { setPreview(null); return; }
+      if (previewState) { setPreview(null); return; }
       if (panelSheet) { setPanelSheet(false); return; }
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.matches("input, textarea, select, [contenteditable='true']"))) { el.blur(); return; }
@@ -1121,7 +1126,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [preview, panelSheet, taskOpen, confirmDelete, dupOpen]);
+  }, [previewState, panelSheet, taskOpen, confirmDelete, dupOpen]);
 
   /* ---------- question operations ---------- */
   const fields = draft.fields;
@@ -1275,7 +1280,10 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   });
 
   const responseCount = meta.count;
-  const TABS: { key: Tab; label: string; badge?: number }[] = [
+  const TABS: { key: Tab; label: string; badge?: number }[] = readOnly ? [
+    { key: "questions", label: t("Preview") },
+    { key: "responses", label: t("Responses"), badge: responseCount || undefined },
+  ] : [
     { key: "questions", label: t("Questions") },
     { key: "settings", label: t("Settings") },
     { key: "share", label: t("Share") },
@@ -1341,6 +1349,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
             ))}
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
+            {readOnly ? <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"><Eye className="h-3.5 w-3.5" />{t("View only")}</span> : <>
             {saveIndicator}
             <button type="button" onClick={() => setPreview((p) => (p ? null : "desktop"))} aria-pressed={!!preview}
               className={cn("ml-1 inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors", preview ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
@@ -1357,6 +1366,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                 <button type="button" onClick={() => { setMoreOpen(false); if (meta.id) { setConfirmDelete(true); void refreshCount(); } else onClose(); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> {meta.id ? t("Delete form") : t("Discard draft")}</button>
               </PopoverContent>
             </Popover>
+            </>}
           </div>
         </div>
         {/* Phone: the tabs get their own row. */}
