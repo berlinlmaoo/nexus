@@ -643,7 +643,10 @@ final class NEXUSUITour: XCTestCase {
                 let field = app.textFields.matching(textMatch).firstMatch
                 let search = app.searchFields.matching(textMatch).firstMatch
                 let target = field.exists ? field : search.exists ? search : app.textViews.matching(textMatch).firstMatch
-                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else { return "wrong-screen: missing or disabled input \(action.label)" }
+                guard target.waitForExistence(timeout: 10), target.isHittable, target.isEnabled else {
+                    persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-input-target.txt")
+                    return "wrong-screen: missing or disabled input \(action.label)"
+                }
                 press(target)
                 dismissKeyboardIntroduction()
                 if action.kind == "replace" {
@@ -773,6 +776,33 @@ final class NEXUSUITour: XCTestCase {
                     guard let before = savedFrames[action.label], abs(before.minX - target.frame.minX) < 2,
                           abs(before.minY - target.frame.minY) < 2 else { return "wrong-screen: frozen header moved while scrolling" }
                 }
+            case "gridSelectVisible":
+                let grid = app.collectionViews.matching(identifier: "sheet.grid").firstMatch
+                guard grid.waitForExistence(timeout: 10) else { return "wrong-screen: missing sheet grid" }
+                let corner = grid.cells.matching(identifier: "sheet.cell.0.0").firstMatch
+                guard corner.exists else { return "wrong-screen: frozen corner is missing" }
+                let bounds = grid.frame.intersection(app.windows.firstMatch.frame)
+                let left = max(bounds.minX, corner.frame.maxX) + 2
+                let top = max(bounds.minY, corner.frame.maxY) + 2
+                let region = CGRect(x: left, y: top, width: max(0, bounds.maxX - left - 2), height: max(0, bounds.maxY - top - 2))
+                let candidates = grid.cells.allElementsBoundByIndex.filter {
+                    let bits = $0.identifier.split(separator: ".")
+                    let visible = $0.frame.intersection(region)
+                    return bits.count == 4 && (Int(bits[2]) ?? 0) > 0 && (Int(bits[3]) ?? 0) > 0 && !visible.isNull && visible.width > 8 && visible.height > 8
+                }.sorted {
+                    let a = $0.frame.intersection(region), b = $1.frame.intersection(region)
+                    return hypot(a.midX - region.midX, a.midY - region.midY) < hypot(b.midX - region.midX, b.midY - region.midY)
+                }
+                guard let cell = candidates.first else { return "wrong-screen: no visible non-frozen cell" }
+                let bits = cell.identifier.split(separator: ".")
+                var col = (Int(bits[3]) ?? 0) + 1; var letters = ""
+                while col > 0 { col -= 1; letters = String(UnicodeScalar(65 + col % 26)!) + letters; col /= 26 }
+                let expected = letters + String((Int(bits[2]) ?? 0) + 1)
+                let visible = cell.frame.intersection(region)
+                press(cell.coordinate(withNormalizedOffset: CGVector(dx: (visible.midX - cell.frame.minX) / cell.frame.width, dy: (visible.midY - cell.frame.minY) / cell.frame.height)))
+                pause(2)
+                let active = app.staticTexts.matching(identifier: "sheet.activeCell").firstMatch
+                guard active.exists && (active.label == expected || active.value as? String == expected) else { return "wrong-screen: visible cell selection did not match " + expected }
             case "gridScroll":
                 let target = app.collectionViews.firstMatch
                 guard target.waitForExistence(timeout: 10) else { return "wrong-screen: no grid to scroll" }
@@ -798,12 +828,13 @@ final class NEXUSUITour: XCTestCase {
             case "orientation":
                 XCUIDevice.shared.orientation = action.label == "landscape" ? .landscapeLeft : .portrait
                 pause(2)
+            case "signal": persist(Data("ready".utf8), "tour-" + action.label + ".signal")
             case "capture": attachShot(takeShot(app), "tour-\(screen.id)-\(action.label)")
             case "tree": persist(Data(app.debugDescription.utf8), "tour-\(screen.id)-\(action.label).txt")
             case "checkValue":
                 let textView = app.textViews.matching(identifier: action.label).firstMatch
                 let target = textView.exists ? textView : app.descendants(matching: .any).matching(identifier: action.label).firstMatch
-                guard target.exists, ((target.value as? String) ?? target.label).contains(action.text ?? "") else {
+                guard target.exists, [target.label, target.value as? String ?? ""].contains(where: { $0.contains(action.text ?? "") }) else {
                     return "wrong-screen: missing expected text in \(action.label)"
                 }
             case "checkFrame":
