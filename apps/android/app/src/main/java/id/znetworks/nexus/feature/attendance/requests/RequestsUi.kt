@@ -507,7 +507,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     rules.types.forEach { t -> FilterChip(cs.type == t, { vm.pickType(t) }, { Text(typeLabel(t)) }) }
                 }
-                Text(typeHint(rules, cs.type, vm), fontSize = 12.sp, color = c.mutedFg)
+                Text(typeHint(rules, cs.type, vm, cs.dayFor()), fontSize = 12.sp, color = c.mutedFg)
 
                 if (cs.type == "LEAVE") {
                     // Annual leave is one range: first day, last day (owner 29 Sep, iOS ed7545e).
@@ -588,7 +588,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
 
                 val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.dayFor(), prefillReason = cs.prefillReason, leaveDays = cs.leaveDays)
                 if (missing == RequestRules.Missing.QUOTA) {
-                    Text(stringResource(R.string.quota_none_left, 1, rules.remainingDays(cs.type) ?: 0), color = c.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.quota_none_left, 1, rules.remainingDays(cs.type, cs.dayFor()) ?: 0), color = c.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
                 cs.error?.let {
                     Text(it, color = c.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
@@ -681,7 +681,7 @@ private fun Label(text: String) = Text(text.uppercase(Locale.getDefault()), font
     color = Nx.colors.mutedFg, letterSpacing = 1.sp)
 
 @Composable
-private fun typeHint(rules: RequestRules, type: String, vm: RequestsViewModel): String {
+private fun typeHint(rules: RequestRules, type: String, vm: RequestsViewModel, date: java.time.LocalDate): String {
     val t = vm.today
     return when (type) {
         "LEAVE" -> {
@@ -694,8 +694,10 @@ private fun typeHint(rules: RequestRules, type: String, vm: RequestsViewModel): 
         }
         "SICK" -> stringResource(R.string.hint_sick)
         "PERMIT" -> stringResource(R.string.hint_permit)
-        "DAY_OFF" -> rules.remainingDays(type)?.let { stringResource(R.string.hint_dayoff_left, it, t?.dayOffQuota ?: 0) }
-            ?: stringResource(R.string.hint_dayoff)
+        "DAY_OFF" -> rules.dayOffBalance(date).let { balance ->
+            if (balance.remaining == null) stringResource(R.string.qa_dayoff_checked)
+            else stringResource(if (balance.next) R.string.qa_dayoff_next else R.string.qa_dayoff_current, balance.remaining, balance.quota ?: 0)
+        }
         else -> rules.remainingDays(type)?.let { stringResource(R.string.hint_red_left, it, t?.redDateQuota ?: 0) }
             ?: stringResource(R.string.hint_red)
     }

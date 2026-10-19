@@ -2786,7 +2786,7 @@
     <string name="pl_filter_pm">Filter menurut PM</string>
     <string name="pl_filter_bd">Filter menurut BD</string>
     <string name="pl_clear_filters">Hapus filter</string>
-    <string name="pl_k_nothing_overdue">Tidak ada yang overdue</string>
+    <string name="pl_k_nothing_overdue">Tak ada telat</string>
     <string name="pl_more_reasons">+%d lagi</string>
     <string name="pl_today">Hari ini</string>
     <string name="pl_fold">Kontrak, delivery &amp; pembayaran</string>
@@ -3252,8 +3252,6 @@
     <string name="prs_meeting">Meeting</string>
     <string name="prs_lunch">Makan siang</string>
     <string name="prs_shoot">Lagi shooting</string>
-    <string name="prs_dentist">Ke dokter gigi</string>
-    <string name="prs_hair">Potong rambut</string>
     <string name="prs_card_title">Atur statusmu</string>
     <string name="prs_card_apply">Atur status</string>
     <string name="prs_card_done">Status diatur</string>

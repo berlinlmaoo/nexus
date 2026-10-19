@@ -378,6 +378,7 @@ fun CalendarScreen(
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val config by container.remoteConfig.body.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.CALENDAR_CHANGED }) { delay(300); vm.refresh().join() }
     // Runs again on every return to this entry and on rotation; the VM applies a link only once.
     LaunchedEffect(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) { vm.applyLink(date, view, lens, focus, scope, task, nonce, folder, unit, person, project, prio, done, overdue) }
     // On show and every return to the foreground, then every calendarPollSeconds while visible (with ETag).
@@ -550,6 +551,7 @@ private fun OnePane(d: CalDerived, vm: CalendarViewModel, medium: Boolean, short
 @Composable
 private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDay: Boolean, shortHeight: Boolean, dayRequests: Int) {
     val c = Nx.colors
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val dayFocus = remember { FocusRequester() }
     val panel = rememberLazyListState()
     RevealDay(d, dayRequests, panel, 0, dayFocus, animate = false)
@@ -559,7 +561,7 @@ private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDa
             item(key = "active") { ActiveFilters(d, vm) }
             item(key = "legend") { Legend(d, vm) }
             item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 16.dp), cellMin = if (shortHeight) 40.dp else 52.dp) { vm.selectDay(it, reveal = true) } }
-            if (!shortHeight) item(key = "hint") { LegendHint(d.s.hintSeen) }
+            if (!shortHeight || wide) item(key = "hint") { LegendHint(d.s.hintSeen) }
             monthNotices(d, vm)
         }
         if (showDay) {
@@ -783,6 +785,10 @@ private fun LegendHint(hintSeen: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically) { Icon(painterResource(R.drawable.ic_cal_check), null, tint = c.foreground, modifier = Modifier.size(12.dp)); Text(" " + stringResource(R.string.cal_legend_done), style = CalType.s12, color = c.mutedFg) }
             Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), style = CalType.s12, color = c.mutedFg) }
         }
+        if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("1", style = CalType.s11, color = c.mutedFg, modifier = Modifier.clip(CircleShape).background(c.muted).padding(horizontal = 5.dp, vertical = 1.dp))
+            Text(stringResource(R.string.ui_calendar_count_legend), style = CalType.s12, color = c.mutedFg)
+        }
         if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
     }
 }
@@ -806,10 +812,11 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val titles = maxWidth / 7 >= 90.dp
+            val counts = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
             Column {
                 data.grid.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
-                        week.forEach { day -> DayCell(data, index, day, day == selectedDay, day == today, titles && ready, cellMin, onPick) }
+                        week.forEach { day -> DayCell(data, index, day, day == selectedDay, day == today, titles && ready, counts, cellMin, onPick) }
                     }
                 }
             }
@@ -818,7 +825,7 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, index: CalIndex, day: String, selected: Boolean, isToday: Boolean, titles: Boolean, cellMin: Dp, onPick: (String) -> Unit) {
+private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, index: CalIndex, day: String, selected: Boolean, isToday: Boolean, titles: Boolean, counts: Boolean, cellMin: Dp, onPick: (String) -> Unit) {
     val c = Nx.colors
     val cell = data.cells[day]
     val inMonth = CalendarCore.sameMonth(day, data.s.day)
@@ -840,6 +847,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
         .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected }
         .clickable(onClickLabel = showLabel, role = Role.Button) { onPick(day) }.padding(vertical = 5.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = if (counts) 4.dp else 0.dp), horizontalArrangement = if (counts) Arrangement.SpaceBetween else Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.sizeIn(minWidth = 26.dp, minHeight = 26.dp).clip(CircleShape).background(if (isToday) c.navy else Color.Transparent).padding(horizontal = 3.dp)
             .clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
             Text(LocalDate.parse(day).dayOfMonth.toString(), maxLines = 1, softWrap = false,
@@ -852,6 +860,8 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
                     !inMonth -> c.mutedFg
                     else -> c.foreground
                 })
+        }
+            if (counts && data.ready && count > 0) Text(count.toString(), style = CalType.s11, color = c.mutedFg, modifier = Modifier.clearAndSetSemantics {}.clip(CircleShape).background(c.muted).padding(horizontal = 5.dp, vertical = 1.dp))
         }
         Box(Modifier.padding(top = 2.dp).width(14.dp).height(2.dp).background(if (cell?.overdue == true && inMonth) c.danger else Color.Transparent))
         if (titles) {

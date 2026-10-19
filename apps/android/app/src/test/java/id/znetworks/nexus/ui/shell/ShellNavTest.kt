@@ -23,6 +23,8 @@ class ShellNavTest {
         // Workspace not known yet: Z Vault and Threads stay hidden; outside Z Networks too.
         assertFalse(ShellNav.Item.VAULT in items(null, false)); assertFalse(ShellNav.Item.THREADS in items(false, false))
         assertTrue(ShellNav.Item.VAULT in items(true, false))
+        assertFalse(ShellNav.Item.ROOMS in items(null, false)); assertFalse(ShellNav.Item.ROOMS in items(false, false))
+        assertTrue(ShellNav.Item.ROOMS in items(true, false))
         // Control Room: Manager and above only.
         assertFalse(ShellNav.Item.CONTROL_ROOM in items(true, false)); assertTrue(ShellNav.Item.CONTROL_ROOM in items(true, true))
         // Legal (owner, 14 Oct 2026): invitation only, drawn after Projects in Work.

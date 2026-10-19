@@ -19,7 +19,7 @@
     <string name="pc_k_real_profit">Real profit</string>
     <string name="pc_k_real_cost">Real cost %1$s</string>
     <plurals name="pc_k_have_costs">
-        <item quantity="other">%1$d dari %2$d deal sudah ada biaya</item>
+        <item quantity="other">%1$d/%2$d ada biaya</item>
     </plurals>
     <plurals name="pc_k_no_net">
         <item quantity="other">%d deal ada biaya tapi nilai bersih kosong</item>

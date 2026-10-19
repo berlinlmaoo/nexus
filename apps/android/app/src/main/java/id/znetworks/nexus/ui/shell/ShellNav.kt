@@ -30,7 +30,7 @@ internal object ShellNav {
         MY_TASKS(Group.HOME, R.string.nav_my_tasks, "tasks"),
         SUBMISSIONS(Group.HOME, R.string.mt_submissions, "submissions"),
         CALENDAR(Group.HOME, R.string.mt_calendar, "calendar", tab = true),
-        ROOMS(Group.HOME, R.string.mt_rooms, "rooms"),
+        ROOMS(Group.HOME, R.string.mt_rooms, "rooms", companyOnly = true),
         PROJECTS(Group.WORK, R.string.nav_projects, "projects", tab = true),
         // Invitation only (owner, 14 Oct 2026): drawn when the roster says canAccessLegal; the server refuses the rest.
         LEGAL(Group.WORK, R.string.lg_title, "legal", legalOnly = true),

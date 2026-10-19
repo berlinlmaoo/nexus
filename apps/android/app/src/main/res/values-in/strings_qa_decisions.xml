@@ -1,0 +1,30 @@
+<resources>
+    <string name="qa_person_trail">Jejak lokasi %1$s</string>
+    <string name="qa_dayoff_allowance">Jatah day off</string>
+    <string name="qa_dayoff_no_bonus">Tidak ada tambahan day off di periode ini.</string>
+    <string name="qa_dayoff_bonus_days">Tambahan day off: %1$d</string>
+    <string name="qa_outlet_settings_short">Pengaturan</string>
+    <string name="qa_term_overpaid">· Dibayar lebih %1$s</string>
+    <string name="qa_term_overpaid_warning">Dibayar lebih %1$s. Tetap dihitung lunas.</string>
+    <string name="qa_rooms_company_title">Booking ruangan khusus kantor Z Networks</string>
+    <string name="qa_rooms_company_body">Ruang meeting dan studio milik workspace Z Networks. Minta admin menambahkanmu ke workspace itu kalau perlu booking ruangan.</string>
+    <string name="qa_booking_delete_body">Ruangan kosong lagi di jam itu. Booking bisa dipulihkan dari Control Room → Audit.</string>
+    <string name="qa_dayoff_current">Day off: tersisa %1$d dari %2$d di periode ini</string>
+    <string name="qa_dayoff_next">Day off: tersisa %1$d dari %2$d di periode tanggal itu</string>
+    <string name="qa_dayoff_checked">Sisa day off diperiksa saat kamu mengirim.</string>
+    <string name="qa_meeting_deleted">Catatan meeting ini sudah dihapus</string>
+    <string name="qa_meeting_deleted_body">Sudah dihapus, atau kamu tidak punya akses lagi.</string>
+    <string name="qa_all_meetings">Semua catatan meeting</string>
+    <string name="qa_meeting_speakers_locked">Terkunci: notulen ini sudah diterapkan ke project, jadi nama tetap seperti ini.</string>
+    <string name="qa_meeting_speakers_applied">Notulen ini sudah diterapkan, jadi nama pembicara tidak bisa diubah lagi.</string>
+    <plurals name="qa_gideon_waiting_count"><item quantity="other">%1$d perubahan menunggu persetujuanmu</item></plurals>
+    <string name="qa_gideon_no_change">Tidak ada perubahan: semuanya sudah seperti ini</string>
+    <string name="qa_gideon_waiting">%1$d perubahan menunggu persetujuanmu</string>
+    <string name="qa_chat_count">%1$s / 4.000 karakter</string>
+    <string name="qa_chat_too_long">Terlalu panjang: %1$s / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.</string>
+    <string name="qa_chat_denied">Kamu sudah tidak ada di chat ini</string>
+    <string name="qa_form_readonly">Kamu bisa melihat form ini tapi tidak bisa mengubahnya.</string>
+    <string name="qa_form_editors">Ikut mengedit: %1$s</string>
+    <string name="qa_form_editing">%1$s sedang mengedit</string>
+    <string name="qa_form_editing_more">%1$s dan %2$d lainnya sedang mengedit</string>
+</resources>

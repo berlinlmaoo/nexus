@@ -44,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -172,13 +174,18 @@ private fun approvalBlurb(m: GideonApprovalMode) = stringResource(when (m) {
 internal fun ApprovalMenu(mode: GideonApprovalMode, onPick: (GideonApprovalMode) -> Unit) {
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
-    Box {
-        Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { open = true }.defaultMinSize(minHeight = 40.dp).padding(horizontal = 6.dp),
+    val modeName = approvalName(mode)
+    val measure = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val labelWidth = measure.measure(androidx.compose.ui.text.AnnotatedString(modeName), androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium)).size.width
+        val compact = labelWidth + with(density) { 50.dp.toPx() } > constraints.maxWidth
+        Row(Modifier.semantics(mergeDescendants = true) { contentDescription = modeName }.clip(RoundedCornerShape(8.dp)).clickable { open = true }.defaultMinSize(minHeight = 40.dp).padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(approvalName(mode), modifier = Modifier.weight(1f, fill = false), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            Icon(Icons.Filled.ArrowDropDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+            if (!compact) Spacer(Modifier.width(4.dp))
+            if (!compact) Text(modeName, modifier = Modifier.weight(1f, fill = false), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            if (!compact) Icon(Icons.Filled.ArrowDropDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(open, { open = false }) {
             Text(stringResource(R.string.gx_mode_header), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
@@ -207,8 +214,9 @@ internal fun ProposalCard(p: GProposal, deciding: Boolean, readOnly: Boolean = f
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.VerifiedUser, null, tint = c.warningFg, modifier = Modifier.size(14.dp).padding(top = 2.dp))
             Spacer(Modifier.width(6.dp))
-            Text(p.summary?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_change_default), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+            Text(proposalSummary(p)?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_change_default), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
         }
+        ProposalNoChange(p)
         p.diff.forEach { row ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val status = row.field == "Status"
@@ -252,7 +260,7 @@ internal fun DecisionDialog(p: GProposal, apply: Boolean, onConfirm: () -> Unit,
     val c = Nx.colors
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(stringResource(if (apply) R.string.gx_apply_q else R.string.gx_discard_q)) },
-        text = p.summary?.takeIf { it.isNotBlank() }?.let { s -> { Text(s) } },
+        text = proposalSummary(p)?.takeIf { it.isNotBlank() }?.let { s -> { Text(s) } },
         confirmButton = {
             TextButton(onClick = { onDismiss(); onConfirm() }) {
                 Text(if (apply && (p.action == "delete_task" || p.extra != null)) actionLabel(p.action, apply = true) else stringResource(if (apply) R.string.gx_apply else R.string.gx_discard), color = if (apply && p.action in setOf("delete_task", "cancel_reminder")) c.dangerText else c.foreground, fontWeight = FontWeight.Bold)
@@ -325,6 +333,8 @@ internal fun BookRoomCard(
             Spacer(Modifier.width(6.dp))
             Text(booking.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_book_room), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
         }
+        proposalSummary(p)?.let { Text(it, color = c.foreground, fontSize = 13.sp) }
+        ProposalNoChange(p)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Event, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
@@ -474,6 +484,8 @@ internal fun BookingChangeCard(
                 Text(change.title.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
             }
         }
+        proposalSummary(p)?.let { Text(it, color = c.foreground, fontSize = 13.sp) }
+        ProposalNoChange(p)
         slotBox(if (move) stringResource(R.string.gx_booking_now) else null, change.before.room, change.before.startsAt, change.before.endsAt,
             change.bookedBy, highlighted = false, struck = !move && p.status == "APPLIED")
         if (move) {

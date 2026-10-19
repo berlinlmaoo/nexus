@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import id.znetworks.nexus.R
-import id.znetworks.nexus.feature.projects.BuilderPick
+
 import id.znetworks.nexus.feature.social.*
 import kotlinx.serialization.json.*
 
@@ -32,7 +32,7 @@ object BlockMarks {
 internal fun BlockFormat(node:JsonObject,enabled:Boolean,change:(JsonObject)->Unit){
     var link by remember{mutableStateOf(false)}
     var href by remember{mutableStateOf("")}
-    BuilderPick(stringResource(R.string.be_format),"",listOf("bold" to stringResource(R.string.be_bold),"italic" to stringResource(R.string.be_italic),"underline" to stringResource(R.string.be_underline),"strike" to stringResource(R.string.be_strike),"code" to stringResource(R.string.be_code),"link" to stringResource(R.string.be_link)),enabled){type->if(type=="link"){href="";link=true}else change(BlockMarks.apply(node,type))}
-    if(node.text("type")=="heading")BuilderPick(stringResource(R.string.be_level),node.objectAt("attrs").text("level").ifBlank{"2"},listOf("1" to "1","2" to "2","3" to "3"),enabled){value->change(JsonObject(node+("attrs" to JsonObject(node.objectAt("attrs")+("level" to JsonPrimitive(value.toInt()))))))}
-    if(link)AlertDialog(onDismissRequest={link=false},title={Text(stringResource(R.string.be_link))},text={OutlinedTextField(href,{href=it},label={Text(stringResource(R.string.be_url))})},confirmButton={TextButton(onClick={change(BlockMarks.apply(node,"link",buildJsonObject{put("href",href.trim())}));link=false},enabled=BlockMarks.safeLink(href.trim())){Text(stringResource(R.string.save))}},dismissButton={Row{TextButton(onClick={change(BlockMarks.remove(node,"link"));link=false}){Text(stringResource(R.string.ab_remove))};TextButton(onClick={link=false}){Text(stringResource(R.string.cancel))}}})
+    BlockPick(stringResource(R.string.be_format),"",listOf("bold" to stringResource(R.string.be_bold),"italic" to stringResource(R.string.be_italic),"underline" to stringResource(R.string.be_underline),"strike" to stringResource(R.string.be_strike),"code" to stringResource(R.string.be_code),"link" to stringResource(R.string.be_link)),enabled){type->if(type=="link"){href="";link=true}else change(BlockMarks.apply(node,type))}
+    if(node.text("type")=="heading")BlockPick(stringResource(R.string.be_level),node.objectAt("attrs").text("level").ifBlank{"2"},listOf("1" to "1","2" to "2","3" to "3"),enabled){value->change(JsonObject(node+("attrs" to JsonObject(node.objectAt("attrs")+("level" to JsonPrimitive(value.toInt()))))))}
+    if(link)AlertDialog(onDismissRequest={link=false},title={Text(stringResource(R.string.be_link))},text={OutlinedTextField(href,{href=it},label={Text(stringResource(R.string.be_url))})},confirmButton={TextButton(onClick={change(BlockMarks.apply(node,"link",buildJsonObject{put("href",href.trim())}));link=false},enabled=BlockMarks.safeLink(href.trim())){Text(stringResource(R.string.save))}},dismissButton={Row{TextButton(onClick={change(BlockMarks.remove(node,"link"));link=false}){Text(stringResource(R.string.be_remove))};TextButton(onClick={link=false}){Text(stringResource(R.string.cancel))}}})
 }

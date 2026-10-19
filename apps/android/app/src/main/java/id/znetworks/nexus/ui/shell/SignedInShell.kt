@@ -313,6 +313,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
+            is Target.Booking -> { container.router.consumed(t); nav.navigate("rooms?booking=${enc(t.id)}") }
             is Target.Calendar -> {
                 container.router.consumed(t)
                 // A quadrant widget's whole list (audit #40).
@@ -324,6 +325,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.GideonPerformance -> { container.router.consumed(t); nav.navigate("admin-performance") }
             Target.Reminders -> { container.router.consumed(t); nav.navigate("reminders") }
+            Target.GideonMemorySummary -> { container.router.consumed(t); nav.navigate("gideon-memory-summary") }
             Target.GideonMemory -> { container.router.consumed(t); nav.navigate("gideon-memory") }
             Target.Gideon -> { container.router.consumed(t); nav.navigate("gideon") }
             is Target.Meetings -> { container.router.consumed(t); nav.navigate("meetings?project=${enc(t.projectId.orEmpty())}") }
@@ -348,25 +350,36 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         }
     }
 
-    // The location disclosure can come due from any screen (a queued check-in landing, a refresh).
-    TrailConsentHost(container.workTrail)
+    var startupModal by rememberSaveable { mutableStateOf<StartupModal?>(null) }
+    var xpLoading by remember { mutableStateOf(!id.znetworks.nexus.core.tour.TourMode.active) }
+    var xpPending by remember { mutableStateOf(false) }
+    var trailModalBusy by remember { mutableStateOf(false) }
+    val disclosure by container.workTrail.disclosureFor.collectAsStateWithLifecycle()
+    val announcementQueue by container.announcements.queue.collectAsStateWithLifecycle()
+    val announcementsLoading by container.announcements.loading.collectAsStateWithLifecycle()
+    TrailConsentHost(container.workTrail, enabled = startupModal == StartupModal.LOCATION_CONSENT, onBusyChanged = { trailModalBusy = it })
     // Taken away in the middle of a workday: asked again on every return to the app (iOS 77818ba).
     var alwaysAgain by rememberSaveable { mutableStateOf(false) }
     androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
-        if (container.remoteConfig.current.requireAlwaysLocation && container.workdayOpen() &&
-            id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null) alwaysAgain = true
+        alwaysAgain = container.remoteConfig.current.requireAlwaysLocation && container.workdayOpen() &&
+            id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null
         onPauseOrDispose { }
     }
-    if (alwaysAgain) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { alwaysAgain = false }) { alwaysAgain = false }
-    AnnouncementDialog(container.announcements)
+    if (startupModal == StartupModal.ALWAYS_LOCATION) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { alwaysAgain = false }) { alwaysAgain = false }
+    if (startupModal == StartupModal.ANNOUNCEMENT) AnnouncementDialog(container.announcements)
     // Once per version, after the location disclosure and announcements have had their turn.
     val version = container.identity.versionName
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version) && !id.znetworks.nexus.core.tour.TourMode.active) }
-    if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
+    LaunchedEffect(announcementQueue, announcementsLoading, disclosure, trailModalBusy, alwaysAgain, whatsNew, xpLoading, xpPending) {
+        startupModal = StartupModals.next(startupModal, announcementsLoading, announcementQueue.isNotEmpty(), disclosure != null || trailModalBusy, alwaysAgain, whatsNew, xpLoading, xpPending)
+    }
+    if (startupModal == StartupModal.PROMO) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
-    val xpAnnouncements by container.announcements.queue.collectAsStateWithLifecycle()
-    val xpDisclosure by container.workTrail.disclosureFor.collectAsStateWithLifecycle()
-    id.znetworks.nexus.feature.people.XpPenaltyHost(!whatsNew && !alwaysAgain && xpAnnouncements.isEmpty() && xpDisclosure == null && !id.znetworks.nexus.core.tour.TourMode.active)
+    id.znetworks.nexus.feature.people.XpPenaltyHost(startupModal == StartupModal.XP_PENALTY) { loading, pending ->
+        val enabled = !id.znetworks.nexus.core.tour.TourMode.active
+        xpLoading = enabled && loading
+        xpPending = enabled && pending
+    }
 
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
     // web's sidebar with every destination instead (dev web AppSidebar).
@@ -499,7 +512,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("leaderboard") { LeaderboardScreen(onBack = { nav.popBackStack() }, onOpenPerson = { nav.navigate("profile/$it") }) }
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
-            composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
+            composable("rooms?booking={booking}", arguments = listOf(navArgument("booking") { nullable = true; defaultValue = null })) { e -> RoomBookingScreen(bookingId = e.arguments?.getString("booking"), onBack = { nav.popBackStack() }) }
             // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
             composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}&folder={folder}&unit={unit}&person={person}&project={project}&prio={prio}&done={done}&overdue={overdue}",
                 arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n", "folder", "unit", "person", "project", "prio", "done", "overdue").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
@@ -590,10 +603,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable("reminders") { RemindersScreen { nav.popBackStack() } }
+            composable("gideon-memory-summary") { GideonMemoryScreen(initialSummary = true) { nav.popBackStack() } }
             composable("gideon-memory") { GideonMemoryScreen { nav.popBackStack() } }
             composable("meetings?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> MeetingsScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
             composable("meeting-new?project={project}", arguments = listOf(navArgument("project") { defaultValue = "" })) { e -> NewMeetingScreen(e.arguments?.getString("project")?.takeIf { it.isNotBlank() }, { nav.popBackStack() }) }
-            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("meeting/{id}") { e -> MeetingScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onAllMeetings = { nav.navigate("meetings") { popUpTo("meeting/{id}") { inclusive = true }; launchSingleTop = true } }) }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) },
                     onOpenSettings = { nav.navigate("project/$it/settings") })

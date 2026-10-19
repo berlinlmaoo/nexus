@@ -100,6 +100,7 @@ import java.util.Locale
 
 data class BoardState(
     val offset: Int = 0,
+    val highlightDay: String? = null,
     val rows: List<HistoryRow> = emptyList(),
     /** The period [rows] and [roster] belong to: another period's rows are never drawn (audit T6). */
     val rowsPeriod: String? = null,
@@ -156,9 +157,14 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun shift(delta: Int) {
-        _state.update { it.copy(offset = (it.offset + delta).coerceAtMost(0)) }
+        _state.update { it.copy(offset = (it.offset + delta).coerceAtMost(0), highlightDay = null) }
         load()
     }
+    fun focusDate(value: String) {
+        val date = runCatching { LocalDate.parse(value) }.getOrNull() ?: return
+        _state.update { it.copy(offset = BoardModel.offsetFor(date), highlightDay = value) }; load()
+    }
+    fun focusTrail(recordId: String, memberId: String?) = openTrail(HistoryRow(id = recordId, user = PersonRef(id = memberId)))
 
     private var loadJob: Job? = null
 
@@ -346,7 +352,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
                 stringResource(R.string.try_again), { vm.load() })
             members.isEmpty() -> EmptyState(Icons.Filled.GridView, stringResource(R.string.board_empty), stringResource(R.string.board_empty_sub),
                 stringResource(R.string.previous_period), { vm.shift(-1) })
-            else -> Grid(members, days, today, onCell = { m, d -> vm.selectCell(m, d) }, compact = true)
+            else -> Grid(members, days, today, onCell = { m, d -> vm.selectCell(m, d) }, compact = true, focusedDay = s.highlightDay?.let(LocalDate::parse))
         }
         Legend()
     }
@@ -360,7 +366,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
                 }
                 // The grid scrolls vertically under its own pinned header; the legend stays below.
                 Grid(members, days, today, onCell = { m, d -> if (vm.selectCell(m, d)) full = false }, compact = false,
-                    modifier = Modifier.weight(1f, fill = false))
+                    modifier = Modifier.weight(1f, fill = false), focusedDay = s.highlightDay?.let(LocalDate::parse))
                 Spacer(Modifier.height(8.dp))
                 Legend()
             }
@@ -394,6 +400,7 @@ internal fun Grid(
     onCell: (BoardMember, LocalDate) -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
+    focusedDay: LocalDate? = null,
 ) {
     val c = Nx.colors
     val cell = if (compact) 22.dp else 26.dp
@@ -404,7 +411,7 @@ internal fun Grid(
     // Opens on today, not on the 28th of last month (NAV-HOME-GROUP §5, the iOS bug): the position is the
     // scroll state's own starting value, set before the first frame — no delayed scroll — and each period
     // gets its own (today for the current one, its first day for a past one). A reload keeps the grid.
-    val hScroll = remember(days) { ScrollState(with(density) { ((cell + gap) * BoardModel.startColumn(days, today)).roundToPx() }) }
+    val hScroll = remember(days, focusedDay) { ScrollState(with(density) { ((cell + gap) * (focusedDay?.let { days.indexOf(it).coerceAtLeast(0) } ?: BoardModel.startColumn(days, today))).roundToPx() }) }
     val vScroll = rememberScrollState()
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val weekday = remember(locale) { DateTimeFormatter.ofPattern("EEE", locale) }
@@ -427,7 +434,8 @@ internal fun Grid(
                 days.forEach { d ->
                     val isToday = d == today
                     Column(
-                        Modifier.width(cell).background(if (isToday) c.accentBg else Color.Transparent, RoundedCornerShape(5.dp)),
+                        Modifier.width(cell).background(if (isToday) c.accentBg else Color.Transparent, RoundedCornerShape(5.dp))
+                            .then(if (d == focusedDay) Modifier.border(1.dp, c.dangerText, RoundedCornerShape(5.dp)) else Modifier),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(weekday.format(d).uppercase(locale).take(3), fontSize = 7.sp, maxLines = 1,
@@ -460,6 +468,7 @@ internal fun Grid(
                             val outsideText = outside?.let { stringResource(R.string.outside_since, hhmm(it)) }
                             Box(
                                 Modifier.size(cell).background(toneColor(m.cells[key] ?: AttTone.NONE), RoundedCornerShape(5.dp))
+                                    .then(if (d == focusedDay) Modifier.border(1.dp, c.dangerText, RoundedCornerShape(5.dp)) else Modifier)
                                     .then(if (d == today) Modifier.border(1.5.dp, if (outside != null) OUTSIDE_AMBER else c.violet, RoundedCornerShape(5.dp)) else Modifier)
                                     .then(if (outsideText != null) Modifier.semantics { contentDescription = "${m.name}, $outsideText" } else Modifier)
                                     .clickable { onCell(m, d) },
@@ -699,7 +708,7 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
         Column(Modifier.fillMaxSize().background(c.background).systemBarsPadding()) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = vm::closeTrail) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
-                Text(stringResource(R.string.trail_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text((trail?.record?.userName ?: r.user?.name)?.let { stringResource(R.string.qa_person_trail, it) } ?: stringResource(R.string.trail_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
             when {
                 error != null && trail == null -> EmptyState(Icons.Filled.Route, stringResource(R.string.trail_load_failed), error, stringResource(R.string.try_again), { vm.openTrail(r) })

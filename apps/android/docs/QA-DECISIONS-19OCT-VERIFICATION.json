@@ -1,0 +1,146 @@
+{
+  "at": "2026-10-19T08:08:36.755Z",
+  "tests": {
+    "total": 920,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "assembleDebug": "PASS"
+  },
+  "variants": [
+    "en-light",
+    "en-dark",
+    "id-light",
+    "id-dark"
+  ],
+  "curatedCaptures": 317,
+  "phase2-final": {
+    "en-light": {
+      "checks": [
+        "d12-missing-meeting",
+        "a12-saved-settles",
+        "c7-allowance-link",
+        "b16-legacy-folder",
+        "u8-remembered-tab",
+        "a24-overview",
+        "c6-absent-date",
+        "c7-booking-link-and-delete-cancel"
+      ],
+      "unresolved": []
+    },
+    "en-dark": {
+      "checks": [
+        "d12-missing-meeting",
+        "a12-saved-settles",
+        "c7-allowance-link",
+        "b16-legacy-folder",
+        "u8-remembered-tab",
+        "a24-overview",
+        "c6-absent-date",
+        "c7-booking-link-and-delete-cancel"
+      ],
+      "unresolved": []
+    },
+    "id-light": {
+      "checks": [
+        "d12-missing-meeting",
+        "a12-saved-settles",
+        "c7-allowance-link",
+        "b16-legacy-folder",
+        "u8-remembered-tab",
+        "a24-overview",
+        "c6-absent-date",
+        "c7-booking-link-and-delete-cancel"
+      ],
+      "unresolved": []
+    },
+    "id-dark": {
+      "checks": [
+        "d12-missing-meeting",
+        "a12-saved-settles",
+        "c7-allowance-link",
+        "b16-legacy-folder",
+        "u8-remembered-tab",
+        "a24-overview",
+        "c6-absent-date",
+        "c7-booking-link-and-delete-cancel"
+      ],
+      "unresolved": []
+    }
+  },
+  "phase3-final": {
+    "en-light": {
+      "checks": [
+        "n1-long-status",
+        "d7-pipeline-kpi",
+        "d8-outlet-settings",
+        "cd3-session-confirm",
+        "cd4-dayoff-dates"
+      ],
+      "unresolved": []
+    },
+    "en-dark": {
+      "checks": [
+        "n1-long-status",
+        "d7-pipeline-kpi",
+        "d8-outlet-settings",
+        "cd3-session-confirm",
+        "cd4-dayoff-dates"
+      ],
+      "unresolved": []
+    },
+    "id-light": {
+      "checks": [
+        "n1-long-status",
+        "d7-pipeline-kpi",
+        "d8-outlet-settings",
+        "cd3-session-confirm",
+        "cd4-dayoff-dates"
+      ],
+      "unresolved": []
+    },
+    "id-dark": {
+      "checks": [
+        "n1-long-status",
+        "d7-pipeline-kpi",
+        "d8-outlet-settings",
+        "cd3-session-confirm",
+        "cd4-dayoff-dates"
+      ],
+      "unresolved": []
+    }
+  },
+  "functional": {
+    "canonical": [
+      "Native canonical save retains bold marks nested list and unknown node",
+      "Stale native save refused; explicit Keep both saves both edits"
+    ],
+    "spreadsheet": [
+      "[TEST] Zoom 200 native save + API readback",
+      "[TEST] Zoom 50 native save + API readback",
+      "Owned edited cells restored"
+    ],
+    "calendar": [
+      "Native Calendar received outside-client task title update in 2890 ms without refresh",
+      "Owned task title restored",
+      "Existing DOCX opens via ACTION_VIEW; no share ChooserActivity"
+    ],
+    "trail": [
+      "Named existing DEV record trail read-only",
+      "Receivable and Real profit short captions fully visible"
+    ]
+  },
+  "cleanup": {
+    "server": true,
+    "device": true,
+    "ownedEmulatorStopped": true,
+    "stoppedAt": "2026-10-19T08:07:16.0400770Z"
+  },
+  "limits": [
+    "Physical pinch feel and Memory loading/reveal timing still need the owner device check. The added cellular-delay recording also took the fast path.",
+    "No Staff or VIEW/COMMENT native session was used; ticket drag/status mutations were not made on shared tickets.",
+    "Forms used one person on Android plus an outside-client API edit; different-person avatars/caret and permissions were not independently staged.",
+    "No attendance approval or XP mutation was staged across devices; event consumers and race/permission rules are tested.",
+    "Calendar widget was not placed on this AVD; no DOCX viewer is installed (ACTION_VIEW gives the expected No app alert)."
+  ]
+}

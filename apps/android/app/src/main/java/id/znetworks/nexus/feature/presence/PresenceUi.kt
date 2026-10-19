@@ -65,7 +65,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     Row(Modifier.then(if (chip) Modifier.background(dotColor(status.tone).copy(alpha = .08f), CircleShape).border(1.dp, dotColor(status.tone).copy(alpha = .2f), CircleShape).padding(horizontal = 10.dp, vertical = 5.dp) else Modifier),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PresenceDot(status)
-        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), color = c.mutedFg, fontSize = 12.sp)
+        Text(status.label(ConfigBody.lang(locale)) + (until?.let { " · " + stringResource(R.string.prs_until, it) } ?: ""), Modifier.weight(1f, fill = false), color = c.mutedFg, fontSize = 12.sp, softWrap = true)
     }
 }
 /** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
@@ -84,13 +84,19 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     }
     if (open) SetStatusDialog { open = false }
 }
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun SetStatusDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     val snapshot by container.presenceStatuses.state.collectAsStateWithLifecycle()
     val manual = remember { snapshot.statuses[container.sessionStore.current?.userId]?.manual }
-    var text by remember { mutableStateOf(manual?.text.orEmpty()) }
+    val initial = remember { PresenceDraft.split(manual?.text.orEmpty()) }
+    var text by remember { mutableStateOf(initial.second) }
+    var emoji by remember { mutableStateOf(initial.first) }
+    var availability by remember { mutableStateOf(manual?.availability?.lowercase()?.takeIf { it in listOf("online", "away", "dnd") } ?: "away") }
+    var emojiMenu by remember { mutableStateOf(false) }
+    var durationMenu by remember { mutableStateOf(false) }
+    var startMenu by remember { mutableStateOf(false) }
     var later by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(Instant.now()) }
     var start by remember { mutableStateOf(LocalDateTime.ofInstant(now, PresenceTimes.zone)) }
@@ -104,34 +110,73 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = Instant.now() } }
     val from = if (later) start.atZone(PresenceTimes.zone).toInstant() else now
     val end = PresenceTimes.end(from, option, picked)
+    val payload = PresenceDraft.payload(emoji, text)
+    val canSave = !busy && snapshot.enabled && payload.isNotBlank() && payload.length <= 80 && end > from && end > now
     fun submit(clear: Boolean) { busy = true; error = null; scope.launch {
-        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(text, if (later) from else null, end); onDismiss() }
+        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(payload, if (later) from else null, end, availability); onDismiss() }
         catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: context.getString(R.string.prs_failed); if ((e as? ApiError.Http)?.code == "PRESENCE_OFF") container.presenceStatuses.refresh() }
         finally { busy = false }
     } }
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(stringResource(R.string.prs_set)) }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.prs_explain), fontSize = 12.sp, color = c.mutedFg)
-            OutlinedTextField(text, { text = it.take(80) }, prefix = { Text("Away · ", color = c.warningFg) }, supportingText = { Text("${text.length}/80") }, enabled = !busy, modifier = Modifier.fillMaxWidth())
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(R.string.prs_meeting, R.string.prs_lunch, R.string.prs_shoot, R.string.prs_dentist, R.string.prs_hair).forEach { id ->
-                val suggestion = stringResource(id); SuggestionChip(onClick = { text = suggestion }, label = { Text(suggestion) }, enabled = !busy)
-            } }
-            Text(stringResource(R.string.prs_from), color = c.mutedFg)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!later, { later = false }, label = { Text(stringResource(R.string.prs_now)) }, enabled = !busy)
-                FilterChip(later, { later = true }, label = { Text(stringResource(R.string.prs_later)) }, enabled = !busy)
+    val durations = listOf("30m" to R.string.prs_30m, "1h" to R.string.prs_1h, "2h" to R.string.prs_2h,
+        "3h" to R.string.ui_status_3h, "today" to R.string.prs_today, "pick" to R.string.prs_pick)
+    ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.background) {
+        Column(Modifier.fillMaxWidth().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) }
+                Text(stringResource(R.string.ui_status_title), Modifier.weight(1f), color = c.foreground, textAlign = androidx.compose.ui.text.style.TextAlign.Center, fontSize = 18.sp)
+                TextButton(onClick = { submit(false) }, enabled = canSave) { Text(stringResource(R.string.gm_save), color = if (canSave) c.violetText else c.mutedFg) }
             }
-            if (later) PresenceDateTime(start, !busy) { start = it }
-            Text(stringResource(R.string.prs_clear_after), color = c.mutedFg)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("30m" to R.string.prs_30m, "1h" to R.string.prs_1h, "2h" to R.string.prs_2h, "today" to R.string.prs_today, "pick" to R.string.prs_pick).forEach { (key, label) ->
-                FilterChip(option == key, { option = key }, label = { Text(stringResource(label)) }, enabled = !busy)
-            } }
-            if (option == "pick") PresenceDateTime(picked, !busy) { picked = it }
-            Text((if (later) from.atZone(PresenceTimes.zone).format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale)) else stringResource(R.string.prs_now)) + " – " + end.atZone(PresenceTimes.zone).format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale)) + " WIB", color = c.mutedFg, fontSize = 12.sp)
-            error?.let { Text(it, color = c.dangerText) }
-            if (manual != null) TextButton(onClick = { submit(true) }, enabled = !busy) { Text(stringResource(R.string.prs_clear), color = c.dangerText) }
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(text, { text = it.take(80) }, placeholder = { Text(stringResource(R.string.ui_status_placeholder)) },
+                    leadingIcon = { Box {
+                        TextButton(onClick = { emojiMenu = true }, enabled = !busy, modifier = Modifier.semantics { contentDescription = context.getString(R.string.ui_status_emoji) }) { Text(emoji.ifBlank { "☺" }, fontSize = 22.sp) }
+                        DropdownMenu(emojiMenu, { emojiMenu = false }) {
+                            listOf("🗓️", "🍽️", "🎬", "🚗", "").forEach { e -> DropdownMenuItem(text = { Text(e.ifBlank { context.getString(R.string.ui_status_no_emoji) }) }, onClick = { emoji = e; emojiMenu = false }) }
+                        }
+                    } }, supportingText = { Text("${payload.length}/80", color = if (payload.length > 80) c.dangerText else c.mutedFg) }, enabled = !busy, isError = payload.length > 80, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.ui_status_availability), color = c.mutedFg, fontSize = 12.sp)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
+                        SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
+                            shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.size(7.dp).background(dotColor(tone), CircleShape)) }) {
+                            Text(stringResource(label), maxLines = 2, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                }
+                Text(stringResource(R.string.ui_status_quick), color = c.mutedFg, fontSize = 12.sp)
+                Column {
+                    listOf(Triple("🗓️", R.string.prs_meeting, "1h"), Triple("🍽️", R.string.prs_lunch, "1h"), Triple("🎬", R.string.prs_shoot, "3h"), Triple("🚗", R.string.ui_status_road, "1h")).forEach { (e, label, duration) ->
+                        val suggestion = stringResource(label)
+                        ListItem(headlineContent = { Text(suggestion) }, leadingContent = { Text(e, fontSize = 22.sp) },
+                            trailingContent = { Text(stringResource(if (duration == "3h") R.string.ui_status_3h else R.string.prs_1h), color = c.mutedFg, fontSize = 12.sp) },
+                            colors = ListItemDefaults.colors(containerColor = c.background), modifier = Modifier.clickable(enabled = !busy) { text = suggestion; emoji = e; option = duration })
+                    }
+                }
+                HorizontalDivider(color = c.border)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.prs_clear_after), Modifier.weight(1f), color = c.foreground)
+                    Box {
+                        TextButton(onClick = { durationMenu = true }, enabled = !busy) { Text(stringResource(durations.first { it.first == option }.second) + " ▾") }
+                        DropdownMenu(durationMenu, { durationMenu = false }) { durations.forEach { (key, label) -> DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { option = key; durationMenu = false }) } }
+                    }
+                }
+                if (option == "pick") PresenceDateTime(picked, !busy) { picked = it }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.ui_status_starts), Modifier.weight(1f), color = c.foreground)
+                    Box {
+                        TextButton(onClick = { startMenu = true }, enabled = !busy) { Text(stringResource(if (later) R.string.prs_later else R.string.prs_now) + " ▾") }
+                        DropdownMenu(startMenu, { startMenu = false }) {
+                            listOf(false to R.string.prs_now, true to R.string.prs_later).forEach { (value, label) -> DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { later = value; startMenu = false }) }
+                        }
+                    }
+                }
+                if (later) PresenceDateTime(start, !busy) { start = it }
+                Text(stringResource(R.string.ui_status_until, end.atZone(PresenceTimes.zone).format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale)) + " WIB"), color = c.mutedFg, fontSize = 12.sp)
+                error?.let { Text(it, color = c.dangerText) }
+                if (manual != null) TextButton(onClick = { submit(true) }, enabled = !busy) { Text(stringResource(R.string.prs_clear), color = c.dangerText) }
+            }
         }
-    }, confirmButton = { TextButton(onClick = { submit(false) }, enabled = !busy && snapshot.enabled && text.isNotBlank()) { Text(stringResource(R.string.prs_save)) } }, dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } })
+    }
 }
 @Composable private fun PresenceDateTime(value: LocalDateTime, enabled: Boolean, change: (LocalDateTime) -> Unit) {
     val context = LocalContext.current

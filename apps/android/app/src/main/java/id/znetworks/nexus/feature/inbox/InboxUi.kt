@@ -329,15 +329,20 @@ internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelet
  */
 class AnnouncementHost(private val api: InboxApi) {
     val queue = MutableStateFlow<List<Announcement>>(emptyList())
+    val loading = MutableStateFlow(true)
+    private val loads = java.util.concurrent.atomic.AtomicInteger(0)
 
     suspend fun refresh() {
-        val active = runCatching { api.activeAnnouncements() }.getOrNull() ?: return
-        queue.update { current -> (current + active).distinctBy { it.id } }
+        loads.incrementAndGet(); loading.value = true
+        try {
+            val active = runCatching { api.activeAnnouncements() }.getOrNull() ?: return
+            queue.update { current -> (current + active).distinctBy { it.id } }
+        } finally { if (loads.decrementAndGet() == 0) loading.value = false }
     }
 
     suspend fun showOne(id: String) {
         val a = runCatching { api.announcement(id) }.getOrNull() ?: return
-        queue.update { current -> listOf(a) + current.filterNot { it.id == id } }
+        queue.update { current -> if (current.isEmpty()) listOf(a) else listOf(current.first()) + listOf(a).filterNot { it.id == current.first().id } + current.drop(1).filterNot { it.id == id } }
     }
 
     suspend fun dismiss(a: Announcement) {

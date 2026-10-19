@@ -24,6 +24,19 @@ class PresenceStatusTest {
         val p = old.copy(state = "future", reason = "future")
         assertEquals("Kalimat server", p.label("id")); assertEquals("Server label", p.label("future"))
     }
+    @Test fun availabilityRoundTripsAndOlderManualStatusesDefaultToAway() = runTest {
+        val legacy = NexusJson.decodeFromString(ManualPresence.serializer(), """{"id":"m","text":"Test","startsAt":"2026-10-19T00:00:00Z","endsAt":"2026-10-20T00:00:00Z"}""")
+        assertEquals("away", legacy.availability)
+        MockWebServer().use { server -> server.start(); val api = api(server)
+            for (availability in listOf("online", "away", "dnd")) {
+                val status = fresh.copy(state = availability, tone = if (availability == "dnd") "red" else "green", availability = availability, manual = legacy.copy(availability = availability))
+                server.enqueue(MockResponse.Builder().body(NexusJson.encodeToString(PresenceMutation.serializer(), PresenceMutation(status))).build())
+                assertEquals(availability, api.set("Test", null, Instant.parse(legacy.endsAt), availability).status?.manual?.availability)
+                val body = NexusJson.parseToJsonElement(server.takeRequest().body!!.utf8()).jsonObject
+                assertEquals(availability, body["availability"]?.jsonPrimitive?.content)
+            }
+        }
+    }
     @Test fun officeTimesKeepDateOnlyAndUseWibForInstants() {
         val now = Instant.parse("2026-10-19T12:00:00Z")
         assertEquals("20:00", PresenceTimes.until("2026-10-19T13:00:00Z", Locale.UK, now))

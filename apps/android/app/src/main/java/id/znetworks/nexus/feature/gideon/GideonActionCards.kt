@@ -53,13 +53,13 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
 @Composable internal fun GPicker(label: String, value: String?, options: List<Pair<String, String>>, enabled: Boolean = true, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    TextButton(onClick = { query = ""; open = true }, enabled = enabled, contentPadding = PaddingValues(0.dp)) { Text(value ?: label) }
+    TextButton(onClick = { query = ""; open = true }, enabled = enabled, contentPadding = PaddingValues(0.dp)) { Text(value ?: label, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(label) }, text = {
         Column {
             OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.gt_search)) }, singleLine = true)
             Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState())) {
                 options.filter { it.second.contains(query, true) }.forEach { (id, name) ->
-                    Text(name, color = Nx.colors.foreground, modifier = Modifier.fillMaxWidth().clickable { open = false; onPick(id) }.padding(vertical = 15.dp))
+                    Text(name, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Nx.colors.foreground, modifier = Modifier.fillMaxWidth().clickable { open = false; onPick(id) }.padding(vertical = 15.dp))
                 }
             }
         }
@@ -99,9 +99,10 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
             Icon(icon, null, tint = if (danger) c.dangerText else c.foreground, modifier = Modifier.size(20.dp))
             Column {
                 Text(actionLabel(p.action), color = if (danger) c.dangerText else c.foreground, fontWeight = FontWeight.SemiBold)
-                Text(p.taskDelete?.title ?: p.summary.orEmpty(), color = c.foreground, fontSize = 13.sp, textDecoration = if (deleting && p.status == "APPLIED") TextDecoration.LineThrough else null)
+                Text(proposalSummary(p) ?: p.taskDelete?.title.orEmpty(), color = c.foreground, fontSize = 13.sp, textDecoration = if (deleting && p.status == "APPLIED") TextDecoration.LineThrough else null)
             }
         }
+        ProposalNoChange(p)
         if (p.isPending) Text(stringResource(R.string.gc_waiting_approval), fontSize = 12.sp, color = c.warningFg)
         if (deleting && p.taskDelete != null) {
             val d = p.taskDelete
@@ -169,6 +170,8 @@ internal fun actionDay(value: String?, day: String?, locale: java.util.Locale): 
     }
     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp)).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.gt_create_task), fontWeight = FontWeight.SemiBold, color = c.foreground)
+        proposalSummary(p)?.let { Text(it, color = c.foreground, fontSize = 13.sp) }
+        ProposalNoChange(p)
         Text(stringResource(R.string.gc_waiting_approval), color = c.warningFg, fontSize = 12.sp)
         GProperty(stringResource(R.string.gt_title)) { Text(target.title, color = c.foreground, fontSize = 13.sp) }
         GProperty(stringResource(R.string.gt_project)) { GPicker(stringResource(R.string.gt_choose_project), target.projects.firstOrNull { it.id == project }?.name, target.projects.map { it.id to it.name }, !deciding) { if (project != it) { targets = null; project = it } } }

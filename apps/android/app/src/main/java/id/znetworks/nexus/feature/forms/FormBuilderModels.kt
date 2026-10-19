@@ -24,6 +24,7 @@ private fun JsonElement?.arr(): JsonArray? = this as? JsonArray
 
 /** One row of GET /api/forms?projectId= — the whole form (never GET /api/forms/{id}, which carries every submission). */
 data class BuilderForm(val raw: JsonObject) {
+    val version: Int get() = (raw["version"] as? JsonPrimitive)?.intOrNull ?: 0
     val id: String get() = raw["id"].text().orEmpty()
     val name: String get() = raw["name"].text().orEmpty()
     val description: String? get() = raw["description"].text()

@@ -15,7 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 
-data class MeetingState(val meeting: Meeting? = null, val loading: Boolean = true, val saving: Boolean = false, val busy: Boolean = false, val error: Int? = null, val notice: Int? = null, val deleted: Boolean = false, val dirty: Boolean = false)
+data class MeetingState(val meeting: Meeting? = null, val loading: Boolean = true, val saving: Boolean = false, val busy: Boolean = false, val error: Int? = null, val notice: Int? = null, val deleted: Boolean = false, val dirty: Boolean = false, val missing: Boolean = false, val terminal: Boolean = false)
 
 internal fun meetingProblem(code: String?): Int = when (code?.lowercase()) {
     "unsupported_type" -> R.string.meet_unsupported_type
@@ -52,10 +52,18 @@ internal fun meetingMerge(meeting: Meeting, fields: Map<String, JsonElement>): M
     return if (merged.projectId != meeting.projectId) merged.copy(project = null, members = emptyList()) else merged
 }
 
+/** Null asks for the full queue/status; positive same-version progress can update locally. */
+internal fun meetingReading(current: Meeting, event: MeetingChanged): Meeting? = when {
+    event.meetingId != current.id || (event.version != null && event.version < current.version) -> current
+    event.version == current.version && event.status == current.status && event.progress != null && event.progress > 0 -> current.copy(progress = event.progress)
+    else -> null
+}
+
 /** The server omits unfinished blank task rows; keep the person's draft until they finish editing it. */
 internal fun meetingAcknowledge(server: Meeting, submitted: Map<String, JsonElement>, pending: Map<String, JsonElement>, previous: Meeting? = null): Meeting {
     val base = if (server.members == null && server.projectId == previous?.projectId) server.copy(members = previous?.members) else server
-    val merged = meetingMerge(base, submitted + pending)
+    val fields = submitted + pending
+    val merged = meetingMerge(base, if (server.status in setOf("APPLIED", "APPLYING")) fields - "speakers" - "speakersMap" else fields)
     val members = base.members?.map { it.id }?.toSet() ?: return merged
     return merged.copy(proposals = merged.proposals.map { p -> p.copy(assigneeIds = p.assigneeIds.filter { it in members }) })
 }
@@ -71,26 +79,34 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
     private val saveLock = Mutex()
     private var delaySave: Job? = null
     private var version = 0
+    private var refreshGeneration = 0
+    private var inFlightFields: Map<String, JsonElement> = emptyMap()
     fun open(value: String) {
         if (id == value) return
         id = value; viewModelScope.launch { refresh() }
     }
     suspend fun refresh() {
+        if (mutable.value.missing || mutable.value.terminal) return
         val key = id ?: return
+        val generation = ++refreshGeneration
         try {
             val fresh = api.get(key)
-            if (!mutable.value.saving && pending.isEmpty() && (mutable.value.meeting?.version ?: -1) < fresh.version) { version = fresh.version; mutable.update { it.copy(meeting = fresh, loading = false, error = null) } }
-            else if (!mutable.value.saving && fresh.version == mutable.value.meeting?.version && mutable.value.meeting?.members == null && fresh.members != null)
-                mutable.update { it.copy(meeting = it.meeting?.copy(members = fresh.members)) }
+            if (generation != refreshGeneration || container.sessionStore.current?.userId != owner || fresh.version < (mutable.value.meeting?.version ?: -1)) return
+            if (fresh.status in setOf("APPLIED", "APPLYING")) { pending.remove("speakers"); pending.remove("speakersMap") }
+            version = fresh.version
+            mutable.update { it.copy(meeting = meetingAcknowledge(fresh, inFlightFields, pending, it.meeting), loading = false, error = null, dirty = pending.isNotEmpty() || inFlightFields.isNotEmpty()) }
         } catch (e: ApiError.Http) {
-            if (e.status == 404) mutable.update { it.copy(deleted = true, notice = R.string.meet_deleted, loading = false) }
-            else mutable.update { it.copy(error = R.string.meet_load_failed, loading = false) }
+            if (generation != refreshGeneration) return
+            if (e.status == 404) deleted()
+            else mutable.update { it.copy(error = R.string.meet_load_failed, loading = false, terminal = e.status in 400..499) }
         } catch (_: ApiError) { mutable.update { it.copy(error = R.string.meet_load_failed, loading = false) } }
     }
     fun change(fields: JsonObject) {
         val current = mutable.value.meeting ?: return
-        pending.putAll(fields)
-        mutable.update { it.copy(meeting = meetingMerge(current, fields), dirty = true, error = null) }
+        val allowed = if (current.status in setOf("APPLIED", "APPLYING")) JsonObject(fields - "speakers" - "speakersMap") else fields
+        if (allowed.isEmpty()) return
+        pending.putAll(allowed)
+        mutable.update { it.copy(meeting = meetingMerge(current, allowed), dirty = true, error = null) }
         delaySave?.cancel()
         delaySave = viewModelScope.launch { delay(650); viewModelScope.launch { save() } }
     }
@@ -102,16 +118,23 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
         try {
             while (pending.isNotEmpty()) {
                 val fields = pending.toMap(); pending.clear()
+                inFlightFields = fields
                 try {
                     val response = api.patch(key, version, JsonObject(fields))
                     val fresh = if ("projectId" in fields) api.get(key) else response
+                    if (fresh.version >= (mutable.value.meeting?.version ?: -1)) {
                     version = fresh.version
                     mutable.update { it.copy(meeting = meetingAcknowledge(fresh, fields, pending, it.meeting), dirty = pending.isNotEmpty(), error = null,
                         notice = if ("speakers" in fields && fresh.status == "READY") R.string.meet_speakers_saved else it.notice) }
+                    }
                 } catch (e: CancellationException) { requeue(fields); throw e
                 } catch (e: ApiError.Http) {
                     val remote = e.body?.get("meeting")?.let { runCatching { NexusJson.decodeFromJsonElement(Meeting.serializer(), it) }.getOrNull() }
-                    if (e.code == "VERSION_CONFLICT" && remote != null) {
+                    if (e.status == 404) { deleted()
+                    } else if (e.code == "ALREADY_APPLIED" && remote != null) {
+                        pending.clear(); version = remote.version
+                        mutable.update { it.copy(meeting = remote, notice = R.string.qa_meeting_speakers_applied, dirty = false, error = null) }
+                    } else if (e.code == "VERSION_CONFLICT" && remote != null) {
                         val complete = runCatching { api.get(key) }.getOrElse { if (remote.projectId == mutable.value.meeting?.projectId) remote.copy(members = mutable.value.meeting?.members) else remote }
                         pending.clear(); version = complete.version
                         mutable.update { it.copy(meeting = complete, notice = R.string.meet_conflict, dirty = false, error = null) }
@@ -120,7 +143,7 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
                 } catch (_: ApiError) { requeue(fields); mutable.update { it.copy(error = R.string.meet_save_failed, dirty = true) }; return@withLock false }
             }
             true
-        } finally { mutable.update { it.copy(saving = false) } }
+        } finally { inFlightFields = emptyMap(); mutable.update { it.copy(saving = false, dirty = pending.isNotEmpty()) } }
     }
     private fun requeue(fields: Map<String, JsonElement>) { val newer = pending.toMap(); pending.clear(); pending.putAll(fields); pending.putAll(newer) }
     fun action(kind: String, lang: String = "en") {
@@ -153,7 +176,14 @@ class MeetingEditor(application: Application) : AndroidViewModel(application) {
             finally { mutable.update { it.copy(busy = false) } }
         }
     }
-    fun deleted() { pending.clear(); mutable.update { it.copy(deleted = true, notice = R.string.meet_deleted) } }
+    fun deleted() { pending.clear(); mutable.update { it.copy(meeting = null, missing = true, terminal = true, loading = false, dirty = false, error = null) } }
+    fun reading(event: MeetingChanged): Boolean {
+        if (event.meetingId != id || mutable.value.missing) return false
+        if (event.deleted) { deleted(); return false }
+        val current = mutable.value.meeting ?: return true
+        meetingReading(current, event)?.let { fresh -> mutable.update { it.copy(meeting = fresh) }; return false }
+        return true // Progress zero carries a new queue position: read the complete queue.
+    }
     fun noticeSeen() { mutable.update { it.copy(notice = null) } }
     override fun onCleared() {
         delaySave?.cancel()

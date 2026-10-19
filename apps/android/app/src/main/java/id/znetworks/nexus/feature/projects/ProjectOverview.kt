@@ -317,7 +317,7 @@ private fun TeamCard(m: OverviewMetrics, onDrill: (OverviewDrill) -> Unit) {
                 Avatar(p.name, p.avatar, 28.dp, userId = p.id); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(p.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Text(p.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         if (p.lead) Text(stringResource(R.string.ov_lead), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.violetText,
                             modifier = Modifier.padding(start = 6.dp).background(c.violet.copy(alpha = 0.1f), CircleShape).padding(horizontal = 6.dp))
                     }
@@ -330,7 +330,7 @@ private fun TeamCard(m: OverviewMetrics, onDrill: (OverviewDrill) -> Unit) {
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(28.dp).border(2.dp, c.border, CircleShape)); Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.ov_unassigned), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
+                Text(stringResource(R.string.ov_unassigned), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 LoadBar(m.unassigned.toFloat() / max, c.mutedFg.copy(alpha = 0.4f))
             }
             Nums(m.unassigned, null, null)

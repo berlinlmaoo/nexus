@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.feature.gideon.GStep
+import id.znetworks.nexus.feature.gideon.stepText
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -111,7 +114,9 @@ private fun RunDialog(api: GideonInsightsApi, id: String, close: () -> Unit) {
                 RunSummary(d.objectAt("run"))
                 if (d.flag("stepsHidden")) Text(stringResource(R.string.gi_hidden_steps))
                 else InsightPrivacy.steps(d).forEach { step ->
-                    Text(step.text("label").ifEmpty { step.text("tool") })
+                    val tool = step.text("tool")
+                    val label = step.text("label").ifEmpty { tool }.let { if (Regex("^[a-z][a-z0-9_]*$").matches(it)) it.replace('_', ' ').replaceFirstChar(Char::titlecase) else it }
+                    Text(stepText(GStep(tool = tool, label = label)))
                     if (step.text("error").isNotEmpty()) Text(step.text("error"), color = MaterialTheme.colorScheme.error)
                 }
             }
