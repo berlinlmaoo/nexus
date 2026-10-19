@@ -191,7 +191,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                         // Who made it, on every task (web c1809a0, iOS c61edb6), and whether they have since left.
                         t.creator?.let { u -> CreatedBy(u) }
                         t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError, s.access.canManage, s.access.canEdit) }
-                        ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }
+                        CommentsCard(t, vm, s.access.canComment)
                         ReadOnly(ro) { DescriptionCard(t, vm) }
                         SubtasksCard(t, vm, onOpenTask)
                         FilesCard(s, vm)
@@ -750,7 +750,7 @@ private fun TimeCard(s: TaskDetailState, vm: TaskDetailViewModel) {
 }
 
 @Composable
-private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel) {
+private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel, canComment: Boolean) {
     val c = Nx.colors
     var draft by rememberSaveable(t.id) { mutableStateOf("") }
     Card {
@@ -773,7 +773,7 @@ private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel) {
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (canComment) Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(draft, { draft = it }, colors = pageInputColors(), placeholder = { Text(stringResource(R.string.td_write_comment)) }, maxLines = 5,
                 shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.comment(draft) { draft = "" } }, enabled = draft.isNotBlank()) {

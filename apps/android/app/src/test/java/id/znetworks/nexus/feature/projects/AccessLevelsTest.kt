@@ -44,7 +44,10 @@ class AccessLevelsTest {
         assertTrue(settings.contains("val ro = !access.canManage") && settings.contains("R.string.acc_settings_readonly"))
         assertTrue(settings.contains("vm.setAccess(uid, l)") && settings.contains("R.string.acc_remove_q"))
         val task = src("feature/tasks/TaskDetailScreen.kt")
-        assertTrue(task.contains("ReadOnly(ro) { DescriptionCard(t, vm) }") && task.contains("ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }"))
+        assertTrue(task.contains("ReadOnly(ro) { DescriptionCard(t, vm) }"))
+        assertTrue(task.contains("CommentsCard(t, vm, s.access.canComment)"))
+        assertTrue(task.contains("if (canComment) Row(verticalAlignment = Alignment.CenterVertically)"))
+        assertTrue(src("feature/tasks/TaskDetailViewModel.kt").contains("if (!_state.value.access.canComment) return@act"))
         assertTrue(src("feature/chat/ChatThreadScreen.kt").contains("s.conversation?.canPost == false"))
         // Add task, inline New task and bulk edits need Can edit.
         val page = src("feature/projects/ProjectPage.kt")

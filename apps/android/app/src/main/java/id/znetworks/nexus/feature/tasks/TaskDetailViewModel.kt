@@ -160,7 +160,11 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         act(R.string.td_subtask_failed) { projects.createTask(pid, lane, title, null, null, parentId = t.id); onDone() }
     }
 
-    fun comment(text: String, onDone: () -> Unit) = act(R.string.td_comment_failed) { api.comment(taskId, text); onDone() }
+    fun comment(text: String, onDone: () -> Unit) = act(R.string.td_comment_failed) {
+        if (!_state.value.access.canComment) return@act
+        api.comment(taskId, text)
+        onDone()
+    }
 
     fun logTime(minutes: Int, onDone: () -> Unit) = act(R.string.td_update_failed) { api.logTime(taskId, minutes, null); onDone() }
 
