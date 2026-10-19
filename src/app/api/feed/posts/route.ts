@@ -137,6 +137,12 @@ export async function POST(request: NextRequest) {
 
     // ── One transaction: Post + images + mentions ──
     const post = await prisma.$transaction(async (tx) => {
+      // The gap and hourly checks above are a fast path; parallel posts from one person all passed them
+      // (QA final 19 Oct 2026). One lock per author, then the same checks again before the insert.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`feed-post|${me}`})::int8)`
+      const last = await tx.post.findFirst({ where: { authorId: me }, orderBy: { createdAt: "desc" }, select: { createdAt: true } })
+      if (last && Date.now() - last.createdAt.getTime() < RATE_MIN_GAP_MS) return null
+      if ((await tx.post.count({ where: { authorId: me, createdAt: { gte: new Date(Date.now() - 3600_000) } } })) >= RATE_HOURLY_MAX) return null
       const created = await tx.post.create({
         data: {
           text,
@@ -148,6 +154,7 @@ export async function POST(request: NextRequest) {
       })
       return created
     })
+    if (!post) return NextResponse.json({ error: "Sabar dikit, jeda 20 detik antar post ya 🙏" }, { status: 429 })
 
     logAudit({ action: "create", entityType: "post", entityId: post.id, entityName: text.slice(0, 80), userId: me, request, metadata: { images: imageData.length, mentions: validMentions.length } })
 
