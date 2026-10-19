@@ -102,8 +102,9 @@ describe('always-card writes (send_message)', () => {
   it('never runs straight from the model (no GIDEON run)', async () => {
     w.noRun = true
     const res = await tool('send_message', { with: 'Rina', text: 'hi' })
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/confirm it on a card/)
+    // The call still names a run that is gone, so the privacy gate refuses the write before the card path.
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/no longer active/)
     expect(w.calls).toHaveLength(0)
   })
 
