@@ -85,6 +85,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "list_custom_fields": return t("Reading the project's fields");
     case "get_task": return a ? t("Reading task {name}", { name: a }) : t("Reading a task");
     case "search_docs": return a ? t("Searching docs for “{q}”", { q: a }) : t("Searching docs");
+    case "list_docs": return a ? t("Listing pages in {name}", { name: a }) : t("Listing pages");
     case "get_doc": return a ? t("Reading doc {name}", { name: a }) : t("Reading a doc");
     case "create_task": return a ? t("Creating task {name}", { name: a }) : t("Creating a task");
     case "update_task": return a ? t("Updating task {name}", { name: a }) : t("Updating a task");
