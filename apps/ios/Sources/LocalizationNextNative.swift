@@ -2,6 +2,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "All categories": "Semua kategori",
         "Names": "Nama",
         "No %@ chats yet": "Belum ada chat %1$@",
         "Status emoji": "Emoji status",
