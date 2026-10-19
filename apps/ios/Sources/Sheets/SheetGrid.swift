@@ -1157,6 +1157,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     }
 
     private func configure(_ cell: SheetGridCell, _ p: SheetPos) {
+        cell.accessibilityIdentifier = "sheet.cell.\(p.r).\(p.c)"
         let s = spill(row: p.r)
         var ext = SheetSpill.Extent()
         var hide = false
