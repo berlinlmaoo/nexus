@@ -111,6 +111,7 @@ struct LegalParagraphEditor: View {
                 .frame(maxWidth: paper ? editor.page.width * 4 / 3 * scale : .infinity, alignment: .leading)
                 .background(Color.white)
                 .overlay(Rectangle().strokeBorder(Color.black.opacity(0.1)))
+                .environment(\.colorScheme, .light)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -243,18 +244,20 @@ private struct LegalParagraphText: UIViewRepresentable {
         style.lineHeightMultiple = (l?.lineHeight ?? 1) * 1.15
         style.tabStops = [NSTextTab(textAlignment: .left, location: max(style.headIndent, font.pointSize * 1.5))]
         let base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black, .paragraphStyle: style]
+        // The document stays white in both appearances; diff ink must use the paper palette too.
+        let paperTraits = UITraitCollection(userInterfaceStyle: .light)
         let result = NSMutableAttributedString(string: "")
         if let marker = l?.marker { result.append(NSAttributedString(string: marker + "\t", attributes: base)) }
         if !editing && text != paragraph.text {
             for segment in LegalText.diffWords(paragraph.text, text) {
                 var attributes = base
                 if segment.type == "del" {
-                    attributes[.foregroundColor] = UIColor(ChipTone.danger.fg)
-                    attributes[.backgroundColor] = UIColor(NX.danger.opacity(0.14))
+                    attributes[.foregroundColor] = UIColor(ChipTone.danger.fg).resolvedColor(with: paperTraits)
+                    attributes[.backgroundColor] = UIColor(NX.danger.opacity(0.14)).resolvedColor(with: paperTraits)
                     attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
                 } else if segment.type == "ins" {
-                    attributes[.foregroundColor] = UIColor(ChipTone.success.fg)
-                    attributes[.backgroundColor] = UIColor(NX.success.opacity(0.16))
+                    attributes[.foregroundColor] = UIColor(ChipTone.success.fg).resolvedColor(with: paperTraits)
+                    attributes[.backgroundColor] = UIColor(NX.success.opacity(0.16)).resolvedColor(with: paperTraits)
                 }
                 result.append(NSAttributedString(string: segment.text, attributes: attributes))
             }

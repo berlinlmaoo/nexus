@@ -1873,7 +1873,7 @@ struct ProjectChatTab: View {
         .onReceive(NotificationCenter.default.publisher(for: .nexusWorkspaceChanged)) { _ in Task { await loadRoom() } }
     }
     private func loadRoom() async {
-            loading = true; roomFailure = nil
+            loading = room == nil; roomFailure = nil
             do {
                 let convos = try await APIClient.shared.conversations()
                 room = convos.first { $0.type == "PROJECT" && $0.projectId == projectId }
