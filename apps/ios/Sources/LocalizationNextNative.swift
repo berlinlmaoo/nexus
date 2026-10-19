@@ -337,6 +337,7 @@ extension AppLanguage {
         "Speakers": "Pembicara",
         "%@ voices": "%@ suara",
         "GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.": "GIDEON membedakan suara dan membaca nama dari perkenalan. Suara hanya dipakai untuk memberi label rekaman ini.",
+        "Locked: these minutes were saved to the project, so the names stay as they are.": "Terkunci: notulen ini sudah diterapkan ke project, jadi nama tetap seperti ini.",
         "Speaker %@": "Pembicara %@",
         "Who is this?": "Siapa ini?",
         "Not named": "Belum diberi nama",
