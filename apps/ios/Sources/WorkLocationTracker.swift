@@ -848,7 +848,8 @@ struct WorkLocationPromptHost: View {
         Color.clear
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
-            .sheet(isPresented: $prompt.isPresented) {
+            .onChange(of: prompt.isPresented, initial: true) { _, due in StartupModalQueue.shared.update(.location, pending: due) }
+            .sheet(isPresented: Binding(get: { prompt.isPresented && StartupModalQueue.shared.owner == .location }, set: { value in if !value { prompt.isPresented = false; StartupModalQueue.shared.finish(.location) } })) {
                 WorkLocationPromptSheet(mode: prompt.mode, required: prompt.required)
                     .presentationDetents([.medium, .large])
                     .interactiveDismissDisabled()

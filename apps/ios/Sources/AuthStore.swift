@@ -158,6 +158,7 @@ final class AuthStore {
     /// queued check-ins, which are kept for the same person's next sign-in (`holdForSignIn`) and
     /// deleted if somebody else signs in instead (`persist` → `keepOnly`).
     func logout() {
+        StartupModalQueue.shared.reset()
         AttendanceQueue.shared.holdForSignIn(owner: session?.userId)
         if let session {
             Task { await NotificationManager.shared.unregister(session: session) }

@@ -129,6 +129,7 @@ struct NexusApp: App {
                 RealtimeClient.shared.reconcile(session: auth.readySession, phase: phase)
             }
             .onChange(of: auth.session?.token, initial: true) { _, _ in
+                if auth.session == nil { StartupModalQueue.shared.update(.announcement, pending: false) }
                 RealtimeClient.shared.reconcile(session: auth.readySession, phase: scenePhase)
             }
             .onChange(of: auth.session?.userId) { _, _ in

@@ -102,3 +102,5 @@ Path(sys.argv[1],'form-wire.swift').write_text(pure+'\nstruct FormLink { static 
 PYFORM
 swiftc "$NATIVE_CHECK_TMP/form-wire.swift" Sources/FormCoedit.swift Tests/FormCoedit/main.swift -o "$NATIVE_CHECK_TMP/form-coedit"
 "$NATIVE_CHECK_TMP/form-coedit"
+swiftc Sources/StartupModalQueue.swift Tests/StartupModalQueue/main.swift -o "$NATIVE_CHECK_TMP/startup-modals"
+"$NATIVE_CHECK_TMP/startup-modals"
