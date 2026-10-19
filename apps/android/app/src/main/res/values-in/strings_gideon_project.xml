@@ -32,4 +32,5 @@
     <string name="gpt_language_en">English</string>
     <string name="gpt_language_id">Bahasa Indonesia</string>
     <string name="gpt_review_gideon">Tinjau usulan di GIDEON</string>
+    <string name="gpt_edit_schedule">Edit jadwal</string>
 </resources>

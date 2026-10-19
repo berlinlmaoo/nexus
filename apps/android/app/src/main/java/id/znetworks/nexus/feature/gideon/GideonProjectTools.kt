@@ -97,7 +97,7 @@ private fun ProjectToolsDialog(project: String, kind: String, close: () -> Unit)
                             if (row.text("lastStatus").isNotBlank()) Text(scheduleStatus(row.text("lastStatus")) + " / " + id.znetworks.nexus.feature.chat.chatTime(row.text("lastRunAt")))
                             Text(row.objectAt("runsAs").text("name"))
                             if (d.flag("canManage")) {
-                                TextButton(onClick = { editSchedule = row }, enabled = manage) { Text(stringResource(R.string.ab_edit)) }
+                                TextButton(onClick = { editSchedule = row }, enabled = manage) { Text(stringResource(R.string.gpt_edit_schedule)) }
                                 TextButton(onClick = { perform { api.runSchedule(row.text("id")); message = ctx.getString(R.string.gpt_digest_started) } }, enabled = manage && d.flag("configured")) { Text(stringResource(R.string.au_run_now)) }
                                 TextButton(onClick = { confirmation = ctx.getString(R.string.gpt_delete_schedule) to { api.deleteSchedule(row.text("id")); Unit } }, enabled = manage) { Text(stringResource(R.string.au_delete)) }
                             }
