@@ -1,8 +1,8 @@
 # NEXUS Android: status
 
-## Device revisions — 19 Oct 2026
+## Device revisions — 19–20 Oct 2026
 
-`feat/android-rev-19oct` starts from merged DEV `603f9dd7a`; final app source `998d7ac4`. R-2–R-7 and the appended R-11/N-1b native changes are implemented; R-1 was already correct, and R-8 was profiled without an unjustified Android scroll rewrite. **931 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** 94 curated EN/ID light/dark captures include real DEV upload/transcription, partial-upload cancellation, status-only save/readback, Memory submit/blur and background/resume checks. Owned fixtures are removed, original preferences restored, temporary helper uninstalled, and visible Pixel_7 / host GPU is stopped. Version stays 0.1.6 / 13; no push or publication. R-4's daily error total needs server data; R-9/R-10 are absent from the brief; physical frame-rate acceptance remains open. [Report](REV-19OCT.md) · [evidence](REV-19OCT-VERIFICATION.json). Bundle: `C:/Users/Berlin/android-rev.bundle`.
+`feat/android-rev-19oct` retains DEV `603f9dd7a`; final application source `e932b782`. Supplied R-1–R-8, R-11–R-18 and R-20 changes are implemented or retained where correct. **937 JVM tests, zero failures/errors/skips; testDebugUnitTest + assembleDebug PASS.** Visible Pixel_7 / host-GPU native verification includes task/attendance refresh, soft controls, meeting review, composer placement, violet selection, and Pipeline masking with real private-fixture edits, export, updates and reset checks. 340 curated Round 2 capture files supplement the original 94. Owned fixtures are removed, exact preferences and Indonesian/dark UI restored, temporary helper uninstalled, and assigned emulator stopped. Version stays 0.1.6 / 13; no push or publication. R-4 still needs the server's daily-error aggregate; R-8 physical frame-rate acceptance is open; R-9/R-10/R-19 were absent. [Report](REV-19OCT.md) · [screen pairs](REV-19OCT-SCREEN-SWEEP.md) · [Round 2 evidence](REV-19OCT-ROUND2-VERIFICATION.json). Bundle: `C:/Users/Berlin/android-rev.bundle`.
 
 ## Phase 2 decisions - 19 Oct 2026
 
