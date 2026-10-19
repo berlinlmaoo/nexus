@@ -65,6 +65,11 @@ export type GideonProposal = {
   id: string;
   action: "create_task" | "update_task" | "add_task_comment" | "create_document" | string;
   summary: string;
+  /** QA final 19 Oct 2026 (E-6): the summary in each language; `summary` is the server's pick. */
+  summaryEn?: string;
+  summaryId?: string;
+  /** D-10: every before → after row had before = after (left out of `diff`): Apply changes nothing. */
+  noChange?: boolean;
   diff: GideonDiffRow[];
   status: "PENDING" | "APPLYING" | "APPLIED" | "DISCARDED" | "FAILED" | string;
   projectId?: string | null;
@@ -492,4 +497,9 @@ export function useGideonLauncher(): LauncherState {
     () => launcher,
     () => launcher,
   );
+}
+
+/** A card's summary line in the interface language (E-6); older servers only send `summary`. */
+export function proposalSummary(p: Pick<GideonProposal, "summary" | "summaryEn" | "summaryId">, lang: string): string {
+  return (lang === "id" ? p.summaryId : p.summaryEn) || p.summary;
 }

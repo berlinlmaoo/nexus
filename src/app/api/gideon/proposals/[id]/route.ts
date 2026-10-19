@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { cardFromResult, proposalView } from "@/lib/gideon-runs"
+import { cardFromResult, proposalLang, proposalView } from "@/lib/gideon-runs"
 import { markAiFill } from "@/lib/gideon-autofill"
 import {
   BOOK_ROOM_LATEST_APP, CANCEL_BOOKING_LATEST_APP, MOVE_BOOKING_LATEST_APP, parseBookRoomChoice, parseCancelChoice,
@@ -45,6 +45,7 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const lang = await proposalLang(session.user.id, req.headers)
   const { id } = await params
   const body = (await req.json().catch(() => ({}))) as { decision?: string; booking?: unknown; confirm?: unknown; task?: unknown }
   const decision = body.decision === "apply" ? "apply" : body.decision === "discard" ? "discard" : null
@@ -52,16 +53,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const proposal = await prisma.gideonProposal.findUnique({ where: { id } })
   if (!proposal || proposal.userId !== session.user.id) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (proposal.status !== "PENDING") return NextResponse.json({ error: "Already decided", proposal: proposalView(proposal) }, { status: 409 })
+  if (proposal.status !== "PENDING") return NextResponse.json({ error: "Already decided", proposal: proposalView(proposal, lang) }, { status: 409 })
 
   if (decision === "discard") {
     const updated = await prisma.gideonProposal.update({ where: { id }, data: { status: "DISCARDED", decidedAt: new Date() } })
-    return NextResponse.json({ proposal: proposalView(updated) })
+    return NextResponse.json({ proposal: proposalView(updated, lang) })
   }
 
   if (Date.now() - proposal.createdAt.getTime() > MAX_AGE_MS) {
     const updated = await prisma.gideonProposal.update({ where: { id }, data: { status: "FAILED", error: "Expired: ask GIDEON again.", decidedAt: new Date() } })
-    return NextResponse.json({ error: "Expired", proposal: proposalView(updated) }, { status: 410 })
+    return NextResponse.json({ error: "Expired", proposal: proposalView(updated, lang) }, { status: 410 })
   }
 
   if (proposal.action === "move_room_booking" || proposal.action === "cancel_room_booking") {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const choice = isMove ? parseMoveChoice(body.booking, bookingId) : null
     if (!bookingId || (isMove ? !choice : !parseCancelChoice(body.booking, bookingId))) {
       const latest = isMove ? MOVE_BOOKING_LATEST_APP : CANCEL_BOOKING_LATEST_APP
-      const view = { ...proposalView(proposal), status: "FAILED", error: latest }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: latest }
       return NextResponse.json({ error: latest, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
     if (choice) {
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const stored = (proposal.input as Record<string, unknown>) ?? {}
     const confirm = body.confirm && typeof body.confirm === "object" ? (body.confirm as Record<string, unknown>) : null
     if (!stored.taskId || confirm?.taskId !== stored.taskId) {
-      const view = { ...proposalView(proposal), status: "FAILED", error: DELETE_TASK_LATEST_APP }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: DELETE_TASK_LATEST_APP }
       return NextResponse.json({ error: DELETE_TASK_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
   }
@@ -109,20 +110,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const t = body.task && typeof body.task === "object" ? (body.task as Record<string, unknown>) : null
     const projectId = typeof t?.projectId === "string" && t.projectId ? t.projectId : null
     if (!projectId) {
-      const view = { ...proposalView(proposal), status: "FAILED", error: CREATE_TASK_LATEST_APP }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: CREATE_TASK_LATEST_APP }
       return NextResponse.json({ error: CREATE_TASK_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
     const options = await taskTargetOptions(session.user.id, projectId)
     if (!options) {
-      const view = { ...proposalView(proposal), error: NOT_EDITABLE }
+      const view = { ...proposalView(proposal, lang), error: NOT_EDITABLE }
       return NextResponse.json({ error: NOT_EDITABLE, code: "NEEDS_EDIT_ACCESS", proposal: view }, { status: 403 })
     }
     const taskListId = typeof t?.taskListId === "string" && t.taskListId ? t.taskListId : null
     const section = taskListId ? options.sections.find((x) => x.id === taskListId) : null
-    if (taskListId && !section) return NextResponse.json({ error: "That column is not in this project · Kolom itu bukan milik project ini", code: "BAD_SECTION", proposal: proposalView(proposal) }, { status: 400 })
+    if (taskListId && !section) return NextResponse.json({ error: "That column is not in this project · Kolom itu bukan milik project ini", code: "BAD_SECTION", proposal: proposalView(proposal, lang) }, { status: 400 })
     const assigneeIds = Array.isArray(t?.assigneeIds) ? Array.from(new Set((t.assigneeIds as unknown[]).filter((x): x is string => typeof x === "string"))) : []
     const memberIds = new Set(options.members.map((m) => m.id))
-    if (assigneeIds.some((a) => !memberIds.has(a))) return NextResponse.json({ error: "A PIC is not a member of this project · Ada PIC yang bukan anggota project ini", code: "BAD_ASSIGNEE", proposal: proposalView(proposal) }, { status: 400 })
+    if (assigneeIds.some((a) => !memberIds.has(a))) return NextResponse.json({ error: "A PIC is not a member of this project · Ada PIC yang bukan anggota project ini", code: "BAD_ASSIGNEE", proposal: proposalView(proposal, lang) }, { status: 400 })
     const dueRaw = t?.dueDate
     const dueDate = dueRaw === null || dueRaw === "" ? null : typeof dueRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dueRaw) ? dueRaw : undefined
     const target = (stored.taskTarget as Record<string, unknown> | undefined) ?? {}
@@ -148,11 +149,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (isExtraAction(proposal.action)) {
     const confirm = body.confirm && typeof body.confirm === "object" ? (body.confirm as Record<string, unknown>) : null
     if (confirm?.proposalId !== id) {
-      const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_LATEST_APP }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: EXTRA_LATEST_APP }
       return NextResponse.json({ error: EXTRA_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
     if (!(await extraToolEnabled(proposal.action))) {
-      const view = { ...proposalView(proposal), status: "FAILED", error: EXTRA_DISABLED_TEXT }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: EXTRA_DISABLED_TEXT }
       return NextResponse.json({ error: EXTRA_DISABLED_TEXT, code: "TOOL_DISABLED", proposal: view }, { status: 409 })
     }
   }
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const choice = parseBookRoomChoice(body.booking)
     if (!choice) {
       // Not stored: the proposal stays PENDING for the web or an app that has the picker.
-      const view = { ...proposalView(proposal), status: "FAILED", error: BOOK_ROOM_LATEST_APP }
+      const view = { ...proposalView(proposal, lang), status: "FAILED", error: BOOK_ROOM_LATEST_APP }
       return NextResponse.json({ error: BOOK_ROOM_LATEST_APP, code: "NEEDS_LATEST_APP", proposal: view }, { status: 409 })
     }
     // The chosen room and slot become the proposal's input, so what runs is exactly what the card showed.
@@ -195,7 +196,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? { status: "APPLIED", decidedAt: new Date(), result: { card: null, link: outcome.link ?? null, note: outcome.message ?? null, ...(outcome.result ?? {}) } as object, error: null }
         : { status: "FAILED", decidedAt: new Date(), error: (outcome.message || "Failed").slice(0, 500) },
     })
-    return NextResponse.json({ proposal: proposalView(updated) }, { status: outcome.ok ? 200 : 422 })
+    return NextResponse.json({ proposal: proposalView(updated, lang) }, { status: outcome.ok ? 200 : 422 })
   }
 
   const token = process.env.NEXUS_GIDEON_SERVICE_TOKEN
@@ -232,7 +233,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // the reason so another room or time can be picked.
   if (!ok && (proposal.action === "book_room" || proposal.action === "move_room_booking") && code === "ROOM_TAKEN") {
     const reopened = await prisma.gideonProposal.update({ where: { id }, data: { status: "PENDING", error: (message || "Taken").slice(0, 500) } })
-    return NextResponse.json({ error: message, code, freeSlots, proposal: proposalView(reopened) }, { status: 409 })
+    return NextResponse.json({ error: message, code, freeSlots, proposal: proposalView(reopened, lang) }, { status: 409 })
   }
 
   const card = ok ? cardFromResult(proposal.action, data) : null
@@ -250,7 +251,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   // No separate audit row: the action itself writes its ActivityLog (GIDEON_TASK_CREATED / _UPDATED /
   // GIDEON_COMMENT_ADDED) exactly as when GIDEON writes without asking.
-  return NextResponse.json({ proposal: proposalView(updated) }, { status: ok ? 200 : 422 })
+  return NextResponse.json({ proposal: proposalView(updated, lang) }, { status: ok ? 200 : 422 })
 }
 
 /**

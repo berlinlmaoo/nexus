@@ -148,7 +148,14 @@ export function buildGideonPrompt(
   const standing = parts.standingRules === false ? [] : standingInstructions(prior)
   const standingSet = new Set(standing)
   const pinned = standingBlock(standing, name)
-  const tail = (convo: string) => `${head}\n\n${convo}${pinned ? `${pinned}\n\n` : ""}Pesan terbaru dari ${name}: ${last.slice(0, 6000)}`
+  // With standing rules, one short check follows the question (recency: Aphrodite still prepared a Friday card in 2 of
+  // 18 long chats with the block alone, calling the write tool before reading the block, then saying it had not).
+  const check = pinned
+    ? `\n\n[CEK SEBELUM BERTINDAK] Cocokkan pesan di atas dengan [ATURAN TETAP DARI ${name}] dulu, SEBELUM memanggil tool ` +
+      `yang membuat atau mengubah apa pun (jadwal, booking, task, pesan, kartu). Kalau melanggar aturan itu: JANGAN panggil tool-nya — ` +
+      `sebut aturannya dan tawarkan alternatif. Jawabanmu harus sesuai dengan yang benar-benar kamu lakukan.`
+    : ""
+  const tail = (convo: string) => `${head}\n\n${convo}${pinned ? `${pinned}\n\n` : ""}Pesan terbaru dari ${name}: ${last.slice(0, 6000)}${check}`
   const mode = parts.historyMode ?? DEFAULT_HISTORY_MODE
 
   if (mode === "window" || mode === "wide") {

@@ -27,7 +27,7 @@ import {
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
   isAcceptedGideonFile,
   type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonContextRef, type GideonFile, type GideonMessage,
-  type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
+  proposalSummary, type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn, type GideonMemory,
 } from "@/lib/gideon";
 import {
   deleteGideonChat, getGideonPrefs, listGideonChats, markdownToDoc, renameGideonChat, saveGideonAnswerAsDoc, saveGideonPrefs, setCachedGideonPrefs,
@@ -541,9 +541,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     el.style.height = `${el.scrollHeight}px`;
   }, [input, view]);
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
-  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going.
+  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going,
+  // and in a new chat too when there are more than 2 (QA final 19 Oct 2026, E-D1: 13 open cards pushed the box
+  // ~2,400 px down). The header still says how many and opens them.
   const [waitingOpen, setWaitingOpen] = useState<boolean | null>(null);
-  const waitingShown = waitingOpen ?? turns.length === 0;
+  const waitingShown = waitingOpen ?? (turns.length === 0 && openWaiting.length <= 2);
 
   // "@" in the composer: the word after it is a search for a page to attach.
   const onInputChange = (value: string, caret: number) => {
@@ -703,7 +705,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const waitingSection = openWaiting.length > 0 && (
     <section className="space-y-2 rounded-xl border border-border bg-muted/30 p-2.5">
-      <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
+      <button type="button" onClick={() => setWaitingOpen(!waitingShown)} aria-expanded={waitingShown} className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs font-medium text-foreground/80 hover:text-foreground">
         <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
         {waitingShown ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
@@ -804,11 +806,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               </DropdownMenuContent>
             </DropdownMenu>
             <button type="button" onClick={startMention} title={t("Add a page, task or project")} aria-label={t("Add a page, task or project")} className={iconBtn}><AtSign className="h-4 w-4" /></button>
-            {/* Notion AI's approval mode: an icon in the narrow panel, the mode's name on the full page. */}
+            {/* Notion AI's approval mode: an icon in the narrow panel and on phones (< 400 px, E-9: "Tinjau sebelum
+                menulis" was cut off), the mode's name on the full page. The name stays in the menu and the label. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label={`${t("Choose approval mode")}: ${t(modeDef.name)}`} title={`${t(modeDef.name)}. ${t(modeDef.blurb)}`} className={cn("inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === "dont_ask" && "text-amber-700 dark:text-amber-400")}>
-                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
+                  <ShieldCheck className="h-4 w-4 shrink-0" /><span className={cn("truncate max-[399px]:sr-only", !(isPage || wide) && "sr-only")}>{t(modeDef.name)}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-72">
@@ -1581,7 +1584,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
 }
 
 function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const decide = async (d: "apply" | "discard") => {
@@ -1604,7 +1607,8 @@ function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal;
     proposal.status === "APPLYING" ? t("Applying…") : null;
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-border bg-card", open ? "shadow-soft" : "opacity-90")}>
-      <ProposalHead open={open} title={title} summary={proposal.summary} />
+      <ProposalHead open={open} title={title} summary={proposalSummary(proposal, lang)} />
+      {open && proposal.noChange && <p className="px-3 pb-2 text-xs font-medium text-amber-700 dark:text-amber-300">{t("No changes: everything is already like this")}</p>}
       {open && proposal.diff.length > 0 && (
         <dl className="space-y-1.5 px-3 pb-2.5 text-[13px]">
           {proposal.diff.map((row, i) => (
@@ -1673,7 +1677,7 @@ function proposalTitle(action: string, t: LangApi["t"]): string {
  * change, and what the person did with it. No Apply / Discard.
  */
 function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const status =
     proposal.status === "APPLIED" ? { text: t("Applied by them"), tone: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300" } :
     proposal.status === "DISCARDED" ? { text: t("Discarded by them"), tone: "bg-muted text-muted-foreground" } :
@@ -1686,7 +1690,7 @@ function ReviewProposalCard({ proposal }: { proposal: GideonProposal }) {
         <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background"><GideonMark className="h-3.5 w-3.5" /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">{proposalTitle(proposal.action, t)}</span>
-          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposal.summary}</span>
+          <span className="mt-0.5 block break-words text-xs text-muted-foreground">{proposalSummary(proposal, lang)}</span>
         </span>
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", status.tone)}>{status.text}</span>
       </div>
