@@ -154,20 +154,20 @@ function ComplaintsPage() {
 
       <PageBody>
         {all.length > 0 && (
-          <div role="group" aria-label={t("Filter by category")} className="mb-3 flex flex-wrap items-center gap-1.5">
+          <div role="group" aria-label={t("Filter by category")} className="-mx-4 mb-3 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
             {CATEGORY_FILTERS.map((k) => (
               <button key={k || "all"} type="button" aria-pressed={category === k} onClick={() => setCategory(k)}
-                className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition pointer-coarse:min-h-9", category === k ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
+                className={cn("shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition pointer-coarse:min-h-9", category === k ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
                 {k ? categoryLabel(k) : t("All categories")}
               </button>
             ))}
-            {!viewerIsBod && <span className="ml-auto text-xs text-muted-foreground">{t("The board moves your tickets along.")}</span>}
+            {!viewerIsBod && <span className="ml-auto hidden text-xs text-muted-foreground md:inline">{t("The board moves your tickets along.")}</span>}
           </div>
         )}
         {loading && (
           <div className="flex gap-3 overflow-hidden">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 space-y-1.5 rounded-lg bg-muted/40 p-1.5 md:w-[17.5rem]">
+              <div key={i} className="w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 space-y-1.5 rounded-lg bg-muted/40 p-1.5 md:w-0 md:min-w-[15rem] md:flex-1">
                 <div className="mx-1.5 my-1.5 h-4 w-24 animate-pulse rounded bg-muted" />
                 {Array.from({ length: 3 - (i % 2) }).map((__, j) => <div key={j} className="h-20 animate-pulse rounded-lg bg-muted" />)}
               </div>

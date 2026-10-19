@@ -135,7 +135,8 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   const rowLabel = "w-28 shrink-0 text-sm font-medium sm:w-32";
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-lg">
+      {/* One shrinkable column: the pickers no longer push the sheet past a phone's edge. */}
+      <DialogContent className="max-w-lg grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">{t("Meeting notes")}<BetaBadge /></DialogTitle>
           <DialogDescription className="sr-only">{t("GIDEON turns a recording into an overview, minutes and tasks. Nothing is added to the project until you check it and press Apply.")}</DialogDescription>

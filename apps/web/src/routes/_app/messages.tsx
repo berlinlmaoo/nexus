@@ -159,8 +159,8 @@ function Messages() {
   // first" would otherwise swap the open chat under the reader. Not on a phone: there the list comes
   // first and a room opens only when tapped — a thread mounted out of sight would mark it read.
   const phone = useIsMobile();
-  useEffect(() => { if (!activeId && !goneId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, goneId, rows, phone]);
-  const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
+  // (The room opened by default is the first of the tab on screen: see the tab effect below.)
+  const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? null;
   const activeKey = active?.id ?? null;
   // The other person's presence status shows under a DM's name (19 Oct 2026).
   const dmPeerStatus = usePresence(active?.type === "DM" ? dmPeer(active, meId)?.id : null);
@@ -235,6 +235,27 @@ function Messages() {
   // A chat opened from a link (a notification) shows its own tab, so the open room is in the list beside it.
   const linkedType = search.c ? rows.find((c) => c.id === search.c)?.type : undefined;
   useEffect(() => { if (linkedType) setTabState(linkedType); }, [linkedType]);
+  // From md up the open chat sits beside the list, and it is one of the tab's rooms (U-8 fix: Groups showed
+  // a project room's thread). Nothing open yet: the tab's first room. Another tab picked: its first room.
+  // A room opened from elsewhere (a link, "Message" in a group's info): the tab follows the room.
+  const activeType = active?.type ?? null;
+  const firstOfTab = groups[tab][0]?.id ?? null;
+  useEffect(() => {
+    if (phone || goneId || !convos.data || activeId) return;
+    if (firstOfTab) setActiveId(firstOfTab);
+  }, [phone, goneId, convos.data, activeId, firstOfTab]);
+  const shownTab = useRef(tab);
+  useEffect(() => {
+    if (shownTab.current === tab) return;
+    shownTab.current = tab;
+    if (!phone && activeType !== tab) setActiveId(firstOfTab);
+  }, [tab, phone, activeType, firstOfTab]);
+  const openedId = useRef(activeId);
+  useEffect(() => {
+    if (openedId.current === activeId || !activeType) return;
+    openedId.current = activeId;
+    if (!phone && activeType !== tab) { shownTab.current = activeType; setTabState(activeType); }
+  }, [activeId, activeType, phone, tab]);
   // A tab's count: its unread rooms' messages, muted rooms left out as in the nav badge; the open room is being read.
   const tabUnread = (kind: ChatTab) =>
     groups[kind].reduce((n, c) => n + (isMuted(c) || (activeKey === c.id && visible) ? 0 : c.unreadCount ?? 0), 0);
