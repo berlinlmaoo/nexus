@@ -335,6 +335,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: async (tx) => {
         count = (await tx.sheetRow.deleteMany({ where: { id: { in: ids }, sheetId } })).count
+        // A parallel delete of the same rows got there first (QA final 19 Oct: 6 at once = 6 audit entries,
+        // each with a copy of the rows). Roll this one back as "not found": restorableDelete then ends it
+        // as an idempotent delete without an audit entry, and the formulas are not rewritten twice.
+        if (count === 0) throw Object.assign(new Error("Sheet rows already deleted"), { code: "P2025" })
         rewritten = await rewrite.apply(tx, me)
       },
     })
