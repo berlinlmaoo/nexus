@@ -267,6 +267,7 @@ export function RealtimeProvider({
             pending.submissions = true;
             pending.legal = true;
             flushPings();
+            refetchCalendar();
           }
           connectedBefore = true;
         };
@@ -283,6 +284,18 @@ export function RealtimeProvider({
         socket.on("connect_error", onConnectError);
         socket.on("workspace-changed", onWorkspaceChanged);
         socket.on("audit-changed", onAuditChanged);
+        // The Calendar (B-12, server since 19 Oct 2026): `calendar-changed` { kinds, actorId } to the company
+        // workspace room, already folded per burst on the server. Its items, overdue list and glance refetch
+        // (the structure has its own version check). Older servers never send it; the 60 s poll covers them.
+        const calendarBurst = { timer: null as ReturnType<typeof setTimeout> | null };
+        const refetchCalendar = () => {
+          queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "nexus" && q.queryKey[1] === "calendar-tasks" && q.queryKey[2] !== "structure" });
+        };
+        const onCalendarChanged = () => {
+          if (calendarBurst.timer) return;
+          calendarBurst.timer = setTimeout(() => { calendarBurst.timer = null; refetchCalendar(); }, 300);
+        };
+        socket.on("calendar-changed", onCalendarChanged);
         // A doc/page changed (block editor, server since 12 Oct 2026): `{ projectId, docId, actorId }` to the
         // project room. Lists and the open page header refetch, folded per burst (a live editing session
         // saves every second or two). The body itself syncs through its own live room.
@@ -486,6 +499,8 @@ export function RealtimeProvider({
           socket.off("connect_error", onConnectError);
           socket.off("workspace-changed", onWorkspaceChanged);
           socket.off("audit-changed", onAuditChanged);
+          socket.off("calendar-changed", onCalendarChanged);
+          if (calendarBurst.timer) clearTimeout(calendarBurst.timer);
           if (flushTimer) clearTimeout(flushTimer);
           eventHandlers.forEach((off) => off());
         });
