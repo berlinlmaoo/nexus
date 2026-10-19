@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 import { nexusApi, type NexusProject, type NexusTask } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { EMPTY_GROUP, propDef, sectionIdOf, taskValues, type PropDef } from "@/lib/project-views";
@@ -152,7 +153,9 @@ export function useGroupMove({ project, defs, groupBy, sub, viewTasks }: {
   const canGroup = droppable(groupBy, defs);
   const canRow = !!sub && droppable(sub, defs);
   /** A handle is worth showing: the view is grouped by something a drop can write. */
-  const enabled = canGroup || canRow;
+  // Only for people who can edit: a viewer's drop only ever answered 403 (QA final 19 Oct).
+  const canEditHere = useProjectCanEdit();
+  const enabled = canEditHere && (canGroup || canRow);
 
   // Stable callbacks (memoised cards): the latest values are read through a ref.
   const live = useRef({ bulk, viewTasks, project, defs, groupBy, sub, canGroup, canRow, drag });
