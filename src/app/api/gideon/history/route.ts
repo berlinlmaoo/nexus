@@ -7,7 +7,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { parseGideonAttachments } from '@/lib/gideon-attachments'
 import { softDeleteGideonChats } from '@/lib/gideon-chat-retention'
-import { proposalView, type GideonRunMeta } from '@/lib/gideon-runs'
+import { proposalLang, proposalView, type GideonRunMeta } from '@/lib/gideon-runs'
 import { memoryView } from '@/lib/gideon-memory'
 
 // Newest N turns are enough to resume a conversation; older ones stay in the table but are not
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     // A proposal's status moves after the turn was saved (Apply / Discard), so the stored meta is
     // refreshed from GideonProposal: a reopened panel must not offer to apply something already applied.
     const runIds = rows.map((r) => r.runId).filter((x): x is string => Boolean(x))
+    const lang = await proposalLang(session.user.id, req.headers)
     const proposals = runIds.length
       ? await prisma.gideonProposal.findMany({ where: { runId: { in: runIds } }, orderBy: { createdAt: 'asc' } })
       : []
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
     const metaOf = (row: { runId: string | null; meta: unknown }) => {
       if (!row.meta || typeof row.meta !== 'object') return null
       const meta = row.meta as GideonRunMeta
-      const mine = proposals.filter((p) => p.runId === row.runId).map(proposalView)
+      const mine = proposals.filter((p) => p.runId === row.runId).map((p) => proposalView(p, lang))
       const mems = memories.filter((m) => m.sourceRunId === row.runId).map(memoryView)
       return { ...meta, proposals: mine.length ? mine : (meta.proposals ?? []), ...(mems.length ? { memories: mems } : {}) }
     }

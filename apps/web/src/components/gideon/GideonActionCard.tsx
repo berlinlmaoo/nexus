@@ -4,7 +4,7 @@ import {
   AlarmClock, AlarmClockOff, ArrowUpRight, CalendarCheck, CircleDot, CalendarX, Check, CheckCheck, FileText, KanbanSquare, Link2,
   FolderInput, ListChecks, Loader2, Megaphone, Sheet, MessageSquare, PencilLine, Receipt, Scale, Send, TrendingUp, type LucideIcon,
 } from "lucide-react";
-import { decideGideonProposal, type GideonProposal } from "@/lib/gideon";
+import { decideGideonProposal, proposalSummary, type GideonProposal } from "@/lib/gideon";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { PROPOSAL_APPLY, PROPOSAL_DISCARD, diffDayText } from "./GideonProposalParts";
@@ -64,7 +64,7 @@ const VALUE_WORDS = new Set([
 ]);
 
 export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t, locale } = useLang();
+  const { t, locale, lang } = useLang();
   const kind = KINDS[proposal.action] ?? FALLBACK;
   const Icon = kind.icon;
   const open = proposal.status === "PENDING";
@@ -114,7 +114,8 @@ export function GideonActionCard({ proposal, onDecided }: { proposal: GideonProp
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">{kind.title(t)}</span>
-          <span className="mt-0.5 block break-words text-[13px] text-muted-foreground">{proposal.summary}</span>
+          <span className="mt-0.5 block break-words text-[13px] text-muted-foreground">{proposalSummary(proposal, lang)}</span>
+          {proposal.noChange && <span className="mt-0.5 block text-xs font-medium text-amber-700 dark:text-amber-300">{t("No changes: everything is already like this")}</span>}
         </span>
         {open && <span className="mt-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />{t("Waiting for your approval")}</span>}
       </div>
