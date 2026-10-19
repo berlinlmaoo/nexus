@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkManager
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.nav.Target
@@ -115,6 +116,12 @@ import java.io.File
     var discard by remember { mutableStateOf<String?>(null) }
     var uploadedId by rememberSaveable { mutableStateOf<String?>(null) }
     var uploaded by remember { mutableStateOf<Meeting?>(null) }
+    val uploads = remember(context) { WorkManager.getInstance(context) }
+    val uploadName = uploadedId?.let { "meeting-upload:${container.sessionStore.current?.userId}:$it" }
+    val work by remember(uploadName) {
+        uploadName?.let(uploads::getWorkInfosForUniqueWorkFlow) ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val uploadData = work.firstOrNull()?.progress
     LaunchedEffect(Unit) {
         try { projects = api.projects() } catch (_: ApiError) { projectsFailed = true }
         if (recording.file == null) {
@@ -133,7 +140,7 @@ import java.io.File
         val id = uploadedId ?: return@LaunchedEffect
         while (isActive) {
             try { uploaded = api.get(id) } catch (_: ApiError) { problem = R.string.meet_load_failed }
-            if (uploaded?.status != "UPLOADING" && uploaded != null) break
+            if (uploaded?.working == false) break
             delay(2000)
         }
     }
@@ -178,8 +185,8 @@ import java.io.File
     val c = Nx.colors
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.cancel)) }
-            Text(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+            if (uploadedId == null) TextButton(onClick = onBack) { Text(stringResource(R.string.cancel)) }
+            Text(stringResource(R.string.meet_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f).padding(start = if (uploadedId == null) 0.dp else 8.dp))
             MeetingBeta()
         }
         HorizontalDivider(color = c.border)
@@ -238,15 +245,22 @@ import java.io.File
                 }, kind = NxButtonKind.PRIMARY, enabled = !busy && localName != null && !recording.recording)
             } else {
                 uploaded?.let { m ->
-                    Text(m.title, fontWeight = FontWeight.SemiBold)
-                    Text(meetingStatus(m.status))
-                    if (m.status == "UPLOADING") { LinearProgressIndicator(progress = { if (m.audio.bytes > 0) (m.audio.received.toFloat() / m.audio.bytes).coerceIn(0f, 1f) else 0f }, modifier = Modifier.fillMaxWidth()); Text(stringResource(R.string.meet_upload_hint), color = c.mutedFg) }
-                    else if (m.status == "FAILED") Text(stringResource(meetingProblem(m.errorCode)), color = c.dangerText)
-                    else if (m.working) MeetingQueueBlock(m)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NxButton(stringResource(R.string.meet_close), onBack)
-                    NxButton(stringResource(R.string.meet_open), { val id = uploadedId!!; onBack(); container.router.open(Target.Meeting(id)) }, kind = NxButtonKind.PRIMARY)
+                    val progress = MeetingUploadProgress.resolve(m.audio, uploadData?.getLong("received", -1), uploadData?.getLong("total", -1))
+                    MeetingProgress(m, progress, busy,
+                        onOpen = { onBack(); container.router.open(Target.Meeting(m.id)) }, onDone = onBack,
+                        onCancel = {
+                            busy = true; problem = null
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { uploadName?.let { uploads.cancelUniqueWork(it).result.get() } }
+                                    api.delete(m.id)
+                                    withContext(Dispatchers.IO) { MeetingFiles.remove(context, m.id) }
+                                    onBack()
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { problem = R.string.meet_load_failed }
+                                finally { busy = false }
+                            }
+                        })
                 }
             }
             if (busy) CircularProgressIndicator()
