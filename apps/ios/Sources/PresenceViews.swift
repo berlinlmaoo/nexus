@@ -201,7 +201,7 @@ struct SetPresenceSheet: View {
             Divider(); pick("🍽️", "Lunch", minutes: 60)
             Divider(); pick("🎬", "Out for a shoot", minutes: 180)
             Divider(); pick("🚗", "On the road", minutes: 60)
-        }.background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border))
+        }.nxSoftField(radius: 12)
     }
     /// Text, emoji and duration, and Away unless the person changes it after (R-11b).
     private func pick(_ icon: String, _ label: String, minutes: Int) -> some View {
