@@ -701,7 +701,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                         ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
                                     id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key }, initialDay = initialDate)
                                 }
-                                ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
+                                ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc, access.canEdit)
                                 ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
                                 ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); views.firstOrNull()?.let { select(PageTabItem.View(it)) } }
                             }

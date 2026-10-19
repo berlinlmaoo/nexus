@@ -1,0 +1,17 @@
+<resources>
+    <string name="pm_new">Halaman baru</string>
+    <string name="pm_project">Proyek</string>
+    <string name="pm_title">Judul</string>
+    <string name="pm_template">Templat</string>
+    <string name="pm_blank">Halaman kosong</string>
+    <string name="pm_create">Buat halaman</string>
+    <string name="pm_manage">Kelola halaman</string>
+    <string name="pm_icon">Ikon / emoji</string>
+    <string name="pm_parent">Halaman induk</string>
+    <string name="pm_top">Tingkat atas</string>
+    <string name="pm_cover">URL sampul atau gradien</string>
+    <string name="pm_wide">Lebar penuh</string>
+    <string name="pm_duplicate">Duplikat halaman</string>
+    <string name="pm_delete">Hapus %1$s?</string>
+    <string name="pm_delete_help">Halaman akan dihapus. Subhalaman pindah ke tingkat teratas. Pulihkan halaman dari audit Control Room.</string>
+</resources>

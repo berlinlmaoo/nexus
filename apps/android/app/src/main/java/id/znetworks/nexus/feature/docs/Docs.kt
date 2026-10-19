@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,6 +53,7 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.shell.openWeb
 import id.znetworks.nexus.ui.components.PageHeader
 import id.znetworks.nexus.ui.components.HeaderIconButton
+import id.znetworks.nexus.core.nav.Target
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.chat.chatTime
@@ -83,6 +85,10 @@ data class Doc(
     val updatedAt: String? = null,
     val project: DocProject? = null,
     val projectId: String? = null,
+    val parentId: String? = null,
+    val position: Int? = null,
+    val fullWidth: Boolean = false,
+    val coverImage: String? = null,
 ) {
     val emoji: String get() = icon?.takeIf { it.isNotBlank() && !it.startsWith("/") } ?: "📄"
 }
@@ -158,7 +164,7 @@ fun DocsScreen(onBack: () -> Unit, onOpenDoc: (String) -> Unit) {
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) { try { val projects = runCatching { id.znetworks.nexus.feature.projects.ProjectsApi((context.applicationContext as NexusApplication).container.api).projects().value }.getOrDefault(emptyList()); docs = api.all().map { d -> if (d.project == null) d.copy(project = projects.firstOrNull { it.id == d.projectId }?.let { DocProject(it.id, it.name) }) else d }; error = null } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_pages), subtitle = stringResource(R.string.sub_docs), onBack = onBack)
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_pages), subtitle = stringResource(R.string.sub_docs), onBack = onBack) { NewPageButton { tick++; onOpenDoc(it) } }
         id.znetworks.nexus.ui.components.CompactSearchField(q, { q = it }, stringResource(R.string.docs_search), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
         val all = docs
         val shown = all?.filter { q.isBlank() || it.title.contains(q.trim(), true) }
@@ -167,7 +173,7 @@ fun DocsScreen(onBack: () -> Unit, onOpenDoc: (String) -> Unit) {
             all == null -> EmptyState(Icons.Filled.MenuBook, stringResource(R.string.docs_locked), error!!, stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
             shown!!.isEmpty() -> TabEmpty(Icons.Filled.MenuBook, stringResource(if (q.isBlank()) R.string.docs_empty else R.string.docs_no_match))
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(shown, key = { it.id }) { d -> DocCard(d) { onOpenDoc(d.id) } }
+                items(PageTree.ordered(shown), key = { it.first.id }) { (d, depth) -> Box(Modifier.padding(start = (depth * 12).dp)) { DocCard(d) { onOpenDoc(d.id) } } }
             }
         }
     }
@@ -205,13 +211,17 @@ fun DocReaderScreen(id: String, onBack: () -> Unit, onGideon: () -> Unit = {}) {
         when {
             d == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             d == null -> TabEmpty(Icons.Filled.MenuBook, stringResource(R.string.docs_load_failed))
-            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = if (d.fullWidth) 8.dp else 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PageCover(d.coverImage)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(d.emoji, fontSize = 30.sp); Spacer(Modifier.width(10.dp))
                     Text(d.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, color = c.foreground)
                 }
                 Text(listOfNotNull(d.project?.name, chatTime(d.updatedAt).takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
-                if (editable) BlockEditorButton("doc", id) { reload++ }
+                if (editable) {
+                    BlockEditorButton("doc", id) { reload++ }
+                    PageManageButton(d, { reload++ }, { next -> (context.applicationContext as NexusApplication).container.router.open(Target.Docs(next)) }, onBack)
+                }
                 val blocks = DocBlocks.from(d.content).ifEmpty { d.contentText?.split("\n")?.map { DocBlock("paragraph", it) }.orEmpty() }
                 if (blocks.all { it.text.isBlank() }) Text(stringResource(R.string.docs_empty_doc), fontSize = 14.sp, color = c.mutedFg)
                 var n = 0
@@ -238,16 +248,24 @@ fun DocReaderScreen(id: String, onBack: () -> Unit, onGideon: () -> Unit = {}) {
 
 /** A project's Pages tab. */
 @Composable
-fun ProjectPagesTab(projectId: String, onOpenDoc: (String) -> Unit) {
+fun ProjectPagesTab(projectId: String, onOpenDoc: (String) -> Unit, canEdit: Boolean = false) {
     val api = docsApi()
     var docs by remember { mutableStateOf<List<Doc>?>(null) }
-    LaunchedEffect(projectId) { docs = runCatching { api.all(projectId) }.getOrDefault(emptyList()) }
+    var retry by remember { mutableStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val resources = LocalContext.current.resources
+    LaunchedEffect(projectId, retry) { try { docs = api.all(projectId); error = null } catch(e: ApiError) { error = e.describe(resources) } }
+    Column {
+    if (canEdit) NewPageButton(projectId) { retry++; onOpenDoc(it) }
     val l = docs
     when {
+        error != null -> EmptyState(Icons.Filled.MenuBook, stringResource(R.string.docs_load_failed), error!!, stringResource(R.string.try_again), { retry++ }, Modifier.fillMaxSize())
         l == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         l.isEmpty() -> TabEmpty(Icons.Filled.MenuBook, stringResource(R.string.docs_none_in_project))
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(l, key = { it.id }) { d -> DocCard(d) { onOpenDoc(d.id) } }
+            items(PageTree.ordered(l), key = { it.first.id }) { (d, depth) -> Box(Modifier.padding(start = (depth * 12).dp)) { DocCard(d) { onOpenDoc(d.id) } } }
         }
     }
+}
+
 }
