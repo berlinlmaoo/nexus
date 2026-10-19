@@ -369,7 +369,7 @@ export async function presenceTick(now = new Date()): Promise<{ changed: number;
   const expired = due.length
     ? (await prisma.presenceManualStatus.deleteMany({ where: { id: { in: due.map((r) => r.id) }, endsAt: { lte: now } } })).count
     : 0
-  // Whoever's status just ended is told even when this process has no earlier entry for them (a slot that just
+  // Whoever's status just ended is always told, even when this process has no earlier entry for them (a slot that just
   // became leader after a deploy starts with an empty cache: QA final 19 Oct 2026, a status ended and nobody's
   // screen moved off "Away · …").
   const ended = new Set(due.map((r) => r.userId))
@@ -378,7 +378,8 @@ export async function presenceTick(now = new Date()): Promise<{ changed: number;
   for (const [id, e] of fresh) {
     const prev = cache.byUser.get(id)
     cache.byUser.set(id, e)
-    if (prev ? !samePresence(prev.status, e.status) : ended.has(id)) {
+    // ended: always, since a read (getPresence) may already have cached the after-state without telling anyone.
+    if (ended.has(id) || (prev && !samePresence(prev.status, e.status))) {
       changed++
       emit(id, e)
     }
