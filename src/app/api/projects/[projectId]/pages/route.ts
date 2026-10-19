@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 export async function GET(
   request: NextRequest,
@@ -86,6 +87,7 @@ export async function POST(
 
     logAudit({ action: "create", entityType: "project_page", entityId: page.id, entityName: name, userId: session.user.id, request, metadata: { projectId } })
 
+    emitProjectContentChanged(projectId, "pages", page.id, session.user.id)
     return NextResponse.json(page, { status: 201 })
   } catch (error) {
     console.error("Error creating project page:", error)

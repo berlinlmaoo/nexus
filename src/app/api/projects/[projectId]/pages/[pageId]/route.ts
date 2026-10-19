@@ -7,6 +7,7 @@ import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 export async function GET(
   request: NextRequest,
@@ -87,6 +88,7 @@ export async function PATCH(
 
     logAudit({ action: "update", entityType: "project_page", entityId: (await params).pageId, entityName: page.name, userId: session.user.id, request, metadata: { projectId: (await params).projectId, changes: body } })
 
+    emitProjectContentChanged(existing.projectId, "pages", (await params).pageId, session.user.id)
     return NextResponse.json(page)
   } catch (error) {
     console.error("Error updating page:", error)
@@ -125,6 +127,7 @@ export async function DELETE(
       remove: (tx) => tx.projectPage.delete({ where: { id: pageId } }),
     })
 
+    emitProjectContentChanged(existing.projectId, "pages", (await params).pageId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting page:", error)

@@ -10,6 +10,7 @@ import {
   resolveProjectFolder,
   toRelativePath,
 } from "@/lib/nas-project"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 const MAX_UPLOAD_SIZE = 200 * 1024 * 1024 // 200MB
 
@@ -78,6 +79,7 @@ export async function POST(
       }
       const folder = await ensureProjectFolder(projectId, path ? `${path}/${name}` : name)
       invalidateListCache(resolveProjectFolder(projectId, path))
+      emitProjectContentChanged(projectId, "files", null, session.user.id)
       return NextResponse.json({ created: true, path: folder })
     }
 
@@ -99,6 +101,7 @@ export async function POST(
     const result = await nasUpload(sid, folder, file.name, buffer)
     invalidateListCache(folder)
 
+    emitProjectContentChanged(projectId, "files", null, session.user.id)
     return NextResponse.json({
       uploaded: true,
       filename: file.name,
@@ -132,6 +135,7 @@ export async function DELETE(
     const sid = await getNasSession()
     await nasDelete(sid, target)
     invalidateListCache(target.slice(0, target.lastIndexOf("/")))
+    emitProjectContentChanged(projectId, "files", null, session.user.id)
     return NextResponse.json({ deleted: true })
   } catch (error) {
     console.error("Project files delete error:", error)

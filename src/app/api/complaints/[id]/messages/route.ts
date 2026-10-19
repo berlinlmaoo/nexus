@@ -9,6 +9,7 @@ import {
   isBodPlus, BODY_MIN, BODY_MAX, COMPLAINT_DETAIL_INCLUDE, isUnclaimedComplaintStatus,
   serializeComplaintDetail,
 } from "@/lib/complaints"
+import { emitComplaintChanged } from "@/lib/complaint-realtime"
 
 // POST /api/complaints/[id]/messages — { body }. The reporter or any BoD may reply (unless CLOSED).
 // A BoD reply on a complaint nobody has claimed (OPEN or AWAITING_DECISION) moves it to IN_REVIEW.
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const fresh = await prisma.complaint.findUnique({ where: { id }, include: COMPLAINT_DETAIL_INCLUDE })
+    void emitComplaintChanged(id, "message")
     return NextResponse.json(serializeComplaintDetail(fresh!, me, viewerIsBod))
   } catch (error) {
     console.error("Error posting complaint message:", error)

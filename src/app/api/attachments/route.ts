@@ -9,6 +9,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { resolveMime } from "@/lib/mime"
 import { checkProjectAccess } from "@/lib/rbac"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 const MAX_SIZE = 1024 * 1024 * 1024 // 1GB (cap consistency; large files use the chunk route)
 
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
     logAudit({ action: "create", entityType: "attachment", entityId: attachment.id, entityName: file.name, userId: session.user.id, request, metadata: { taskId, mimeType: file.type, size: file.size } })
     void pingSubmitter(taskId, session.user.id) // Bukti Pencairan shows up on the submitter's board live
 
+    void pingTaskDetail(taskId, session.user.id) // open task details + card covers refetch (19 Oct 2026)
     return NextResponse.json(attachment, { status: 201 })
   } catch (error) {
     console.error("Error uploading attachment:", error)
