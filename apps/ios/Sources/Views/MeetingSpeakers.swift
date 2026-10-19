@@ -26,6 +26,12 @@ struct MeetingSpeakersSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Text(T("Speakers")).font(NXFont.text(18, .semibold)); Spacer(); Text(keys.count == 1 ? T("1 voice") : String(format: T("%@ voices"), AppNumber.int(keys.count))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 Text(T("GIDEON told the voices apart and read the names from the introductions. Voices are only used to label this recording.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                // D-Q4 (19 Oct 2026): names are fixed once the minutes are applied; the server answers 409 ALREADY_APPLIED.
+                if ["APPLYING", "APPLIED"].contains(meeting.status) {
+                    Label(T("Locked: these minutes were saved to the project, so the names stay as they are."), systemImage: "lock")
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("meetings.speakers.locked")
+                }
                 ForEach(keys, id: \.self) { key in voice(key) }
             }.accessibilityElement(children: .contain).accessibilityIdentifier("meetings.speakers")
         }
