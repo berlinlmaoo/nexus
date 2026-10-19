@@ -133,13 +133,11 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                             listOf("🗓️", "🍽️", "🎬", "🚗", "").forEach { e -> DropdownMenuItem(text = { Text(e.ifBlank { context.getString(R.string.ui_status_no_emoji) }) }, onClick = { emoji = e; emojiMenu = false }) }
                         }
                     } }, supportingText = { Text("${payload.length}/80", color = if (payload.length > 80) c.dangerText else c.mutedFg) }, enabled = !busy, isError = payload.length > 80, modifier = Modifier.fillMaxWidth())
-                Text(stringResource(R.string.ui_status_availability), color = c.mutedFg, fontSize = 12.sp)
-                // The deployed manual-status contract supports Away only. Never send a made-up availability write.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(false, {}, enabled = false, label = { Text(stringResource(R.string.ui_status_online)) })
-                    FilterChip(true, {}, enabled = false, label = { Text(stringResource(R.string.ui_status_away)) })
+                // Native API notes: manual statuses have fixed Away availability.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.ui_status_availability), Modifier.weight(1f), color = c.mutedFg, fontSize = 12.sp)
+                    Text(stringResource(R.string.ui_status_away), color = c.foreground)
                 }
-                Text(stringResource(R.string.ui_status_away_hint), color = c.mutedFg, fontSize = 12.sp)
                 Text(stringResource(R.string.ui_status_quick), color = c.mutedFg, fontSize = 12.sp)
                 Column {
                     listOf(Triple("🗓️", R.string.prs_meeting, "1h"), Triple("🍽️", R.string.prs_lunch, "1h"), Triple("🎬", R.string.prs_shoot, "3h"), Triple("🚗", R.string.ui_status_road, "1h")).forEach { (e, label, duration) ->
