@@ -415,7 +415,8 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
             }
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
                 listOf(PipelineView.BOARD to R.string.ptab_board, PipelineView.LIST to R.string.ptab_list, PipelineView.HEALTH to R.string.pl_health).forEachIndexed { i, (v, l) ->
-                    SegmentedButton(view == v, { view = v }, SegmentedButtonDefaults.itemShape(i, 3), icon = {}) { Text(stringResource(l)) }
+                    SegmentedButton(view == v, { view = v }, SegmentedButtonDefaults.itemShape(i, 3),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, c.border), icon = {}) { Text(stringResource(l)) }
                 }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

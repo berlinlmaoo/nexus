@@ -158,6 +158,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
                             SegmentedButton(selected = availability == value, onClick = { availability = value; if (quickPicked) { text = ""; emoji = ""; quickPicked = false } }, enabled = !busy,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, c.border),
                                 modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.requiredSize(7.dp).background(dotColor(tone), CircleShape)) }) {
                                 // Its intrinsic-height layout otherwise reserves only the first wrapped line.
