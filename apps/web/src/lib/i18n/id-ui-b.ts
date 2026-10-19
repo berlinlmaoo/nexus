@@ -19,4 +19,11 @@ export const ID_UI_B: Record<string, string> = {
   "Tell GIDEON in a chat, e.g. “remember that I prefer short answers”, or add something below.": "Bilang ke GIDEON di chat, mis. “ingat ya, aku lebih suka jawaban singkat”, atau tambahkan di bawah.",
   "Add or update…": "Tambah atau perbarui…",
   "Never passwords, PINs or codes. Up to {n} memories.": "Jangan kata sandi, PIN, atau kode. Maksimal {n} memori.",
+  // U-6 New meeting notes
+  "Meeting title": "Judul meeting",
+  "Pick a project (optional)": "Pilih project (opsional)",
+  "Automatic (ID + EN)": "Otomatis (ID + EN)",
+  "Upload an audio file": "Unggah file audio",
+  "Start with quick introductions: “Hi, I'm Berlin…”. Voices only label this recording.": "Mulai dengan perkenalan singkat: “Halo, saya Berlin…”. Suara hanya dipakai untuk melabeli rekaman ini.",
+  "Up to {min} min · {mb} MB · processed on the company's own server. Check the minutes and tasks before Apply.": "Maks. {min} menit · {mb} MB · diproses di server milik perusahaan. Cek notulen dan task sebelum Terapkan.",
 };
