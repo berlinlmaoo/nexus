@@ -75,8 +75,9 @@ class PresenceStatuses(private val api: PresenceApi, private val owner: () -> St
 object PresenceTimes {
     val zone: ZoneId = ZoneId.of("Asia/Jakarta")
     fun end(start: Instant, option: String, picked: LocalDateTime): Instant = when (option) {
-        "30m" -> start.plusSeconds(1800); "2h" -> start.plusSeconds(7200); "3h" -> start.plusSeconds(10800)
+        "30m" -> start.plusSeconds(1800); "2h" -> start.plusSeconds(7200); "3h" -> start.plusSeconds(10800); "4h" -> start.plusSeconds(14400)
         "today" -> start.atZone(zone).toLocalDate().atTime(23, 59).atZone(zone).toInstant()
+        "week" -> start.atZone(zone).toLocalDate().with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)).atTime(23, 59).atZone(zone).toInstant()
         "pick" -> picked.atZone(zone).toInstant(); else -> start.plusSeconds(3600)
     }
     fun until(value: String?, locale: Locale, now: Instant = Instant.now()): String? = value?.let {
@@ -88,6 +89,9 @@ object PresenceTimes {
 }
 
 object PresenceDraft {
+    fun canSave(text: String, availability: String?) = text.length <= 80 && (text.isNotBlank() || availability in setOf("online", "away", "dnd"))
+    /** Emoji belongs to custom text; choosing only availability sends an actual empty string. */
+    fun statusText(emoji: String, text: String) = if (text.isBlank()) "" else payload(emoji, text)
     fun payload(emoji: String, text: String): String = listOf(emoji.trim(), text.trim()).filter { it.isNotEmpty() }.joinToString(" ")
     fun split(value: String): Pair<String, String> {
         val emoji = listOf("🗓️", "🍽️", "🎬", "🚗").firstOrNull { value == it || value.startsWith("$it ") } ?: return "" to value

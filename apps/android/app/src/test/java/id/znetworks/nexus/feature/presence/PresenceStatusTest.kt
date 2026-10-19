@@ -45,6 +45,18 @@ class PresenceStatusTest {
         assertEquals(Instant.parse("2026-10-19T16:59:00Z"), PresenceTimes.end(now, "today", LocalDateTime.MIN))
         assertEquals(now.plusSeconds(1800), PresenceTimes.end(now, "30m", LocalDateTime.MIN))
     }
+    @Test fun availabilityOnlySendsEmptyTextAndUsesServerLabelsWithoutASeparator() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            val json = """{"status":{"userId":"u","state":"dnd","tone":"red","reason":"custom","text":null,"availability":"dnd","label":{"en":"Do not disturb","id":"Jangan diganggu"},"manual":{"id":"m","text":"","availability":"dnd","startsAt":"2026-10-19T00:00:00Z","endsAt":"2026-10-20T00:00:00Z"}}}"""
+            server.enqueue(MockResponse.Builder().body(json).build())
+            val status = api(server).set("", null, Instant.parse("2026-10-20T00:00:00Z"), "dnd").status!!
+            assertNull(status.text); assertEquals("", status.manual!!.text)
+            assertEquals("Do not disturb", status.label("en")); assertEquals("Jangan diganggu", status.label("id"))
+            val body = NexusJson.parseToJsonElement(server.takeRequest().body!!.utf8()).jsonObject
+            assertEquals("", body["text"]!!.jsonPrimitive.content); assertEquals("dnd", body["availability"]!!.jsonPrimitive.content)
+        }
+    }
     @Test fun clearSendsTheDisplayedManualIdAndSetUsesIsoInstants() = runTest {
         MockWebServer().use { server -> server.start(); val api = api(server)
             repeat(2) { server.enqueue(MockResponse.Builder().body("{\"cleared\":0}").build()) }

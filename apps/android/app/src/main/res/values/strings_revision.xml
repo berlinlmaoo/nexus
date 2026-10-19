@@ -10,8 +10,10 @@
     <string name="rev_meeting_upload">Upload</string>
     <string name="rev_meeting_transcribe">Transcribe</string>
     <string name="rev_meeting_ready_step">Minutes &amp; tasks ready</string>
-    <string name="rev_meeting_ready">Ready ? open to review</string>
-    <string name="rev_meeting_transcribing">Transcribing? about %1$d min left</string>
+    <string name="rev_meeting_ready">Ready — open to review</string>
+    <string name="rev_meeting_transcribing">Transcribing… about %1$d min left</string>
+    <string name="rev_status_4h">4 h</string>
+    <string name="rev_status_week">This week</string>
     <string name="rev_meeting_notify">You can close this. We\'ll notify you when the minutes are ready.</string>
     <string name="rev_meeting_cancel_upload">Cancel upload</string>
     <string name="rev_meeting_done">Done</string>
