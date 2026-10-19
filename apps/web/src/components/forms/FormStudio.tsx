@@ -1539,7 +1539,8 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
         <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Choose target project")}</div>
         <div className="mt-1 max-h-72 space-y-0.5 overflow-y-auto">
           {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">{t("Loading projects…")}</div>}
-          {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
+          {/* Only projects where I can edit: a form copied into a Can view / Can comment project was refused (QA final 19 Oct). */}
+          {(projectsQ.data ?? []).filter((p) => p.id !== projectId && !p.members?.some((m) => m.userId === me?.id && (m.role === "VIEWER" || m.role === "GUEST" || m.accessLevel === "VIEW" || m.accessLevel === "COMMENT"))).map((p) => (
             <button key={p.id} type="button" disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
               <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} type={p.type} className="h-full w-full object-cover" /></span>
               <span className="truncate">{p.name}</span>
