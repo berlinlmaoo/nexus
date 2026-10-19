@@ -1,3 +1,4 @@
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { enumerateAttendanceDates, FLEXI_WINDOW_END, formatAttendanceDateKey, getAttendanceDate, getPrimaryAttendanceTeam, isWorkdayForAttendanceDate, minutesLateAgainstShift, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember } from "@/lib/attendance"
@@ -403,6 +404,7 @@ export async function clearLeaveCoveredOpenRecords(userId: string, workspaceId: 
     .map((r) => r.id)
   if (ids.length === 0) return []
   await prisma.attendanceRecord.deleteMany({ where: { id: { in: ids } } })
+  noteAttendanceChanged(userId, "record", ids.length === 1 ? ids[0] : null, null)
   return ids
 }
 
@@ -425,7 +427,7 @@ async function createAutoDayOffOnce(opts: {
   guard: AttendanceDayGuard
 }): Promise<string | null> {
   const { userId, workspaceId, teamId, date, dateKey, reason, reviewNote } = opts
-  return await prisma.$transaction(async (tx) => {
+  const createdId = await prisma.$transaction(async (tx) => {
     // The per-person request lock (race audit H3; it was autodayoff|user|date, which serialized two cron
     // runs but not the cron against a request being filed for the same day).
     await lockAttendanceRequests(tx, userId)
@@ -444,6 +446,9 @@ async function createAutoDayOffOnce(opts: {
     })
     return created.id
   })
+  // Attendance realtime: the cut shows on the person's card and their viewers' board.
+  if (createdId) noteAttendanceChanged(userId, "deduction", createdId, dateKey)
+  return createdId
 }
 
 export interface OutageRefundMemberEntry {

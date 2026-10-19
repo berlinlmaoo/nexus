@@ -7,6 +7,7 @@ import { notifyMention } from "@/lib/notification-service"
 import { resolveSheetAccess } from "@/lib/project-sheets"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { auditSnippet } from "@/lib/deletion-entities"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 const BODY_MAX = 2000
 
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       }).catch((err) => console.error("Sheet comment mention failed:", err))
     }
 
+    emitProjectContentChanged(access.sheet.projectId, "sheet-comments", sheetId, session.user.id) // open threads + corner flags (19 Oct 2026)
     return NextResponse.json(comment, { status: 201 })
   } catch (error) {
     console.error("Error creating sheet comment:", error)
@@ -175,6 +177,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
         author: { select: { id: true, name: true, avatar: true } },
       },
     })
+    emitProjectContentChanged(access.sheet.projectId, "sheet-comments", sheetId, session.user.id)
     return NextResponse.json(updated)
   } catch (error) {
     console.error("Error updating sheet comment:", error)
@@ -217,6 +220,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: (tx) => tx.sheetComment.delete({ where: { id: commentId } }),
     })
+    emitProjectContentChanged(projectId, "sheet-comments", sheetId, session.user.id)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error deleting sheet comment:", error)

@@ -7,6 +7,9 @@ import { actionsOf, normalizeConditions, normalizeTrigger } from "@/lib/automati
 import { logAudit } from "@/lib/audit"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { normalizeCustomFieldOptions, normalizeCustomFieldType } from "@/lib/custom-fields"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
+import { emitAutomationsChanged } from "@/lib/socket-emitter"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 interface BundleConfig {
   sections?: { name: string; position?: number }[]
@@ -157,6 +160,10 @@ export async function POST(
       metadata: { bundleId, results },
     })
 
+    // Sections, fields, automations and tasks appeared: the open project, its automations tab and its boards refetch.
+    void emitProjectChanged(projectId, { actorId: session.user.id })
+    emitAutomationsChanged(projectId, null, session.user.id)
+    emitProjectContentChanged(projectId, "tasks", null, session.user.id)
     return NextResponse.json({ success: true, applied: bundle.name, results })
   } catch (error) {
     console.error("Apply bundle error:", error)

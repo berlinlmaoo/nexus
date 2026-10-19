@@ -8,6 +8,7 @@ import { formatAttendanceDateKey } from "@/lib/attendance"
 import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
 import { notifyComplaintReply } from "@/lib/notification-service"
 import { scrubGideonReply } from "@/lib/gideon-reply-scrub"
+import { emitComplaintChanged } from "@/lib/complaint-realtime"
 
 /**
  * GIDEON's first pass over a support ticket it is allowed to touch.
@@ -567,6 +568,8 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     })
     // The reporter is told on their phone. The answer lands up to a few minutes after they filed,
     // usually after they have put the phone down — without a push the thread just quietly grows.
+    // GIDEON's answer shows in every open copy of the thread and moves the card (19 Oct 2026).
+    void emitComplaintChanged(complaintId, "message")
     const owner = await prisma.complaint.findUnique({ where: { id: complaintId }, select: { reporterId: true, workspaceId: true } })
     if (owner) {
       await notifyComplaintReply({ complaintId, workspaceId: owner.workspaceId, reporterId: owner.reporterId, fromReviewer: true, replierId: gideonId, byGideon: true }).catch(() => {})

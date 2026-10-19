@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { notifyTaskAssigned } from "@/lib/notification-service"
 import { checkProjectAccess } from "@/lib/rbac"
+import { announceTaskChanged } from "@/lib/project-realtime"
 
 export async function POST(
   request: NextRequest,
@@ -89,6 +90,8 @@ export async function POST(
 
     logAudit({ action: "create", entityType: "task_assignee", entityId: (await params).taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })
 
+    // Open boards redraw the card (project realtime gaps, 19 Oct 2026): this route bypasses applyTaskUpdate.
+    void announceTaskChanged((await params).taskId)
     return NextResponse.json(assignee, { status: 201 })
   } catch (error) {
     console.error("Error adding assignee:", error)
@@ -154,6 +157,7 @@ export async function DELETE(
 
     logAudit({ action: "delete", entityType: "task_assignee", entityId: (await params).taskId, entityName: task.title, userId: session.user.id!, request, metadata: { removedUserId: userId } })
 
+    void announceTaskChanged((await params).taskId)
     return NextResponse.json({ message: "Assignee removed" })
   } catch (error) {
     console.error("Error removing assignee:", error)

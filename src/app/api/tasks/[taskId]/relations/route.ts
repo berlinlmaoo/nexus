@@ -7,6 +7,7 @@ import { isUniqueViolation } from "@/lib/prisma-errors"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function GET(
   req: NextRequest,
@@ -119,6 +120,8 @@ export async function POST(
 
     logAudit({ action: "create", entityType: "task_relation", entityId: relation.id, userId: session.user.id, request: req, metadata: { sourceTaskId: (await params).taskId, targetTaskId, type } })
 
+    void pingTaskDetail((await params).taskId, session.user.id)
+    void pingTaskDetail(targetTaskId, session.user.id)
     return NextResponse.json({ relation }, { status: 201 })
   } catch (error) {
     console.error("Error creating relation:", error)

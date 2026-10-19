@@ -7,6 +7,7 @@ import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { restorableDelete } from '@/lib/deletion-snapshot'
 import { auditSnippet } from '@/lib/deletion-entities'
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 export async function GET(
   req: NextRequest,
@@ -68,6 +69,7 @@ export async function POST(
       include: { user: { select: { id: true, name: true, avatar: true } } },
     })
 
+    void pingTaskDetail(attachment.taskId, session.user.id)
     return NextResponse.json({ annotation }, { status: 201 })
   } catch (error) {
     console.error('Error creating annotation:', error)
@@ -105,6 +107,7 @@ export async function PATCH(
       include: { user: { select: { id: true, name: true, avatar: true } } },
     })
 
+    void pingTaskDetail(annotated.taskId, session.user.id)
     return NextResponse.json({ annotation: updated })
   } catch (error) {
     console.error('Error toggling annotation:', error)
@@ -146,6 +149,7 @@ export async function DELETE(
       remove: (tx) => tx.proofAnnotation.delete({ where: { id } }),
     })
 
+    void pingTaskDetail(taskId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting annotation:', error)

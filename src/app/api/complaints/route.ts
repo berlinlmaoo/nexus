@@ -14,6 +14,7 @@ import {
   COMPLAINT_LIST_INCLUDE, COMPLAINT_INBOX_STATUSES, COMPLAINT_STATUSES, serializeComplaint,
   complaintCategoryLabel, complaintCategoryLabelEn, type ComplaintCategoryKey, type ComplaintStatusKey,
 } from "@/lib/complaints"
+import { emitComplaintChanged } from "@/lib/complaint-realtime"
 
 const EVIDENCE_MAX = 8 * 1024 * 1024 // 8MB per photo
 const EVIDENCE_MAX_COUNT = 5   // per ticket — generous for screenshots, bounded against disk abuse
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
       void reviewSupportTicket(created.id).catch(() => {})
     }
 
+    void emitComplaintChanged(created.id, "created") // reporter's other devices + the BoD board (19 Oct 2026)
     return NextResponse.json(serializeComplaint(created, me, isBodPlus(membership.role)), { status: 201 })
   } catch (error) {
     console.error("Error creating complaint:", error)

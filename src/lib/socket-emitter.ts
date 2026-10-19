@@ -294,9 +294,29 @@ export function emitRemindersChanged(userId: string, id: string) {
  * changed something in attendance, so their other devices refetch the approval queue / board / today card.
  * kind: "request" | "offsite" | "override" | "correction" | "dayoff_bonus" | "dayoff".
  */
-export function emitAttendanceChanged(userIds: Array<string | null | undefined>, kind: string, id: string | null) {
+export function emitAttendanceChanged(
+  userIds: Array<string | null | undefined>,
+  kind: string,
+  id: string | null,
+  /** Additive (19 Oct 2026, lib/attendance-broadcast.ts): whose attendance moved, and which day ("YYYY-MM-DD"). */
+  subject?: { userId?: string | null; date?: string | null },
+) {
   const ids = [...new Set(userIds.filter((u): u is string => typeof u === "string" && u.length > 0))]
-  if (ids.length) publishSafely(BUS_EVENTS.ATTENDANCE_CHANGED, { userIds: ids, kind, id })
+  if (!ids.length) return
+  const extra: { userId?: string; date?: string } = {}
+  if (subject?.userId) extra.userId = subject.userId
+  if (subject?.date) extra.date = subject.date
+  publishSafely(BUS_EVENTS.ATTENDANCE_CHANGED, { userIds: ids, kind, id, ...extra })
+}
+
+/**
+ * `attendance-board-changed` { userIds, dates } to each viewer's `user:<id>` room (19 Oct 2026): the attendance of
+ * `userId` moved, and these viewers may see it (lib/attendance-broadcast.ts attendanceViewerIds decides — never call
+ * this with a list worked out anywhere else). The socket server folds a burst per viewer into one per second.
+ */
+export function emitAttendanceBoardChanged(viewerIds: string[], userId: string, date: string | null) {
+  const ids = [...new Set(viewerIds.filter((u) => typeof u === "string" && u.length > 0))]
+  if (ids.length && userId) publishSafely(BUS_EVENTS.ATTENDANCE_BOARD_CHANGED, { viewerIds: ids, userId, date })
 }
 
 /** `xp-changed` { userIds } to `workspace:<id>` rooms (C-D2): open leaderboards refetch. Use lib/xp-realtime.ts noteXpChanged. */

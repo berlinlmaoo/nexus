@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { bi } from "@/lib/notification-text"
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
       })
     } catch { /* audit best-effort */ }
 
+    noteAttendanceChanged(record.userId, "suspect", recordId, dateKey)
     return NextResponse.json({ ok: true, recordId, verdict, date: dateKey })
   } catch (error) {
     console.error("Error reviewing suspect attendance:", error)

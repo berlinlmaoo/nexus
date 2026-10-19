@@ -47,6 +47,9 @@ export interface NextApiResponseWithSocket extends NextApiResponse {
 const AUDIT_ROOM = "audit"
 /** A burst of audit writes (a bulk action, a reorder) reaches the audit room as one ping. */
 const AUDIT_PING_COALESCE_MS = 250
+/** `attendance-board-changed`: at most one per viewer per this long; the first of a burst waits this short a moment. */
+const BOARD_PING_INTERVAL_MS = 1_000
+const BOARD_PING_MIN_DELAY_MS = 150
 /** How long a conversation's member list is reused for `typing` before it is read again. */
 const TYPING_MEMBERS_TTL_MS = 60_000
 /**
@@ -705,9 +708,46 @@ export function initializeSocketServer(
   })
 
   // C-17 (19 Oct 2026): the actor's own other devices drop decisions they already made. Ids only.
-  eventBus.on(BUS_EVENTS.ATTENDANCE_CHANGED, (data: { userIds?: string[]; kind?: string; id?: string | null }) => {
+  eventBus.on(BUS_EVENTS.ATTENDANCE_CHANGED, (data: { userIds?: string[]; kind?: string; id?: string | null; userId?: string; date?: string }) => {
     const rooms = (Array.isArray(data?.userIds) ? data.userIds : []).filter((u) => typeof u === "string" && u).map((u) => `user:${u}`)
-    if (rooms.length) io.to(rooms).emit("attendance-changed", { kind: data.kind ?? null, id: data.id ?? null })
+    if (!rooms.length) return
+    // userId/date: additive since 19 Oct 2026 (check-in/out and every write that changes the person's attendance).
+    const payload: Record<string, unknown> = { kind: data.kind ?? null, id: data.id ?? null }
+    if (typeof data.userId === "string" && data.userId) payload.userId = data.userId
+    if (typeof data.date === "string" && data.date) payload.date = data.date
+    io.to(rooms).emit("attendance-changed", payload)
+  })
+
+  // Attendance board (19 Oct 2026): whoever may see these people's attendance refetches their monitor / board /
+  // team list / Reports per crew. The viewer list was worked out by lib/attendance-broadcast.ts from the database;
+  // here it is only folded per viewer to at most one ping a second (a cron closing 40 records = one refetch).
+  const boardPending = new Map<string, { userIds: Set<string>; dates: Set<string>; timer: ReturnType<typeof setTimeout> | null; lastAt: number }>()
+  const flushBoard = (viewer: string) => {
+    const entry = boardPending.get(viewer)
+    if (!entry) return
+    entry.timer = null
+    if (!entry.userIds.size) return
+    io.to(`user:${viewer}`).emit("attendance-board-changed", { userIds: [...entry.userIds], dates: [...entry.dates] })
+    entry.userIds.clear()
+    entry.dates.clear()
+    entry.lastAt = Date.now()
+  }
+  eventBus.on(BUS_EVENTS.ATTENDANCE_BOARD_CHANGED, (data: { viewerIds?: string[]; userId?: string; date?: string | null }) => {
+    if (typeof data?.userId !== "string" || !data.userId || !Array.isArray(data.viewerIds)) return
+    const now = Date.now()
+    for (const viewer of data.viewerIds) {
+      if (typeof viewer !== "string" || !viewer) continue
+      let entry = boardPending.get(viewer)
+      if (!entry) { entry = { userIds: new Set(), dates: new Set(), timer: null, lastAt: 0 }; boardPending.set(viewer, entry) }
+      entry.userIds.add(data.userId)
+      if (typeof data.date === "string" && data.date) entry.dates.add(data.date)
+      if (entry.timer) continue
+      const wait = Math.max(BOARD_PING_MIN_DELAY_MS, entry.lastAt + BOARD_PING_INTERVAL_MS - now)
+      const v = viewer
+      entry.timer = setTimeout(() => flushBoard(v), wait)
+    }
+    // Forget idle viewers so the map never grows with everyone who was ever pinged.
+    if (boardPending.size > 500) for (const [v, e] of boardPending) if (!e.timer && now - e.lastAt > 60_000) boardPending.delete(v)
   })
 
   // C-D2 (19 Oct 2026): XP moved for these people — open leaderboards in their workspaces refetch. Ids only.
@@ -851,6 +891,38 @@ export function initializeSocketServer(
   // project's room, so its Pages list and any open copy of the page refetch.
   eventBus.on(BUS_EVENTS.DOC_CHANGED, (data: { projectId: string; docId: string; actorId: string | null }) => {
     emitGuarded(`project:${data.projectId}`, "doc-changed", { projectId: data.projectId, docId: data.docId, actorId: data.actorId })
+  })
+
+  // Something inside a project changed that no other event covers (lib/project-realtime.ts, 19 Oct 2026): ids
+  // only, to the project's room (VIEWER access to join). Folded per (project, kind, id): a form builder autosaving
+  // or a tab drag is one ping per 300 ms window, sent after the last write of the window.
+  const projectPings = new Map<string, ReturnType<typeof setTimeout>>()
+  eventBus.on(BUS_EVENTS.PROJECT_CHANGED, (data: { projectId?: unknown; kind?: unknown; id?: unknown; actorId?: unknown }) => {
+    if (typeof data?.projectId !== "string" || !data.projectId || typeof data.kind !== "string") return
+    const payload = {
+      projectId: data.projectId,
+      kind: data.kind,
+      id: typeof data.id === "string" ? data.id : null,
+      actorId: typeof data.actorId === "string" ? data.actorId : null,
+    }
+    const key = `${payload.projectId}|${payload.kind}|${payload.id ?? ""}`
+    const prev = projectPings.get(key)
+    if (prev) clearTimeout(prev)
+    const timer = setTimeout(() => {
+      projectPings.delete(key)
+      emitGuarded(`project:${payload.projectId}`, "project-changed", payload)
+    }, 300)
+    timer.unref?.()
+    projectPings.set(key, timer)
+  })
+
+  // A support ticket changed (lib/complaint-realtime.ts, 19 Oct 2026): to the user rooms the route resolved — the
+  // reporter and the workspace's BoD/OAA — and nowhere else. Ids only.
+  eventBus.on(BUS_EVENTS.COMPLAINT_CHANGED, (data: { userIds?: unknown; payload?: { id?: unknown; kind?: unknown } }) => {
+    const rooms = (Array.isArray(data?.userIds) ? data.userIds : []).filter((u): u is string => typeof u === "string" && !!u).map((u) => `user:${u}`)
+    const id = data?.payload?.id
+    if (!rooms.length || typeof id !== "string") return
+    io.to(rooms).emit("complaint-changed", { id, kind: typeof data.payload?.kind === "string" ? data.payload.kind : null })
   })
 
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes

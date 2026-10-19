@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
 import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -225,6 +226,7 @@ async function handlePOST(req: NextRequest) {
       })
     } catch { /* audit best-effort */ }
 
+    noteAttendanceChanged(created.userId, "dayoff", created.id, created.startDate)
     return NextResponse.json({ dayoff: serializeAttendanceRequest(created) }, { status: 201 })
   } catch (error) {
     console.error("Error granting day-off:", error)
@@ -262,6 +264,7 @@ async function handleDELETE(req: NextRequest) {
       remove: (tx) => tx.attendanceRequest.delete({ where: { id } }),
     })
 
+    noteAttendanceChanged(target.userId, "dayoff", id, target.startDate)
     return NextResponse.json({ message: "Day-off dihapus." })
   } catch (error) {
     console.error("Error deleting day-off:", error)

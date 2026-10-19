@@ -36,6 +36,7 @@ import { replaceTargetFor, applyReplace, replacedRow, type ReplaceTarget } from 
 import { pipelineGate, dealInclude, serializeDeal } from "@/lib/pipeline-server"
 import { pipelineToday } from "@/lib/pipeline"
 import { MAX_DEAL_DOCUMENTS, addFileDocument, documentOut, newPipelineFile, storedDocs } from "@/lib/pipeline-documents"
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 // Chunked attachment upload — lets files larger than Cloudflare's ~100MB request-body cap through by
 // splitting them client-side into sub-100MB chunks (each passes CF normally), then reassembling here.
@@ -681,6 +682,7 @@ export async function POST(request: NextRequest) {
         /* audit is best-effort */
       }
 
+      void pingTaskDetail(taskId, userId) // open task details + card covers refetch (19 Oct 2026)
       return NextResponse.json(attachment, { status: 201 })
     } finally {
       await rm(lockPath, { recursive: true, force: true }).catch(() => {})

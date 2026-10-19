@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
 
     logAudit({ action: "create", entityType: "sprint", entityId: sprint.id, entityName: name, userId: session.user.id, request: req, metadata: { projectId } })
 
+    emitSprintUpdated(projectId, sprint) // a new sprint shows in every open sprint picker (19 Oct 2026)
     return NextResponse.json({ sprint }, { status: 201 })
   } catch (error) {
     console.error('Sprints POST error:', error)

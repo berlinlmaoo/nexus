@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { checkProjectAccess } from '@/lib/rbac'
+import { pingTaskDetail } from "@/lib/project-realtime"
 
 /** Resolve a task's project id (for the workspace/project authorization check). */
 async function projectIdOfTask(taskId: string): Promise<string | null> {
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "time_entry", entityId: entry.id, userId: session.user.id, request: req, metadata: { taskId } })
+    void pingTaskDetail(taskId, session.user.id)
     return NextResponse.json({ entry }, { status: 201 })
   } catch (error) {
     console.error("Error creating time entry:", error)
@@ -88,7 +90,7 @@ export async function PATCH(req: NextRequest) {
     // Only the entry's owner, or a project manager (LEAD) of the task's project, may edit it.
     const existing = await prisma.timeEntry.findUnique({
       where: { id },
-      select: { userId: true, task: { select: { taskList: { select: { projectId: true } } } } },
+      select: { userId: true, taskId: true, task: { select: { taskList: { select: { projectId: true } } } } },
     })
     if (!existing) return NextResponse.json({ error: 'Time entry not found' }, { status: 404 })
     if (existing.userId !== session.user.id) {
@@ -110,6 +112,7 @@ export async function PATCH(req: NextRequest) {
 
     const entry = await prisma.timeEntry.update({ where: { id }, data })
     logAudit({ action: "update", entityType: "time_entry", entityId: id, userId: session.user.id, request: req })
+    void pingTaskDetail(existing?.taskId, session.user.id)
     return NextResponse.json({ entry })
   } catch (error) {
     console.error("Error updating time entry:", error)

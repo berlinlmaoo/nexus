@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
+import { announceTaskChanged, emitProjectContentChanged } from "@/lib/project-realtime"
 
 const DEFAULT_TASK_LIST_ALIASES = ["to do", "todo", "backlog"]
 
@@ -277,6 +278,9 @@ export async function POST(
       })
     }
 
+    // The project it was added to shows it now; its home board redraws the card (project realtime gaps, 19 Oct 2026).
+    emitProjectContentChanged(projectId, "tasks", taskId, session.user.id)
+    void announceTaskChanged(taskId)
     const taskAssignees = await prisma.taskAssignee.findMany({
       where: { taskId: taskId },
       include: {
@@ -356,6 +360,8 @@ export async function DELETE(
       where: { taskId_projectId: { taskId: taskId, projectId } },
     })
 
+    emitProjectContentChanged(projectId, "tasks", taskId, session.user.id)
+    void announceTaskChanged(taskId)
     return NextResponse.json({ message: "Task removed from project" })
   } catch (error) {
     console.error("Error removing task from project:", error)

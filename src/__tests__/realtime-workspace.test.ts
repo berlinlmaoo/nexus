@@ -157,7 +157,7 @@ vi.mock("@/lib/deletion-snapshot", () => ({
   }),
 }))
 
-import { emitAttendanceChanged, emitWorkspaceChanged, emitXpChanged } from "@/lib/socket-emitter"
+import { emitAttendanceChanged, emitAttendanceBoardChanged, emitWorkspaceChanged, emitXpChanged } from "@/lib/socket-emitter"
 import { logAudit } from "@/lib/audit"
 import { PATCH as patchProject } from "@/app/api/projects/[projectId]/route"
 import { PATCH as patchVaultItem } from "@/app/api/vault/items/[itemId]/route"
@@ -312,6 +312,36 @@ describe("workspace rooms (server-assigned from WorkspaceMember)", () => {
     clients[0].off("attendance-changed", onA)
     clients[2].off("attendance-changed", onC)
     expect(got.carol).toEqual([{ kind: "request", id: "r-1" }])
+    expect(got.alice).toHaveLength(0)
+  })
+
+  it("attendance-changed carries whose day moved (userId/date) when given, still ids only", async () => {
+    const got: unknown[] = []
+    const on = (p: unknown) => got.push(p)
+    clients[2].on("attendance-changed", on)
+    emitAttendanceChanged(["u-carol"], "check_in", "rec-9", { userId: "u-carol", date: "2026-10-19" })
+    await settle()
+    clients[2].off("attendance-changed", on)
+    expect(got).toEqual([{ kind: "check_in", id: "rec-9", userId: "u-carol", date: "2026-10-19" }])
+  })
+
+  it("attendance-board-changed reaches only the given viewers, folded to one ping per burst", async () => {
+    const got: Record<string, unknown[]> = { alice: [], bob: [], carol: [] }
+    const on = (k: string) => (p: unknown) => got[k].push(p)
+    const handlers = [on("alice"), on("bob"), on("carol")]
+    ;[0, 1, 2].forEach((i) => clients[i].on("attendance-board-changed", handlers[i]))
+    // a burst (a cron closing several records): three people, one viewer
+    emitAttendanceBoardChanged(["u-carol"], "u-bob", "2026-10-19")
+    emitAttendanceBoardChanged(["u-carol"], "u-alice", "2026-10-19")
+    emitAttendanceBoardChanged(["u-carol", "u-carol"], "u-bob", "2026-10-18")
+    await new Promise((r) => setTimeout(r, 600))
+    ;[0, 1, 2].forEach((i) => clients[i].off("attendance-board-changed", handlers[i]))
+    expect(got.carol).toHaveLength(1)
+    const evt = got.carol[0] as { userIds: string[]; dates: string[] }
+    expect(evt.userIds.sort()).toEqual(["u-alice", "u-bob"])
+    expect(evt.dates.sort()).toEqual(["2026-10-18", "2026-10-19"])
+    expect(Object.keys(evt).sort()).toEqual(["dates", "userIds"])
+    expect(got.bob).toHaveLength(0) // the people whose day moved are not viewers of it here
     expect(got.alice).toHaveLength(0)
   })
 

@@ -9,6 +9,7 @@ import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
 import { normalizeFormBranding, normalizeFormSettings } from "@/lib/form-settings"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "form", entityId: form.id, entityName: name, userId: session.user.id, request })
 
+    emitProjectContentChanged(projectId, "forms", form.id, session.user.id) // every open forms list (19 Oct 2026)
     return NextResponse.json(form, { status: 201 })
   } catch (error) {
     console.error("Error creating form:", error)

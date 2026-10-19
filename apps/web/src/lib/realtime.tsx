@@ -31,7 +31,20 @@ const REALTIME_EVENTS = [
   "attendance-changed",
   // Server since 19 Oct 2026 (C-D2): XP moved for these people (coalesced ~1.5 s) → workspace rooms. Ids only.
   "xp-changed",
+  // Server since 19 Oct 2026 (attendance realtime): someone whose attendance this user may see checked in/out, was
+  // auto-checked-out, edited, decided, granted or cut a day off → user:<me>, folded to ≤ 1/s. { userIds, dates }.
+  "attendance-board-changed",
 ] as const;
+
+// Every attendance surface (attendance realtime, 19 Oct 2026): the today card, the board and history (who's in, per
+// person), requests/offsite queues, day-off summary/bonuses, deductions, Control Room → Attendance monitor (suspects),
+// and Reports per crew (roster + person). Debounced (ATTENDANCE_DEBOUNCE_MS); the screens' own refetches stay as fallback.
+const ATTENDANCE_TERMS = [
+  "attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff",
+  "attendance-deductions", "attendance-suspects", "dayoffs", "day-off-bonus", "reports",
+];
+const ATTENDANCE_EVENTS = new Set<string>(["attendance-changed", "attendance-board-changed"]);
+const ATTENDANCE_DEBOUNCE_MS = 400;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
 // Task events are NOT here any more (realtime bug 5, 13 Oct 2026): they patch the cache from their payload
@@ -41,7 +54,8 @@ const INVALIDATION: Record<string, string[]> = {
   "sprint-updated": ["sprint", "dashboard"],
   "message-created": ["messages", "conversation"],
   "conversation-updated": ["conversation"],
-  "attendance-changed": ["attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff", "attendance-deductions"],
+  "attendance-changed": ATTENDANCE_TERMS,
+  "attendance-board-changed": ATTENDANCE_TERMS,
   "xp-changed": ["leaderboard"],
 };
 
@@ -50,7 +64,7 @@ const INVALIDATION: Record<string, string[]> = {
  * conversation list and its badge, the bell). Events emitted while the socket was down are gone
  * for good, so without this an open chat would stay frozen at the moment the connection dropped.
  */
-const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info"];
+const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info", "attendance-today", "attendance-history", "attendance-suspects", "complaint"];
 
 /**
  * Realtime diagnostics: every event received is logged with console.debug in dev builds, or anywhere
@@ -431,6 +445,84 @@ export function RealtimeProvider({
         socket.on("form-responses-changed", onFormResponses);
         cleanups.push(() => socket.off("form-responses-changed", onFormResponses));
 
+        // Something inside a project that no other event covers (server since 19 Oct 2026, lib/project-realtime.ts):
+        // `project-changed` { projectId, kind, id, actorId } to the project's room, already folded per (project, kind,
+        // id) on the server. Ids only: each kind refetches the screens that show it, if they are on screen. Never the
+        // sheet grid, a page body or the form builder (they sync through their own live rooms), so nothing being
+        // typed is replaced. The actor's own pings are not skipped: their other tabs move too.
+        const onProjectChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { projectId?: unknown; kind?: unknown; id?: unknown };
+          const pid = typeof data.projectId === "string" ? data.projectId : null;
+          const id = typeof data.id === "string" ? data.id : null;
+          if (!pid) return;
+          if (debug) console.debug("[realtime] project-changed", { kind: data.kind });
+          const opts = { cancelRefetch: false } as const;
+          switch (data.kind) {
+            case "task":
+              if (id) {
+                void queryClient.invalidateQueries({ queryKey: ["task", id] }, opts);
+                void queryClient.invalidateQueries({ queryKey: ["task-attachments", id] }, opts);
+                void queryClient.invalidateQueries({ queryKey: ["task-followers", id] }, opts);
+              }
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-task-covers", pid] }, opts);
+              break;
+            case "tasks":
+              taskBurst.projects.add(pid);
+              taskBurst.flat.add(pid);
+              taskBurst.others = true;
+              if (id) void queryClient.invalidateQueries({ queryKey: ["task", id] }, opts);
+              scheduleTasks();
+              break;
+            case "forms":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "forms"] }, opts);
+              break;
+            case "sheets":
+              // The tab bar only (exact key): the grid ["nexus","sheet",id] has its own sheet-structure event.
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-sheets", pid], exact: true }, opts);
+              break;
+            case "sheet-comments":
+              if (id) void queryClient.invalidateQueries({ queryKey: ["nexus", "sheet-comments", id] }, opts);
+              break;
+            case "status-updates":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project", pid, "status-updates"] }, opts);
+              break;
+            case "members":
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-members", pid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["nexus", "project-members-lite", pid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["project-members", pid] }, opts);
+              break;
+            default:
+              // "pages", "files" or a kind a newer server adds: no web screen shows them yet.
+              break;
+          }
+        };
+        socket.on("project-changed", onProjectChanged);
+        cleanups.push(() => socket.off("project-changed", onProjectChanged));
+
+        // A support ticket changed (server since 19 Oct 2026, lib/complaint-realtime.ts): `complaint-changed` { id, kind }
+        // reaches only its reporter and the workspace's BoD/OAA. The board (cards + counts) and an open thread refetch;
+        // the reply box keeps its own state, so a reply being typed stays.
+        let complaintTimer: ReturnType<typeof setTimeout> | null = null;
+        const complaintIds = new Set<string>();
+        const onComplaintChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { id?: unknown; kind?: unknown };
+          if (typeof data.id === "string") complaintIds.add(data.id);
+          if (debug) console.debug("[realtime] complaint-changed", { kind: data.kind });
+          if (complaintTimer) return;
+          complaintTimer = setTimeout(() => {
+            complaintTimer = null;
+            const opts = { cancelRefetch: false } as const;
+            void queryClient.invalidateQueries({ queryKey: ["complaints"] }, opts);
+            complaintIds.forEach((cid) => {
+              void queryClient.invalidateQueries({ queryKey: ["complaint", cid] }, opts);
+              void queryClient.invalidateQueries({ queryKey: ["complaint-corrections", cid] }, opts);
+            });
+            complaintIds.clear();
+          }, 150);
+        };
+        socket.on("complaint-changed", onComplaintChanged);
+        cleanups.push(() => { socket.off("complaint-changed", onComplaintChanged); if (complaintTimer) clearTimeout(complaintTimer); });
+
         // Taken out of a project (or sheet) room because access to the project ended (server since 13 Oct 2026):
         // the open project refetches and shows the no-access state instead of silently going quiet; the
         // project tree drops it.
@@ -445,9 +537,25 @@ export function RealtimeProvider({
         socket.on("join-denied", onJoinDenied);
         cleanups.push(() => socket.off("join-denied", onJoinDenied));
 
+        // Attendance pings arrive in bursts (a check-in pings the person and, a moment later, the board): one refetch.
+        let attendanceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleAttendanceRefetch = () => {
+          if (attendanceTimer) return;
+          attendanceTimer = setTimeout(() => {
+            attendanceTimer = null;
+            void queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, ATTENDANCE_TERMS) });
+          }, ATTENDANCE_DEBOUNCE_MS);
+        };
+        cleanups.push(() => { if (attendanceTimer) clearTimeout(attendanceTimer); });
+
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
           const handler = (payload?: unknown) => {
             const terms = [...(INVALIDATION[evt] ?? [])];
+            if (ATTENDANCE_EVENTS.has(evt)) {
+              if (debug) console.debug("[realtime]", evt, { kind: (payload as { kind?: unknown } | undefined)?.kind });
+              scheduleAttendanceRefetch();
+              return;
+            }
             if (TASK_EVENTS.has(evt)) {
               if (debug) console.debug("[realtime]", evt);
               onTaskEvent(evt, payload);
