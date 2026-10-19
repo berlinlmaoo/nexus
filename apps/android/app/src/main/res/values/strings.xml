@@ -2834,7 +2834,7 @@
     <string name="pl_filter_pm">Filter by PM</string>
     <string name="pl_filter_bd">Filter by BD</string>
     <string name="pl_clear_filters">Clear filters</string>
-    <string name="pl_k_nothing_overdue">Nothing overdue</string>
+    <string name="pl_k_nothing_overdue">None overdue</string>
     <string name="pl_more_reasons">+%d more</string>
     <string name="pl_today">Today</string>
     <string name="pl_fold">Contract, delivery &amp; payment</string>
