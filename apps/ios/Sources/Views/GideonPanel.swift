@@ -388,7 +388,8 @@ struct GideonPanel: View {
     private var compactTitle: some View {
         VStack(spacing: 0) {
             tierChip
-            Text(subtitleText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Shrinks a little before it truncates: "Bertindak di NEXUS sebagai kamu" is wider than the EN line.
+            Text(subtitleText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.85)
         }.frame(maxWidth: 200)
     }
 
