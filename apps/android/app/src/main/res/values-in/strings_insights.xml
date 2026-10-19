@@ -1,0 +1,22 @@
+<resources>
+    <string name="gi_title">Ringkasan</string>
+    <string name="gi_days">%1$d hari terakhir</string>
+    <string name="gi_runs">Proses</string>
+    <string name="gi_completion">Tingkat penyelesaian</string>
+    <string name="gi_failures">Kegagalan</string>
+    <string name="gi_people">Orang aktif</string>
+    <string name="gi_empty">Tidak ada proses yang cocok dengan filter ini.</string>
+    <string name="gi_tools">%1$d panggilan alat</string>
+    <string name="gi_private">Chat (privat)</string>
+    <string name="gi_duration">Durasi: %1$d ms</string>
+    <string name="gi_run">Detail proses</string>
+    <string name="gi_hidden_steps">Disembunyikan: pertanyaan dan langkah chat orang lain bersifat privat.</string>
+    <string name="gi_chat">Chat</string>
+    <string name="gi_mention">@sebutan</string>
+    <string name="gi_schedule">Jadwal</string>
+    <string name="gi_ticket">Tiket bantuan</string>
+    <string name="gi_reflection">Refleksi</string>
+    <string name="gi_running">Berjalan</string>
+    <string name="gi_succeeded">Berhasil</string>
+    <string name="gi_failed">Gagal</string>
+</resources>

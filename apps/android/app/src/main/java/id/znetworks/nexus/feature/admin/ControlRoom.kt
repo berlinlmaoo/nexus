@@ -64,12 +64,13 @@ object ControlRoomTabs {
     fun forRole(isBoD: Boolean, fakeGps: Boolean = true) = buildList {
         addAll(listOf("users", "attendance", "audit"))
         // Quests are made by BoD and up (owner, 16 Oct 2026); the server answers a Manager 403.
-        if (isBoD) addAll(listOfNotNull("quests", "announcements", "extra-dayoff", "suspects".takeIf { fakeGps }, "gideon", "app"))
+        if (isBoD) addAll(listOfNotNull("quests", "announcements", "extra-dayoff", "suspects".takeIf { fakeGps }, "gideon", "app", "calendar"))
     }
 }
 
 @Composable
 private fun tabLabel(id: String) = when (id) {
+    "calendar" -> stringResource(R.string.calp_tab)
     "users" -> stringResource(R.string.audit_admin_users); "attendance" -> stringResource(R.string.home_attendance); "audit" -> stringResource(R.string.audit_admin_audit); "quests" -> stringResource(R.string.audit_admin_quests); "announcements" -> stringResource(R.string.an_tab)
     "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "suspects" -> stringResource(R.string.fg_tab); "gideon" -> "GIDEON"; else -> "App"
 }
@@ -117,9 +118,15 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, initialTab: String = "u
                 "announcements" -> AnnouncementsTab()
                 "gideon" -> Column(Modifier.fillMaxSize()) {
                     val perf = PerformanceRules.allowed(viewer.role, viewer.isCompanyMember)
-                    PageTabs(listOfNotNull(PageTab("people", stringResource(R.string.gu_people)), if (perf) PageTab("performance", stringResource(R.string.perf_title)) else null), gideonTab, { gideonTab = it })
-                    if (gideonTab == "performance" && perf) GideonPerformanceTab() else GideonUsageTab()
+                    PageTabs(listOfNotNull(PageTab("insights", stringResource(R.string.gi_title)), PageTab("people", stringResource(R.string.gu_people)), PageTab("credits", stringResource(R.string.gc_title)), if (perf) PageTab("performance", stringResource(R.string.perf_title)) else null), gideonTab, { gideonTab = it })
+                    when {
+                        gideonTab == "performance" && perf -> GideonPerformanceTab()
+                        gideonTab == "insights" -> GideonInsightsTab()
+                        gideonTab == "credits" -> GideonCreditAdminTab()
+                        else -> GideonUsageTab()
+                    }
                 }
+                "calendar" -> CalendarPrivacyTab()
                 "app" -> AppInstallsTab()
                 else -> if (!tabContent(tab, viewer.isBoD)) EmptyState(Icons.Filled.AdminPanelSettings, tabLabel(tab), stringResource(R.string.not_on_android_message),
                     stringResource(R.string.open_on_web), { nav.openWeb("/admin") }, Modifier.fillMaxSize())
