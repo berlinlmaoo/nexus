@@ -1,0 +1,18 @@
+<resources>
+    <string name="rev_perf_answers24">Answers · 24 h</string>
+    <string name="rev_perf_errors24">Errors · 24 h</string>
+    <string name="rev_perf_not_reported">Not reported</string>
+    <string name="rev_perf_updated">Updated %1$s s ago</string>
+    <string name="rev_perf_offline">Offline</string>
+    <string name="rev_perf_idle">No answers in 15 min</string>
+    <string name="rev_perf_answers24_count">%1$s answers in 24 h</string>
+    <string name="rev_meeting_bytes">%1$s of %2$s · %3$d %%</string>
+    <string name="rev_meeting_upload">Upload</string>
+    <string name="rev_meeting_transcribe">Transcribe</string>
+    <string name="rev_meeting_ready_step">Minutes &amp; tasks ready</string>
+    <string name="rev_meeting_ready">Ready ? open to review</string>
+    <string name="rev_meeting_transcribing">Transcribing? about %1$d min left</string>
+    <string name="rev_meeting_notify">You can close this. We\'ll notify you when the minutes are ready.</string>
+    <string name="rev_meeting_cancel_upload">Cancel upload</string>
+    <string name="rev_meeting_done">Done</string>
+</resources>

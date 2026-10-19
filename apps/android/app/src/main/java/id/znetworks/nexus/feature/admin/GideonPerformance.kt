@@ -98,13 +98,20 @@ import java.time.format.DateTimeFormatter
     fun at(value: String?) = value?.let { runCatching { Instant.parse(it).atZone(OfficeTime.ZONE).format(DateTimeFormatter.ofPattern("HH:mm:ss", locale)) }.getOrNull() } ?: "—"
     val stale = PerformanceRules.stale(d.telemetry, Instant.ofEpochMilli(now))
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Column {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(7.dp).background(if (stale) c.warningFg else c.success, CircleShape))
-                Text(stringResource(if (stale) R.string.perf_stale else R.string.perf_live), fontWeight = FontWeight.SemiBold, color = c.foreground)
+        item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PerfTile(R.string.rev_perf_answers24, n(d.tiers.sumOf { it.answers24h }), Modifier.weight(1f))
+                // The endpoint exposes failures15m, not a 24-hour error count. Never mislabel that window.
+                PerfTile(R.string.rev_perf_errors24, stringResource(R.string.rev_perf_not_reported), Modifier.weight(1f))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(Modifier.size(7.dp).background(if (stale) c.warningFg else c.success, CircleShape))
+                        Text("GPU", color = c.foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                    val age = d.telemetry.lastAt?.let { runCatching { ((now - Instant.parse(it).toEpochMilli()) / 1000).coerceAtLeast(0) }.getOrNull() }
+                    Text(if (age == null) stringResource(R.string.perf_no_gpu) else stringResource(R.string.rev_perf_updated, n(age)), color = c.mutedFg, fontSize = 11.sp)
+                }
             }
-            val age = d.telemetry.lastAt?.let { runCatching { ((now - Instant.parse(it).toEpochMilli()) / 1000).coerceAtLeast(0) }.getOrNull() }
-            Text(if (age == null) stringResource(R.string.perf_no_gpu) else stringResource(R.string.perf_gpu_age, n(age)), color = c.mutedFg, fontSize = 12.sp)
             Text(stringResource(R.string.perf_subtitle), color = c.mutedFg, fontSize = 11.sp)
             if (error) Text(stringResource(R.string.perf_failed), color = c.dangerText)
         } }
@@ -117,22 +124,29 @@ import java.time.format.DateTimeFormatter
         }
         items(GideonTier.entries, key = { it.key }) { tier ->
             val row = d.tiers.firstOrNull { it.id == tier.key }
-            PerfCard("GIDEON " + tier.label) {
-                Text(stringResource(when (row?.status) { "online" -> R.string.perf_online; "busy" -> R.string.perf_busy; "loading" -> R.string.perf_loading; else -> R.string.perf_unavailable }), color = if (row?.status == "online") c.success else c.warningFg, fontSize = 12.sp)
+            Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp)).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(tier.label, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                    val tone = when (row?.status) { "online" -> c.success; "busy", "loading" -> c.warningFg; else -> c.dangerText }
+                    Text(stringResource(when (row?.status) { "online" -> R.string.perf_online; "busy", "loading" -> R.string.perf_busy; else -> R.string.rev_perf_offline }),
+                        color = tone, fontSize = 12.sp, modifier = Modifier.background(tone.copy(alpha = .12f), CircleShape).padding(horizontal = 9.dp, vertical = 4.dp))
+                }
                 row?.reason?.let { Text(stringResource(when (it) { "transcribing" -> R.string.perf_transcribing; "loading" -> R.string.perf_model_loading; "failing" -> R.string.perf_failing; else -> R.string.perf_down }), color = c.mutedFg, fontSize = 12.sp) }
-                Text(ms(row?.p50Ms), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.foreground)
-                Text(stringResource(R.string.perf_p50), fontSize = 11.sp, color = c.mutedFg)
-                Row(Modifier.fillMaxWidth()) {
-                    PerfMetric(R.string.perf_p95, ms(row?.p95Ms), Modifier.weight(1f))
-                    PerfMetric(R.string.perf_error, row?.errorRate?.let { n(it * 100) + "%" } ?: "—", Modifier.weight(1f))
+                if (row == null || row.answers15m == 0 && row.inFlight == 0) {
+                    Box(Modifier.fillMaxWidth().heightIn(min = 100.dp).background(c.muted.copy(alpha = .5f), RoundedCornerShape(12.dp)).padding(12.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.rev_perf_idle), color = c.mutedFg, fontSize = 13.sp)
+                    }
+                    Text(stringResource(R.string.rev_perf_answers24_count, n(row?.answers24h ?: 0)), color = c.mutedFg, fontSize = 11.sp)
+                } else {
+                    val metrics = listOf(
+                        R.string.perf_p50 to ms(row.p50Ms), R.string.perf_p95 to ms(row.p95Ms),
+                        R.string.perf_error to (row.errorRate?.let { n(it * 100) + "%" } ?: "—"), R.string.perf_inflight to n(row.inFlight),
+                        R.string.perf_credits to (if (tier == GideonTier.EXPERIMENTAL) stringResource(R.string.perf_free) else n(row.avgCredits15m ?: row.avgCredits24h)),
+                        R.string.rev_perf_answers24 to n(row.answers24h))
+                    metrics.chunked(2).forEach { pair -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        pair.forEach { (label, value) -> PerfTile(label, value, Modifier.weight(1f).background(c.muted.copy(alpha = .5f), RoundedCornerShape(12.dp)).padding(10.dp)) }
+                    } }
                 }
-                Row(Modifier.fillMaxWidth()) {
-                    PerfMetric(R.string.perf_inflight, n(row?.inFlight), Modifier.weight(1f))
-                    PerfMetric(R.string.perf_credits, if (tier == GideonTier.EXPERIMENTAL) stringResource(R.string.perf_free) else n(row?.avgCredits15m), Modifier.weight(1f))
-                }
-                if (tier != GideonTier.EXPERIMENTAL && row?.avgCredits15m == null && row?.avgCredits24h != null) Text(stringResource(R.string.perf_avg24, n(row.avgCredits24h)), color = c.mutedFg, fontSize = 11.sp)
-                HorizontalDivider(color = c.border)
-                Text(if (row?.answers15m == 0) stringResource(R.string.perf_no_answers, n(row.answers24h)) else stringResource(R.string.perf_answers, n(row?.answers15m), n(row?.answers24h)), fontSize = 11.sp, color = c.mutedFg)
             }
         }
         item { PerfCard(stringResource(R.string.perf_gpu_title)) {
@@ -193,6 +207,12 @@ import java.time.format.DateTimeFormatter
 }
 @Composable private fun PerfMetric(label: Int, value: String, modifier: Modifier = Modifier) {
     Column(modifier.padding(vertical = 4.dp)) { Text(stringResource(label), fontSize = 11.sp, color = Nx.colors.mutedFg); Text(value, fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground) }
+}
+@Composable private fun PerfTile(label: Int, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground)
+        Text(stringResource(label), fontSize = 11.sp, color = Nx.colors.mutedFg)
+    }
 }
 
 /** The same four hourly plots as the web, with a tap target and an accessible hour picker for exact values. */
