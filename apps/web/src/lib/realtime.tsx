@@ -212,6 +212,9 @@ export function RealtimeProvider({
           flushTimer = null;
           burstStartedAt = 0;
           if (pending.tree) invalidateProjectViews(queryClient, pending.allProjects ? "all" : new Set(pending.projectIds));
+          // A field added, renamed or deleted elsewhere: an open task popup's property rows (["task-cf", taskId], their own
+          // query) refetch too — a deleted field used to stay in the popup until it was reopened (19 Oct 2026).
+          if (pending.tree && (pending.allProjects || pending.projectIds.size > 0)) void queryClient.invalidateQueries({ queryKey: ["task-cf"] }, { cancelRefetch: false });
           if (pending.audit) invalidateAuditViews(queryClient);
           // Z Vault: the folder on screen, search results, the trash and the Move-to picker, all keyed
           // ["vault", …]. Share dialogs (["vault-shares", id]) refetch on their own when opened.
