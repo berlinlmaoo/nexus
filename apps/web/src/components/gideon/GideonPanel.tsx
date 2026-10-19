@@ -104,6 +104,15 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
   }
 }
 
+/** A tool's name in words ("search_workspace" → "Searching your workspace"), for lists of tools used — Control Room
+ *  › GIDEON › Insights (QA final 19 Oct 2026, C-D6). An unknown tool reads as its words, never as snake_case. */
+export function toolLabel(tool: string, t: LangApi["t"]): string {
+  const label = stepText({ id: "", tool, arg: null, label: "", status: "done" }, t);
+  if (label && label !== tool) return label;
+  const words = tool.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : tool;
+}
+
 const STATUS_WORD: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 
 export type GideonPanelVariant = "float" | "side" | "page";
