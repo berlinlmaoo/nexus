@@ -66,7 +66,9 @@ class BlockEditorApi(private val api:ApiClient) {
             }
         }
         if(failure!=null)throw ApiError.Http(502,failure,null,null)
-        return final?:throw ApiError.Decoding(IllegalStateException("Missing writing result"))
+        val result = final?:throw ApiError.Decoding(IllegalStateException("Missing writing result"))
+        if(result.text("content").isBlank())throw ApiError.Decoding(IllegalStateException("Empty writing result"))
+        return result
     }
     suspend fun save(kind:String,id:String,base:JsonObject,doc:JsonObject,keepBoth:Boolean=false):JsonObject {
         val body=buildJsonObject{put("kind",kind);put("id",id);put("base",base);put("doc",doc);put("keepBoth",keepBoth)}

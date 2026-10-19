@@ -32,6 +32,13 @@ internal fun GideonProjectTools(projectId: String) {
 }
 
 @Composable
+internal fun GideonAutofillButton(projectId: String) {
+    var open by remember(projectId) { mutableStateOf(false) }
+    TextButton(onClick = { open = true }) { Text(stringResource(R.string.gpt_autofill)) }
+    if (open) ProjectToolsDialog(projectId, "autofill") { open = false }
+}
+
+@Composable
 private fun ProjectToolsDialog(project: String, kind: String, close: () -> Unit) {
     val ctx = LocalContext.current
     val container = (ctx.applicationContext as NexusApplication).container
@@ -103,7 +110,7 @@ private fun ProjectToolsDialog(project: String, kind: String, close: () -> Unit)
                             if (field != null) AutofillConfigCard(config,field,manage,d.flag("configured"),busy, { patch -> perform { api.saveAutofill(field.id,patch) } }, { all ->
                                 val action: suspend () -> Unit = { val result = api.runAutofill(field.id, if (all) "all" else "empty"); message = ctx.getString(R.string.gpt_fill_started,result.number("count")?.toInt() ?: 0,result.number("remaining")?.toInt() ?: 0) }
                                 if (all) confirmation = ctx.getString(R.string.gpt_refill_confirm) to action else perform(action)
-                            }, { confirmation = ctx.getString(R.string.gpt_remove_confirm) to { api.deleteAutofill(field.id); Unit } })
+                            }, { confirmation = ctx.getString(R.string.gpt_remove_confirm) to { api.deleteAutofill(field.id); Unit } }, { close(); container.router.open(id.znetworks.nexus.core.nav.Target.Gideon) })
                         }
                         val eligible = fields.filter { it.kind in listOf("TEXT","URL","NUMBER","SELECT","DROPDOWN","MULTI_SELECT","STATUS","DATE") && configs.none { c -> c.text("customFieldId") == it.id } }
                         if (configs.isEmpty()) Text(stringResource(R.string.gpt_no_fields))
@@ -140,7 +147,7 @@ private fun ScheduleEditor(row: JsonObject, busy: Boolean, error: String?, close
 }
 
 @Composable
-private fun AutofillConfigCard(c: JsonObject, field: CustomFieldDef, manage: Boolean, configured: Boolean, busy: Boolean, save: (JsonObject)->Unit, run: (Boolean)->Unit, remove: ()->Unit) {
+private fun AutofillConfigCard(c: JsonObject, field: CustomFieldDef, manage: Boolean, configured: Boolean, busy: Boolean, save: (JsonObject)->Unit, run: (Boolean)->Unit, remove: ()->Unit, review: ()->Unit) {
     var prompt by remember(c.text("customFieldId"),c.text("prompt")) { mutableStateOf(c.text("prompt")) }
     val running=c.objectAt("lastResult").text("at")=="running"
     fun toggle(key:String,on:Boolean)=save(buildJsonObject{put(key,on)})
@@ -152,6 +159,7 @@ private fun AutofillConfigCard(c: JsonObject, field: CustomFieldDef, manage: Boo
         OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.gpt_instructions))},enabled=manage,modifier=Modifier.fillMaxWidth())
         TextButton(onClick={save(buildJsonObject{put("prompt",prompt)})},enabled=manage&&prompt!=c.text("prompt")){Text(stringResource(R.string.save))}
         Row{Text(stringResource(R.string.gpt_review),Modifier.weight(1f));Switch(c.text("approval")!="auto",{save(buildJsonObject{put("approval",if(it)"review" else "auto")})},enabled=manage)}
+        if(c.text("approval")!="auto") TextButton(onClick=review,enabled=!busy){Text(stringResource(R.string.gpt_review_gideon))}
         if(c.text("lastRunAt").isNotBlank())Text(scheduleStatus(c.text("lastStatus")) + " / " + id.znetworks.nexus.feature.chat.chatTime(c.text("lastRunAt")))
         val last=c.objectAt("lastResult")
         if(running)Text(stringResource(R.string.gpt_running)) else if(last.isNotEmpty())Text(stringResource(R.string.gpt_result,last.number("filled")?.toInt()?:0,last.number("proposed")?.toInt()?:0,last.number("skipped")?.toInt()?:0))

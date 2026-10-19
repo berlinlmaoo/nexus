@@ -322,3 +322,5 @@ Round-2 refinements: automation fields/forms are typed and searchable, status ru
 Refinement validation: 864 JVM tests, zero failures, and assembleDebug passed with DEV routing configured. Added dedicated cases for shared-enum section routing, schedule bounds, typed operators, mark preservation and unsafe-link rejection. The round-2 bundle includes all committed groups and is regenerated after this report update.
 
 Isolation check: local body drafts and penalty acknowledgements are scoped by server origin as well as user ID, so DEV and production copies cannot reuse one another's saved state. Language names and token clipboard labels are resources in both locales. Validation remains 864 tests and assembleDebug passing.
+
+Autofill review flow: project field settings opens Autofill directly, and review-mode configurations link to the existing GIDEON proposal cards for preview/apply/discard. Writing stream tests cover malformed frames, final-vs-partial results, task context/tone/language, explicit errors and empty finals; partial or empty output cannot become replacement text. Validation: 866 tests and assembleDebug passed.

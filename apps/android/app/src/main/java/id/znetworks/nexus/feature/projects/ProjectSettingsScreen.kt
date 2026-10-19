@@ -286,6 +286,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 }
                 if (s.roleKnown && !canChange) Text(stringResource(R.string.ps_tabs_managers), fontSize = 11.sp, color = c.mutedFg)
             }
+            if (!ro) id.znetworks.nexus.feature.gideon.GideonAutofillButton(d.id)
             // Custom fields
             Section(stringResource(R.string.ps_fields), action = { if (!ro) TextButton(onClick = { addingField = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.add)) } }) {
                 if (s.fields.isEmpty()) Text(stringResource(R.string.ps_no_fields), fontSize = 12.sp, color = c.mutedFg)

@@ -31,4 +31,5 @@
     <string name="gpt_refill">Refill all</string>
     <string name="gpt_language_en">English</string>
     <string name="gpt_language_id">Bahasa Indonesia</string>
+    <string name="gpt_review_gideon">Review proposals in GIDEON</string>
 </resources>
