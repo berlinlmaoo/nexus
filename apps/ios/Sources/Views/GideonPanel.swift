@@ -361,12 +361,12 @@ struct GideonPanel: View {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
                     Button { showChats = true } label: { Image(systemName: "clock.arrow.circlepath") }
-                        .accessibilityLabel(T("Chat history"))
+                        .accessibilityLabel(T("Chat history")).accessibilityIdentifier("gideon.toolbar.history")
                 }
                 ToolbarItem(placement: .principal) { compactTitle }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { newChat() } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel(T("New chat"))
+                        .accessibilityLabel(T("New chat")).accessibilityIdentifier("gideon.toolbar.new")
                     Menu {
                         Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
                         if reviewTurns == nil { Button { showMemory = true } label: { Label(T("GIDEON Memory"), systemImage: "brain") }.accessibilityIdentifier("gideon.memory.menu") }
@@ -375,7 +375,7 @@ struct GideonPanel: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel(T("Chat options"))
+                    .accessibilityLabel(T("Chat options")).accessibilityIdentifier("gideon.toolbar.options")
                 }
             }
         }
