@@ -327,6 +327,7 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "list_custom_fields": return "Reading the project's fields"
     case "get_task": return a ? `Reading task ${a}` : "Reading a task"
     case "search_docs": return a ? `Searching docs for “${a}”` : "Searching docs"
+    case "list_docs": return a ? `Listing pages in ${a}` : "Listing pages"
     case "get_doc": return a ? `Reading doc ${a}` : "Reading a doc"
     case "create_task": return a ? `Creating task ${a}` : "Creating a task"
     case "update_task": return a ? `Updating task ${a}` : "Updating a task"
@@ -370,6 +371,12 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
         const id = str(input.taskId)
         if (!id) return null
         return (await prisma.task.findUnique({ where: { id }, select: { title: true } }))?.title ?? null
+      }
+      // The project(s) asked about: an id's name, or the name filter as typed ("Master").
+      case "list_docs": {
+        const id = str(input.projectId) ?? str(input.project_id)
+        if (id) return (await prisma.project.findUnique({ where: { id }, select: { name: true } }))?.name ?? null
+        return str(input.projectQuery) ?? str(input.project_query) ?? str(input.project)
       }
       case "get_doc": {
         const id = str(input.docId)
@@ -448,6 +455,9 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
       break
     case "search_docs":
       if (Array.isArray(d)) for (const doc of d.slice(0, 8)) if (doc?.id) push({ kind: "doc", id: doc.id, title: doc.title, projectId: doc.projectId ?? null, url: docUrl(doc.id) })
+      break
+    case "list_docs":
+      if (Array.isArray(d.items)) for (const doc of d.items.slice(0, 10)) if (doc?.id) push({ kind: "doc", id: doc.id, title: doc.title, projectId: doc.project?.id ?? null, url: docUrl(doc.id) })
       break
     case "get_doc":
       if (d.id) push({ kind: "doc", id: d.id, title: d.title, projectId: d.projectId ?? null, url: docUrl(d.id) })
