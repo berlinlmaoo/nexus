@@ -163,6 +163,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
 
     // The removal and its log line ("Budi removed Mira" / "Mira left") together, or neither.
     const system = await prisma.$transaction(async (tx) => {
+      // The count above was read before this transaction: everyone leaving at the same moment all passed it and
+      // left a group with no members (QA final 19 Oct 2026). One member change per group at a time, then count again.
+      await tx.$executeRaw`SELECT 1 FROM "Conversation" WHERE id = ${convo.id} FOR UPDATE`
+      if ((await tx.conversationMember.count({ where: { conversationId: convo.id } })) <= 1) return LAST_MEMBER
       const { count } = await tx.conversationMember.deleteMany({ where: { conversationId, userId: target } })
       if (count === 0) return null
       const leaving = target === userId
@@ -175,6 +179,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
           : { type: "member_removed", actor, targets: [removed] },
       })
     })
+    if (system === LAST_MEMBER) return NextResponse.json({ error: LAST_MEMBER_MESSAGE, code: LAST_MEMBER }, { status: 400 })
     if (system) {
       // Out of the room's socket at once; the line reaches who is still in it, and every member's
       // list (the one who left included) refreshes.
