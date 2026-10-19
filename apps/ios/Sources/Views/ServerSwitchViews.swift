@@ -131,11 +131,13 @@ struct LoginServerSwitch: ViewModifier {
 
 /// Tuning Room → Notifications (DEV server, 12 Oct 2026): "Automation notifications". Off = what an
 /// automation's "Send notification" says lands in the Inbox only, without a push. Default on. Drawn only
-/// once the server answers with the key, so a server without it shows nothing.
+/// with explicit loading, failure and unsupported-server states.
 struct AutomationNotificationsCard: View {
     @State private var on: Bool?
     @State private var saving = false
     @State private var failed = false
+    @State private var loading = true
+    @State private var loadFailed = false
 
     var body: some View {
         Group {
@@ -157,11 +159,31 @@ struct AutomationNotificationsCard: View {
                     }
                 }
                 .nexusCard()
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(T("Notifications")).font(NXFont.text(15, .bold))
+                    if loading {
+                        HStack { ProgressView(); Text(T("Loading…")) }
+                            .accessibilityIdentifier("notifications.loading")
+                    } else if loadFailed {
+                        Text(T("Couldn't load notification preferences.")).foregroundStyle(NX.danger)
+                        Button(T("Retry")) { Task { await load() } }
+                            .buttonStyle(.nxBordered).accessibilityIdentifier("notifications.retry")
+                    } else {
+                        Text(T("Automation notification preferences aren't available on this server."))
+                            .foregroundStyle(NX.mutedFg)
+                    }
+                }.font(NXFont.text(13)).frame(maxWidth: .infinity, alignment: .leading).nexusCard()
             }
         }
-        .task {
-            if let p = try? await APIClient.shared.notificationPrefs(), let a = p.automation { on = a }
-        }
+        .task { await load() }
+    }
+
+    @MainActor private func load() async {
+        loading = true; loadFailed = false
+        defer { loading = false }
+        do { on = try await APIClient.shared.notificationPrefs().automation }
+        catch { loadFailed = true }
     }
 
     private func save(_ v: Bool) async {

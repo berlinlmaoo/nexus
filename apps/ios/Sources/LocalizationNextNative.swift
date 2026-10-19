@@ -2,6 +2,8 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianNextNative: [String: String] = [
+        "Couldn't load notification preferences.": "Preferensi notifikasi tidak bisa dimuat.",
+        "Automation notification preferences aren't available on this server.": "Preferensi notifikasi otomatis belum tersedia di server ini.",
         "%@ credits · %@ answers": "%1$@ kredit · %2$@ jawaban",
         "%@ tokens out": "%1$@ token keluar",
         "Choose an audio file: M4A, MP3, WAV, WebM, OGG, AAC or FLAC.": "Pilih file audio: M4A, MP3, WAV, WebM, OGG, AAC, atau FLAC.",
