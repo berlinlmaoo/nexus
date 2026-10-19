@@ -115,6 +115,12 @@ assert.equal(buildGideonPrompt([{ role: "user", content: "halo" }, { role: "assi
   assert.equal(got[0], many[4].content)
   assert.equal(new Set(got).size, got.length)
 }
+// Kill switch (AppSetting gideon-history {standing:false}): no block, the rule rides in the history list again.
+{
+  const out = buildGideonPrompt([...longChat(20), ask], who, { standingRules: false })
+  assert.equal(out.includes("[ATURAN TETAP"), false)
+  assert.ok(out.includes(RULE))
+}
 // The block says rules never override the system rules above it.
 assert.match(standingBlock(["x"], "Budi Contoh"), /tidak pernah mengalahkan aturan di atas/)
 console.log("gideon-compact ok")

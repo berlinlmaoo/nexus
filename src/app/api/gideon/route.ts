@@ -34,10 +34,16 @@ import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, park
 
 // The prompt builder (cache order, long-history compaction, the person's standing rules) is pure and lives in
 // src/lib/gideon-history.ts so it can be unit-tested; only the AppSetting lookup stays here.
-/** Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts. */
-async function historyMode(): Promise<HistoryMode> {
-  const v = await getAppSetting<{ mode?: string }>("gideon-history").catch(() => null)
-  return v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE
+/**
+ * Which history shape to use: AppSetting "gideon-history" { mode } overrides the default (tests), else facts.
+ * { standing: false } turns off the pinned block of the person's standing rules (kill switch; default on).
+ */
+async function historyOptions(): Promise<{ historyMode: HistoryMode; standingRules: boolean }> {
+  const v = await getAppSetting<{ mode?: string; standing?: boolean }>("gideon-history").catch(() => null)
+  return {
+    historyMode: v?.mode && HISTORY_MODES.has(v.mode as HistoryMode) ? (v.mode as HistoryMode) : DEFAULT_HISTORY_MODE,
+    standingRules: v?.standing !== false,
+  }
 }
 
 // File types GIDEON can actually be asked about. This is not a wish list: Hermes reaches a document
@@ -434,7 +440,7 @@ export async function POST(req: NextRequest) {
             ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
             : '',
       ].filter(Boolean)
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], historyMode: await historyMode() })
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, { rules, personal: [...prefsLines, ...memory.personal], dynamic: [...dynamic, ...memory.dynamic], ...(await historyOptions()) })
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
       const payload = JSON.stringify({

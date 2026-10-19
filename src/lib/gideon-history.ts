@@ -118,7 +118,7 @@ export function standingBlock(lines: string[], name: string): string {
 export function buildGideonPrompt(
   history: Msg[],
   who: { name: string; email: string },
-  parts: { rules?: string[]; personal?: string[]; dynamic?: string[]; historyMode?: HistoryMode } = {},
+  parts: { rules?: string[]; personal?: string[]; dynamic?: string[]; historyMode?: HistoryMode; standingRules?: boolean } = {},
 ): string {
   const msgs = (history || []).filter((m) => m && typeof m.content === "string" && m.content.trim())
   const last = msgs[msgs.length - 1]?.content?.trim() || ""
@@ -144,7 +144,8 @@ export function buildGideonPrompt(
   const speaker = (m: { role: string }) => (m.role === "user" ? name : "Gideon")
   const prior = msgs.slice(0, -1)
   // Read from the WHOLE chat (not the window below): a rule from turn 3 of a 300-turn chat still holds.
-  const standing = standingInstructions(prior)
+  // Kill switch: AppSetting "gideon-history" { standing: false } (then rules ride in the history list as before).
+  const standing = parts.standingRules === false ? [] : standingInstructions(prior)
   const standingSet = new Set(standing)
   const pinned = standingBlock(standing, name)
   const tail = (convo: string) => `${head}\n\n${convo}${pinned ? `${pinned}\n\n` : ""}Pesan terbaru dari ${name}: ${last.slice(0, 6000)}`
@@ -191,7 +192,7 @@ export function buildGideonPrompt(
   let answers = older.filter((m) => m.role !== "user").slice(-4).map((m) => `- Gideon: ${clipText(m.content, 200)}`)
   const build = (recentCap: number) => {
     const blocks: string[] = []
-    if (said.length) blocks.push(`Yang sudah dikatakan ${name} di percakapan ini (urut, dipotong; angka, nama, tanggal dan keputusan di sini tetap berlaku):\n${said.join("\n")}`)
+    if (said.length) blocks.push(`Yang sudah dikatakan ${name} di percakapan ini (urut, dipotong; angka, nama, tanggal, keputusan dan aturan di sini tetap berlaku):\n${said.join("\n")}`)
     if (answers.length) blocks.push(`Jawaban Gideon sebelumnya (dipotong):\n${answers.join("\n")}`)
     if (recent.length) blocks.push(`Percakapan terakhir:\n${recent.map((m) => `${speaker(m)}: ${clipText(m.content, recentCap)}`).join("\n")}`)
     return tail(blocks.length ? `${blocks.join("\n\n")}\n\n` : "")
