@@ -91,6 +91,11 @@ export const BUS_EVENTS = {
   ACCESS_CHANGED: "access-changed",
   /** A form got a response (or lost one) → `project:<id>` ("form-responses-changed", ids only). */
   FORM_RESPONSES_CHANGED: "form-responses-changed",
+  /**
+   * A form's builder content changed (live co-editing, 19 Oct 2026): `form-ops` { formId, version, kind, ops, actor,
+   * originTab, form } → room `form:<id>` (Can edit and up). lib/form-coedit-server.ts.
+   */
+  FORM_OPS: "form-ops",
   /** A GIDEON answer was billed (or the person's credits changed) → `user:<id>` ("gideon-credits", their own summary). */
   GIDEON_CREDITS: "gideon-credits",
   /** A personal reminder was made, cancelled or went off (18 Oct 2026): `reminders-changed` { id } to user:<id>. */

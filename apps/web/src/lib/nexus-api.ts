@@ -1533,7 +1533,13 @@ export type NexusForm = {
   branding?: NexusFormBranding | null;
   settings?: NexusFormSettings | null;
   updatedAt?: string;
+  /** Live co-editing (server since 19 Oct 2026): +1 per write of the builder content. Absent on older servers. */
+  version?: number;
 };
+
+/** One builder edit, merged at field level by the server (PATCH /api/forms/:id { ops }, 19 Oct 2026). */
+export type NexusFormOp = import("@/components/forms/form-coedit").FormOp;
+export type NexusFormOpsResult = { form: NexusForm; version: number; applied: number; skipped: { index: number; op: string; reason: string }[] };
 
 export type NexusTeam = {
   id: string;
@@ -3104,6 +3110,10 @@ export const nexusApi = {
   /** The forms of many projects in one request (server since 12 Oct 2026; up to 300 ids; projects the caller can't open are skipped). */
   formsMany: (projectIds: string[]) => apiFetch<NexusForm[]>(`/api/forms?projectIds=${projectIds.map(encodeURIComponent).join(",")}`),
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
+  /** The builder's catch-up read: the form without its submissions (server since 19 Oct 2026). */
+  formLite: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}?lite=1`),
+  /** Live co-editing: apply these ops (only what this person changed) to the form as it is now. */
+  formOps: (formId: string, ops: NexusFormOp[], baseVersion?: number) => apiFetch<NexusFormOpsResult>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify({ ops, ...(baseVersion !== undefined ? { baseVersion } : {}) }) }),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null; /** The form's updatedAt this edit started from: 409 FORM_CHANGED when someone saved since (race audit H7). */ baseUpdatedAt?: string }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   /** The builder's Responses tab: submissions newest first with the task each one created (12 Oct 2026). */

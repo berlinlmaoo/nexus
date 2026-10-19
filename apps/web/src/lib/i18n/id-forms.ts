@@ -1,5 +1,10 @@
 /** English → Indonesian for the Notion-style form builder (12 Oct 2026). Keys must be unique across all id-*.ts files. */
 export const ID_FORMS: Record<string, string> = {
+  // Live co-editing (A-12, 19 Oct 2026)
+  "{name} is editing": "{name} sedang mengedit",
+  "{name} and {n} more are editing": "{name} dan {n} lainnya sedang mengedit",
+  "Also editing: {names}": "Ikut mengedit: {names}",
+  "You can view this form but not change it.": "Kamu bisa melihat form ini tapi tidak bisa mengubahnya.",
   "1 question was shown only after it; it now always shows.": "1 pertanyaan tadinya hanya muncul setelah pertanyaan ini; sekarang selalu muncul.",
   "{n} questions were shown only after it; they now always show.": "{n} pertanyaan tadinya hanya muncul setelah pertanyaan ini; sekarang selalu muncul.",
   "1 response": "1 jawaban",

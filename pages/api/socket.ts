@@ -155,6 +155,16 @@ export function initializeSocketServer(
       // Control Room › GIDEON › Performance (18 Oct 2026): BoD / One Above All of the company workspace only.
       case "gideon":
         return { ok: id === "perf" && (await isOrgBodPlus(userId).catch(() => false)) }
+      // A form's live builder (co-editing, 19 Oct 2026): Can edit and up only. Viewers see the form's Preview and
+      // Responses, never the editors' room (QA A-18), so they neither hear ops nor show up as editing.
+      case "form": {
+        const form = await prisma.form.findUnique({ where: { id }, select: { projectId: true } })
+        if (!form) return { ok: false }
+        const ok = (await checkProjectAccess(userId, form.projectId, ["MEMBER"])).allowed
+        if (!ok) return { ok: false }
+        rememberAccess(userId, form.projectId, true)
+        return { ok: true, projectId: form.projectId }
+      }
       case "sheet": {
         const access = await resolveSheetAccess(userId, id, ["VIEWER"])
         if (!access.allowed) return { ok: false }
@@ -267,6 +277,8 @@ export function initializeSocketServer(
     // At once (events for them wait for the answer, see emitGuarded), then again after the delays in case
     // the change was announced inside a transaction that had not committed yet.
     for (const key of pairs) { const [u, p] = key.split("|"); void recheckAccess(u, p) }
+    // Form builder rooms need Can edit, not just access: someone moved down to Can view leaves them now.
+    for (const key of pairs) { const [u, p] = key.split("|"); void recheckFormRooms(u, p) }
     for (const delay of ACCESS_RECHECK_DELAYS_MS) {
       setTimeout(() => {
         for (const key of pairs) {
@@ -275,6 +287,23 @@ export function initializeSocketServer(
           void recheckAccess(u, p)
         }
       }, delay).unref?.()
+    }
+  }
+
+  /** Takes this user's sockets out of the `form:` rooms of the project when they can no longer edit it. */
+  async function recheckFormRooms(userId: string, projectId: string) {
+    const holders = [...io.sockets.sockets.values()].filter((s) => s.data.userId === userId && [...roomProjectsOf(s)].some(([room, pid]) => pid === projectId && room.startsWith("form:")))
+    if (holders.length === 0) return
+    const canEdit = await checkProjectAccess(userId, projectId, ["MEMBER"]).then((r) => r.allowed).catch(() => true)
+    if (canEdit) return
+    for (const socket of holders) {
+      for (const [room, pid] of [...roomProjectsOf(socket)]) {
+        if (pid !== projectId || !room.startsWith("form:")) continue
+        roomProjectsOf(socket).delete(room)
+        presenceLeave(socket, room)
+        socket.leave(room)
+        socket.emit("join-denied", { room, reason: "revoked" })
+      }
     }
   }
 
@@ -343,7 +372,28 @@ export function initializeSocketServer(
       })
   }
 
+  /**
+   * Who is in a form's builder and which question each one is on (live co-editing, 19 Oct 2026), as its own
+   * event for the same reason as `sheet-presence`. One entry per person (several tabs fold into one; the
+   * question is the one they focused last). `questionId` null = in the builder, on no question.
+   */
+  const formFocus = new Map<string, { questionId: string | null; at: number }>() // `${room}|${socketId}`
+  function broadcastFormPresence(room: string) {
+    if (!room.startsWith("form:")) return
+    const people = new Map<string, { userId: string; name: string; avatar: string | null; color: string; questionId: string | null; at: number }>()
+    for (const [sid, m] of roomPresence.get(room) ?? []) {
+      const focus = formFocus.get(`${room}|${sid}`) ?? { questionId: null, at: 0 }
+      const prev = people.get(m.userId)
+      if (!prev || focus.at > prev.at) people.set(m.userId, { userId: m.userId, name: m.name, avatar: m.avatar, color: m.color, questionId: focus.questionId, at: focus.at })
+    }
+    io.to(room).emit("form-presence", {
+      formId: room.slice(5),
+      members: [...people.values()].map(({ at: _at, ...m }) => m),
+    })
+  }
+
   function broadcastSheetPresence(room: string) {
+    broadcastFormPresence(room)
     if (!room.startsWith("sheet:")) return
     io.to(room).emit("sheet-presence", {
       sheetId: room.slice(6),
@@ -361,6 +411,7 @@ export function initializeSocketServer(
     const members = roomPresence.get(room)
     if (!members) return
     const member = members.get(socket.id)
+    formFocus.delete(`${room}|${socket.id}`)
     if (!members.delete(socket.id)) return
     if (members.size === 0) roomPresence.delete(room)
     else io.to(room).emit("presence-update", Array.from(members.values()))
@@ -553,6 +604,19 @@ export function initializeSocketServer(
       relayTyping(typingFrom(event.conversationId, event.typing))
     })
 
+    // Which question of a form's builder this person is on (live co-editing): only into a form room this socket
+    // was admitted to (Can edit). Ephemeral, like sheet-cursor; nothing stored. Sent on change only.
+    socket.on("form-focus", (data: { formId?: unknown; questionId?: unknown }) => {
+      const formId = typeof data?.formId === "string" ? data.formId : ""
+      const room = `form:${formId}`
+      if (!formId || !socket.rooms.has(room)) return
+      const questionId = typeof data.questionId === "string" && data.questionId.length <= 100 ? data.questionId : null
+      const key = `${room}|${socket.id}`
+      if (formFocus.get(key)?.questionId === questionId && formFocus.has(key)) return
+      formFocus.set(key, { questionId, at: Date.now() })
+      broadcastFormPresence(room)
+    })
+
     socket.on("heartbeat", () => {
       const now = Date.now()
       for (const room of (socket.data.presenceRooms as Set<string> | undefined) ?? []) {
@@ -620,6 +684,11 @@ export function initializeSocketServer(
 
   eventBus.on(BUS_EVENTS.ACCESS_CHANGED, (data: { projectId: string | null; userIds: string[] | null }) => {
     onAccessChanged(data?.projectId ?? null, Array.isArray(data?.userIds) ? data.userIds : null)
+  })
+
+  // A form's builder content changed (live co-editing, lib/form-coedit-server.ts): to its editors' room.
+  eventBus.on(BUS_EVENTS.FORM_OPS, (data: { projectId: string; formId: string; payload: unknown }) => {
+    if (typeof data?.formId === "string" && data.formId) emitGuarded(`form:${data.formId}`, "form-ops", data.payload)
   })
 
   // A form got a response: its owner's open Responses tab refetches (realtime bug 6). Ids only.
