@@ -6,7 +6,7 @@ import { POSITION_ID_ORDER, TASK_ORDER } from "@/lib/task-order"
 import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import {
   normalizeAutoAssignConfig,
@@ -294,15 +294,12 @@ export async function DELETE(
     }
 
     const projectId = (await params).projectId
-    const auditLogId = await logAudit({
-      action: "delete", entityType: "project", entityId: projectId, entityName: existing.name,
-      userId: session.user.id!, request,
-    })
-
-    // Everything the delete takes with it is kept first, so Control Room → Audit can restore it.
-    await deleteKeepingSnapshot({
+    // Everything the delete takes with it is kept first, so Control Room → Audit can restore it. Through
+    // restorableDelete (audit row + copy) so a second delete of the same project at once ends as an
+    // idempotent delete instead of a 500 (QA final 19 Oct: 4 parallel deletes = 1x 200 + 3x 500).
+    await restorableDelete({
       entityType: "project", entityId: projectId, entityName: existing.name, workspaceId: existing.workspaceId,
-      deletedById: session.user.id!, auditLogId,
+      userId: session.user.id!, request,
       meta: { open: { type: "project", id: projectId }, projectId },
       remove: (tx) => tx.project.delete({ where: { id: projectId } }),
     })
