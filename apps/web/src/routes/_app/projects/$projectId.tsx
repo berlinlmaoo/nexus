@@ -1594,6 +1594,9 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const qc = useQueryClient();
   const { t } = useLang();
   const bulk = useTaskBulk();
+  // Can view / Can comment: no drag affordance (QA final 19 Oct: a viewer could pick a card up and got
+  // "Couldn't move the task" on the drop).
+  const canEditHere = useProjectCanEdit();
   const draft = task.id.startsWith("draft-");
   const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
@@ -1609,7 +1612,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
       <div
         role="button"
         tabIndex={0}
-        draggable={!linkedFrom && !draft}
+        draggable={!linkedFrom && !draft && canEditHere}
         onDragStart={(e) => onDrag(task, lane, row, e)}
         onDragEnd={onDragEnd}
         onClick={cardProps.onClick}
@@ -1976,7 +1979,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     for (const k of fallbackKeys) { const d = parseDate(taskValues(task, k)[0]); if (d) return d; }
     return null;
   };
-  const movable = (task: NexusTask) => canDrag && !!ownDate(task);
+  const canEditDates = useProjectCanEdit();
+  const movable = (task: NexusTask) => canDrag && canEditDates && !!ownDate(task);
   const dated = tasks.filter((task) => dateOf(task));
   const undated = tasks.filter((task) => !dateOf(task));
   // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
@@ -2366,6 +2370,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   groups: TaskGroup[]; groupBy: string | null; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
   onSetDates: (task: NexusTask, changes: Record<string, string | null>) => void;
 }) {
+  const canEditBars = useProjectCanEdit();
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
   // Phone: the frozen column is the title only, ~40% of the width, so the bars have room (Duration and
@@ -2640,7 +2645,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
                     const dragging = drag?.id === task.id && drag.moved;
-                    const canMove = (startW || endW) && !marker && !task.id.startsWith("draft-");
+                    const canMove = canEditBars && (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
