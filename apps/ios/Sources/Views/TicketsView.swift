@@ -744,6 +744,7 @@ private struct TicketLaneHeader: View {
         HStack(spacing: 8) {
             Circle().fill(tone.fg).frame(width: 8, height: 8)
             Text(ticketStatusLabel(status)).font(NXFont.text(14, .semibold)).foregroundStyle(tone.fg)
+                .lineLimit(1).minimumScaleFactor(0.8)
             Spacer()
             Text(AppNumber.int(count)).font(NXFont.text(12, .semibold)).foregroundStyle(tone.fg.opacity(0.8)).monospacedDigit()
         }
