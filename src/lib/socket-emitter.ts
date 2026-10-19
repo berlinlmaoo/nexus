@@ -3,12 +3,39 @@ import { eventBus, BUS_EVENTS } from "./event-bus"
 /** Emit a task-created event to all clients watching a project */
 export function emitTaskCreated(projectId: string, task: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.TASK_CREATED, { projectId, task })
+  pingAssignees(task)
 }
 
 /** Emit a task-updated event to all clients watching a project */
 export function emitTaskUpdated(projectId: string, task: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.TASK_UPDATED, { projectId, task })
+  pingAssignees(task)
   pingSubmitterLater(typeof task?.id === "string" ? task.id : null)
+}
+
+/**
+ * R-13 (19 Oct 2026): the people a task is assigned to are usually not in its project room, yet their Home "Tasks"
+ * tile and My Tasks list show it. They get `workspace-changed` { kind: "tasks" } in their own `user:<id>` room —
+ * ids only; the lists refetch through the API. A client that does not know the kind refetches its project tree.
+ */
+export function taskAssigneeIds(task: Record<string, unknown> | null | undefined): string[] {
+  const ids = new Set<string>()
+  if (!task || typeof task !== "object") return []
+  if (typeof task.assigneeId === "string" && task.assigneeId) ids.add(task.assigneeId)
+  if (Array.isArray(task.assignees)) {
+    for (const a of task.assignees as Array<Record<string, unknown> | null>) {
+      if (!a || typeof a !== "object") continue
+      const user = a.user as Record<string, unknown> | null | undefined
+      const id = typeof a.userId === "string" ? a.userId : typeof user?.id === "string" ? user.id : null
+      if (id) ids.add(id)
+    }
+  }
+  return [...ids]
+}
+
+function pingAssignees(task: Record<string, unknown>) {
+  const ids = taskAssigneeIds(task)
+  if (ids.length) emitWorkspaceChanged(null, { kind: "tasks" }, ids)
 }
 
 /** A task a form submission made changed: its submitter's "My Submissions" refetches (lib/submission-ping.ts). */
@@ -133,7 +160,7 @@ export function originTabOf(req: { headers: { get(name: string): string | null }
   return v && /^[A-Za-z0-9_-]{6,64}$/.test(v) ? v : null
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal" | "bookings"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions" | "legal" | "bookings" | "tasks"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
