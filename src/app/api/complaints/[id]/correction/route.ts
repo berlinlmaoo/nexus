@@ -21,6 +21,7 @@ import {
   serializeAttendanceCorrection, validateCorrectionTimes,
   type CorrectionDecision,
 } from "@/lib/attendance-correction"
+import { emitComplaintChanged } from "@/lib/complaint-realtime"
 
 // Attendance remedy proposed on a ticket, decided by a BoD.
 //
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           }).catch(() => {})
         }
         logAudit({ action: "create", entityType: "attendance_correction", entityId: result.id, userId: me, request, metadata: { source: "reporter", date: String(payload?.date ?? "") } })
+        void emitComplaintChanged(id, "correction")
         return NextResponse.json({ correction: result })
       } catch (error) {
         // Every throw in there is a sentence written to be read by the person who typed the form.
@@ -215,6 +217,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       logAudit({ action: "update", entityType: "attendance_correction", entityId: correction.id, userId: me, request, metadata: { decision: "REJECT", date: dateKey, note } })
       void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+      void emitComplaintChanged(id, "correction")
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
     }
 
@@ -324,6 +327,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       })
       void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan pembatalan potongan ${dateKey} disetujui BoD — XP dan jatah day off hari itu sudah kembali.`, detailEn: `The BoD approved cancelling the ${dateKey} cut — that day's XP and day off are back.` }).catch(() => {})
       // record: null, and it means it — no AttendanceRecord was read, written or created.
+      void emitComplaintChanged(id, "correction")
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
     }
 
@@ -562,6 +566,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
     void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan koreksi absen ${dateKey} disetujui BoD — catatan absen hari itu sudah diperbarui.`, detailEn: `The BoD approved the attendance correction for ${dateKey} — that day's record is updated.` }).catch(() => {})
 
+    void emitComplaintChanged(id, "correction")
     return NextResponse.json({
       correction: serializeAttendanceCorrection(updatedCorrection),
       record: serializeAttendanceRecord(updatedRecord),

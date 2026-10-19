@@ -45,6 +45,7 @@ import {
 import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '@/lib/gideon-tools'
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 import { MEMORY_ACTIONS, MemoryRefusal, runMemoryTool } from '@/lib/gideon-memory'
+import { emitComplaintChanged } from '@/lib/complaint-realtime'
 
 type GideonAction =
   | 'list_projects'
@@ -1438,13 +1439,19 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return createDocument(actor, input)
     case 'get_attendance_day':
       return getAttendanceDay(actor, input)
-    case 'propose_attendance_correction':
-      return proposeAttendanceCorrection(actor, input, undefined, { enforceTicketDate: true })
+    case 'propose_attendance_correction': {
+      const proposed = await proposeAttendanceCorrection(actor, input, undefined, { enforceTicketDate: true })
+      if (typeof input.complaintId === 'string') void emitComplaintChanged(input.complaintId, 'correction')
+      return proposed
+    }
     // The second remedy. Still a proposal: it writes an AttendanceCorrection row and a thread
     // message, and no XP moves until a BoD taps approve. There is no tool action here that applies
     // one, by design and not by omission.
-    case 'propose_penalty_cancellation':
-      return proposeAttendancePenaltyCancellation(actor, input, undefined, { enforceTicketDate: true })
+    case 'propose_penalty_cancellation': {
+      const proposed = await proposeAttendancePenaltyCancellation(actor, input, undefined, { enforceTicketDate: true })
+      if (typeof input.complaintId === 'string') void emitComplaintChanged(input.complaintId, 'correction')
+      return proposed
+    }
     // Menutup tiket yang memang sudah tidak menyisakan apa pun. SERVER yang membuktikan itu (lihat
     // resolveTicketByGideon); model hanya boleh memintanya. Tiket yang masih punya potongan, jatah
     // day-off terpotong, atau usulan yang menunggu, ditolak di sini apa pun kata modelnya.
@@ -2048,6 +2055,7 @@ async function resolveTicketByGideon(actor: { id: string }, input: Record<string
       data: { complaintId, action: 'status', fromStatus: complaint.status, toStatus: 'RESOLVED', actorId: gideon?.id ?? actor.id },
     })
   })
+  void emitComplaintChanged(complaintId, 'status')
   await notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId, status: 'RESOLVED', detail: note.slice(0, 160) }).catch(() => {})
   return { resolved: true, complaintId, date: dateKey, verified: { xpRemaining: remaining, autoDayOffs: pen.autoDayOffs, pendingProposals: 0 } }
 }

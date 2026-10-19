@@ -8,6 +8,7 @@ import { notifyComplaintStatus } from "@/lib/notification-service"
 import {
   isBodPlus, COMPLAINT_STATUSES, COMPLAINT_DETAIL_INCLUDE, serializeComplaintDetail, type ComplaintStatusKey,
 } from "@/lib/complaints"
+import { emitComplaintChanged } from "@/lib/complaint-realtime"
 
 async function load(id: string) {
   return prisma.complaint.findUnique({ where: { id }, include: COMPLAINT_DETAIL_INCLUDE })
@@ -79,6 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     void notifyComplaintStatus({ reporterId: existing.reporterId, complaintId: id, status }).catch(() => {})
 
     const fresh = await load(id)
+    void emitComplaintChanged(id, "status")
     return NextResponse.json(serializeComplaintDetail(fresh!, me, true))
   } catch (error) {
     console.error("Error updating complaint:", error)
