@@ -86,21 +86,25 @@ val NxDark = NxColors(
 )
 
 val LocalNx = staticCompositionLocalOf { NxLight }
+private val LocalNxDark = staticCompositionLocalOf { false }
 
 /** Shorthand for the palette inside composables: `Nx.colors.violet`. */
 object Nx {
     val colors: NxColors @Composable get() = LocalNx.current
+    val isDark: Boolean @Composable get() = LocalNxDark.current
 }
 
 enum class AppTheme { SYSTEM, LIGHT, DARK }
 
+internal fun AppTheme.resolveDark(systemDark: Boolean): Boolean = when (this) {
+    AppTheme.SYSTEM -> systemDark
+    AppTheme.LIGHT -> false
+    AppTheme.DARK -> true
+}
+
 @Composable
 fun NexusTheme(theme: AppTheme = AppTheme.SYSTEM, content: @Composable () -> Unit) {
-    val dark = when (theme) {
-        AppTheme.SYSTEM -> isSystemInDarkTheme()
-        AppTheme.LIGHT -> false
-        AppTheme.DARK -> true
-    }
+    val dark = theme.resolveDark(isSystemInDarkTheme())
     NexusThemeOf(if (dark) NxDark else NxLight, dark, content)
 }
 
@@ -145,7 +149,7 @@ private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () ->
             surfaceContainerHigh = nx.muted, surfaceContainerHighest = Color(0xFFE9EBEF), outlineVariant = nx.border,
         )
     }
-    CompositionLocalProvider(LocalNx provides nx) {
+    CompositionLocalProvider(LocalNx provides nx, LocalNxDark provides dark) {
         MaterialTheme(colorScheme = scheme, typography = NexusTypography, content = content)
     }
 }

@@ -68,7 +68,6 @@ internal fun OutletReportForm(d: OutletMonth, s: OutletState, vm: OutletViewMode
     val c = Nx.colors
     val context = LocalContext.current
     val id = OutletFormat.isId()
-    val form = d.form
     val thisYear = OutletFormat.parseDate(d.today)?.year ?: LocalDate.now().year
     val known = (d.events + d.waitingEarlier).distinctBy { it.id }
     // An event of another month (a waiting one opened elsewhere): fetched once.
@@ -78,6 +77,9 @@ internal fun OutletReportForm(d: OutletMonth, s: OutletState, vm: OutletViewMode
         val eid = s.formEventId ?: return@LaunchedEffect
         if (known.none { it.id == eid }) fetched = runCatching { vm.api.event(vm.projectId, eid) }.getOrNull()
     }
+    val archivedLabel = stringResource(R.string.sm_archived)
+    val totalOnlyLabel = stringResource(R.string.oc_total_only)
+    val form = remember(s.formTick, s.formEventId, event != null, archivedLabel, totalOnlyLabel) { d.reportForm(event, archivedLabel, totalOnlyLabel) }
     val newDate = s.formDate ?: d.today ?: LocalDate.now().toString()
     // The working copy; re-read when another event is picked (not on a refresh, which would lose typing).
     var original by remember(s.formTick, s.formEventId, event != null) { mutableStateOf(OutletDraft.of(event, form, newDate)) }
@@ -143,7 +145,7 @@ internal fun OutletReportForm(d: OutletMonth, s: OutletState, vm: OutletViewMode
             onClick = {
                 tried = true
                 if (draft["name"].isNullOrBlank() || draft["date"].isNullOrBlank()) return@Button
-                val fields = if (event == null) OutletDraft.all(form, draft) else OutletDraft.changes(form, original, draft)
+                val fields = outletValues(if (event == null) OutletDraft.all(form, draft) else OutletDraft.changes(form, original, draft))
                 vm.save(event?.id, fields) { original = draft; onSaved() }
             },
             enabled = !s.busy, colors = ButtonDefaults.buttonColors(containerColor = c.violet),

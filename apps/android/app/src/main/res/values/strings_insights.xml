@@ -1,0 +1,22 @@
+<resources>
+    <string name="gi_title">Insights</string>
+    <string name="gi_days">Last %1$d days</string>
+    <string name="gi_runs">Runs</string>
+    <string name="gi_completion">Completion rate</string>
+    <string name="gi_failures">Failures</string>
+    <string name="gi_people">Active people</string>
+    <string name="gi_empty">No runs match these filters.</string>
+    <string name="gi_tools">%1$d tool calls</string>
+    <string name="gi_private">Chat (private)</string>
+    <string name="gi_duration">Duration: %1$d ms</string>
+    <string name="gi_run">Run details</string>
+    <string name="gi_hidden_steps">Hidden: another person\'s chat questions and steps are private.</string>
+    <string name="gi_chat">Chat</string>
+    <string name="gi_mention">@mention</string>
+    <string name="gi_schedule">Schedule</string>
+    <string name="gi_ticket">Support ticket</string>
+    <string name="gi_reflection">Reflection</string>
+    <string name="gi_running">Running</string>
+    <string name="gi_succeeded">Succeeded</string>
+    <string name="gi_failed">Failed</string>
+</resources>

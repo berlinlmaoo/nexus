@@ -1,0 +1,11 @@
+<resources>
+    <string name="xpa_title">Log XP</string>
+    <string name="xpa_description">Setiap perubahan XP, penambahan maupun potongan, untuk semua orang</string>
+    <string name="xpa_all">Semua</string>
+    <string name="xpa_added">Ditambah (+)</string>
+    <string name="xpa_deducted">Dipotong (−)</string>
+    <string name="xpa_period">Periode ini</string>
+    <string name="xpa_all_time">Semua waktu</string>
+    <string name="xpa_empty">Tidak ada perubahan XP.</string>
+    <string name="xpa_more">Muat lagi</string>
+</resources>

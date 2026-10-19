@@ -24,6 +24,7 @@ object ProjectTabsLogic {
     val KEYS = listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat")
 
     fun key(t: ProjectTab): String? = when (t) {
+        ProjectTab.SOCIAL_OVERVIEW, ProjectTab.SOCIAL_CALENDAR -> null
         ProjectTab.GALLERY -> null // a saved view, not a legacy project tab
         ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.TABLE -> "table"; ProjectTab.SHEET -> "sheet"
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"
@@ -41,8 +42,9 @@ object ProjectTabsLogic {
      * sections stay on the server only so older apps open it as an empty task project). Finance and P&L are
      * gone from every project (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct).
      */
-    fun visible(hidden: Set<String>, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
+    fun visible(hidden: Set<String>, isPipeline: Boolean = false, isOutlet: Boolean = false, isSocial: Boolean = false): List<ProjectTab> = if (isSocial) listOf(ProjectTab.SOCIAL_OVERVIEW, ProjectTab.SOCIAL_CALENDAR) + (if ("chat" !in hidden) listOf(ProjectTab.CHAT) else emptyList()) else ProjectTab.entries.filter {
         when (it) {
+            ProjectTab.SOCIAL_OVERVIEW, ProjectTab.SOCIAL_CALENDAR -> false
             ProjectTab.GALLERY -> false // available through saved views, not legacy module tabs
             ProjectTab.PIPELINE -> isPipeline
             // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat.
@@ -55,6 +57,7 @@ object ProjectTabsLogic {
     /** The open tab hidden (a refresh, another device): Board, else List, else the first one shown. */
     fun fallback(current: ProjectTab, visible: List<ProjectTab>): ProjectTab = when {
         current in visible -> current
+        ProjectTab.SOCIAL_OVERVIEW in visible -> ProjectTab.SOCIAL_OVERVIEW
         ProjectTab.PIPELINE in visible -> ProjectTab.PIPELINE
         ProjectTab.OUTLET_OVERVIEW in visible -> ProjectTab.OUTLET_OVERVIEW
         ProjectTab.BOARD in visible -> ProjectTab.BOARD
@@ -77,6 +80,7 @@ enum class ProjectType(val code: String, val title: String, val description: Int
     TASK("TASK", "Task Project", R.string.pt_task_sub, true),
     /** Replaces the Finance Dashboard card (OUTLET-SALES §1, 10 Oct); FINANCE is 400 TYPE_COMING_SOON. */
     OUTLET_SALES("OUTLET_SALES", "Outlet Sales Dashboard", R.string.pt_outlet_sub, true),
+    SOCIAL_MEDIA_REPORT("SOCIAL_MEDIA_REPORT", "Social Media Report", R.string.sm_description, true),
     CONTENT("CONTENT", "Content Planner", R.string.pt_content_sub, false),
     PIPELINE("PIPELINE", "Pipeline Dashboard", R.string.pt_pipeline_sub, true),
 }

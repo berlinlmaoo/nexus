@@ -190,7 +190,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                         ReadOnly(ro) { QuestBanner(t, s.isBoD, vm, requestQuest) { requestQuest = false } }
                         // Who made it, on every task (web c1809a0, iOS c61edb6), and whether they have since left.
                         t.creator?.let { u -> CreatedBy(u) }
-                        ReadOnly(ro) { t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError, s.access.canManage) } }
+                        t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError, s.access.canManage, s.access.canEdit) }
                         ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }
                         ReadOnly(ro) { DescriptionCard(t, vm) }
                         SubtasksCard(t, vm, onOpenTask)

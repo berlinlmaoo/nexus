@@ -73,6 +73,16 @@ object PeopleLogic {
         return if (words.isEmpty()) ranked else ranked.filter { (_, r) -> val n = r.name.orEmpty().lowercase(); words.all { it in n } }
     }
 
+    /** Member-record bounds are inclusive day keys, unlike the leaderboard's exclusive end. */
+    fun recordPeriodLabel(p: RecPeriod, locale: java.util.Locale): String {
+        val from = runCatching { java.time.LocalDate.parse(p.from?.take(10)) }.getOrNull()
+        val to = runCatching { java.time.LocalDate.parse(p.to?.take(10)) }.getOrNull()
+        if (from == null || to == null) return p.label ?: p.key
+        val short = id.znetworks.nexus.core.i18n.AppDateFormats.ofPattern("d MMM", locale)
+        val full = id.znetworks.nexus.core.i18n.AppDateFormats.ofPattern("d MMM yyyy", locale)
+        return short.format(from) + " – " + full.format(to)
+    }
+
     /** The period's last counted day: `end` is exclusive (the 1st of next month), "1 Oct – 31 Oct". */
     fun periodDays(p: BoardPeriod?): Pair<java.time.LocalDate, java.time.LocalDate>? {
         val zone = java.time.ZoneId.of("Asia/Jakarta")

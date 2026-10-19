@@ -1,0 +1,7 @@
+<resources>
+    <string name="calp_tab">Calendar</string>
+    <string name="calp_title">Private projects</string>
+    <string name="calp_help">Staff outside private projects see “Internal task” instead of task titles on the calendar. Changes apply on the next calendar request.</string>
+    <string name="calp_private">Private on the calendar</string>
+    <string name="calp_visible">Visible on the calendar</string>
+</resources>

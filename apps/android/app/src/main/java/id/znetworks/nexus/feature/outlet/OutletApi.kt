@@ -37,6 +37,9 @@ class OutletApi(private val api: ApiClient) {
     suspend fun delete(projectId: String, eventId: String) =
         api.send(Request.Builder().url(api.url("${base(projectId)}/events/${enc(eventId)}")).delete().build(), JsonObject.serializer())
 
+    suspend fun config(projectId: String) = api.get("${base(projectId)}/config", JsonObject.serializer())
+    suspend fun put(projectId: String, path: String, body: JsonObject) = api.send(Request.Builder().url(api.url("${base(projectId)}/$path")).put(body.toString().toJsonBody()).build(), JsonObject.serializer())
+
     /** The month's own targets; null clears one. */
     suspend fun setTarget(projectId: String, month: String, sales: Double?, pax: Double?) {
         fun n(v: Double?): JsonElement = v?.let { JsonPrimitive(it.toLong()) } ?: JsonNull
