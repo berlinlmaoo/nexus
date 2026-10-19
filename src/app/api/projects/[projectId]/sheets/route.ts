@@ -9,6 +9,7 @@ import {
 } from "@/lib/project-sheets"
 import { copySheet } from "@/lib/sheet-structure"
 import { emitSheetStructure } from "@/lib/socket-emitter"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 // GET /api/projects/[projectId]/sheets — the project's spreadsheets (the tabs at the bottom).
 //
@@ -66,7 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     // and the loser got a 500 (bughunt S-BUG-17). The loser now takes the next slot.
     for (let attempt = 0; ; attempt += 1) {
       try {
-        return await createSheetAt(projectId, body, session.user.id)
+        const created = await createSheetAt(projectId, body, session.user.id)
+        if (created.status === 201) emitProjectContentChanged(projectId, "sheets", null, session.user.id) // other open tab bars (19 Oct 2026)
+        return created
       } catch (error) {
         // Up to 12 tries with a short random pause: six clicks/tabs at once used to exhaust 4 tries (QA final 19 Oct).
         if (attempt < 12 && (error as { code?: string })?.code === "P2002") {
@@ -139,6 +142,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
       ...order.map((id, i) => prisma.projectSheet.update({ where: { id }, data: { position: i } })),
     ])
     for (const id of order) emitSheetStructure(id, session.user.id)
+    emitProjectContentChanged(projectId, "sheets", null, session.user.id) // the tab bar of every open copy (19 Oct 2026)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error reordering project sheets:", error)

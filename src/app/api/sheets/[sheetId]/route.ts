@@ -11,6 +11,7 @@ import {
 } from "@/lib/project-sheets"
 import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { computeSheet } from "@/lib/sheet-formula"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 // GET /api/sheets/[sheetId] — the whole sheet: structure + every row.
 //
@@ -164,6 +165,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       return { kind: "ok", row }
     })
     if (out.kind === "error") return NextResponse.json(out.body, { status: out.status })
+    if (name !== undefined) emitProjectContentChanged(access.sheet.projectId, "sheets", sheetId, userId) // renamed: every tab bar (19 Oct 2026)
     emitSheetStructure(sheetId, userId, originTabOf(req))
     return NextResponse.json({ ...out.row, settings: readSheetSettings(out.row.settings) })
   } catch (error) {
@@ -201,6 +203,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: (tx) => tx.projectSheet.delete({ where: { id: sheetId } }),
     })
+    emitProjectContentChanged(projectId, "sheets", sheetId, session.user.id)
     emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true })
   } catch (error) {

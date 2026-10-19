@@ -14,6 +14,7 @@ import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { FormOpError, parseFormOps } from "@/lib/form-ops"
 import { announceFormChange, applyFormOpsToForm, BUILDER_FORM_SELECT } from "@/lib/form-coedit-server"
 import { originTabOf } from "@/lib/socket-emitter"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 const jsonOrDbNull = (value: object | null) => (value ? (value as InputJsonValue) : Prisma.DbNull)
 
@@ -134,6 +135,7 @@ export async function PATCH(
 
     logAudit({ action: "update", entityType: "form", entityId: formId, entityName: form.name, userId: session.user.id, request, metadata: { changes: Object.keys(body).filter((k) => k !== "baseUpdatedAt") } })
 
+    emitProjectContentChanged(existing.projectId, "forms", formId, session.user.id) // forms lists: name/settings (folded on the server)
     return NextResponse.json(form)
   } catch (error) {
     console.error("Error updating form:", error)
@@ -171,6 +173,7 @@ async function applyOps(request: NextRequest, formId: string, userId: string, us
     logAudit({ action: "update", entityType: "form", entityId: formId, entityName: out.form.name, userId, request, metadata: { ops: Array.from(new Set(out.applied.map((o) => o.op))), version: out.version } })
   }
 
+  if (out.applied.length) emitProjectContentChanged(existing.projectId, "forms", formId, userId)
   return NextResponse.json({ form: out.form, version: out.version, applied: out.applied.length, skipped: out.skipped })
 }
 
@@ -219,6 +222,7 @@ export async function DELETE(
       remove: (tx) => tx.form.delete({ where: { id: formId } }),
     })
 
+    emitProjectContentChanged(existing.projectId, "forms", formId, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting form:", error)

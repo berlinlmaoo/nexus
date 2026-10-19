@@ -6,6 +6,7 @@ import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "status_update", entityId: update.id, entityName: text.substring(0, 50), userId: session.user.id, request, metadata: { projectId, status } })
 
+    emitProjectContentChanged(projectId, "status-updates", update.id, session.user.id) // Overview of every open copy (19 Oct 2026)
     return NextResponse.json(update, { status: 201 })
   } catch (error) {
     console.error("Error creating status update:", error)

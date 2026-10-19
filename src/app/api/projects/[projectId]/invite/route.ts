@@ -8,6 +8,7 @@ import { logAudit } from '@/lib/audit'
 import { syncProjectRoomSafe } from '@/lib/chat-membership'
 import { emitProjectChanged } from '@/lib/workspace-realtime'
 import { hasProjectLevel, isAccessLevel, memberAccessLevel, roleForLevel, type AccessLevel } from '@/lib/rbac'
+import { emitProjectContentChanged } from "@/lib/project-realtime"
 
 export async function GET(
   _req: Request,
@@ -225,6 +226,7 @@ export async function DELETE(
 
     logAudit({ action: "delete", entityType: "invite", entityId: inviteId, entityName: invite.email, userId: session.user.id, metadata: { projectId } })
 
+    emitProjectContentChanged(projectId, "members", null, session.user.id) // pending invites list (19 Oct 2026)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting invite:', error)
