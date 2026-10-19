@@ -6,7 +6,7 @@ Base: latest available `origin/dev` f5accfb8, then fast-forwarded to the reviewe
 
 | Item | Status | Commit / evidence | Remaining |
 |---|---|---|---|
-| U-1 Status | In progress | — | Deployed manual contract accepts text/start/end and always sets Away. Server: supply the approved writable Online/Away contract. No recently-used statuses appear in the supplied contract or deployed response; optional recent section omitted. |
+| U-1 Status | Partial: editor verified; availability needs server contract | 7f4461cf. [EN light](../../../../nexus-shots/ui-round-19oct/en-light/u1-status.png), [EN dark](../../../../nexus-shots/ui-round-19oct/en-dark/u1-status.png), [ID light](../../../../nexus-shots/ui-round-19oct/id-light/u1-status.png), [ID dark](../../../../nexus-shots/ui-round-19oct/id-dark/u1-status.png). | Deployed manual contract accepts text/start/end and always sets Away; availability choices are visibly disabled with an explanatory caption. Server: supply the approved writable Online/Away contract. No recently-used statuses appear in the supplied contract or deployed response; optional recent section omitted. |
 | U-2 Memory | Pending | — | Include physical-device animation review. |
 | U-3 Notifications | Pending verification | Existing Android card already has loading/error/Retry states. | — |
 | U-4 Tickets board | Pending | — | — |
@@ -19,3 +19,5 @@ Base: latest available `origin/dev` f5accfb8, then fast-forwarded to the reviewe
 | U-11 Calendar counts | Pending verification | Phone grid already omits the count. | Check wide layout. |
 
 10:30 progress: final QA finished at 10:28 (829 tests green; 532 states, 814 captures). Its private fixtures were removed and Pixel_7 stopped before this round. Restarted Pixel_7 visibly with host GPU for this round.
+
+10:40 U-1: **833 tests + assembleDebug PASS**. All four variants reviewed. Native Save persisted the emoji and three-hour shoot preset; DEV readback confirmed the duration, and the original own status was restored. One Cancel/Save top bar, separate availability, vertical quick picks, duration/start menus and an Until summary. Removed the two retired presets from Android resources. The existing sheet guard now explicitly allows the owner-approved status editor; destructive confirmations remain centred.
