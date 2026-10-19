@@ -1,0 +1,18 @@
+<resources>
+    <string name="oc_guests">Tamu · %1$s</string>
+    <string name="oc_guests_empty">Isi laporan untuk melihat rincian tamu bulan ini.</string>
+    <string name="oc_settings">Pengaturan laporan</string>
+    <string name="oc_communities">Komunitas</string>
+    <string name="oc_breakdown">Rincian</string>
+    <string name="oc_hide_breakdown">Sembunyikan rincian</string>
+    <string name="oc_day_target">Target harian</string>
+    <string name="oc_set_day_target">Atur/ubah target harian</string>
+    <string name="oc_sales">Sales</string>
+    <string name="oc_pax">Pax</string>
+    <string name="oc_label">Nama</string>
+    <string name="oc_remove">Hapus</string>
+    <string name="oc_total_only">Total saja</string>
+    <string name="oc_add_item">Tambah item</string>
+    <string name="oc_add_community">Tambah komunitas</string>
+    <string name="oc_archive_confirm">Arsipkan item ini dan simpan laporannya?</string>
+</resources>

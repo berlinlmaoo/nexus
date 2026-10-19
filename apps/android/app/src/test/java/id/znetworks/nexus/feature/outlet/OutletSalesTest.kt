@@ -78,7 +78,7 @@ class OutletSalesTest {
     }
 
     @Test fun projectTypeAndTabs() {
-        assertEquals(listOf("TASK", "OUTLET_SALES", "CONTENT", "PIPELINE"), ProjectType.entries.map { it.code })
+        assertEquals(listOf("TASK", "OUTLET_SALES", "SOCIAL_MEDIA_REPORT", "CONTENT", "PIPELINE"), ProjectType.entries.map { it.code })
         assertTrue(ProjectType.OUTLET_SALES.ready)
         val tabs = ProjectTabsLogic.visible(emptySet(), isOutlet = true)
         assertEquals(listOf(ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM, ProjectTab.CHAT), tabs)

@@ -40,7 +40,11 @@ data class OutletEvent(val raw: JsonObject) {
     val id get() = raw["id"].str().orEmpty()
     val date get() = raw["date"].str().orEmpty().take(10)
     val name get() = raw["name"].str().orEmpty()
-    fun number(key: String): Double? = raw[key].num()
+    fun number(key: String): Double? = when {
+        key.startsWith("value:") -> (raw["values"] as? JsonObject)?.get(key.removePrefix("value:")).num() ?: raw[key.removePrefix("value:")].num()
+        key.startsWith("community:") -> (raw["communityTotals"] as? JsonObject)?.get(key.removePrefix("community:")).num()
+        else -> raw[key].num()
+    }
     fun text(key: String): String = raw[key].str().orEmpty()
     val sales get() = number("sales")
     val pax get() = number("pax")

@@ -191,6 +191,14 @@ class OutletViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
         } catch (x: ApiError) { _state.update { it.copy(notice = x.describe(res)) } }
     }
 
+    fun saveCustom(path: String, body: kotlinx.serialization.json.JsonObject, done: () -> Unit) = viewModelScope.launch {
+        if (_state.value.busy) return@launch
+        _state.update { it.copy(busy = true, notice = null) }
+        try { api.put(projectId, path, body); load().join(); done() }
+        catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
+        _state.update { it.copy(busy = false) }
+    }
+
     fun noticeShown() = _state.update { it.copy(notice = null) }
 }
 
@@ -206,7 +214,8 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
         matches = { it.name == RealtimeEvents.OUTLET_SALES_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }
     LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); vm.noticeShown() } }
     var detail by remember { mutableStateOf<OutletEvent?>(null) }
-    val d = s.data
+    var settings by remember { mutableStateOf(false) }
+    val d = s.data?.takeIf { it.month == s.month }
     val addEvent = { date: String? -> vm.openForm(null, date ?: d?.today?.takeIf { it.startsWith(s.month.orEmpty()) } ?: s.day); goTo(OutletView.FORM) }
     val fill = { e: OutletEvent -> detail = null; vm.openForm(e.id); goTo(OutletView.FORM) }
     when {
@@ -215,16 +224,18 @@ fun OutletTab(view: OutletView, goTo: (OutletView) -> Unit, initialDay: String? 
             stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
         d == null -> EmptyState(Icons.Filled.Storefront, stringResource(R.string.os_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
         else -> Column(Modifier.fillMaxSize()) {
+            if ((d.raw["canManageSettings"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true") TextButton(onClick = { settings = true }) { Text(stringResource(R.string.oc_settings)) }
             if (view != OutletView.FORM) MonthBar(d, vm, onAdd = { addEvent(if (view == OutletView.CALENDAR) s.day else null) })
             when (view) {
-                OutletView.OVERVIEW -> Overview(d, vm, s.busy, onOpen = { detail = it }, onFill = fill, onAdd = { addEvent(null) })
+                OutletView.OVERVIEW -> Overview(d, vm, s.busy, onOpen = { detail = it }, onFill = fill, onAdd = { addEvent(null) }, onSettings = { settings = true })
                 OutletView.CALENDAR -> Calendar(d, s.day, vm, onFill = fill, onAdd = { addEvent(it) })
                 OutletView.BOARD -> Board(d, onOpen = { detail = it }, onAdd = { addEvent(null) })
                 OutletView.FORM -> OutletReportForm(d, s, vm, onSaved = { goTo(OutletView.CALENDAR) })
             }
         }
     }
-    detail?.let { e -> EventSheet(e, d?.form ?: OutletForm.DEFAULT, d?.today, onFill = { fill(e) }, onClose = { detail = null }) }
+    detail?.let { e -> EventSheet(e, d?.reportForm(e) ?: OutletForm.DEFAULT, d?.today, onFill = { fill(e) }, onClose = { detail = null }) }
+    if (settings) OutletSettings(vm) { settings = false }
 }
 
 /** ‹ Oktober 2026 › (+ This month), Copy form link, Add event — shared by Overview, Calendar and Board. */
@@ -289,7 +300,7 @@ private fun year(d: OutletMonth) = OutletFormat.parseDate(d.today)?.year ?: Loca
 // region Overview
 
 @Composable
-private fun Overview(d: OutletMonth, vm: OutletViewModel, busy: Boolean, onOpen: (OutletEvent) -> Unit, onFill: (OutletEvent) -> Unit, onAdd: () -> Unit) {
+private fun Overview(d: OutletMonth, vm: OutletViewModel, busy: Boolean, onOpen: (OutletEvent) -> Unit, onFill: (OutletEvent) -> Unit, onAdd: () -> Unit, onSettings: () -> Unit) {
     val c = Nx.colors
     val s = d.summary
     val monthName = OutletFormat.monthLabel(d.month)
@@ -314,14 +325,6 @@ private fun Overview(d: OutletMonth, vm: OutletViewModel, busy: Boolean, onOpen:
             if (d.canManageTargets && !editing) TextButton(onClick = { editing = true }) { Text(stringResource(if (hasTarget) R.string.os_change_target else R.string.os_set_target)) }
         }
         if (editing) TargetEditor(d, monthName, busy, onCancel = { editing = false }) { sales, pax -> vm.saveTarget(sales, pax) { editing = false } }
-        // Events · Reported · Waiting report · RSVP · Hosting
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Stat(stringResource(R.string.os_stat_events), "${s.eventCount}")
-            Stat(stringResource(R.string.os_st_reported), "${s.reportedCount}")
-            Stat(stringResource(R.string.os_st_waiting), "${s.waitingCount}")
-            Stat("RSVP", OutletFormat.count(s.rsvpTotal))
-            Stat("Hosting", OutletFormat.count(s.hostingTotal))
-        }
         val waiting = d.allWaiting
         if (waiting.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.warning.copy(alpha = 0.12f))
             .border(1.dp, c.warning.copy(alpha = 0.4f), RoundedCornerShape(14.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -333,10 +336,7 @@ private fun Overview(d: OutletMonth, vm: OutletViewModel, busy: Boolean, onOpen:
                 }
             }
         }
-        Text(stringResource(R.string.os_events_in, monthName), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
-        if (d.events.isEmpty()) EmptyState(Icons.Filled.Storefront, stringResource(R.string.os_no_events), stringResource(R.string.os_no_events_sub),
-            stringResource(R.string.os_add_event), onAdd)
-        d.events.forEach { e -> EventRow(e, year(d)) { onOpen(e) } }
+        OutletGuests(d, onAdd, onSettings)
     }
 }
 
@@ -447,6 +447,7 @@ private fun Calendar(d: OutletMonth, day: String?, vm: OutletViewModel, onFill: 
                                     Text("${date.dayOfMonth}", fontSize = 12.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                         color = when { isToday -> Color.White; inMonth -> c.foreground; else -> c.mutedFg.copy(alpha = 0.5f) })
                                 }
+                                if ((d.raw["dayTargets"] as? kotlinx.serialization.json.JsonArray).orEmpty().any { (it as? kotlinx.serialization.json.JsonObject)?.get("date")?.toString()?.trim('"') == iso }) Text("?", fontSize = 10.sp, color = c.violetText)
                                 if (wide) {
                                     evs.take(2).forEach { e ->
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -467,9 +468,10 @@ private fun Calendar(d: OutletMonth, day: String?, vm: OutletViewModel, onFill: 
         HorizontalDivider(color = c.border)
         Text(OutletFormat.longDay(selected, year(d)), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
         TextButton(onClick = { onAdd(selected) }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.os_add_on_day)) }
+        OutletDayTargets(d, selected, vm)
         val today = byDay[selected].orEmpty()
         if (today.isEmpty()) Text(stringResource(R.string.os_no_event_day), fontSize = 13.sp, color = c.mutedFg)
-        today.forEach { e -> EventCard(e, d.form, d.today) { onFill(e) } }
+        today.forEach { e -> EventCard(e, d.reportForm(e), d.today) { onFill(e) } }
     }
 }
 
