@@ -78,6 +78,12 @@ final class MeetingUploads {
         session.getAllTasks { tasks in for task in tasks where task.taskDescription?.hasPrefix(id + ":") == true { task.cancel() } }
         finish(id); completed[id] = nil; fractions[id] = nil
     }
+    /// Bytes on the server plus the running chunk's bytes sent: the same source as the progress bar.
+    func sentBytes(_ id: String) -> Int? {
+        guard let job = jobs[id] else { return nil }
+        guard let fraction = fractions[id] else { return job.received }
+        return min(job.bytes, max(job.received, Int((fraction * Double(job.bytes)).rounded())))
+    }
     func retry(_ id: String) async { failures[id] = nil; await schedule(id, reconcile: true) }
     func isCurrent(_ job: Job) -> Bool { job.ownerId == Keychain.load()?.userId && job.server == ServerEnvironment.current.rawValue }
     func rebindIdentity(from old: String, to new: String) {
@@ -189,8 +195,12 @@ struct MeetingUploadStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let job = uploads.jobs[meetingId], uploads.isCurrent(job) {
-                ProgressView(value: uploads.fractions[meetingId] ?? Double(job.received) / Double(max(1, job.bytes))).tint(NX.violet)
-                Text(AppNumber.bytes(job.received) + " / " + AppNumber.bytes(job.bytes)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                // Bar and label read the same live byte count (R-5: the label stayed at 0 B while the bar moved).
+                let sent = uploads.sentBytes(meetingId) ?? job.received
+                let fraction = Double(sent) / Double(max(1, job.bytes))
+                ProgressView(value: fraction).tint(NX.violet)
+                Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(job.bytes), AppNumber.int(Int((fraction * 100).rounded(.down))) + " %"))
+                    .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
             }
             if let failure = uploads.failures[meetingId] { Text(failure).font(NXFont.text(12)).foregroundStyle(NX.danger); Button(T("Resume upload")) { Task { await uploads.retry(meetingId) } }.buttonStyle(.nxBordered) }
         }

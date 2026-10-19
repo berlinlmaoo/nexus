@@ -16,5 +16,7 @@ extension AppLanguage {
         "Typical time (p50)": "Waktu umumnya (p50)",
         "Credits / answer": "Kredit / jawaban",
         "Offline": "Offline",
+        // R-5 / R-6 meeting notes: one progress screen
+        "%@ of %@ · %@": "%1$@ dari %2$@ · %3$@",
     ]
 }
