@@ -10,6 +10,16 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FormLiveAutosaveTest {
+    @Test fun builderFieldNormalizationDoesNotStartAnEndlessNoOpSave() = runTest {
+        val server = FormStudioDraft.of(BuilderForm(obj("""{"id":"f","name":"Form","fields":[{"id":"a","label":"Question","type":"text"}]}""")))
+        var sent = 0
+        val saver = FormAutosave<FormStudioDraft>(this, send = { _, _, _ -> sent++ }, hasId = { true }, describe = { "error" },
+            serverAuthoritative = true, equivalent = { a, b -> FormCoedit.document(a) == FormCoedit.document(b) })
+        saver.start(server, saved = true)
+        saver.receive(server, merge = FormCoedit::rebase)
+        advanceUntilIdle()
+        assertEquals(0, sent); assertFalse(saver.dirty); assertEquals(FormSaveState.Saved, saver.state.value)
+    }
     private fun obj(s: String) = NexusJson.parseToJsonElement(s).jsonObject
     private val base = obj("""{"name":"Base","description":"","fields":[{"id":"a","label":"A"}]}""")
     @Test fun remoteEventDuringSaveAndNewTypingNeverRevertTheRemoteQuestion() = runTest {

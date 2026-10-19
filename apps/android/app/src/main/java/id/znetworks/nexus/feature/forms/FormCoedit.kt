@@ -7,6 +7,17 @@ data class FormEditorPresence(val userId: String, val name: String = "", val ava
 @kotlinx.serialization.Serializable
 data class FormPresence(val formId: String, val members: List<FormEditorPresence> = emptyList())
 
+/** Repair one pre-join focus loss; another device's later selection must not cause a focus ping-pong. */
+internal class FormFocusRepair {
+    private var pending = false
+    fun sent() { pending = true }
+    fun shouldResend(observed: String?, expected: String?): Boolean {
+        val resend = pending && observed != expected
+        pending = false
+        return resend
+    }
+}
+
 /** Field-level operations and three-way rebase shared by HTTP receipts and live form events. */
 object FormCoedit {
     private val scalars = listOf("name", "description", "isPublic", "requireAuth", "accessSchedule")

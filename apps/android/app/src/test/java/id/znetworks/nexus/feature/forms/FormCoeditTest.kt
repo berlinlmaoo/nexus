@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FormCoeditTest {
+    @Test fun anotherDevicesFocusGetsAtMostOneRepairAfterJoiningOrSelecting() {
+        val repair = FormFocusRepair(); repair.sent()
+        assertTrue(repair.shouldResend(null, "mine"))
+        assertFalse(repair.shouldResend("other-device", "mine"))
+        repair.sent(); assertFalse(repair.shouldResend("mine", "mine"))
+        assertFalse(repair.shouldResend("other-device", "mine"))
+        repair.sent(); assertTrue(repair.shouldResend("other-device", "new-selection"))
+    }
     private fun obj(s: String) = NexusJson.parseToJsonElement(s).jsonObject
     private val base = obj("""{"name":"Base","description":"","settings":{"a":1,"b":2},"fields":[{"id":"a","label":"A","required":false},{"id":"b","label":"B"},{"id":"c","label":"C"}]}""")
     @Test fun independentScalarQuestionAndSettingsKeysSurvive() {

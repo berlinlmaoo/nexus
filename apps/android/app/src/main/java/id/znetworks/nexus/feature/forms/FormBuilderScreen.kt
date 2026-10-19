@@ -153,9 +153,11 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
     private val tabId = "android_" + java.util.UUID.randomUUID().toString().replace("-", "")
     private var sending: Pair<FormStudioDraft, FormStudioDraft>? = null
     private var focusedQuestion: String? = null
+    private val focusRepair = FormFocusRepair()
 
     val autosave = FormAutosave<FormStudioDraft>(viewModelScope, send = { snap, base, _ -> send(snap, base) },
-        hasId = { _state.value.formId != null }, describe = ::describe, serverAuthoritative = true)
+        hasId = { _state.value.formId != null }, describe = ::describe, serverAuthoritative = true,
+        equivalent = { a, b -> FormCoedit.document(a) == FormCoedit.document(b) })
 
     init {
         load()
@@ -173,14 +175,16 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
                 event.name == RealtimeEvents.FORM_PRESENCE -> {
                     val presence = runCatching { NexusJson.decodeFromString(FormPresence.serializer(), event.raw!!) }.getOrNull() ?: return@collect
                     _state.update { it.copy(editors = presence.members.filter { p -> p.userId != owner }) }
-                    if (presence.members.firstOrNull { it.userId == owner }?.questionId != focusedQuestion) focus(focusedQuestion)
+                    presence.members.firstOrNull { it.userId == owner }?.let { mine ->
+                        if (focusRepair.shouldResend(mine.questionId, focusedQuestion) && _state.value.canEdit) c.realtime.sendFormFocus(id, focusedQuestion)
+                    }
                 }
             }
         } }
     }
 
     private fun readOnly() { autosave.stopped = true; c.realtime.leave("form:${_state.value.formId}"); _state.update { it.copy(canEdit = false, editors = emptyList(), toast = res.getString(R.string.qa_form_readonly)) } }
-    fun focus(id: String?) { focusedQuestion = id; if (_state.value.canEdit) _state.value.formId?.let { c.realtime.sendFormFocus(it, id) } }
+    fun focus(id: String?) { focusedQuestion = id; focusRepair.sent(); if (_state.value.canEdit) _state.value.formId?.let { c.realtime.sendFormFocus(it, id) } }
     suspend fun refreshLive() {
         val id = _state.value.formId ?: return
         if (c.sessionStore.current?.userId != owner) return

@@ -316,6 +316,7 @@ class FormAutosave<D : Any>(
     private val describe: (Throwable) -> String,
     private val debounceMs: Long = 700,
     private val serverAuthoritative: Boolean = false,
+    private val equivalent: (D, D) -> Boolean = { a, b -> a == b },
 ) {
     private val _state = MutableStateFlow<FormSaveState>(FormSaveState.Idle)
     val state = _state.asStateFlow()
@@ -330,7 +331,7 @@ class FormAutosave<D : Any>(
     private var againForce = false
     private var debounce: Job? = null
 
-    val dirty: Boolean get() = draft != null && draft != baseline
+    val dirty: Boolean get() = draft != null && baseline != null && !equivalent(draft!!, baseline!!)
 
     fun start(initial: D, saved: Boolean) {
         draft = initial; baseline = initial
@@ -350,8 +351,8 @@ class FormAutosave<D : Any>(
         val base = baseline ?: return
         if (stopped) return
         debounce?.cancel()
-        if (draft == base) {
-            if (_state.value == FormSaveState.Pending) _state.value = if (hasId()) FormSaveState.Saved else FormSaveState.Idle
+        if (!dirty) {
+            if (!inflight) _state.value = if (hasId()) FormSaveState.Saved else FormSaveState.Idle
             return
         }
         if (!inflight) _state.value = FormSaveState.Pending
@@ -365,7 +366,7 @@ class FormAutosave<D : Any>(
         val base = baseline ?: return
         val snapshot = draft ?: return
         if (inflight) { again = true; againForce = againForce || force; return }
-        if (snapshot == base && !(force && !hasId())) return
+        if (equivalent(snapshot, base) && !(force && !hasId())) return
         inflight = true
         _state.value = FormSaveState.Saving
         val failure = withContext(NonCancellable) {
