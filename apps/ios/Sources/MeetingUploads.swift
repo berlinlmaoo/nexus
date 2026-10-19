@@ -73,10 +73,11 @@ final class MeetingUploads {
         }
         for job in jobs.values where isCurrent(job) && !running.contains(job.id) && !active.contains(job.id) { await schedule(job.id, reconcile: true) }
     }
-    func cancelAndRemove(_ id: String) {
+    /// `keepRecording`: the person cancelled the upload, so a recording made here stays for another try.
+    func cancelAndRemove(_ id: String, keepRecording: Bool = false) {
         guard let job = jobs[id], isCurrent(job) else { return }
         session.getAllTasks { tasks in for task in tasks where task.taskDescription?.hasPrefix(id + ":") == true { task.cancel() } }
-        finish(id); completed[id] = nil; fractions[id] = nil
+        finish(id, keepRecording: keepRecording); completed[id] = nil; fractions[id] = nil
     }
     /// Bytes on the server plus the running chunk's bytes sent: the same source as the progress bar.
     func sentBytes(_ id: String) -> Int? {
@@ -158,10 +159,10 @@ final class MeetingUploads {
         } else if refusal.code == "NOT_UPLOADING" { await schedule(id, reconcile: true) }
         else { failures[id] = status == 401 ? T("Session expired — please log in again.") : refusal.localizedDescription; save() }
     }
-    private func finish(_ id: String) {
+    private func finish(_ id: String, keepRecording: Bool = false) {
         if let job = jobs.removeValue(forKey: id) {
             if let source = MeetingStorage.resolve(job.source, in: folder) { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
-            if let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
+            if !keepRecording, let source = job.recordingSource { MeetingRecorder.shared.uploaded(source) }
         }
         active.remove(id); fractions[id] = 1; failures[id] = nil; save()
     }

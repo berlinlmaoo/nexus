@@ -74,12 +74,7 @@ struct NewMeetingSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !RemoteConfig.shared.meetingNotesEnabled { EmptyState(icon: "mic.slash", title: T("Meeting notes is unavailable right now."), subtitle: T("Try again later.")) }
                     else if let created {
-                        let current = uploads.completed[created.id] ?? created
-                        Label(T(uploads.completed[created.id] == nil ? "Uploading" : "Uploaded"), systemImage: uploads.completed[created.id] == nil ? "arrow.up.circle" : "checkmark.circle.fill").font(NXFont.display(20, .bold))
-                        Text(created.title).font(NXFont.text(16, .semibold))
-                        if uploads.completed[created.id] != nil { MeetingQueueBlock(meeting: current) }
-                        else { MeetingUploadStatus(meetingId: created.id); Text(T("The upload continues in the background. Keep the recording on this device until it finishes.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-                        HStack { Button(T("Close")) { dismiss() }.buttonStyle(.nxBordered); Button(T("Open meeting")) { open(created.id) }.buttonStyle(.nxPrimary) }
+                        MeetingProgressPanel(created: created, onOpen: { open(created.id) }, onDone: { dismiss() }, onCancelUpload: { await cancelUpload(created.id) })
                     } else {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(T("Meeting title")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
@@ -118,7 +113,10 @@ struct NewMeetingSheet: View {
             }.background(NX.background)
                 .navigationTitle("").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { if recorder.recording || recorder.paused { confirmClose = true } else { recorder.cancelPreparation(); dismiss() } } }
+                    // Once the upload started the progress screen's own Done / Cancel upload replace this (R-6).
+                    if created == nil {
+                        ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { if recorder.recording || recorder.paused { confirmClose = true } else { recorder.cancelPreparation(); dismiss() } } }
+                    }
                     ToolbarItem(placement: .principal) { HStack(spacing: 6) { Text(T("Meeting notes")).font(NXFont.text(16, .semibold)); MeetingBetaBadge() } }
                 }
                 .safeAreaInset(edge: .bottom) {
@@ -198,6 +196,13 @@ struct NewMeetingSheet: View {
             let duration = measured.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             created = try await uploads.begin(file: file, title: title.isEmpty ? file.deletingPathExtension().lastPathComponent : title, projectId: chosenProject?.id, language: language, source: source, duration: duration, speakerLabels: speakerLabels, introEndSec: source == "record" ? recorder.introEndSec : nil)
         } catch { failure = error.localizedDescription }
+    }
+    /// Stops the upload and removes the half-uploaded meeting; the form comes back with the same file.
+    private func cancelUpload(_ id: String) async {
+        uploads.cancelAndRemove(id, keepRecording: true)
+        do { let _: NativeAPI.Empty = try await NativeAPI.request("/api/meetings/" + NativeAPI.escape(id), method: "DELETE") }
+        catch { failure = error.localizedDescription }
+        created = nil
     }
     private func open(_ id: String) { dismiss(); Task { try? await Task.sleep(for: .milliseconds(350)); router.open(.meeting(id)) } }
 }
