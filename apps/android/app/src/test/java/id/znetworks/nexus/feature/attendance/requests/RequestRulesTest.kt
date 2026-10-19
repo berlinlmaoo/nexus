@@ -18,6 +18,26 @@ import java.time.Instant
 import java.time.LocalDate
 
 class RequestRulesTest {
+    @Test fun dayOffUsesTheChosenAttendancePeriodAcrossTheTwentyEighth() {
+        val next = id.znetworks.nexus.feature.attendance.DayOffNextPeriod("2026-11", quota = 4, used = 1, remaining = 3)
+        val rules = RequestRules(AttendanceToday(attendanceDateKey = "2026-10-19", dayOffQuota = 4, dayOffUsedThisMonth = 4, dayOffNextPeriod = next), true)
+        val now = Instant.parse("2026-10-19T05:00:00Z")
+        assertEquals(0, rules.remainingDays("DAY_OFF", LocalDate.parse("2026-10-27"), now))
+        assertEquals(3, rules.remainingDays("DAY_OFF", LocalDate.parse("2026-10-28"), now))
+        assertTrue(rules.quotaExhausted("DAY_OFF", LocalDate.parse("2026-10-27"), now))
+        assertFalse(rules.quotaExhausted("DAY_OFF", LocalDate.parse("2026-11-27"), now))
+        assertNull(rules.remainingDays("DAY_OFF", LocalDate.parse("2026-11-28"), now))
+        assertFalse(rules.quotaExhausted("DAY_OFF", LocalDate.parse("2026-11-28"), now))
+        assertNull(rules.missing("DAY_OFF", "A valid reason", false, false, LocalDate.parse("2026-10-28"), now))
+    }
+    @Test fun anEmptyNextPeriodBlocksButAnOlderServerDoesNotReuseThisPeriodsQuota() {
+        val now = Instant.parse("2026-10-28T05:00:00Z"); val day = LocalDate.parse("2026-11-28")
+        val today = AttendanceToday(attendanceDateKey = "2026-10-28", dayOffQuota = 4, dayOffUsedThisMonth = 0,
+            dayOffNextPeriod = id.znetworks.nexus.feature.attendance.DayOffNextPeriod("2026-12", quota = 4, used = 4, remaining = 0))
+        assertTrue(RequestRules(today, true).quotaExhausted("DAY_OFF", day, now))
+        val old = RequestRules(today.copy(dayOffNextPeriod = null), true)
+        assertNull(old.remainingDays("DAY_OFF", day, now)); assertFalse(old.quotaExhausted("DAY_OFF", day, now))
+    }
     // 24 Sep 2026, 10:00 WIB
     private val now = Instant.parse("2026-09-24T03:00:00Z")
     private val todayWib = LocalDate.of(2026, 9, 24)

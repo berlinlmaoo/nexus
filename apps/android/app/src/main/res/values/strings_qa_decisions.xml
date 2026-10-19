@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_dayoff_current">Day off: %1$d of %2$d left this period</string>
+    <string name="qa_dayoff_next">Day off: %1$d of %2$d left in the period of that date</string>
+    <string name="qa_dayoff_checked">Day-off balance is checked when you submit.</string>
     <string name="qa_meeting_deleted">This meeting note was deleted</string>
     <string name="qa_meeting_deleted_body">It was deleted, or you no longer have access to it.</string>
     <string name="qa_all_meetings">All meeting notes</string>

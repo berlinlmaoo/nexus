@@ -1,4 +1,7 @@
 <resources>
+    <string name="qa_dayoff_current">Day off: tersisa %1$d dari %2$d di periode ini</string>
+    <string name="qa_dayoff_next">Day off: tersisa %1$d dari %2$d di periode tanggal itu</string>
+    <string name="qa_dayoff_checked">Sisa day off diperiksa saat kamu mengirim.</string>
     <string name="qa_meeting_deleted">Catatan meeting ini sudah dihapus</string>
     <string name="qa_meeting_deleted_body">Sudah dihapus, atau kamu tidak punya akses lagi.</string>
     <string name="qa_all_meetings">Semua catatan meeting</string>
