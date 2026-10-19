@@ -543,30 +543,9 @@ private fun TaskTagsDialog(t: TaskDetail, vm: TaskDetailViewModel, onDismiss: ()
 
 @Composable
 private fun DescriptionCard(t: TaskDetail, vm: TaskDetailViewModel) {
-    val c = Nx.colors
-    val original = t.descriptionText
-    var base by rememberSaveable(t.id) { mutableStateOf(original) }
-    var draft by rememberSaveable(t.id) { mutableStateOf(original) }
-    var latest by rememberSaveable(t.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(original) { if (draft == base) { draft = original; base = original } }
     Column(Modifier.fillMaxWidth()) {
-        TextField(
-            draft, { draft = it }, placeholder = { Text(stringResource(R.string.td_add_description)) },
-            textStyle = TextStyle(fontSize = 14.sp, color = c.foreground), minLines = 2, maxLines = 12,
-            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-            shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth(),
-        )
-        latest?.let { remote -> Column(Modifier.fillMaxWidth().background(c.warningBg).padding(12.dp)) {
-            Text(stringResource(R.string.task_latest_description), color = c.warningFg, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Text(remote.ifEmpty { "—" }, color = c.foreground, fontSize = 14.sp)
-            TextButton(onClick = { draft = remote; base = remote; latest = null }) { Text(stringResource(R.string.task_use_latest)) }
-        } }
-        if (draft != original) Row {
-            TextButton(onClick = { draft = original; base = original }) { Text(stringResource(R.string.cancel)) }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { vm.setDescription(draft, base, onConflict = { remote -> base = remote; latest = remote }) { base = draft; latest = null } }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
-        }
+        Text(t.descriptionText.ifBlank { stringResource(R.string.td_add_description) })
+        id.znetworks.nexus.feature.docs.BlockEditorButton("taskbody", t.id, vm::load)
     }
 }
 
