@@ -833,7 +833,8 @@ final class NEXUSUITour: XCTestCase {
                 let target = app.descendants(matching: .any).matching(match).firstMatch
                 guard !target.exists else { return "wrong-screen: unexpected content \(action.label)" }
             case "selected":
-                let target = app.buttons.matching(match).firstMatch
+                let segments = app.segmentedControls.matching(identifier: "messages.tabs").firstMatch
+                let target = segments.exists ? segments.buttons.matching(match).firstMatch : app.buttons.matching(match).firstMatch
                 guard target.waitForExistence(timeout: 10), target.isSelected == (action.text == "true") else {
                     return "wrong-screen: unexpected selection for \(action.label)"
                 }
