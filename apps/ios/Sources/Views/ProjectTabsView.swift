@@ -355,6 +355,7 @@ struct TimelineTab: View {
     var dateFieldIds: [String] = []
 
     @Environment(\.horizontalSizeClass) private var hSize
+    @State private var showNames = false
     @State private var collapsed: Set<String> = []
     @State private var shown: [String: Int] = [:]
     /// The chart's horizontal scroll (iOS 18): drives the sticky day header above it.
@@ -523,7 +524,7 @@ struct TimelineTab: View {
     /// The frozen Name (| Duration | Progress) column. Wider than before: the phone's ~150 pt showed about
     /// ten characters of a name (UI tour run 11, IP-14).
     private func leftWidth(_ width: CGFloat) -> CGFloat {
-        if compact { return min(240, max(160, width * 0.5)) }
+        if compact { return showNames ? 120 : 0 }
         // A regular width too narrow for Duration and Progress (portrait iPad): the name alone, so the chart
         // keeps more than five days (UI tour run 13, I-19).
         // With Duration and Progress the column took 45% and the Mac chart showed 13 days (UI tour run 14, P-M5).
@@ -561,6 +562,11 @@ struct TimelineTab: View {
         let ax = axis(gs, chartWidth: max(0, width - leftW))
         let outside = barsOutOfView(gs, ax: ax, viewport: width - leftW)
         return VStack(spacing: 8) {
+            if compact {
+                Toggle(T("Names"), isOn: $showNames).toggleStyle(.button)
+                    .font(NXFont.text(12)).frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("timeline.names")
+            }
             if let outside {
                 ProjectRangeHint(icon: "text.alignleft",
                                  text: outside == 1 ? T("1 task outside this range") : String(format: T("%d tasks outside this range"), outside),
@@ -605,9 +611,10 @@ struct TimelineTab: View {
         return VStack(spacing: 0) {
             if #available(iOS 18.0, *) {
                 HStack(alignment: .top, spacing: 0) {
-                    leftHeader
-                        .frame(width: leftW)
-                        .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    if leftW > 0 {
+                        leftHeader.frame(width: leftW)
+                            .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    }
                     TimelineAxisHeader(offsetX: offsetX, monthLabel: visibleMonth(ax), monthH: monthH) {
                         VStack(alignment: .leading, spacing: 0) {
                             monthRow(ax)
@@ -620,9 +627,10 @@ struct TimelineTab: View {
             }
             ScrollView(.vertical, showsIndicators: true) {
                 HStack(alignment: .top, spacing: 0) {
-                    leftColumn(ls, width: leftW, header: !sticky)
-                        .frame(width: leftW)
-                        .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    if leftW > 0 {
+                        leftColumn(ls, width: leftW, header: !sticky).frame(width: leftW)
+                            .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    }
                     rightPane(ls, ax: ax, header: !sticky, firstBar: firstBarIndex(gs, ax: ax),
                               landing: openingDay(ax: ax), viewport: viewport)
                 }
@@ -768,10 +776,11 @@ struct TimelineTab: View {
                         Text(UntitledText.wrapped(t.title)).font(NXFont.text(showMeta ? 13 : 14, .medium))
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
                             .strikethrough(t.isDone)
+                            .lineLimit(compact ? 2 : nil).truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).
-                        if !showMeta {
+                        if !compact && !showMeta {
                             Text(r.win.map(Self.spanLabel) ?? T("No date"))
                                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                         }

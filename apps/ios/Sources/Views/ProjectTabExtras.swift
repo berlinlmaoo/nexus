@@ -62,7 +62,7 @@ struct TableColumns: Equatable {
     static func fit(width: CGFloat, fieldNames: [String], compact: Bool) -> TableColumns {
         // Name wraps to two lines, so it needs less width; on a 13" iPad beside the sidebar three columns now
         // fit next to it and Harga shows on the first screen, as on the web (UI tour run 15, Q-IA5 / Q-M14).
-        let minName: CGFloat = compact ? 200 : 220
+        let minName: CGFloat = compact ? 120 : 220
         let minCol: CGFloat = compact ? 120 : 140
         let fieldMins = fieldNames.map { min(compact ? 220 : 280, max(minCol, headerWidth($0))) }
         let mins = [minCol, minCol] + fieldMins + [minCol, minCol]
@@ -77,9 +77,10 @@ struct TableColumns: Equatable {
             // room, so each swipe lands on a whole column and the screen's edge never cuts one. A peeking money
             // column read "Rp 3", "Rp 6.8" or a bare "Rp" (UI tour run 17, iPhone R17-I-02; decision 17). More
             // columns are cued by the "›" in the header and the scroll bar, not by a cut column.
-            let name = max(160, min(220, width - 150))
-            let column = max(minCol, width - name)
-            return TableColumns(name: width - column, widths: mins.map { _ in column })
+            let room = max(minCol, width - minName)
+            let visible = max(1, Int(room / minCol))
+            let column = room / CGFloat(visible)
+            return TableColumns(name: minName, widths: mins.map { _ in column })
         }
         // Wider than the window on an iPad / Mac: Name keeps its minimum (it took half the window before,
         // UI tour run 14, P-I12 / P-M9), and EVERY column gets one width, the room beside Name shared by the k
@@ -585,6 +586,7 @@ struct ProjectTableRow: View {
                     .font(NXFont.text(15, .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
+                    .lineLimit(cols.name <= 120 ? 2 : nil).truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 if task.hasQuest { QuestXPChip(xp: task.questXP) }
