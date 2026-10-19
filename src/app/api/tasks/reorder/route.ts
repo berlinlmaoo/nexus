@@ -86,7 +86,10 @@ export async function POST(request: NextRequest) {
       const current = new Map(inList.map((t) => [t.id, t.position]))
       const writes = full.map((id, i) => ({ id, i })).filter(({ id, i }) => current.get(id) !== i)
       for (const { id, i } of writes) await tx.task.update({ where: { id }, data: { position: i } })
-      return { full, writes: writes.length, moved: movedFirst && known.has(movedFirst) ? movedFirst : undefined }
+      // A whole-list reorder (orderedIds: older apps, the web's undo) names no moved card: announce the first card whose
+      // position changed, so the section's new order (listOrder) still reaches open boards (19 Oct 2026).
+      const announce = movedFirst && known.has(movedFirst) ? movedFirst : writes[0]?.id
+      return { full, writes: writes.length, moved: announce }
     }, { timeout: 20_000, maxWait: 10_000 })
     if ("gone" in outcome) {
       return NextResponse.json(
