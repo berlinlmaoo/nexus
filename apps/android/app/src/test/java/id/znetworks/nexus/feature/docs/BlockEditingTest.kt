@@ -30,6 +30,15 @@ class BlockEditingTest {
         assertEquals(JsonArray(listOf(second,first)),BlockTree.moveUp(tree,listOf(1))["content"])
         val removed=BlockTree.remove(tree,listOf(0));assertEquals(JsonArray(listOf(second)),removed["content"]);assertEquals(tree["attrs"],removed["attrs"])
     }
+    @Test fun clearingThenRetypingRetainsTypingMarksAndAttributes(){
+        val node=doc("""{"type":"paragraph","attrs":{"id":"stable"},"content":[{"type":"text","text":"Bold","marks":[{"type":"bold"},{"type":"futureMark","attrs":{"keep":true}}]}]}""")
+        val cleared=BlockTree.replaceText(node,"")
+        assertEquals("",BlockTree.text(cleared))
+        val typed=BlockTree.replaceText(cleared,"Replacement")
+        assertEquals("Replacement",BlockTree.text(typed))
+        assertEquals(node["attrs"],typed["attrs"])
+        assertEquals(node["content"]!!.jsonArray[0].jsonObject["marks"],typed["content"]!!.jsonArray[0].jsonObject["marks"])
+    }
     @Test fun canonicalReadAndSaveUseExactBase()=runTest{
         val server=MockWebServer();server.start()
         try{val api=BlockEditorApi(ApiClient(server.url("/"),ClientIdentity("0.1.6",13,36),{Session("t","c","u")},mayCarrySession={true}))

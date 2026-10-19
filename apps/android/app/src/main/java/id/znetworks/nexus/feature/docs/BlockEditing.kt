@@ -32,6 +32,12 @@ object BlockTree {
     fun replaceText(node:JsonObject,value:String):JsonObject {
         val old=text(node);if(old==value)return node
         val raw=(node["content"] as? JsonArray).orEmpty()
+        // Keep a local empty run as the typing style when the user clears the field.
+        // The canonical writer sanitizes empty text if an empty paragraph is saved.
+        if(value.isEmpty() && raw.isNotEmpty() && raw.all { it.jsonObject.text("type")=="text" }) {
+            val emptyRun = JsonObject(raw.first().jsonObject+("text" to JsonPrimitive("")))
+            return JsonObject(node+("content" to JsonArray(listOf(emptyRun))))
+        }
         if(raw.any{it.jsonObject.text("type")!="text"})return JsonObject(node+("content" to JsonArray(if(value.isEmpty())emptyList()else listOf(buildJsonObject{put("type","text");put("text",value)}))))
         var prefix=0;while(prefix<old.length&&prefix<value.length&&old[prefix]==value[prefix])prefix++
         var suffix=0;while(suffix<old.length-prefix&&suffix<value.length-prefix&&old[old.lastIndex-suffix]==value[value.lastIndex-suffix])suffix++
