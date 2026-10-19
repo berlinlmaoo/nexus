@@ -40,7 +40,9 @@ struct GideonActionCard: View {
                 HStack {
                     Spacer()
                     Button(T("Discard"), action: onDiscard).buttonStyle(.nxBordered)
-                    Button(applyLabel, action: onApply).buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
+                    Button(action: onApply) {
+                        Text(applyLabel).foregroundStyle(action.destructive ? Color.white : NX.background)
+                    }.buttonStyle(.borderedProminent).tint(action.destructive ? NX.danger : NX.onyx)
                 }
             } else {
                 Text(proposal.status == "APPLIED" && !readOnly ? T(action.done) : gideonProposalState(proposal, readOnly: readOnly))
