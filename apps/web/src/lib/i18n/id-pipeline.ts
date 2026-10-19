@@ -47,6 +47,8 @@ export const ID_PIPELINE: Record<string, string> = {
   "The deal's receivable is counted again without it. Control Room → Audit can bring it back.": "Piutang deal dihitung ulang tanpa termin ini. Control Room → Audit bisa memulihkannya.",
   "Paid in full{on}": "Lunas{on}",
   "Still owed: {amount}": "Sisa: {amount}",
+  "Overpaid by {amount}": "Dibayar lebih {amount}",
+  "Overpaid by {amount}. It still counts as paid in full.": "Dibayar lebih {amount}. Tetap dihitung lunas.",
   "added payment term": "menambah termin",
   "deleted payment term": "menghapus termin",
   "restored payment term": "memulihkan termin",
@@ -76,6 +78,8 @@ export const ID_PIPELINE: Record<string, string> = {
   "Deliverables on track": "Deliverable aman",
   "{n} completed": "{n} selesai",
   "Nothing overdue": "Tidak ada yang lewat tenggat",
+  "None overdue": "Tak ada jatuh tempo",
+  "{n}/{total} with costs": "{n}/{total} ada biaya",
 
   // Toolbar and filters
   "New deal": "Deal baru",

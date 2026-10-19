@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { reportableUserIds } from '@/lib/attendance-approvers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,15 @@ export async function GET(request: NextRequest) {
         primaryMembership?.role === 'ONE_ABOVE_ALL'
       if (canFilterMembers) memberIds = requestedMemberIds
     }
+
+    // Reports per crew (24 Sep 2026): Staff see only themselves. This legacy endpoint (iOS Reports up to
+    // 0.1.6) used to give a Staff member every assignee's numbers from shared projects (QA final 19 Oct
+    // C-2). For them it is now their own tasks only, same response shape, so released apps keep working
+    // and simply show one person. BoD/OAA and managers are unchanged until the apps move to
+    // /api/reports/people and this endpoint is retired.
+    const scope = await reportableUserIds(userId)
+    const selfOnly = scope.mode === 'SELF'
+    if (selfOnly) memberIds = [userId]
 
     const now = new Date()
     const parsedTo = to ? new Date(to) : null
@@ -136,6 +146,7 @@ export async function GET(request: NextRequest) {
     const assigneeMap: Record<string, { name: string; avatar: string | null; total: number; completed: number }> = {}
     for (const task of allTasks) {
       for (const a of task.assignees) {
+        if (selfOnly && a.user.id !== userId) continue
         if (!assigneeMap[a.user.id]) {
           assigneeMap[a.user.id] = { name: a.user.name, avatar: a.user.avatar, total: 0, completed: 0 }
         }
@@ -257,6 +268,7 @@ export async function GET(request: NextRequest) {
     for (const task of recentTasks) {
       const dateKey = task.updatedAt.toISOString().split('T')[0]
       for (const a of task.assignees) {
+        if (selfOnly && a.user.id !== userId) continue
         if (!heatmapData[a.user.id]) {
           heatmapData[a.user.id] = {}
         }

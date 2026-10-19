@@ -803,6 +803,9 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
           {paid
             ? t("Paid in full{on}", { on: term.paidAt ? ` · ${fmtDay(term.paidAt, locale)}` : "" })
             : t("Still owed: {amount}", { amount: fmtIdrFull(term.outstanding, lang) })}
+          {(term.overpaid ?? 0) > 0 && (
+            <span className="ml-1.5 font-medium text-amber-700 dark:text-amber-300">· {t("Overpaid by {amount}", { amount: fmtIdrFull(term.overpaid ?? 0, lang) })}</span>
+          )}
         </p>
         {canEdit && !paid && !paying && (
           <button
@@ -825,6 +828,11 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
             <button type="button" onClick={() => setPaying(false)} className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted pointer-coarse:min-h-[44px]">{t("Cancel")}</button>
             <button type="submit" className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground pointer-coarse:min-h-[44px]">{t("Save")}</button>
           </div>
+          {paidDraft > term.amount && (
+            <p role="status" className="text-xs font-medium text-amber-700 sm:col-span-3 dark:text-amber-300">
+              {t("Overpaid by {amount}. It still counts as paid in full.", { amount: fmtIdrFull(paidDraft - term.amount, lang) })}
+            </p>
+          )}
         </form>
       )}
     </li>

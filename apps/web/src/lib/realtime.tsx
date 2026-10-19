@@ -26,6 +26,11 @@ const REALTIME_EVENTS = [
   // the nav badge and the tab title move for chats that aren't open. Older servers never send it;
   // the "new-notification" fallback below and the list's own poll cover them.
   "conversation-updated",
+  // Server since 19 Oct 2026 (C-17): to the actor's own user:<id> after they review/cancel/override in attendance,
+  // so this tab drops an Approve/Reject they already used on another device. Ids only.
+  "attendance-changed",
+  // Server since 19 Oct 2026 (C-D2): XP moved for these people (coalesced ~1.5 s) → workspace rooms. Ids only.
+  "xp-changed",
 ] as const;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
@@ -36,6 +41,8 @@ const INVALIDATION: Record<string, string[]> = {
   "sprint-updated": ["sprint", "dashboard"],
   "message-created": ["messages", "conversation"],
   "conversation-updated": ["conversation"],
+  "attendance-changed": ["attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history", "attendance-dayoff", "attendance-deductions"],
+  "xp-changed": ["leaderboard"],
 };
 
 /**
@@ -442,6 +449,11 @@ export function RealtimeProvider({
             // frozen until a reload and offered Approve on requests someone else had already decided.
             if (evt === "new-notification" && typeof data.type === "string" && /^(attendance|offsite|dayoff)/i.test(data.type)) {
               terms.push("attendance-requests", "offsite-checkouts", "attendance-today", "attendance-history");
+            }
+            // My own XP moved (C-D2): the level/XP card and my profile too, not only the board.
+            if (evt === "xp-changed" && Array.isArray((payload as { userIds?: unknown } | undefined)?.userIds) && ((payload as { userIds: unknown[] }).userIds).includes(userId)) {
+              void queryClient.invalidateQueries({ queryKey: ["gamification", "me"] });
+              void queryClient.invalidateQueries({ queryKey: ["profile"] });
             }
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) });
             // A deleted group (server since 9 Oct 2026): out of every list at once, its cached thread and

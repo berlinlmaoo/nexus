@@ -476,6 +476,8 @@ export type NexusAttendanceToday = {
   /** This period's allowance: base + extra days granted for it (servers from 28 Sep 2026). */
   dayOffQuota?: number;
   dayOffAllowance?: { period: string; base: number; bonus: number; grants: { days: number; reason: string }[] };
+  /** The following attendance period's day-off balance (additive, 19 Oct 2026). */
+  dayOffNextPeriod?: { period: string; quota: number; used: number; remaining: number };
   redDateUsedThisMonth?: number;
   redDateQuota?: number;
   myShift?: { startTime: string; endTime: string; source: string; flexi?: boolean } | null;

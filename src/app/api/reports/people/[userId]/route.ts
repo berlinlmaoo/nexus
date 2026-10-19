@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { resolveLegacyId } from "@/lib/legacy-ids"
 import prisma from "@/lib/prisma"
 import { logAudit, logViewOncePerDay } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const viewerId = session?.user?.id
     if (!viewerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { userId: rawUserId } = await params
+    // An app that still holds a pre-UUID (cuid) id gets the same answer as with the new one (C-16).
+    const rawUserId = await resolveLegacyId((await params).userId)
     const targetId = rawUserId === "me" ? viewerId : rawUserId
 
     const windows = resolveReportWindows(request.nextUrl.searchParams)

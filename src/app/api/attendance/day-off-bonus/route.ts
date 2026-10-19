@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { pingActorAfter } from "@/lib/attendance-realtime"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -97,7 +98,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const g = await context()
     if ("error" in g) return g.error
@@ -214,9 +215,11 @@ export async function POST(req: NextRequest) {
     // Tell each person. After the commit and best-effort: a failed push never undoes a grant.
     const notice = bonusGrantTexts(days, periodKey, reason)
     const sent = await Promise.allSettled(
-      fresh.map((userId) =>
-        createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: "/attendance", push: true }),
-      ),
+      fresh.map((userId) => {
+        // C-7: the grant itself; the web opens the day-off log. Apps that only read the path land on /attendance.
+        const grantId = created.find((c) => c.userId === userId)?.id
+        return createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: grantId ? `/attendance?bonus=${encodeURIComponent(grantId)}` : "/attendance", push: true })
+      }),
     )
     const notified = sent.filter((r) => r.status === "fulfilled").length
     if (notified < fresh.length) console.error("[day-off-bonus] notify failed for", fresh.length - notified, "people")
@@ -227,3 +230,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// C-17: the actor's other devices refetch (lib/attendance-realtime.ts).
+export const POST = pingActorAfter("dayoff_bonus", handlePOST)

@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { cleanMom, cleanProposals, cleanSpeakers, MEETING_LANGUAGES } from "@/lib/meeting-notes-core"
+import { cleanMom, cleanProposals, cleanSpeakers, MEETING_LANGUAGES, sameSpeakers } from "@/lib/meeting-notes-core"
 import { emitMeetingChanged, isMeetingId, meetingAccess, removeAudio, serializeMeeting, speakerCandidates } from "@/lib/meeting-notes"
 
 type Params = { params: Promise<{ id: string }> }
@@ -49,6 +49,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
   const data: Prisma.MeetingNoteUpdateManyMutationInput = {}
   const applied = row.status === "APPLIED" || row.status === "APPLYING"
+  // After Apply the speaker names are locked (they are in the Doc and the tasks already): a real change is refused
+  // with 409 ALREADY_APPLIED instead of a 200 that silently dropped it (QA final 19 Oct 2026, D-Q4). The same names
+  // sent back unchanged (a client that always sends its whole draft) are not a change and pass.
+  if (applied && body.speakers && typeof body.speakers === "object" && !Array.isArray(body.speakers) && !sameSpeakers(cleanSpeakers(body.speakers), cleanSpeakers(row.speakers))) {
+    return NextResponse.json({ error: "These minutes were already saved, so the speaker names can't change anymore.", code: "ALREADY_APPLIED", meeting: await serializeMeeting(row, access, { full: true }) }, { status: 409 })
+  }
   if (typeof body.title === "string") data.title = body.title.replace(/\s+/g, " ").trim().slice(0, 200)
   if (!applied) {
     if ("projectId" in body) {

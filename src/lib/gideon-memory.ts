@@ -343,11 +343,14 @@ export async function forgetMemories(userId: string, input: { id?: unknown; quer
 
 export type ProfileField = "nickname" | "role" | "about"
 export type ProfileSource = "PROFILE_NICKNAME" | "PROFILE_ROLE" | "PROFILE_ABOUT"
-const PROFILE: Record<ProfileField, { source: ProfileSource; kind: MemoryKind; prefix: string }> = {
-  nickname: { source: "PROFILE_NICKNAME", kind: "PERSON", prefix: "Nickname: " },
-  role: { source: "PROFILE_ROLE", kind: "PERSON", prefix: "Role / occupation: " },
-  about: { source: "PROFILE_ABOUT", kind: "FACT", prefix: "About me: " },
+// Kinds and prefixes match what the Android app writes through POST /api/gideon/memory (nickname PERSON, role FACT,
+// more-about PREFERENCE): such rows (source SETTINGS) are read as the fields too and adopted on the next save.
+const PROFILE: Record<ProfileField, { source: ProfileSource; kind: MemoryKind; prefix: string; also: string[] }> = {
+  nickname: { source: "PROFILE_NICKNAME", kind: "PERSON", prefix: "Nickname: ", also: [] },
+  role: { source: "PROFILE_ROLE", kind: "FACT", prefix: "Role / occupation: ", also: [] },
+  about: { source: "PROFILE_ABOUT", kind: "PREFERENCE", prefix: "More about me: ", also: ["About me: "] },
 }
+const prefixOf = (f: ProfileField, text: string) => [PROFILE[f].prefix, ...PROFILE[f].also].find((p) => text.startsWith(p)) ?? null
 export const PROFILE_FIELDS = Object.keys(PROFILE) as ProfileField[]
 /** Room for the prefix inside MEMORY_TEXT_MAX (200). */
 export const PROFILE_TEXT_MAX = 170
@@ -356,8 +359,9 @@ export const PROFILE_TEXT_MAX = 170
 export function profileFromMemories(memories: MemoryView[]): Record<ProfileField, string | null> {
   const out = { nickname: null, role: null, about: null } as Record<ProfileField, string | null>
   for (const f of PROFILE_FIELDS) {
-    const m = memories.find((x) => x.source === PROFILE[f].source && x.status === "ACTIVE")
-    if (m) out[f] = m.text.startsWith(PROFILE[f].prefix) ? m.text.slice(PROFILE[f].prefix.length) : m.text
+    const live = memories.filter((x) => x.status === "ACTIVE")
+    const m = live.find((x) => x.source === PROFILE[f].source) ?? [...live].reverse().find((x) => x.source === "SETTINGS" && prefixOf(f, x.text))
+    if (m) { const p = prefixOf(f, m.text); out[f] = p ? m.text.slice(p.length) : m.text }
   }
   return out
 }
@@ -372,7 +376,12 @@ export async function setProfileMemories(userId: string, input: Partial<Record<P
     const raw = input[f]
     const value = typeof raw === "string" ? cleanMemoryText(raw).slice(0, PROFILE_TEXT_MAX).trim() : ""
     const { source, kind, prefix } = PROFILE[f]
-    const live = await prisma.gideonMemory.findMany({ where: { userId, source, deletedAt: null }, select: { id: true }, orderBy: { createdAt: "desc" } })
+    const prefixes = [prefix, ...PROFILE[f].also]
+    const live = await prisma.gideonMemory.findMany({
+      where: { userId, deletedAt: null, OR: [{ source }, ...prefixes.map((p) => ({ source: "SETTINGS", text: { startsWith: p } }))] },
+      select: { id: true, source: true }, orderBy: [{ updatedAt: "desc" }],
+    })
+    live.sort((a, b) => Number(b.source === source) - Number(a.source === source))
     if (!value) {
       if (live.length) await prisma.gideonMemory.updateMany({ where: { id: { in: live.map((r) => r.id) }, userId, deletedAt: null }, data: { deletedAt: new Date() } })
       continue
@@ -381,6 +390,7 @@ export async function setProfileMemories(userId: string, input: Partial<Record<P
     const text = prefix + value
     if (live[0]) {
       await updateMemory(userId, live[0].id, { text, kind })
+      if (live[0].source !== source) await prisma.gideonMemory.updateMany({ where: { id: live[0].id, userId }, data: { source } })
       if (live.length > 1) await prisma.gideonMemory.updateMany({ where: { id: { in: live.slice(1).map((r) => r.id) }, userId, deletedAt: null }, data: { deletedAt: new Date() } })
     } else {
       const { memory, created } = await saveMemory(userId, { text, kind, status: "ACTIVE", source, explicit: true })
