@@ -203,9 +203,13 @@ private struct GideonMemorySummaryView: View {
                         let memories = store.memories.filter { $0.kind == section.kind }
                         if !memories.isEmpty {
                             ZStack(alignment: .topLeading) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(T(section.title)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                                    ForEach(memories) { row($0) }
+                                // One inset group per section, as the GIDEON Memory page: no outline, a hairline
+                                // between rows (Q-7, Berlin 20 Oct).
+                                MemoryGroup(header: T(section.title)) {
+                                    ForEach(Array(memories.enumerated()), id: \.element.id) { i, memory in
+                                        if i > 0 { Divider().overlay(NX.border).padding(.leading, 16) }
+                                        row(memory)
+                                    }
                                 }.opacity(revealed ? 1 : 0).offset(y: revealed ? 0 : 8)
                                 VStack(alignment: .leading, spacing: 10) {
                                     RoundedRectangle(cornerRadius: 4).fill(NX.muted).frame(width: 100, height: 14)
@@ -288,7 +292,7 @@ private struct GideonMemorySummaryView: View {
                         .accessibilityLabel(T("Memory options")).disabled(store.busy)
                 }.font(NXFont.text(12))
             }
-        }.padding(14).background(NX.card, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NX.border)).accessibilityElement(children: .contain).accessibilityIdentifier("memory.row." + memory.id)
+        }.padding(.horizontal, 16).padding(.vertical, 12).accessibilityElement(children: .contain).accessibilityIdentifier("memory.row." + memory.id)
     }
     private func profileDisplay(_ memory: GideonMemory) -> String {
         guard let field = MemoryProfileField.allCases.first(where: { $0.source == memory.source }) else { return memory.text }

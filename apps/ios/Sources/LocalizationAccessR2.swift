@@ -26,7 +26,7 @@ extension AppLanguage {
         "You can't open this page": "Kamu tidak bisa membuka halaman ini",
         "No files yet.": "Belum ada file.",
         "No updates yet.": "Belum ada update.",
-        "Pick a date to see its tasks.": "Pilih tanggal untuk melihat tugasnya.",
+        "Pick a date to see its tasks.": "Pilih tanggal untuk melihat task-nya.",
         "Only on this screen. Saving a filter to the view needs Can edit access.": "Hanya di layar ini. Menyimpan filter ke tampilan butuh akses Bisa edit.",
         // Keyboard shortcuts sheet, ⌘/ (13 Oct 2026; web id-qafix-kbd.ts where the web has the line).
         "Search NEXUS": "Cari di NEXUS",

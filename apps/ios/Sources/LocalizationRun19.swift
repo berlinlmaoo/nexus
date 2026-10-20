@@ -48,6 +48,6 @@ extension AppLanguage {
         "You are already in that workspace.": "Kamu sudah ada di workspace itu.",
         "That workspace code is not valid.": "Kode workspace itu tidak valid.",
         "Enter the workspace code": "Masukkan kode workspace",
-        "You are in a personal workspace. Enter your company's workspace code in Settings to join it; the Calendar then shows the tasks of everyone there.": "Kamu berada di workspace pribadi. Masukkan kode workspace perusahaanmu di Pengaturan untuk bergabung; Kalender lalu menampilkan tugas semua orang di sana.",
+        "You are in a personal workspace. Enter your company's workspace code in Settings to join it; the Calendar then shows the tasks of everyone there.": "Kamu berada di workspace pribadi. Masukkan kode workspace perusahaanmu di Pengaturan untuk bergabung; Kalender lalu menampilkan task semua orang di sana.",
     ]
 }

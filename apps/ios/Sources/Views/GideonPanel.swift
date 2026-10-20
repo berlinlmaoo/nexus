@@ -1143,11 +1143,12 @@ struct GideonPanel: View {
                 Button {
                     submit()
                 } label: {
+                    // Accent with text, grey while empty, as the Memory summary composer (Q-2, Berlin 20 Oct).
                     Image(systemName: "arrow.up")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(NX.card)
+                        .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
-                        .background(NX.onyx.opacity(canSend ? 1 : 0.35), in: Circle())
+                        .background(canSend ? NX.violet : NX.mutedFg.opacity(0.35), in: Circle())
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }

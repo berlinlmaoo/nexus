@@ -15,9 +15,9 @@ extension AppLanguage {
         "Select a project to open it.": "Pilih proyek untuk membukanya.",
         // Project calendar day panel: the web's sentences (R16-B-09)
         "Nothing on this day, nor anywhere else this month.": "Tidak ada apa-apa di tanggal ini, begitu juga sepanjang bulan ini.",
-        "Nothing on this day. Days with a dot have tasks.": "Tidak ada apa-apa di hari ini. Hari yang bertitik ada tugasnya.",
-        "Nothing on this day. Tap another day to see its tasks.": "Tidak ada apa pun di hari ini. Ketuk hari lain untuk melihat tugasnya.",
-        "Nothing on this day. Click another day to see its tasks.": "Tidak ada apa pun di hari ini. Klik hari lain untuk melihat tugasnya.",
+        "Nothing on this day. Days with a dot have tasks.": "Tidak ada apa-apa di hari ini. Hari yang bertitik ada task-nya.",
+        "Nothing on this day. Tap another day to see its tasks.": "Tidak ada apa pun di hari ini. Ketuk hari lain untuk melihat task-nya.",
+        "Nothing on this day. Click another day to see its tasks.": "Tidak ada apa pun di hari ini. Klik hari lain untuk melihat task-nya.",
         // Attendance board: the web's labelled export (R16-B-24)
         "Export": "Ekspor",
         // Home leaderboard widget (R16-B-14)

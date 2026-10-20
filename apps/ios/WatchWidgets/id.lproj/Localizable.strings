@@ -5,9 +5,9 @@
 /* Widgets */
 "Calendar" = "Kalender";
 "Calendar progress" = "Progres kalender";
-"What's due next, and how much is left today." = "Tugas berikutnya, dan sisa tugas hari ini.";
-"Today's tasks done, or how far the year has gone." = "Tugas hari ini yang selesai, atau seberapa jauh tahun ini berjalan.";
-"Your tasks from the NEXUS Calendar." = "Tugasmu dari Kalender NEXUS.";
+"What's due next, and how much is left today." = "Task berikutnya, dan sisa task hari ini.";
+"Today's tasks done, or how far the year has gone." = "Task hari ini yang selesai, atau seberapa jauh tahun ini berjalan.";
+"Your tasks from the NEXUS Calendar." = "Task kamu dari Kalender NEXUS.";
 
 /* Parameters and their choices */
 "Scope" = "Cakupan";
@@ -19,10 +19,10 @@
 "Year" = "Tahun";
 
 /* Recommendations (the face editor's list) */
-"My tasks" = "Tugas saya";
-"My division's tasks" = "Tugas divisi saya";
-"Everyone's tasks" = "Tugas semua orang";
-"Today · My tasks" = "Hari ini · Tugas saya";
+"My tasks" = "Task saya";
+"My division's tasks" = "Task divisi saya";
+"Everyone's tasks" = "Task semua orang";
+"Today · My tasks" = "Hari ini · Task saya";
 "Today · My division" = "Hari ini · Divisi saya";
 "Today · Everyone" = "Hari ini · Semua orang";
 "Year progress" = "Progres tahun";
