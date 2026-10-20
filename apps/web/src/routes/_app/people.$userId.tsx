@@ -15,7 +15,7 @@ import { PERIOD_BASELINE_XP } from "@/lib/levels";
 import { ZoomableAvatar } from "@/components/PhotoLightbox";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
-import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
+import { OverrideEvidenceView, StatusOverridePanel, overrideDayStateOf } from "@/components/attendance/StatusOverridePanel";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
@@ -316,6 +316,8 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
           {where && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Location")}</dt><dd className="min-w-0 text-right"><div className="truncate font-semibold" title={rec?.checkInAddress ?? undefined}>{where}</div>{place?.away && <div className="text-[11px] text-muted-foreground">{tr("Away from the office")}</div>}</dd></div>}
           {rec?.requestType && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Request")}</dt><dd className="font-semibold">{REQ_LABEL[rec.requestType] ? tr(REQ_LABEL[rec.requestType]) : rec.requestType}{rec.reviewedBy?.name ? ` · ${tr("approved by {name}", { name: rec.reviewedBy.name })}` : ""}</dd></div>}
           {rec?.notes && <div className="rounded-xl bg-muted/40 p-2.5 text-sm"><div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Reason")}</div><p className="whitespace-pre-wrap">{rec.notes}</p></div>}
+          {(rec?.supportingDocumentUrl || rec?.evidenceMissing) && <div><OverrideEvidenceView url={rec.supportingDocumentUrl} name={rec.supportingDocumentName} missing={rec.evidenceMissing} /></div>}
+          {(rec?.correctionEvidenceUrl || rec?.correctionEvidenceMissing) && <div><OverrideEvidenceView url={rec.correctionEvidenceUrl} name={rec.correctionEvidenceName} missing={rec.correctionEvidenceMissing} label={tr("Correction evidence")} /></div>}
           {!rec && !day.isFuture && <p className="text-muted-foreground">{tr("Nothing recorded — a rest day, a public holiday, before they joined, or still open today.")}</p>}
         </dl>
         {entries.length > 0 && (
@@ -325,7 +327,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
           </div>
         )}
         {data.viewer.canManageAttendance && !day.isFuture && (
-          <StatusOverridePanel userId={data.person.id} name={data.person.name} dateKey={day.date} onDone={onClose} />
+          <StatusOverridePanel userId={data.person.id} name={data.person.name} dateKey={day.date} onDone={onClose} current={overrideDayStateOf(rec)} />
         )}
         {rec?.id && rec.recordKind === "ATTENDANCE" && (
           <Link to="/attendance" className="mt-3 inline-flex text-xs font-semibold text-primary hover:underline">{tr("Selfies, location and trail are on the Attendance board →")}</Link>

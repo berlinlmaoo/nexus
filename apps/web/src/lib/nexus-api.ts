@@ -542,6 +542,12 @@ export type NexusAttendanceHistory = {
     reviewedBy?: { id?: string; name?: string | null; email?: string | null } | null;
     hasSupportingDocument?: boolean;
     supportingDocumentUrl?: string | null;
+    /** A Sick/Permit set from the board with no evidence attached (owner 20 Oct 2026). */
+    evidenceMissing?: boolean;
+    /** Evidence for a board change to Present (from Permit / TK / nothing), or its "no evidence attached" mark. */
+    correctionEvidenceUrl?: string | null;
+    correctionEvidenceName?: string | null;
+    correctionEvidenceMissing?: boolean;
   submittedLat?: number | null;
   submittedLng?: number | null;
   submittedAddress?: string | null;
@@ -2460,8 +2466,21 @@ export const nexusApi = {
       entries: { id: string; dateKey: string; kind: string; label: string; amount: number; unit: "XP" | "DAY_OFF"; detail: string | null; cleared: boolean }[];
     }>(`/api/attendance/deductions?userId=${encodeURIComponent(userId)}${month ? `&month=${month}` : ""}`),
 
-  attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
-    apiFetch<{ ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number }>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) }),
+  // With `evidence` (owner 20 Oct 2026: → Sick, → Permit, Permit/TK/nothing → Present ask for it, optional) the
+  // same fields go as multipart/form-data with the file in `evidence`; without it, JSON as before.
+  attendanceOverride: ({ evidence, ...payload }: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null; evidence?: File | null }) => {
+    type R = { ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number; evidence?: { url: string; name: string | null } | null; evidenceMissing?: boolean };
+    if (!evidence) return apiFetch<R>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) });
+    const form = new FormData();
+    form.set("userId", payload.userId);
+    form.set("date", payload.date);
+    form.set("action", payload.action);
+    if (payload.note) form.set("note", payload.note);
+    if (payload.checkInAt) form.set("checkInAt", payload.checkInAt);
+    if ("checkOutAt" in payload) form.set("checkOutAt", payload.checkOutAt ?? "");
+    form.set("evidence", evidence, evidence.name);
+    return apiFetch<R>("/api/attendance/override", { method: "POST", body: form });
+  },
   // `reviewNote` is required by the server on "reject" (min 3 chars) and optional on "approve".
   reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel", reviewNote?: string) => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action, reviewNote: reviewNote?.trim() || undefined }) }),
   periodRewards: () => apiFetch<{ rewards: Array<{ periodKey: string; tier: string; perk?: string | null; bonusDayOff: number; zeroAlpha: boolean; finalScore: number }> }>("/api/attendance/xp-rewards"),
