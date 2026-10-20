@@ -3158,10 +3158,10 @@
     <string name="au_when">Saat</string>
     <string name="au_one_condition">1 kondisi</string>
     <string name="au_n_conditions">%1$d kondisi</string>
-    <string name="au_intro">Saat sesuatu terjadi di project ini, NEXUS mengerjakan langkah berikutnya untukmu. Aturannya dibuat di web.</string>
+    <string name="au_intro">Saat sesuatu terjadi di proyek ini, NEXUS mengerjakan langkah berikutnya untuk Anda.</string>
     <string name="au_load_failed">Otomasi gagal dimuat</string>
     <string name="au_empty_title">Belum ada otomasi</string>
-    <string name="au_empty_lead">Buat di web: pilih pemicunya, saring task-nya, lalu apa yang dikerjakan NEXUS.</string>
+    <string name="au_empty_lead">Pilih Automasi baru untuk menentukan pemicu, menyaring task, dan memilih langkah NEXUS berikutnya.</string>
     <string name="au_empty_member">Lead proyek bisa membuat otomasi.</string>
     <string name="au_never_ran">Belum pernah jalan</string>
     <string name="au_one_run">1 kali jalan</string>

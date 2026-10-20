@@ -308,7 +308,7 @@
     <string name="st_mcp_url">Server URL for Claude</string>
     <string name="st_copy">Copy</string>
     <string name="st_copied">Copied</string>
-    <string name="st_mcp_body">Connect Claude (the app, Claude Code or Claude Desktop) to NEXUS so it can read and update your tasks and pages with your access. The connection token is created on the web, in Settings › Claude (MCP), and shown once.</string>
+    <string name="st_mcp_body">Connect Claude (the app, Claude Code or Claude Desktop) to NEXUS so it can read and update your tasks and pages with your access. Create a personal token below, copy it when shown once, and paste it into your Claude connection settings.</string>
     <!-- Projects summary card (iOS ProjectsSummaryCard), 14 Oct 2026 -->
     <string name="psum_avg_progress">Average progress</string>
     <string name="psum_tasks_done">Tasks done</string>

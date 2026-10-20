@@ -3210,10 +3210,10 @@
     <string name="au_when">When</string>
     <string name="au_one_condition">1 condition</string>
     <string name="au_n_conditions">%1$d conditions</string>
-    <string name="au_intro">When something happens in this project, NEXUS does the next step for you. Rules are built on the web.</string>
+    <string name="au_intro">When something happens in this project, NEXUS does the next step for you.</string>
     <string name="au_load_failed">Couldn\'t load the automations</string>
     <string name="au_empty_title">No automations yet</string>
-    <string name="au_empty_lead">Set one up on the web: pick what starts it, filter which tasks, then what NEXUS should do.</string>
+    <string name="au_empty_lead">Choose New automation to pick what starts it, filter which tasks, and choose what NEXUS does next.</string>
     <string name="au_empty_member">Project leads can set up automations.</string>
     <string name="au_never_ran">Never ran</string>
     <string name="au_one_run">1 run</string>

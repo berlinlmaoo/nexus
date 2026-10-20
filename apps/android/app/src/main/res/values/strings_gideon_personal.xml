@@ -1,0 +1,7 @@
+<resources>
+    <string name="gp_personalize">Assistant preferences</string>
+    <string name="gp_help">Choose a name and standing instructions for your assistant.</string>
+    <string name="gp_name">Assistant name (40 characters)</string>
+    <string name="gp_instructions">Instructions (2000 characters)</string>
+    <string name="gp_private">Only your account uses these preferences. Project permissions still apply. Empty values reset to defaults.</string>
+</resources>

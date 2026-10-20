@@ -1,0 +1,18 @@
+<resources>
+    <string name="pm_new">New page</string>
+    <string name="pm_project">Project</string>
+    <string name="pm_title">Title</string>
+    <string name="pm_template">Template</string>
+    <string name="pm_blank">Blank page</string>
+    <string name="pm_create">Create page</string>
+    <string name="pm_manage">Manage page</string>
+    <string name="pm_icon">Icon / emoji</string>
+    <string name="pm_parent">Parent page</string>
+    <string name="pm_top">Top level</string>
+    <string name="pm_cover">Cover URL or gradient</string>
+    <string name="pm_wide">Full width</string>
+    <string name="pm_duplicate">Duplicate page</string>
+    <string name="pm_delete">Delete %1$s?</string>
+    <string name="pm_delete_help">The page will be deleted. Subpages move to the top level. Restore the page from Control Room audit.</string>
+    <string name="pm_subpage">Add subpage</string>
+</resources>
