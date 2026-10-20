@@ -1,6 +1,6 @@
 import { DateField } from "@/components/DateField";
 import { EscClose } from "@/hooks/use-escape";
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -189,7 +189,15 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const isPhone = useIsMobile();
   // UI round 19 Oct 2026 (U-9, like Notion mobile): on a phone the Name column is frozen and narrow (120 px, title on
   // two lines with an ellipsis), so the other columns scroll under it and more of them show. Desktop unchanged.
-  const nameW = isPhone ? 120 : 280;
+  // A name wraps between words and never breaks one ("Menung / gu", Q-1, as iOS): the column is at least as wide
+  // as the longest single word among the rows, plus the cell's paddings, grip and open arrow, up to a cap.
+  const fontsReady = useFontsReady();
+  const longestWord = useMemo(() => longestWordWidth(viewTasks.map((x) => x.title), isPhone ? 13 : 14),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewTasks, isPhone, fontsReady]);
+  const nameChrome = (isPhone ? 38 : 50) + (mover.enabled ? (isPhone ? 30 : 18) : 0);
+  const nameCap = isPhone ? Math.max(120, Math.round((typeof window === "undefined" ? 390 : window.innerWidth) * 0.55)) : 480;
+  const nameW = Math.min(nameCap, Math.max(isPhone ? 120 : 280, Math.ceil(longestWord * 1.04 + nameChrome)));
   const frozen = isPhone ? "sticky left-0 z-[1] border-r border-border bg-card" : "";
   const colMin = (k: string) => colW[k] ?? Math.min(280, Math.max(160, Math.ceil(64 + propLabel(propDef(defs, k)).length * 6.8)));
   const gridTemplate = `${isPhone ? `${nameW}px` : `minmax(${nameW}px,2fr)`} ${columns.map((k) => (colW[k] ? `${colW[k]}px` : `minmax(${colMin(k)}px,1fr)`)).join(" ")} 40px`;
@@ -338,6 +346,38 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   );
 }
 
+/** Bumps once the web fonts have loaded, so a measurement taken with the fallback font is redone in Inter. */
+function useFontsReady(): boolean {
+  const [ready, setReady] = useState(() => typeof document === "undefined" || document.fonts?.status === "loaded");
+  useEffect(() => {
+    if (ready || typeof document === "undefined" || !document.fonts) return;
+    let live = true;
+    document.fonts.ready.then(() => { if (live) setReady(true); });
+    return () => { live = false; };
+  }, [ready]);
+  return ready;
+}
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+/** The widest single word (as the name cell draws it, dash glued to the next word) across titles, in px. */
+function longestWordWidth(titles: string[], px: number): number {
+  if (typeof document === "undefined") return 0;
+  if (measureCtx === undefined) measureCtx = document.createElement("canvas").getContext("2d");
+  const ctx = measureCtx;
+  if (!ctx) return 0;
+  ctx.font = `400 ${px}px ${getComputedStyle(document.body).fontFamily}`;
+  const seen = new Set<string>();
+  let max = 0;
+  for (const title of titles) {
+    for (const word of glueDash(title ?? "").split(/[ \t\n]+/)) {
+      if (!word || seen.has(word)) continue;
+      seen.add(word);
+      max = Math.max(max, ctx.measureText(word).width);
+    }
+  }
+  return max;
+}
+
 function questXp(task: NexusTask): number {
   return (task.quests ?? []).reduce((s, q) => s + (q.xpReward ?? 0), 0);
 }
@@ -369,9 +409,9 @@ function NameCell({ task, handle, onRename, onOpen, className }: { task: NexusTa
           type="button"
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
           title={task.title}
-          // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
+          // Breaks between words only, never inside one (Q-1: the column is sized to the longest word), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug [overflow-wrap:normal] [word-break:normal] [hyphens:none] hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>
