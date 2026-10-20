@@ -774,7 +774,10 @@ struct TimelineTab: View {
                         // R17-I-08), and "Gaji Clippers / –Cymenggs" broke before its dash (iPad R17-I-12).
                         // The whole name, wrapped, as the web (decision 7 of run 20, R20-I-20 / R20-B-28): two lines and
                         // "…" cut "FEE HOSTING PR NADIA RAHMA - 22 A…"; the row grows instead.
-                        Text(UntitledText.wrapped(t.title)).font(NXFont.text(showMeta ? 13 : 14, .medium))
+                        // The phone's ~120 pt column (Q-1, Berlin 20 Oct: not wider): a smaller name, two lines,
+                        // and a size its longest word fits, so "REIMBURSE" never breaks into "REIMBURS / E".
+                        Text(UntitledText.wrapped(t.title))
+                            .font(NXFont.text(compact ? Self.phoneNameSize(t.title, subtask: t.isSubtask) : showMeta ? 13 : 14, .medium))
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
                             .strikethrough(t.isDone)
                             .lineLimit(compact ? 2 : nil).truncationMode(.tail)
@@ -1111,6 +1114,23 @@ struct TimelineTab: View {
     }
 
     static func dayCount(_ n: Int) -> String { n == 1 ? T("1 day") : String(format: T("%d days"), n) }
+
+    /// The phone name's size: 12 pt, smaller (down to 9 pt) only while its longest word is wider than the
+    /// text's room in the 120 pt column (the check circle, the subtask arrow and the paddings taken off).
+    static func phoneNameSize(_ title: String, subtask: Bool) -> CGFloat {
+        let room: CGFloat = 120 - 12 - 18 - 8 - 4 - (subtask ? 19 : 0)
+        let words = UntitledText.wrapped(title).split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" })
+        var size: CGFloat = 12
+        while size > 9 {
+            let desc = UIFontDescriptor(name: "Inter", size: size)
+                .addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: UIFont.Weight.medium]])
+            let font = UIFont(descriptor: desc, size: size)
+            let widest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+            if widest <= room { break }
+            size -= 0.5
+        }
+        return size
+    }
 }
 
 /// Reports a horizontal ScrollView's offset (iOS 18; a no-op before).
