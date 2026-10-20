@@ -26,20 +26,20 @@
 /* Gallery: descriptions */
 "Where you stand today." = "Posisi absensimu hari ini.";
 "This month at a glance." = "Bulan ini dalam sekali lihat.";
-"The month, and what comes next." = "Bulan ini, dan tugas yang segera datang.";
+"The month, and what comes next." = "Bulan ini, dan task yang segera datang.";
 "Monday to Sunday at a glance." = "Senin sampai Minggu dalam sekali lihat.";
 "High priority and due now: do these first." = "Prioritas tinggi dan tenggatnya sudah dekat: kerjakan dulu.";
 "High priority, not due yet: plan them in." = "Prioritas tinggi, tenggat masih longgar: rencanakan.";
 "Urgent, not high priority: due now, get them done." = "Mendesak, bukan prioritas tinggi: tenggat sudah dekat, segera bereskan.";
-"Not urgent, not high priority: everything else, tasks without a date included." = "Tidak mendesak, bukan prioritas tinggi: sisanya, termasuk tugas tanpa tenggat.";
-"Your next tasks and their times." = "Tugas berikutnya beserta jamnya.";
-"This week's tasks as dots." = "Tugas minggu ini sebagai titik.";
-"Today's tasks done, or the year so far." = "Tugas hari ini yang sudah selesai, atau tahun yang sudah berjalan.";
-"Today's tasks in one line." = "Tugas hari ini dalam satu baris.";
+"Not urgent, not high priority: everything else, tasks without a date included." = "Tidak mendesak, bukan prioritas tinggi: sisanya, termasuk task tanpa tenggat.";
+"Your next tasks and their times." = "Task berikutnya beserta jamnya.";
+"This week's tasks as dots." = "Task minggu ini sebagai titik.";
+"Today's tasks done, or the year so far." = "Task hari ini yang sudah selesai, atau tahun yang sudah berjalan.";
+"Today's tasks in one line." = "Task hari ini dalam satu baris.";
 
 /* Edit Widget: scope */
 "Scope" = "Cakupan";
-"Whose tasks the widget shows." = "Tugas siapa yang ditampilkan widget ini.";
+"Whose tasks the widget shows." = "Task siapa yang ditampilkan widget ini.";
 "Mine" = "Saya";
 "My division" = "Divisi saya";
 "Everyone" = "Semua orang";

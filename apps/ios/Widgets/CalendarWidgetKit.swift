@@ -384,8 +384,8 @@ struct CalendarInk {
 /// English first, Indonesian second, in the app's language.
 enum CalendarWords {
     static var comingUp: String { GlanceText.t("Coming up", "Tidak lama lagi") }
-    static var nothingComingUp: String { GlanceText.t("Nothing coming up", "Belum ada tugas mendatang") }
-    static var nothingHere: String { GlanceText.t("Nothing here", "Tidak ada tugas di sini") }
+    static var nothingComingUp: String { GlanceText.t("Nothing coming up", "Belum ada task mendatang") }
+    static var nothingHere: String { GlanceText.t("Nothing here", "Tidak ada task di sini") }
     static var noDate: String { GlanceText.t("No date", "Tanpa tenggat") }
 
     /// "Day 278 · 76%" / "Hari ke-278 · 76%".
@@ -409,8 +409,8 @@ enum CalendarWords {
     /// "3 due today · next 19:00"; "Nothing due today · next Thu 8".
     static func inline(_ i: GlanceInline, today: String) -> String {
         let base = i.openToday == 0
-            ? GlanceText.t("Nothing due today", "Tidak ada tugas hari ini")
-            : GlanceText.t("\(i.openToday) due today", "\(i.openToday) tugas hari ini")
+            ? GlanceText.t("Nothing due today", "Tidak ada task hari ini")
+            : GlanceText.t("\(i.openToday) due today", "\(i.openToday) task hari ini")
         // A date-only task today has no moment to point at, and "due today" already counts it.
         if i.nextDay == today && i.nextTime == nil { return base }
         guard let next = short(day: i.nextDay, time: i.nextTime, today: today) else { return base }

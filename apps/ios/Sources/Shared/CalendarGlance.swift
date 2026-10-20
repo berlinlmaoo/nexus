@@ -541,7 +541,7 @@ enum GlanceText {
     static func dayNumber(_ day: String) -> String { String(Int(day.suffix(2)) ?? 0) }
 
     /// What a masked row says instead of its title.
-    static var internalTask: String { t("Internal task", "Tugas internal") }
+    static var internalTask: String { t("Internal task", "Task internal") }
 
     static func title(_ bar: GlanceBar) -> String { bar.title ?? internalTask }
 
@@ -607,9 +607,9 @@ enum GlanceText {
     /// "1 task" / "3 tasks" / "no tasks".
     static func taskCount(_ n: Int) -> String {
         switch n {
-        case 0: return t("no tasks", "tidak ada tugas")
-        case 1: return t("1 task", "1 tugas")
-        default: return t("\(n) tasks", "\(n) tugas")
+        case 0: return t("no tasks", "tidak ada task")
+        case 1: return t("1 task", "1 task")
+        default: return t("\(n) tasks", "\(n) task")
         }
     }
 

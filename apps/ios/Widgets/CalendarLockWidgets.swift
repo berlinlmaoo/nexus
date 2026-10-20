@@ -247,7 +247,7 @@ struct CalendarTodayGauge: View {
         .gaugeStyle(.accessoryCircularCapacity)
         .widgetAccentable()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(GlanceText.t("Today's tasks", "Tugas hari ini"))
+        .accessibilityLabel(GlanceText.t("Today's tasks", "Task hari ini"))
         .accessibilityValue(ring.total == 0
                             ? GlanceText.taskCount(0)
                             : GlanceText.t("\(ring.done) of \(ring.total) done", "\(ring.done) dari \(ring.total) selesai"))

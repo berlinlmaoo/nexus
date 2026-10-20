@@ -291,12 +291,12 @@ func watchCalendarWhen(_ bar: GlanceBar, today: String) -> String {
     return relative + " " + GlanceText.time(time)
 }
 
-/// "3 due today · next 19:00" / "3 tugas hari ini · berikut 19.00".
+/// "3 due today · next 19:00" / "3 task hari ini · berikut 19.00".
 func watchCalendarInline(_ s: GlanceSnapshot, now: Date, today: String) -> String {
     let line = CalendarGlance.inline(s, now: now)
     let head = line.openToday > 0
-        ? GlanceText.t("\(line.openToday) due today", "\(line.openToday) tugas hari ini")
-        : GlanceText.t("Nothing due today", "Tidak ada tugas hari ini")
+        ? GlanceText.t("\(line.openToday) due today", "\(line.openToday) task hari ini")
+        : GlanceText.t("Nothing due today", "Tidak ada task hari ini")
     guard let day = line.nextDay else { return head }
     let next: String
     switch CalDays.dayDiff(today, day) {
@@ -341,7 +341,7 @@ struct WatchCalendarRectangularView: View {
             if rows.isEmpty {
                 VStack(alignment: .leading, spacing: 1) {
                     header
-                    Text(GlanceText.t("Nothing coming up", "Tidak ada tugas mendatang"))
+                    Text(GlanceText.t("Nothing coming up", "Tidak ada task mendatang"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -450,7 +450,7 @@ struct WatchCalendarCornerView: View {
                     }
             } else {
                 count(open)
-                    .accessibilityLabel(GlanceText.t("Nothing due today", "Tidak ada tugas hari ini"))
+                    .accessibilityLabel(GlanceText.t("Nothing due today", "Tidak ada task hari ini"))
                     .widgetLabel {
                         Text(GlanceText.t("Nothing today", "Kosong hari ini"))
                     }
@@ -512,7 +512,7 @@ struct WatchCalendarCircularView: View {
             .gaugeStyle(.accessoryCircularCapacity)
             .widgetAccentable()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(GlanceText.t("Today's tasks", "Tugas hari ini"))
+            .accessibilityLabel(GlanceText.t("Today's tasks", "Task hari ini"))
             .accessibilityValue(ring.total == 0
                                 ? GlanceText.taskCount(0)
                                 : GlanceText.t("\(ring.done) of \(ring.total) done", "\(ring.done) dari \(ring.total) selesai"))

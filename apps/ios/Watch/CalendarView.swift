@@ -51,9 +51,9 @@ private func wcalDayLabel(_ day: String, format: String) -> String {
 /// (impeccable audit, 6 Oct 2026). Read and written from the views' main thread only.
 private var wcalFormatters: [String: DateFormatter] = [:]
 
-/// "5 tasks" / "5 tugas", for VoiceOver.
+/// "5 tasks" / "5 task", for VoiceOver.
 private func wcalTaskCount(_ n: Int) -> String {
-    n == 1 ? wt("1 task", "1 tugas") : wt("\(n) tasks", "\(n) tugas")
+    n == 1 ? wt("1 task", "1 task") : wt("\(n) tasks", "\(n) task")
 }
 
 /// "19.00" in Indonesian, "19:00" in English (the server sends "HH:MM", WIB).
@@ -155,7 +155,7 @@ struct CalendarView: View {
         let byDay = CalendarCore.byDay(shown)
         return Section {
             if shown.isEmpty {
-                Text(wt("Nothing due in the next 7 days.", "Tidak ada tugas bertenggat dalam 7 hari ke depan."))
+                Text(wt("Nothing due in the next 7 days.", "Tidak ada task bertenggat dalam 7 hari ke depan."))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
@@ -479,8 +479,8 @@ private struct WCalTaskRow: View {
             // A private project the wearer is not in: no title, and it never opens.
             HStack(spacing: 3) {
                 Image(systemName: "lock.fill").font(.system(size: 9))
-                Text(row.division.map { wt("Internal task · \($0)", "Tugas internal · \($0)") }
-                     ?? wt("Internal task", "Tugas internal"))
+                Text(row.division.map { wt("Internal task · \($0)", "Task internal · \($0)") }
+                     ?? wt("Internal task", "Task internal"))
                     .italic()
                     .lineLimit(2)
             }
