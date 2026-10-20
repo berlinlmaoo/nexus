@@ -42,6 +42,8 @@ type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
   hasSupportingDocument: boolean
   supportingDocumentUrl: string | null
   supportingDocumentName: string | null
+  /** A Sick/Permit set from the board with no evidence attached (AttendanceRequest.evidenceMissing). */
+  evidenceMissing?: boolean
 }
 
 function escapeCsvValue(value: string | number | null | undefined) {
@@ -670,6 +672,9 @@ export async function GET(request: NextRequest) {
           status: "COMPLETED",
           correctedAt: null,
           correctionReason: null,
+          correctionEvidenceUrl: null,
+          correctionEvidenceName: null,
+          correctionEvidenceMissing: false,
           isCorrected: false,
           officeLocation: {
             id: fallbackOffice?.id ?? "no-office",
@@ -698,6 +703,7 @@ export async function GET(request: NextRequest) {
           hasSupportingDocument: Boolean(approvedRequest.supportingDocumentUrl),
           supportingDocumentUrl: approvedRequest.supportingDocumentUrl ?? null,
           supportingDocumentName: approvedRequest.supportingDocumentName ?? null,
+          evidenceMissing: approvedRequest.evidenceMissing ?? false,
         })
       }
     }
@@ -783,6 +789,9 @@ export async function GET(request: NextRequest) {
             status: "INCOMPLETE",
             correctedAt: null,
             correctionReason: null,
+            correctionEvidenceUrl: null,
+            correctionEvidenceName: null,
+            correctionEvidenceMissing: false,
             isCorrected: false,
             officeLocation: {
               id: fallbackOffice.id,

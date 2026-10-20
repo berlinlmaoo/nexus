@@ -61,6 +61,9 @@ type AttendanceRecordWithRelations = {
   status: "CHECKED_IN" | "COMPLETED" | "INCOMPLETE"
   correctedAt: Date | null
   correctionReason: string | null
+  correctionEvidenceUrl?: string | null
+  correctionEvidenceName?: string | null
+  correctionEvidenceMissing?: boolean | null
   officeLocation: OfficeLocationLike
   user: {
     id: string
@@ -86,6 +89,7 @@ type AttendanceRequestWithRelations = {
   approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | "DIRECT_MANAGER" | null
   supportingDocumentUrl: string | null
   supportingDocumentName: string | null
+  evidenceMissing?: boolean | null
   submittedLat?: number | null
   submittedLng?: number | null
   submittedAddress?: string | null
@@ -1134,6 +1138,11 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
     status: record.status,
     correctedAt: record.correctedAt?.toISOString() ?? null,
     correctionReason: record.correctionReason,
+    // Evidence a BoD/OAA attached turning the day into Present from Permit / TK / nothing recorded, and
+    // whether that change was saved without it (owner 20 Oct 2026; lib/attendance-override-evidence.ts).
+    correctionEvidenceUrl: record.correctionEvidenceUrl ?? null,
+    correctionEvidenceName: record.correctionEvidenceName ?? null,
+    correctionEvidenceMissing: record.correctionEvidenceMissing ?? false,
     isCorrected,
     officeLocation: {
       id: record.officeLocation.id,
@@ -1193,6 +1202,8 @@ export function serializeAttendanceRequest(request: AttendanceRequestWithRelatio
     approvalSource: request.approvalSource,
     supportingDocumentUrl: request.supportingDocumentUrl,
     supportingDocumentName: request.supportingDocumentName,
+    // A Sick/Permit set from the attendance board without the evidence it asks for (optional) — shown to OAA.
+    evidenceMissing: request.evidenceMissing ?? false,
     // Izin evidence — the approver's whole basis for telling a real errand from "lupa absen".
     submittedLat: request.submittedLat ?? null,
     submittedLng: request.submittedLng ?? null,
