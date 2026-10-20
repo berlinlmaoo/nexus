@@ -33,6 +33,22 @@ enum UntitledText {
         title.replacingOccurrences(of: "[\\s\u{00A0}]+([-–—])[\\s\u{00A0}]+", with: " $1\u{2060}\u{00A0}",
                                    options: .regularExpression)
     }
+    /// The largest Inter size, from `base` down to `minimum` in half points, at which the title's longest word
+    /// fits `room`: a narrow name column wraps between words and never breaks one ("REIMBURS / E", Q-1).
+    static func fittingSize(_ title: String, room: CGFloat, base: CGFloat, minimum: CGFloat,
+                            weight: UIFont.Weight = .medium) -> CGFloat {
+        let words = wrapped(title).split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" })
+        var size = base
+        while size > minimum {
+            let desc = UIFontDescriptor(name: "Inter", size: size)
+                .addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: weight]])
+            let font = UIFont(descriptor: desc, size: size)
+            let widest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+            if widest <= room { break }
+            size -= 0.5
+        }
+        return size
+    }
     /// Anything else (a page, an event): "Untitled" / "Tanpa judul".
     static func any(_ title: String?) -> String {
         isBlank(title) ? T("Untitled") : (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

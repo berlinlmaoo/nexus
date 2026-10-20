@@ -1118,18 +1118,7 @@ struct TimelineTab: View {
     /// The phone name's size: 12 pt, smaller (down to 9 pt) only while its longest word is wider than the
     /// text's room in the 120 pt column (the check circle, the subtask arrow and the paddings taken off).
     static func phoneNameSize(_ title: String, subtask: Bool) -> CGFloat {
-        let room: CGFloat = 120 - 12 - 18 - 8 - 4 - (subtask ? 19 : 0)
-        let words = UntitledText.wrapped(title).split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" })
-        var size: CGFloat = 12
-        while size > 9 {
-            let desc = UIFontDescriptor(name: "Inter", size: size)
-                .addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: UIFont.Weight.medium]])
-            let font = UIFont(descriptor: desc, size: size)
-            let widest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-            if widest <= room { break }
-            size -= 0.5
-        }
-        return size
+        UntitledText.fittingSize(title, room: 120 - 12 - 18 - 8 - 4 - (subtask ? 19 : 0), base: 12, minimum: 9)
     }
 }
 

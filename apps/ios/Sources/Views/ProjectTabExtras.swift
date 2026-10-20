@@ -611,6 +611,11 @@ struct ProjectTableRow: View {
 
     // MARK: cells
 
+    /// The name text's width in its cell: the paddings, the subtask arrow and the selection mark taken off.
+    private var nameRoom: CGFloat {
+        cols.name - (task.isSubtask ? 26 : 14) - 10 - 4 - (task.isSubtask ? 20 : 0) - (selecting ? 28 : 0)
+    }
+
     @ViewBuilder private var nameCell: some View {
         let base = Button {
             if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
@@ -622,8 +627,9 @@ struct ProjectTableRow: View {
                 }
                 // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NADIA RAHMA
                 // - 22…" (UI tour run 19, R19-I-18). The row grows with it.
+                // A narrow column (the phone's) takes a smaller size before it would break a word (Q-1).
                 Text(UntitledText.wrapped(task.title))
-                    .font(NXFont.text(15, .medium))
+                    .font(NXFont.text(UntitledText.fittingSize(task.title, room: nameRoom, base: 15, minimum: 11), .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
                     .lineLimit(cols.name <= 120 ? 2 : nil).truncationMode(.tail)
