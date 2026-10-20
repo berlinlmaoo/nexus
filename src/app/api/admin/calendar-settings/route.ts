@@ -10,7 +10,7 @@ import { CALENDAR_SETTING_KEY, getCalendarSettings } from "@/lib/calendar/server
 
 /**
  * GET/PATCH /api/admin/calendar-settings — the Calendar's AppSetting "calendar": which projects are
- * private (staff outside them see "Tugas internal", decision 1), the rollout audience and the overdue
+ * private (staff outside them see "Task internal", decision 1), the rollout audience and the overdue
  * window. BoD / One Above All only. Takes effect on the next request, no deploy.
  *
  * The hand-set project/folder division (folderUnits / projectUnits, "Project divisions" in the Control

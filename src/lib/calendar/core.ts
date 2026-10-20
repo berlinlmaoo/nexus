@@ -6,7 +6,7 @@
  * What the owner decided (plan "Rencana Kalender NEXUS", section 8; the rules in force are listed,
  * numbered, in its section 10 — change both together):
  *   1. Everyone sees every task, except tasks of PRIVATE projects (Legal + Finance by default) for staff
- *      who are not in those projects: they get the row without title or id ("Tugas internal").
+ *      who are not in those projects: they get the row without title or id ("Task internal").
  *   2. The Bagan is readable by everyone for the calendar, without job titles.
  *   3. Entries of the "… Master Calendar" projects stay TASKS — there is no event kind.
  *   4/5. A task sits under the Bagan cards of the people doing it (its PICs), not under its project.

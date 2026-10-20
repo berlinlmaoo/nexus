@@ -38,7 +38,7 @@ export default function PrivacyPolicyPage() {
 
         <Section title="Ringkasnya">
           <p>
-            NEXUS adalah alat kerja internal Z Networks: absensi, tugas, proyek, pengajuan, dan
+            NEXUS adalah alat kerja internal Z Networks: absensi, task, proyek, pengajuan, dan
             obrolan tim. Akun dibuat oleh admin workspace — tidak ada pendaftaran mandiri. Semua
             data yang dikumpulkan dipakai untuk menjalankan aplikasi itu sendiri. Tidak ada
             pelacakan lintas aplikasi, tidak ada iklan, dan tidak ada data yang dijual.
@@ -59,11 +59,11 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <b className="text-foreground">Foto</b> — swafoto absensi, foto profil, lampiran pada
-              obrolan dan tugas. Diambil dari kamera atau galeri, hanya atas tindakanmu.
+              obrolan dan task. Diambil dari kamera atau galeri, hanya atas tindakanmu.
             </li>
             <li>
               <b className="text-foreground">Konten yang kamu tulis</b> — pesan obrolan, komentar
-              tugas, isi formulir pengajuan, dan catatan harian.
+              task, isi formulir pengajuan, dan catatan harian.
             </li>
             <li>
               <b className="text-foreground">Data perangkat untuk notifikasi</b> — token

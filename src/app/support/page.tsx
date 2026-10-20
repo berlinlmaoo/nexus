@@ -40,7 +40,7 @@ export default function SupportPage() {
           </Link>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Bantuan</h1>
           <p className="text-sm text-muted-foreground">
-            NEXUS adalah aplikasi kerja internal Z Networks — absensi, tugas dan proyek, pengajuan
+            NEXUS adalah aplikasi kerja internal Z Networks — absensi, task dan proyek, pengajuan
             formulir, serta obrolan tim.
           </p>
         </header>
