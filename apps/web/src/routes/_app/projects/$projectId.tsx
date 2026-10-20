@@ -2683,7 +2683,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                                 since UI tour run 14, WD-8). Phone: the hidden Duration and Progress columns are a small
                                 line under the name (WM-10). */}
                             <span className="min-w-0" title={task.title}>
-                              <span className={cn("line-clamp-2 break-words text-sm font-medium leading-snug", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
+                              {/* Phone (Q-1, 20 Oct 2026): the column stays ~120 px, so the name is a size smaller and wraps
+                                  on whole words only (never mid-word), as on the iPhone. */}
+                              <span className={cn("line-clamp-2 font-medium", compact ? "text-xs leading-tight [overflow-wrap:normal] [word-break:normal] [hyphens:none]" : "break-words text-sm leading-snug", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
                             </span>
                           </button>
                           {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{win ? tn(dur, "{n} day", "{n} days") : t("No date")}</div>}

@@ -21,7 +21,7 @@ export const ID_R13WEB: Record<string, string> = {
   "Not filled in only": "Hanya yang belum diisi",
 
   // Project calendar (W-D15)
-  "No task falls in this month. Use the arrows to go to another one.": "Tidak ada tugas di bulan ini. Pakai panah untuk pindah ke bulan lain.",
+  "No task falls in this month. Use the arrows to go to another one.": "Tidak ada task di bulan ini. Pakai panah untuk pindah ke bulan lain.",
 
   // Leaderboard (W-B4, W-D9)
   "You're not on this ranking: the board is left out, so management doesn't compete with staff.": "Kamu tidak masuk peringkat ini: direksi tidak diikutkan, supaya manajemen tidak bersaing dengan staf.",

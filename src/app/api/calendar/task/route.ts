@@ -50,6 +50,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error("[calendar/task] GET", error)
-    return NextResponse.json({ error: "Tugas tidak bisa dimuat." }, { status: 500 })
+    return NextResponse.json({ error: "Task tidak bisa dimuat." }, { status: 500 })
   }
 }

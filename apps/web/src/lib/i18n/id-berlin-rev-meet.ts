@@ -4,12 +4,12 @@
  */
 export const ID_BERLIN_REV_MEET: Record<string, string> = {
   "Transcribe": "Transkripsi",
-  "Minutes & tasks ready": "Notulen & tugas siap",
+  "Minutes & tasks ready": "Notulen & task siap",
   "Starts after the upload": "Mulai setelah unggahan selesai",
   "Transcript ready": "Transkrip siap",
   "Transcription failed. Open the meeting to try again.": "Transkripsi gagal. Buka meeting untuk mencoba lagi.",
   "Writing the minutes…": "Menulis notulen…",
   "The minutes could not be written. Open the meeting to try again.": "Notulen gagal ditulis. Buka meeting untuk mencoba lagi.",
-  "Overview, minutes and proposed tasks": "Ringkasan, notulen, dan usulan tugas",
+  "Overview, minutes and proposed tasks": "Ringkasan, notulen, dan usulan task",
   "Ready to check — open the meeting, then Apply": "Siap dicek — buka meeting, lalu Terapkan",
 };
