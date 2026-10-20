@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.search
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,7 +33,6 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -138,10 +139,10 @@ fun SearchScreen(
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            OutlinedTextField(
+            NxTextField(
                 s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = { if (s.query.isNotEmpty()) IconButton(onClick = { vm.setQuery("") }) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search)) } },
-                placeholder = { Text(stringResource(R.string.search_hint)) }, shape = RoundedCornerShape(24.dp),
+                placeholder = { Text(stringResource(R.string.search_hint)) }, shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f).focusRequester(focus),
             )
         }

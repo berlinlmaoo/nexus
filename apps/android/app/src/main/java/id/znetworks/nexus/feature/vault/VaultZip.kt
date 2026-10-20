@@ -1,5 +1,9 @@
 ﻿package id.znetworks.nexus.feature.vault
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.content.Intent
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.*
@@ -45,8 +49,8 @@ internal fun VaultZipButton(items:List<VaultItem>){
     TextButton(onClick={selected=emptySet();query="";error=null;open=true},enabled=items.isNotEmpty()){Text(stringResource(R.string.vz_title))}
     if(open)AlertDialog(onDismissRequest={if(!busy)open=false},title={Text(stringResource(R.string.vz_title))},text={Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text(stringResource(R.string.vz_help))
-        OutlinedTextField(query,{query=it},label={Text(stringResource(R.string.vault_search))},enabled=!busy)
-        items.filter{it.name.contains(query,true)}.forEach{i->Row{Checkbox(i.id in selected,{on->selected=if(on)selected+i.id else selected-i.id},enabled=!busy&&(i.id in selected||selected.size<500));Text(i.name,Modifier.padding(top=12.dp))}}
+        NxTextField(query,{query=it},label={Text(stringResource(R.string.vault_search))},enabled=!busy)
+        items.filter{it.name.contains(query,true)}.forEach{i->Row{NxCheckbox(i.id in selected,{on->selected=if(on)selected+i.id else selected-i.id},enabled=!busy&&(i.id in selected||selected.size<500));Text(i.name,Modifier.padding(top=12.dp))}}
         if(busy){LinearProgressIndicator(Modifier.fillMaxWidth());Text(stringResource(R.string.vz_progress,done/1024,total/1024))}
         error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
     }},confirmButton={TextButton(onClick={val ids=selected.toList();busy=true;done=0;total=0;error=null;scope.launch{

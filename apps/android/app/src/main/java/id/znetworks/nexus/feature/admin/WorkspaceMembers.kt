@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.ui.components.PendingConfirm
 import id.znetworks.nexus.ui.components.ConfirmDialog
 import androidx.compose.foundation.background
@@ -22,7 +24,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,7 +87,7 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
         val roles = Roles.assignable(r.role)
         if (roles.isNotEmpty()) Column(Modifier.fillMaxWidth().background(c.muted.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text(stringResource(R.string.wm_email)) },
+                NxTextField(email, { email = it }, singleLine = true, placeholder = { Text(stringResource(R.string.wm_email)) },
                     keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Email), modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 var open by remember { mutableStateOf(false) }

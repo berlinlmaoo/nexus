@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -134,6 +135,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     LaunchedEffect(Unit) { chat.setApproval(GideonApprovalMode.of(prefs.getString(KEY_APPROVAL, null))) }
     var decision by remember { mutableStateOf<GDecision?>(null) }
     val focus = remember { FocusRequester() }
+    var composerFocused by remember { mutableStateOf(false) }
     BackHandler(enabled = showChats) { showChats = false }
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -201,10 +203,14 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             TextButton(onClick = { chat.setTier(GideonTier.LUNA) }) { Text(stringResource(R.string.g19_use_phaethon)) }
         }
         // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
-        Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
-            Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                androidx.compose.material3.TextField(draft, { draft = it }, colors = androidx.compose.material3.TextFieldDefaults.colors(focusedContainerColor = c.card, unfocusedContainerColor = c.card, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent), placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
-                    shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+        GideonCreditMeter(container.api, s.thinking)
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            val composerShape = RoundedCornerShape(24.dp)
+            Column(Modifier.fillMaxWidth().clip(composerShape).background(c.muted)
+                .then(if (composerFocused) Modifier.border(1.dp, c.violetText, composerShape) else Modifier)
+                .padding(horizontal = 8.dp, vertical = 6.dp)) {
+                androidx.compose.material3.TextField(draft, { draft = it }, colors = androidx.compose.material3.TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent), placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
+                    shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { composerFocused = it.isFocused })
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         IconButton(onClick = { attachMenu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.mutedFg) }
@@ -229,7 +235,6 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 }
             }
         }
-        GideonCreditMeter(container.api, s.thinking)
         Text(stringResource(R.string.gc_ai_disclaimer), fontSize = 11.sp, color = c.mutedFg,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp))

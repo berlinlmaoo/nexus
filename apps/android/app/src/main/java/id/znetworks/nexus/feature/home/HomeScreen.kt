@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.home
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Storage
@@ -55,7 +57,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -150,14 +151,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val state = _state.asStateFlow()
     val shortcuts = c.shortcuts
 
-    fun refreshPersonal() = viewModelScope.launch {
-        val owner = c.sessionStore.current?.userId ?: return@launch
-        val game = async { runCatching { c.api.getCached("/api/gamification/me", "gamification", Gamification.serializer()).value }.getOrNull() }
-        val today = async { runCatching { c.attendanceApi.today() }.getOrNull() }
-        val g = game.await(); val t = today.await()
-        if (c.sessionStore.current?.userId == owner) _state.update { it.copy(game = g ?: it.game, today = t ?: it.today) }
-    }
-
     fun load() = viewModelScope.launch {
         shortcuts.refresh()
         val me = c.sessionStore.current?.userId ?: return@launch
@@ -242,13 +235,14 @@ fun HomeScreen(
     val homeScroll = rememberScrollState()
     var stat by rememberSaveable { mutableStateOf<Int?>(null) }
     var levelOpen by rememberSaveable { mutableStateOf(false) }
-    // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
-    LaunchedEffect(Unit) { vm.load() }
     val liveContainer = (LocalContext.current.applicationContext as NexusApplication).container
     id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { e ->
-        e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED ||
+        id.znetworks.nexus.core.realtime.RealtimeEvents.isAttendance(e) ||
+            e.name in id.znetworks.nexus.core.realtime.RealtimeEvents.TASK ||
+            id.znetworks.nexus.core.realtime.RealtimeEvents.isMyTasks(e) ||
+            id.znetworks.nexus.core.realtime.RealtimeEvents.isProjectsOrFolders(e) ||
             (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.XP_CHANGED && liveContainer.sessionStore.current?.userId in e.userIds)
-    }) { vm.refreshPersonal().join() }
+    }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
 
     // Card rects, not state: written on every scroll frame, read only when a card is tapped (iOS MorphFrameStore).
     val statRects = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
@@ -257,6 +251,7 @@ fun HomeScreen(
         Column(Modifier.fillMaxSize().scrollEdges(homeScroll, c.background, vertical = true).verticalScroll(homeScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Greeting(session?.userName)
             AttendanceCard(s, onOpenAttendance)
+            id.znetworks.nexus.feature.presence.SetStatusEntry(home = true)
             LevelCard(s.game) { levelOpen = true }
             SearchRow(s.unread, onSearch, onOpenInbox)
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) }
@@ -463,9 +458,11 @@ private fun StatMorph(i: Int, source: androidx.compose.ui.geometry.Rect?, s: Hom
         scope.launch { if (source != null) progress.animateTo(0f, spring); onClose(); then() }
     }
     androidx.activity.compose.BackHandler { close() }
-    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { close() } }) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { close() } }) {
+        val maxCardHeight = maxHeight * .7f
         Column(
             Modifier.align(Alignment.Center).padding(horizontal = 18.dp).widthIn(max = 560.dp)
+                .heightIn(max = maxCardHeight)
                 .onGloballyPositioned { if (target == null) target = it.boundsInRoot() }
                 .graphicsLayer {
                     val t = target
@@ -503,7 +500,7 @@ private fun StatMorph(i: Int, source: androidx.compose.ui.geometry.Rect?, s: Hom
                 }
             }
             // The header scales with the card; the list fades in once it has landed (web: delay 0.15 s).
-            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()).graphicsLayer { alpha = ((progress.value - 0.85f) / 0.15f).coerceIn(0f, 1f) },
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).graphicsLayer { alpha = ((progress.value - 0.85f) / 0.15f).coerceIn(0f, 1f) },
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (i) {
                     0 -> if (s.projects.isEmpty()) SheetEmpty(stringResource(R.string.home_no_projects))
@@ -812,7 +809,7 @@ private fun ProfileCard(name: String?, avatar: String?, g: Gamification?, onOpen
                 ProfileRow(stringResource(R.string.home_points_period), "%,d".format(Locale.getDefault(), g?.xp?.totalXp ?: 0))
             }
         }
-        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+        NxOutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
             Text(stringResource(R.string.home_settings), color = c.foreground, fontWeight = FontWeight.SemiBold)
         }
     }

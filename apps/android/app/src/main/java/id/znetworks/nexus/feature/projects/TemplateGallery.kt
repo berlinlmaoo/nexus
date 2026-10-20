@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,7 +49,6 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -166,7 +167,7 @@ fun TemplateGalleryDialog(pipelineAccess: Boolean, onDismiss: () -> Unit, onPick
                     textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.width(72.dp))
             }
-            OutlinedTextField(query, { query = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+            NxTextField(query, { query = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, stringResource(R.string.tg_clear_search)) } },
                 placeholder = { Text(stringResource(R.string.tg_search)) }, shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))

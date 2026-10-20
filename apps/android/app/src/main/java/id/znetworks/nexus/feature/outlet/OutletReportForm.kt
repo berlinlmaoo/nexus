@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.outlet
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,7 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -129,9 +130,9 @@ internal fun OutletReportForm(d: OutletMonth, s: OutletState, vm: OutletViewMode
                         when (f.type) {
                             "money", "count" -> NumberBox(f.label.pick(id), v, money = f.type == "money", hint = f.hint?.pick(id)) { set(it) }
                             "date" -> DateBox(f.label.pick(id), v, thisYear, error) { set(it) }
-                            "longtext" -> OutlinedTextField(v, { if (f.max == null || it.length <= f.max) set(it) }, label = { Text(f.label.pick(id)) },
+                            "longtext" -> NxTextField(v, { if (f.max == null || it.length <= f.max) set(it) }, label = { Text(f.label.pick(id)) },
                                 minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth())
-                            else -> OutlinedTextField(v, { if (f.max == null || it.length <= f.max) set(it) }, singleLine = true, label = { Text(f.label.pick(id) + if (f.required) " *" else "") },
+                            else -> NxTextField(v, { if (f.max == null || it.length <= f.max) set(it) }, singleLine = true, label = { Text(f.label.pick(id) + if (f.required) " *" else "") },
                                 isError = error != null, supportingText = error?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth())
                         }
                     }

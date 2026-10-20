@@ -21,6 +21,7 @@ class MeetingUploader(private val api: MeetingsApi) {
         require(file.isFile && file.length() == meeting.audio.bytes) { "Local audio missing or size changed" }
         val size = file.length()
         var offset = meeting.audio.received
+        progress(offset, size)
         var mismatches = 0
         while (true) {
             require(offset in 0..size) { "Invalid upload offset" }
@@ -92,6 +93,16 @@ object MeetingFiles {
         if (file.canonicalFile.parentFile != directory(context).canonicalFile || !file.isFile) return false
         enqueue(context, user, meeting.id, file, 8_388_608)
         return true
+    }
+    /** Remove just the cancelled upload, never another recording or account's files. */
+    fun remove(context: Context, id: String) {
+        val dir = directory(context)
+        val marker = File(dir, "$id.upload")
+        if (marker.canonicalFile.parentFile != dir.canonicalFile) return
+        marker.takeIf { it.isFile }?.readText()?.let { name ->
+            File(dir, name).takeIf { it.canonicalFile.parentFile == dir.canonicalFile }?.delete()
+        }
+        marker.delete()
     }
     fun clear(context: Context) {
         WorkManager.getInstance(context).cancelAllWorkByTag("meeting-uploads")

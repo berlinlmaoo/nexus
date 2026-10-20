@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +21,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -106,7 +107,7 @@ fun NotificationsSettingsCard() {
                     Text(stringResource(R.string.st_notif_automation_sub), fontSize = 13.sp, color = c.mutedFg)
                 }
                 Spacer(Modifier.width(8.dp))
-                Switch(on == true, { v ->
+                NxSwitch(on == true, { v ->
                     val before = on
                     on = v; saving = true; failed = false
                     scope.launch {

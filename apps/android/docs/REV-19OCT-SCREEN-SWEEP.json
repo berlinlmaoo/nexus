@@ -1,0 +1,500 @@
+[
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AdminMore.kt",
+    "before": "before-fields/admin-quests.png",
+    "after": "after-fields/admin-quests.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AnnouncementComposer.kt",
+    "before": "before-fields/admin-announcements.png",
+    "after": "after-fields/admin-announcements.png",
+    "coverage": "Enclosing Announcements destination; no announcement was sent."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AttendanceAdmin.kt",
+    "before": "before-fields/admin-attendance.png",
+    "after": "after-fields/admin-attendance.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AttendanceCrew.kt",
+    "before": "before-fields/admin-member-attendance.png",
+    "after": "after-fields/admin-member-attendance.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/AuditAdmin.kt",
+    "before": "before-fields/admin-audit.png",
+    "after": "after-fields/admin-audit.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/CalendarPrivacy.kt",
+    "before": "staged-before-en-light/calendar-privacy.png",
+    "after": "staged-after-en-light/calendar-privacy.png",
+    "coverage": "Field/box component preview; surrounding app chrome, typography inheritance and system-bar insets are not represented by this isolated mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/ExtraDayOff.kt",
+    "before": "staged-before-en-light/bonuses.png",
+    "after": "staged-after-en-light/bonuses.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/FakeGps.kt",
+    "before": "staged-before-id-dark/monitor.png",
+    "after": "staged-after-id-dark/monitor.png",
+    "coverage": "Indonesian/dark production-component pair; English capture retries could not load DEV viewer permissions."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GideonCreditAdmin.kt",
+    "before": "staged-before-en-light/gideon-credits.png",
+    "after": "staged-after-en-light/gideon-credits.png",
+    "coverage": "Retained EN/light role-defaults mount on the final APK; a later repeat timed out while loading the viewer role. No limit was saved."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GideonPeople.kt",
+    "before": "staged-before-en-light/gideon-people.png",
+    "after": "staged-after-en-light/gideon-people.png",
+    "coverage": "BoD overview capture; OAA-only chat search/date controls were not bypassed or live-tested."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/GoogleWorkspace.kt",
+    "before": "staged-before-en-light/google-link.png",
+    "after": "staged-after-en-light/google-link.png",
+    "coverage": "Google Workspace is not connected on DEV. The permission-checked empty state was captured; gated inputs were not rendered or connected. Shared style migration compiled."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/Offboard.kt",
+    "before": "staged-before-en-light/offboard.png",
+    "after": "staged-after-en-light/offboard.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/Teams.kt",
+    "before": "before-fields/admin-org-chart.png",
+    "after": "after-fields/admin-org-chart.png",
+    "coverage": "Legacy unmounted Teams implementation; the live route opens Org Chart."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/UsersAdmin.kt",
+    "before": "before-fields/admin-users.png",
+    "after": "after-fields/admin-users.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/WorkspaceMembers.kt",
+    "before": "staged-before-en-light/workspace-members.png",
+    "after": "staged-after-en-light/workspace-members.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/admin/orgchart/OrgChartSheets.kt",
+    "before": "before-fields/admin-org-chart.png",
+    "after": "after-fields/admin-org-chart.png",
+    "coverage": "Enclosing Org Chart; no organisation structure was changed."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/agenda/RoomBookingComposer.kt",
+    "before": "before-fields/room-booking.png",
+    "after": "after-fields/room-booking.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/AttendanceScreen.kt",
+    "before": "before-fields/attendance.png",
+    "after": "after-fields/attendance.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/history/BoardUi.kt",
+    "before": "before-fields/admin-attendance.png",
+    "after": "after-fields/admin-attendance.png",
+    "coverage": "Enclosing attendance admin; no attendance records were edited."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/attendance/requests/RequestsUi.kt",
+    "before": "before-fields/attendance.png",
+    "after": "after-fields/attendance.png",
+    "coverage": "Enclosing attendance destination; no real attendance request was submitted."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/AccountScreen.kt",
+    "before": "before-fields/settings-profile.png",
+    "after": "after-fields/settings-profile.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/LoginScreen.kt",
+    "before": "staged-before-en-light/login.png",
+    "after": "staged-after-en-light/login.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/auth/McpTokens.kt",
+    "before": "staged-before-id-dark/mcp-tokens.png",
+    "after": "staged-after-id-dark/mcp-tokens.png",
+    "coverage": "Indonesian/dark production-component pair; English capture retries timed out on DEV. No token was created."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarFilters.kt",
+    "before": "before-fields/calendar-filters.png",
+    "after": "after-fields/calendar-filters.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt",
+    "before": "before-fields/calendar-filters.png",
+    "after": "after-fields/calendar-filters.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/calendar/JoinWorkspace.kt",
+    "before": "staged-before-en-light/join-workspace.png",
+    "after": "staged-after-en-light/join-workspace.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/ChatInfoScreen.kt",
+    "before": "before-fields/chat-info.png",
+    "after": "after-fields/chat-info.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/ChatThreadScreen.kt",
+    "before": "before-fields/chat.png",
+    "after": "after-fields/chat.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/chat/MessagesScreen.kt",
+    "before": "before-fields/messages.png",
+    "after": "after-fields/messages.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockEditorDialog.kt",
+    "before": "before-fields/doc-editor.png",
+    "after": "after-fields/doc-editor.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockFormat.kt",
+    "before": "before-fields/doc-editor.png",
+    "after": "after-fields/doc-editor.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/docs/BlockWriting.kt",
+    "before": "before-fields/doc-editor.png",
+    "after": "after-fields/doc-editor.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormBuilderScreen.kt",
+    "before": "before-fields/form-builder.png",
+    "after": "after-fields/form-builder.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormFillScreen.kt",
+    "before": "before-fields/form-fill.png",
+    "after": "after-fields/form-fill.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/forms/FormStudioTabs.kt",
+    "before": "before-fields/form-settings.png",
+    "after": "after-fields/form-settings.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonActionCards.kt",
+    "before": "staged-before-en-light/save-answer.png",
+    "after": "staged-after-en-light/save-answer.png",
+    "coverage": "Shared form controls shown in the save-answer dialog; all proposal branches were not newly submitted."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonMemoryUi.kt",
+    "before": "staged-before-en-light/memory-editor.png",
+    "after": "staged-after-en-light/memory-editor.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonProjectTools.kt",
+    "before": "staged-before-en-light/schedule-editor.png",
+    "after": "staged-after-en-light/schedule-editor.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/GideonSaveDoc.kt",
+    "before": "staged-before-en-light/save-answer.png",
+    "after": "staged-after-en-light/save-answer.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/gideon/Reminders.kt",
+    "before": "before-fields/reminder.png",
+    "after": "after-fields/reminder.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/home/HomeScreen.kt",
+    "before": "before-fields/status-sheet.png",
+    "after": "after-fields/status-sheet.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/inbox/InboxUi.kt",
+    "before": "before-fields/inbox.png",
+    "after": "after-fields/inbox.png",
+    "coverage": "Enclosing Inbox destination; no unrelated notification was changed."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/legal/LegalReview.kt",
+    "before": "before-fields/legal-new.png",
+    "after": "after-fields/legal-new.png",
+    "coverage": "Legal field component and enclosing creation flow; no existing legal document was edited."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/legal/LegalShared.kt",
+    "before": "before-fields/legal-settings.png",
+    "after": "after-fields/legal-settings.png",
+    "coverage": "Native Companies & numbering fields; no company or legal document was edited."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingPages.kt",
+    "before": "before-fields/new-meeting.png",
+    "after": "after-fields/new-meeting.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingScreen.kt",
+    "before": "before-fields/meeting-task-card.png",
+    "after": "after-fields/meeting-task-card.png",
+    "coverage": "Before: two proposals. After: the owned owner/date/remove test leaves one proposal."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/meetings/MeetingSpeakers.kt",
+    "before": "staged-before-en-light/meeting-speakers.png",
+    "after": "staged-after-en-light/meeting-speakers.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletReportForm.kt",
+    "before": "before-fields/outlet-fill-report.png",
+    "after": "after-fields/outlet-fill-report.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletScreen.kt",
+    "before": "before-fields/outlet-add-event.png",
+    "after": "after-fields/outlet-add-event.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/outlet/OutletSettings.kt",
+    "before": "before-fields/outlet-settings.png",
+    "after": "after-fields/outlet-settings.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/people/PeopleScreens.kt",
+    "before": "before-fields/member-profile.png",
+    "after": "after-fields/member-profile.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/people/XpAdmin.kt",
+    "before": "staged-before-id-dark/xp-adjust.png",
+    "after": "staged-after-id-dark/xp-adjust.png",
+    "coverage": "Indonesian/dark production-component pair; English capture retries could not load DEV viewer permissions. No XP was adjusted."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDealSheet.kt",
+    "before": "before-fields/pipeline-new-deal.png",
+    "after": "after-fields/pipeline-new-deal.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineDocuments.kt",
+    "before": "before-fields/pipeline-new-deal.png",
+    "after": "after-fields/pipeline-new-deal.png",
+    "coverage": "Enclosing deal editor; no attachment was uploaded."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineRealCost.kt",
+    "before": "before-fields/pipeline-new-deal.png",
+    "after": "after-fields/pipeline-new-deal.png",
+    "coverage": "Enclosing deal editor; separate Presentation Mode checks verify that the entire section disappears."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineScreen.kt",
+    "before": "before-fields/pipeline-segments.png",
+    "after": "after-fields/pipeline-segments.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/pipeline/PipelineTermsSection.kt",
+    "before": "before-fields/pipeline-new-deal.png",
+    "after": "after-fields/pipeline-new-deal.png",
+    "coverage": "Enclosing deal editor plus the native R-20 payment-term checks."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/presence/PresenceUi.kt",
+    "before": "before-fields/status-sheet.png",
+    "after": "after-fields/status-sheet.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/AutomationBuilder.kt",
+    "before": "staged-before-en-light/automation-builder.png",
+    "after": "staged-after-en-light/automation-builder.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/AutomationsTab.kt",
+    "before": "staged-before-en-light/automation-builder.png",
+    "after": "staged-after-en-light/automation-builder.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectDetailScreen.kt",
+    "before": "before-fields/project-board.png",
+    "after": "after-fields/project-board.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectOverview.kt",
+    "before": "before-fields/project-overview.png",
+    "after": "after-fields/project-overview.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectPage.kt",
+    "before": "before-fields/project-board.png",
+    "after": "after-fields/project-board.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectSettingsScreen.kt",
+    "before": "before-fields/project-settings.png",
+    "after": "after-fields/project-settings.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectSetup.kt",
+    "before": "before-fields/project-templates.png",
+    "after": "after-fields/project-templates.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/ProjectsScreen.kt",
+    "before": "before-fields/project-templates.png",
+    "after": "after-fields/project-templates.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/TaskBulk.kt",
+    "before": "before-fields/project-board.png",
+    "after": "after-fields/project-board.png",
+    "coverage": "Enclosing board; no bulk changes were applied."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/TemplateGallery.kt",
+    "before": "before-fields/project-templates.png",
+    "after": "after-fields/project-templates.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/projects/WorkflowBundle.kt",
+    "before": "staged-before-en-light/workflow-bundles.png",
+    "after": "staged-after-en-light/workflow-bundles.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/reports/ReportsScreen.kt",
+    "before": "before-fields/reports.png",
+    "after": "after-fields/reports.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/search/SearchScreen.kt",
+    "before": "before-fields/search.png",
+    "after": "after-fields/search.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/sheets/SheetScreen.kt",
+    "before": "staged-before-en-light/sheet-editor.png",
+    "after": "staged-after-en-light/sheet-editor.png",
+    "coverage": "Production cell-edit-bar mount with a synthetic cell and no edit submitted; the earlier project-sheet prototype showed the Board and is excluded."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/social/SocialEditors.kt",
+    "before": "before-fields/social-daily.png",
+    "after": "after-fields/social-daily.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tasks/TaskDetailScreen.kt",
+    "before": "before-fields/task-detail.png",
+    "after": "after-fields/task-detail.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tasks/TaskFields.kt",
+    "before": "before-fields/task-detail.png",
+    "after": "after-fields/task-detail.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/threads/ThreadsScreen.kt",
+    "before": "before-fields/threads.png",
+    "after": "after-fields/threads.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketDetailScreen.kt",
+    "before": "before-fields/new-ticket.png",
+    "after": "after-fields/new-ticket.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/tickets/TicketsScreen.kt",
+    "before": "before-fields/new-ticket.png",
+    "after": "after-fields/new-ticket.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/vault/VaultScreen.kt",
+    "before": "before-fields/vault-folder.png",
+    "after": "after-fields/vault-folder.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/feature/vault/VaultZip.kt",
+    "before": "staged-before-en-light/vault-zip.png",
+    "after": "staged-after-en-light/vault-zip.png",
+    "coverage": "Production component mount."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/components/PageChrome.kt",
+    "before": "before-fields/project-overview.png",
+    "after": "after-fields/project-overview.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt",
+    "before": "before-fields/search.png",
+    "after": "after-fields/search.png",
+    "coverage": "Native destination; shared field and secondary-action style."
+  },
+  {
+    "file": "apps/android/app/src/main/java/id/znetworks/nexus/ui/update/UpdateScreens.kt",
+    "before": "staged-before-en-light/update.png",
+    "after": "staged-after-en-light/update.png",
+    "coverage": "Production component mount."
+  }
+]

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +41,7 @@ internal fun AttendanceCrew(api: AttendanceAdminApi, month: String, employment: 
     var editing by remember { mutableStateOf<JsonObject?>(null) }
     var clear by remember { mutableStateOf<JsonObject?>(null) }
     var search by remember { mutableStateOf("") }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(month) { retry++ }
     LaunchedEffect(month, retry) {
         loading = true
         try {
@@ -83,7 +86,7 @@ internal fun AttendanceCrew(api: AttendanceAdminApi, month: String, employment: 
                         }
                     }
                 } else {
-                    OutlinedTextField(search, { search = it }, label = { Text(stringResource(R.string.crew_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+                    NxTextField(search, { search = it }, label = { Text(stringResource(R.string.crew_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
                     val known = people.associateBy { it.text("userId") }
                     val rows = if (employment) people else summary?.rows("members").orEmpty()
                     rows.filter { row -> (known[row.text("userId")]?.text("name").orEmpty() + names[row.text("userId")].orEmpty() + row.text("userId")).contains(search, true) }.forEach { row ->

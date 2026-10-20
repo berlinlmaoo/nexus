@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.ui.zIndex
 
 import androidx.compose.ui.layout.positionInParent
@@ -66,7 +70,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -134,6 +137,7 @@ fun ProjectPageHeader(
     detail: ProjectDetail?, onBack: () -> Unit, onMembers: () -> Unit, onGideon: () -> Unit, onSettings: () -> Unit,
     onAdd: (() -> Unit)?,
     addInTabs: Boolean = false,
+    extraActions: @Composable () -> Unit = {},
 ) {
     val c = Nx.colors
     val access = ProjectAccess.of(detail)
@@ -157,6 +161,7 @@ fun ProjectPageHeader(
                 }
             }
             if (detail != null) {
+                extraActions()
                 MemberFaces(detail.members, onMembers)
                 Spacer(Modifier.width(6.dp))
                 HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp, painter = id.znetworks.nexus.ui.components.gideonPainter())
@@ -767,7 +772,7 @@ fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false, request: Boole
         val focus = remember { androidx.compose.ui.focus.FocusRequester() }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
         Row(Modifier.fillMaxWidth().background(if (flat) Color.Transparent else c.card, RoundedCornerShape(10.dp)).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.pp_new_task)) }, singleLine = true,
+            NxTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.pp_new_task)) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (title.isNotBlank()) { onAdd(title.trim()); title = "" } else composing = false }),
                 modifier = Modifier.weight(1f).focusRequester(focus))
@@ -983,7 +988,7 @@ fun NewViewDialog(canShare: Boolean, onDismiss: () -> Unit, onCreate: (name: Str
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ViewsLogic.LAYOUTS.forEach { l -> TabChip(layoutIcon(l), stringResource(layoutTab(l).label), on = layout == l, onClick = { layout = l }) }
                 }
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.view_name)) },
+                NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.view_name)) },
                     placeholder = { Text(stringResource(layoutTab(layout).label)) }, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.view_who), fontSize = 13.sp, color = c.mutedFg)
                 Row(Modifier.fillMaxWidth().clickable { shared = false }, verticalAlignment = Alignment.CenterVertically) {
@@ -1023,7 +1028,7 @@ fun ViewMenuDialog(v: ProjectView, canEdit: Boolean, canDelete: Boolean, onDismi
 fun TextPromptDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf(initial) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) },
-        text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+        text = { NxTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }
@@ -1077,7 +1082,7 @@ fun ViewFilterDialog(cfg: ViewConfig, lanes: List<Lane>, members: List<ProjectMe
                     "title" to stringResource(R.string.pp_col_name), "start" to stringResource(R.string.td_start_date))
                 ChipGroup(null, sorts, listOf(sort?.prop ?: "")) { p -> sort = if (p.isEmpty()) null else ViewSort(p, sort?.desc ?: false) }
                 if (sort != null) Row(Modifier.clickable { sort = sort?.copy(desc = !(sort?.desc ?: false)) }, verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(sort?.desc == true, { d -> sort = sort?.copy(desc = d) }); Text(stringResource(R.string.filter_desc))
+                    NxCheckbox(sort?.desc == true, { d -> sort = sort?.copy(desc = d) }); Text(stringResource(R.string.filter_desc))
                 }
                 HorizontalDivider(color = c.border)
                 Text(stringResource(R.string.filter_group), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
@@ -1112,8 +1117,8 @@ private fun ChipGroup(title: String?, options: List<Pair<String, String>>, picke
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             options.forEach { (k, label) ->
                 val on = k in picked
-                Text(label, fontSize = 13.sp, color = if (on) c.background else c.foreground, maxLines = 1,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) c.onyx else c.card).border(1.dp, if (on) c.onyx else c.border, RoundedCornerShape(8.dp))
+                Text(label, fontSize = 13.sp, color = if (on) c.violetText else c.foreground, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) c.accentBg else c.muted)
                         .clickable { onToggle(k) }.padding(horizontal = 10.dp, vertical = 7.dp))
             }
         }

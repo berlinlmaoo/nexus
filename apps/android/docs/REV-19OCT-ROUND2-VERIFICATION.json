@@ -1,0 +1,3361 @@
+{
+  "at": "2026-10-19T20:40:20.886Z",
+  "source": "e932b782",
+  "base": "603f9dd7a",
+  "versionName": "0.1.6",
+  "versionCode": 13,
+  "tests": {
+    "suites": 189,
+    "tests": 937,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "build": "testDebugUnitTest assembleDebug PASS",
+  "apkSha256": "73b9c421e69aaa0fa5a8e01da1b5289e722ee13586c9e9888a0187fe477265be",
+  "environment": {
+    "avd": "Pixel_7",
+    "serial": "emulator-5556",
+    "visibleWindow": true,
+    "gpu": "host",
+    "server": "DEV",
+    "serializedBuildAndEmulator": true
+  },
+  "settledRouteRetries": [
+    {
+      "name": "chat",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "admin-offices",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "legal-request-links",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "admin-org-chart",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "member-profile",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "attendance",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "pipeline",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "admin-quests",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "admin-announcements",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "outlet-settings",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "legal-settings",
+      "ok": true,
+      "settled": true
+    },
+    {
+      "name": "admin-users",
+      "ok": true,
+      "settled": true
+    }
+  ],
+  "screens": [
+    {
+      "name": "search",
+      "ok": true
+    },
+    {
+      "name": "messages",
+      "ok": true
+    },
+    {
+      "name": "threads",
+      "ok": true
+    },
+    {
+      "name": "tickets",
+      "ok": true
+    },
+    {
+      "name": "reports",
+      "ok": true
+    },
+    {
+      "name": "settings-profile",
+      "ok": true
+    },
+    {
+      "name": "settings-security",
+      "ok": true
+    },
+    {
+      "name": "status-sheet",
+      "ok": true
+    },
+    {
+      "name": "calendar-filters",
+      "ok": true
+    },
+    {
+      "name": "new-meeting",
+      "ok": true
+    },
+    {
+      "name": "meeting-review",
+      "ok": true
+    },
+    {
+      "name": "project-overview",
+      "ok": true
+    },
+    {
+      "name": "project-board",
+      "ok": true
+    },
+    {
+      "name": "project-settings",
+      "ok": true
+    },
+    {
+      "name": "task-detail",
+      "ok": true
+    },
+    {
+      "name": "form-builder",
+      "ok": true
+    },
+    {
+      "name": "form-fill",
+      "ok": true
+    },
+    {
+      "name": "project-templates",
+      "ok": true
+    },
+    {
+      "name": "reminder",
+      "ok": true
+    },
+    {
+      "name": "room-booking",
+      "ok": true
+    },
+    {
+      "name": "chat",
+      "ok": true
+    },
+    {
+      "name": "chat-info",
+      "ok": true
+    },
+    {
+      "name": "legal-new",
+      "ok": true
+    },
+    {
+      "name": "legal-upload",
+      "ok": true
+    },
+    {
+      "name": "legal-template-new",
+      "ok": true
+    },
+    {
+      "name": "legal-settings",
+      "ok": true
+    },
+    {
+      "name": "admin-users",
+      "ok": true
+    },
+    {
+      "name": "admin-attendance",
+      "ok": true
+    },
+    {
+      "name": "admin-member-attendance",
+      "ok": true
+    },
+    {
+      "name": "admin-offices",
+      "ok": true
+    },
+    {
+      "name": "legal-invite",
+      "ok": true
+    },
+    {
+      "name": "legal-request-links",
+      "ok": true
+    },
+    {
+      "name": "admin-org-chart",
+      "ok": true
+    },
+    {
+      "name": "member-profile",
+      "ok": true
+    },
+    {
+      "name": "attendance",
+      "ok": true
+    },
+    {
+      "name": "pipeline",
+      "ok": true
+    },
+    {
+      "name": "outlet_sales",
+      "ok": true
+    },
+    {
+      "name": "social_media_report",
+      "ok": true
+    },
+    {
+      "name": "pipeline-new-deal",
+      "ok": true
+    },
+    {
+      "name": "outlet-add-event",
+      "ok": true
+    },
+    {
+      "name": "outlet-fill-report",
+      "ok": true
+    },
+    {
+      "name": "social-settings",
+      "ok": true
+    },
+    {
+      "name": "social-daily",
+      "ok": true
+    },
+    {
+      "name": "doc-editor",
+      "ok": true
+    },
+    {
+      "name": "admin-audit",
+      "ok": true
+    },
+    {
+      "name": "admin-quests",
+      "ok": true
+    },
+    {
+      "name": "admin-announcements",
+      "ok": true
+    },
+    {
+      "name": "form-settings",
+      "ok": true
+    },
+    {
+      "name": "form-settings-share",
+      "ok": true
+    },
+    {
+      "name": "outlet-settings",
+      "ok": true
+    },
+    {
+      "name": "inbox",
+      "ok": true
+    },
+    {
+      "name": "new-ticket",
+      "ok": true
+    },
+    {
+      "name": "vault-folder",
+      "ok": true
+    },
+    {
+      "name": "admin-member-details",
+      "ok": true
+    }
+  ],
+  "componentMounts": [
+    {
+      "kind": "offboard",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "schedule-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "join-workspace",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "vault-zip",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "automation-builder",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "save-answer",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "login",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "update",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "short-home",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "monitor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workspace-members",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "google-link",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "offboard",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "mcp-tokens",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "xp-adjust",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "schedule-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "join-workspace",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "vault-zip",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "automation-builder",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "save-answer",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "login",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "update",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "short-home",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "bonuses",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "calendar-privacy",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-people",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-people-credits",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workspace-members",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "google-link",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workflow-bundles",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "memory-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "meeting-speakers",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "sheet-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "bonuses",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "calendar-privacy",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workflow-bundles",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "memory-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "meeting-speakers",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "sheet-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    }
+  ],
+  "incompleteComponentAttempts": [
+    {
+      "variant": "en-light",
+      "kind": "monitor",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "en-light",
+      "kind": "gideon-credits",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "en-light",
+      "kind": "mcp-tokens",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "en-light",
+      "kind": "xp-adjust",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "id-dark",
+      "kind": "gideon-credits",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "id-dark",
+      "kind": "gideon-people",
+      "reason": "DEV transport/viewer readiness"
+    },
+    {
+      "variant": "id-dark",
+      "kind": "gideon-people-credits",
+      "reason": "DEV transport/viewer readiness"
+    }
+  ],
+  "componentMountsBefore": [
+    {
+      "kind": "calendar-privacy",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-credits",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-people",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workspace-members",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "google-link",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "offboard",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "schedule-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "login",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "update",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "short-home",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "calendar-privacy",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-credits",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-people",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workspace-members",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "google-link",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "offboard",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "schedule-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "login",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "update",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "short-home",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "join-workspace",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "automation-builder",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "join-workspace",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "automation-builder",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "vault-zip",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "monitor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "mcp-tokens",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "xp-adjust",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "vault-zip",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "monitor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "mcp-tokens",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "xp-adjust",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "save-answer",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "save-answer",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "bonuses",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true,
+      "settledRetry": true
+    },
+    {
+      "kind": "gideon-people-credits",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workflow-bundles",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "memory-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "meeting-speakers",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "sheet-editor",
+      "variant": "en-light",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "bonuses",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "gideon-people-credits",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "workflow-bundles",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "memory-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "meeting-speakers",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    },
+    {
+      "kind": "sheet-editor",
+      "variant": "id-dark",
+      "ok": true,
+      "stagedPresentation": true
+    }
+  ],
+  "retainedEarlierCapture": {
+    "kind": "gideon-credits",
+    "variant": "en-light",
+    "after": "staged-after-en-light/gideon-credits.png",
+    "source": "e932b782",
+    "coverage": "Initial successful production-component mount; later repeat viewer hydration timed out"
+  },
+  "attendance": [
+    {
+      "route": "attendance",
+      "event": "attendance-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "native navigation",
+      "afterBurst": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/history?scope=workspace&month=2026-10": 1,
+        "/api/attendance/offices": 1,
+        "/api/attendance/offsite-checkouts?status=ALL": 1,
+        "/api/attendance/requests?scope=workspace": 1,
+        "/api/attendance/today": 2
+      },
+      "afterForeground": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/history?scope=workspace&month=2026-10": 2,
+        "/api/attendance/offices": 2,
+        "/api/attendance/offsite-checkouts?status=ALL": 2,
+        "/api/attendance/requests?scope=workspace": 2,
+        "/api/attendance/today": 3
+      }
+    },
+    {
+      "route": "reports",
+      "event": "attendance-board-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "native navigation",
+      "afterBurst": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/history?scope=me&month=2026-10": 1,
+        "/api/attendance/today": 1,
+        "/api/reports/people": 1,
+        "/api/reports/people/me": 1
+      },
+      "afterForeground": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1,
+        "/api/reports/people": 2,
+        "/api/reports/people/me": 2
+      }
+    },
+    {
+      "route": "report/01a12d57-8a97-7004-bfb0-f6729f9cce12/0",
+      "event": "attendance-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "native navigation",
+      "afterBurst": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1,
+        "/api/reports/people/01a12d57-8a97-7004-bfb0-f6729f9cce12": 1
+      },
+      "afterForeground": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1,
+        "/api/reports/people/01a12d57-8a97-7004-bfb0-f6729f9cce12": 2
+      }
+    },
+    {
+      "route": "profile/01a12d57-8a97-7004-bfb0-f6729f9cce12",
+      "event": "attendance-board-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "native navigation",
+      "afterBurst": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/history?scope=me&month=2026-10": 1,
+        "/api/attendance/today": 1,
+        "/api/members/01a12d57-8a97-7004-bfb0-f6729f9cce12/record": 1
+      },
+      "afterForeground": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/history?scope=me&month=2026-10": 2,
+        "/api/attendance/today": 1,
+        "/api/members/01a12d57-8a97-7004-bfb0-f6729f9cce12/record": 2
+      }
+    },
+    {
+      "route": "admin-att/01a12d57-8a97-7004-bfb0-f6729f9cce12",
+      "event": "attendance-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "native navigation",
+      "afterBurst": {
+        "/api/attendance/dayoffs?userId=01a12d57-8a97-7004-bfb0-f6729f9cce12&month=2026-10": 1,
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1
+      },
+      "afterForeground": {
+        "/api/attendance/dayoffs?userId=01a12d57-8a97-7004-bfb0-f6729f9cce12&month=2026-10": 2,
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1
+      }
+    },
+    {
+      "route": "home",
+      "event": "attendance-board-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "monitor",
+      "afterBurst": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/suspects?periodKey=2026-10": 1,
+        "/api/attendance/today": 1
+      },
+      "afterForeground": {
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/suspects?periodKey=2026-10": 2,
+        "/api/attendance/today": 1
+      }
+    },
+    {
+      "route": "home",
+      "event": "attendance-changed",
+      "burstSize": 5,
+      "clientStagedPing": true,
+      "mountedComponent": "bonuses",
+      "afterBurst": {
+        "/api/attendance/day-off-bonus?periodKey=2026-10": 1,
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1
+      },
+      "afterForeground": {
+        "/api/attendance/day-off-bonus?periodKey=2026-10": 2,
+        "/api/attendance/history?scope=me&dateFrom=2026-10-13&dateTo=2026-10-19&compact=1": 1,
+        "/api/attendance/today": 1
+      }
+    }
+  ],
+  "taskUserRoomMeasurements": {
+    "done": true
+  },
+  "pipeline": [
+    {
+      "variant": "en-light",
+      "masks": 6,
+      "sawCosts": false,
+      "sawTerms": true,
+      "nonMoneyEdit": true,
+      "realtime": true,
+      "reset": true,
+      "captures": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-light\\r20-detail-0.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-light\\r20-detail-2.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-light\\r20-detail-5.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-light\\r20-detail-8.png"
+      ]
+    },
+    {
+      "variant": "id-dark",
+      "masks": 6,
+      "sawCosts": false,
+      "sawTerms": true,
+      "nonMoneyEdit": false,
+      "realtime": true,
+      "reset": true,
+      "captures": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-dark\\r20-detail-0.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-dark\\r20-detail-2.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-dark\\r20-detail-5.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-dark\\r20-detail-8.png"
+      ]
+    },
+    {
+      "variant": "en-dark",
+      "masks": 6,
+      "sawCosts": false,
+      "sawTerms": true,
+      "nonMoneyEdit": false,
+      "realtime": true,
+      "reset": true,
+      "captures": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-dark\\r20-detail-0.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-dark\\r20-detail-2.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-dark\\r20-detail-5.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\en-dark\\r20-detail-8.png"
+      ]
+    },
+    {
+      "variant": "id-light",
+      "masks": 6,
+      "sawCosts": false,
+      "sawTerms": true,
+      "nonMoneyEdit": false,
+      "realtime": true,
+      "reset": true,
+      "captures": [
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-light\\r20-detail-0.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-light\\r20-detail-2.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-light\\r20-detail-5.png",
+        "C:\\Users\\Berlin\\Documents\\Dev\\nexus-shots\\android-rev2-19oct\\id-light\\r20-detail-8.png"
+      ]
+    }
+  ],
+  "workbook": {
+    "nativeExportWhileMasked": true,
+    "realFixtureAmountsRetained": true,
+    "maskedValues": false,
+    "checkedAmounts": [
+      987654321,
+      876543210,
+      765432109,
+      23456789
+    ]
+  },
+  "tablet": {
+    "wideKpis": 5,
+    "masking": true,
+    "views": [
+      "Board",
+      "List",
+      "Health"
+    ],
+    "size": "2560x1600",
+    "density": 320,
+    "physicalTablet": false
+  },
+  "checkedPixels": [
+    {
+      "stage": "before",
+      "variant": "en-light",
+      "control": "memory",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "en-light",
+      "control": "checkbox",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "id-dark",
+      "control": "memory",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "id-dark",
+      "control": "checkbox",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "en-dark",
+      "control": "memory",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "en-dark",
+      "control": "checkbox",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "id-light",
+      "control": "memory",
+      "violetPixels": 0
+    },
+    {
+      "stage": "before",
+      "variant": "id-light",
+      "control": "checkbox",
+      "violetPixels": 0
+    },
+    {
+      "stage": "after",
+      "variant": "en-light",
+      "control": "memory",
+      "violetPixels": 6919
+    },
+    {
+      "stage": "after",
+      "variant": "en-light",
+      "control": "checkbox",
+      "violetPixels": 2513
+    },
+    {
+      "stage": "after",
+      "variant": "id-dark",
+      "control": "memory",
+      "violetPixels": 6683
+    },
+    {
+      "stage": "after",
+      "variant": "id-dark",
+      "control": "checkbox",
+      "violetPixels": 2485
+    },
+    {
+      "stage": "after",
+      "variant": "en-dark",
+      "control": "memory",
+      "violetPixels": 6683
+    },
+    {
+      "stage": "after",
+      "variant": "en-dark",
+      "control": "checkbox",
+      "violetPixels": 2485
+    },
+    {
+      "stage": "after",
+      "variant": "id-light",
+      "control": "memory",
+      "violetPixels": 6919
+    },
+    {
+      "stage": "after",
+      "variant": "id-light",
+      "control": "checkbox",
+      "violetPixels": 2513
+    }
+  ],
+  "borders": {
+    "pipeline": true,
+    "availability": true,
+    "maskSmoke": true,
+    "variant": "en-light",
+    "borderToken": "Nx.colors.border",
+    "noStatusSave": true
+  },
+  "cleanup": [
+    {
+      "name": "deal",
+      "path": "/api/projects/01a1548b-3b6b-7259-956c-2572d9aff6b8/pipeline/01a1549c-ae6f-765f-a905-466451aded1f",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "meeting",
+      "path": "/api/meetings/01a15483-4d19-7428-957f-3e11aac16da1",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "form",
+      "path": "/api/forms/01a1548b-3ca0-7575-822c-ae5f4ce5e247",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "doc",
+      "path": "/api/docs/01a15498-f223-75e8-aaa7-ef5b2af75d29",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "task",
+      "path": "/api/tasks/01a1547e-70a1-7758-a60f-d96ea9fab833",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "gideon-chat",
+      "path": "/api/gideon/chats/01a15484-97ef-7637-adfc-2cafb43a9771",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "owned-inbox-row",
+      "path": "/api/notifications#01a15483-e97a-7145-ab68-9ade67a11526",
+      "status": 200
+    },
+    {
+      "name": "project",
+      "path": "/api/projects/01a1548b-3b6b-7259-956c-2572d9aff6b8",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "project",
+      "path": "/api/projects/01a1548b-3bb9-768a-9db4-2f0c47cc3551",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "project",
+      "path": "/api/projects/01a1548b-3c5a-7608-b884-70fb1c98ccdf",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "project",
+      "path": "/api/projects/01a1547e-7015-71b9-b987-fe3ac500d36d",
+      "status": 200,
+      "recheck": 404
+    },
+    {
+      "name": "project-conversation",
+      "path": "/api/conversations/01a1547e-701b-737e-81ec-d000d3b4dd92",
+      "recheck": 404
+    }
+  ],
+  "cleanupTransport": {
+    "kind": "curl; existing DEV session",
+    "requests": 27
+  },
+  "restored": {
+    "originalPreferenceFiles": [
+      "nexus.appearance.xml",
+      "nexus.language.xml",
+      "nexus.calendar.xml",
+      "messages-ui.xml"
+    ],
+    "byteExact": true,
+    "ownedViewKeysRemovedFrom": [
+      "project_view.xml",
+      "sheet_tab.xml"
+    ],
+    "language": "in",
+    "theme": "DARK",
+    "coldHome": "Beranda",
+    "helperRemoved": true,
+    "physicalSize": "Physical size: 1080x2400",
+    "physicalDensity": "Physical density: 420",
+    "exportFilesRemoved": 1
+  },
+  "shutdown": {
+    "stopped": "2026-10-19T20:34:28.3144515Z",
+    "serial": "emulator-5556",
+    "qemuPid": 7800
+  },
+  "processes": {
+    "checkedAt": "2026-10-19T20:39:52.5054014Z",
+    "ownedQemuPid": 7800,
+    "ownedLauncherPid": 13628,
+    "remainingOwnedProcesses": [],
+    "ownedEmulatorStopped": true,
+    "sharedAdbLeftRunning": true,
+    "sharedAdbUntouched": true
+  },
+  "performanceContract": {
+    "at": "2026-10-19T19:56:17.442Z",
+    "status": 200,
+    "dailyAggregateAvailable": false,
+    "rootDailyKeys": [],
+    "tierDailyKeys": [
+      "failures15m",
+      "restarts24h",
+      "errorRate",
+      "avgCredits24h",
+      "answers24h"
+    ]
+  },
+  "performanceFinalRefresh": {
+    "attemptedAt": "2026-10-19T20:40:20.746Z",
+    "status": "unavailable",
+    "attempts": 4,
+    "transport": "curl; existing DEV session",
+    "retainedSuccessfulReadAt": "2026-10-19T19:56:17.442Z"
+  },
+  "captures": [
+    {
+      "file": "after-fields/admin-announcements.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7b4b72bf55f1022b61232e9438a809e5aa0f7fafe0a18a013189c4cb6b08e76a"
+    },
+    {
+      "file": "after-fields/admin-attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ba764a1b2be04fcfe602e9ab21400d4ff81b6b32a6af2745a09f6942cba891b6"
+    },
+    {
+      "file": "after-fields/admin-audit.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "28394970a7e730975db0689b8bc309405bbe91c55529c7c0961813ffee824200"
+    },
+    {
+      "file": "after-fields/admin-member-attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "637de40b4c509fa7d08405a4f46ee73b3d547d58d32af8b86ad0d42b4838bdc9"
+    },
+    {
+      "file": "after-fields/admin-member-details.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "66b9359a850c53d1205dd0108ce6963bee8c777a9b27b031afecadb071ea4f80"
+    },
+    {
+      "file": "after-fields/admin-offices.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "51058561ed598682ab4e84f48ac3eb69b7baeaa5185dde9921aac29ec561e41b"
+    },
+    {
+      "file": "after-fields/admin-org-chart.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "af1b95ce525c23b1ca2d8e41e8db521841f6d47f2c413e1ea5396063f15fe348"
+    },
+    {
+      "file": "after-fields/admin-quests.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "89fe15437f0683eae58ab112293093d6118714073994c47bf19721ad705bbe50"
+    },
+    {
+      "file": "after-fields/admin-users.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f5a29a91490fe24d831f01736606f44b3ab2130ae3e8bb7f28a850579f3cc189"
+    },
+    {
+      "file": "after-fields/attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "df507d716396a6ba1effa31b216639c116a8dfc287235fd902aab87341bc8445"
+    },
+    {
+      "file": "after-fields/calendar-filters.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c71ecf9096826875b206aab61444ec5ce29872532e488645282e30ecb6107085"
+    },
+    {
+      "file": "after-fields/chat-info.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "818bec37673cbe3bdcf6d5fb85c6e4cbf1aab7b251b7cef40b009cbe8ebd0939"
+    },
+    {
+      "file": "after-fields/chat.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3163d1a374bb4d450579055f47bb2c569d64096c4da37a9bfcdac004b8ec0c70"
+    },
+    {
+      "file": "after-fields/doc-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "32fe435d02171ba27ea85b70fc1904d5ae65e8cf262674b36984f368eee3f3aa"
+    },
+    {
+      "file": "after-fields/form-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e2b7e9c65cfbce65f4788df570bf2e48ec9115d34bf7ead89834f74a3b5d42e5"
+    },
+    {
+      "file": "after-fields/form-fill.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8e6df1e1c9e2919ba3a3fe706e37aef0310be0ca416eb33e8c5c18715a5515aa"
+    },
+    {
+      "file": "after-fields/form-settings-share.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "73369ad3b8f6070887e505302b6a4e66ed4ed864510c22d07aabcd652622e867"
+    },
+    {
+      "file": "after-fields/form-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3f63a54beca7a6c14474237de678fb61b1ef0d99f614c622bd557946756b1823"
+    },
+    {
+      "file": "after-fields/inbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "06a8a76d078b769e89abdcc58f33e336e83ccabc8614498221d0cee2c5f4d3d3"
+    },
+    {
+      "file": "after-fields/legal-invite.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d07cc38a3b9c4996dfc272e9f3439620ce7fc29876d38284a78578a5cf98164f"
+    },
+    {
+      "file": "after-fields/legal-new.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4497cedc6f090211bb5018e9416af5c809634146d01d8f4ecd8bedc0d105f888"
+    },
+    {
+      "file": "after-fields/legal-request-links.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "658700034d7b2d3964f1dcc10bf6de759d5e3f53696e2c4c6769b5573f76224a"
+    },
+    {
+      "file": "after-fields/legal-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "dff95e65980dc7835e7c020402dd55a6188e0749d040f0b576c3e41b05d24fbd"
+    },
+    {
+      "file": "after-fields/legal-template-new.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2cb0ae59b071feb7cc8c189346a799304e6f06840fc34652bbb2bcba4a5869f1"
+    },
+    {
+      "file": "after-fields/legal-upload.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7683bcda424069f342ed29ce665e81078e909ea09ea1f7dd3728a7cf756d7a99"
+    },
+    {
+      "file": "after-fields/meeting-owner-picker.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3d0d4dff8ace3f910363373acb4fe0d458140231b7e285ec21d2b787e45e04c9"
+    },
+    {
+      "file": "after-fields/meeting-review.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6d0dd2e4211a85a4d6f9f5e1315172cc58e39bf2b13f27b62a4ab925d8c4e10f"
+    },
+    {
+      "file": "after-fields/meeting-task-card.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "28d8443aa9f5e6a2246033575472def8fb58acd835b2330410538b696e3a15ac"
+    },
+    {
+      "file": "after-fields/member-profile.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "574fae735d9eb347f9f033fae004b77d3636d39aeebfff1aa4b096f55c486066"
+    },
+    {
+      "file": "after-fields/messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a4089ffb398aefa182f5d3b6979d3144430405313ca54c446a2956645b36c800"
+    },
+    {
+      "file": "after-fields/new-meeting.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d7a1b25fbbdf4e6055ad21fab9d74216fd9a5d2bcad77284c7d74ea0fe9b08d7"
+    },
+    {
+      "file": "after-fields/new-ticket.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "81650fd393ed6dce210b678c283481e9be03af9dc5daab45e13468ef139fb482"
+    },
+    {
+      "file": "after-fields/outlet-add-event.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3695f3c6cecfd14c5f934da4e7c0a42283daf04c31ea4e2829d33987200a3ecf"
+    },
+    {
+      "file": "after-fields/outlet-fill-report.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fbb6000773f189c61c9c7b4636ca09568939d74b5e66b4ad686f323663747b57"
+    },
+    {
+      "file": "after-fields/outlet-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ffe0146eb2717537de1278e06d263b4b1d1f5309ba6c7f53e9767278ee656f5c"
+    },
+    {
+      "file": "after-fields/outlet_sales.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ff613eec217b64ad97ca9568463de55233ddf7f617fe462f040fe37cf3f0b260"
+    },
+    {
+      "file": "after-fields/pipeline-new-deal.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f395309bfe78e4afb98fc3f7e9e8b410440ddd5bc86695c60572b309375b1f4e"
+    },
+    {
+      "file": "after-fields/pipeline-segments.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a8e936f015bcf4776d0a1cd4381920a29b5aac880f78d510d02ed664d7e6b30e"
+    },
+    {
+      "file": "after-fields/pipeline.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9c77ed5d0f79e7d11120b86ed4d0f172b60dd5844edfd62e23232a0097521ea7"
+    },
+    {
+      "file": "after-fields/project-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "399048dc62026518d22581c6756e6f4eb18f14ff186e55c87e0968fb124b998a"
+    },
+    {
+      "file": "after-fields/project-overview.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "495a811d6473cfbbe44f32db1642ad577fc1fef41decc78e41c539b1b9f6709d"
+    },
+    {
+      "file": "after-fields/project-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "09ba8a403acc14087907b7a0b249746f7a25465cd5bcc76de8ac9c991df47244"
+    },
+    {
+      "file": "after-fields/project-templates.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "03051d2f9495379d174b2358623646799ddcd4e5a4c83ef7582a716e90baf326"
+    },
+    {
+      "file": "after-fields/reminder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "35ae4c3d19f827ee4eae3ed491fa31b47e472c3eaaa7ff5ae549c0319b6f22b8"
+    },
+    {
+      "file": "after-fields/reports.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3962260ea7a95d8ce21e7def5088f5048fe1901ac37b261bfe5d1f3efa70e3b5"
+    },
+    {
+      "file": "after-fields/room-booking.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "781b2896d7880a3c0160b35e6f8a0bdb8bbf7217d85f5c3a614f688e83320ed6"
+    },
+    {
+      "file": "after-fields/search.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "052b10d887b710d7b89faf214636c47bcd5458ca3391909bd0a2bcec81ae3528"
+    },
+    {
+      "file": "after-fields/settings-profile.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2364f62e0dd0c6039a601900f9f583130835f9022e43bc9026b64dff7d0e0efb"
+    },
+    {
+      "file": "after-fields/settings-security.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "00ce6b7d11ef48c872965fe5e157cc78f585185ef684e83eb0ce109cb0f38ae5"
+    },
+    {
+      "file": "after-fields/social-daily.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4f42e70e821ba6035ab7c4c7a2c1d471101d1965d47c6bba923e88145ed4a523"
+    },
+    {
+      "file": "after-fields/social-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f9402cefb620a3b69fb114fc2aa15384696491e672bd8f28b5ef3105338ecee9"
+    },
+    {
+      "file": "after-fields/social_media_report.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "95332a34263aae2d3448d033944ead2197c4a50b04030dc96178474db965518c"
+    },
+    {
+      "file": "after-fields/status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d04f9b3469ccab8aeffaf6734a825b2c22687060e04aec5418a6614dc8fe298b"
+    },
+    {
+      "file": "after-fields/task-detail.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "84f1d8cc25d343e61caaff7c61e2c319429d6930e211b9a755f4bf79eca8fed3"
+    },
+    {
+      "file": "after-fields/threads.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "951a0e64ad089528da4cffdeb93f8175bbf813d858e2a679aaf1ef0cb4abb926"
+    },
+    {
+      "file": "after-fields/tickets.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "5b23f0d267efed74387b19ad43c1ad590dcebaf6d8264a64490ea067f5b68fd6"
+    },
+    {
+      "file": "after-fields/vault-folder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4b6c85ec5884dab6ce801d051b4bf5932128f0f9938dfd1a79906fbc80d13f0a"
+    },
+    {
+      "file": "before/account.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6b3062d6b5ccbc938f5a8f622a20d4749bce810565b8e44a2a5ef4ae4d9a41b1"
+    },
+    {
+      "file": "before/calendar.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f7e71d42f5491555bc3b50ca24feadff245975f62ece154a2f879c2a322f5242"
+    },
+    {
+      "file": "before/gideon-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "58a9c263beb3fb90a853e2be980671f34ff1172f522759c004de3d2082d11cf7"
+    },
+    {
+      "file": "before/gideon-messages-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d2155b08250fde4ff12702097f28e22bd8b78e3d28edd1d897bc7eb4c63baaf9"
+    },
+    {
+      "file": "before/gideon-messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d0fdac14fae17d1182125fd147597dcda1418c922b9f906d6923aadf3fae7201"
+    },
+    {
+      "file": "before/gideon.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6038e21d24606fab044ca03af1c08fe91056419ff133bc5420d3de933b060c8f"
+    },
+    {
+      "file": "before/home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "559bd30f3ed8c1ada91eb4a67fba4462410d731743aa569b24401beb53b58c98"
+    },
+    {
+      "file": "before/tasks-modal.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c1045168b0017f9f50de2d4ee799921917c6204960ec6fb9b74e1c6dbcd6846a"
+    },
+    {
+      "file": "before-fields/admin-announcements.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1d482ac5ab170b3cc9c64c90fdaeb71788c004287d9effd97bae06fa4796df4a"
+    },
+    {
+      "file": "before-fields/admin-attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fc7a25cd6b80e5f1a51b21ad0d8289f1cefecfab25e177b9c4b36f1d80ec700d"
+    },
+    {
+      "file": "before-fields/admin-audit.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "445675e09c97902598e90315bf2e58d57396e3a86f1fecb5dd248aa57cb86db3"
+    },
+    {
+      "file": "before-fields/admin-member-attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f2bb58a261cc2ee9d993b4798a6ddca574541de457af945e776cd643af5e0843"
+    },
+    {
+      "file": "before-fields/admin-member-details.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b87b2c945042f45b45f809abc8ad3068e9a74360adcb7c670d9922594b363fd5"
+    },
+    {
+      "file": "before-fields/admin-offices.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6f1c033f1ae3d861c10d5fcdcb5f9cfac351a8d677c08fc7c39948d17e04e0a6"
+    },
+    {
+      "file": "before-fields/admin-org-chart.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "62f968ebf4e976abaf8e25767cac84f4b74631e3c1a2eb4943070f9ec6f5af59"
+    },
+    {
+      "file": "before-fields/admin-quests.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "cea6b8a52072e2bbef95a20cdb3af1541abfda4c9f6331fdace6b346a440f3ef"
+    },
+    {
+      "file": "before-fields/admin-users.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f36124e781ec1ec67eddb4036a7914b060de6004cc0049844d61f2a1f4e21e95"
+    },
+    {
+      "file": "before-fields/attendance.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "08f45ae111dff60afca97c6289c68c22c1831ec2bcee821bd3253e43d31ec68d"
+    },
+    {
+      "file": "before-fields/calendar-filters.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0d6d17e9b3f6e1617323a568f2f0847df93a0e062aaaa574f8811d6d33184883"
+    },
+    {
+      "file": "before-fields/chat-info.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6a313db8d3b7b46d2d6137348a28d09ebfbfea22e1b473fbefbb40782acddd4c"
+    },
+    {
+      "file": "before-fields/chat.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fcafef06c1a15efa35c29ac25898abb9861c69da339b6c153ba0fba58e71948e"
+    },
+    {
+      "file": "before-fields/doc-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9bdffd1bdd6652c086013efdb543e736d05a83e94bf3f7e01b6c04b5ed3f7ddc"
+    },
+    {
+      "file": "before-fields/form-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "57e2a47bae1bd2391e5ca53996a33b44b2cafd9cca8c79d4b2f05ddc36e57d7a"
+    },
+    {
+      "file": "before-fields/form-fill.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9a46f003f77a8d1521c31770ad7ffc1dd9ece9867ee708837b12969413e923c6"
+    },
+    {
+      "file": "before-fields/form-settings-share.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "34c926ebefc6fa3fb94acfa2fbb387ca1c2e188161aaae5d9899e53d6999e652"
+    },
+    {
+      "file": "before-fields/form-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "93a6a63f8bb1bcb5030b1a4d9ea088da9ec043084d193cefda08aa64f8cef34c"
+    },
+    {
+      "file": "before-fields/inbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e712beec3e04eefe4682eb78b513f68f5df52fb5dd8d82b766f5482b8fdac1a3"
+    },
+    {
+      "file": "before-fields/legal-invite.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8b51f77ab70405dc944703b36333e0846494d5f86eb5dc5f77938f4e88863c3b"
+    },
+    {
+      "file": "before-fields/legal-new.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fdb31c9679f95b180bff7b00d6c3027e9f2862981d2e27885f918a8a42154070"
+    },
+    {
+      "file": "before-fields/legal-request-links.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2eecb6d60289ac3ea07c5544c83eb939280c1727cf480506761f2e4e2d53f26d"
+    },
+    {
+      "file": "before-fields/legal-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b85c85be4281358899b8bfa94b33c1c74b63d62b261cc54141a0704ad9abf9f7"
+    },
+    {
+      "file": "before-fields/legal-template-new.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d608ec4f939d4590cd39df27bb21174ef5d29aafc37c6b01e69a275a0d40c133"
+    },
+    {
+      "file": "before-fields/legal-upload.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "95fbf67296c1b6d2d180999ea2e21fc64fe8b780cb40fd419aa513353e24b24b"
+    },
+    {
+      "file": "before-fields/meeting-owner-picker.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "43f40afada1bb5aae5f26838033d7c2f4e7b2e7562931037cb098be3518fb651"
+    },
+    {
+      "file": "before-fields/meeting-review.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "735265790ec540e0bc24a27f3c278a90b6dcc696bf1ad26106048901f0e000f6"
+    },
+    {
+      "file": "before-fields/meeting-task-card.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "75707fd7ce64915098ecf0f7fe5f9126bdee668959cf8d6a349144243235d415"
+    },
+    {
+      "file": "before-fields/member-profile.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6150f4e6c4c3009cf97e38856e2ae597c24f0f254902d250e801205e3c0cc5f9"
+    },
+    {
+      "file": "before-fields/messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "84130dd618234dc607dee9b6b55d957f9850fe96eaebeb480d561fa026fedaf0"
+    },
+    {
+      "file": "before-fields/new-meeting.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "40986aec1ae3c977ec0f37a711add1db967a9bcdbf68fea27eab5038548a7d6a"
+    },
+    {
+      "file": "before-fields/new-ticket.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "bbd9285689ba54f29a863dc8945866bf055bb4330ebcaa827c291c88b3cb6992"
+    },
+    {
+      "file": "before-fields/outlet-add-event.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "883283cf794103b461cb34eea2b15f6b4f80fef1b817548020bb6a8f5f8289bd"
+    },
+    {
+      "file": "before-fields/outlet-fill-report.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "883283cf794103b461cb34eea2b15f6b4f80fef1b817548020bb6a8f5f8289bd"
+    },
+    {
+      "file": "before-fields/outlet-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "998b27f243ab0ee2921b32c2c7ba7d2dbfd7019dc6c17ec4f653f89304c2edbf"
+    },
+    {
+      "file": "before-fields/outlet_sales.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2d3d0c8499c0902749becdf95f7bff4e895b2c630f89bcbc9ce989721c913606"
+    },
+    {
+      "file": "before-fields/pipeline-new-deal.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4d8322ac029f0de11720bffe940cd8f15b540e8c7e68d0fa2ff033a9ba4b64eb"
+    },
+    {
+      "file": "before-fields/pipeline-segments.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "26848ad9e97da11e454534f8217a328d0e94d64a583bab322144ffee8e9b765d"
+    },
+    {
+      "file": "before-fields/pipeline.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a54e7a5343d351b309e10ac99c54ee40e0dc3affceb514e8cf89b389c0701651"
+    },
+    {
+      "file": "before-fields/project-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "acd87086b3fc2c8a0b16dffb9b2b29fda9e6ba179ab694b74eace043170f652e"
+    },
+    {
+      "file": "before-fields/project-overview.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b1dfe6a8beea7e612e18a21264b2472c51b2c0d26e04befb1f386451e9dfc358"
+    },
+    {
+      "file": "before-fields/project-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "88f7d7dabf5c4aef84e03763d41824d9d4100da510560ed38dd7ce60345b8d31"
+    },
+    {
+      "file": "before-fields/project-templates.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "06925f4a7c4cdf24e070fb9f3e0c0ec12038b044c9b331f5229c994c4b541d81"
+    },
+    {
+      "file": "before-fields/reminder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b7dcd6d5bff64c67fc7ca26d93feb1c03a22761ae4f94812aafbb7045d5abc46"
+    },
+    {
+      "file": "before-fields/reports.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4dea9d9fe67c01e051712cf3d77143d4cb479d128ebf5e36be05f5249ed86a0b"
+    },
+    {
+      "file": "before-fields/room-booking.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "5fec1a8656df92796ae688537a328034e288b985245ef5ed6b0ae5566a4b4826"
+    },
+    {
+      "file": "before-fields/search.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b24ce033de4da54b6f938895b5342731469d596dfa35b8528fb456103044184a"
+    },
+    {
+      "file": "before-fields/settings-profile.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e2ade96c6dd01deba20d14bc84c36189742ea89de60357b8b4b37e2cc4575399"
+    },
+    {
+      "file": "before-fields/settings-security.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b485019ab2f24a4ac07cfaa9fc757f693f7e3e0cc8a9192240a8e57c3f3b5320"
+    },
+    {
+      "file": "before-fields/social-daily.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d02e2ce7eecc2218a43a9959cf1ff54c7605b71e0d89b4fbf09263bf48fd40c0"
+    },
+    {
+      "file": "before-fields/social-settings.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c126676b0be157163bad62f1679c003f14aafc902be159de366f23a2151a2119"
+    },
+    {
+      "file": "before-fields/social_media_report.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7d74202f13f7cd8c5aa44e69180c864dd67ff7784e636038c9a9cbd3258a1e15"
+    },
+    {
+      "file": "before-fields/status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7982caab37519d75fafb26fd6ea8979915bc7e11ce7c8459d2e3e11e720004e1"
+    },
+    {
+      "file": "before-fields/task-detail.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fef6275bc7a64bfba5a508d315b75ea0bd659afdcc72b30fb0298c98600441ce"
+    },
+    {
+      "file": "before-fields/threads.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "50267929335d9c36473e266035c10cb9575e77b83d059c1b964653c2e96a8237"
+    },
+    {
+      "file": "before-fields/tickets.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "27b84b378a76073b2215d0290cbacc162792d98e15bc6ae8ac7736c31bc9469b"
+    },
+    {
+      "file": "before-fields/vault-folder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "922fa93370d420956d4ceec21b2f8fe7223d8a557e8ff35ca8b92e2f08390945"
+    },
+    {
+      "file": "en-dark/r12-calendar.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4515375fd7c7b52549fa1e50fb8ffc9a516c69e794e24065213f68404f9a1e96"
+    },
+    {
+      "file": "en-dark/r14-home-status.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e94fc7261b23225618af51ad4e62a5b0fd0977a1037911dc96dc075978195de9"
+    },
+    {
+      "file": "en-dark/r14-status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0c429ef89e5ae1673fd1b872240f5836e90e6afc40217c84d15f569ab1c922b4"
+    },
+    {
+      "file": "en-dark/r17-empty-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0cd24fa826308b62e7d7703ec3fb405ce11d7ffe1bc8cb0f389da652d2901386"
+    },
+    {
+      "file": "en-dark/r17-empty.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ecdbb42950669adafec8d2fafb2562966dac5c12b974df6a5778bfac0770a938"
+    },
+    {
+      "file": "en-dark/r17-messages-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e54c46bb2589c9a3716fcfe2fed4f2c5b72a277a10a82341ff54bb8bae2bc57e"
+    },
+    {
+      "file": "en-dark/r17-messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ddb8cded949c0311fd0de9d88ab0a4381bba34ea84dc19e6cd2fa1c2bc7399fc"
+    },
+    {
+      "file": "en-dark/r18-after-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7edc5d5fc4b86bfbb2d415ae30afa5cddd6aad8569f8a82cab7eff508335e1f4"
+    },
+    {
+      "file": "en-dark/r18-after-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b211e173f485bc249aba95252082c2125372dfea202b60a748945e71bec59c42"
+    },
+    {
+      "file": "en-dark/r18-after-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8f62f469cc66a011af1a86d7d062a93c10d98e19997975283f2bc85fb8033749"
+    },
+    {
+      "file": "en-dark/r18-after-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0842913148eaff161d10b1c8a0455973628788f350e02a470d2f067cfcd5ad5d"
+    },
+    {
+      "file": "en-dark/r18-before-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4b748ed54dec8216631a60e7c80390c9319784b3a292070c6e8b897a6095d890"
+    },
+    {
+      "file": "en-dark/r18-before-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ba2e52d63b98fcb4958d0cefdf0c78c70494a73b116b86656d79ca90ce6fea60"
+    },
+    {
+      "file": "en-dark/r18-before-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "04859540907bc538b59c77c58525ba3eff921fa3ada63719561f71d31526b6bb"
+    },
+    {
+      "file": "en-dark/r18-before-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4b748ed54dec8216631a60e7c80390c9319784b3a292070c6e8b897a6095d890"
+    },
+    {
+      "file": "en-dark/r20-detail-0.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c0cdc494e4d31c963284f74931a80c2c376325ac4f4fa0a8bdb5b1129c27fe80"
+    },
+    {
+      "file": "en-dark/r20-detail-2.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a7677de00d0b96561c2cec820ddfc8655ae7011cd313c6280dfae1b5aa4c6f09"
+    },
+    {
+      "file": "en-dark/r20-detail-5.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7f9c9fa6681f02bd08f6b799dbf57542e73808132d85413b14b45e2631a8cca8"
+    },
+    {
+      "file": "en-dark/r20-detail-8.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b93c1f7bd174842f0d3d99aab98550f991334c9340129d3d09e3dcb54935a4a1"
+    },
+    {
+      "file": "en-dark/r20-masked-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "5efe87e5811dd6b32d3e45b795fd0430b8b50b12acded866ddabe6f51c3806fb"
+    },
+    {
+      "file": "en-dark/r20-masked-health.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "158c46c7d5f0d44c023e7ba80bc2bdaf2f62a059d37702a27f2ca6f22efb5f8b"
+    },
+    {
+      "file": "en-dark/r20-masked-history.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1c7ccf93b386f6af94fdf247aadb651979baaab09e037aa34b2bde6a6254448b"
+    },
+    {
+      "file": "en-dark/r20-masked-list.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3fafcd5f2a78aefe45f5c5fe746578ce2a0c336fe0abd2754ab50a448dd7b67a"
+    },
+    {
+      "file": "en-dark/r20-masked-realtime.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "bfc21574b21f478f55de6d0512285a7fa1e3f753a41c51d7e02ca49d3e19ec9f"
+    },
+    {
+      "file": "en-dark/r20-unmasked.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7a2eb1e2fcebb44f4d587600a51c5a5846400d40c27b8faf6033c4280a4c80de"
+    },
+    {
+      "file": "en-dark/r20-visible-dashboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "79b856ad9990b890e5acb171ebbf5f709c400c4d8d73b9d9a4f967a4fc56549e"
+    },
+    {
+      "file": "en-light/r12-calendar.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7e887c476fa9bb069c321cbddefaa35de1d81685ca5a9a85280a1058c0379b3f"
+    },
+    {
+      "file": "en-light/r13-live-done.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c87e2a258d44d4603cd39fa8faba010f015f918757c9c8ef020efa7864f2c10c"
+    },
+    {
+      "file": "en-light/r13-my-tasks-live.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "96f2f3645237548f4a483ba53c1848dd8167dbf3a5d63f6f96410b6bbf40ccbc"
+    },
+    {
+      "file": "en-light/r13-my-tasks-reopened.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "863bbc8c984dad70c9151c856c190af82c62e877e84fdde36e0f1bc4f5c2a8c7"
+    },
+    {
+      "file": "en-light/r13-open.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c83085d9a081d856ef6c8581a10545afe11e6bf81607b3cca3058601f83bbc10"
+    },
+    {
+      "file": "en-light/r13-resumed-open.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d77f2cf072b21dbf9376acd3738d7d3051db872753242da31baa6a9e1164b1ed"
+    },
+    {
+      "file": "en-light/r13-user-room-done.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d2d7e13c0c24df8ae626c587d4d97de80f4cdd7ce7c55cc6b3ae487736dd6893"
+    },
+    {
+      "file": "en-light/r13-user-room-resumed.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c83085d9a081d856ef6c8581a10545afe11e6bf81607b3cca3058601f83bbc10"
+    },
+    {
+      "file": "en-light/r14-home-status.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a9247a53959f268ab14e6d303129932ec1ca7c2668efe53dc600007325713c17"
+    },
+    {
+      "file": "en-light/r14-status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2a0dbfa5e759c462f1adf9ccc7b1b49da4380a03a86056cdc28f61980276bc12"
+    },
+    {
+      "file": "en-light/r16-apply-confirmation.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "69b9ae7c8483628ed132b569054ab99680a598c5daa732138d3503c200304a7f"
+    },
+    {
+      "file": "en-light/r16-empty-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "df26b5a3643feb52edd0a27c1e25e6d536d85465d4e0533f81776238f06554cc"
+    },
+    {
+      "file": "en-light/r16-field-focused.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b0cfd06221867e02cf890965c7bf41772f33cfcd80c673a2bfd2e7f9795cdeba"
+    },
+    {
+      "file": "en-light/r16-new-meeting-empty.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "819d0ab83e0cb319781185bba2d29322b4194d29e456edad9c9417cbf9bdd36f"
+    },
+    {
+      "file": "en-light/r16-owner-date-selected.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "310ede4be89852bc3ca18a9ca4645bb5b105f892f6e6897d7c47cf1e2c4441ea"
+    },
+    {
+      "file": "en-light/r16-owner-picker.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6f44e5aecd29da87a8b08405109a8a683a1187c913cd05e163adebc46f868b78"
+    },
+    {
+      "file": "en-light/r16-persisted-review.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b775f7962cf52a5048073fb0ff365767db6adfa4ca8a2754cb8b96a2de75c7c7"
+    },
+    {
+      "file": "en-light/r16-removed-proposal.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "15a5c9fc25f01b572550eaadec1e3ff36cba11d5b6397488c5ab0fd9644cf5a5"
+    },
+    {
+      "file": "en-light/r16-selected-owner-picker.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "88a901417a23d39d96c06983a4d50874ab2c94499bb3425cdd19014b6771f0dc"
+    },
+    {
+      "file": "en-light/r17-empty-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1861a65bf17aa7bc692dca6acb8052e434744e4a0bf53479792a1ef387033445"
+    },
+    {
+      "file": "en-light/r17-empty.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e007028b64695a4279b5f480071fead5e52e5da2391489ff25d3acbe33176ade"
+    },
+    {
+      "file": "en-light/r17-messages-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7c083f6ca4860114fafa3be354ced86f943916efe478fd9e74775e703a1149f0"
+    },
+    {
+      "file": "en-light/r17-messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "5b591ced89bc767e8ad27cd853159faa9004b203a97ee2bb71888836591f468d"
+    },
+    {
+      "file": "en-light/r18-after-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "28d8443aa9f5e6a2246033575472def8fb58acd835b2330410538b696e3a15ac"
+    },
+    {
+      "file": "en-light/r18-after-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "331f1c907d6f543ce66ebfc5c527269652f7661405bcceeda09c627c1aa0eb43"
+    },
+    {
+      "file": "en-light/r18-after-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "77af6051922f96c43bac07381e6922c84e29f21a8e8bc339fff144b059032649"
+    },
+    {
+      "file": "en-light/r18-after-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3d0d4dff8ace3f910363373acb4fe0d458140231b7e285ec21d2b787e45e04c9"
+    },
+    {
+      "file": "en-light/r18-before-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6c2acc3941b8295236b64ee0b1f2c8da51890cab6c2ce42a585e39589dd86180"
+    },
+    {
+      "file": "en-light/r18-before-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c2dc84201601e7efb1de1a77ef31517097341360e1ad7c472cbd379ac7ea99c5"
+    },
+    {
+      "file": "en-light/r18-before-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "efda0ae77185623d7834a6698154a2961fd8d424e867e1bd09baaaea6261e69d"
+    },
+    {
+      "file": "en-light/r18-before-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6c2acc3941b8295236b64ee0b1f2c8da51890cab6c2ce42a585e39589dd86180"
+    },
+    {
+      "file": "en-light/r20-detail-0.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ed58032116196b071556b2069b85ab2823743c4b12ec1d0c99e49ca6599f7492"
+    },
+    {
+      "file": "en-light/r20-detail-2.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "545dd3fcae111a128f4a3ca92eea1a62a2fed76e5d9fa3076f8dc7a885bd6a21"
+    },
+    {
+      "file": "en-light/r20-detail-5.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b876f1b917b3875dcd48cdb88c8fd1ad663a62558750a591c5f06493e881a6cd"
+    },
+    {
+      "file": "en-light/r20-detail-8.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "298fbf74d1df300e83098f40d579a44ebc75349e7527fb11104aa989f380bc47"
+    },
+    {
+      "file": "en-light/r20-export-while-masked.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "cd31060a9f5faf4fbebc770dc9fb8ab8d1076deb15483dcc262b716b3e872520"
+    },
+    {
+      "file": "en-light/r20-final-masked-dashboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "24f3a7ae40a8a9b0ad6d945acc4c56bbd3764dabf81b5a0840c9f770f2e898d8"
+    },
+    {
+      "file": "en-light/r20-masked-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "22532e1b9e03e3f59ba3dbc93bbfe5f9b1092debdecda283f9eae4c657614857"
+    },
+    {
+      "file": "en-light/r20-masked-health.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "588eb5c3b438f7ff283aaa9bf87dc83e13ef48b6982c2d7220072365ee79376f"
+    },
+    {
+      "file": "en-light/r20-masked-history.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7d2bfa2f178767f06af55de90b6747ece9b063426adca63771800f610bd6f55b"
+    },
+    {
+      "file": "en-light/r20-masked-list.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0702ead9e712868870ccd2a656f9c2050b51b02e4ada7a3da9a8d9d8cb75094c"
+    },
+    {
+      "file": "en-light/r20-masked-realtime.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "bf28353c1626baada61ff6903196f4f852c4e73766d09c5a6c59cd9ab47717e0"
+    },
+    {
+      "file": "en-light/r20-unmasked.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b21201f061b81423e3d2312a87a94269de1782bd354e24e31af8265db741499c"
+    },
+    {
+      "file": "en-light/r20-visible-dashboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "26848ad9e97da11e454534f8217a328d0e94d64a583bab322144ffee8e9b765d"
+    },
+    {
+      "file": "id-dark/r12-calendar.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2aae6f8597b2976ba752fe67052658ea73f40350b72b6ad462f9da4866b22918"
+    },
+    {
+      "file": "id-dark/r14-home-status.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1b46bce1af4601bf7d869512985ce61af801563b003a96034bc6a785d32d8329"
+    },
+    {
+      "file": "id-dark/r14-status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c60165c42863a2f4a161f433263719171282cd89e8b3303dd01d055868349238"
+    },
+    {
+      "file": "id-dark/r17-empty-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1559f7b0d3ab536502f1a640a25ff860d6b781859dcb4b0ce29c1421111a80c3"
+    },
+    {
+      "file": "id-dark/r17-empty.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b1208760cb5c8f7a65acb41acb2827bc37d0f3b8d0e445ac675e02f50fba59d3"
+    },
+    {
+      "file": "id-dark/r17-messages-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6c393c2308700c1e92d7d176289e12cd5c313f30601ec95d59434ae270169137"
+    },
+    {
+      "file": "id-dark/r17-messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3bbdb8d9a273fc8962e2e448e49bd2597545cfdd9e5908f1f4d81fcc981b3b25"
+    },
+    {
+      "file": "id-dark/r18-after-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e6a761a45759ccd8cd492fda588b3264466d3afb99ceaf5422f9428bc9db95dd"
+    },
+    {
+      "file": "id-dark/r18-after-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f25ea130c0454c13c9e32bd2cff5ccb5e06dfec9e6079ec3dae94f545552ad6f"
+    },
+    {
+      "file": "id-dark/r18-after-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "140bc02b7320cf62ea4236b643ec2dddff6f8d43b4a83373aae9fe00bb6b6c49"
+    },
+    {
+      "file": "id-dark/r18-after-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b3f398a67ac051a4ed039e904861c0487e41da02a12abab2027987f35baf6d91"
+    },
+    {
+      "file": "id-dark/r18-before-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "057d17663521a2674795432597880c5ba6eadd21b4f0bd280c1cfd4de7312b3d"
+    },
+    {
+      "file": "id-dark/r18-before-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6ff3a142692390282dd67a9219741140516e77c60c3a69bee348cae1a4cc5eed"
+    },
+    {
+      "file": "id-dark/r18-before-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e1298538c36a0dd1d64de3d9eb5714bbbf9892558a8fc4012aca0c83a5e7206c"
+    },
+    {
+      "file": "id-dark/r18-before-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "057d17663521a2674795432597880c5ba6eadd21b4f0bd280c1cfd4de7312b3d"
+    },
+    {
+      "file": "id-dark/r20-detail-0.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "af0601b1e7359c4bb941f0767fe95f84791acbac3543d2b5e14cad351ea6b5b2"
+    },
+    {
+      "file": "id-dark/r20-detail-2.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7a030a2dc209892637f0ec2f65520344da57da7d93a5e993b9a56a6e4af960b7"
+    },
+    {
+      "file": "id-dark/r20-detail-5.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6e4c9bbd2bf7721abed5ac21f04c75be48a43ef3d5f9d1b08cd14a75abb7be6a"
+    },
+    {
+      "file": "id-dark/r20-detail-8.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4253362d57af3e49ee4067cc663e9e7c096e8659323ea14db751a33f2f434848"
+    },
+    {
+      "file": "id-dark/r20-masked-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "49b1a0edfa7d75e9a91f60ab5a79f537ffd349f37490af27d1e8c42afea1bc3c"
+    },
+    {
+      "file": "id-dark/r20-masked-health.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3f50260ecaaecc1577bc6432b44c2872e4c75834a797f37f6f41bef456ccb95d"
+    },
+    {
+      "file": "id-dark/r20-masked-history.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "87818bc3502d7a93e6501bd6ce383dcaf0ab2b0eaed0eb691c692b2f3c2b133e"
+    },
+    {
+      "file": "id-dark/r20-masked-list.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2635f8742955d2299b81cec488b71611fb82da35b6d3040c222c7ba438dae7c3"
+    },
+    {
+      "file": "id-dark/r20-masked-realtime.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0fd1095b7a2cc284abdef4cb4f8b5aa5411a1bd626c7fbfef1228dd79792aecc"
+    },
+    {
+      "file": "id-dark/r20-unmasked.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9189a4368609be73c5f825c5bd74fa385da214516807959edb34dc5f562dc23f"
+    },
+    {
+      "file": "id-dark/r20-visible-dashboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7372cbe5ae4269488b0d06d69e499115775364e200f7b59ba21f53622beab11b"
+    },
+    {
+      "file": "id-light/r12-calendar.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a00e9e824c1b5b28cfa01331dcddde58a75c7ae6fba46b93e9b5aca9c0b9c673"
+    },
+    {
+      "file": "id-light/r14-home-status.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4c9546c356509c9d96ec55cd5ec1405b0da8a9b000ba7365163f72e57ec54040"
+    },
+    {
+      "file": "id-light/r14-status-sheet.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e9cf0f1a9deb1d64bb20f497880429c4b75bdcbba9771bb55933648885aecb1a"
+    },
+    {
+      "file": "id-light/r17-empty-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "98296e91a36adbbd6d1cc3e69b5b699a93bf683acb3ebdf1b1a1042be1796571"
+    },
+    {
+      "file": "id-light/r17-empty.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "901665ea273f1673a26e834dd535fe437d450d3b936f2e46780e8948f45038a3"
+    },
+    {
+      "file": "id-light/r17-messages-keyboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3d909698f2e0f0cc5966e575712d3833ac468afeff0e9ebf445f36eb98e78646"
+    },
+    {
+      "file": "id-light/r17-messages.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ec084776f50463bf1426b69823f478f4f124efc23bfaec2ae635ebb7fa57eb86"
+    },
+    {
+      "file": "id-light/r18-after-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fcfeca99be3a9f49d44f9540035faa4afe65bdbf3d83d308d755238d34622380"
+    },
+    {
+      "file": "id-light/r18-after-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "634e8e894fb9d6357b5bfb7ade32034dbbb4f97a83e0080275c3091a88ff9eb1"
+    },
+    {
+      "file": "id-light/r18-after-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a3e5bff5bf28862f70f1f9ed87a176fcb171f95642dfbacb2aa540a18bdbca19"
+    },
+    {
+      "file": "id-light/r18-after-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "fdd0b4c5716253517c452f4b12b00e310c20ba13ca4848284174eaca6aa55cc5"
+    },
+    {
+      "file": "id-light/r18-before-meeting-checkbox.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f908ff8eec95011f2944226611f51bf061b0f34739a7d5064e1f69b8a72d4cee"
+    },
+    {
+      "file": "id-light/r18-before-meeting-switch.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3138d2e443286983011cfd5f9861631ac80e748e2d7c91fcda6d32a2192243cc"
+    },
+    {
+      "file": "id-light/r18-before-memory.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a6731cf3e728a4b5ab327f58ac8fed1db8fece46003236353cf13e1dcb49316c"
+    },
+    {
+      "file": "id-light/r18-before-selected-owner.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f908ff8eec95011f2944226611f51bf061b0f34739a7d5064e1f69b8a72d4cee"
+    },
+    {
+      "file": "id-light/r20-detail-0.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "82917542029dc2f156af395c671368d183df88ec6087509d85d86d995d037674"
+    },
+    {
+      "file": "id-light/r20-detail-2.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e9f28bb2fc3d411687eda8cbe2aa5250391459603e23476761db488285b97021"
+    },
+    {
+      "file": "id-light/r20-detail-5.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b8004a4b37768395a369d491160d4cbd57fc02670e46c7b655009b5807a34b30"
+    },
+    {
+      "file": "id-light/r20-detail-8.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "18a3c3d39e3c76b2aba289de83a64cdba6329603e89b7d1c8f4913640855c898"
+    },
+    {
+      "file": "id-light/r20-masked-board.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2bb2e15bccd184402e2ebca94266ac390625339035d5616d23588e7a5df56005"
+    },
+    {
+      "file": "id-light/r20-masked-health.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "dd9c00662de79b4bbed4e3098b4ae59bd65d80d06a41772346a80aadc7ef5ca7"
+    },
+    {
+      "file": "id-light/r20-masked-history.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "281973b04c313c88db93a50b17da7b6f30486405a6c7c7fce583ea47d695462a"
+    },
+    {
+      "file": "id-light/r20-masked-list.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f43055aac80f64dd5d79b547cca339a55cead711127e163cb2d5f2deafa0a6ae"
+    },
+    {
+      "file": "id-light/r20-masked-realtime.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0107b1374bfa49e651dbb3e7683e8cdc807cc5020c39d6a75ad205ccf0cad26b"
+    },
+    {
+      "file": "id-light/r20-unmasked.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a45e136fb92bc644debe7ab2fa0c2d70c2ff2555c4ecb1dfb0c3bf206f8cb772"
+    },
+    {
+      "file": "id-light/r20-visible-dashboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1dca0ac8e18a5d67b457395540c063cdc68a2bc5e17a3c186ad37d8b9e1e05be"
+    },
+    {
+      "file": "restored/original-home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d09abbc12798f675995696d0adbdce124b6c3fc260d437d4cc74cbd02c0a276f"
+    },
+    {
+      "file": "staged-after-en-light/automation-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f3e1d272e339c61e8bd13d81b8e69b65c581c9b90f877efb6f962782f93f6a42"
+    },
+    {
+      "file": "staged-after-en-light/bonuses.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f572955ae6e781c204cf6a112de74b75be70a23728a06a45d145959e35aeea51"
+    },
+    {
+      "file": "staged-after-en-light/calendar-privacy.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "16922021dffd87ccf85906b2f6c4e3da267497ddd581e9889a2570292e48b347"
+    },
+    {
+      "file": "staged-after-en-light/gideon-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d1baa8a5e6d4a01fc6ff12ad71a7c43d7c556dc83e0086bac145d2c94d08418d"
+    },
+    {
+      "file": "staged-after-en-light/gideon-people-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "48591bf8233c2b745705d7b6bdbe58585454a81a542d894c9be9ecfce603e10a"
+    },
+    {
+      "file": "staged-after-en-light/gideon-people.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6d8b10ed3cbc33b424cc1f3565c826289d14c20ee8d8f624791fb3e8e2aa7c3e"
+    },
+    {
+      "file": "staged-after-en-light/google-link.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e994bc5f5765f8d21e5265507afdc8ca649ca0af20b1d7ebe635a9677a9ceb18"
+    },
+    {
+      "file": "staged-after-en-light/join-workspace.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c17dec8019a8c750b823b63f174c2e0b76d0390770cffac9d05f3b2101393227"
+    },
+    {
+      "file": "staged-after-en-light/login.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8dc9e9c2db5d6ae9283e2181fe939d8e7a49596caad99fbdd53100bec97d3633"
+    },
+    {
+      "file": "staged-after-en-light/meeting-speakers.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a709c66ed0dce41fcece6b38d9b7e770dce0409f8654e91226c2c8b9d788b994"
+    },
+    {
+      "file": "staged-after-en-light/memory-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c9f5cb0d43ce1a92b818d6d0f2361c2483d99ae5344cf595679d8bdcb75fd2ec"
+    },
+    {
+      "file": "staged-after-en-light/offboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "546055a61ea06a6b800045b13dd497db8bc573a7428b8a5569e4efa038002575"
+    },
+    {
+      "file": "staged-after-en-light/save-answer.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "160084ef9a8c64b6925b3d879b45e6d289c2b134b5d24c50714f3d34842bfd41"
+    },
+    {
+      "file": "staged-after-en-light/schedule-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ec1741c0a118b3cf26521d53c21888f6157479eda317322ba3b52bb527078287"
+    },
+    {
+      "file": "staged-after-en-light/sheet-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f3b90a3af72e4046119fb5d9ac3a232ca397202698217847805af0be73f1a810"
+    },
+    {
+      "file": "staged-after-en-light/short-home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "574768aa484206b7f2e1ebd58dbd68eb979e3e0b849d11e77a6952e7231030c7"
+    },
+    {
+      "file": "staged-after-en-light/update.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "33bbecfc31ef698c66b2529cb8436043d2553c0f3d5dbef3883937b6f0cfb729"
+    },
+    {
+      "file": "staged-after-en-light/vault-zip.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "26684089e9b14ad15abcb816033d6171e31fc6aef3097a1430783ca5d056f84b"
+    },
+    {
+      "file": "staged-after-en-light/workflow-bundles.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7fbe404e60a4aa0b01b9974882101f89b368d82e4338d7a71cfcdedb0783941d"
+    },
+    {
+      "file": "staged-after-en-light/workspace-members.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "cadb4b061e957e569fc57ab9e5f7c207e66696553c257b6e087e995451b51d0d"
+    },
+    {
+      "file": "staged-after-id-dark/automation-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "75db0290e5d9f3cdaead56edeb6c85fc8a86009e8a3c5104d7d04b99b40c336b"
+    },
+    {
+      "file": "staged-after-id-dark/bonuses.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "427256846b8b290f5f9caa3477ce14e4930d0916471a256de7d972efe8b8da82"
+    },
+    {
+      "file": "staged-after-id-dark/calendar-privacy.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "68d5bdbd6f70ab0f64c8bf5aeb76d3ea22d15e1fb340190423a714343b23454f"
+    },
+    {
+      "file": "staged-after-id-dark/gideon-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9e535c63a777c17a1584563ad6e72c196c6b93d144c3dd5b2927a976787162ec"
+    },
+    {
+      "file": "staged-after-id-dark/gideon-people-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f3e00e98687f821a8853cf401801767de5bed21dea5e87d71e6baef3e61f925f"
+    },
+    {
+      "file": "staged-after-id-dark/gideon-people.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4369c0f57c72cc78f1de085304674f986d5be6e0324e7fe7cf1abd90254edef0"
+    },
+    {
+      "file": "staged-after-id-dark/google-link.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f2057b438bf09e86264e79a205d4c7acddf8e715bf684ccc12c86fb656393dd1"
+    },
+    {
+      "file": "staged-after-id-dark/join-workspace.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "6751e3680a252783a576b281948eabf362c68705cd0da198144604cbc9d58129"
+    },
+    {
+      "file": "staged-after-id-dark/login.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8cba366e9d8ea4aaee78df6af75e010342e038d801608b0d5c7226af97a668dc"
+    },
+    {
+      "file": "staged-after-id-dark/mcp-tokens.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "b6ccc06854f6459ea7f8828cf3157c3ce782e76e05ad16c92d8bbde4f2f58b76"
+    },
+    {
+      "file": "staged-after-id-dark/meeting-speakers.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e9e74ae526511e155e273dfc8b2d0b676f430bdfea93f864dfc098daa42371f9"
+    },
+    {
+      "file": "staged-after-id-dark/memory-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0dad41bab5c1a35f58c28534fde4bba5bdfc5eef079424d160bd43380de6778a"
+    },
+    {
+      "file": "staged-after-id-dark/monitor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f431754cea1797cf0484716b75b7e05b1d6f4af4074acf0950fb747eb535fc97"
+    },
+    {
+      "file": "staged-after-id-dark/offboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e9abd00ed68c9107371981da0aeb3e045bb18b202f53ee9443436d05ac9af1cd"
+    },
+    {
+      "file": "staged-after-id-dark/save-answer.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8e832ebdcd1fcca68e070ccb879214dd6824d5d7dde3a09722db228b141d3f08"
+    },
+    {
+      "file": "staged-after-id-dark/schedule-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "18e858de9d6e67490dd9a94b1b0639f978a9ebe8f40821bafb3a63eb86fcdc35"
+    },
+    {
+      "file": "staged-after-id-dark/sheet-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4566d0557c798001423d1d15cdb65aad12235656ae33a4045d0c9308fa6bec04"
+    },
+    {
+      "file": "staged-after-id-dark/short-home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ccc8c76acae0ae612698131d58167210b2fc52286edb003a4cc9fb0875c83542"
+    },
+    {
+      "file": "staged-after-id-dark/update.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d57526e8313e86414f2bc433fd6a2dea9a0681b645f0c5f390938191aff07af9"
+    },
+    {
+      "file": "staged-after-id-dark/vault-zip.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c484bf535eb84299ed006073101262493c50f42b65486f799676148ac054cae0"
+    },
+    {
+      "file": "staged-after-id-dark/workflow-bundles.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c2cf878cf5b380af5e1d2ab9ca7617ca2a3b0073ac4aab12f712b293bccb5b82"
+    },
+    {
+      "file": "staged-after-id-dark/workspace-members.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d0613ad6528a150c2c423bce7702bacde21bdb3f7f4039667b791592bb84682d"
+    },
+    {
+      "file": "staged-after-id-dark/xp-adjust.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "eb16d5f3d8601a9cd8b49cf6f9dafc01e94a827703d65c44eb965ac60ffdcd78"
+    },
+    {
+      "file": "staged-before-en-light/automation-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "cb4ca64da887a0356b1e7b53054465d6b92841bed0d50e5a4924634f9195ca11"
+    },
+    {
+      "file": "staged-before-en-light/bonuses.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9bb79dbe2181f8a38fe4a318989831989a9e0989e0b7d06a2b3152b0712bcf54"
+    },
+    {
+      "file": "staged-before-en-light/calendar-privacy.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "834992a9c86b97b420f3344e78f1e2e127c45f12e44188c92ee1a8f265b7d5e8"
+    },
+    {
+      "file": "staged-before-en-light/gideon-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "8c93594d85ab7b539c1af65733d1ce870e44407b2f30bfb4ef5cd0e47d187040"
+    },
+    {
+      "file": "staged-before-en-light/gideon-people-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "614c7c3b7b30b135e48c717d83d4913a077bc171b761cbda0b8b780516205976"
+    },
+    {
+      "file": "staged-before-en-light/gideon-people.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "ac3efb7c8d6bb6a24f337e775c55efda615f3cc1c3cb5c6505ae8dbb378ede15"
+    },
+    {
+      "file": "staged-before-en-light/google-link.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "10bd4a003d5eb07e67252c505dfa0cd6f646221031ac909594ba12d708de5311"
+    },
+    {
+      "file": "staged-before-en-light/join-workspace.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "397a848bf9948ec2e49cd218984c614eda3f9d2aa476ee101b950488533ee594"
+    },
+    {
+      "file": "staged-before-en-light/login.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4738cebda80b619dd5659086d19d3026e14e8a54ec2e698299146a198b1f02b7"
+    },
+    {
+      "file": "staged-before-en-light/mcp-tokens.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "4a2dd6d1290fc44b3e43f4ac15024070e53416a96f2d23ec0780ca2128f52614"
+    },
+    {
+      "file": "staged-before-en-light/meeting-speakers.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "5792c279b30774807405886922e3a11ff0ac32f3717833a032e0c5a2feac8493"
+    },
+    {
+      "file": "staged-before-en-light/memory-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "d7c85136aff7175bed31382b4a6ff874fd69a6087bd16beb745ab7274d912b2f"
+    },
+    {
+      "file": "staged-before-en-light/monitor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9f6bd68291f29e90b526588f3b0bfd6e6f879edf9235665c8aa2025a463ac174"
+    },
+    {
+      "file": "staged-before-en-light/offboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "587d37608ede79295a24f314ef96e783150392f025d4ed2eb3cb7705a2031547"
+    },
+    {
+      "file": "staged-before-en-light/save-answer.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3e3a725ee8df4891990d3a97b1b01ac3ddf221db743546214a69fb140c0187cd"
+    },
+    {
+      "file": "staged-before-en-light/schedule-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a316cf13127b41482e569c77171ab82768f9ae90bf21126ebe52fa9fede9c76b"
+    },
+    {
+      "file": "staged-before-en-light/sheet-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1a944e25edd7ba436043663ba35193cb607dab3155c4c4a2045f412d7ac7b254"
+    },
+    {
+      "file": "staged-before-en-light/short-home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "c86532ef1c1a20e8eea7e7b690c5db222ae4a573d3af2d8e2c413c9bca2316ef"
+    },
+    {
+      "file": "staged-before-en-light/update.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7c479fd2e06d12ff4e9992e39ffdd9bd7c081fafc147145b245ef8d1739976a2"
+    },
+    {
+      "file": "staged-before-en-light/vault-zip.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "db0612d835cbfc314aac26a82d91008403eea157a8abff554c5d102a7975e8e9"
+    },
+    {
+      "file": "staged-before-en-light/workflow-bundles.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2c76e2e36f80b706f41b92c1e9213d65ad4436474417a95e60b2df621334ca60"
+    },
+    {
+      "file": "staged-before-en-light/workspace-members.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e18f9dc7a67dce74a3c50c7f70b230583e45e41a35e154cc9d04a72c1bb465a8"
+    },
+    {
+      "file": "staged-before-en-light/xp-adjust.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2b87f71038fdf2bf2006e009b9e29fd39192b280c521a48741ec11e267725e04"
+    },
+    {
+      "file": "staged-before-id-dark/automation-builder.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "1fa6a49ae854d40edab1b5e965ea9766939056d3fdd19bc8718d29554ff9f432"
+    },
+    {
+      "file": "staged-before-id-dark/bonuses.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "7608597b2950731a7b40c4aa94f5b0eac7105171a7dac1b4e7aeb21c9a37782c"
+    },
+    {
+      "file": "staged-before-id-dark/calendar-privacy.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "a7d5cdf6b664425318443269bcb72d28122bba69a2b109bef8bcddfbaf3e9ad0"
+    },
+    {
+      "file": "staged-before-id-dark/gideon-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f450164afc95b0cf672a13cf5586cacc7a0ab1c67a4683508402018cd3edce4c"
+    },
+    {
+      "file": "staged-before-id-dark/gideon-people-credits.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "388c31ee5b60156edf93f2863e3216164d52d39f724926679a9054e8ae1fa306"
+    },
+    {
+      "file": "staged-before-id-dark/gideon-people.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "77d520b388e9c4452ae4ea66fe0146253bbc25e815748c38e739264ce9fc46b7"
+    },
+    {
+      "file": "staged-before-id-dark/google-link.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "9bd27504ee990f04799dd28399b077b7f166bef05898ef2f9bd8c1049b46a2cc"
+    },
+    {
+      "file": "staged-before-id-dark/join-workspace.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "59ee967babcd377bfd1c7fe00650b6fcbf2cce22710051954a6916d6fd7f8a24"
+    },
+    {
+      "file": "staged-before-id-dark/login.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "cd66cc163299e0479cd28802c3c50ae65ad8e81d21fc4311a2d83e6c4bd3ee46"
+    },
+    {
+      "file": "staged-before-id-dark/mcp-tokens.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "01504742fb97423c45337dc8b19a27f5cec6d4525f25d982464b17a2d94328e7"
+    },
+    {
+      "file": "staged-before-id-dark/meeting-speakers.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "043206b169fc2c5df06bcc85a87f1d216ed700ed34c12abeb1f1ea4b2ef66d09"
+    },
+    {
+      "file": "staged-before-id-dark/memory-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "65c2d623413c54769b5fa13e4befea5fc3e603c400ec3a895456190c3f4792aa"
+    },
+    {
+      "file": "staged-before-id-dark/monitor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f706db663ca0086afd62f93f89c8b9ccff82c56df400e8e1b3183700618822bf"
+    },
+    {
+      "file": "staged-before-id-dark/offboard.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "86ea6b6d7132e4d8362db8acf80472a14a22a3ec160e582963e0823abe0dacf5"
+    },
+    {
+      "file": "staged-before-id-dark/save-answer.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "2fc8e0622647e7dc816289a53b05c1bcba8c8218108b71d5d50e7fbb635a8b7e"
+    },
+    {
+      "file": "staged-before-id-dark/schedule-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "e6097f0f9ebe397d3fdcbb88e49d679e2239e4902116775ee3e5e90d72fd0c27"
+    },
+    {
+      "file": "staged-before-id-dark/sheet-editor.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0f0b28a82174c4247d56bb6cebda59d0e3762c5931aef1c3761bc3a7729a1976"
+    },
+    {
+      "file": "staged-before-id-dark/short-home.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "85573ecf2bfb8d2292f558874627c7b4dd92b09d040c09a5c40a01de7219a663"
+    },
+    {
+      "file": "staged-before-id-dark/update.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "252131e09266d5dd07174d405fd9983068dcb826bb89fe9ae89fcf89135340ca"
+    },
+    {
+      "file": "staged-before-id-dark/vault-zip.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "59d5572df7e54eb48d8ad37ac140f74304b6654861ed50ab1fe192c19005ff03"
+    },
+    {
+      "file": "staged-before-id-dark/workflow-bundles.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "0d6454df335d5835608a56e92814fc41636592520b0393cea140a836c92262b4"
+    },
+    {
+      "file": "staged-before-id-dark/workspace-members.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3794a79d3810183dbfc41d38d0e462e3f4109c9879a4d7d95a100d9d484d065d"
+    },
+    {
+      "file": "staged-before-id-dark/xp-adjust.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "f47c361c2d080b74f425442b53306ca88beae89ab232168a02e19ce87a4dc4f2"
+    },
+    {
+      "file": "tablet/r17-composer.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "356f3b91040b4645242d90e02b70e1c44e75c13c87d38f7f6e81061ece8eddb7"
+    },
+    {
+      "file": "tablet/r17-keyboard.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "ffb5c04c57940dd0447285610a4adcd5dda4a4f1af6e39f7a5e7e95a85c7b7b2"
+    },
+    {
+      "file": "tablet/r20-masked-dashboard.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "b3571906f5dcfac50e23085fa2ec2822aa2c85815f4ae538016a7c8777ff4717"
+    },
+    {
+      "file": "tablet/r20-masked-health.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "c81e36a18261c452b4ec5553519565f7cd2b04e9ef7447185a4e3dc957135c58"
+    },
+    {
+      "file": "tablet/r20-masked-list.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "701e899fbcf77c850aa85fe2c90cbc674b3110c6c1625ac9af7b247665ad4275"
+    },
+    {
+      "file": "tablet/r20-visible-dashboard.png",
+      "width": 2560,
+      "height": 1600,
+      "sha256": "71461f3b16ab0ed961c71767687b786351fd1810429857a5e4fb80c3257f4571"
+    }
+  ]
+}

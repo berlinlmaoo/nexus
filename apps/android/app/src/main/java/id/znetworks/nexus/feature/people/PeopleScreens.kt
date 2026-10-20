@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.feature.presence.PresenceLine
 
 import id.znetworks.nexus.core.i18n.AppDateFormats
@@ -57,7 +59,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -248,7 +249,8 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     // The board's day sheet for this person's days (audit S6, iOS MemberProfileView).
     val dayBoard: id.znetworks.nexus.feature.attendance.history.BoardViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "member-days-$userId")
     var dayRows by remember { mutableStateOf<Map<String, id.znetworks.nexus.feature.attendance.history.HistoryRow>>(emptyMap()) }
-    LaunchedEffect(rec) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to period) { tick++ }
+    LaunchedEffect(rec, tick) {
         val r = rec ?: return@LaunchedEffect
         dayBoard.manageOverride = r.viewer?.canManageAttendance == true
         dayBoard.onChanged = { tick++ }
@@ -490,7 +492,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     removing?.let { e ->
         var note by remember { mutableStateOf("") }
         AlertDialog(onDismissRequest = { removing = null }, title = { Text(stringResource(R.string.pf_remove_q, e.signed)) },
-            text = { Column { Text(stringResource(R.string.pf_remove_body), fontSize = 13.sp); OutlinedTextField(note, { note = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_decision_note)) }) } },
+            text = { Column { Text(stringResource(R.string.pf_remove_body), fontSize = 13.sp); NxTextField(note, { note = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_decision_note)) }) } },
             confirmButton = { TextButton(onClick = {
                 removing = null
                 if (e.id in inFlight) return@TextButton

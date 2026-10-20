@@ -129,8 +129,7 @@ private fun AccessCard(draft: FormStudioDraft, projectName: String, onEdit: ((Fo
 private fun AccessOption(on: Boolean, icon: ImageVector, title: String, hint: String, onClick: () -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(10.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(if (on) c.muted.copy(alpha = 0.6f) else c.card)
-        .border(1.dp, if (on) c.foreground.copy(alpha = 0.6f) else c.border, shape)
+    Column(Modifier.fillMaxWidth().clip(shape).background(if (on) c.accentBg else c.muted)
         .clickable(role = Role.RadioButton, onClick = onClick).semantics { selected = on }.padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,12 +162,11 @@ private fun ScheduleCard(s: BuilderSchedule, edit: ((BuilderSchedule) -> Builder
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     FormVocab.DAYS.forEachIndexed { i, d ->
                         val on = i in s.days
-                        Box(Modifier.defaultMinSize(minWidth = 44.dp, minHeight = 34.dp).clip(CircleShape).background(if (on) c.onyx else c.card)
-                            .border(1.dp, if (on) c.onyx else c.border, CircleShape)
+                        Box(Modifier.defaultMinSize(minWidth = 44.dp, minHeight = 34.dp).clip(CircleShape).background(if (on) c.accentBg else c.muted)
                             .clickable(role = Role.Checkbox) { edit { sc -> sc.copy(days = if (i in sc.days) sc.days - i else (sc.days + i).sorted()) } }
                             .semantics { selected = on }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
                             Text(d.getDisplayName(TextStyle.SHORT, Locale.getDefault()), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                                color = if (on) c.background else c.mutedFg, maxLines = 1)
+                                color = if (on) c.violetText else c.mutedFg, maxLines = 1)
                         }
                     }
                 }
@@ -309,7 +307,7 @@ private fun NotifyCard(ids: List<String>, members: List<StudioMember>, onChange:
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Avatar(m.name, m.avatar, size = 24.dp, userId = m.id)
                     Text(m.name, fontSize = 15.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Icon(if (on) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, null, tint = if (on) c.onyx else c.mutedFg, modifier = Modifier.size(20.dp))
+                    Icon(if (on) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, null, tint = if (on) c.violetText else c.mutedFg, modifier = Modifier.size(20.dp))
                 }
             }
             if (q.isEmpty() && list.size > 12) Text(stringResource(R.string.fs_more_search, list.size - 12), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(10.dp))

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -261,7 +263,7 @@ private fun CoverPickerDialog(current: String, onDismiss: () -> Unit, onPick: (S
                     val value = "preset:${p.key}"
                     val label = stringResource(p.label)
                     Box(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(6.dp)).background(Brush.linearGradient(p.colors.map { Color(it) }))
-                        .border(2.dp, if (current == value) c.foreground else Color.Transparent, RoundedCornerShape(6.dp))
+                        .border(2.dp, if (current == value) c.violetText else Color.Transparent, RoundedCornerShape(6.dp))
                         .clickable(role = Role.Button, onClickLabel = label) { onPick(value) }.semantics { contentDescription = label })
                 }
             }
@@ -556,8 +558,8 @@ fun StudioSwitch(title: String, sub: String? = null, on: Boolean, enabled: Boole
             Text(title, fontSize = 15.sp, color = c.foreground.copy(alpha = if (enabled) 1f else 0.5f))
             sub?.let { Text(it, fontSize = 13.sp, color = c.mutedFg) }
         }
-        androidx.compose.material3.Switch(on, onChange, enabled = enabled, colors = androidx.compose.material3.SwitchDefaults.colors(
-            checkedTrackColor = c.onyx, checkedThumbColor = c.background, checkedBorderColor = c.onyx))
+        NxSwitch(on, onChange, enabled = enabled, colors = androidx.compose.material3.SwitchDefaults.colors(
+            checkedTrackColor = c.violetText, checkedThumbColor = c.background, checkedBorderColor = c.violetText))
     }
 }
 

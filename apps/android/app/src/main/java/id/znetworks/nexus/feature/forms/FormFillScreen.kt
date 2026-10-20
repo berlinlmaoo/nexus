@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.forms
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -34,7 +40,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -45,8 +50,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -230,7 +233,7 @@ private fun FieldInput(f: FormField, s: FormFillState, vm: FormFillViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(f.displayLabel + if (f.required) " *" else "", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
         when {
-            f.kind == "textarea" -> OutlinedTextField(text, { vm.set(f.id, FormValue.Text(it)) }, minLines = 3, placeholder = f.placeholder?.let { p -> { Text(p) } }, modifier = Modifier.fillMaxWidth())
+            f.kind == "textarea" -> NxTextField(text, { vm.set(f.id, FormValue.Text(it)) }, minLines = 3, placeholder = f.placeholder?.let { p -> { Text(p) } }, modifier = Modifier.fillMaxWidth())
             f.kind == "dropdown" || f.kind == "select" -> {
                 var open by remember { mutableStateOf(false) }
                 Box {
@@ -250,7 +253,7 @@ private fun FieldInput(f: FormField, s: FormFillState, vm: FormFillViewModel) {
                 }
             }
             f.kind == "checkbox" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox((v as? FormValue.Flag)?.on == true, { vm.set(f.id, FormValue.Flag(it)) })
+                NxCheckbox((v as? FormValue.Flag)?.on == true, { vm.set(f.id, FormValue.Flag(it)) })
                 f.placeholder?.let { Text(it, fontSize = 13.sp, color = c.foreground) }
             }
             f.kind == "file" -> FilesInput(f, v as? FormValue.Files, vm)
@@ -258,7 +261,7 @@ private fun FieldInput(f: FormField, s: FormFillState, vm: FormFillViewModel) {
                 modifier = Modifier.fillMaxWidth().background(c.muted.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(14.dp))
             f.kind == "date" -> {
                 var picking by remember { mutableStateOf(false) }
-                OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth()) { Text(text.ifBlank { stringResource(R.string.form_pick_date) }) }
+                NxOutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth()) { Text(text.ifBlank { stringResource(R.string.form_pick_date) }) }
                 if (picking) {
                     val st = rememberDatePickerState(initialSelectedDateMillis = (runCatching { LocalDate.parse(text) }.getOrNull() ?: LocalDate.now()).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())
                     DatePickerDialog(onDismissRequest = { picking = false }, confirmButton = {
@@ -268,7 +271,7 @@ private fun FieldInput(f: FormField, s: FormFillState, vm: FormFillViewModel) {
             }
             else -> {
                 val numeric = f.kind == "number" || f.kind == "currency" || f.numberFormat?.contains("currency", true) == true
-                OutlinedTextField(text, { vm.set(f.id, FormValue.Text(if (numeric) it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' } else it)) },
+                NxTextField(text, { vm.set(f.id, FormValue.Text(if (numeric) it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' } else it)) },
                     singleLine = true, placeholder = f.placeholder?.let { p -> { Text(p) } },
                     prefix = if (f.numberFormat?.contains("currency", true) == true || f.kind == "currency") ({ Text("Rp ") }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = when { numeric -> KeyboardType.Decimal; f.kind == "email" -> KeyboardType.Email; f.kind == "phone" || f.kind == "tel" -> KeyboardType.Phone; else -> KeyboardType.Text }),
@@ -290,7 +293,7 @@ private fun FilesInput(f: FormField, v: FormValue.Files?, vm: FormFillViewModel)
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { if (it.isNotEmpty()) vm.addFiles(f.id, it) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         v?.files?.forEach { up -> FileRow(up) { vm.removeFile(f.id, up) } }
-        OutlinedButton(onClick = { pick.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.AttachFile, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.form_add_files)) }
+        NxOutlinedButton(onClick = { pick.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.AttachFile, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.form_add_files)) }
     }
 }
 

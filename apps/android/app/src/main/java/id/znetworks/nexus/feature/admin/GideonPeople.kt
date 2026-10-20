@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -168,10 +170,10 @@ private fun tierName(key: String?) = GideonTier.entries.firstOrNull { it.key == 
     }
     LaunchedEffect(user, query, deleted, from, to, retry) { page = null; delay(300); load() }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.gp_search)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true, keyboardOptions = AdminKeyboard.Done)
+        NxTextField(query, { query = it }, label = { Text(stringResource(R.string.gp_search)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true, keyboardOptions = AdminKeyboard.Done)
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(from, { from = it }, label = { Text(stringResource(R.string.gp_from)) }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.weight(1f))
-            OutlinedTextField(to, { to = it }, label = { Text(stringResource(R.string.gp_to)) }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.weight(1f))
+            NxTextField(from, { from = it }, label = { Text(stringResource(R.string.gp_from)) }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.weight(1f))
+            NxTextField(to, { to = it }, label = { Text(stringResource(R.string.gp_to)) }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.weight(1f))
         }
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("all" to R.string.gp_all, "none" to R.string.gp_kept, "only" to R.string.gp_deleted).forEach { (key, label) ->

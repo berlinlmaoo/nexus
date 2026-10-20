@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.docs
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,5 +36,5 @@ internal fun BlockFormat(node:JsonObject,enabled:Boolean,change:(JsonObject)->Un
     var href by remember{mutableStateOf("")}
     BlockPick(stringResource(R.string.be_format),"",listOf("bold" to stringResource(R.string.be_bold),"italic" to stringResource(R.string.be_italic),"underline" to stringResource(R.string.be_underline),"strike" to stringResource(R.string.be_strike),"code" to stringResource(R.string.be_code),"link" to stringResource(R.string.be_link)),enabled){type->if(type=="link"){href="";link=true}else change(BlockMarks.apply(node,type))}
     if(node.text("type")=="heading")BlockPick(stringResource(R.string.be_level),node.objectAt("attrs").text("level").ifBlank{"2"},listOf("1" to "1","2" to "2","3" to "3"),enabled){value->change(JsonObject(node+("attrs" to JsonObject(node.objectAt("attrs")+("level" to JsonPrimitive(value.toInt()))))))}
-    if(link)AlertDialog(onDismissRequest={link=false},title={Text(stringResource(R.string.be_link))},text={OutlinedTextField(href,{href=it},label={Text(stringResource(R.string.be_url))})},confirmButton={TextButton(onClick={change(BlockMarks.apply(node,"link",buildJsonObject{put("href",href.trim())}));link=false},enabled=BlockMarks.safeLink(href.trim())){Text(stringResource(R.string.save))}},dismissButton={Row{TextButton(onClick={change(BlockMarks.remove(node,"link"));link=false}){Text(stringResource(R.string.be_remove))};TextButton(onClick={link=false}){Text(stringResource(R.string.cancel))}}})
+    if(link)AlertDialog(onDismissRequest={link=false},title={Text(stringResource(R.string.be_link))},text={NxTextField(href,{href=it},label={Text(stringResource(R.string.be_url))})},confirmButton={TextButton(onClick={change(BlockMarks.apply(node,"link",buildJsonObject{put("href",href.trim())}));link=false},enabled=BlockMarks.safeLink(href.trim())){Text(stringResource(R.string.save))}},dismissButton={Row{TextButton(onClick={change(BlockMarks.remove(node,"link"));link=false}){Text(stringResource(R.string.be_remove))};TextButton(onClick={link=false}){Text(stringResource(R.string.cancel))}}})
 }

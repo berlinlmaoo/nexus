@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.meetings
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.Manifest
 import android.content.Context
 import android.media.MediaMetadataRetriever
@@ -25,6 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.nav.Target
@@ -115,6 +124,13 @@ import java.io.File
     var discard by remember { mutableStateOf<String?>(null) }
     var uploadedId by rememberSaveable { mutableStateOf<String?>(null) }
     var uploaded by remember { mutableStateOf<Meeting?>(null) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val uploads = remember(context) { WorkManager.getInstance(context) }
+    val uploadName = uploadedId?.let { "meeting-upload:${container.sessionStore.current?.userId}:$it" }
+    val work by remember(uploadName) {
+        uploadName?.let(uploads::getWorkInfosForUniqueWorkFlow) ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val uploadData = work.firstOrNull()?.progress
     LaunchedEffect(Unit) {
         try { projects = api.projects() } catch (_: ApiError) { projectsFailed = true }
         if (recording.file == null) {
@@ -129,12 +145,14 @@ import java.io.File
     LaunchedEffect(recording.finished, recording.file) {
         if (recording.finished && recording.file != null) { localName = recording.file; fileName = title.ifBlank { context.getString(R.string.meet_recording_entry) } + ".m4a"; source = "record"; duration = recording.seconds; recordedAt = recording.recordedAt; introEndSec = recording.introEndSec }
     }
-    LaunchedEffect(uploadedId) {
+    LaunchedEffect(uploadedId, lifecycle) {
         val id = uploadedId ?: return@LaunchedEffect
-        while (isActive) {
-            try { uploaded = api.get(id) } catch (_: ApiError) { problem = R.string.meet_load_failed }
-            if (uploaded?.status != "UPLOADING" && uploaded != null) break
-            delay(2000)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (isActive) {
+                try { uploaded = api.get(id) } catch (_: ApiError) { problem = R.string.meet_load_failed }
+                if (uploaded?.working == false) break
+                delay(2000)
+            }
         }
     }
     fun pick(uri: Uri) {
@@ -178,22 +196,22 @@ import java.io.File
     val c = Nx.colors
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.cancel)) }
-            Text(stringResource(if (uploaded?.status != "UPLOADING" && uploaded != null) R.string.meet_uploaded else R.string.meet_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+            if (uploadedId == null) TextButton(onClick = onBack) { Text(stringResource(R.string.cancel)) }
+            Text(stringResource(R.string.meet_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f).padding(start = if (uploadedId == null) 0.dp else 8.dp))
             MeetingBeta()
         }
         HorizontalDivider(color = c.border)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!config.meetingNotesEnabled) { Text(stringResource(R.string.meet_not_available)); return@Column }
             if (uploadedId == null) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.ui_meeting_title)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                NxTextField(title, { title = it }, label = { Text(stringResource(R.string.ui_meeting_title)) }, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 MeetingProperty(stringResource(R.string.meet_project)) { GPicker(stringResource(R.string.meet_choose_project), projects.firstOrNull { it.id == project }?.name, listOf("" to stringResource(R.string.meet_none)) + projects.map { it.id to it.name }, !busy) { project = it.takeIf { it.isNotEmpty() } } }
                 if (projectsFailed) Text(stringResource(R.string.meet_load_failed), color = c.dangerText)
                 MeetingProperty(stringResource(R.string.meet_language)) { GPicker(stringResource(R.string.meet_language), when (language) { "id" -> stringResource(R.string.meet_indonesian); "en" -> stringResource(R.string.meet_english); else -> stringResource(R.string.ui_meeting_auto) }, listOf("auto" to stringResource(R.string.ui_meeting_auto), "id" to stringResource(R.string.meet_indonesian), "en" to stringResource(R.string.meet_english)), !busy) { language = it } }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.People, null, tint = c.mutedFg)
                     Text(stringResource(R.string.meet_tell_speakers), Modifier.weight(1f), color = c.foreground)
-                    Switch(speakerLabels, { speakerLabels = it }, enabled = !busy)
+                    NxSwitch(speakerLabels, { speakerLabels = it }, enabled = !busy)
                 }
                 Text(stringResource(R.string.ui_meeting_speaker_caption), color = c.mutedFg, fontSize = 12.sp)
                 if (recording.recording) {
@@ -238,15 +256,23 @@ import java.io.File
                 }, kind = NxButtonKind.PRIMARY, enabled = !busy && localName != null && !recording.recording)
             } else {
                 uploaded?.let { m ->
-                    Text(m.title, fontWeight = FontWeight.SemiBold)
-                    Text(meetingStatus(m.status))
-                    if (m.status == "UPLOADING") { LinearProgressIndicator(progress = { if (m.audio.bytes > 0) (m.audio.received.toFloat() / m.audio.bytes).coerceIn(0f, 1f) else 0f }, modifier = Modifier.fillMaxWidth()); Text(stringResource(R.string.meet_upload_hint), color = c.mutedFg) }
-                    else if (m.status == "FAILED") Text(stringResource(meetingProblem(m.errorCode)), color = c.dangerText)
-                    else if (m.working) MeetingQueueBlock(m)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NxButton(stringResource(R.string.meet_close), onBack)
-                    NxButton(stringResource(R.string.meet_open), { val id = uploadedId!!; onBack(); container.router.open(Target.Meeting(id)) }, kind = NxButtonKind.PRIMARY)
+                    val progress = MeetingUploadProgress.resolve(m.audio, uploadData?.getLong("received", -1), uploadData?.getLong("total", -1),
+                        completed = work.firstOrNull()?.state == WorkInfo.State.SUCCEEDED)
+                    MeetingProgress(m, progress, busy,
+                        onOpen = { onBack(); container.router.open(Target.Meeting(m.id)) }, onDone = onBack,
+                        onCancel = {
+                            busy = true; problem = null
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { uploadName?.let { uploads.cancelUniqueWork(it).result.get() } }
+                                    api.delete(m.id)
+                                    withContext(Dispatchers.IO) { MeetingFiles.remove(context, m.id) }
+                                    onBack()
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { problem = R.string.meet_load_failed }
+                                finally { busy = false }
+                            }
+                        })
                 }
             }
             if (busy) CircularProgressIndicator()

@@ -1,7 +1,10 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.clickable
-import androidx.compose.material3.OutlinedButton
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -34,7 +37,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -152,7 +154,7 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                                     Text(stringResource(R.string.lg_or).uppercase(), style = FieldLabelStyle, color = c.mutedFg, modifier = Modifier.padding(horizontal = 12.dp))
                                     Box(Modifier.weight(1f).height(1.dp).background(c.border))
                                 }
-                                OutlinedButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null, shape = RoundedCornerShape(16.dp),
+                                NxOutlinedButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null, shape = RoundedCornerShape(16.dp),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, c.border), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                                     Icon(Icons.Filled.Key, null, Modifier.size(16.dp), tint = c.onyx)
                                     Spacer(Modifier.size(8.dp))
@@ -278,12 +280,12 @@ private fun NxField(
     secret: Boolean = false,
 ) {
     val c = Nx.colors
-    OutlinedTextField(
+    NxTextField(
         value = value, onValueChange = onChange, singleLine = true,
         placeholder = { Text(placeholder, color = c.mutedFg, fontFamily = TextFont) },
         visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = keyboard, keyboardActions = actions,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = TextFont, fontSize = 16.sp, color = c.foreground),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = c.muted, unfocusedContainerColor = c.muted,

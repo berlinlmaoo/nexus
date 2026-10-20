@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +47,7 @@ internal fun CalendarPrivacyTab() {
         item {
             Text(stringResource(R.string.calp_title), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.calp_help))
-            OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
+            NxTextField(query, { query = it }, label = { Text(stringResource(R.string.gsd_search)) }, keyboardOptions = AdminKeyboard.Done, modifier = Modifier.fillMaxWidth())
         }
         if (data == null && error == null) item { CircularProgressIndicator() }
         error?.let { item { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = { retry++ }, enabled = busy == null) { Text(stringResource(R.string.try_again)) } } }
@@ -51,7 +55,7 @@ internal fun CalendarPrivacyTab() {
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp)) {
                     Column(Modifier.weight(1f)) { Text(project.text("name")); Text(stringResource(if (project.flag("private")) R.string.calp_private else R.string.calp_visible), style = MaterialTheme.typography.bodySmall) }
-                    Switch(project.flag("private"), { isPrivate -> scope.launch {
+                    NxSwitch(project.flag("private"), { isPrivate -> scope.launch {
                         if (busy != null) return@launch
                         busy = project.text("id"); error = null
                         try { data = api.set(project.text("id"), isPrivate) }

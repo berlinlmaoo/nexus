@@ -9,6 +9,13 @@ import org.junit.Test
 import java.time.Instant
 
 class GideonPerformanceTest {
+    @Test fun errors24hStaysUnknownOnOlderOrPartiallyUpgradedResponses() {
+        val old = NexusJson.decodeFromString(PerfTier.serializer(), """{"id":"astra","failures15m":4}""")
+        assertNull(PerformanceRules.errors24h(listOf(old)))
+        assertNull(PerformanceRules.errors24h(listOf(old, PerfTier("luna", failures24h = 2))))
+        assertEquals(0, PerformanceRules.errors24h(listOf(PerfTier("astra", failures24h = 0))))
+        assertEquals(7, PerformanceRules.errors24h(listOf(PerfTier("astra", failures24h = 2), PerfTier("luna", failures24h = 5))))
+    }
     @Test fun onlyCompanyBodAndOaaCanOpenThePanel() {
         assertTrue(PerformanceRules.allowed("BOD", true))
         assertTrue(PerformanceRules.allowed("ONE_ABOVE_ALL", true))

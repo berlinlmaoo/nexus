@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.tasks
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +24,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -136,7 +137,7 @@ fun TaskFieldsCard(projectId: String, taskId: String, onError: (String) -> Unit,
         var saving by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { if (!saving) adding = false }, title = { Text(stringResource(R.string.r21_add_property)) },
             text = { Column {
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.r21_property_name)) })
+                NxTextField(name, { name = it }, label = { Text(stringResource(R.string.r21_property_name)) })
                 Row { listOf("TEXT" to R.string.r21_text_type, "NUMBER" to R.string.r21_number_type, "DATE" to R.string.r21_date_type).forEach { (type, label) ->
                     TextButton(onClick = { kind = type }) { Text((if (kind == type) "✓ " else "") + stringResource(label), fontSize = 11.sp) }
                 } }
@@ -202,10 +203,10 @@ private fun FieldRow(f: CustomFieldDef, onCommit: (JsonElement) -> Unit) {
                 var label by remember(f.id, l0) { mutableStateOf(l0) }
                 var map by remember(f.id, m0) { mutableStateOf(m0) }
                 val save = { if (label != l0 || map != m0) onCommit(FieldValues.placeValue(label, map)) }
-                OutlinedTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.td_place_name)) },
+                NxTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.td_place_name)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) save() })
-                OutlinedTextField(map, { map = it }, singleLine = true, placeholder = { Text(stringResource(R.string.td_place_map)) },
+                NxTextField(map, { map = it }, singleLine = true, placeholder = { Text(stringResource(R.string.td_place_map)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) save() })
             }
@@ -213,7 +214,7 @@ private fun FieldRow(f: CustomFieldDef, onCommit: (JsonElement) -> Unit) {
                 val v0 = FieldValues.text(f.value)
                 var v by remember(f.id, v0) { mutableStateOf(v0) }
                 val save = { if (v != v0) onCommit(JsonPrimitive(v.trim())) }
-                OutlinedTextField(v, { v = it }, singleLine = true, placeholder = { Text(if (f.kind == "NUMBER") "0" else "…") },
+                NxTextField(v, { v = it }, singleLine = true, placeholder = { Text(if (f.kind == "NUMBER") "0" else "…") },
                     keyboardOptions = KeyboardOptions(keyboardType = if (f.kind == "NUMBER") KeyboardType.Decimal else KeyboardType.Text, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) save() })

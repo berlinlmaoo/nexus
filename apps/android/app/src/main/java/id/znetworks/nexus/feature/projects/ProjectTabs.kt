@@ -348,7 +348,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
     val dayW = 40.dp; val rowH = 44.dp; val groupH = 32.dp
     val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val compact = screenWidth < 600
-    var names by rememberSaveable { mutableStateOf(false) }
+    var names by rememberSaveable { mutableStateOf(true) }
     val showNames = !compact || names
     val leftW = if (compact) 120.dp else (screenWidth * 0.4f).dp.coerceIn(120.dp, 200.dp)
     fun x(d: LocalDate) = dayW * ChronoUnit.DAYS.between(minD, d).toInt()

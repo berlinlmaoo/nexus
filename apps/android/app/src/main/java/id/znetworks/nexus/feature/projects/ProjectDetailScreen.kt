@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.app.Application
@@ -37,6 +41,8 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewKanban
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -48,8 +54,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -500,6 +504,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     // A selection belongs to the task views; leaving them drops it.
     LaunchedEffect(tab) { if (!tab.searches || tab == ProjectTab.CALENDAR || tab == ProjectTab.TIMELINE) { vm.clearSelection() }; if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.setDrill(null) }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
+    var pipelinePresentation by remember(vm.projectId) { mutableStateOf(false) }
+    LaunchedEffect(tab) { if (tab != ProjectTab.PIPELINE) pipelinePresentation = false }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -620,7 +626,15 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
-                onAdd = onAdd, addInTabs = tabsShown)
+                onAdd = onAdd, addInTabs = tabsShown, extraActions = {
+                    if (tab == ProjectTab.PIPELINE) {
+                        id.znetworks.nexus.ui.components.HeaderIconButton(
+                            if (pipelinePresentation) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            stringResource(if (pipelinePresentation) R.string.pl_show_amounts else R.string.pl_hide_amounts),
+                            { pipelinePresentation = !pipelinePresentation }, size = 36.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                })
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
                     onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null,
@@ -693,7 +707,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> if (canAddTask) { createDue = d; creating = true } }
                                 ProjectTab.TIMELINE -> TimelineTab(groups.map { groupLabel(it, cfg.groupBy) to it.tasks }, onOpenTask)
                                 ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId, s.lanes, s.detail!!.members)
-                                ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
+                                ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder, presentation = pipelinePresentation)
                                 ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
                                     val outletViews = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,
                                         ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
@@ -814,15 +828,15 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
         title = { Text(stringResource(R.string.task_new)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(title, { title = it }, label = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
                 Box {
-                    OutlinedButton(onClick = { laneMenu = true }) { Text(lanes.firstOrNull { it.id == lane }?.name ?: "—") }
+                    NxOutlinedButton(onClick = { laneMenu = true }) { Text(lanes.firstOrNull { it.id == lane }?.name ?: "—") }
                     DropdownMenu(laneMenu, { laneMenu = false }) { lanes.forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { lane = l.id; laneMenu = false }) } }
                 }
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TaskEnums.PRIORITIES.reversed().forEach { p -> FilterChip(prio == p, { prio = p }, { Text(priorityLabel(p), fontSize = 12.sp) }) }
                 }
-                OutlinedButton(onClick = { picking = true }) {
+                NxOutlinedButton(onClick = { picking = true }) {
                     Text(due?.let { AppDateFormats.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
                 NewTaskFields(fields, values, projectId) { id, v -> values = values + (id to v) }

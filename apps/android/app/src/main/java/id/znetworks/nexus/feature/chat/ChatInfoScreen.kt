@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.feature.presence.PresenceLine
 
 import android.content.Intent
@@ -50,7 +52,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -336,9 +337,9 @@ private fun EditDetailsDialog(cv: ChatInfoConversation, legacy: Boolean, onDismi
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.ci_edit)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.ci_name)) }, isError = !nameOk,
+                NxTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.ci_name)) }, isError = !nameOk,
                     supportingText = { if (name.trim().length > ChatInfoLogic.NAME_MAX) Text(stringResource(R.string.ci_err_name_len)) }, modifier = Modifier.fillMaxWidth())
-                if (!legacy) OutlinedTextField(description, { description = it }, minLines = 2, maxLines = 5, label = { Text(stringResource(R.string.ci_description)) }, isError = !descOk,
+                if (!legacy) NxTextField(description, { description = it }, minLines = 2, maxLines = 5, label = { Text(stringResource(R.string.ci_description)) }, isError = !descOk,
                     supportingText = { Text(if (descOk) "${description.trim().length}/${ChatInfoLogic.DESCRIPTION_MAX}" else stringResource(R.string.ci_err_desc_len)) },
                     modifier = Modifier.fillMaxWidth())
             }
@@ -453,7 +454,7 @@ fun ChatSearchScreen(id: String, onBack: () -> Unit, onOpenMessage: (String) -> 
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ci_search_hint)) }, leadingIcon = { Icon(Icons.Filled.Search, null) },
+            NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ci_search_hint)) }, leadingIcon = { Icon(Icons.Filled.Search, null) },
                 isError = query.length > ChatInfoLogic.QUERY_MAX, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f).padding(end = 8.dp))
         }
         if (query.length > ChatInfoLogic.QUERY_MAX) Text(stringResource(R.string.ci_err_q_len), fontSize = 12.sp, color = c.dangerText, modifier = Modifier.padding(horizontal = 16.dp))

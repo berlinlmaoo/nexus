@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.border
@@ -25,7 +27,6 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -85,7 +86,7 @@ fun TaskSelectionBar(count: Int, busy: Boolean, onDuplicate: () -> Unit, onDupli
         .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(pluralStringResource(R.plurals.bulk_selected, count, count), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground,
             modifier = Modifier.padding(horizontal = 6.dp))
-        OutlinedButton(onClick = onDuplicate, enabled = !busy && count > 0) {
+        NxOutlinedButton(onClick = onDuplicate, enabled = !busy && count > 0) {
             if (busy) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.bulk_duplicate))
         }

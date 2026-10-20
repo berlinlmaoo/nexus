@@ -1,0 +1,21 @@
+<resources>
+    <string name="rev_perf_answers24">Jawaban · 24 jam</string>
+    <string name="rev_perf_errors24">Error · 24 jam</string>
+    <string name="rev_perf_not_reported">Belum tersedia</string>
+    <string name="rev_perf_updated">Diperbarui %1$s dtk lalu</string>
+    <string name="rev_perf_offline">Offline</string>
+    <string name="rev_perf_idle">Belum ada jawaban dalam 15 menit</string>
+    <string name="rev_perf_answers24_count">%1$s jawaban dalam 24 jam</string>
+    <string name="rev_meeting_bytes">%1$s dari %2$s · %3$d %%</string>
+    <string name="rev_meeting_upload">Unggah</string>
+    <string name="rev_meeting_transcribe">Transkripsi</string>
+    <string name="rev_meeting_ready_step">Notulen &amp; tugas siap</string>
+    <string name="rev_meeting_ready">Siap — buka untuk meninjau</string>
+    <string name="rev_meeting_transcribing">Mentranskripsi… sekitar %1$d menit lagi</string>
+    <string name="rev_status_4h">4 jam</string>
+    <string name="rev_status_week">Minggu ini</string>
+    <string name="rev_meeting_notify">Kamu bisa menutup halaman ini. Kami akan memberi tahu saat notulen siap.</string>
+    <string name="rev_meeting_cancel_upload">Batalkan unggahan</string>
+    <string name="rev_meeting_done">Selesai</string>
+    <string name="rev_meeting_next">Berikutnya dalam antrean</string>
+</resources>

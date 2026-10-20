@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.meetings
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.DatePickerDialog
 import android.media.MediaPlayer
 import androidx.compose.foundation.*
@@ -42,6 +46,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.*
 import java.time.LocalDate
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun MeetingScreen(id: String, onBack: () -> Unit, onAllMeetings: () -> Unit = onBack, vm: MeetingEditor = viewModel()) {
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -172,14 +177,17 @@ import java.time.LocalDate
                     item { Text(stringResource(R.string.meet_tasks), fontWeight = FontWeight.SemiBold); Text(stringResource(R.string.meet_selected, m.proposals.count { it.include }.toString(), m.proposals.size.toString()), fontSize = 12.sp, color = c.mutedFg) }
                     items(m.proposals, key = { it.key }) { task -> MeetingSection("", card = true) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(task.include, { checked -> proposals(m.proposals.map { if (it.key == task.key) it.copy(include = checked) else it }) }, enabled = editable)
+                            NxCheckbox(task.include, { checked -> proposals(m.proposals.map { if (it.key == task.key) it.copy(include = checked) else it }) }, enabled = editable)
                             Text(stringResource(R.string.meet_task_title), color = c.mutedFg, fontSize = 12.sp)
+                            Spacer(Modifier.weight(1f))
+                            if (editable) IconButton(onClick = { proposals(m.proposals.filterNot { it.key == task.key }) }) {
+                                Icon(Icons.Outlined.DeleteOutline, stringResource(R.string.meet_remove), tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                            }
                         }
                         fun update(value: MeetingProposal) = proposals(m.proposals.map { if (it.key == task.key) value else it })
                         MeetingText(task.title, editable) { update(task.copy(title = it)) }
                         if (editable) {
-                            Row(Modifier.horizontalScroll(rememberScrollState())) { task.assigneeIds.forEach { uid -> TextButton(onClick = { update(task.copy(assigneeIds = task.assigneeIds - uid)) }) { Text((m.projectMembers.firstOrNull { it.id == uid }?.name ?: "—") + " ×") } } }
-                            GPicker(stringResource(R.string.meet_pic), null, m.projectMembers.filter { it.id !in task.assigneeIds }.map { it.id to it.name }) { update(task.copy(assigneeIds = task.assigneeIds + it)) }
+                            MeetingOwners(m.projectMembers, task.assigneeIds) { update(task.copy(assigneeIds = it)) }
                             MeetingDate(task.dueDate) { update(task.copy(dueDate = it)) }
                         } else Text(task.assigneeIds.mapNotNull { id -> m.projectMembers.firstOrNull { it.id == id }?.name }.joinToString(", "), color = c.mutedFg)
                         MeetingText(task.description, editable, stringResource(R.string.meet_description)) { update(task.copy(description = it)) }
@@ -192,7 +200,7 @@ import java.time.LocalDate
                 TextButton(onClick = { transcript = !transcript }) { Text((if (transcript) "▾ " else "▸ ") + stringResource(R.string.meet_transcript)) }
                 if (transcript) {
                     Text(stringResource(R.string.meet_automatic), color = c.mutedFg, fontSize = 12.sp)
-                    OutlinedTextField(find, { find = it }, placeholder = { Text(stringResource(R.string.meet_find)) }, modifier = Modifier.fillMaxWidth())
+                    NxTextField(find, { find = it }, placeholder = { Text(stringResource(R.string.meet_find)) }, modifier = Modifier.fillMaxWidth())
                 }
             }
             if (transcript) items(m.transcript.withIndex().filter { it.value.text.contains(find, true) }, key = { "segment:${it.index}" }) { (_, segment) ->
@@ -211,7 +219,12 @@ import java.time.LocalDate
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val count = m.proposals.count { it.include }
                 Text(pluralStringResource(R.plurals.meet_apply_tasks, count, count), color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                NxButton(stringResource(R.string.meet_apply), { confirmation = "apply" }, kind = NxButtonKind.PRIMARY, enabled = MeetingRules.canApply(m) && !state.busy && !state.saving)
+                Button(onClick = { confirmation = "apply" }, enabled = MeetingRules.canApply(m) && !state.busy && !state.saving,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = c.violetText,
+                        contentColor = if (Nx.isDark) c.background else androidx.compose.ui.graphics.Color.White)) {
+                    Text(stringResource(R.string.meet_apply))
+                }
             }
         }
     }
@@ -221,8 +234,47 @@ import java.time.LocalDate
     }, confirmButton = { TextButton(onClick = { confirmation = null; vm.action(action, lang) }) { Text(stringResource(when (action) { "delete" -> R.string.meet_delete; "rewrite" -> R.string.meet_rewrite; else -> R.string.meet_apply }), color = if (action == "delete") c.dangerText else c.foreground) } }, dismissButton = { TextButton(onClick = { confirmation = null }) { Text(stringResource(R.string.cancel)) } }) }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun MeetingOwners(members: List<id.znetworks.nexus.feature.gideon.GTaskMember>, selected: List<String>, change: (List<String>) -> Unit) {
+    val c = Nx.colors
+    var open by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    fun pick() { query = ""; open = true }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        selected.forEach { uid ->
+            val member = members.firstOrNull { it.id == uid }
+            InputChip(selected = false, onClick = ::pick,
+                label = { Text(member?.name ?: "—") },
+                avatar = { Avatar(member?.name, member?.avatar, 20.dp, userId = uid) },
+                trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(16.dp)) },
+                shape = RoundedCornerShape(12.dp), border = null,
+                colors = InputChipDefaults.inputChipColors(containerColor = c.muted, labelColor = c.foreground))
+        }
+        if (selected.isEmpty() || members.any { it.id !in selected }) TextButton(onClick = ::pick,
+            shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.textButtonColors(containerColor = c.muted, contentColor = c.foreground)) {
+            Text("+ " + stringResource(R.string.meet_owner))
+        }
+    }
+    if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(stringResource(R.string.meet_owner)) }, text = {
+        Column {
+            NxTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.gt_search)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState())) {
+                members.filter { it.name.contains(query, true) }.forEach { member ->
+                    Row(Modifier.fillMaxWidth().clickable {
+                        change(if (member.id in selected) selected - member.id else selected + member.id); open = false
+                    }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Avatar(member.name, member.avatar, 28.dp, userId = member.id)
+                        Text(member.name, Modifier.weight(1f), color = c.foreground)
+                        NxCheckbox(member.id in selected, null)
+                    }
+                }
+            }
+        }
+    }, confirmButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } })
+}
+
 @Composable internal fun MeetingSection(title: String, card: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().then(if (card) Modifier.background(Nx.colors.card, RoundedCornerShape(12.dp)).border(1.dp, Nx.colors.border, RoundedCornerShape(12.dp)).padding(12.dp) else Modifier.padding(vertical = 8.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (card) Modifier.background(Nx.colors.muted.copy(alpha = .45f), RoundedCornerShape(12.dp)).padding(12.dp) else Modifier.padding(vertical = 8.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title.isNotEmpty()) Text(title, color = Nx.colors.foreground, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         content()
     }
@@ -243,18 +295,21 @@ import java.time.LocalDate
 @Composable private fun AttendeeAdder(members: List<Pair<String, String>>, onAdd: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(name, { name = it }, placeholder = { Text(stringResource(R.string.meet_add_attendee)) }, modifier = Modifier.weight(1f), singleLine = true)
+        NxTextField(name, { name = it }, placeholder = { Text(stringResource(R.string.meet_add_attendee)) }, modifier = Modifier.weight(1f), singleLine = true)
         IconButton(onClick = { onAdd(name.trim()); name = "" }, enabled = name.isNotBlank()) { Icon(Icons.Outlined.Add, stringResource(R.string.meet_add)) }
     }
     GPicker(stringResource(R.string.meet_attendees), null, members) { id -> members.firstOrNull { it.first == id }?.second?.let(onAdd) }
 }
 @Composable internal fun MeetingDate(value: String?, onChange: (String?) -> Unit) {
     val context = LocalContext.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.meet_due), color = Nx.colors.mutedFg, fontSize = 12.sp)
         TextButton(onClick = {
             val date = value?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: id.znetworks.nexus.core.time.OfficeTime.today()
             DatePickerDialog(context, { _, y, m, d -> onChange(LocalDate.of(y, m + 1, d).toString()) }, date.year, date.monthValue - 1, date.dayOfMonth).show()
-        }) { Text(value ?: stringResource(R.string.meet_due)) }
+        }, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.textButtonColors(containerColor = Nx.colors.muted, contentColor = Nx.colors.foreground)) {
+            Text(value ?: stringResource(R.string.meet_add_date))
+        }
         if (value != null) IconButton(onClick = { onChange(null) }) { Icon(Icons.Outlined.Close, stringResource(R.string.meet_remove)) }
     }
 }

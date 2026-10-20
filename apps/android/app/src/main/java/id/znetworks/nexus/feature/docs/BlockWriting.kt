@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.docs
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,7 +32,7 @@ internal fun BlockWriting(api:BlockEditorApi,kind:String,id:String,text:String,e
     if(open)AlertDialog(onDismissRequest={if(!busy)open=false},title={Text(stringResource(R.string.be_ask))},text={Column(Modifier.verticalScroll(rememberScrollState())){
         BlockPick(stringResource(R.string.be_action),action,listOf("improve" to R.string.be_improve,"fix" to R.string.be_fix,"shorter" to R.string.be_shorter,"longer" to R.string.be_longer,"summarize" to R.string.be_summarize,"translate" to R.string.be_translate,"continue" to R.string.be_continue,"explain" to R.string.be_explain,"action_items" to R.string.be_actions,"tone" to R.string.be_tone,"custom" to R.string.be_custom).map{it.first to stringResource(it.second)},!busy){action=it}
         if(action=="translate")BlockPick(stringResource(R.string.be_language),language,listOf("en" to stringResource(R.string.be_language_en),"id" to stringResource(R.string.be_language_id)),!busy){language=it}
-        if(action=="custom"||action=="tone")OutlinedTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.be_instructions))},enabled=!busy)
+        if(action=="custom"||action=="tone")NxTextField(prompt,{if(it.length<=1000)prompt=it},label={Text(stringResource(R.string.be_instructions))},enabled=!busy)
         TextButton(onClick={busy=true;error=null;result=null;scope.launch{try{result=api.write(kind,id,action,text,prompt,language).text("content")}catch(e:ApiError){error=e.describe(ctx.resources)}finally{busy=false}}},enabled=!busy&&(text.isNotBlank()||action=="continue"||action=="custom"&&prompt.isNotBlank())){Text(stringResource(R.string.be_generate))}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let{Text(it,color=MaterialTheme.colorScheme.error)}

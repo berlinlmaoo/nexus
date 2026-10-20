@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
@@ -50,8 +54,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -164,7 +166,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                         if (ts != null) {
                             // With terms these are the terms' (server-computed), read-only (§11.2).
                             ReadOnly(stringResource(R.string.pl_f_payment_status), ts.paymentStatus)
-                            ReadOnly(stringResource(R.string.pl_f_receivable), PipelineFormat.idrFull(ts.outstanding))
+                            ReadOnly(stringResource(R.string.pl_f_receivable), pipelineFullMoney(ts.outstanding))
                             ReadOnly(stringResource(R.string.pl_t_next_due), ts.nextDueDate?.let(::dayLabel) ?: "–")
                             Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
                                 else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
@@ -183,7 +185,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                     }
                     Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
                     // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms; read-only for Can comment / Can view.
-                    Group(stringResource(R.string.pc_title), "Finance") { RealCost(deal, data.canEdit) { edit -> vm.editCosts(deal.id, edit) } }
+                    if (!LocalPipelinePresentation.current) Group(stringResource(R.string.pc_title), "Finance") { RealCost(deal, data.canEdit) { edit -> vm.editCosts(deal.id, edit) } }
                     Group(stringResource(R.string.pl_ph_closing), "Finance") {
                         Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
                     }
@@ -296,7 +298,7 @@ internal fun TextSave(label: String, value: String, big: Boolean = false, multil
     var t by remember(value) { mutableStateOf(value) }
     var focused by remember { mutableStateOf(false) }
     fun commit() { if (t != value) onSave(t) }
-    OutlinedTextField(t, { t = it }, label = { Text(label) }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
+    NxTextField(t, { t = it }, label = { Text(label) }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
         textStyle = androidx.compose.material3.LocalTextStyle.current.let { if (big) it.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp) else it },
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Text, imeAction = if (multiline) ImeAction.Default else ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -306,6 +308,11 @@ internal fun TextSave(label: String, value: String, big: Boolean = false, multil
 /** Rupiah: typed with any grouping, saved as a plain number; a negative only where allowed (net cash). */
 @Composable
 internal fun Money(label: String, value: Double, allowNegative: Boolean = false, onSave: (Double) -> Unit) {
+    if (LocalPipelinePresentation.current) {
+        NxTextField(PipelinePresentation.MASK, {}, enabled = false, readOnly = true,
+            label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        return
+    }
     TextSave(label, if (value == 0.0) "" else PipelineFormat.idrFull(value).removePrefix("Rp").removePrefix("-Rp").let { if (value < 0) "-$it" else it }, number = !allowNegative) { t ->
         PipelineFormat.parseMoney(t)?.takeIf { allowNegative || it >= 0 }?.let(onSave)
     }
@@ -318,7 +325,7 @@ internal fun Pick(title: String, current: String, options: List<String>, label: 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         Box {
-            OutlinedButton(onClick = { open = true }) {
+            NxOutlinedButton(onClick = { open = true }) {
                 // An option this build doesn't know is shown as stored.
                 Text(if (current.isBlank()) "–" else label?.invoke(current) ?: current, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
                 Icon(Icons.Filled.KeyboardArrowDown, null)
@@ -337,7 +344,7 @@ internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { open = true }) {
+        NxOutlinedButton(onClick = { open = true }) {
             Text(iso?.let { runCatching { AppDateFormats.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(it)) }.getOrNull() } ?: "–")
         }
     }
@@ -358,7 +365,7 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         Box {
-            OutlinedButton(onClick = { open = true }) {
+            NxOutlinedButton(onClick = { open = true }) {
                 // Set earlier, before the lead added them (or since removed): the server still keeps them.
                 val member = userId == null || people.isEmpty() || people.any { it.id == userId }
                 Text((shown ?: stringResource(R.string.pl_not_assigned)) + if (!member) " " + stringResource(R.string.pl_not_member) else "", maxLines = 1,
@@ -377,7 +384,7 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     if (typing) {
         var name by remember { mutableStateOf(if (userId == null) shown.orEmpty() else "") }
         AlertDialog(onDismissRequest = { typing = false }, title = { Text(stringResource(R.string.pl_name_of, label)) },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_their_name)) }, modifier = Modifier.fillMaxWidth()) },
+            text = { NxTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_their_name)) }, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { typing = false; save(JsonObject(mapOf("${role}UserId" to JsonNull, "${role}Name" to JsonPrimitive(name.trim())))) }, enabled = name.isNotBlank()) {
                 Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { typing = false }) { Text(stringResource(R.string.cancel)) } })
@@ -414,7 +421,8 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                                 val field = PipelineText.field(ch.field)?.let { stringResource(it) } ?: ch.field
                                 Text("$who ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 val costs = ch.field == "costs"
-                                Text("${if (costs) costsShown(ch.before) else shown(ch.before)} → ${if (costs) costsShown(ch.after) else shown(ch.after)}",
+                                val masked = LocalPipelinePresentation.current && PipelinePresentation.isMoney(ch.field)
+                                Text("${if (costs) costsShown(ch.before) else if (masked) PipelinePresentation.MASK else shown(ch.before)} → ${if (costs) costsShown(ch.after) else if (masked) PipelinePresentation.MASK else shown(ch.after)}",
                                     fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
                             // A payment term (§11.2): added / deleted / restored with its amount, or one of its fields.
@@ -422,7 +430,7 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                                 Text(stringResource(when (tf) { "created" -> R.string.pl_t_h_added; "deleted" -> R.string.pl_t_h_deleted; else -> R.string.pl_t_h_restored }, who, term),
                                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 ((if (tf == "deleted") ch.before else ch.after) as? JsonObject)?.get("amount").num()?.let {
-                                    Text(PipelineFormat.idrFull(it), fontSize = 12.sp, color = c.mutedFg) }
+                                    Text(pipelineFullMoney(it), fontSize = 12.sp, color = c.mutedFg) }
                             }
                             else -> {
                                 val field = PipelineText.termField(tf.orEmpty())?.let { stringResource(it) } ?: tf.orEmpty()
@@ -444,8 +452,9 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
 
 @Composable
 private fun shown(e: JsonElement?, money: Boolean = false): String = when {
+    money && LocalPipelinePresentation.current -> PipelinePresentation.MASK
     e == null || e is JsonNull -> stringResource(R.string.pl_empty_value)
-    money && e.num() != null -> PipelineFormat.idrFull(e.num()!!)
+    money && e.num() != null -> pipelineFullMoney(e.num()!!)
     e is JsonPrimitive && e.isString -> e.content.ifBlank { stringResource(R.string.pl_empty_value) }.let { PipelineText.stage(it)?.let { r -> stringResource(r) } ?: it }
     e is JsonPrimitive -> e.content
     // Services (§13.2) are words: "a, b, c"; a list of objects (links) is counted.

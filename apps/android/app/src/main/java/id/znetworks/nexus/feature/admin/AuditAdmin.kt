@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import id.znetworks.nexus.core.realtime.RealtimeEvents
@@ -48,7 +50,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -207,7 +208,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
         runCatching { api.page(0, action, q, limit = held.coerceIn(AuditLogic.PAGE, 200)) }.onSuccess { p -> logs = p.logs; total = p.total; error = null }
     }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.au_search)) },
+        NxTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.au_search)) },
             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), keyboardOptions = AdminKeyboard.Done)
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(null to R.string.tk_all, "create" to R.string.au_create, "update" to R.string.au_update, "delete" to R.string.au_delete, "restore" to R.string.au_restore, "login" to R.string.au_login).forEach { (v, l) ->

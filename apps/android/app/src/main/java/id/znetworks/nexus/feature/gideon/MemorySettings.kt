@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -80,27 +82,23 @@ import kotlinx.coroutines.launch
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         val label = stringResource(R.string.gm_use)
                         Text(label, Modifier.weight(1f), color = c.foreground)
-                        Switch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy,
+                        NxSwitch(!data.paused, { on -> act { store.pause(!on) } }, enabled = snapshot.loaded && !busy,
                             modifier = Modifier.semantics { contentDescription = label })
                     }
-                    Text(stringResource(R.string.gm_off_hint), Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), color = c.mutedFg, fontSize = 12.sp)
                 }
+                MemoryCaption(stringResource(R.string.gm_off_hint))
             }
             item {
                 MemoryGroup {
                     Row(Modifier.fillMaxWidth().clickable(enabled = snapshot.loaded) { summary = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(stringResource(R.string.ui_memory_summary), color = c.foreground)
-                            Text(stringResource(R.string.ui_memory_summary_hint), color = c.mutedFg, fontSize = 13.sp)
-                        }
+                        Text(stringResource(R.string.ui_memory_summary), Modifier.weight(1f), color = c.foreground)
                         Icon(Icons.Outlined.ChevronRight, null, tint = c.mutedFg)
                     }
                 }
+                MemoryCaption(stringResource(R.string.ui_memory_summary_hint))
             }
-            item {
-                MemoryGroup {
-                    MemoryProfile.Field.entries.forEachIndexed { index, field ->
-                        if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = c.border)
+            MemoryProfile.Field.entries.forEach { field ->
+                item(key = field.name) {
                         val memory = MemoryProfile.find(field, data.memories)
                         MemoryProfileEditor(field, memory, data.textMax, snapshot.loaded && !busy && data.available && (memory != null || MemoryRules.canAdd(data))) { value ->
                             act {
@@ -109,10 +107,9 @@ import kotlinx.coroutines.launch
                                 else store.add(MemoryProfile.payload(field, value), field.kind)
                             }
                         }
-                    }
                 }
-                Text(stringResource(R.string.ui_memory_about_hint), Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp), color = c.mutedFg, fontSize = 12.sp)
             }
+            item { MemoryCaption(stringResource(R.string.ui_memory_about_hint)) }
             error?.let { message -> item {
                 Text(message, color = c.dangerText)
                 if (!snapshot.loaded) TextButton(onClick = { act { store.refresh() } }) { Text(stringResource(R.string.gx_try_again)) }
@@ -127,7 +124,11 @@ import kotlinx.coroutines.launch
 }
 
 @Composable internal fun MemoryGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Nx.colors.card).border(1.dp, Nx.colors.border, RoundedCornerShape(14.dp)), content = content)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Nx.colors.card), content = content)
+}
+
+@Composable private fun MemoryCaption(text: String) {
+    Text(text, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp), color = Nx.colors.mutedFg, fontSize = 12.sp)
 }
 
 @Composable private fun MemoryProfileEditor(field: MemoryProfile.Field, memory: GMemory?, max: Int, enabled: Boolean, save: (String) -> Unit) {
@@ -142,15 +143,20 @@ import kotlinx.coroutines.launch
         MemoryProfile.Field.ROLE -> R.string.ui_memory_role
         MemoryProfile.Field.ABOUT -> R.string.ui_memory_about
     })
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text(label, color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
+    MemoryGroup {
     TextField(draft, { draft = it.replace('\n', ' ').take(MemoryProfile.limit(field, max)) }, enabled = enabled,
-        label = { Text(label) }, placeholder = { Text(stringResource(R.string.ui_memory_optional)) },
+        placeholder = { Text(stringResource(R.string.ui_memory_optional)) },
         minLines = if (field == MemoryProfile.Field.ABOUT) 3 else 1, maxLines = if (field == MemoryProfile.Field.ABOUT) 4 else 2,
         textStyle = TextStyle(fontSize = 15.sp, color = c.foreground), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
         colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().onFocusChanged { state ->
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }.onFocusChanged { state ->
             val wasFocused = focused; focused = state.isFocused
             if (wasFocused && !focused && draft != value) save(draft)
         })
+    }
+    }
 }

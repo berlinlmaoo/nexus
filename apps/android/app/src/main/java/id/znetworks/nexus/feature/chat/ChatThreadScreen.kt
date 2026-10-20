@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.chat
 
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.feature.presence.PresenceLine
 
 import androidx.compose.ui.semantics.semantics
@@ -71,7 +75,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -702,7 +705,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     if (renaming) {
         var name by rememberSaveable { mutableStateOf(conv?.name.orEmpty()) }
         AlertDialog(onDismissRequest = { renaming = false }, title = { Text(stringResource(R.string.chat_rename)) },
-            text = { OutlinedTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            text = { NxTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { renaming = false; vm.rename(name) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text(stringResource(R.string.cancel)) } })
     }
@@ -769,7 +772,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
                         Text(stringResource(if (project) R.string.chat_everyone_here_project else R.string.chat_everyone_here_group), fontSize = 13.sp, color = c.mutedFg)
                     }
                     else -> {
-                        OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
+                        NxTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
                             items(shown, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
                                 val uid = m.userId ?: m.id ?: ""
@@ -777,7 +780,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
                                 Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Avatar(m.name, m.avatar, 28.dp, userId = m.userId); Spacer(Modifier.width(10.dp))
                                     Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
-                                    androidx.compose.material3.Checkbox(on, { picked = if (on) picked - uid else picked + uid })
+                                    NxCheckbox(on, { picked = if (on) picked - uid else picked + uid })
                                 }
                             }
                         }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.threads
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.ui.components.PageHeader
 import android.app.Application
 import android.graphics.BitmapFactory
@@ -51,7 +53,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -286,7 +287,7 @@ fun ThreadsScreen(onBack: () -> Unit, focusPostId: String? = null, vm: ThreadsVi
                 if (!s.mentionsOnly) item(key = "composer") {
                     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(draft, { draft = it.take(FeedRules.MAX_TEXT) }, placeholder = { Text(stringResource(R.string.th_whats_new)) },
+                        NxTextField(draft, { draft = it.take(FeedRules.MAX_TEXT) }, placeholder = { Text(stringResource(R.string.th_whats_new)) },
                             minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth())
                         MentionRow(draft, s.roster, vm.picked) { draft = it }
                         if (s.photos.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -410,7 +411,7 @@ private fun PostCard(p: Post, vm: ThreadsViewModel) {
     if (editing) {
         var text by rememberSaveable { mutableStateOf(p.text) }
         AlertDialog(onDismissRequest = { editing = false }, title = { Text(stringResource(R.string.th_edit)) },
-            text = { OutlinedTextField(text, { text = it.take(FeedRules.MAX_TEXT) }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
+            text = { NxTextField(text, { text = it.take(FeedRules.MAX_TEXT) }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { editing = false; vm.edit(p, text) }, enabled = text.isNotBlank() || p.images.isNotEmpty()) { Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { editing = false }) { Text(stringResource(R.string.cancel)) } })
     }
@@ -440,7 +441,7 @@ private fun CommentsSheet(s: ThreadsState, vm: ThreadsViewModel) {
             }
             MentionRow(draft, s.roster, vm.picked) { draft = it }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-                OutlinedTextField(draft, { draft = it.take(FeedRules.MAX_COMMENT) }, placeholder = { Text(stringResource(R.string.th_reply_hint)) }, maxLines = 4, modifier = Modifier.weight(1f))
+                NxTextField(draft, { draft = it.take(FeedRules.MAX_COMMENT) }, placeholder = { Text(stringResource(R.string.th_reply_hint)) }, maxLines = 4, modifier = Modifier.weight(1f))
                 IconButton(onClick = { vm.comment(draft) { draft = "" } }, enabled = draft.isNotBlank()) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.violetText) }
             }
         }

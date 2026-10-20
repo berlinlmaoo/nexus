@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import android.text.format.DateUtils
@@ -41,8 +45,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -360,7 +362,7 @@ private fun BriefCard(d: ProjectDetail, onEdit: () -> Unit) {
                 if (long) TextButton(onClick = { expanded = !expanded }) { Text(stringResource(if (expanded) R.string.ov_show_less else R.string.ov_read_more), fontSize = 12.sp) }
             } else {
                 Text(stringResource(R.string.ov_brief_empty), fontSize = 13.sp, color = c.mutedFg)
-                OutlinedButton(onClick = onEdit, modifier = Modifier.padding(top = 10.dp)) {
+                NxOutlinedButton(onClick = onEdit, modifier = Modifier.padding(top = 10.dp)) {
                     Icon(Icons.Filled.Edit, null, Modifier.size(14.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ov_write_brief))
                 }
             }
@@ -474,7 +476,7 @@ private fun StatusUpdatesCard(projectId: String) {
         }
     }) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(text, { text = it }, placeholder = { Text(stringResource(R.string.ov_update_hint), fontSize = 13.sp) },
+            NxTextField(text, { text = it }, placeholder = { Text(stringResource(R.string.ov_update_hint), fontSize = 13.sp) },
                 minLines = if (text.isBlank()) 2 else 4, modifier = Modifier.fillMaxWidth())
             problem?.let { Text(stringResource(it), fontSize = 12.sp, color = c.dangerText) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.presence
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
@@ -8,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,18 +72,29 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     }
 }
 /** [card]: drawn as one of the More sheet's footer cards (web: the phone More sheet's "Set a status" row). */
-@Composable fun SetStatusEntry(card: Boolean = false) {
+@Composable fun SetStatusEntry(card: Boolean = false, home: Boolean = false) {
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val snapshot by container.presenceStatuses.state.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
     if (!snapshot.enabled) return
-    val shape = RoundedCornerShape(12.dp)
-    val frame = if (card) Modifier.fillMaxWidth().clip(shape).background(Nx.colors.card).border(1.dp, Nx.colors.border, shape).clickable { open = true }
-        .defaultMinSize(minHeight = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp)
+    val status = snapshot.statuses[container.sessionStore.current?.userId]
+    val shape = RoundedCornerShape(if (home) 18.dp else 12.dp)
+    val frame = if (card || home) Modifier.fillMaxWidth().clip(shape).background(Nx.colors.card).border(1.dp, Nx.colors.border, shape).clickable { open = true }
+        .defaultMinSize(minHeight = if (home) 72.dp else 52.dp).padding(horizontal = if (home) 14.dp else 12.dp, vertical = 8.dp)
     else Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 12.dp)
     Row(frame, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(Icons.Outlined.Circle, null, tint = Nx.colors.warning)
-        Column(Modifier.weight(1f)) { Text(stringResource(R.string.prs_set), color = Nx.colors.foreground); PresenceLine(container.sessionStore.current?.userId) }
+        Box(Modifier.then(if (home) Modifier.size(44.dp).background(dotColor(status?.tone ?: "grey").copy(alpha = .14f), RoundedCornerShape(14.dp)) else Modifier.size(24.dp)), contentAlignment = Alignment.Center) {
+            if (status != null) PresenceDot(status, 12.dp)
+            else Icon(Icons.Outlined.Circle, null, tint = Nx.colors.mutedFg)
+        }
+        Text(stringResource(R.string.prs_set), Modifier.weight(1f), color = Nx.colors.foreground)
+        status?.let {
+            Text(it.label(ConfigBody.lang(LocalConfiguration.current.locales[0])), Modifier.weight(1f),
+                color = Nx.colors.mutedFg, fontSize = 12.sp, maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Nx.colors.mutedFg, modifier = Modifier.size(18.dp))
     }
     if (open) SetStatusDialog { open = false }
 }
@@ -93,7 +107,8 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     val initial = remember { PresenceDraft.split(manual?.text.orEmpty()) }
     var text by remember { mutableStateOf(initial.second) }
     var emoji by remember { mutableStateOf(initial.first) }
-    var availability by remember { mutableStateOf(manual?.availability?.lowercase()?.takeIf { it in listOf("online", "away", "dnd") } ?: "away") }
+    var availability by remember { mutableStateOf(manual?.availability?.lowercase()?.takeIf { it in listOf("online", "away", "dnd") }) }
+    var quickPicked by remember { mutableStateOf(false) }
     var emojiMenu by remember { mutableStateOf(false) }
     var durationMenu by remember { mutableStateOf(false) }
     var startMenu by remember { mutableStateOf(false) }
@@ -110,15 +125,16 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = Instant.now() } }
     val from = if (later) start.atZone(PresenceTimes.zone).toInstant() else now
     val end = PresenceTimes.end(from, option, picked)
-    val payload = PresenceDraft.payload(emoji, text)
-    val canSave = !busy && snapshot.enabled && payload.isNotBlank() && payload.length <= 80 && end > from && end > now
+    val payload = PresenceDraft.statusText(emoji, text)
+    val canSave = !busy && snapshot.enabled && PresenceDraft.canSave(payload, availability) && end > from && end > now
     fun submit(clear: Boolean) { busy = true; error = null; scope.launch {
-        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(payload, if (later) from else null, end, availability); onDismiss() }
+        try { if (clear) manual?.id?.let { container.presenceStatuses.clear(it) } else container.presenceStatuses.set(payload, if (later) from else null, end, availability ?: "away"); onDismiss() }
         catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: context.getString(R.string.prs_failed); if ((e as? ApiError.Http)?.code == "PRESENCE_OFF") container.presenceStatuses.refresh() }
         finally { busy = false }
     } }
     val durations = listOf("30m" to R.string.prs_30m, "1h" to R.string.prs_1h, "2h" to R.string.prs_2h,
-        "3h" to R.string.ui_status_3h, "today" to R.string.prs_today, "pick" to R.string.prs_pick)
+        "4h" to R.string.rev_status_4h, "today" to R.string.prs_today, "week" to R.string.rev_status_week, "pick" to R.string.prs_pick) +
+        (if (option == "3h") listOf("3h" to R.string.ui_status_3h) else emptyList())
     ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.background) {
         Column(Modifier.fillMaxWidth().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -127,7 +143,7 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                 TextButton(onClick = { submit(false) }, enabled = canSave) { Text(stringResource(R.string.gm_save), color = if (canSave) c.violetText else c.mutedFg) }
             }
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(text, { text = it.take(80) }, placeholder = { Text(stringResource(R.string.ui_status_placeholder)) },
+                NxTextField(text, { text = it.take(80); quickPicked = false }, placeholder = { Text(stringResource(R.string.ui_status_placeholder)) },
                     leadingIcon = { Box {
                         TextButton(onClick = { emojiMenu = true }, enabled = !busy, modifier = Modifier.semantics { contentDescription = context.getString(R.string.ui_status_emoji) }) { Text(emoji.ifBlank { "☺" }, fontSize = 22.sp) }
                         DropdownMenu(emojiMenu, { emojiMenu = false }) {
@@ -141,7 +157,8 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                     val labelHeight = with(androidx.compose.ui.platform.LocalDensity.current) { 32.sp.toDp() }
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf(Triple("online", R.string.ui_status_online, "green"), Triple("away", R.string.ui_status_away, "yellow"), Triple("dnd", R.string.ui_status_dnd, "red")).forEachIndexed { index, (value, label, tone) ->
-                            SegmentedButton(selected = availability == value, onClick = { availability = value }, enabled = !busy,
+                            SegmentedButton(selected = availability == value, onClick = { availability = value; if (quickPicked) { text = ""; emoji = ""; quickPicked = false } }, enabled = !busy,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, c.border),
                                 modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 shape = SegmentedButtonDefaults.itemShape(index, 3), icon = { Box(Modifier.requiredSize(7.dp).background(dotColor(tone), CircleShape)) }) {
                                 // Its intrinsic-height layout otherwise reserves only the first wrapped line.
@@ -158,10 +175,10 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                         val suggestion = stringResource(label)
                         ListItem(headlineContent = { Text(suggestion) }, leadingContent = { Text(e, fontSize = 22.sp) },
                             trailingContent = { Text(stringResource(if (duration == "3h") R.string.ui_status_3h else R.string.prs_1h), color = c.mutedFg, fontSize = 12.sp) },
-                            colors = ListItemDefaults.colors(containerColor = c.background), modifier = Modifier.clickable(enabled = !busy) { text = suggestion; emoji = e; option = duration })
+                            colors = ListItemDefaults.colors(containerColor = c.background), modifier = Modifier.clickable(enabled = !busy) { text = suggestion; emoji = e; option = duration; availability = "away"; quickPicked = true })
                     }
                 }
-                HorizontalDivider(color = c.border)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).padding(horizontal = 12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.prs_clear_after), Modifier.weight(1f), color = c.foreground)
                     Box {
@@ -180,7 +197,10 @@ private fun dotColor(tone: String) = Color(when (tone) { "green" -> 0xFF10B981; 
                     }
                 }
                 if (later) PresenceDateTime(start, !busy) { start = it }
-                Text(stringResource(R.string.ui_status_until, end.atZone(PresenceTimes.zone).format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale)) + " WIB"), color = c.mutedFg, fontSize = 12.sp)
+                }
+                val format = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale) }
+                Text(if (later) from.atZone(PresenceTimes.zone).format(format) + " – " + end.atZone(PresenceTimes.zone).format(format) + " WIB"
+                    else stringResource(R.string.ui_status_until, end.atZone(PresenceTimes.zone).format(format) + " WIB"), color = c.mutedFg, fontSize = 12.sp)
                 error?.let { Text(it, color = c.dangerText) }
                 if (manual != null) TextButton(onClick = { submit(true) }, enabled = !busy) { Text(stringResource(R.string.prs_clear), color = c.dangerText) }
             }

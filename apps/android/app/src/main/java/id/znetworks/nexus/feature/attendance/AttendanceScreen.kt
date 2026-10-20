@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import id.znetworks.nexus.feature.attendance.history.MapFrame
@@ -60,7 +62,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -139,7 +140,9 @@ fun AttendanceScreen(
     LaunchedEffect(boardState.highlightDay, boardState.loading) {
         if (boardState.highlightDay != null && !boardState.loading) { androidx.compose.runtime.withFrameNanos { }; boardInView.bringIntoView() }
     }
-    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null, { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.ATTENDANCE_CHANGED }) { vm.load(); requests.load(); board.load() }
+    id.znetworks.nexus.core.realtime.AttendanceRefresh {
+        vm.load().join(); requests.load().join(); board.load()
+    }
     val router = (context.applicationContext as NexusApplication).container.router
     val pending by router.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {
@@ -463,7 +466,7 @@ private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (Str
         }
         Text(stringResource(R.string.reflection_help), fontSize = 11.sp, color = c.mutedFg)
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
+        NxTextField(
             value = text, onValueChange = onChange, minLines = 5, maxLines = 12,
             placeholder = { Text(stringResource(R.string.reflection_placeholder)) },
             shape = RoundedCornerShape(12.dp),
@@ -496,7 +499,7 @@ private fun OffsitePrompt(reason: String, onReason: (String) -> Unit, onCancel: 
     ) {
         Text(stringResource(R.string.offsite_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground)
         Text(stringResource(R.string.offsite_body), fontSize = 12.sp, color = c.mutedFg)
-        OutlinedTextField(reason, onReason, minLines = 2, placeholder = { Text(stringResource(R.string.offsite_placeholder)) },
+        NxTextField(reason, onReason, minLines = 2, placeholder = { Text(stringResource(R.string.offsite_placeholder)) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.cancel)) }

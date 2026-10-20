@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.tickets
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -45,8 +49,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -242,9 +244,9 @@ private fun NewTicketDialog(s: TicketsState, vm: TicketsViewModel, onDismiss: ()
                     TicketRules.CATEGORIES.forEach { k -> FilterChip(category == k, { category = k }, { Text(ticketCategoryLabel(k), fontSize = 12.sp) }) }
                 }
                 Label(stringResource(R.string.tk_subject))
-                OutlinedTextField(subject, { subject = it.take(TicketRules.SUBJECT_MAX) }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_subject_ph)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(subject, { subject = it.take(TicketRules.SUBJECT_MAX) }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_subject_ph)) }, modifier = Modifier.fillMaxWidth())
                 Label(stringResource(R.string.tk_what_happened))
-                OutlinedTextField(body, { body = it.take(TicketRules.BODY_MAX) }, minLines = 4, placeholder = { Text(stringResource(R.string.tk_body_ph)) }, modifier = Modifier.fillMaxWidth())
+                NxTextField(body, { body = it.take(TicketRules.BODY_MAX) }, minLines = 4, placeholder = { Text(stringResource(R.string.tk_body_ph)) }, modifier = Modifier.fillMaxWidth())
                 Label(stringResource(R.string.tk_evidence))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     s.photos.forEach { p ->
@@ -258,8 +260,8 @@ private fun NewTicketDialog(s: TicketsState, vm: TicketsViewModel, onDismiss: ()
                     }
                 }
                 if (s.photos.size < TicketRules.MAX_PHOTOS) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = camera) { Icon(Icons.Filled.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.camera)) }
-                    OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                    NxOutlinedButton(onClick = camera) { Icon(Icons.Filled.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.camera)) }
+                    NxOutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                         Icon(Icons.Filled.Image, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.gallery))
                     }
                 }

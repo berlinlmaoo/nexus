@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
@@ -88,7 +90,7 @@ internal fun reminderProblem(code: String?) = when (code) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(text, { if (it.length <= 280) text = it }, label = { Text(stringResource(R.string.rem_what)) }, modifier = Modifier.fillMaxWidth().focusRequester(focus), minLines = 2)
+                    NxTextField(text, { if (it.length <= 280) text = it }, label = { Text(stringResource(R.string.rem_what)) }, modifier = Modifier.fillMaxWidth().focusRequester(focus), minLines = 2)
                     NxButton(time.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy HH:mm", locale)) + " WIB", {
                         DatePickerDialog(context, { _, y, m, d ->
                             TimePickerDialog(context, { _, h, minute -> timeText = LocalDateTime.of(y, m + 1, d, h, minute).toString() }, time.hour, time.minute, true).show()

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.agenda
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
@@ -31,7 +33,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -176,7 +177,7 @@ fun BookingComposer(booking: Booking?, api: AgendaApi, onDismiss: () -> Unit, on
                 Picker(roomLabel(room), BookingLogic.ROOMS.map { it to it }, { roomLabel(it) }) { room = it }
             }
             Field(stringResource(R.string.rb_title)) {
-                OutlinedTextField(title, { title = it }, singleLine = true, placeholder = { Text(stringResource(R.string.rb_title_hint)) },
+                NxTextField(title, { title = it }, singleLine = true, placeholder = { Text(stringResource(R.string.rb_title_hint)) },
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
             }
             Field(stringResource(R.string.rb_date)) {
@@ -190,7 +191,7 @@ fun BookingComposer(booking: Booking?, api: AgendaApi, onDismiss: () -> Unit, on
                 Box(Modifier.weight(1f)) { Field(stringResource(R.string.rb_end)) { Picker(end, BookingLogic.TIMES.map { it to it }, { it }) { end = it } } }
             }
             Field(stringResource(R.string.rb_notes)) {
-                OutlinedTextField(notes, { notes = it }, minLines = 2, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                NxTextField(notes, { notes = it }, minLines = 2, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
             }
             when (problem) {
                 BookingLogic.Problem.END_BEFORE_START -> Text(stringResource(R.string.rb_end_before_start), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.material.icons.outlined.Power
@@ -61,7 +63,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -287,18 +288,18 @@ private fun EmailBlock(s: AccountState, vm: AccountViewModel, inline: Boolean = 
         if (changing || s.pendingEmail != null) {
         val pending = s.pendingEmail
         if (pending == null) {
-            OutlinedTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
+            NxTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
             // Never saved into the restorable state: a password only lives while the field does.
             var currentPassword by remember { mutableStateOf("") }
-            OutlinedTextField(currentPassword, { currentPassword = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
+            NxTextField(currentPassword, { currentPassword = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
                 supportingText = { Text(stringResource(R.string.acct_email_password_help)) },
                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
             NxButton(stringResource(R.string.signup_send_code), { vm.requestEmail(newEmail, currentPassword) { currentPassword = "" } },
                 enabled = newEmail.contains('@') && currentPassword.isNotEmpty() && !s.busy)
         } else {
             Text(stringResource(R.string.code_sub, pending), fontSize = 13.sp, color = c.mutedFg)
-            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, singleLine = true, label = { Text(stringResource(R.string.code_label)) },
+            NxTextField(code, { code = it.filter(Char::isDigit).take(6) }, singleLine = true, label = { Text(stringResource(R.string.code_label)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NxButton(stringResource(R.string.cancel), vm::cancelEmail, kind = NxButtonKind.GHOST)
@@ -318,9 +319,9 @@ private fun PasswordBlock(s: AccountState, vm: AccountViewModel) {
         // Never in the restorable state.
         var current by remember { mutableStateOf("") }
         var new by remember { mutableStateOf("") }
-        OutlinedTextField(current, { current = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
+        NxTextField(current, { current = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
             visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(new, { new = it }, singleLine = true, label = { Text(stringResource(R.string.st_new_password)) },
+        NxTextField(new, { new = it }, singleLine = true, label = { Text(stringResource(R.string.st_new_password)) },
             supportingText = { Text(stringResource(R.string.password_min_ph)) },
             visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
         when (s.passwordOk) {

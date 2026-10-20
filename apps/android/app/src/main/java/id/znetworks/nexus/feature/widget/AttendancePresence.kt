@@ -131,7 +131,7 @@ class AttendancePresence(
     private var recentAt = 0L
     private var recentKey: String? = null
 
-    fun refresh(today: AttendanceToday? = null) = scope.launch {
+    fun refresh(today: AttendanceToday? = null, forceRecent: Boolean = false) = scope.launch {
         if (!signedIn()) return@launch
         if (today != null) lastToday = today
         lock.withLock {
@@ -139,7 +139,7 @@ class AttendancePresence(
             // The dots change with a check-in/out or a new day; otherwise at most every 15 min.
             val key = "${OfficeTime.today()}|${rec?.checkInAt}|${rec?.checkOutAt}"
             val now = System.currentTimeMillis()
-            if (key != recentKey || now - recentAt > 15 * 60_000L) {
+            if (forceRecent || key != recentKey || now - recentAt > 15 * 60_000L) {
                 runCatching { fetchRecent() }.getOrNull()?.let { recent = it; recentAt = now; recentKey = key }
             }
             save(PresenceLogic.build(lastToday, queue(), recent, hereName(), OfficeTime.today().toString()))

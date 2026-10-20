@@ -163,8 +163,9 @@ class MyTasksViewModel(app: Application) : AndroidViewModel(app) {
 fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, onBack: (() -> Unit)? = null, vm: MyTasksViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
-    // Every visit re-reads: a task finished on its own screen must not stay "hot" here.
-    LaunchedEffect(Unit) { vm.load() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, null, null,
+        { id.znetworks.nexus.core.realtime.RealtimeEvents.isMyTasks(it) || it.name in id.znetworks.nexus.core.realtime.RealtimeEvents.TASK },
+        refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     var expanded by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<MyTaskGroups.Group>()) }
     Column(Modifier.fillMaxSize().background(c.background)) {
         // Opened from More (no longer a tab): a back arrow beside the title.

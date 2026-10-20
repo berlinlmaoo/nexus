@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.legal
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -31,7 +33,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -220,7 +221,7 @@ private fun SeriesRow(series: LgSeries, canEdit: Boolean, reload: () -> Unit) {
             }
             if (canEdit) {
                 // "In use": off keeps the series and its numbers, it just isn't offered to new templates.
-                Switch(series.active, { v -> patch(lgBody("active" to v)) }, enabled = !saving, colors = SwitchDefaults.colors(checkedTrackColor = c.violet))
+                NxSwitch(series.active, { v -> patch(lgBody("active" to v)) }, enabled = !saving, colors = SwitchDefaults.colors(checkedTrackColor = c.violet, checkedBorderColor = c.violet, checkedThumbColor = c.background))
                 IconButton(onClick = { label = series.label; format = series.format; reset = series.resetPeriod; editing = true }) {
                     Icon(Icons.Filled.Edit, stringResource(R.string.lg_edit), tint = c.mutedFg, modifier = Modifier.size(18.dp))
                 }

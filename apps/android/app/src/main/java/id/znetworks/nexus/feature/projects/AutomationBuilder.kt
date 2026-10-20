@@ -1,5 +1,12 @@
 ﻿package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -49,8 +56,8 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(if (original == null) R.string.ab_new else R.string.ab_edit), style = MaterialTheme.typography.titleLarge)
-                    OutlinedTextField(name, { if (it.length <= 200) name = it }, label = { Text(stringResource(R.string.ab_name)) }, enabled = !busy, modifier = Modifier.fillMaxWidth())
-                    Row { Text(stringResource(R.string.ab_enabled), Modifier.weight(1f)); Switch(enabled, { enabled = it }, enabled = !busy) }
+                    NxTextField(name, { if (it.length <= 200) name = it }, label = { Text(stringResource(R.string.ab_name)) }, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                    Row { Text(stringResource(R.string.ab_enabled), Modifier.weight(1f)); NxSwitch(enabled, { enabled = it }, enabled = !busy) }
                     Text(stringResource(R.string.au_when_caps), style = MaterialTheme.typography.titleMedium)
                     RuleEditor(trigger, true, names, lanes, !busy) { trigger = it }
                     Text(stringResource(R.string.ab_conditions), style = MaterialTheme.typography.titleMedium)
@@ -93,10 +100,10 @@ internal fun AutomationBuilder(projectId: String, original: Automation?, names: 
 internal fun BuilderPick(label: String, value: String, options: List<Pair<String, String>>, enabled: Boolean = true, change: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    OutlinedButton(onClick = { open = true; query = "" }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("$label: ${options.firstOrNull { it.first == value }?.second ?: value}") }
+    NxOutlinedButton(onClick = { open = true; query = "" }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("$label: ${options.firstOrNull { it.first == value }?.second ?: value}") }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(label) }, text = {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
-            OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.search)) })
+            NxTextField(query, { query = it }, label = { Text(stringResource(R.string.search)) })
             options.filter { it.second.contains(query, true) }.forEach { (key, text) -> TextButton(onClick = { change(key); open = false }, modifier = Modifier.fillMaxWidth()) { Text(text) } }
         }
     }, confirmButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } })
@@ -112,7 +119,7 @@ private fun BuilderValue(field: String?, value: String, names: AutomationNames, 
         else -> names.fieldDefs.firstOrNull { "cf:${it.id}" == field }?.choices.orEmpty().map { it to it }
     }
     if (opts.isNotEmpty()) BuilderPick(stringResource(R.string.ab_value), value, listOf("" to stringResource(R.string.ab_any)) + opts, enabled, change)
-    else OutlinedTextField(value, { if (it.length <= 2000) change(it) }, label = { Text(stringResource(R.string.ab_value)) }, enabled = enabled, modifier = Modifier.fillMaxWidth())
+    else NxTextField(value, { if (it.length <= 2000) change(it) }, label = { Text(stringResource(R.string.ab_value)) }, enabled = enabled, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -121,7 +128,7 @@ private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lan
     BuilderPick(stringResource(if (trigger) R.string.ab_trigger else R.string.ab_action), rule.type.orEmpty(), types, enabled) { type -> change(if (type == "SCHEDULED") Rule(type, config = buildJsonObject { put("frequency", "daily"); put("time", "09:00") }) else if (type == "DUE_DATE_APPROACHING") Rule(type, value = JsonPrimitive("24")) else Rule(type)) }
     val cfg = rule.config ?: buildJsonObject { }
     fun config(key: String, value: JsonElement) = change(rule.copy(config = JsonObject(cfg + (key to value))))
-    @Composable fun input(label: Int, key: String, default: String = "") { OutlinedTextField((cfg[key] as? JsonPrimitive)?.content ?: default, { if (it.length <= 2000) config(key, JsonPrimitive(it)) }, label = { Text(stringResource(label)) }, enabled = enabled, modifier = Modifier.fillMaxWidth()) }
+    @Composable fun input(label: Int, key: String, default: String = "") { NxTextField((cfg[key] as? JsonPrimitive)?.content ?: default, { if (it.length <= 2000) config(key, JsonPrimitive(it)) }, label = { Text(stringResource(label)) }, enabled = enabled, modifier = Modifier.fillMaxWidth()) }
     @Composable fun value(field: String?) { BuilderValue(field, rule.text.orEmpty(), names, enabled) { change(rule.copy(value = JsonPrimitive(it), config = if (rule.type == "STATUS_CHANGED") JsonObject(cfg - "toSection" - "bySection") else if (rule.type == "SET_STATUS") JsonObject(cfg - "sectionId") else rule.config)) } }
     val fields = AutomationText.FIELDS.filterKeys { key -> if (rule.type == "SET_FIELD") key in listOf("title", "description", "dueDate", "startDate") else key !in listOf("creator", "status", "assignee") }.map { it.key to stringResource(it.value) } + names.fieldDefs.filter { rule.type != "SET_FIELD" || it.kind !in listOf("FILE", "CREATED", "PLACE") }.map { "cf:${it.id}" to it.name }
     val statusOptions = listOf("" to stringResource(R.string.ab_any)) + lanes.filter { it.taskStatus != null }.map { it.id to it.name } + AutomationText.STATUSES.map { "status:${it.key}" to stringResource(it.value) }
@@ -149,7 +156,7 @@ private fun RuleEditor(rule: Rule, trigger: Boolean, names: AutomationNames, lan
             val ctx = LocalContext.current
             val tokens = listOf("@actor", "@creator") + if (rule.type == "UNASSIGN") listOf("@all") else emptyList()
             (names.people.toList() + tokens.map { it to AutomationText.valueText(it, names) { id, args -> ctx.getString(id, *args) } }).forEach { (id, label) ->
-                Row { Checkbox(id in picked, { on -> change(rule.copy(value = JsonPrimitive((if (on) picked + id else picked - id).distinct().joinToString(",")))) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
+                Row { NxCheckbox(id in picked, { on -> change(rule.copy(value = JsonPrimitive((if (on) picked + id else picked - id).distinct().joinToString(",")))) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
             }
         }
         "FORM_SUBMITTED" -> BuilderPick(stringResource(R.string.ab_form), rule.text.orEmpty(), listOf("" to stringResource(R.string.ab_any)) + names.forms.toList(), enabled) { change(rule.copy(value = it.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) })) }
@@ -169,6 +176,6 @@ private fun PeopleConfig(cfg: JsonObject, key: String, names: AutomationNames, e
     // Roles use the same translated vocabulary as the rule summary.
     val ctx = LocalContext.current
     (names.people.toList() + tokens.map { it to AutomationText.valueText(it, names) { id, args -> ctx.getString(id, *args) } }).forEach { (id, label) ->
-        Row { Checkbox(id in picked, { on -> change(key, JsonArray((if (on) picked + id else picked - id).distinct().map { JsonPrimitive(it) })) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
+        Row { NxCheckbox(id in picked, { on -> change(key, JsonArray((if (on) picked + id else picked - id).distinct().map { JsonPrimitive(it) })) }, enabled = enabled); Text(label, Modifier.padding(top = 12.dp)) }
     }
 }

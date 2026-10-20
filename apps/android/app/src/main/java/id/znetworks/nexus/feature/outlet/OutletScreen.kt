@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.outlet
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -38,7 +40,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -387,7 +388,7 @@ private fun TargetEditor(d: OutletMonth, monthName: String, busy: Boolean, onCan
 /** A money / count box that groups thousands as you type and keeps only digits. */
 @Composable
 internal fun NumberBox(label: String, value: String, money: Boolean, hint: String? = null, modifier: Modifier = Modifier.fillMaxWidth(), onChange: (String) -> Unit) {
-    OutlinedTextField(value, { t -> onChange(OutletFormat.box(OutletFormat.parseNumber(t))) }, singleLine = true, label = { Text(label) },
+    NxTextField(value, { t -> onChange(OutletFormat.box(OutletFormat.parseNumber(t))) }, singleLine = true, label = { Text(label) },
         prefix = if (money) ({ Text("Rp") }) else null,
         supportingText = hint?.let { { Text(it, fontSize = 11.sp) } },
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number), modifier = modifier)

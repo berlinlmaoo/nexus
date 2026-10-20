@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.social
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,7 +20,7 @@ import kotlinx.serialization.json.*
 
 @Composable
 internal fun NumberBox(value: String, label: Int, enabled: Boolean, max: Long, placeholder: String = "", change: (String) -> Unit) {
-    OutlinedTextField(value, { if (it.isEmpty() || it.all(Char::isDigit)) change(it) }, label = { Text(stringResource(label)) },
+    NxTextField(value, { if (it.isEmpty() || it.all(Char::isDigit)) change(it) }, label = { Text(stringResource(label)) },
         enabled = enabled, isError = SocialDraft.number(value, max) == null, placeholder = { Text(placeholder) },
         visualTransformation = remember(OutletFormat.isId()) { GroupedNumber(if (OutletFormat.isId()) '.' else ',') },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done), singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -60,7 +62,7 @@ internal fun SocialDayDialog(d: SocialMonth, date: String, vm: SocialViewModel, 
                 Text(stringResource(when (figures.text("engagementTargetSource")) { "day" -> R.string.sm_own_target; "month" -> R.string.sm_month_share; else -> R.string.sm_no_target }))
             }
             listOf("worked" to R.string.sm_worked, "didntWork" to R.string.sm_didnt_work).forEach { (key, label) ->
-                OutlinedTextField(draft[key].orEmpty(), { if (it.length <= 2000) draft[key] = it }, enabled = editable && !busy,
+                NxTextField(draft[key].orEmpty(), { if (it.length <= 2000) draft[key] = it }, enabled = editable && !busy,
                     label = { Text(stringResource(label)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
             }
             if (d.canManage) TextButton(onClick = { targets = true }, enabled = !busy) { Text(stringResource(R.string.sm_day_targets)) }
@@ -155,7 +157,7 @@ internal fun SocialSettingsDialog(d: SocialMonth, vm: SocialViewModel, busy: Boo
             else if (config == null) CircularProgressIndicator()
             config?.forEachIndexed { index, p ->
                 val id = p.text("id")
-                OutlinedTextField(p.text("name"), { name -> if (name.length <= 40) update(id) { JsonObject(it + ("name" to JsonPrimitive(name))) } },
+                NxTextField(p.text("name"), { name -> if (name.length <= 40) update(id) { JsonObject(it + ("name" to JsonPrimitive(name))) } },
                     label = { Text(stringResource(R.string.sm_platform)) }, enabled = !busy && !p.flag("archived"))
                 if (!p.flag("archived") && !p.flag("_local")) SocialDraft.targetKeys.forEach { k ->
                     NumberBox(targetDraft["$id:$k"].orEmpty(), metricLabel(k), !busy, if (k == "postsTarget") 1_000_000 else 2_000_000_000) { targetDraft["$id:$k"] = it; dirty = true }

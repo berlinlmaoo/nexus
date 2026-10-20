@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.ScrollState
@@ -46,7 +48,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -556,7 +557,7 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
                     r.checkOutReflection?.takeIf { it.isNotBlank() }?.let { Fact(stringResource(R.string.reflection_title), it) }
                     if (r.isCorrected == true) Fact(stringResource(R.string.detail_corrected), r.correctionReason.orEmpty())
                     if (r.locationTrackingState == "denied") Text(stringResource(R.string.trail_location_off), color = c.warning, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    OutlinedButton(onClick = { vm.openTrail(r) }, modifier = Modifier.fillMaxWidth()) {
+                    NxOutlinedButton(onClick = { vm.openTrail(r) }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Filled.Route, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text(stringResource(R.string.trail_open))
                     }
                 } else if (r.recordKind == null && r.requestType == null && r.attendanceDayType == null) {
@@ -630,7 +631,7 @@ private fun ChangeStatusPanel(vm: BoardViewModel, r: HistoryRow) {
             color = c.accentFg, letterSpacing = 1.sp)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OVERRIDE_ACTIONS.forEach { a ->
-                OutlinedButton(onClick = { pending = a }, enabled = !s.busy) { Text(overrideLabel(a), fontSize = 12.sp) }
+                NxOutlinedButton(onClick = { pending = a }, enabled = !s.busy) { Text(overrideLabel(a), fontSize = 12.sp) }
             }
         }
         TextButton(onClick = { pending = "CLEAR_PENALTY" }, enabled = !s.busy) { Text(stringResource(R.string.override_clear_full)) }

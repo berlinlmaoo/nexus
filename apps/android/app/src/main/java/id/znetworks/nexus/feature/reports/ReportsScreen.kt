@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.reports
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import id.znetworks.nexus.core.i18n.AppDateFormats
 
 import androidx.compose.foundation.background
@@ -34,7 +36,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -111,7 +112,7 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
     var rosterError by remember { mutableStateOf<String?>(null) }
     var rosterSavedAt by remember { mutableStateOf<Long?>(null) }
     var q by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(offset) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(offset) {
         try { val got = api.roster(periodKey(offset)); roster = got.value; rosterSavedAt = got.savedAtMillis; rosterError = null }
         catch (e: ApiError) {
             // Staff: not a fault, there is simply no team view.
@@ -135,7 +136,7 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
         if (tab == 0 || !showTeam) PersonReportBody("me", periodKey(offset), onOpenTask)
         else {
             val r = roster
-            OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.rp_search_crew)) },
+            NxTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.rp_search_crew)) },
                 shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             when {
                 r == null && rosterError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -215,7 +216,7 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
     var r by remember(userId, period) { mutableStateOf<PersonReport?>(null) }
     var error by remember(userId, period) { mutableStateOf<String?>(null) }
     var savedAt by remember(userId, period) { mutableStateOf<Long?>(null) }
-    LaunchedEffect(userId, period) {
+    id.znetworks.nexus.core.realtime.AttendanceRefresh(userId to period) {
         try { val got = api.person(userId, period); r = got.value; savedAt = got.savedAtMillis } catch (e: ApiError) {
             error = if (e is ApiError.Http && e.code == "REPORT_OUT_OF_SCOPE") res.getString(R.string.rp_out_of_scope) else e.describe(res)
         }

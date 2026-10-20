@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.ui.components.NxSwitch
+
+import id.znetworks.nexus.ui.components.NxCheckbox
+
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,13 +35,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -116,7 +119,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             }
             item(key = "peopleh") {
                 Header(stringResource(R.string.cal_people))
-                OutlinedTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
+                NxTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                 if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 else if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
@@ -131,7 +134,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             if (folders.isNotEmpty()) {
                 item(key = "folderh") {
                     Header(stringResource(R.string.cal_folders), f.folders.size)
-                    OutlinedTextField(qFolders, { qFolders = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_folders)) },
+                    NxTextField(qFolders, { qFolders = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_folders)) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                     if (matchingFolders.isEmpty()) Text(stringResource(R.string.cal_no_folder_matches), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 }
@@ -150,7 +153,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             }
             item(key = "projh") {
                 Header(stringResource(R.string.cal_projects))
-                OutlinedTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
+                NxTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
                 if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
                 else if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
@@ -209,7 +212,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 private fun CheckRow(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = on, role = Role.Checkbox, onValueChange = { onToggle() }).then(modifier),
         verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(on, null); Spacer(Modifier.width(4.dp))
+        NxCheckbox(on, null); Spacer(Modifier.width(4.dp))
         content()
     }
 }
@@ -219,6 +222,6 @@ private fun CheckRow(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
 private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = on, role = Role.Switch, onValueChange = onChange), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = CalType.s14, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
-        Switch(on, null)
+        NxSwitch(on, null)
     }
 }

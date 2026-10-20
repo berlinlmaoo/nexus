@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Psychology
@@ -18,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -110,10 +112,15 @@ import kotlin.math.abs
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (data.paused) Text(stringResource(R.string.gm_paused), color = c.mutedFg, fontSize = 12.sp)
             else if (data.memories.size >= data.max) Text(stringResource(R.string.gm_full, data.max.toString()), color = c.mutedFg, fontSize = 12.sp)
-            OutlinedTextField(draft, { draft = it.take(data.textMax.coerceAtLeast(1)) }, placeholder = { Text(stringResource(R.string.ui_memory_add_update)) }, maxLines = 4,
+            val canSend = snapshot.loaded && !busy && MemoryRules.canAdd(data) && draft.isNotBlank()
+            TextField(draft, { draft = it.take(data.textMax.coerceAtLeast(1)) }, placeholder = { Text(stringResource(R.string.ui_memory_add_update)) }, maxLines = 4,
                 enabled = snapshot.loaded && !busy && MemoryRules.canAdd(data), modifier = Modifier.fillMaxWidth().focusRequester(addFocus),
-                trailingIcon = { IconButton(onClick = { act { store.add(draft, "FACT"); draft = "" } }, enabled = snapshot.loaded && !busy && MemoryRules.canAdd(data) && draft.isNotBlank()) {
-                    Icon(Icons.Outlined.ArrowUpward, stringResource(R.string.gm_add))
+                shape = RoundedCornerShape(28.dp),
+                colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, disabledContainerColor = c.muted,
+                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
+                trailingIcon = { IconButton(onClick = { act { store.add(draft, "FACT"); draft = "" } }, enabled = canSend,
+                    modifier = Modifier.padding(end = 6.dp).size(40.dp).background(if (canSend) MaterialTheme.colorScheme.primary else c.mutedFg.copy(alpha = .18f), CircleShape)) {
+                    Icon(Icons.Outlined.ArrowUpward, stringResource(R.string.gm_add), tint = if (canSend) MaterialTheme.colorScheme.onPrimary else c.mutedFg)
                 } })
         }
     }

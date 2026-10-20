@@ -1,5 +1,7 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.ui.components.NxTextField
+
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inbox
@@ -150,7 +152,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -869,7 +870,7 @@ private fun DeleteAccountDialog(onDone: () -> Unit, onCancel: () -> Unit) {
             Column {
                 Text(stringResource(R.string.delete_account_body))
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(typed, { typed = it }, singleLine = true, placeholder = { Text("DELETE") })
+                NxTextField(typed, { typed = it }, singleLine = true, placeholder = { Text("DELETE") })
                 error?.let { Text(it, color = Nx.colors.danger, fontSize = 12.sp) }
             }
         },

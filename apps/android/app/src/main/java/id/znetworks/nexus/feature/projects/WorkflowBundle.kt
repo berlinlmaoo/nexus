@@ -1,5 +1,7 @@
 ﻿package id.znetworks.nexus.feature.projects
 
+import id.znetworks.nexus.ui.components.NxOutlinedButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,7 +39,7 @@ internal fun WorkflowBundleButton(project:String,onApplied:()->Unit){
     var error by remember{mutableStateOf<String?>(null)}
     var tick by remember{mutableIntStateOf(0)}
     LaunchedEffect(open,tick){if(open)try{list=api.list();error=null}catch(e:ApiError){error=e.describe(ctx.resources)}}
-    OutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth()){Text(stringResource(R.string.wb_title))}
+    NxOutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth()){Text(stringResource(R.string.wb_title))}
     if(open)AlertDialog(onDismissRequest={if(!busy)open=false},title={Text(stringResource(R.string.wb_title))},text={Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text(stringResource(R.string.wb_help))
         if(list==null&&error==null||busy)LinearProgressIndicator(Modifier.fillMaxWidth())
