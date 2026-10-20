@@ -29,7 +29,7 @@ import { PERIOD_BASELINE_XP } from "@/lib/levels";
 // page (/people/:userId) draws the same cells and offers the same panel (28 Sep 2026).
 import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
-import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
+import { EvidencePicker, OverrideEvidenceView, StatusOverridePanel, overrideDayStateOf } from "@/components/attendance/StatusOverridePanel";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -189,8 +189,11 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
         {record.supportingDocumentUrl && (
           <div className="mt-3"><SupportingDocument url={record.supportingDocumentUrl} name={record.supportingDocumentName} type={record.requestType} large /></div>
         )}
+        {!record.supportingDocumentUrl && record.evidenceMissing && (
+          <div className="mt-3"><OverrideEvidenceView missing /></div>
+        )}
         {canOverride && record.user?.id && (
-          <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
+          <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} current={overrideDayStateOf(record)} />
         )}
       </div>
     </div>
@@ -969,7 +972,7 @@ function Attendance() {
                 </div>
                 <button onClick={() => setOverrideTarget(null)} aria-label={tr("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
               </div>
-              <StatusOverridePanel userId={overrideTarget.userId} name={overrideTarget.name} dateKey={overrideTarget.dateKey} onDone={() => setOverrideTarget(null)} />
+              <StatusOverridePanel userId={overrideTarget.userId} name={overrideTarget.name} dateKey={overrideTarget.dateKey} onDone={() => setOverrideTarget(null)} current="NONE" />
             </div>
           </div>
         )}
@@ -1252,6 +1255,10 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
   const [checkOutAt, setCheckOutAt] = useState(toLocalInput(record.checkOutAt));
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
+  // Filling a day with nothing recorded (no record id) turns it into Present from TK / nothing: that change
+  // asks for a supporting photo or file (owner 20 Oct 2026, optional).
+  const fillsMissingDay = !record.id;
+  const [evidence, setEvidence] = useState<File | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -1277,7 +1284,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
       }
       const uid = record.user?.id;
       if (!uid) throw new Error(tr("Unknown user."));
-      return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim() });
+      return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim(), evidence });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate(tr("Attendance saved")); onClose(); },
   });
@@ -1299,6 +1306,12 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} away={recordPlace(record).away} officeName={record.checkInAt ? record.officeLocation?.name : null} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
+        {(record.correctionEvidenceUrl || record.correctionEvidenceMissing) && (
+          <div className="mt-4 space-y-1.5">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Correction evidence")}</p>
+            <OverrideEvidenceView url={record.correctionEvidenceUrl} name={record.correctionEvidenceName} missing={record.correctionEvidenceMissing} />
+          </div>
+        )}
         {record.id && record.checkInAt && <TrailSection record={record} recordId={record.id} />}
         {record.checkOutReflection && (
           <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-3">
@@ -1316,11 +1329,12 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           </div>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Notes")}<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={tr("Optional note…")} className={cn(field, "mt-1 min-h-16")} /></label>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Correction reason")}<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("Why is this being corrected?")} className={cn(field, "mt-1")} /></label>
+          {fillsMissingDay && <EvidencePicker kind="SUPPORTING" file={evidence} onChange={setEvidence} disabled={save.isPending} />}
           {save.isError && <p className="text-sm text-destructive">{save.error instanceof Error && save.error.message ? save.error.message : tr("Couldn’t save the correction. Check your access and that check-out comes after check-in.")}</p>}
           <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {tr("Save correction")}</button>
         </div>
         {canOverride && record.user?.id && (
-          <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
+          <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} current={overrideDayStateOf(record)} />
         )}
         {canOverride && record.id && (
           <DeleteRecordPanel recordId={record.id} hasCheckOut={!!record.checkOutAt} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />

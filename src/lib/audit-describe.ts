@@ -868,7 +868,8 @@ function buildTitle(row: AuditRowLike, names?: AuditNames): string {
     const who = person("targetUserId")
     const date = formatAuditDate(meta.date)
     const what = str(meta.override)
-    return `${actor} overrode ${who ? `${possessive(who)} attendance` : "an attendance day"}${date ? ` on ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}`
+    const proof = meta.evidenceUrl ? " — evidence attached" : meta.evidenceMissing === true ? " — no evidence attached" : ""
+    return `${actor} overrode ${who ? `${possessive(who)} attendance` : "an attendance day"}${date ? ` on ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}${proof}`
   }
 
   if (type === "xp_transaction" && action === "refund") {
@@ -1126,7 +1127,8 @@ function buildTitleId(row: AuditRowLike, names?: AuditNames): string {
     const who = person("targetUserId")
     const date = formatAuditDate(meta.date)
     const what = str(meta.override)
-    return `${actor} mengganti status absensi${who ? ` ${who}` : ""}${date ? ` pada ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}`
+    const proof = meta.evidenceUrl ? " — bukti terlampir" : meta.evidenceMissing === true ? " — tanpa bukti" : ""
+    return `${actor} mengganti status absensi${who ? ` ${who}` : ""}${date ? ` pada ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}${proof}`
   }
 
   if (type === "xp_transaction" && action === "refund") {

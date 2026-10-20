@@ -1466,6 +1466,13 @@ model AttendanceRecord {
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
   correctionReason      String?
+  /// Evidence attached when a BoD/OAA turned this day into Present from Permit / TK / nothing recorded
+  /// (POST /api/attendance/override, owner 20 Oct 2026). An /api/files/attendance/requests/… URL + the
+  /// file's own name. correctionEvidenceMissing =
+  /// no file was attached where one was asked for: saved anyway (evidence is optional), flagged so OAA sees it.
+  correctionEvidenceUrl     String?
+  correctionEvidenceName    String?
+  correctionEvidenceMissing Boolean      @default(false)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -1495,6 +1502,9 @@ model AttendanceRequest {
   approvalSource        AttendanceApprovalSource?
   supportingDocumentUrl String?
   supportingDocumentName String?
+  /// A Sick / Permit status set by a BoD/OAA from the attendance board WITHOUT the (optional) evidence it asks
+  /// for: "no evidence attached", shown to OAA (owner 20 Oct 2026).
+  evidenceMissing       Boolean                   @default(false)
 
   /// Where the person was when they filed this, and how late they filed it. Only meaningful for
   /// PERMIT self-submissions — the type that used to carry no evidence at all, which made it the
