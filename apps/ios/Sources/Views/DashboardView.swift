@@ -762,11 +762,14 @@ struct DashboardView: View {
             // The detail is a separate element that fades in just after the card lands (web: delay 0.15).
             // As tall as its rows and no taller (R-13: one task left a tall empty green card): the rows
             // as they are while they fit, a scroll inside once the card would pass ~70 % of the screen.
-            ViewThatFits(in: .vertical) {
-                statDetail(a).padding(2)
-                ScrollView { statDetail(a).padding(2) }
+            // `.frame(maxHeight:)` grew the card to the cap even for one row or none (QA, 20 Oct 2026);
+            // StatDetailCap offers the cap and keeps the content's own height.
+            StatDetailCap(cap: max(120, statModalSpace * 0.7 - 106)) {
+                ViewThatFits(in: .vertical) {
+                    statDetail(a).padding(2)
+                    ScrollView { statDetail(a).padding(2) }
+                }
             }
-            .frame(maxHeight: max(120, statModalSpace * 0.7 - 106))
             .opacity(morphReady ? 1 : 0)
         }
         .padding(18)
@@ -1438,7 +1441,7 @@ struct DashboardView: View {
                     Text(t.laneName).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                if let p = t.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
+                if let p = t.priority, p.uppercased() != "NONE" { NexusChip(text: TaskPriorityName.label(p), tone: prioTone(p)) }
             }
             .padding(.vertical, 4)
         }
@@ -1625,5 +1628,20 @@ struct StatusBarScrollEdge: ViewModifier {
         #else
         return 0
         #endif
+    }
+}
+
+/// Offers its one child at most `cap` points of height and is exactly as tall as the child then is: a short
+/// list stays short, a long one (a ScrollView inside a ViewThatFits) stops at the cap.
+private struct StatDetailCap: Layout {
+    let cap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: min(proposal.height ?? cap, cap)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }

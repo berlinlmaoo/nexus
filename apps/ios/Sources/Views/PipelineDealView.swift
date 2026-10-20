@@ -33,6 +33,8 @@ struct PipelineDealView: View {
     @State private var termToDelete: PipelineTerm?
     /// The folded contract → closing sections of an open deal, opened by hand.
     @State private var laterOpen = false
+    /// Presentation mode (R-20), set by the Pipeline header: amounts masked, money fields locked.
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var wide: Bool { hSize == .regular }
 
@@ -71,6 +73,7 @@ struct PipelineDealView: View {
         // The only .sheet of this view: add, edit or mark paid a payment term.
         .sheet(item: $termRoute) { route in
             PipelineTermSheet(store: store, dealId: dealId, route: route)
+                .environment(\.pipelinePresenting, presenting)
         }
         .task(id: "\(store.revision)-\(showHistory)") {
             if showHistory { await loadHistory() }
@@ -278,7 +281,7 @@ struct PipelineDealView: View {
                     termDerived(T("Payment status"), ts.paymentStatus)
                 }
                 PipelineFieldBox(T("Outstanding receivable")) {
-                    termDerived(T("Outstanding receivable"), PipelineFormat.idrFull(ts.outstanding))
+                    termDerived(T("Outstanding receivable"), PipelineFormat.idrFull(ts.outstanding, hidden: presenting))
                 }
                 PipelineFieldBox(T("Next due date")) {
                     termDerived(T("Next due date"), ts.nextDueDate.map { PipelineFormat.day($0) } ?? "–")
@@ -325,10 +328,13 @@ struct PipelineDealView: View {
                               onDelete: { termToDelete = $0 })
         }
 
-        // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms.
-        PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
-            PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
-                patch(["costs": costs.map(\.json), "costsBase": deal.costs.map(\.json)])
+        // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms. Presenting (R-20):
+        // the section is not drawn at all, not blurred.
+        if !presenting {
+            PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
+                PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
+                    patch(["costs": costs.map(\.json), "costsBase": deal.costs.map(\.json)])
+                }
             }
         }
 
@@ -547,7 +553,7 @@ struct PipelineDealView: View {
                     EmptyView()
                 } else if h.field == "term.created" || h.field == "term.deleted" || h.field == "term.restored" {
                     if let amount = termAmount(h.field == "term.deleted" ? h.before : h.after) {
-                        Text(PipelineFormat.idrFull(amount)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        Text(PipelineFormat.idrFull(amount, hidden: presenting)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     }
                 } else if h.field == "notes" || h.field == "term.note" {
                     Text(shown(h.field, h.after)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3)
@@ -623,7 +629,7 @@ struct PipelineDealView: View {
             }
         case .number(let n):
             switch field {
-            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount": return PipelineFormat.idrFull(n)
+            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount": return PipelineFormat.idrFull(n, hidden: presenting)
             case "probability": return PipelineFormat.pct(n)
             default: return n.rounded() == n ? String(Int(n)) : String(n)
             }
@@ -638,7 +644,7 @@ struct PipelineDealView: View {
                     if case .object(let o) = item, case .number(let n)? = o["amount"] { return sum + n }
                     return sum
                 }
-                return String(format: T("%d cost lines · %@"), a.count, PipelineFormat.idrFull(total))
+                return String(format: T("%d cost lines · %@"), a.count, PipelineFormat.idrFull(total, hidden: presenting))
             }
             return field == "links" ? String(format: T("%d links"), a.count) : value.pretty
         case .bool(let b): return b ? "✓" : "–"
@@ -955,8 +961,20 @@ struct PipelineMoneyInput: View {
     @State private var draft = ""
     @State private var sent: Double?
     @FocusState private var focused: Bool
+    @Environment(\.pipelinePresenting) private var presenting
 
     var body: some View {
+        Group {
+            if presenting { PipelineMaskedMoney(label: label) } else { field }
+        }
+        // Presenting drops a half-typed edit; the saved value shows again once the mode is off.
+        .onChange(of: presenting) { _, on in
+            if on { draft = value == 0 ? "" : PipelineFormat.plain(value); focused = false }
+        }
+        .onDisappear { if !presenting { commit() } }
+    }
+
+    private var field: some View {
         HStack(spacing: 6) {
             Text("Rp").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
             TextField("0", text: $draft)
@@ -976,7 +994,6 @@ struct PipelineMoneyInput: View {
             if !focused { draft = v == 0 ? "" : PipelineFormat.plain(v) }
         }
         .onChange(of: focused) { _, f in if !f { commit() } }
-        .onDisappear { commit() }
     }
 
     private func commit() {
@@ -1182,6 +1199,9 @@ struct PipelineTermsList: View {
     let onEdit: (PipelineTerm) -> Void
     let onPay: (PipelineTerm) -> Void
     let onDelete: (PipelineTerm) -> Void
+    @Environment(\.pipelinePresenting) private var presenting
+
+    private func money(_ n: Double) -> String { PipelineFormat.idrFull(n, hidden: presenting) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1200,12 +1220,15 @@ struct PipelineTermsList: View {
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                 totals
             }
-            Button(action: onAdd) {
-                Label(T("Add payment term"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 14).frame(minHeight: 38)
-                    .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // A new term starts with an amount: not while presenting.
+            if !presenting {
+                Button(action: onAdd) {
+                    Label(T("Add payment term"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(minHeight: 38)
+                        .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -1218,8 +1241,8 @@ struct PipelineTermsList: View {
                             .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         NexusChip(text: PipelineText.termStatus(t.status), tone: PipelineText.termTone(t.status))
                     }
-                    Text(PipelineFormat.idrFull(t.amount)).font(NXFont.text(13)).foregroundStyle(NX.foreground).monospacedDigit()
-                    if t.overpaid > 0 { Text(String(format: T("Overpaid by %@"), PipelineFormat.idrFull(t.overpaid))).font(NXFont.text(12)).foregroundStyle(NX.warning) }
+                    Text(money(t.amount)).font(NXFont.text(13)).foregroundStyle(NX.foreground).monospacedDigit()
+                    if t.overpaid > 0 { Text(String(format: T("Overpaid by %@"), money(t.overpaid))).font(NXFont.text(12)).foregroundStyle(NX.warning) }
                     Text(detail(t)).font(NXFont.text(12))
                         .foregroundStyle(t.daysOverdue > 7 ? ChipTone.danger.fg : NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1231,7 +1254,7 @@ struct PipelineTermsList: View {
             .accessibilityHint(T("Edit"))
             Menu {
                 Button { onEdit(t) } label: { Label(T("Edit"), systemImage: "pencil") }
-                if !t.isPaid {
+                if !t.isPaid && !presenting {
                     Button { onPay(t) } label: { Label(T("Mark paid"), systemImage: "checkmark.circle") }
                 }
                 Button(role: .destructive) { onDelete(t) } label: { Label(T("Delete"), systemImage: "trash") }
@@ -1252,7 +1275,7 @@ struct PipelineTermsList: View {
         if t.daysOverdue > 0 { parts.append(String(format: T(t.daysOverdue == 1 ? "%d day overdue" : "%d days overdue"), t.daysOverdue)) }
         if t.paidAmount > 0 {
             let when = t.paidAt.map { PipelineFormat.day($0) } ?? "–"
-            parts.append(String(format: T("Paid %@ on %@"), PipelineFormat.idrFull(t.paidAmount), when))
+            parts.append(String(format: T("Paid %@ on %@"), money(t.paidAmount), when))
         }
         if !t.invoiceNo.isEmpty { parts.append(t.invoiceNo) }
         return parts.isEmpty ? T("No due date") : parts.joined(separator: " · ")
@@ -1267,18 +1290,18 @@ struct PipelineTermsList: View {
             HStack {
                 Text(T("Total of terms")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                 Spacer()
-                Text(PipelineFormat.idrFull(total)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
+                Text(money(total)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
             }
             HStack {
-                Text(String(format: T("Paid %@"), PipelineFormat.idrFull(paid))).foregroundStyle(ChipTone.success.fg)
+                Text(String(format: T("Paid %@"), money(paid))).foregroundStyle(ChipTone.success.fg)
                 Spacer()
-                Text(String(format: T("Outstanding %@"), PipelineFormat.idrFull(owed))).foregroundStyle(owed > 0 ? NX.foreground : NX.mutedFg)
+                Text(String(format: T("Outstanding %@"), money(owed))).foregroundStyle(owed > 0 ? NX.foreground : NX.mutedFg)
             }
             .font(NXFont.text(12)).monospacedDigit()
             if ref > 0 && Swift.abs(total - ref) >= 1 {
                 Label {
                     Text(String(format: T(deal.invoiceValue > 0 ? "Terms add up to %@, invoice value is %@" : "Terms add up to %@, contract value is %@"),
-                                PipelineFormat.idrFull(total), PipelineFormat.idrFull(ref)))
+                                money(total), money(ref)))
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -1309,6 +1332,8 @@ struct PipelineTermSheet: View {
     @State private var err: String?
     @State private var clientRequestId = UUID().uuidString
     @State private var started = false
+    /// Presenting (R-20): the amounts stay as they are, masked and locked; the other fields still save.
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var term: PipelineTerm? {
         switch route {
@@ -1332,13 +1357,13 @@ struct PipelineTermSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if paying {
                         if let term {
-                            Text(String(format: T("%@ · %@ of %@ still owed"), term.label, PipelineFormat.idrFull(term.outstanding), PipelineFormat.idrFull(term.amount)))
+                            Text(String(format: T("%@ · %@ of %@ still owed"), term.label, PipelineFormat.idrFull(term.outstanding, hidden: presenting), PipelineFormat.idrFull(term.amount, hidden: presenting)))
                                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                         }
                         paidFields
                     } else {
                         PipelineFieldBox(T("Name")) { field(T("DP, Termin 1, Pelunasan…"), $label) }
-                        PipelineFieldBox(T("Amount")) { money($amount) }
+                        PipelineFieldBox(T("Amount")) { money($amount, label: T("Amount")) }
                         PipelineFieldBox(T("Due date")) {
                             PipelineDateInput(label: T("Due date"), value: dueDate) { dueDate = $0 }
                         }
@@ -1372,9 +1397,9 @@ struct PipelineTermSheet: View {
     }
 
     @ViewBuilder private var paidFields: some View {
-        PipelineFieldBox(T("Amount paid")) { money($paid) }
+        PipelineFieldBox(T("Amount paid")) { money($paid, label: T("Amount paid")) }
         let extra = (PipelineFormat.parseMoney(paid) ?? 0) - (term?.amount ?? PipelineFormat.parseMoney(amount) ?? 0)
-        if extra > 0 { Text(String(format: T("Overpaid by %@. It still counts as paid in full."), PipelineFormat.idrFull(extra))).font(NXFont.text(12)).foregroundStyle(NX.warning).fixedSize(horizontal: false, vertical: true) }
+        if extra > 0 && !presenting { Text(String(format: T("Overpaid by %@. It still counts as paid in full."), PipelineFormat.idrFull(extra))).font(NXFont.text(12)).foregroundStyle(NX.warning).fixedSize(horizontal: false, vertical: true) }
         PipelineFieldBox(T("Paid on")) {
             PipelineDateInput(label: T("Paid on"), value: paidAt) { paidAt = $0 }
         }
@@ -1393,13 +1418,22 @@ struct PipelineTermSheet: View {
         .nxSoftField(radius: 12)
     }
 
-    private func money(_ text: Binding<String>) -> some View {
-        HStack(spacing: 6) {
-            Text("Rp").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-            TextField("0", text: text).font(NXFont.text(15)).keyboardType(.numberPad).monospacedDigit()
+    @ViewBuilder private func money(_ text: Binding<String>, label: String) -> some View {
+        if presenting {
+            Text(PipelineFormat.moneyMask).font(NXFont.text(15)).tracking(1).foregroundStyle(NX.mutedFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .nxSoftField(radius: 12)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(label): \(T("hidden in presentation mode"))")
+        } else {
+            HStack(spacing: 6) {
+                Text("Rp").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                TextField("0", text: text).font(NXFont.text(15)).keyboardType(.numberPad).monospacedDigit()
+            }
+            .padding(12)
+            .nxSoftField(radius: 12)
         }
-        .padding(12)
-        .nxSoftField(radius: 12)
     }
 
     private func start() {

@@ -298,6 +298,8 @@ struct PipelineTab: View {
     @State private var healthFilter = ""
     @State private var route: PipelineRoute?
     @State private var exporting = false
+    /// Presentation mode (R-20): plain state on purpose, never stored, so the Pipeline always opens with it off.
+    @State private var presenting = false
 
     init(projectId: String, newDealRequest: Int) {
         self.projectId = projectId
@@ -360,6 +362,7 @@ struct PipelineTab: View {
                     Divider().overlay(NX.border)
                     content
                 }
+                .environment(\.pipelinePresenting, presenting)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -367,7 +370,7 @@ struct PipelineTab: View {
         .liveRefresh(every: 60, on: [.nexusPipelineChanged], projectId: projectId) { await store.load() }
         .onChange(of: newDealRequest) { _, _ in route = .newDeal("Incoming") }
         .onChange(of: store.signedOut) { _, out in if out { auth.logout() } }
-        .sheet(item: $route) { r in sheet(r) }
+        .sheet(item: $route) { r in sheet(r).environment(\.pipelinePresenting, presenting) }
         // While a sheet is up it shows the refusal itself (PipelineDealView); this one is for the board.
         .alert(store.actionError ?? "", isPresented: Binding(
             get: { route == nil && store.actionError != nil },
@@ -422,11 +425,13 @@ struct PipelineTab: View {
                     searchField.frame(maxWidth: 380)
                     modePicker.frame(maxWidth: 320)
                     Spacer(minLength: 0)
+                    presentationToggle
                     moreMenu
                 }
             } else {
                 HStack(spacing: 8) {
                     searchField
+                    presentationToggle
                     moreMenu
                 }
                 modePicker
@@ -470,6 +475,27 @@ struct PipelineTab: View {
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(search.isEmpty ? NX.border : NX.violet.opacity(0.55)))
         .accessibilityLabel(T("Search deals"))
+    }
+
+    /// The eye: presentation mode on and off (R-20). Tinted while it is on, so nobody forgets it.
+    private var presentationToggle: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { presenting.toggle() }
+        } label: {
+            Image(systemName: presenting ? "eye.slash" : "eye")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(presenting ? NX.violetText : NX.foreground)
+                .frame(width: 42, height: 42)
+                .background(presenting ? NX.violet.opacity(0.12) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(presenting ? NX.violet.opacity(0.55) : NX.border))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("pipeline.presentation")
+        .accessibilityLabel(T("Presentation mode"))
+        .accessibilityValue(presenting ? T("On") : T("Off"))
+        .accessibilityHint(presenting ? T("Amounts are hidden. Tap to show them.") : T("Hides every amount on screen"))
+        .accessibilityAddTraits(presenting ? .isSelected : [])
     }
 
     /// PM and BD filters and the Excel download, in one menu next to search (no row of small buttons).
@@ -768,6 +794,7 @@ struct PipelinePhaseStepper: View {
 struct PipelineKpiStrip: View {
     let summary: PipelineSummary
     var wide: Bool = false
+    @Environment(\.pipelinePresenting) private var presenting
 
     private struct Tile: Identifiable {
         let id: String
@@ -782,7 +809,20 @@ struct PipelineKpiStrip: View {
 
     private var tiles: [Tile] {
         let s = summary
-        return [
+        guard presenting else { return readings(s) }
+        // Presenting: every money tile reads "Rp ••••" in the same quiet tone, so neither a zero nor a red
+        // (negative / overdue) tile gives a figure away.
+        let money: Set<String> = ["open", "weighted", "won", "receivable", "realProfit"]
+        return readings(s).map { t in
+            guard money.contains(t.id) else { return t }
+            let sub = t.id == "receivable" && s.receivableOverdue > 0
+                ? String(format: T("%@ overdue"), PipelineFormat.moneyMask) : t.sub
+            return Tile(id: t.id, label: t.label, value: PipelineFormat.moneyMask, sub: sub, zero: true)
+        }
+    }
+
+    private func readings(_ s: PipelineSummary) -> [Tile] {
+        [
             Tile(id: "open", label: T("Open pipeline"), value: PipelineFormat.idr(s.openValue),
                  sub: String(format: T("%d open deals"), s.openCount), zero: s.openValue == 0),
             Tile(id: "weighted", label: T("Weighted forecast"), value: PipelineFormat.idr(s.weightedValue),
@@ -985,6 +1025,7 @@ struct PipelineColumnView: View {
     let onMove: (String, String) -> Void
     let onAdd: (String) -> Void
     let onRefresh: () async -> Void
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var total: Double { deals.reduce(0) { $0 + $1.shownValue } }
 
@@ -999,7 +1040,7 @@ struct PipelineColumnView: View {
                     .background(NX.background, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
                 Spacer(minLength: 6)
                 if total > 0 {
-                    Text(PipelineFormat.idr(total)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                    Text(PipelineFormat.idr(total, hidden: presenting)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                         .monospacedDigit().lineLimit(1)
                 }
                 if stage != PipelineVocab.lostStage {
@@ -1056,6 +1097,7 @@ struct PipelineDealCard: View {
     let today: String
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var group: String { PipelineVocab.group(of: deal.stage) }
     private var flagged: Bool { deal.health.key == "CRITICAL" || deal.health.key == "ATTENTION" }
@@ -1099,13 +1141,14 @@ struct PipelineDealCard: View {
                     }
                     Spacer(minLength: 6)
                     if deal.shownValue > 0 {
-                        Text(PipelineFormat.idr(deal.shownValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                        Text(PipelineFormat.idr(deal.shownValue, hidden: presenting)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                             .monospacedDigit().lineLimit(1).layoutPriority(1)
                     }
                 }
             }
             // Margin on the net value (Control Tower v6, 14 Oct 2026); only on a deal with cost lines and a net value.
-            if !deal.costs.isEmpty, let margin = deal.margin {
+            // Presenting: no margin line at all (its percentage gives the money away too).
+            if !presenting, !deal.costs.isEmpty, let margin = deal.margin {
                 HStack(spacing: 4) {
                     Text("\(T("Margin")):").foregroundStyle(NX.mutedFg)
                     Text("\(PipelineFormat.idr(margin)) (\(PipelineFormat.pct(deal.marginPct ?? 0)))")
@@ -1216,6 +1259,7 @@ struct PipelineTable: View {
 
     @State private var sort: SortKey = .urgency
     @State private var ascending = true
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var rows: [PipelineDeal] {
         let stageIndex = Dictionary(stages.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
@@ -1327,9 +1371,9 @@ struct PipelineTable: View {
             Text(PipelineFormat.pct(d.probability)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
             // Blank, not "–", where nothing is known yet (owner, 9 Oct 2026).
-            Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+            Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue, hidden: presenting) : "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit().frame(width: 96, alignment: .trailing)
-            Text(d.receivable != 0 ? PipelineFormat.idr(d.receivable) : "").font(NXFont.text(12))
+            Text(d.receivable != 0 ? PipelineFormat.idr(d.receivable, hidden: presenting) : "").font(NXFont.text(12))
                 .foregroundStyle(NX.foreground).monospacedDigit().frame(width: 96, alignment: .trailing)
             overdueText(d).frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 1) {
@@ -1371,11 +1415,11 @@ struct PipelineTable: View {
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 3) {
                 if d.netValue != 0 {
-                    Text(PipelineFormat.idr(d.netValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                    Text(PipelineFormat.idr(d.netValue, hidden: presenting)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
                 }
                 if d.receivable > 0 {
                     HStack(spacing: 4) {
-                        Text(PipelineFormat.idr(d.receivable)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                        Text(PipelineFormat.idr(d.receivable, hidden: presenting)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
                         overdueText(d)
                     }
                 }
@@ -1399,8 +1443,8 @@ struct PipelineTable: View {
             Text(String(format: T("%d deals"), list.count)).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(T("Net value")) \(PipelineFormat.idrFull(net))").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
-                Text("\(T("Receivable")) \(PipelineFormat.idrFull(receivable))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                Text("\(T("Net value")) \(PipelineFormat.idrFull(net, hidden: presenting))").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                Text("\(T("Receivable")) \(PipelineFormat.idrFull(receivable, hidden: presenting))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -1420,6 +1464,7 @@ struct PipelineHealthView: View {
     let wide: Bool
     let onOpen: (String) -> Void
     let onRefresh: () async -> Void
+    @Environment(\.pipelinePresenting) private var presenting
 
     private var live: [PipelineDeal] { deals.filter { $0.stageGroup != "Lost" && $0.stageGroup != "Closed" } }
     private var flagged: [PipelineDeal] {
@@ -1470,7 +1515,7 @@ struct PipelineHealthView: View {
                                 PipelineHealthPill(key: d.health.key)
                                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                 Spacer(minLength: 4)
-                                Text(PipelineFormat.idr(d.netValue)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                                Text(PipelineFormat.idr(d.netValue, hidden: presenting)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
                             }
                             Text([d.code, PipelineText.stage(d.stage), d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -1527,7 +1572,7 @@ struct PipelineHealthView: View {
 
     private var latePayments: some View {
         let sum = late.reduce(0) { $0 + $1.receivable }
-        return PipelinePanel(icon: "creditcard", title: T("Late payments"), meta: late.isEmpty ? nil : PipelineFormat.idr(sum)) {
+        return PipelinePanel(icon: "creditcard", title: T("Late payments"), meta: late.isEmpty ? nil : PipelineFormat.idr(sum, hidden: presenting)) {
             if late.isEmpty {
                 calm(T("No receivable is past its due date."))
             } else {
@@ -1537,7 +1582,7 @@ struct PipelineHealthView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                Text("\(d.paymentStatusShown) · \(PipelineFormat.idr(d.receivable))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                Text("\(d.paymentStatusShown) · \(PipelineFormat.idr(d.receivable, hidden: presenting))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                             }
                             Spacer(minLength: 4)
                             Text(String(format: T(d.daysOverdue == 1 ? "%d day" : "%d days"), d.daysOverdue))
