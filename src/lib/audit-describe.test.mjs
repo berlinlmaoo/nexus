@@ -412,6 +412,26 @@ if (PRINT) {
   }
 }
 
+// Board status change with / without the evidence it asks for (owner, 20 Oct 2026).
+check("attendance_status_override with evidence", {
+  action: "attendance_status_override", entityType: "attendance_day", entityId: `${rina.id}:2026-10-06`, entityName: "override:SICK:2026-10-06", userId: budi.id, user: budi,
+  metadata: { targetUserId: rina.id, date: "2026-10-06", override: "SICK", from: "ABSENT", evidenceAsked: "SICK_NOTE", evidenceUrl: "/api/files/attendance/requests/override-x.jpg", evidenceName: "surat.jpg", evidenceMissing: false },
+}, (o) => {
+  assert.match(o.title, /^Budi Santoso overrode Rina Kartika.s attendance on 6 Oct 2026 \(sick\) — evidence attached$/)
+})
+check("attendance_status_override without evidence", {
+  action: "attendance_status_override", entityType: "attendance_day", entityId: `${rina.id}:2026-10-05`, entityName: "override:PRESENT:2026-10-05", userId: budi.id, user: budi,
+  metadata: { targetUserId: rina.id, date: "2026-10-05", override: "PRESENT", from: "ABSENT", evidenceAsked: "PRESENT_EVIDENCE", evidenceUrl: null, evidenceMissing: true },
+}, (o) => {
+  assert.match(o.title, / — no evidence attached$/)
+})
+check("attendance_status_override, nothing asked", {
+  action: "attendance_status_override", entityType: "attendance_day", entityId: `${rina.id}:2026-10-07`, entityName: "override:LEAVE:2026-10-07", userId: budi.id, user: budi,
+  metadata: { targetUserId: rina.id, date: "2026-10-07", override: "LEAVE", from: null, evidenceAsked: null, evidenceUrl: null, evidenceMissing: false },
+}, (o) => {
+  assert.ok(!/evidence/.test(o.title), o.title)
+})
+
 if (failed) {
   console.log(`\n${failed} failed`)
   process.exit(1)
