@@ -155,33 +155,46 @@ struct NativeOptionalDay: View {
     let label: String
     @Binding var value: Date?
     var controlID: String? = nil
-    /// A compact row, "Due  [Add date]", the picked day as the system date chip with a clear button; no toggle
-    /// in a box (Berlin device review 19 Oct, R-16).
+    @State private var picking = false
+    /// A compact row, "Due  [Add date]", the picked day with a clear button; no toggle in a box (Berlin device
+    /// review 19 Oct, R-16). The day is a chip of the "Add date" size and style, its calendar in a popover,
+    /// not the larger grey system date chip (Q-5, Berlin 20 Oct).
     var body: some View {
         HStack(spacing: 8) {
             Text(T(label)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            if value != nil {
-                DatePicker(T(label), selection: Binding(get: { value ?? Date() }, set: { value = $0 }), displayedComponents: .date)
-                    .labelsHidden().datePickerStyle(.compact)
-                    .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!).environment(\.locale, AppDateLocale.current)
-                    .accessibilityIdentifier((controlID ?? "native.day." + label) + ".date")
+            if let day = value {
+                Button { picking = true } label: {
+                    chip(AppDateLocale.shortDate(day, timeZone: TimeZone(secondsFromGMT: 0)), systemImage: "calendar")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(T(label)): \(AppDateLocale.shortDate(day, timeZone: TimeZone(secondsFromGMT: 0)))")
+                .accessibilityIdentifier((controlID ?? "native.day." + label) + ".date")
+                .popover(isPresented: $picking) {
+                    DatePicker(T(label), selection: Binding(get: { value ?? day }, set: { value = $0; picking = false }), displayedComponents: .date)
+                        .labelsHidden().datePickerStyle(.graphical).tint(NX.violetText)
+                        .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!).environment(\.locale, AppDateLocale.current)
+                        .frame(width: 320).padding(12)
+                        .presentationCompactAdaptation(.popover)
+                }
                 Button { value = nil } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(NX.mutedFg).touchTarget44(drawn: 18)
                 }
                 .buttonStyle(.plain).accessibilityLabel(T("Clear date"))
             } else {
-                Button { value = CalDays.date(CalDays.wibToday()) } label: {
-                    Label(T("Add date"), systemImage: "calendar")
-                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.violetText)
-                        .padding(.horizontal, 10).frame(minHeight: 30)
-                        .background(NX.muted, in: Capsule())
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(controlID ?? "native.day." + label)
+                Button { value = CalDays.date(CalDays.wibToday()) } label: { chip(T("Add date"), systemImage: "calendar") }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(controlID ?? "native.day." + label)
             }
             Spacer(minLength: 0)
         }
+    }
+
+    private func chip(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(NXFont.text(13, .medium)).foregroundStyle(NX.violetText).monospacedDigit()
+            .padding(.horizontal, 10).frame(minHeight: 30)
+            .background(NX.muted, in: Capsule())
+            .frame(minHeight: 44).contentShape(Rectangle())
     }
 }
 
