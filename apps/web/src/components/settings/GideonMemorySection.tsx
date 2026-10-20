@@ -57,6 +57,8 @@ function relTime(iso: string, locale: string, justNow: string) {
 }
 
 const group = "overflow-hidden rounded-xl border border-border bg-card shadow-soft divide-y divide-border";
+// Memory summary (Q-7, 20 Oct 2026): the same grouped card, without the hairline border, like iOS.
+const summaryGroup = "overflow-hidden rounded-xl bg-card shadow-soft divide-y divide-border";
 const caption = "px-1 pt-1.5 text-xs leading-relaxed text-muted-foreground";
 
 export function GideonMemorySection() {
@@ -250,7 +252,7 @@ function MemorySummary({ onBack }: { onBack: () => void }) {
         {sections.map((s, i) => (
           <section key={s.kind} className={cn("space-y-1.5", animate && "gmem-reveal")} style={animate ? ({ "--i": i } as React.CSSProperties) : undefined}>
             <h3 className="px-1 text-xs font-semibold text-muted-foreground">{t(s.label)}</h3>
-            <ul className={group}>
+            <ul className={summaryGroup}>
               {s.rows.map((m) => <MemoryRow key={m.id} memory={m} locale={locale} paused={paused} onDone={() => void refresh()} />)}
             </ul>
           </section>
@@ -258,13 +260,13 @@ function MemorySummary({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="sticky bottom-0 mt-6 bg-background/95 pb-2 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <form className="flex items-center gap-2 rounded-full bg-muted/70 py-1 pl-4 pr-1 transition-shadow focus-within:ring-2 focus-within:ring-primary/30"
+        <form className="flex items-center gap-2 rounded-full bg-muted/70 py-1 pl-4 pr-1 transition-shadow focus-within:ring-2 focus-within:ring-ring/30"
           onSubmit={(e) => { e.preventDefault(); if (text.trim() && !add.isPending) add.mutate(); }}>
           <input value={text} onChange={(e) => setText(e.target.value)} maxLength={data?.textMax ?? 200} disabled={!data || paused || atMax}
             placeholder={t("Add or update…")} aria-label={t("Something for GIDEON to remember")}
             className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60" />
           <button type="submit" disabled={!text.trim() || add.isPending || paused || atMax} aria-label={t("Add")} title={t("Add")}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 active:scale-95 disabled:bg-muted disabled:text-muted-foreground">
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition hover:bg-sidebar-primary/90 active:scale-95 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted">
             {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
           </button>
         </form>
