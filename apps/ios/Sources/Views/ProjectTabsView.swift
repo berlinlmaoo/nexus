@@ -1116,9 +1116,9 @@ struct TimelineTab: View {
     static func dayCount(_ n: Int) -> String { n == 1 ? T("1 day") : String(format: T("%d days"), n) }
 
     /// The phone name's size: 12 pt, smaller (down to 9 pt) only while its longest word is wider than the
-    /// text's room in the 120 pt column (the check circle, the subtask arrow and the paddings taken off).
+    /// text's room in the 120 pt column (the check circle, the subtask arrow, the stack spacing and the padding taken off).
     static func phoneNameSize(_ title: String, subtask: Bool) -> CGFloat {
-        UntitledText.fittingSize(title, room: 120 - 12 - 18 - 8 - 4 - (subtask ? 19 : 0), base: 12, minimum: 9)
+        UntitledText.fittingSize(title, room: 120 - 12 - 18 - 8 - 8 - (subtask ? 19 : 0), base: 12, minimum: 9)
     }
 }
 

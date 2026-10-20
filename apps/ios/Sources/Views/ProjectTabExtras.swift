@@ -611,9 +611,10 @@ struct ProjectTableRow: View {
 
     // MARK: cells
 
-    /// The name text's width in its cell: the paddings, the subtask arrow and the selection mark taken off.
+    /// The name text's width in its cell: the paddings, the spacer (and the stack spacing before it), the
+    /// subtask arrow and the selection mark taken off.
     private var nameRoom: CGFloat {
-        cols.name - (task.isSubtask ? 26 : 14) - 10 - 4 - (task.isSubtask ? 20 : 0) - (selecting ? 28 : 0)
+        cols.name - (task.isSubtask ? 26 : 14) - 10 - 8 - 4 - (task.isSubtask ? 20 : 0) - (selecting ? 30 : 0)
     }
 
     @ViewBuilder private var nameCell: some View {

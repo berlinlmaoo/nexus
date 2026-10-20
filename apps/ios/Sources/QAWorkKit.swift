@@ -44,7 +44,8 @@ enum UntitledText {
                 .addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: weight]])
             let font = UIFont(descriptor: desc, size: size)
             let widest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-            if widest <= room { break }
+            // A little slack: the measured width can be a shade under the drawn medium weight.
+            if widest * 1.04 <= room { break }
             size -= 0.5
         }
         return size
