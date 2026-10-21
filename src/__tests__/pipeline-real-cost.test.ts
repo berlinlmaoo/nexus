@@ -160,7 +160,7 @@ describe('cost list validation', () => {
   it('reads anything stored that is not a list as no costs', () => {
     expect(costsOf(null)).toEqual([])
     expect(costsOf({})).toEqual([])
-    expect(costsOf([{ id: 'a', label: 'A', amount: 'x' }, 'junk'])).toEqual([{ id: 'a', label: 'A', amount: 0 }])
+    expect(costsOf([{ id: 'a', label: 'A', amount: 'x' }, 'junk'])).toEqual([{ id: 'a', label: 'A', amount: 0, budgetId: null }])
   })
   it('parseDealFields accepts costs and answers INVALID_FIELD shape on a bad one', async () => {
     const ok = await parseDealFields({ costs: [{ label: 'A', amount: 5 }] }, 'w1')
@@ -237,7 +237,8 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(saved.margin).toBe(65_000_000)
     expect(prisma.pipelineDeal.update).toHaveBeenCalledOnce()
     const call = vi.mocked(prisma.pipelineDeal.update).mock.calls[0][0] as { data: { costs: unknown } }
-    expect(call.data.costs).toEqual([{ id: 'c1', label: 'Vendor sound', amount: 35_000_000 }])
+    // v8: every stored line carries its budget category key (null = none).
+    expect(call.data.costs).toEqual([{ id: 'c1', label: 'Vendor sound', amount: 35_000_000, budgetId: null }])
   })
 
   it("the export is the GM's 33 columns in his order plus Diperbarui Oleh, with real numbers, dates and formats", async () => {
@@ -265,8 +266,11 @@ describe('who receives the numbers (project access, server side)', () => {
       'Posisi Kas Bersih', 'Status Closing', 'Total Real Cost', 'Margin (Rp)', 'Margin (%)', 'Project Health', 'Tanggal Event',
       'Next Action', 'Tanggal Next Action', 'Blocker / Issue', 'Catatan', 'Dokumen & Link', 'Rincian Real Cost', 'Terakhir Diperbarui',
       'Diperbarui Oleh',
+      // Control Tower v8 (21 Oct 2026): nine columns appended at the end.
+      'Nilai Barter', 'Bentuk Kompensasi Barter', 'Total Cashback', 'Rincian Cashback', 'Kontak Project', 'Total Budget',
+      'Rincian Budget', 'Sumber', 'Tahun Event',
     ])
-    expect(header).toHaveLength(34)
+    expect(header).toHaveLength(43)
     const at = (name: string) => header.indexOf(name) + 1
     const r2 = ws.getRow(2)
     expect(r2.getCell(at('Nilai Kontrak')).value).toBe(120_000_000)
@@ -315,7 +319,7 @@ describe('who receives the numbers (project access, server side)', () => {
     await wb.xlsx.load(await res.arrayBuffer())
     const header = (wb.getWorksheet('Master Project')!.getRow(1).values as unknown[]).slice(1)
     expect(header).toEqual(MASTER_COLUMNS.map((c) => c.en))
-    expect(header).toHaveLength(34)
+    expect(header).toHaveLength(43)
     expect(header[32]).toBe('Last Updated')
     expect(header[33]).toBe('Updated By')
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Master Project', 'Payment Terms', 'Info'])

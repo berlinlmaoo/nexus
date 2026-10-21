@@ -34,7 +34,14 @@ export const DELIVERABLE_STATUS_OPTIONS = ["Not Started", "Briefing", "In Progre
 export const DELIVERABLE_RISK_OPTIONS = ["Aman", "At Risk", "Overdue"] as const
 export const PAYMENT_STATUS_OPTIONS = ["Not Yet", "Upcoming", "Due", "Overdue", "Partial", "Paid"] as const
 export const CLOSING_STATUS_OPTIONS = ["Not Ready", "In Progress", "Waiting BAST", "Waiting Client Payment", "Waiting Vendor Settlement", "Waiting Deliverables", "Ready to Close", "Closed"] as const
-export const LINK_TYPES = ["SPK", "Kontrak", "MOU", "Invoice", "Lainnya"] as const
+/**
+ * Document & link types (Control Tower v8, 21 Oct 2026: Deck, Quotation, Contract, SPK, MOU, Invoice, Report,
+ * Other). "Kontrak" and "Lainnya" stay the stored keys of Contract and Other (documents saved before v8 keep
+ * theirs); clients label them.
+ */
+export const LINK_TYPES = ["Deck", "Quotation", "Kontrak", "SPK", "MOU", "Invoice", "Report", "Lainnya"] as const
+/** Who a project contact is (Control Tower v8). Stored as these English keys; clients label them. */
+export const CONTACT_ROLES = ["Client", "Vendor", "Broker", "PM (client side)", "Finance", "Admin", "Other"] as const
 
 /** Every option list, as GET …/pipeline sends it (`vocab`), so a client can draw its pickers from the server. */
 export const PIPELINE_VOCAB = {
@@ -49,6 +56,7 @@ export const PIPELINE_VOCAB = {
   paymentStatuses: PAYMENT_STATUS_OPTIONS,
   closingStatuses: CLOSING_STATUS_OPTIONS,
   linkTypes: LINK_TYPES,
+  contactRoles: CONTACT_ROLES,
   termStatuses: ["Not Invoiced", "Invoiced", "Partial", "Paid", "Overdue"],
 } as const
 
@@ -105,7 +113,16 @@ export function dealValue(d: Pick<PipelineDealFacts, "netValue" | "contractValue
 // access, like every other field of the deal (owner, 14 Oct 2026).
 
 /** One real-cost line of a deal. `id` is the client's, kept so a list can be edited line by line. */
-export type PipelineCostItem = { id: string; label: string; amount: number }
+export type PipelineCostItem = {
+  id: string
+  label: string
+  amount: number
+  /**
+   * The budget category this cost is booked against (Control Tower v8, 21 Oct 2026): the id of one of the
+   * deal's budget items, or null / absent = not assigned. It never changes the margin.
+   */
+  budgetId?: string | null
+}
 
 export type DealMargin = {
   /** Σ amount of the cost lines. */
@@ -462,4 +479,67 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     }
   }
   return s
+}
+
+// ── Control Tower v8 (21 Oct 2026): cashback, project contacts, budget expenses, barter, year filter ─────
+// Cashback recipients, contacts and budget categories are rows of their own (PipelineDealItem, kind
+// "cashback" | "contact" | "budget"), so each one is added, edited and deleted on its own (and a delete can
+// be restored from Audit like a payment term). None of them changes Margin or Real Profit: those stay
+// net value − total real cost.
+
+export type PipelineItemKind = "cashback" | "contact" | "budget"
+export const PIPELINE_ITEM_KINDS: readonly PipelineItemKind[] = ["cashback", "contact", "budget"]
+
+/** One budget category with what the cost lines booked against it have used. remaining < 0 = over budget. */
+export type BudgetUsage = { id: string; name: string; amount: number; spent: number; remaining: number }
+
+/** Σ amount over a list (cashback recipients, budget categories); a value that is not a finite number counts 0. */
+export function amountTotalOf(items: readonly { amount: number }[] | null | undefined): number {
+  let total = 0
+  for (const i of items ?? []) total += Number.isFinite(i?.amount) ? i.amount : 0
+  return total
+}
+
+/** Each budget category with the cost lines booked against it (by budgetId): spent and what is left. */
+export function budgetUsageOf(
+  budgets: readonly { id: string; name: string; amount: number }[] | null | undefined,
+  costs: readonly PipelineCostItem[] | null | undefined,
+): BudgetUsage[] {
+  const spent = new Map<string, number>()
+  for (const c of costs ?? []) {
+    if (!c?.budgetId) continue
+    spent.set(c.budgetId, (spent.get(c.budgetId) ?? 0) + (Number.isFinite(c.amount) ? c.amount : 0))
+  }
+  return (budgets ?? []).map((b) => {
+    const used = spent.get(b.id) ?? 0
+    return { id: b.id, name: b.name, amount: b.amount, spent: used, remaining: (b.amount || 0) - used }
+  })
+}
+
+/** The year a deal counts in for the year filter: its event / main date's calendar year (cut-off 31 Dec); null without one. */
+export function eventYearOf(d: { mainDate?: string | null }): number | null {
+  const y = d.mainDate ? Number.parseInt(d.mainDate.slice(0, 4), 10) : NaN
+  return Number.isFinite(y) ? y : null
+}
+
+/** Every year that has at least one deal, newest first (the year filter's options). */
+export function dealYearsOf(deals: readonly { mainDate?: string | null }[]): number[] {
+  const set = new Set<number>()
+  for (const d of deals) {
+    const y = eventYearOf(d)
+    if (y !== null) set.add(y)
+  }
+  return [...set].sort((a, b) => b - a)
+}
+
+/** The year filter: null = every deal; a year = only deals whose event date falls in it (no date = left out). */
+export function filterByYear<T extends { mainDate?: string | null }>(deals: readonly T[], year: number | null): T[] {
+  return year === null ? [...deals] : deals.filter((d) => eventYearOf(d) === year)
+}
+
+/** Parses ?year= (a 4-digit year, or absent / "all" = every year). undefined = refused. */
+export function parseYearParam(v: string | null): number | null | undefined {
+  if (v === null || v === "" || v === "all") return null
+  if (!/^\d{4}$/.test(v)) return undefined
+  return Number(v)
 }

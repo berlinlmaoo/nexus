@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client"
 import { checkProjectAccess, type AccessLevel } from "@/lib/rbac"
 import {
   CLOSING_STATUS_OPTIONS,
+  CONTACT_ROLES,
   CONTRACT_STATUS_OPTIONS,
   DELIVERABLE_RISK_OPTIONS,
   DELIVERABLE_STATUS_OPTIONS,
@@ -12,7 +13,10 @@ import {
   READINESS_OPTIONS,
   SERVICE_OPTIONS,
   VREG_STATUS_OPTIONS,
+  amountTotalOf,
+  budgetUsageOf,
   daysOverdueOf,
+  eventYearOf,
   healthOf,
   isWonStage,
   marginOf,
@@ -24,6 +28,7 @@ import {
   termStatusOf,
   termSummaryOf,
   type PipelineCostItem,
+  type PipelineItemKind,
 } from "@/lib/pipeline"
 import { documentsOut, mergeDocuments, storedDocs } from "@/lib/pipeline-documents"
 
@@ -47,10 +52,26 @@ export const dealInclude = {
   executionCalendarProject: { select: { id: true, name: true } },
   executionFolder: { select: { id: true, name: true } },
   terms: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+  // Cashback recipients, contacts and budget categories (Control Tower v8, 21 Oct 2026).
+  items: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.PipelineDealInclude
 
 type DealRow = Prisma.PipelineDealGetPayload<{ include: typeof dealInclude }>
 type TermRow = DealRow["terms"][number]
+type ItemRow = DealRow["items"][number]
+
+/** A cashback recipient on the wire (Control Tower v8). */
+export function serializeCashback(i: ItemRow) {
+  return { id: i.id, dealId: i.dealId, position: i.position, name: i.name, amount: i.amount, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() }
+}
+/** A project contact on the wire (Control Tower v8). `role` is one of CONTACT_ROLES. */
+export function serializeContact(i: ItemRow) {
+  return { id: i.id, dealId: i.dealId, position: i.position, role: i.role, name: i.name, phone: i.phone, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() }
+}
+/** One item of any kind, as the item routes answer it. */
+export function serializeItem(i: ItemRow) {
+  return { kind: i.kind as PipelineItemKind, ...(i.kind === "contact" ? serializeContact(i) : serializeCashback(i)) }
+}
 
 /** A payment term on the wire, with what the rules derive from it (owner, 9 Oct 2026). */
 export function serializeTerm(t: TermRow, today: string) {
@@ -146,6 +167,14 @@ export function serializeDeal(row: DealRow, today: string) {
     costs: costsOf(row.costs),
   }
   const margin = marginOf(facts)
+  // Control Tower v8 (21 Oct 2026). Old rows have no items: every list reads [] and every total 0.
+  const items = row.items ?? []
+  const cashback = items.filter((i) => i.kind === "cashback").map(serializeCashback)
+  const contacts = items.filter((i) => i.kind === "contact").map(serializeContact)
+  const budgetRows = items.filter((i) => i.kind === "budget")
+  const budgetUse = budgetUsageOf(budgetRows.map((b) => ({ id: b.id, name: b.name, amount: b.amount })), facts.costs)
+  const budgets = budgetRows.map((b, n) => ({ ...serializeCashback(b), spent: budgetUse[n].spent, remaining: budgetUse[n].remaining }))
+  const mainDate = dateOut(row.mainDate)
   return {
     id: row.id,
     projectId: row.projectId,
@@ -199,6 +228,20 @@ export function serializeDeal(row: DealRow, today: string) {
     costTotal: margin.totalCost,
     margin: margin.margin,
     marginPct: margin.marginPct,
+    // Control Tower v8 (21 Oct 2026) — all additive. Barter: value (money) + the form it takes.
+    barterValue: row.barterValue ?? 0,
+    barterCompensation: row.barterCompensation ?? "",
+    // Cashback recipients [{ id, name, amount }] and their total (money: hidden in presentation mode).
+    cashback,
+    cashbackTotal: amountTotalOf(cashback),
+    // Project contacts [{ id, role, name, phone }].
+    contacts,
+    // Budget categories [{ id, name, amount, spent, remaining }]: spent = Σ cost lines with that budgetId,
+    // remaining = amount − spent (negative = over budget). Budget never changes margin / real profit.
+    budgets,
+    budgetTotal: amountTotalOf(budgets),
+    // The year filter's key: the event / main date's year, null without one.
+    eventYear: eventYearOf({ mainDate }),
   }
 }
 
@@ -222,9 +265,15 @@ export function costsOf(raw: unknown): PipelineCostItem[] {
   const out: PipelineCostItem[] = []
   for (const c of raw) {
     if (!c || typeof c !== "object") continue
-    const { id, label, amount } = c as Record<string, unknown>
+    const { id, label, amount, budgetId } = c as Record<string, unknown>
     if (typeof id !== "string") continue
-    out.push({ id, label: typeof label === "string" ? label : "", amount: typeof amount === "number" && Number.isFinite(amount) ? amount : 0 })
+    out.push({
+      id,
+      label: typeof label === "string" ? label : "",
+      amount: typeof amount === "number" && Number.isFinite(amount) ? amount : 0,
+      // Control Tower v8: the budget category the line is booked against (null = none).
+      budgetId: typeof budgetId === "string" && budgetId ? budgetId : null,
+    })
   }
   return out
 }
@@ -241,6 +290,11 @@ export function normalizeCosts(v: unknown): PipelineCostItem[] | undefined {
   for (const raw of v) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
     const { id, label, amount } = raw as Record<string, unknown>
+    // budgetId (Control Tower v8): a category id, or null / "" = none. A line sent WITHOUT the key (every app
+    // before v8) leaves it undefined here; keepBudgetIds then puts back what is stored, never wiping it.
+    const hasBudget = "budgetId" in (raw as Record<string, unknown>)
+    const rawBudget = (raw as Record<string, unknown>).budgetId
+    if (hasBudget && rawBudget !== null && rawBudget !== "" && (typeof rawBudget !== "string" || !COST_ID_RE.test(rawBudget))) return undefined
     const text = label === undefined || label === null ? "" : label
     if (typeof text !== "string") return undefined
     const name = text.trim().replace(/\s+/g, " ")
@@ -250,9 +304,22 @@ export function normalizeCosts(v: unknown): PipelineCostItem[] | undefined {
     let key = typeof id === "string" && COST_ID_RE.test(id) ? id : newCostId()
     if (seen.has(key)) key = newCostId()
     seen.add(key)
-    out.push({ id: key, label: name, amount: Math.round(n) })
+    const line: PipelineCostItem = { id: key, label: name, amount: Math.round(n) }
+    if (hasBudget) line.budgetId = typeof rawBudget === "string" && rawBudget ? rawBudget : null
+    out.push(line)
   }
   return out
+}
+
+/**
+ * A cost list as sent, with the budget category of each line that did not say one (key absent: an app from
+ * before v8) taken from the stored line with the same id — so an older app editing a label or an amount never
+ * wipes the category a newer app set. A line that is new (no stored twin) gets null. Every line comes out with
+ * the key set.
+ */
+export function keepBudgetIds(sent: PipelineCostItem[], stored: readonly PipelineCostItem[]): PipelineCostItem[] {
+  const byId = new Map(stored.map((c) => [c.id, c.budgetId ?? null]))
+  return sent.map((c) => (c.budgetId === undefined ? { ...c, budgetId: byId.get(c.id) ?? null } : { ...c, budgetId: c.budgetId ?? null }))
 }
 
 export type SerializedDeal = ReturnType<typeof serializeDeal>
@@ -313,6 +380,9 @@ export const DEAL_FIELDS: Record<string, FieldKind> = {
   // Real cost lines (Control Tower v4, 14 Oct 2026): the whole list, as links. Same access as every
   // other field: whoever may edit the deal (Full / Can edit) may edit them.
   costs: { kind: "costs" },
+  // Barter (Control Tower v8, 21 Oct 2026): its value in rupiah and the form the compensation takes.
+  barterValue: { kind: "money" },
+  barterCompensation: { kind: "text", max: 500 },
 }
 
 /** The 1e15 rupiah ceiling only keeps a typo (or a paste of a whole row) out of the totals. */
@@ -341,7 +411,7 @@ function parseDate(v: unknown): Date | null | undefined {
 export async function parseDealFields(
   body: Record<string, unknown>,
   workspaceId: string,
-  current?: { links?: unknown; services?: string[]; service?: string },
+  current?: { links?: unknown; services?: string[]; service?: string; costs?: unknown },
 ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: FieldError }> {
   const data: Record<string, unknown> = {}
   const bad = (field: string, error: string) => ({ ok: false as const, error: { field, error } })
@@ -407,7 +477,8 @@ export async function parseDealFields(
       case "costs": {
         const list = normalizeCosts(v)
         if (!list) return bad(field, `Maksimal ${MAX_COSTS_PER_DEAL} baris biaya; nominal angka ≥ 0, keterangan maksimal ${COST_LABEL_MAX} karakter.`)
-        data[field] = list
+        // A line without a budget category key keeps the stored one (an older app never wipes it).
+        data[field] = keepBudgetIds(list, costsOf(current?.costs))
         break
       }
       case "services": {
@@ -622,4 +693,54 @@ export function parseTermFields(
     }
   }
   return { ok: true, data }
+}
+
+// ── Cashback, contacts, budget (Control Tower v8, 21 Oct 2026) ─────────────────────────────────────────
+
+/** A deal holds at most this many items of one kind — a guard against a runaway client, not a business rule. */
+export const MAX_ITEMS_PER_KIND = 100
+
+/** What a client may set on an item, per kind. `position` is separate (order, not history). */
+export const ITEM_FIELDS: Record<PipelineItemKind, Record<string, FieldKind>> = {
+  cashback: { name: { kind: "text", max: 120 }, amount: { kind: "money" } },
+  contact: { role: { kind: "enum", options: CONTACT_ROLES }, name: { kind: "text", max: 120 }, phone: { kind: "text", max: 40 } },
+  budget: { name: { kind: "text", max: 120 }, amount: { kind: "money" } },
+}
+
+export function isItemKind(v: unknown): v is PipelineItemKind {
+  return v === "cashback" || v === "contact" || v === "budget"
+}
+
+/** Checks an item body against ITEM_FIELDS[kind] — same rules and error shape as a deal's fields. */
+export function parseItemFields(
+  kind: PipelineItemKind,
+  body: Record<string, unknown>,
+): { ok: true; data: Record<string, unknown> } | { ok: false; error: FieldError } {
+  const data: Record<string, unknown> = {}
+  const bad = (field: string, error: string) => ({ ok: false as const, error: { field, error } })
+  for (const [field, spec] of Object.entries(ITEM_FIELDS[kind])) {
+    if (!(field in body)) continue
+    const v = body[field]
+    if (spec.kind === "text") {
+      if (v === null) { data[field] = ""; continue }
+      if (typeof v !== "string") return bad(field, "Harus berupa teks.")
+      const t = v.trim().replace(/\s+/g, " ")
+      if (t.length > spec.max) return bad(field, `Maksimal ${spec.max} karakter.`)
+      data[field] = t
+    } else if (spec.kind === "money") {
+      const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v === null ? 0 : v
+      if (typeof n !== "number" || !Number.isFinite(n) || n > MONEY_MAX) return bad(field, "Harus berupa angka.")
+      if (n < 0) return bad(field, "Tidak boleh negatif.")
+      data[field] = Math.round(n)
+    } else if (spec.kind === "enum") {
+      if (typeof v !== "string" || !spec.options.includes(v)) return bad(field, "Pilihan tidak dikenal.")
+      data[field] = v
+    }
+  }
+  return { ok: true, data }
+}
+
+/** The history name of an item ("Budi", "Venue"), or its kind when it has none yet. */
+export function itemLabel(i: { kind: string; name: string; role?: string }): string {
+  return i.name || (i.kind === "contact" ? i.role || "contact" : i.kind)
 }

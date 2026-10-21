@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 import { useLang, type Lang } from "@/lib/lang";
 import { fmtIdr as fmtIdrReal, fmtIdrFull as fmtIdrFullReal } from "./pipeline-ui";
 
@@ -12,6 +12,27 @@ import { fmtIdr as fmtIdrReal, fmtIdrFull as fmtIdrFullReal } from "./pipeline-u
 export const MONEY_MASK = "Rp ••••";
 
 export const PresentationContext = createContext(false);
+
+/**
+ * The mode's on/off, kept in memory for the open tab (Control Tower v8, owner 21 Oct 2026): it stays on when
+ * moving between boards, into All Pipelines and back, so a screen being shown never flashes the numbers. Still
+ * never stored: a reload starts with it off.
+ */
+let presentingNow = false;
+const listeners = new Set<() => void>();
+export function setPresentingMode(on: boolean) {
+  if (presentingNow === on) return;
+  presentingNow = on;
+  for (const l of listeners) l();
+}
+export function usePresentingMode(): [boolean, (on: boolean) => void] {
+  const on = useSyncExternalStore(
+    (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
+    () => presentingNow,
+    () => false,
+  );
+  return [on, setPresentingMode];
+}
 
 export function usePresenting(): boolean {
   return useContext(PresentationContext);

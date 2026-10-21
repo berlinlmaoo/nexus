@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { isUniqueViolation } from "@/lib/prisma-errors"
 import { emitPipelineChanged } from "@/lib/socket-emitter"
-import { PIPELINE_VOCAB, pipelineToday, summarize } from "@/lib/pipeline"
+import { PIPELINE_VOCAB, dealYearsOf, filterByYear, parseYearParam, pipelineToday, summarize } from "@/lib/pipeline"
 import {
   dealInclude,
   defaultProbability,
@@ -23,7 +23,7 @@ import {
  * NEXUS. GET: every deal with its derived health and phases, the KPI summary over all of them, and the
  * option lists. POST: a new deal. Spec: ~/handoff/chat/PIPELINE-DASHBOARD.md.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -37,11 +37,19 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     })
     const today = pipelineToday()
-    const deals = rows.map((row) => serializeDeal(row, today))
+    // Year filter (Control Tower v8, 21 Oct 2026): ?year=YYYY keeps the deals whose event / main date falls in
+    // that year (no date = left out) and counts the KPIs over them; absent = every deal, as before. `years`
+    // lists every year with a deal (newest first) for the picker.
+    const year = parseYearParam(request.nextUrl.searchParams.get("year"))
+    if (year === undefined) return NextResponse.json({ field: "year", error: "year must be YYYY.", code: "INVALID_FIELD" }, { status: 400 })
+    const all = rows.map((row) => serializeDeal(row, today))
+    const deals = filterByYear(all, year)
     return NextResponse.json({
       project: gate.project,
       deals,
       summary: summarize(deals, today),
+      years: dealYearsOf(all),
+      year,
       vocab: PIPELINE_VOCAB,
       today,
       // The viewer's level in the board (14 Oct 2026): Full / Can edit change deals (real cost lines

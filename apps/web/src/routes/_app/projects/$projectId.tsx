@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { PipelineTitleSwitcher } from "@/components/pipeline/AllPipelinesEntry";
 import { SnapTail } from "@/components/SnapTail";
 import { EdgeArrows } from "@/components/EdgeArrows";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
@@ -185,7 +186,7 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   // (lib/project-views.ts encodes them). A reload or a shared link keeps all of it.
   // `&task=<id>`: the task popup that is open (bug hunt C-BUG-11, 12 Oct 2026) — Back closes it, a reload or a
   // shared link opens it again.
-  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string; task?: string; form?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string; task?: string; form?: string; deal?: string; from?: "all" } => ({
     settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
     view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
     date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
@@ -199,6 +200,9 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
     task: searchString(s.task, 64),
     // The open form builder (?form=<id> | new), see useFormBuilderParam.
     form: searchString(s.form, 64),
+    // A Pipeline deal to open (`?deal=<id>`), and where it was opened from (`from=all`: All Pipelines, v8).
+    deal: searchString(s.deal, 64),
+    from: s.from === "all" ? "all" : undefined,
   }),
 });
 
@@ -784,7 +788,7 @@ function ProjectDetail() {
         className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card [--page-header-bg:var(--card)]"
         // Notion's database page: the icon sits bare beside a 32px bold title (16 Oct 2026 pass).
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg text-[28px] leading-none md:h-10 md:w-10 md:text-[34px]"><ProjectMark icon={data?.icon} color={data?.color} type={data?.type} className="max-h-9 max-w-9 rounded-lg object-cover md:max-h-10 md:max-w-10" /></span>}
-        title={data?.name || tr("Project")}
+        title={isPipeline && data ? <PipelineTitleSwitcher title={data.name} current={data.id} workspaceId={data.workspaceId ?? undefined} /> : data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={
           <>
@@ -813,7 +817,7 @@ function ProjectDetail() {
         : <div className="nx-gx py-10"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its Project Owner to add you.")} /></div>)}
       {!project.isLoading && data && isPipeline && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
-          : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
+          : <PipelineView key={data.id} projectId={data.id} workspaceId={data.workspaceId ?? ""} initialDealId={search.deal} fromAll={search.from === "all"} boardName={data.name} />}</Pending>
       )}
       {!project.isLoading && data && isOutlet && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />

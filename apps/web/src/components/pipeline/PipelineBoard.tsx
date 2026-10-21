@@ -8,7 +8,7 @@ import { PIPELINE_STAGES, daysBetween, dealValue, marginOf, stageGroupOf } from 
 import { servicesOf, type PipelineDeal } from "@/lib/pipeline-api";
 import { COLOR_PRESETS } from "@/lib/project-views";
 import { useMoneyFmt } from "./presentation";
-import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtMarginPct, marginTone, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, SourceChip, StagePill, fmtDayShort, fmtMarginPct, marginTone, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 
 const DRAG_TYPE = "application/x-nexus-deal";
 
@@ -243,7 +243,8 @@ const DealCard = memo(function DealCard({
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className="min-w-0 truncate text-xs tabular-nums text-muted-foreground">{deal.code}</span>
+        <span className="shrink-0 truncate text-xs tabular-nums text-muted-foreground">{deal.code}</span>
+        <SourceChip deal={deal} className="min-w-0" />
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {deal.health.key !== "NONE" && <HealthPill health={deal.health.key} />}
           {canEdit && <MoveMenu deal={deal} onMove={onMove} />}

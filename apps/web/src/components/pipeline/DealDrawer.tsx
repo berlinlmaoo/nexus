@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, CalendarDays, ChevronDown, CircleCheck, Folder, FolderKanban, History, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarDays, ChevronDown, CircleCheck, Folder, FolderKanban, History, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -22,6 +22,8 @@ import {
   type PipelineTerm, type PipelineTermPatch,
 } from "@/lib/pipeline-api";
 import { DealDocuments } from "./DealDocuments";
+import { BudgetSection, CashbackSection, ContactsSection, useDealItems } from "./DealLists";
+import { Field, Section } from "./drawer-parts";
 import { useMoneyFmt } from "./presentation";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
@@ -39,13 +41,18 @@ const FIELD_LABEL: Record<string, string> = {
   paymentDueDate: "Payment due date", maxDaysOverdue: "Days overdue (typed)", netCash: "Net cash position",
   closingStatus: "Closing status", mainDate: "Event / main date", nextAction: "Next action", nextActionDate: "Next action date",
   blocker: "Blocker / issue", notes: "Notes", links: "Documents & links", costs: "Real cost",
+  barterValue: "Barter value", barterCompensation: "Barter compensation form",
 };
+/** Cashback / contact / budget rows (v8): "<kind>.<field>" and "<kind>.created|deleted|restored". */
+const ITEM_KIND_LABEL: Record<string, string> = { cashback: "Cashback", contact: "Project contact", budget: "Budget category" };
+const ITEM_FIELD_LABEL: Record<string, string> = { name: "Name", amount: "Amount", role: "Role", phone: "Phone" };
+const ITEM_EVENT: Record<string, string> = { created: "added", deleted: "deleted", restored: "restored" };
 /** A payment term's fields, for history rows "term.<field>" (owner, 9 Oct 2026). */
 const TERM_FIELD_LABEL: Record<string, string> = {
   label: "Term name", amount: "Amount", dueDate: "Due date", invoiceNo: "Invoice no.", invoiceDate: "Invoice date",
   paidAmount: "Amount paid", paidAt: "Paid on", note: "Term note",
 };
-const MONEY = new Set(["contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount"]);
+const MONEY = new Set(["contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount", "barterValue", "cashback.amount", "budget.amount"]);
 const STATUS_FIELDS = new Set(["contractStatus", "vregStatus", "readiness", "deliverableStatus", "paymentStatus", "closingStatus"]);
 const DATES = new Set(["paymentDueDate", "mainDate", "nextActionDate", "term.dueDate", "term.invoiceDate", "term.paidAt"]);
 
@@ -56,7 +63,7 @@ const DATES = new Set(["paymentDueDate", "mainDate", "nextActionDate", "term.due
  * Right-hand sheet on a computer, full screen on a phone.
  */
 export function DealDrawer({
-  deal, projectId, people, canEdit, onPatch, onDelete, onClose,
+  deal, projectId, people, canEdit, onPatch, onDelete, onClose, boardName, fromAll = false,
 }: {
   deal: PipelineDeal | null;
   projectId: string;
@@ -65,6 +72,9 @@ export function DealDrawer({
   onPatch: (id: string, patch: PipelineDealPatch) => void;
   onDelete: (deal: PipelineDeal) => void;
   onClose: () => void;
+  /** The board's (company's) name; shown on the deal when it was opened from All Pipelines (v8). */
+  boardName?: string;
+  fromAll?: boolean;
 }) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<"details" | "history">("details");
@@ -94,6 +104,18 @@ export function DealDrawer({
                   </button>
                 </div>
               </div>
+              {/* Opened from All Pipelines (owner, 21 Oct 2026): which company's board this deal is on, and the way back. */}
+              {fromAll && boardName && (
+                <div className="mt-2 flex flex-wrap items-center gap-2" data-pl="deal-company">
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                    <Building2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{boardName}</span>
+                  </span>
+                  <Link to="/pipelines" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]">
+                    <ArrowLeft aria-hidden className="h-3.5 w-3.5" /> {t("All Pipelines")}
+                  </Link>
+                </div>
+              )}
               <SheetTitle className="sr-only">{deal.name}</SheetTitle>
               <SheetDescription className="sr-only">{t("Every field saves when you leave it.")}</SheetDescription>
               <TextField
@@ -255,28 +277,6 @@ function LastUpdated({ deal }: { deal: PipelineDeal }) {
   );
 }
 
-function Section({ title, owner, children }: { title: string; owner: string; children: ReactNode }) {
-  return (
-    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
-      <header className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <span className="text-xs text-muted-foreground">{owner}</span>
-      </header>
-      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
-    </section>
-  );
-}
-
-function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
-  // The control inside carries its own aria-label; this label is what a sighted reader scans for.
-  return (
-    <div className={cn("min-w-0 space-y-1", wide && "sm:col-span-2")}>
-      <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-    </div>
-  );
-}
-
 function Details({ deal, projectId, people, canEdit, onPatch }: { deal: PipelineDeal; projectId: string; people: PersonOption[]; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
   const { t, lang, locale } = useLang();
   const { fmtIdrFull, hidden } = useMoneyFmt();
@@ -287,107 +287,17 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
   const early = deal.stageGroup === "Pipeline" || deal.stageGroup === "Lost";
   // The blocker has its own banner (and sits under its phase in the stepper), so the list skips it.
   const reasons = deal.health.reasons.filter((r) => r.code !== "BLOCKER" || !deal.blocker?.trim());
-  return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <BlockerBanner deal={deal} className="px-3 py-2.5 text-sm" />
-        {reasons.length > 0 && (
-          <ul className={cn("space-y-1 rounded-lg px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]" : "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]")}>
-            {reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}
-          </ul>
-        )}
-        {/* On every deal, open ones too: grey steps say what has not started (owner, 9 Oct 2026). */}
-        <PhaseStepper deal={deal} />
-      </div>
-
-      <Section title={t("Commercial & pipeline")} owner={t("BD / account")}>
-        <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>
-        <Field label={L("Services")} wide><ServicesField value={servicesOf(deal)} projectId={projectId} disabled={off} onCommit={(v) => onPatch({ services: v })} /></Field>
-        <Field label={L("BD / account owner")}>
-          <PersonField label={L("BD / account owner")} userId={deal.bdUserId} userName={deal.bd?.name} name={deal.bdName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ bdUserId: userId, bdName: name })} />
-        </Field>
-        <Field label="PM">
-          <PersonField label="PM" userId={deal.pmUserId} userName={deal.pm?.name} name={deal.pmName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ pmUserId: userId, pmName: name })} />
-        </Field>
-        <Field label={L("Stage")}><SelectField label={L("Stage")} value={deal.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={off} onCommit={(v) => onPatch({ stage: v })} /></Field>
-        <Field label={L("Probability")}><SelectField label={L("Probability")} value={deal.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={off} onCommit={(v) => onPatch({ probability: v })} /></Field>
-        <Field label={L("Contract value")}><MoneyField label={L("Contract value")} value={deal.contractValue} disabled={off} onCommit={(v) => onPatch({ contractValue: v })} /></Field>
-        <Field label={L("Net project value")}><MoneyField label={L("Net project value")} value={deal.netValue} disabled={off} onCommit={(v) => onPatch({ netValue: v })} /></Field>
-        <Field label={L("Event / main date")}><DateField label={L("Event / main date")} value={deal.mainDate} disabled={off} onCommit={(v) => onPatch({ mainDate: v })} /></Field>
-      </Section>
-
-      {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
-          one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
-      {early ? (
-        <details className="group/later rounded-lg border border-border">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">{t("Contract, delivery & payment")}</span>
-              <span className="block text-xs text-muted-foreground">{t("Legal, PM and Finance fill these in once the deal is won.")}</span>
-            </span>
-            <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/later:rotate-180" />
-          </summary>
-          <div className="space-y-5 border-t border-border px-3 py-4">
-          <Section title={t("Contract")} owner="Legal">
-            <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
-          </Section>
-
-          <Section title={t("Vendor registration")} owner={t("PM / admin")}>
-            <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
-          </Section>
-
-          <Section title={t("Readiness & deliverable")} owner="PM">
-            <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
-            <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
-            <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
-          </Section>
-
-          <Section title={t("Billing & payment")} owner="Finance">
-            <Field label={L("Invoice value")}><MoneyField label={L("Invoice value")} value={deal.invoiceValue} disabled={off} onCommit={(v) => onPatch({ invoiceValue: v })} /></Field>
-            {/* Paid per term (owner, 9 Oct 2026): status, receivable, due date and days overdue come from the
-                terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
-            {deal.termSummary ? (
-              <>
-                <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{labels.status(deal.termSummary.paymentStatus)}</p></Field>
-                <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
-                <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
-                <Field label={L("Days overdue")}>
-                  <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, oldest unpaid term", { n: deal.daysOverdue }) : t("Not overdue")}</p>
-                </Field>
-                <p className="text-xs text-muted-foreground sm:col-span-2">{t("From the payment terms below.")}</p>
-              </>
-            ) : (
-              <>
-            <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
-            <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
-            <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
-            {deal.paymentDueDate ? (
-              <Field label={L("Days overdue")}>
-                <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, counted from the due date", { n: deal.daysOverdue }) : t("Not overdue")}</p>
-              </Field>
-            ) : (
-              <Field label={L("Days overdue (typed)")}><NumberField label={L("Days overdue (typed)")} value={deal.maxDaysOverdue} disabled={off} onCommit={(v) => onPatch({ maxDaysOverdue: v })} /></Field>
-            )}
-              </>
-            )}
-            <Field label={L("Net cash position")}><MoneyField label={L("Net cash position")} allowNegative value={deal.netCash} disabled={off} onCommit={(v) => onPatch({ netCash: v })} /></Field>
-            <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
-          </Section>
-
-          {/* Presentation mode: the cost lines are not rendered at all, not blurred. */}
-          {!hidden && <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />}
-
-          <Section title={t("Closing")} owner="PM">
-            <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
-          </Section>
-
-          </div>
-        </details>
-      ) : (
-        <>
+  // Cashback, contacts and budget (Control Tower v8): one row each on the server.
+  const items = useDealItems(projectId, deal);
+  // Contract → closing: the same sections whether folded (open / lost deal) or not.
+  const later = (
+    <>
         <Section title={t("Contract")} owner="Legal">
           <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
         </Section>
+
+        {/* Project contacts (v8): below Contract. */}
+        <ContactsSection deal={deal} canEdit={canEdit} items={items} />
 
         <Section title={t("Vendor registration")} owner={t("PM / admin")}>
           <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
@@ -431,14 +341,67 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
         </Section>
 
+        {/* Budget expenses (v8, Strategist): right before Real cost; both hidden while presenting. */}
+        <BudgetSection deal={deal} canEdit={canEdit} items={items} />
         {!hidden && <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />}
 
         <Section title={t("Closing")} owner="PM">
           <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
         </Section>
 
-        </>
-      )}
+    </>
+  );
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <BlockerBanner deal={deal} className="px-3 py-2.5 text-sm" />
+        {reasons.length > 0 && (
+          <ul className={cn("space-y-1 rounded-lg px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]" : "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]")}>
+            {reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}
+          </ul>
+        )}
+        {/* On every deal, open ones too: grey steps say what has not started (owner, 9 Oct 2026). */}
+        <PhaseStepper deal={deal} />
+      </div>
+
+      <Section title={t("Commercial & pipeline")} owner={t("BD / account")}>
+        <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>
+        <Field label={L("Services")} wide><ServicesField value={servicesOf(deal)} projectId={projectId} disabled={off} onCommit={(v) => onPatch({ services: v })} /></Field>
+        <Field label={L("BD / account owner")}>
+          <PersonField label={L("BD / account owner")} userId={deal.bdUserId} userName={deal.bd?.name} name={deal.bdName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ bdUserId: userId, bdName: name })} />
+        </Field>
+        <Field label="PM">
+          <PersonField label="PM" userId={deal.pmUserId} userName={deal.pm?.name} name={deal.pmName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ pmUserId: userId, pmName: name })} />
+        </Field>
+        <Field label={L("Stage")}><SelectField label={L("Stage")} value={deal.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={off} onCommit={(v) => onPatch({ stage: v })} /></Field>
+        <Field label={L("Probability")}><SelectField label={L("Probability")} value={deal.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={off} onCommit={(v) => onPatch({ probability: v })} /></Field>
+        <Field label={L("Contract value")}><MoneyField label={L("Contract value")} value={deal.contractValue} disabled={off} onCommit={(v) => onPatch({ contractValue: v })} /></Field>
+        <Field label={L("Net project value")}><MoneyField label={L("Net project value")} value={deal.netValue} disabled={off} onCommit={(v) => onPatch({ netValue: v })} /></Field>
+        <Field label={L("Event / main date")}><DateField label={L("Event / main date")} value={deal.mainDate} disabled={off} onCommit={(v) => onPatch({ mainDate: v })} /></Field>
+        {/* Barter (v8): what the client pays in kind. The value is money (masked while presenting). */}
+        <Field label={L("Barter value")}><MoneyField label={L("Barter value")} value={deal.barterValue ?? 0} disabled={off} onCommit={(v) => onPatch({ barterValue: v })} /></Field>
+        <Field label={L("Barter compensation form")} wide><TextField label={L("Barter compensation form")} placeholder={t("e.g. 2 TV ad slots")} value={deal.barterCompensation ?? ""} maxLength={500} disabled={off} onCommit={(v) => onPatch({ barterCompensation: v })} /></Field>
+      </Section>
+
+      {/* Cashback (v8): right after Net value's section; not rendered at all while presenting. */}
+      <CashbackSection deal={deal} canEdit={canEdit} items={items} />
+
+      {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
+          one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
+      {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
+          one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
+      {early ? (
+        <details className="group/later rounded-lg border border-border">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{t("Contract, delivery & payment")}</span>
+              <span className="block text-xs text-muted-foreground">{t("Legal, PM and Finance fill these in once the deal is won.")}</span>
+            </span>
+            <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/later:rotate-180" />
+          </summary>
+          <div className="space-y-5 border-t border-border px-3 py-4">{later}</div>
+        </details>
+      ) : later}
 
       <Section title={t("Follow-up & notes")} owner={t("Every division")}>
         <Field label={L("Next action")}><TextField label={L("Next action")} value={deal.nextAction} disabled={off} onCommit={(v) => onPatch({ nextAction: v })} /></Field>
@@ -493,6 +456,11 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
     const name = [v.label, v.fileName, v.url].find((x) => typeof x === "string" && x) as string | undefined;
     return `${typeof v.type === "string" ? labels.link(v.type) : ""}${name ? ` · ${name}` : ""}`;
   };
+  // A cashback / contact / budget row (v8): "<kind>.<field|event>", the row's name in termLabel.
+  const itemParts = (field: string): [string, string] | null => {
+    const [kind, rest] = field.split(".");
+    return ITEM_KIND_LABEL[kind] && rest ? [kind, rest] : null;
+  };
   const termAmount = (h: PipelineChange) => {
     const v = (h.field === "term.deleted" ? h.before : h.after) as { amount?: unknown } | null;
     return typeof v?.amount === "number" ? fmtIdrFull(v.amount, lang) : null;
@@ -503,6 +471,29 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
         <li key={h.id} className="flex gap-3">
           <AvatarFace name={h.user?.name ?? "?"} avatar={h.user?.avatar ?? null} size={26} decorative className="mt-0.5 ring-0" />
           <div className="min-w-0 flex-1 text-sm">
+            {itemParts(h.field) ? (() => {
+              const [kind, rest] = itemParts(h.field)!;
+              const event = ITEM_EVENT[rest];
+              const v = (rest === "deleted" ? h.before : h.after) as { amount?: unknown } | null;
+              return (
+                <>
+                  <p>
+                    <span className="font-semibold">{h.user?.name ?? t("Someone")}</span>{" "}
+                    <span className="text-muted-foreground">{t(event ?? "changed")}</span>{" "}
+                    <span className="font-medium">{t(ITEM_KIND_LABEL[kind])}{h.termLabel ? ` · ${h.termLabel}` : ""}{event ? "" : ` · ${t(ITEM_FIELD_LABEL[rest] ?? rest)}`}</span>
+                  </p>
+                  {event ? (
+                    kind !== "contact" && typeof v?.amount === "number" && <p className="mt-0.5 tabular-nums text-muted-foreground">{fmtIdrFull(v.amount, lang)}</p>
+                  ) : (
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                      <span className="line-through decoration-muted-foreground/50">{rest === "role" && typeof h.before === "string" ? labels.contactRole(h.before) : show(h.field, h.before)}</span>
+                      <ArrowRight aria-label={t("to")} className="h-3 w-3" />
+                      <span className="text-foreground">{rest === "role" && typeof h.after === "string" ? labels.contactRole(h.after) : show(h.field, h.after)}</span>
+                    </p>
+                  )}
+                </>
+              );
+            })() : (<>
             <p>
               <span className="font-semibold">{h.user?.name ?? t("Someone")}</span>{" "}
               <span className="text-muted-foreground">{t(termEvent[h.field] ?? docEvent[h.field] ?? "changed")}</span>{" "}
@@ -527,6 +518,7 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
                 <span className="text-foreground">{show(h.field, h.after)}</span>
               </p>
             )}
+            </>)}
             <time dateTime={h.createdAt} className="text-xs text-muted-foreground">
               {new Date(h.createdAt).toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
             </time>
@@ -562,6 +554,9 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
   const { t, lang } = useLang();
   const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
   const costs: PipelineCostItem[] = deal.costs ?? [];
+  // Budget category per line (v8), offered once the deal has at least one category. "" = none.
+  const budgets = deal.budgets ?? [];
+  const budgetName = (id: string) => (id ? budgets.find((b) => b.id === id)?.name || (budgets.some((b) => b.id === id) ? t("Untitled category") : t("Deleted category")) : t("No budget category"));
   const m = marginOf({ netValue: deal.netValue, costs });
   const off = !canEdit;
   const save = (next: PipelineCostItem[]) => onPatch({ costs: next });
@@ -608,7 +603,7 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
         ) : (
           <ul className="space-y-1.5" aria-label={t("Cost lines")}>
             {costs.map((c, i) => (
-              <li key={c.id} className="flex items-center gap-2">
+              <li key={c.id} className="flex flex-wrap items-center gap-2">
                 <TextField
                   label={t("Cost {n} description", { n: i + 1 })}
                   placeholder={t("e.g. Sound vendor")}
@@ -635,6 +630,19 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
+                {budgets.length > 0 && (
+                  <div className="basis-full">
+                    <SelectField
+                      label={t("Cost {n} budget category", { n: i + 1 })}
+                      value={c.budgetId ?? ""}
+                      options={["", ...budgets.map((b) => b.id)]}
+                      labelOf={budgetName}
+                      disabled={off}
+                      onCommit={(v) => edit(c.id, { budgetId: v || null })}
+                      className="text-xs text-muted-foreground sm:max-w-[60%]"
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -642,7 +650,7 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
         {canEdit && (
           <button
             type="button"
-            onClick={() => save([...costs, { id: newCostId(), label: "", amount: 0 }])}
+            onClick={() => save([...costs, { id: newCostId(), label: "", amount: 0, budgetId: null }])}
             disabled={costs.length >= 100}
             className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
           >

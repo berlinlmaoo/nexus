@@ -5,7 +5,7 @@ import { useLang } from "@/lib/lang";
 import { daysBetween } from "@/lib/pipeline";
 import type { PipelineDeal } from "@/lib/pipeline-api";
 import { useMoneyFmt } from "./presentation";
-import { HEALTH_TEXT, HealthPill, dealPayment, fmtDay, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_TEXT, HealthPill, SourceChip, dealPayment, fmtDay, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 import { bySeverity } from "./PipelineBoard";
 
 /**
@@ -36,9 +36,12 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
   const blockers = live.filter((d) => d.blocker).sort(bySeverity);
 
   const DealLink = ({ d }: { d: PipelineDeal }) => (
-    <button type="button" onClick={() => onOpen(d.id)} className="block min-w-0 max-w-full truncate rounded text-left text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-      {d.name || t("Untitled deal")}
-    </button>
+    <span className="flex min-w-0 max-w-full items-center gap-1.5">
+      <button type="button" onClick={() => onOpen(d.id)} className="block min-w-0 max-w-full truncate rounded text-left text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+        {d.name || t("Untitled deal")}
+      </button>
+      <SourceChip deal={d} className="shrink-0 max-w-[45%]" />
+    </span>
   );
 
   return (

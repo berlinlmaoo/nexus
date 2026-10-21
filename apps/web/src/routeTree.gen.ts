@@ -29,6 +29,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomBookingRouteImport } from './routes/_app/room-booking'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRemindersRouteImport } from './routes/_app/reminders'
+import { Route as AppPipelinesRouteImport } from './routes/_app/pipelines'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
@@ -152,6 +153,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
 const AppRemindersRoute = AppRemindersRouteImport.update({
   id: '/reminders',
   path: '/reminders',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPipelinesRoute = AppPipelinesRouteImport.update({
+  id: '/pipelines',
+  path: '/pipelines',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyTasksRoute = AppMyTasksRouteImport.update({
@@ -301,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
+  '/pipelines': typeof AppPipelinesRoute
   '/reminders': typeof AppRemindersRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
@@ -346,6 +353,7 @@ export interface FileRoutesByTo {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
+  '/pipelines': typeof AppPipelinesRoute
   '/reminders': typeof AppRemindersRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
@@ -394,6 +402,7 @@ export interface FileRoutesById {
   '/_app/master-calendar': typeof AppMasterCalendarRoute
   '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
+  '/_app/pipelines': typeof AppPipelinesRoute
   '/_app/reminders': typeof AppRemindersRoute
   '/_app/reports': typeof AppReportsRouteWithChildren
   '/_app/room-booking': typeof AppRoomBookingRoute
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
+    | '/pipelines'
     | '/reminders'
     | '/reports'
     | '/room-booking'
@@ -488,6 +498,7 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
+    | '/pipelines'
     | '/reminders'
     | '/reports'
     | '/room-booking'
@@ -535,6 +546,7 @@ export interface FileRouteTypes {
     | '/_app/master-calendar'
     | '/_app/messages'
     | '/_app/my-tasks'
+    | '/_app/pipelines'
     | '/_app/reminders'
     | '/_app/reports'
     | '/_app/room-booking'
@@ -718,6 +730,13 @@ declare module '@tanstack/react-router' {
       path: '/reminders'
       fullPath: '/reminders'
       preLoaderRoute: typeof AppRemindersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pipelines': {
+      id: '/_app/pipelines'
+      path: '/pipelines'
+      fullPath: '/pipelines'
+      preLoaderRoute: typeof AppPipelinesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-tasks': {
@@ -948,6 +967,7 @@ interface AppRouteChildren {
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
   AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
+  AppPipelinesRoute: typeof AppPipelinesRoute
   AppRemindersRoute: typeof AppRemindersRoute
   AppReportsRoute: typeof AppReportsRouteWithChildren
   AppRoomBookingRoute: typeof AppRoomBookingRoute
@@ -981,6 +1001,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMasterCalendarRoute: AppMasterCalendarRoute,
   AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,
+  AppPipelinesRoute: AppPipelinesRoute,
   AppRemindersRoute: AppRemindersRoute,
   AppReportsRoute: AppReportsRouteWithChildren,
   AppRoomBookingRoute: AppRoomBookingRoute,

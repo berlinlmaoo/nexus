@@ -28,7 +28,7 @@ const HEALTH: Record<HealthKey, [string, string]> = {
 }
 
 type Kind = "text" | "wrap" | "money" | "moneySigned" | "pct" | "pct1" | "int" | "date" | "datetime"
-type Col = { id: string; en: string; width: number; kind: Kind; value: (d: SerializedDeal, lang: ExportLang) => unknown }
+type Col = { id: string; en: string; width: number; kind: Kind; value: (d: SerializedDeal, lang: ExportLang, meta: ExportMeta) => unknown }
 
 const MONEY_FMT = '"Rp"#,##0;-"Rp"#,##0'
 const MONEY_SIGNED_FMT = '"Rp"#,##0;[Red]-"Rp"#,##0'
@@ -62,13 +62,45 @@ function linksText(d: SerializedDeal): string {
     .join("\n")
 }
 
+/** A project contact's role in the file's language (stored keys are English). */
+const CONTACT_ROLE_ID: Record<string, string> = {
+  Client: "Klien", Vendor: "Vendor", Broker: "Broker", "PM (client side)": "PM (pihak klien)", Finance: "Finance", Admin: "Admin", Other: "Lainnya",
+}
+
+const rp = (n: number) => Math.round(n).toLocaleString("id-ID")
+
+/** "Budi: 1.500.000", one line per cashback recipient. */
+function cashbackLines(d: SerializedDeal): string {
+  return (d.cashback ?? []).map((c) => `${c.name || "-"}: ${rp(c.amount)}`).join("\n")
+}
+
+/** "Klien: Budi (0812…)", one line per contact. */
+function contactLines(d: SerializedDeal, lang: ExportLang): string {
+  return (d.contacts ?? [])
+    .map((c) => `${lang === "en" ? c.role : CONTACT_ROLE_ID[c.role] ?? c.role}: ${c.name || "-"}${c.phone ? ` (${c.phone})` : ""}`)
+    .join("\n")
+}
+
+/** "Venue: 50.000.000 (terpakai 30.000.000, sisa 20.000.000)" — "lebih" / "over" when the costs passed it. */
+function budgetLines(d: SerializedDeal, lang: ExportLang): string {
+  return (d.budgets ?? [])
+    .map((b) => {
+      const used = lang === "en" ? `used ${rp(b.spent)}` : `terpakai ${rp(b.spent)}`
+      const left = b.remaining >= 0
+        ? (lang === "en" ? `remaining ${rp(b.remaining)}` : `sisa ${rp(b.remaining)}`)
+        : (lang === "en" ? `over by ${rp(-b.remaining)}` : `lebih ${rp(-b.remaining)}`)
+      return `${b.name || "-"}: ${rp(b.amount)} (${used}, ${left})`
+    })
+    .join("\n")
+}
+
 /** The margin cells: blank without cost lines (like the board) or without a net value (lib/pipeline.ts marginOf). */
 function marginCell(d: SerializedDeal, key: "margin" | "marginPct"): number | null {
   return d.costs.length > 0 ? d[key] : null
 }
 
 /**
- * The GM's 33 columns, in his order, then "Diperbarui Oleh" (34). Payment status / receivable come from the
+ * The GM's 33 columns, in his order, then "Diperbarui Oleh" (34), then the nine v8 columns (35–43). Payment status / receivable come from the
  * terms when a deal has any.
  */
 export const MASTER_COLUMNS: Col[] = [
@@ -109,6 +141,17 @@ export const MASTER_COLUMNS: Col[] = [
   { id: "Terakhir Diperbarui", en: "Last Updated", width: 17, kind: "datetime", value: (d) => wib(d.updatedAt) },
   // 34 · not in the Control Tower: who last edited the deal, as the earlier NEXUS export said it.
   { id: "Diperbarui Oleh", en: "Updated By", width: 18, kind: "text", value: (d) => d.updatedBy?.name ?? "" },
+  // 35–43 · Control Tower v8 (21 Oct 2026), appended at the end in the GM's order so older files still line up.
+  { id: "Nilai Barter", en: "Barter Value", width: 17, kind: "money", value: (d) => d.barterValue ?? 0 },
+  { id: "Bentuk Kompensasi Barter", en: "Barter Compensation Form", width: 30, kind: "wrap", value: (d) => d.barterCompensation ?? "" },
+  { id: "Total Cashback", en: "Total Cashback", width: 17, kind: "money", value: (d) => d.cashbackTotal ?? 0 },
+  { id: "Rincian Cashback", en: "Cashback Details", width: 34, kind: "wrap", value: (d) => cashbackLines(d) },
+  { id: "Kontak Project", en: "Project Contacts", width: 36, kind: "wrap", value: (d, lang) => contactLines(d, lang) },
+  { id: "Total Budget", en: "Total Budget", width: 17, kind: "money", value: (d) => d.budgetTotal ?? 0 },
+  { id: "Rincian Budget", en: "Budget Details", width: 44, kind: "wrap", value: (d, lang) => budgetLines(d, lang) },
+  // The board the deal is on (one board: its name; All Pipelines: each deal's own board).
+  { id: "Sumber", en: "Source", width: 20, kind: "text", value: (d, _lang, meta) => (meta.sourceOf ? meta.sourceOf(d) : meta.boardName) },
+  { id: "Tahun Event", en: "Event Year", width: 10, kind: "int", value: (d) => d.eventYear ?? null },
 ]
 
 /** The "Termin" cell of the row that carries a deal's manual payment due date (no terms). */
@@ -160,7 +203,26 @@ function tableSheet(wb: ExcelJS.Workbook, name: string, cols: SheetCol[], rows: 
   return ws
 }
 
-export type ExportMeta = { boardName: string; exportedAt: Date; exportedBy: string | null; lang: ExportLang }
+export type ExportMeta = {
+  boardName: string
+  exportedAt: Date
+  exportedBy: string | null
+  lang: ExportLang
+  /** The "Sumber / Source" cell of a deal; default = boardName (All Pipelines: each deal's board). */
+  sourceOf?: (d: SerializedDeal) => string
+  /** The view's filters, when the file was asked for with them (year filter, All Pipelines' source). */
+  filter?: { year: number | null; source?: string | null }
+}
+
+/** The Info sheet's "Filter" line: none, or the year / source the file was asked for with. */
+function filterText(meta: ExportMeta): string {
+  const en = meta.lang === "en"
+  const parts: string[] = []
+  if (meta.filter?.source) parts.push(en ? `Source: ${meta.filter.source}` : `Sumber: ${meta.filter.source}`)
+  if (meta.filter?.year) parts.push(en ? `Event year: ${meta.filter.year} (deals without an event date left out)` : `Tahun event: ${meta.filter.year} (deal tanpa tanggal event tidak ikut)`)
+  if (parts.length) return `${parts.join(" · ")}. ${en ? "Other on-screen filters do not apply." : "Filter lain di layar tidak ikut."}`
+  return en ? "None: every deal on the board (on-screen filters do not apply)" : "Tidak ada: semua deal di board (filter di layar tidak ikut)"
+}
 
 export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta): ExcelJS.Workbook {
   const en = meta.lang === "en"
@@ -174,7 +236,7 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
     wb,
     "Master Project",
     MASTER_COLUMNS.map((c) => ({ header: en ? c.en : c.id, width: c.width, kind: c.kind })),
-    deals.map((d) => MASTER_COLUMNS.map((c) => c.value(d, meta.lang))),
+    deals.map((d) => MASTER_COLUMNS.map((c) => c.value(d, meta.lang, meta))),
     2,
   )
 
@@ -217,7 +279,7 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
     [en ? "Board" : "Board", meta.boardName],
     [en ? "Exported at (WIB)" : "Diekspor (WIB)", wib(meta.exportedAt), DATETIME_FMT],
     [en ? "Exported by" : "Diekspor oleh", meta.exportedBy ?? "—"],
-    [en ? "Filter" : "Filter", en ? "None: every deal on the board (on-screen filters do not apply)" : "Tidak ada: semua deal di board (filter di layar tidak ikut)"],
+    [en ? "Filter" : "Filter", filterText(meta)],
     [en ? "Deals" : "Jumlah deal", deals.length],
     [en ? "Deals with real cost" : "Deal dengan real cost", withCosts],
     [en ? "Payment terms" : "Termin pembayaran", termRows.length - manualDueRows],

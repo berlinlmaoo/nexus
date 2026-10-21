@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Download, Eye, EyeOff, Filter, HeartPulse, KanbanSquare, Loader2, Plus, Search, Table2, X } from "lucide-react";
+import { ChevronRight, Download, Eye, EyeOff, Filter, HeartPulse, KanbanSquare, Layers, Loader2, Plus, Search, Table2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
-import { PIPELINE_STAGES, summarize, type HealthKey } from "@/lib/pipeline";
-import { pipelineApi, pipelineKey, servicesOf, type PipelineDeal, type PipelineDealPatch, type PipelineListBases, type PipelineResponse } from "@/lib/pipeline-api";
+import { PIPELINE_STAGES, dealYearsOf, eventYearOf, summarize, type HealthKey } from "@/lib/pipeline";
+import {
+  allPipelinesApi, allPipelinesKey, pipelineApi, pipelineKey, servicesOf,
+  type AllPipelinesResponse, type PipelineBoardRef, type PipelineDeal, type PipelineDealPatch, type PipelineListBases, type PipelineResponse,
+} from "@/lib/pipeline-api";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
 import { PipelineHealth } from "./PipelineHealth";
 import { DealDrawer } from "./DealDrawer";
-import { PresentationContext } from "./presentation";
+import { PresentationContext, usePresentingMode } from "./presentation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PersonOption } from "./fields";
 import { HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, StagePill, applyLocal, personName } from "./pipeline-ui";
@@ -44,11 +48,33 @@ function errorText(error: unknown, fallback: string): string {
  * someone today), and the deal drawer. Edits show at once (optimistic) and reach colleagues live through
  * `pipeline-changed` on the project's room.
  */
-export function PipelineView({ projectId }: { projectId: string; workspaceId: string }) {
+export function PipelineView({
+  projectId = "", mode = "board", initialDealId, fromAll = false, boardName,
+}: {
+  projectId?: string;
+  workspaceId?: string;
+  /**
+   * "all" = All Pipelines (Control Tower v8, owner 21 Oct 2026): every Pipeline board of the workspace,
+   * read-only, BoD / One Above All only (the server answers 403 to anyone else). A company chip on every deal,
+   * Company + Year filters, combined KPIs; a deal opens in its own board; no "New deal" here.
+   */
+  mode?: "board" | "all";
+  /** Open this deal once the board has loaded (`?deal=` on the project page). */
+  initialDealId?: string;
+  /** The deal was opened from All Pipelines: the drawer shows the company and the way back. */
+  fromAll?: boolean;
+  boardName?: string;
+}) {
   const { t, tn, lang } = useLang();
   const qc = useQueryClient();
-  const key = pipelineKey(projectId);
-  const q = useQuery({ queryKey: key, queryFn: () => pipelineApi.list(projectId), retry: false });
+  const navigate = useNavigate();
+  const all = mode === "all";
+  const key = all ? allPipelinesKey : pipelineKey(projectId);
+  const q = useQuery<PipelineResponse | AllPipelinesResponse>({
+    queryKey: key,
+    queryFn: () => (all ? allPipelinesApi.list() : pipelineApi.list(projectId)),
+    retry: false,
+  });
   // BD / PM are picked from the project's members (owner, 9 Oct 2026: the board's people are its project
   // members, added by its lead) — the same list and cache key as the task project's member pickers.
   const members = useQuery({
@@ -56,6 +82,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
     queryFn: () => nexusApi.projectMembers(projectId),
     retry: false,
     staleTime: 60_000,
+    enabled: !all && !!projectId,
   });
   const people: PersonOption[] = useMemo(() => {
     const raw = members.data;
@@ -68,17 +95,26 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   }, [members.data]);
 
   // Live: a colleague's edit refetches the list (and the open deal's history, keyed under it).
-  useRealtimeRoom(`project:${projectId}`);
-  const { socket } = useRealtime();
+  useRealtimeRoom(all ? null : `project:${projectId}`);
+  // All Pipelines listens on every board's room: any board's edit refetches the combined view.
+  const boards: PipelineBoardRef[] = useMemo(() => (q.data && "boards" in q.data ? q.data.boards : []), [q.data]);
+  const boardIds = boards.map((b) => b.id).join(",");
+  const { socket, join, leave, connected } = useRealtime();
+  useEffect(() => {
+    if (!all || !boardIds) return;
+    const rooms = boardIds.split(",").map((id) => `project:${id}`);
+    rooms.forEach(join);
+    return () => rooms.forEach(leave);
+  }, [all, boardIds, join, leave, connected]);
   useEffect(() => {
     if (!socket) return;
     const onChanged = (payload?: { projectId?: unknown }) => {
-      if (payload?.projectId === projectId) qc.invalidateQueries({ queryKey: key });
+      if (all ? boardIds.split(",").includes(String(payload?.projectId)) : payload?.projectId === projectId) qc.invalidateQueries({ queryKey: key });
     };
     socket.on("pipeline-changed", onChanged);
     return () => { socket.off("pipeline-changed", onChanged); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, projectId, qc]);
+  }, [socket, projectId, qc, all, boardIds]);
 
   const [view, setViewState] = useState<View>(readView);
   const stickyTop = useStickyHeaderOffset();
@@ -92,17 +128,29 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   const [service, setService] = useState(ALL);
   const [health, setHealth] = useState<HealthKey | "">("");
   const [openId, setOpenId] = useState<string | null>(null);
-  // Presentation mode (Control Tower v7): hides every rupiah on screen. Plain state on purpose, never
-  // stored — each load starts with it off (presentation.tsx).
-  const [presenting, setPresenting] = useState(false);
+  // Presentation mode (Control Tower v7): hides every rupiah on screen. Never stored — a reload starts with it
+  // off; kept in memory for the tab so it stays on across boards and All Pipelines (presentation.tsx, v8).
+  const [presenting, setPresentingMode] = usePresentingMode();
+  const setPresenting = (fn: (p: boolean) => boolean) => setPresentingMode(fn(presenting));
+  // Year (v8): the event / main date's year, a view filter only (never stored). Company: All Pipelines only.
+  const [year, setYear] = useState(ALL);
+  const [source, setSource] = useState(ALL);
 
   const data = q.data;
-  const deals = useMemo(() => data?.deals ?? [], [data]);
+  const allDeals = useMemo(() => data?.deals ?? [], [data]);
   const today = data?.today ?? new Date().toISOString().slice(0, 10);
   // Staff who are not project members never get this far (403). Full / Can edit may change deals (real
   // cost lines included); Can comment / Can view only read (14 Oct 2026). An older server says nothing:
-  // everyone who reads may write, as before.
-  const canEdit = !!data && data.canEdit !== false;
+  // everyone who reads may write, as before. All Pipelines is always read-only.
+  const canEdit = !all && !!data && data.canEdit !== false;
+  const years = useMemo(() => dealYearsOf(allDeals), [allDeals]);
+  // The deals the page is about: the company and year picked (deals without an event date leave with a year).
+  const deals = useMemo(
+    () => allDeals.filter((d) => (!source || d.source?.projectId === source) && (!year || eventYearOf(d) === Number(year))),
+    [allDeals, source, year],
+  );
+  // The KPI strip follows the company and year (same KPI definitions); the other filters never change it.
+  const kpis = useMemo(() => (!all && !year && data ? data.summary : summarize(deals, today)), [all, year, data, deals, today]);
 
   const personFilter = (list: PipelineDeal[], pick: (d: PipelineDeal) => string | null) =>
     Array.from(new Set(list.map(pick).filter((x): x is string => !!x))).sort((a, b) => a.localeCompare(b));
@@ -128,8 +176,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
       return true;
     });
   }, [deals, search, pm, bd, service, health]);
-  const filtering = !!(search.trim() || pm || bd || service || health);
-  const resetFilters = () => { setSearch(""); setPm(ALL); setBd(ALL); setService(ALL); setHealth(""); };
+  const filtering = !!(search.trim() || pm || bd || service || health || year || source);
+  const resetFilters = () => { setSearch(""); setPm(ALL); setBd(ALL); setService(ALL); setHealth(""); setYear(ALL); setSource(ALL); };
 
   const personOf = useCallback((id: string | null | undefined) => {
     if (!id) return null;
@@ -219,12 +267,29 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   const [exporting, setExporting] = useState(false);
   const exportXlsx = async () => {
     setExporting(true);
-    try { await pipelineApi.exportXlsx(projectId, lang); }
+    try {
+      if (all) await allPipelinesApi.exportXlsx(lang, { year: year ? Number(year) : null, source: source || null });
+      else await pipelineApi.exportXlsx(projectId, lang, year ? Number(year) : null);
+    }
     catch (error) { toast.error(errorText(error, t("The Excel file didn't download. Try again."))); }
     finally { setExporting(false); }
   };
 
-  const openDeal = deals.find((d) => d.id === openId) ?? null;
+  // A deal named in the link (`?deal=`, e.g. opened from All Pipelines) opens once the board is there.
+  const openedInitial = useRef(false);
+  useEffect(() => {
+    if (openedInitial.current || !initialDealId || !data) return;
+    openedInitial.current = true;
+    if (data.deals.some((d) => d.id === initialDealId)) setOpenId(initialDealId);
+  }, [initialDealId, data]);
+  // All Pipelines: a deal opens in its own board, with the company on it.
+  const openFromAll = (id: string) => {
+    const d = allDeals.find((x) => x.id === id);
+    if (d?.source) navigate({ to: "/projects/$projectId", params: { projectId: d.source.projectId }, search: { deal: d.id, from: "all" } });
+  };
+  const onOpen = all ? openFromAll : setOpenId;
+
+  const openDeal = all ? null : allDeals.find((d) => d.id === openId) ?? null;
   // The open deal was deleted elsewhere: close the drawer instead of showing a ghost.
   useEffect(() => {
     if (openId && data && !data.deals.some((d) => d.id === openId)) setOpenId(null);
@@ -246,8 +311,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         <EmptyState
           icon={Filter}
           tone="muted"
-          title={code === 403 ? t("This pipeline is for its project members") : t("The pipeline didn't load")}
-          message={code === 403 ? t("Ask the Project Owner or a board member to add you to the project.") : t("Check your connection, then try again.")}
+          title={code === 403 ? (all ? t("All Pipelines is for BoD and One Above All") : t("This pipeline is for its project members")) : t("The pipeline didn't load")}
+          message={code === 403 ? (all ? t("Open your company's pipeline board from Projects.") : t("Ask the Project Owner or a board member to add you to the project.")) : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>
@@ -288,11 +353,13 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   return (
     <PresentationContext.Provider value={presenting}>
     <div className="flex flex-col gap-4 p-4 md:p-8" data-presenting={presenting ? "" : undefined}>
-      {deals.length === 0 ? (
-        <FirstDeal adding={create.isPending} onAdd={canEdit ? () => setNewIn("Incoming") : undefined} />
+      {allDeals.length === 0 ? (
+        all
+          ? <EmptyState icon={Layers} tone="muted" title={t("No deals in any pipeline yet")} message={t("Deals are added inside each company's pipeline board. They show here together.")} />
+          : <FirstDeal adding={create.isPending} onAdd={canEdit ? () => setNewIn("Incoming") : undefined} />
       ) : (
         <>
-          <PipelineKpis s={data.summary} />
+          <PipelineKpis s={kpis} />
 
           {/* A computer: find · filter · export · add, then health chips with the view switch. A phone or a
               narrow window (owner, 9 Oct 2026: "di hape jg sempit bgt"): search with the add button, the two
@@ -311,6 +378,12 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                   className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
+              {all && boards.length > 0 && (
+                <SelectPicker variant="field" ariaLabel={t("Filter by company")} value={source} onChange={setSource} renderValue={allLabel(t("Company"), t("All companies"))} options={[{ value: ALL, label: t("All companies") }, ...boards.map((b) => ({ value: b.id, label: b.name }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-48 lg:flex-none", source && "border-foreground/30 text-foreground")} />
+              )}
+              {years.length > 0 && (
+                <SelectPicker variant="field" ariaLabel={t("Filter by year")} value={year} onChange={setYear} renderValue={allLabel(t("Year"), t("All years"))} options={[{ value: ALL, label: t("All years") }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-32 lg:flex-none", year && "border-foreground/30 text-foreground")} />
+              )}
               <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} renderValue={allLabel("PM", t("All PMs"))} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-foreground/30 text-foreground")} />
               <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} renderValue={allLabel("BD", t("All BDs"))} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-foreground/30 text-foreground")} />
               {serviceNames.length > 1 && (
@@ -384,7 +457,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               </div>
               {filtering && (
                 <p className="hidden shrink-0 items-center gap-2 text-xs text-muted-foreground lg:flex" aria-live="polite">
-                  {t("{shown} of {total} deals", { shown: shown.length, total: deals.length })}
+                  {t("{shown} of {total} deals", { shown: shown.length, total: allDeals.length })}
                   <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 rounded font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
                     <X className="h-3 w-3" /> {t("Clear filters")}
                   </button>
@@ -394,7 +467,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
             </div>
             {filtering && (
               <p className="-mt-2 flex items-center gap-2 text-xs text-muted-foreground lg:hidden" aria-live="polite">
-                {t("{shown} of {total} deals", { shown: shown.length, total: deals.length })}
+                {t("{shown} of {total} deals", { shown: shown.length, total: allDeals.length })}
                 <button type="button" onClick={resetFilters} className="inline-flex min-h-[36px] items-center gap-1 rounded font-semibold text-foreground">
                   <X className="h-3 w-3" /> {t("Clear filters")}
                 </button>
@@ -408,15 +481,15 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               icon={Search}
               tone="muted"
               title={t("No deal matches")}
-              message={tn(deals.length, "The filters hide the only deal.", "The filters hide all {n} deals.")}
+              message={tn(allDeals.length, "The filters hide the only deal.", "The filters hide all {n} deals.")}
               action={<EmptyAction onClick={resetFilters}>{t("Clear filters")}</EmptyAction>}
             />
           ) : view === "board" ? (
-            <PipelineBoard deals={shown} today={today} canEdit={canEdit} onOpen={setOpenId} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => setNewIn(stage)} />
+            <PipelineBoard deals={shown} today={today} canEdit={canEdit} onOpen={onOpen} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => setNewIn(stage)} />
           ) : view === "table" ? (
-            <PipelineTable deals={shown} canEdit={canEdit} onOpen={setOpenId} onPatch={patchDeal} />
+            <PipelineTable deals={shown} canEdit={canEdit} onOpen={onOpen} onPatch={patchDeal} />
           ) : (
-            <PipelineHealth deals={shown} today={today} onOpen={setOpenId} />
+            <PipelineHealth deals={shown} today={today} onOpen={onOpen} />
           )}
         </>
       )}
@@ -430,6 +503,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         onPatch={patchDeal}
         onDelete={(d) => remove.mutate(d)}
         onClose={() => setOpenId(null)}
+        boardName={boardName ?? (data && "project" in data ? data.project.name : undefined)}
+        fromAll={fromAll}
       />
     </div>
     </PresentationContext.Provider>
