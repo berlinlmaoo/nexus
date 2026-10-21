@@ -42,9 +42,27 @@ class UiPreviewActivity : ComponentActivity() {
         enableEdgeToEdge()
         val screen = intent.getStringExtra("screen") ?: "more"
         setContent {
-            NexusTheme {
+            NexusTheme(theme = if (intent.getBooleanExtra("dark", false)) id.znetworks.nexus.ui.theme.AppTheme.DARK else id.znetworks.nexus.ui.theme.AppTheme.LIGHT) {
                 Box(Modifier.fillMaxSize().background(Nx.colors.background).safeDrawingPadding()) {
                     when (screen) {
+                        "r21-sick", "r21-permit", "r21-present" -> {
+                            val action = screen.removePrefix("r21-").uppercase()
+                            id.znetworks.nexus.feature.attendance.history.OverrideEvidenceStep(
+                                id.znetworks.nexus.feature.attendance.history.HistoryRow(attendanceDate = "2026-10-20"), action,
+                                getString(id.znetworks.nexus.R.string.override_confirm_change, "20 Oct 2026", "Rina", action), false, {}, { _, _, _ -> })
+                        }
+                        "r21-missing" -> androidx.compose.foundation.layout.Column(Modifier.padding(20.dp)) {
+                            id.znetworks.nexus.feature.attendance.history.EvidenceDisplay(null, null, true, false)
+                            id.znetworks.nexus.feature.attendance.history.EvidenceDisplay(null, null, true, true)
+                        }
+                        "r9" -> id.znetworks.nexus.feature.tickets.TicketBoard(
+                            id.znetworks.nexus.feature.tickets.TicketsState(loading = false, list = id.znetworks.nexus.feature.tickets.TicketList(viewerIsBod = true,
+                                complaints = listOf("OPEN", "AWAITING_DECISION", "IN_REVIEW", "RESOLVED", "CLOSED").map { id.znetworks.nexus.feature.tickets.Ticket(it, subject = "Ticket " + it, status = it, canManage = true) })), "me", { _, _ -> }, {})
+                        "r10" -> id.znetworks.nexus.feature.chat.MessagesPager(
+                            id.znetworks.nexus.feature.chat.MessagesState(loading = false, conversations = listOf("DM", "GROUP", "PROJECT").flatMap { type ->
+                                (1..40).map { i -> id.znetworks.nexus.feature.chat.Conversation(type + i, type, name = "Conversation " + i,
+                                    lastMessage = id.znetworks.nexus.feature.chat.Message("m" + i, content = "Cached message preview " + i, createdAt = "2026-10-20T02:00:00Z"), unreadCount = if (i < 4) i else 0) }
+                            }), "me", emptySet(), {}, {}, {}, Modifier.fillMaxSize())
                         "account" -> AccountScreen(onBack = {})
                         "nav8" -> Nav8Preview()
                         "restore" -> RestorePreview()

@@ -199,12 +199,12 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    fun applyOverride(r: HistoryRow, action: String, doneText: (OverrideResponse) -> String) {
+    fun applyOverride(r: HistoryRow, action: String, evidence: id.znetworks.nexus.feature.attendance.requests.Attachment? = null, checkInAt: String? = null, checkOutAt: String? = null, doneText: (OverrideResponse) -> String) {
         val uid = r.user?.id ?: return
         _state.update { it.copy(busy = true, overrideError = null, overrideDone = null) }
         viewModelScope.launch {
             try {
-                val res = api.override(uid, r.dayKey, action)
+                val res = api.override(uid, r.dayKey, action, evidence = evidence, checkInAt = checkInAt, checkOutAt = checkOutAt)
                 _state.update { it.copy(busy = false, overrideDone = doneText(res), multiDayLeft = res.multiDayRequestsLeft?.takeIf { n -> n > 0 }) }
                 reloadAfterChange()
             } catch (e: ApiError) {
@@ -565,8 +565,10 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
                 } else {
                     r.requestType?.let { Fact(stringResource(R.string.req_type), it + (r.requestStatus?.let { s -> " · $s" } ?: "")) }
                     r.reviewedBy?.name?.let { Fact(stringResource(R.string.detail_approver), it) }
-                    r.supportingDocumentUrl?.let { AttachmentChip(it, r.supportingDocumentName, r.requestType) }
+
                 }
+                EvidenceDisplay(r.supportingDocumentUrl, r.supportingDocumentName, r.evidenceMissing, false)
+                EvidenceDisplay(r.correctionEvidenceUrl, r.correctionEvidenceName, r.correctionEvidenceMissing, true)
                 // Never for a future day, row or not: the server refuses it (audit R13).
                 if (vm.canManage && r.user?.id != null && !BoardModel.isFuture(r.dayKey)) ChangeStatusPanel(vm, r)
                 // BoD record actions, confirmed and audited server-side.
@@ -640,7 +642,7 @@ private fun ChangeStatusPanel(vm: BoardViewModel, r: HistoryRow) {
         s.overrideDone?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.success) }
         s.overrideError?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger) }
     }
-    pending?.let { action ->
+    pending?.takeIf { OverrideEvidence.asked(r, it) == null }?.let { action ->
         val label = overrideLabel(action)
         val doneClear = stringResource(R.string.override_done_clear, date)
         val doneNone = stringResource(R.string.override_done_none, date)
@@ -663,6 +665,14 @@ private fun ChangeStatusPanel(vm: BoardViewModel, r: HistoryRow) {
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text(stringResource(R.string.cancel)) } },
         )
+    }
+    pending?.takeIf { OverrideEvidence.asked(r, it) != null }?.let { action ->
+        val label = overrideLabel(action)
+        OverrideEvidenceStep(r, action, stringResource(R.string.override_confirm_change, date, person, label), s.busy,
+            dismiss = { pending = null }, save = { attachment, checkIn, checkOut ->
+                pending = null
+                vm.applyOverride(r, action, attachment, checkIn, checkOut) { "$person · $date → $label" }
+            })
     }
     s.multiDayLeft?.let { n ->
         AlertDialog(

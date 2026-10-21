@@ -1,0 +1,28 @@
+{
+  "fixture": "120 conversations, 40 per lazy page; warmed pages; 12 horizontal swipes per run",
+  "device": "Pixel_7 emulator, 2 cores, 1536 MB RAM, host GPU, debug build",
+  "physicalAcceptanceVerified": false,
+  "runs": [
+    {
+      "run": 1,
+      "frames": 397,
+      "janky": "48 (12.09%)",
+      "p50": "20ms",
+      "p95": "44ms"
+    },
+    {
+      "run": 2,
+      "frames": 410,
+      "janky": "30 (7.32%)",
+      "p50": "19ms",
+      "p95": "30ms"
+    },
+    {
+      "run": 3,
+      "frames": 409,
+      "janky": "23 (5.62%)",
+      "p50": "16ms",
+      "p95": "25ms"
+    }
+  ]
+}

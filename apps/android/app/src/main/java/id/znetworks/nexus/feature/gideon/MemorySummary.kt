@@ -119,7 +119,7 @@ import kotlin.math.abs
                 colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, disabledContainerColor = c.muted,
                     focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
                 trailingIcon = { IconButton(onClick = { act { store.add(draft, "FACT"); draft = "" } }, enabled = canSend,
-                    modifier = Modifier.padding(end = 6.dp).size(40.dp).background(if (canSend) MaterialTheme.colorScheme.primary else c.mutedFg.copy(alpha = .18f), CircleShape)) {
+                    modifier = Modifier.padding(end = 6.dp).size(40.dp).background(if (canSend) c.violet else c.mutedFg.copy(alpha = .18f), CircleShape)) {
                     Icon(Icons.Outlined.ArrowUpward, stringResource(R.string.gm_add), tint = if (canSend) MaterialTheme.colorScheme.onPrimary else c.mutedFg)
                 } })
         }

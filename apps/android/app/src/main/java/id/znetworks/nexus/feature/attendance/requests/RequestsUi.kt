@@ -304,7 +304,7 @@ private fun RequestRow(vm: RequestsViewModel, r: AttendanceRequest, busy: Boolea
                 modifier = Modifier.then(if (it.length > 140) Modifier.padding(0.dp) else Modifier))
             if (it.length > 140) TextButton(onClick = { expanded = !expanded }) { Text(stringResource(if (expanded) R.string.show_less else R.string.read_all), fontSize = 11.sp) }
         }
-        r.supportingDocumentUrl?.let { AttachmentChip(it, r.supportingDocumentName, r.type) }
+        id.znetworks.nexus.feature.attendance.history.EvidenceDisplay(r.supportingDocumentUrl, r.supportingDocumentName, r.evidenceMissing, false)
         if (!r.isPending) {
             val by = r.reviewedBy?.name
             val verb = statusLabel(r.status)

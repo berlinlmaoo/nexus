@@ -35,7 +35,7 @@
     <string name="update_required_title">Perbarui NEXUS untuk lanjut</string>
 
     <string name="tab_home">Beranda</string>
-    <string name="tab_tasks">Tugas</string>
+    <string name="tab_tasks">Task</string>
     <string name="tab_inbox">Kotak Masuk</string>
     <string name="tab_projects">Proyek</string>
     <string name="tab_more">Lainnya</string>
@@ -352,7 +352,7 @@
     <string name="theme_dark">Gelap</string>
     <string name="delete_account">Hapus akun</string>
     <string name="delete_account_sub">Nonaktifkan dan anonimkan akunmu.</string>
-    <string name="delete_account_body">Nama, email, dan login kamu dihapus dan kamu keluar di semua perangkat. Absen, tugas, dan pesan tetap ada sebagai \"Akun terhapus\". Tidak bisa dibatalkan. Ketik DELETE untuk konfirmasi.</string>
+    <string name="delete_account_body">Nama, email, dan login kamu dihapus dan kamu keluar di semua perangkat. Absen, task, dan pesan tetap ada sebagai \"Akun terhapus\". Tidak bisa dibatalkan. Ketik DELETE untuk konfirmasi.</string>
     <string name="delete">Hapus</string>
 
     <!-- Push -->
@@ -360,7 +360,7 @@
     <string name="ch_attendance_location">Di luar kantor</string>
     <string name="ch_approvals">Persetujuan</string>
     <string name="ch_messages">Pesan</string>
-    <string name="ch_tasks">Tugas</string>
+    <string name="ch_tasks">Task</string>
     <string name="ch_tickets">Tiket</string>
     <string name="ch_announcements">Pengumuman</string>
     <string name="ch_attendance">Absen</string>
@@ -428,7 +428,7 @@
     <string name="projects_empty_sub">Proyek adalah satu board untuk satu pekerjaan: task, orang, dan tenggatnya di satu tempat. Semua proyek yang kamu ikuti muncul di sini — buat yang pertama untuk mulai.</string>
     <string name="projects_nothing_matches">Nggak ada yang cocok.</string>
     <string name="projects_section_missions">Project</string>
-    <string name="projects_section_tasks">Tugas</string>
+    <string name="projects_section_tasks">Task</string>
     <string name="folder_edit">Edit folder</string>
     <string name="folder_delete">Hapus folder</string>
     <string name="folder_expand">Buka folder</string>
@@ -505,7 +505,7 @@
     <string name="ptab_board">Board</string>
     <string name="ptab_list">Daftar</string>
     <string name="back">Kembali</string>
-    <string name="board_search">Cari tugas di project ini…</string>
+    <string name="board_search">Cari task di project ini…</string>
     <string name="project_locked">Proyek terkunci</string>
     <string name="project_locked_sub">Kamu bukan anggota proyek ini. Minta lead-nya untuk menambahkanmu.</string>
     <string name="project_load_failed">Gagal memuat project.</string>
@@ -519,7 +519,7 @@
     <string name="board_move_failed">The task wasn\'t moved.</string>
     <string name="board_update_failed">Couldn\'t update the board</string>
     <string name="board_create_failed">The task wasn\'t created.</string>
-    <string name="task_new">Tugas baru</string>
+    <string name="task_new">Task baru</string>
     <string name="task_add_deadline">Tambah tenggat</string>
     <string name="task_no_deadline">Tanpa deadline</string>
     <string name="overview_overdue">Lewat tenggat</string>
@@ -615,7 +615,7 @@
     <string name="home_att_not_yet_shift">Belum check in · %1$s</string>
     <string name="home_search">Cari…</string>
     <string name="home_stat_projects">Proyek</string>
-    <string name="home_stat_mission">Tugas</string>
+    <string name="home_stat_mission">Task</string>
     <string name="home_stat_quest">Quest</string>
     <string name="home_no_projects">Belum ada project.</string>
     <string name="home_no_tasks">Belum ada task aktif.</string>
@@ -883,7 +883,7 @@
     <string name="tk_more_sub">Jalur pribadi ke BoD</string>
     <string name="tk_ticket">Tiket</string>
     <string name="tk_open">Terbuka</string>
-    <string name="tk_in_review">Sedang ditinjau</string>
+    <string name="tk_in_review">Ditangani</string>
     <string name="tk_awaiting">Menunggu keputusan</string>
     <string name="tk_resolved">Selesai</string>
     <string name="tk_closed">Ditutup</string>
@@ -1769,14 +1769,14 @@
     </plurals>
     <string name="calendar_title">Kalender</string>
     <string name="calendar_none_title">Gabung ke workspace perusahaanmu</string>
-    <string name="calendar_none_body">Kalender menampilkan tugas semua orang di perusahaanmu, dikelompokkan menurut Bagan IP &amp; Divisi. Masukkan kode workspace untuk bergabung.</string>
+    <string name="calendar_none_body">Kalender menampilkan task semua orang di perusahaanmu, dikelompokkan menurut Bagan IP &amp; Divisi. Masukkan kode workspace untuk bergabung.</string>
     <string name="calendar_none_action">Masukkan kode workspace</string>
     <string name="calendar_off_title">Kalender segera hadir</string>
-    <string name="calendar_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Tugas Saya.</string>
+    <string name="calendar_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Task Saya.</string>
     <string name="calendar_empty_title">Tidak ada tenggat di bulan ini</string>
-    <string name="calendar_empty_body">Tugas yang punya tenggat muncul di sini sebagai titik. Pilih bulan lain, atau beri tenggat pada tugas.</string>
-    <string name="calendar_masked">Tugas internal</string>
-    <string name="calendar_masked_in">Tugas internal · %1$s</string>
+    <string name="calendar_empty_body">Task yang punya tenggat muncul di sini sebagai titik. Pilih bulan lain, atau beri tenggat pada task.</string>
+    <string name="calendar_masked">Task internal</string>
+    <string name="calendar_masked_in">Task internal · %1$s</string>
     <string name="calendar_not_in_chart">Belum di bagan</string>
     <string name="calendar_someday">Suatu hari</string>
     <string name="cal_former_member">Mantan anggota</string>
@@ -1798,16 +1798,16 @@
     <string name="cal_load_failed">Kalender gagal dimuat</string>
     <string name="cal_check_connection">Periksa koneksi lalu coba lagi.</string>
     <string name="cal_none_title">Kalender ini khusus anggota perusahaan</string>
-    <string name="cal_none_body">Kamu berada di workspace pribadi. Masukkan kode workspace perusahaanmu untuk bergabung; Kalender lalu menampilkan tugas semua orang di sana.</string>
+    <string name="cal_none_body">Kamu berada di workspace pribadi. Masukkan kode workspace perusahaanmu untuk bergabung; Kalender lalu menampilkan task semua orang di sana.</string>
     <string name="cal_off_title">Kalender segera hadir</string>
-    <string name="cal_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di tab Tugas.</string>
+    <string name="cal_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di tab Task.</string>
     <string name="cal_open_my_tasks">Buka tugasku</string>
-    <string name="cal_empty_month">Belum ada tugas bertenggat di %1$s.</string>
+    <string name="cal_empty_month">Belum ada task bertenggat di %1$s.</string>
     <string name="cal_go_this_month">Ke bulan ini</string>
     <string name="cal_no_match_month">Tidak ada yang cocok dengan filter di bulan ini.</string>
     <string name="cal_reset_filters">Reset filter</string>
-    <string name="cal_truncated">Bulan ini punya lebih banyak tugas daripada yang bisa ditampilkan sekaligus.</string>
-    <string name="cal_legend_open">ada tugas yang belum selesai</string>
+    <string name="cal_truncated">Bulan ini punya lebih banyak task daripada yang bisa ditampilkan sekaligus.</string>
+    <string name="cal_legend_open">ada task yang belum selesai</string>
     <string name="cal_legend_done">selesai / tanpa status</string>
     <string name="cal_legend_overdue">lewat tenggat</string>
     <string name="cal_legend_hint">Titik mengikuti Bagan IP &amp; Divisi. Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya.</string>
@@ -1822,12 +1822,12 @@
     <string name="cal_show_less">Lebih sedikit</string>
     <string name="cal_show_all">Lihat semua</string>
     <string name="cal_no_match_day">Tidak ada yang cocok dengan filter di tanggal ini</string>
-    <string name="cal_no_tasks_day">Tidak ada tugas di tanggal ini</string>
+    <string name="cal_no_tasks_day">Tidak ada task di tanggal ini</string>
     <string name="cal_filters_hiding">Sisanya tersembunyi oleh filter. Reset filter untuk melihat semuanya.</string>
     <string name="cal_nobody_due">Tidak ada yang punya tenggat di tanggal ini.</string>
     <string name="cal_back_today">Kembali ke hari ini</string>
     <string name="cal_not_in_chart_n">Belum di bagan · %1$d</string>
-    <string name="cal_unique_total">Satu tugas bisa tampil di beberapa divisi. Total: %1$d tugas unik.</string>
+    <string name="cal_unique_total">Satu task bisa tampil di beberapa divisi. Total: %1$d task unik.</string>
     <string name="cal_you">Kamu</string>
     <string name="cal_also_in">juga di %1$s</string>
     <string name="cal_not_in_chart_lower">belum di bagan</string>
@@ -1835,12 +1835,12 @@
     <string name="cal_not_in_chart_scope">Kamu belum ada di Bagan, jadi \"Divisi saya\" menampilkan tugasmu sendiri.</string>
     <string name="cal_divisions">Divisi</string>
     <string name="cal_search_people">Cari orang…</string>
-    <string name="cal_nobody_month">Belum ada yang punya tugas di bulan ini.</string>
+    <string name="cal_nobody_month">Belum ada yang punya task di bulan ini.</string>
     <string name="cal_projects">Proyek</string>
     <string name="cal_search_projects">Cari proyek…</string>
-    <string name="cal_no_project_month">Belum ada proyek yang punya tugas di bulan ini.</string>
+    <string name="cal_no_project_month">Belum ada proyek yang punya task di bulan ini.</string>
     <string name="cal_priority">Prioritas</string>
-    <string name="cal_hide_done">Sembunyikan tugas selesai</string>
+    <string name="cal_hide_done">Sembunyikan task selesai</string>
     <string name="cal_only_overdue">Hanya yang lewat tenggat</string>
     <string name="cal_prio_urgent">Mendesak</string>
     <string name="cal_prio_high">Tinggi</string>
@@ -1848,21 +1848,21 @@
     <string name="cal_prio_low">Rendah</string>
     <string name="cal_prio_none">Tidak ada</string>
     <string name="cal_overdue">Lewat tenggat</string>
-    <string name="cal_nobody_week">Belum ada yang punya tugas minggu ini</string>
+    <string name="cal_nobody_week">Belum ada yang punya task minggu ini</string>
     <string name="cal_pick_week">Pilih minggu lain, atau reset filter.</string>
-    <string name="cal_without_person">Tugas tanpa orang</string>
+    <string name="cal_without_person">Task tanpa orang</string>
     <string name="cal_person">Orang</string>
-    <string name="cal_internal">Tugas internal</string>
+    <string name="cal_internal">Task internal</string>
     <string name="cal_status_progress">Sedang dikerjakan</string>
     <string name="cal_status_review">Ditinjau</string>
     <string name="cal_status_cancelled">Dibatalkan</string>
     <string name="cal_status_todo">Belum dikerjakan</string>
     <string name="cal_status_done">Selesai</string>
-    <string name="cal_task">Tugas</string>
+    <string name="cal_task">Task</string>
     <string name="cal_read_only_of">Hanya-baca · kamu bukan anggota proyek %1$s</string>
     <string name="cal_read_only">Hanya-baca</string>
-    <string name="cal_masked_note">Ini tugas internal dari proyek rahasia. Hanya anggotanya yang bisa membukanya.</string>
-    <string name="cal_task_failed">Tugas ini tidak bisa dimuat.</string>
+    <string name="cal_masked_note">Ini task internal dari proyek rahasia. Hanya anggotanya yang bisa membukanya.</string>
+    <string name="cal_task_failed">Task ini tidak bisa dimuat.</string>
     <string name="cal_from">dari %1$s</string>
     <string name="cal_status">Status</string>
     <string name="cal_due">Tenggat</string>
@@ -1874,13 +1874,13 @@
     <string name="cal_comments">Komentar</string>
     <string name="cal_no_status">Tanpa status</string>
     <string name="cal_overdue_older">Lewat tenggat lebih dari %1$d hari</string>
-    <string name="cal_internal_in">Tugas internal · %1$s</string>
+    <string name="cal_internal_in">Task internal · %1$s</string>
     <string name="cal_with">bareng</string>
     <string name="cal_filters_n">Filter · %1$d</string>
     <string name="cal_close">Tutup</string>
     <plurals name="cal_tasks_n">
-        <item quantity="one">%d tugas</item>
-        <item quantity="other">%d tugas</item>
+        <item quantity="one">%d task</item>
+        <item quantity="other">%d task</item>
     </plurals>
     <plurals name="cal_people_n">
         <item quantity="one">%d orang</item>
@@ -1898,9 +1898,9 @@
     <string name="wcal_month_name">Kalender Bulan</string>
     <string name="wcal_month_desc">Sebulan dengan tugasmu; besarkan widget untuk garis dan judul.</string>
     <string name="wcal_month_up_name">Bulan + Tidak lama lagi</string>
-    <string name="wcal_month_up_desc">Bulan kecil dan empat tugas berikutnya.</string>
+    <string name="wcal_month_up_desc">Bulan kecil dan empat task berikutnya.</string>
     <string name="wcal_week_name">Minggu Ini</string>
-    <string name="wcal_week_desc">Senin sampai Minggu, sampai tiga tugas per hari.</string>
+    <string name="wcal_week_desc">Senin sampai Minggu, sampai tiga task per hari.</string>
     <string name="wcal_q_do">Penting dan mendesak</string>
     <string name="wcal_q_plan">Penting</string>
     <string name="wcal_q_act">Mendesak</string>
@@ -1908,7 +1908,7 @@
     <string name="wcal_q_do_desc">Prioritas mendesak atau tinggi, tenggat hari ini atau besok, atau lewat tenggat.</string>
     <string name="wcal_q_plan_desc">Prioritas tinggi, belum dekat tenggat.</string>
     <string name="wcal_q_act_desc">Mendesak, bukan prioritas tinggi: tenggat hari ini atau besok, atau lewat tenggat.</string>
-    <string name="wcal_q_later_desc">Tidak mendesak, bukan prioritas tinggi, termasuk tugas tanpa tenggat.</string>
+    <string name="wcal_q_later_desc">Tidak mendesak, bukan prioritas tinggi, termasuk task tanpa tenggat.</string>
     <string name="wcal_year">Hari ke-%1$d tahun ini · %2$d%%</string>
     <string name="wcal_updated">Diperbarui %s</string>
     <string name="wcal_stale">Buka NEXUS untuk memperbarui</string>
@@ -1925,19 +1925,19 @@
     <string name="wcal_scope_me">Saya</string>
     <string name="wcal_scope_division">Divisi saya</string>
     <string name="wcal_scope_all">Semua</string>
-    <string name="wcal_cfg_title">Tugas siapa?</string>
-    <string name="wcal_cfg_hint">Widget ini menampilkan tugas:</string>
+    <string name="wcal_cfg_title">Task siapa?</string>
+    <string name="wcal_cfg_hint">Widget ini menampilkan task:</string>
     <string name="wcal_cfg_division_hint">Menampilkan tugasmu sendiri selama kamu belum ada di kartu Bagan.</string>
     <string name="wcal_cfg_save">Simpan</string>
     <string name="cal_updated_offline">Diperbarui %s · offline</string>
-    <string name="cal_no_tasks">tidak ada tugas</string>
-    <string name="cal_show_tasks">Tampilkan tugas</string>
+    <string name="cal_no_tasks">tidak ada task</string>
+    <string name="cal_show_tasks">Tampilkan task</string>
     <string name="cal_collapsed">Tertutup</string>
     <string name="cal_expanded">Terbuka</string>
     <string name="cal_expand">Buka</string>
     <string name="cal_collapse">Tutup</string>
     <string name="cal_why_locked">Kenapa terkunci</string>
-    <string name="cal_open_task">Buka tugas</string>
+    <string name="cal_open_task">Buka task</string>
     <string name="cal_open_read_only">Buka hanya-baca</string>
     <string name="cal_show_in_month">Lihat di bulan</string>
     <string name="cal_go_this_week">Ke minggu ini</string>
@@ -1950,32 +1950,32 @@
         <item quantity="other">%d lewat tenggat</item>
     </plurals>
     <plurals name="cal_show_n_tasks">
-        <item quantity="one">Tampilkan %d tugas</item>
-        <item quantity="other">Tampilkan %d tugas</item>
+        <item quantity="one">Tampilkan %d task</item>
+        <item quantity="other">Tampilkan %d task</item>
     </plurals>
     <string name="wcal_q_act_note">mendesak, bukan prioritas tinggi</string>
     <string name="wcal_q_later_note">tidak mendesak, bukan prioritas tinggi</string>
     <string name="wcal_q_do_empty">Tidak ada yang penting dan mendesak (%s). Mantap.</string>
-    <string name="wcal_q_plan_empty">Tidak ada tugas prioritas tinggi yang menunggu (%s).</string>
+    <string name="wcal_q_plan_empty">Tidak ada task prioritas tinggi yang menunggu (%s).</string>
     <string name="wcal_q_act_empty">Tidak ada yang mendesak (%s). Mantap.</string>
     <string name="wcal_q_later_empty">Tidak ada yang disimpan untuk nanti (%s).</string>
     <string-array name="wcal_weekdays">
         <item>Sn</item><item>Sl</item><item>Rb</item><item>Km</item><item>Jm</item><item>Sb</item><item>Mg</item>
     </string-array>
-    <string name="calq_title_note">Ketuk tugas untuk membukanya di Kalender.</string>
+    <string name="calq_title_note">Ketuk task untuk membukanya di Kalender.</string>
     <string name="cal_all_divisions">Semua divisi</string>
     <string name="cal_focus_on">Fokus ke %1$s</string>
     <plurals name="cal_focus_on_n">
-        <item quantity="one">Fokus ke %1$s, %2$d tugas</item>
-        <item quantity="other">Fokus ke %1$s, %2$d tugas</item>
+        <item quantity="one">Fokus ke %1$s, %2$d task</item>
+        <item quantity="other">Fokus ke %1$s, %2$d task</item>
     </plurals>
-    <string name="cal_task_gone">Tugas ini sudah dihapus, atau dipindah ke tempat yang tidak bisa kamu lihat.</string>
-    <string name="cal_task_offline">Kamu sedang offline. Tugas terbuka saat kamu online lagi.</string>
+    <string name="cal_task_gone">Task ini sudah dihapus, atau dipindah ke tempat yang tidak bisa kamu lihat.</string>
+    <string name="cal_task_offline">Kamu sedang offline. Task terbuka saat kamu online lagi.</string>
     <string name="cal_remove_filter">Hapus filter %1$s</string>
-    <string name="cal_project_elsewhere">Proyek tanpa tugas di sini</string>
+    <string name="cal_project_elsewhere">Proyek tanpa task di sini</string>
     <plurals name="cal_internal_n">
-        <item quantity="one">%d tugas internal</item>
-        <item quantity="other">%d tugas internal</item>
+        <item quantity="one">%d task internal</item>
+        <item quantity="other">%d task internal</item>
     </plurals>
     <string name="cal_lists_loading">Memuat orang dan proyek di rentang ini…</string>
     <string name="calq_empty_next">Tugasmu ada di Kalender, hari per hari.</string>
@@ -2012,7 +2012,7 @@
     <string name="au_restored">Sudah dipulihkan</string>
     <string name="au_bring_back">Kembalikan</string>
     <string name="au_restore_project">Pulihkan proyek</string>
-    <string name="au_restore_task">Pulihkan tugas</string>
+    <string name="au_restore_task">Pulihkan task</string>
     <string name="au_restoring">Memulihkan…</string>
     <string name="au_restore_confirm">Pulihkan “%1$s”?</string>
     <string name="au_restore_yes">Ya, pulihkan</string>
@@ -2026,15 +2026,15 @@
     <string name="au_restored_at">Dipulihkan · %1$s</string>
     <string name="au_restored_now">Sudah dipulihkan. Kembali ke tempat semula.</string>
     <string name="au_open_project">Buka proyek</string>
-    <string name="au_open_task">Buka tugas</string>
+    <string name="au_open_task">Buka task</string>
     <string name="au_err_already_restored">Sudah dipulihkan oleh orang lain.</string>
     <string name="au_err_already_exists">Sudah kembali.</string>
-    <string name="au_err_parent_missing">Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru tugas ini.</string>
+    <string name="au_err_parent_missing">Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru task ini.</string>
     <string name="au_err_not_restorable">Tidak ada salinan dari penghapusan ini, jadi tidak bisa dipulihkan.</string>
     <string name="au_err_restore_failed">Belum bisa dipulihkan. Coba lagi sebentar lagi.</string>
-    <string name="au_restore_too_old">Ini dihapus sebelum NEXUS mulai menyimpan proyek dan tugas yang dihapus, jadi tidak bisa dipulihkan.</string>
+    <string name="au_restore_too_old">Ini dihapus sebelum NEXUS mulai menyimpan proyek dan task yang dihapus, jadi tidak bisa dipulihkan.</string>
     <plurals name="au_n_tasks">
-        <item quantity="other">%d tugas</item>
+        <item quantity="other">%d task</item>
     </plurals>
     <plurals name="au_n_subtasks">
         <item quantity="other">%d subtugas</item>
@@ -2075,8 +2075,8 @@
     <string name="off_what_happens">Yang terjadi</string>
     <string name="off_h1">Tidak bisa masuk lagi, di perangkat mana pun.</string>
     <string name="off_h2">Dikeluarkan dari proyek, tim, dan chat.</string>
-    <string name="off_h3">Absensi, pengajuan, proyek, tugas, dan pesannya tetap ada.</string>
-    <string name="off_h4">Tugas yang belum selesai tetap atas namanya.</string>
+    <string name="off_h3">Absensi, pengajuan, proyek, task, dan pesannya tetap ada.</string>
+    <string name="off_h4">Task yang belum selesai tetap atas namanya.</string>
     <string name="off_h5">Yang approver-nya dia kembali ke BoD sebagai jaring pengaman.</string>
     <string name="off_done_title">%1$s sudah di-offboard.</string>
     <string name="off_done_last">Hari kerja terakhir: %1$s</string>
@@ -2084,7 +2084,7 @@
     <string name="off_pending">Pengajuan menunggu</string>
     <string name="off_pending_some">Masih menunggu keputusan di Attendance.</string>
     <string name="off_pending_none">Tidak ada yang menunggu.</string>
-    <string name="off_open">Tugas belum selesai</string>
+    <string name="off_open">Task belum selesai</string>
     <string name="off_open_some">Masih atas namanya. Pindahkan kalau perlu ada yang melanjutkan.</string>
     <string name="off_open_none">Tidak ada yang terbuka.</string>
     <string name="off_lost_approver_sub">Pengajuan mereka masuk ke BoD sampai kamu atur approver baru di Bagan Approval.</string>
@@ -2160,7 +2160,7 @@
     <string name="au_rb_quest">Pulihkan quest</string>
     <string name="au_rb_event">Pulihkan acara</string>
     <string name="au_rb_extra_day_off">Pulihkan extra day off</string>
-    <string name="au_note_task_list">Tugas yang dipindahkan keluar akan kembali ke sini, kecuali sudah dipindahkan lagi oleh seseorang.</string>
+    <string name="au_note_task_list">Task yang dipindahkan keluar akan kembali ke sini, kecuali sudah dipindahkan lagi oleh seseorang.</string>
     <string name="au_note_project_folder">Proyek dan folder yang dipindahkan keluar akan kembali ke dalamnya, kecuali sudah dipindahkan lagi. Kalau namanya sudah dipakai, folder ini kembali sebagai “Nama (2)”.</string>
     <string name="au_note_org_unit">Orang-orangnya kembali ke kartu, dan unit yang dinaikkan kembali ke bawahnya kecuali sudah dipindahkan lagi.</string>
     <string name="au_note_sheet_rows">Barisnya kembali ke tempat semula. Kalau tempatnya sudah diisi baris baru, barisnya ditaruh setelah baris terakhir.</string>
@@ -2209,7 +2209,7 @@
     <string name="au_pm_person">Orang pemiliknya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
     <string name="au_pm_workspace">Workspace-nya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
     <string name="au_pm_team">Tim-nya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
-    <string name="au_pm_subtask">Tugas induknya juga terhapus. Pulihkan tugas itu dulu, baru subtugas ini.</string>
+    <string name="au_pm_subtask">Task induknya juga terhapus. Pulihkan task itu dulu, baru subtugas ini.</string>
     <string name="au_pm_unknown">Induknya juga terhapus. Pulihkan itu dulu, baru ini.</string>
     <string name="au_open_doc">Buka dokumen</string>
     <string name="au_open_folder">Buka folder</string>
@@ -3109,7 +3109,7 @@
     <string name="au_a_mark_complete">Tandai selesai</string>
     <string name="au_a_set_priority">Atur prioritas</string>
     <string name="au_a_assign">Tugaskan ke</string>
-    <string name="au_a_unassign">Lepas tugas</string>
+    <string name="au_a_unassign">Lepas task</string>
     <string name="au_a_set_field">Isi kolom</string>
     <string name="au_a_move">Pindah ke seksi</string>
     <string name="au_a_add_tag">Tambah tag</string>
@@ -3291,4 +3291,5 @@
     <string name="gm_full">Memori GIDEON penuh (%1$s). Hapus sesuatu untuk menambah.</string>
     <string name="gm_failed">Tidak bisa menyimpan. Coba lagi.</string>
     <string name="gm_edit_memory">Ubah memori</string>
+    <string name="round3_closed_choice">Ditutup</string>
 </resources>

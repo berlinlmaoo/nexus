@@ -214,21 +214,22 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
                     if (conv.muted()) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 4.dp).size(14.dp))
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(chatTime(conv.lastMessage?.createdAt), fontSize = 11.sp, color = if (conv.unreadCount > 0) c.violetText else c.mutedFg)
+                Text(remember(conv.lastMessage?.createdAt, java.time.LocalDate.now(), Locale.getDefault()) { chatTime(conv.lastMessage?.createdAt) }, fontSize = 11.sp, color = if (conv.unreadCount > 0) c.violetText else c.mutedFg)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val last = conv.lastMessage
-                val preview = when {
-                    last == null -> stringResource(R.string.chat_no_message)
-                    last.attachmentUrl != null && !last.isImage -> ChatDocuments.preview(last.attachmentType, last.attachmentName, stringResource(R.string.files)) ?: stringResource(R.string.files)
-                    last.content.isBlank() && last.attachmentUrl != null -> "📷 " + stringResource(R.string.chat_photo)
-                    last.isSystem -> ChatSystemText.sentence(last.event, last.content, meId, ChatSystemText.Words.of(LocalContext.current.resources))
+                val resources = LocalContext.current.resources
+                val preview = remember(last, meId, androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) { when {
+                    last == null -> resources.getString(R.string.chat_no_message)
+                    last.attachmentUrl != null && !last.isImage -> ChatDocuments.preview(last.attachmentType, last.attachmentName, resources.getString(R.string.files)) ?: resources.getString(R.string.files)
+                    last.content.isBlank() && last.attachmentUrl != null -> "📷 " + resources.getString(R.string.chat_photo)
+                    last.isSystem -> ChatSystemText.sentence(last.event, last.content, meId, ChatSystemText.Words.of(resources))
                     else -> when (val p = ChatPayload.parse(last.content)) {
-                        is ChatPayload.Location -> "📍 " + stringResource(R.string.chat_location)
+                        is ChatPayload.Location -> "📍 " + resources.getString(R.string.chat_location)
                         is ChatPayload.Task -> "📋 " + p.title
                         ChatPayload.Plain -> last.content
                     }
-                }
+                } }
                 // A log line reads as its own sentence, not "Budi: Budi Santoso menambahkan …" (SYSTEM-MESSAGES).
                 val who = if (conv.type != "DM" && last?.user?.name != null && !last.isSystem) "${last.user.name.substringBefore(' ')}: " else ""
                 // "typing…" in place of the last message while anyone types in that room (TYPING.md).

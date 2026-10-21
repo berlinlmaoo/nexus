@@ -49,6 +49,29 @@ object AttachmentReader {
         }
     }
 
+    /** Overrides preserve the selected file, with a bounded read and extension fallback for Files providers. */
+    fun readEvidence(context: Context, uri: Uri): Result {
+        val name = displayName(context, uri) ?: "evidence.jpg"
+        val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
+        val extension = name.substringAfterLast('.', "").lowercase()
+        val fallback = mapOf("jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "heic" to "image/heic", "heif" to "image/heif", "webp" to "image/webp", "gif" to "image/gif", "pdf" to "application/pdf")
+        val type = if (mime.isEmpty() || mime == "application/octet-stream") fallback[extension] else mime
+        if (type == null || !(type.startsWith("image/") || type == "application/pdf")) return Result.Unsupported
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    if (out.size() + n > RequestRules.MAX_ATTACHMENT_BYTES) return Result.TooBig
+                    out.write(buffer, 0, n)
+                }
+                if (out.size() == 0) Result.Unreadable else Result.Ok(Attachment(out.toByteArray(), name, type))
+            } ?: Result.Unreadable
+        } catch (_: Exception) { Result.Unreadable }
+    }
+
     private fun displayName(context: Context, uri: Uri): String? = runCatching {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null

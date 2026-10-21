@@ -103,18 +103,18 @@ import java.util.Locale
 fun ticketStatusLabel(s: String) = stringResource(when (s) {
     "IN_REVIEW" -> R.string.tk_in_review
     "AWAITING_DECISION" -> R.string.tk_awaiting
-    "RESOLVED" -> R.string.tk_resolved
+    "RESOLVED" -> R.string.ui_ticket_done
     "CLOSED" -> R.string.tk_closed
     "ALL" -> R.string.tk_all
-    else -> R.string.tk_open
+    else -> R.string.ui_ticket_new
 })
 
 @Composable
 fun ticketStatusColor(s: String) = when (s) {
-    // The web's chips (complaints.tsx STATUS): Open amber, Awaiting decision violet, In review sky, Resolved green, Closed slate.
-    "OPEN" -> Nx.colors.warning
+    // Shared board, menu and card palette: New grey, Awaiting violet, In review amber, Done green.
+    "OPEN" -> Nx.colors.mutedFg
     "AWAITING_DECISION" -> Nx.colors.violetText
-    "IN_REVIEW" -> Nx.colors.blue
+    "IN_REVIEW" -> Nx.colors.warning
     "RESOLVED" -> Nx.colors.success
     "CLOSED" -> Nx.colors.mutedFg
     else -> Nx.colors.mutedFg
@@ -204,7 +204,7 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var composing by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { vm.load() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.complaint(it) }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     Column(Modifier.fillMaxSize().background(c.background)) {
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
             actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.tk_new), { vm.resetForm(); composing = true }, primary = true) })

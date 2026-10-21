@@ -234,7 +234,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                     }
                     Box(Modifier.weight(1f)) { ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() } }
                     if (s.thinking) TextButton(onClick = chat::stop) { Text(stringResource(R.string.gc_stop), color = c.foreground) }
-                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) c.onyx else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) {
+                    else IconButton(onClick = { send(draft) }, modifier = Modifier.background(if (tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) c.violet else c.muted, androidx.compose.foundation.shape.CircleShape), enabled = tiers.available(s.tier) && (draft.isNotBlank() || upload != null)) {
                         Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.background else c.mutedFg)
                     }
                 }

@@ -497,7 +497,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
         val held = s.lanes.asSequence().flatMap { it.tasks.asSequence() }.firstOrNull { it.id == event.taskId }
         id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(event, vm.projectId) &&
             !id.znetworks.nexus.core.net.ConcurrentEdits.older(event.updatedAt, held?.updatedAt)
-    }) { vm.load().join() }
+    }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     // The open view (a saved view's id); the tab follows its layout.
     var viewId by rememberSaveable { mutableStateOf(vm.savedViewId()) }
@@ -626,7 +626,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
-                onAdd = onAdd, addInTabs = tabsShown, extraActions = {
+                onAdd = if (pipelinePresentation) null else onAdd, addInTabs = tabsShown, presentation = pipelinePresentation, extraActions = {
                     if (tab == ProjectTab.PIPELINE) {
                         id.znetworks.nexus.ui.components.HeaderIconButton(
                             if (pipelinePresentation) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
@@ -637,7 +637,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                 })
             if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
-                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd, onDetails = if (canAddTask) details else null,
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = if (pipelinePresentation) null else onAdd, onDetails = if (canAddTask) details else null,
                     onMeetings = if (meetingConfig.meetingNotesEnabled) ({ meetingContainer.router.open(id.znetworks.nexus.core.nav.Target.Meetings(vm.projectId)) }) else null)
             }
             androidx.compose.material3.HorizontalDivider(color = c.border)

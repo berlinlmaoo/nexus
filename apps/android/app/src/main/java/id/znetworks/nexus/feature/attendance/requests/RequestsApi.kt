@@ -38,6 +38,7 @@ data class AttendanceRequest(
     val approvalSource: String? = null,
     val supportingDocumentUrl: String? = null,
     val supportingDocumentName: String? = null,
+    val evidenceMissing: Boolean = false,
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val reviewedAt: String? = null,

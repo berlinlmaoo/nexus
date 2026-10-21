@@ -383,7 +383,7 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
                             tint = if (t.isDone) c.foreground else c.mutedFg.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, lineHeight = 17.sp, maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis,
+                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = if (compact) 12.sp else 14.sp, lineHeight = 16.sp, maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis,
                             color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
                     }
                 }

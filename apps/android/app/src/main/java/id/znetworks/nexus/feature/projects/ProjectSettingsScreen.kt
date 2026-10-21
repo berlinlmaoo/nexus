@@ -223,6 +223,8 @@ private val FIELD_TYPES = listOf("TEXT" to R.string.ps_ft_text, "SELECT" to R.st
 fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProject: (String) -> Unit, vm: ProjectSettingsViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
+    id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.projectContent(it, vm.projectId, "members") }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     LaunchedEffect(s.deleted) { if (s.deleted) onDeleted() }
     LaunchedEffect(s.duplicatedId) { s.duplicatedId?.let(onOpenProject) }
     var confirmDelete by remember { mutableStateOf(false) }

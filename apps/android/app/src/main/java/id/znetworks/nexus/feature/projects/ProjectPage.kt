@@ -138,6 +138,7 @@ fun ProjectPageHeader(
     onAdd: (() -> Unit)?,
     addInTabs: Boolean = false,
     extraActions: @Composable () -> Unit = {},
+    presentation: Boolean = false,
 ) {
     val c = Nx.colors
     val access = ProjectAccess.of(detail)
@@ -145,7 +146,7 @@ fun ProjectPageHeader(
         // Phone header (owner, 14 Oct 2026: "kegedean di HP"): back, mark, the name, faces, GIDEON and settings like the
         // web phone; "Add task" sits at the end of the tab row (ProjectTabRow), so the name keeps its room.
         Row(Modifier.fillMaxWidth().padding(start = 0.dp, end = 12.dp, top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.IconButton(onClick = onBack) {
+            if (!presentation) androidx.compose.material3.IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = c.foreground, modifier = Modifier.size(22.dp))
             }
             detail?.let { ProjectMark(it.icon, 22.dp, projectId = it.id) }
@@ -162,11 +163,13 @@ fun ProjectPageHeader(
             }
             if (detail != null) {
                 extraActions()
+                if (!presentation) {
                 MemberFaces(detail.members, onMembers)
                 Spacer(Modifier.width(6.dp))
                 HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp, painter = id.znetworks.nexus.ui.components.gideonPainter())
                 Spacer(Modifier.width(6.dp))
                 HeaderIconButton(Icons.Outlined.Settings, stringResource(R.string.pp_settings), onSettings, size = 36.dp)
+                }
                 // Without tabs (no access, still loading) "Add task" has no row to sit in: it stays here.
                 if (onAdd != null && !addInTabs) {
                     Spacer(Modifier.width(6.dp))

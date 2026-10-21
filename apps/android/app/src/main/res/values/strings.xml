@@ -3344,4 +3344,5 @@
     <string name="gm_full">GIDEON Memory is full (%1$s). Delete something to add more.</string>
     <string name="gm_failed">Could not save. Try again.</string>
     <string name="gm_edit_memory">Edit memory</string>
+    <string name="round3_closed_choice">Closed (no action)</string>
 </resources>

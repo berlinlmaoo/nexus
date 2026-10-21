@@ -91,8 +91,10 @@ object RealtimeEvents {
     const val ATTENDANCE_BOARD_CHANGED = "attendance-board-changed"
     const val XP_CHANGED = "xp-changed"
     const val CALENDAR_CHANGED = "calendar-changed"
+    const val PROJECT_CHANGED = "project-changed"
+    const val COMPLAINT_CHANGED = "complaint-changed"
 
-    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
+    val LISTENED = listOf(PROJECT_CHANGED, COMPLAINT_CHANGED, WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
         OUTLET_SALES_CHANGED, SOCIAL_MEDIA_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, FORM_OPS, FORM_PRESENCE, ATTENDANCE_CHANGED, ATTENDANCE_BOARD_CHANGED, XP_CHANGED, CALENDAR_CHANGED, "sheet-cells", "sheet-structure", "gideon-tiers", "gideon-perf", "meeting-changed", "reminders-changed", "presence-changed") + TASK
 
 
@@ -136,6 +138,8 @@ object RealtimeEvents {
             // { projectId, formId } (the form's id rides in taskId)
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             FORM_OPS, FORM_PRESENCE -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"), raw = json)
+            PROJECT_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), kind = o.str("kind"), taskId = o.str("id"), userId = o.str("actorId"))
+            COMPLAINT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), taskId = o.str("id"))
             ATTENDANCE_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), taskId = o.str("id"), raw = json)
             ATTENDANCE_BOARD_CHANGED -> RealtimeEvent(name, raw = json)
             XP_CHANGED -> RealtimeEvent(name, userIds = (o["userIds"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }, raw = json)
@@ -161,8 +165,11 @@ object RealtimeEvents {
     /** The server sends this only to the task's assignees, including assignment changes. */
     fun isMyTasks(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && e.kind == "tasks"
     /** Something about this project: its tasks (project room) or the project itself (workspace room). */
+    fun projectContent(e: RealtimeEvent, projectId: String, vararg kinds: String) =
+        e.name == PROJECT_CHANGED && e.projectId == projectId && (kinds.isEmpty() || e.kind in kinds)
+    fun complaint(e: RealtimeEvent, id: String? = null) = e.name == COMPLAINT_CHANGED && (id == null || e.taskId == null || e.taskId == id)
     fun touchesProject(e: RealtimeEvent, projectId: String) =
-        e.name in TASK || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId)) || revoked(e, projectId)
+        (e.name in TASK && (e.projectId == null || e.projectId == projectId)) || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId)) || projectContent(e, projectId) || revoked(e, projectId)
     /** Access to [projectId] ended while its room was held: refetch (→ the no-access state) and say so. */
     fun revoked(e: RealtimeEvent, projectId: String) = e.name == JOIN_DENIED && e.reason == "revoked" && e.projectId == projectId
 
@@ -170,7 +177,7 @@ object RealtimeEvents {
     fun formResponses(e: RealtimeEvent, formId: String) = e.name == FORM_RESPONSES_CHANGED && (e.taskId == null || e.taskId == formId)
 
     /** Something about this task (task-created never is: it is a new one). */
-    fun touchesTask(e: RealtimeEvent, taskId: String) = e.name != "task-created" && e.name in TASK && e.taskId == taskId
+    fun touchesTask(e: RealtimeEvent, taskId: String) = (e.name != "task-created" && e.name in TASK && e.taskId == taskId) || (e.name == PROJECT_CHANGED && e.kind == "task" && (e.taskId == null || e.taskId == taskId))
 }
 
 /**
