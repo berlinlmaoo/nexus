@@ -385,7 +385,7 @@ export function PipelineView({
                     <SelectPicker variant="field" ariaLabel={t("Filter by company")} value={source} onChange={setSource} renderValue={allLabel(t("All companies"), t("All companies"))} options={[{ value: ALL, label: t("All companies") }, ...boards.map((b) => ({ value: b.id, label: b.name }))]} className={cn(pickerControl, "min-w-0 flex-1 px-3 lg:w-48 lg:flex-none", source && "border-foreground/30 text-foreground")} />
                   )}
                   {years.length > 0 && (
-                    <SelectPicker variant="field" ariaLabel={t("Filter by year")} value={year} onChange={setYear} renderValue={allLabel(t("All years"), t("All years"))} options={[{ value: ALL, label: t("All years") }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} className={cn(pickerControl, "min-w-0 flex-1 px-3 lg:w-32 lg:flex-none", year && "border-foreground/30 text-foreground")} />
+                    <SelectPicker variant="field" ariaLabel={t("Filter by year")} value={year} onChange={setYear} renderValue={allLabel(t("All years"), t("All years"))} options={[{ value: ALL, label: t("All years") }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} className={cn(pickerControl, "min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", year && "border-foreground/30 text-foreground")} />
                   )}
                 </div>
               )}
