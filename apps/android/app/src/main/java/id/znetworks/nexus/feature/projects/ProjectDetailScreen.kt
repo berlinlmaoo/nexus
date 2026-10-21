@@ -504,8 +504,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     // A selection belongs to the task views; leaving them drops it.
     LaunchedEffect(tab) { if (!tab.searches || tab == ProjectTab.CALENDAR || tab == ProjectTab.TIMELINE) { vm.clearSelection() }; if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.setDrill(null) }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
-    var pipelinePresentation by remember(vm.projectId) { mutableStateOf(false) }
-    LaunchedEffect(tab) { if (tab != ProjectTab.PIPELINE) pipelinePresentation = false }
+    var sessionPresentation by id.znetworks.nexus.feature.pipeline.PipelineSession.presentation
+    val pipelinePresentation = s.detail?.type == "PIPELINE" && tab == ProjectTab.PIPELINE && sessionPresentation
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -626,12 +626,14 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
             val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
-                onAdd = if (pipelinePresentation) null else onAdd, addInTabs = tabsShown, presentation = pipelinePresentation, extraActions = {
+                onAdd = if (pipelinePresentation) null else onAdd, addInTabs = tabsShown, presentation = pipelinePresentation,
+                titleContent = if (s.detail?.type == "PIPELINE") ({ id.znetworks.nexus.feature.pipeline.PipelineBoardTitle(s.detail?.name.orEmpty(), vm.projectId, onOpenProject) }) else null,
+                extraActions = {
                     if (tab == ProjectTab.PIPELINE) {
                         id.znetworks.nexus.ui.components.HeaderIconButton(
                             if (pipelinePresentation) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                             stringResource(if (pipelinePresentation) R.string.pl_show_amounts else R.string.pl_hide_amounts),
-                            { pipelinePresentation = !pipelinePresentation }, size = 36.dp)
+                            { sessionPresentation = !sessionPresentation }, size = 36.dp)
                         Spacer(Modifier.width(6.dp))
                     }
                 })

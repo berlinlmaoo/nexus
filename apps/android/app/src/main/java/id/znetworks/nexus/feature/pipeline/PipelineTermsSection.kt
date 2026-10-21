@@ -73,8 +73,8 @@ internal fun PaymentTerms(deal: PipelineDeal, vm: PipelineViewModel) {
     }
     if (terms.isEmpty()) Text(stringResource(R.string.pl_t_empty), fontSize = 12.sp, color = c.mutedFg)
     terms.forEach { t -> key(t.id) { TermCard(deal, t, vm) } }
-    TextButton(onClick = { adding = true }, enabled = !LocalPipelinePresentation.current) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
-    if (adding && !LocalPipelinePresentation.current) NewTerm(deal, vm) { adding = false }
+    if (LocalPipelineCanEdit.current) TextButton(onClick = { adding = true }, enabled = !LocalPipelinePresentation.current) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
+    if (adding && LocalPipelineCanEdit.current && !LocalPipelinePresentation.current) NewTerm(deal, vm) { adding = false }
 }
 
 @Composable
@@ -103,7 +103,7 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(t.label.ifBlank { stringResource(R.string.pl_t_term) }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f))
             TermPill(t)
-            IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.pl_t_delete), tint = c.dangerText) }
+            if (LocalPipelineCanEdit.current) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.pl_t_delete), tint = c.dangerText) }
         }
         Text(if (t.isPaid) stringResource(R.string.pl_t_paid_full, t.paidAt?.let(::dayLabel) ?: "–") else stringResource(R.string.pl_t_still_owed, pipelineFullMoney(t.outstanding)),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (t.isPaid) c.success else if (t.daysOverdue > 0) c.danger else c.mutedFg)
@@ -119,7 +119,7 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
             DateSave(stringResource(R.string.pl_t_paid_at), t.paidAt) { save(f("paidAt" to day(it))) }
         }
         TextSave(stringResource(R.string.pl_t_note), t.note, multiline = true) { save(f("note" to JsonPrimitive(it))) }
-        if (!t.isPaid) TextButton(onClick = { paying = true }, enabled = !LocalPipelinePresentation.current) {
+        if (!t.isPaid && LocalPipelineCanEdit.current) TextButton(onClick = { paying = true }, enabled = !LocalPipelinePresentation.current) {
             Icon(Icons.Filled.CheckCircle, null, Modifier.size(16.dp), tint = c.success); Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.pl_t_mark_paid), color = c.success, fontWeight = FontWeight.SemiBold)
         }

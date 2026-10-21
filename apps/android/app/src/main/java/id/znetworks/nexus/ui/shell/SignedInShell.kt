@@ -181,6 +181,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import id.znetworks.nexus.feature.projects.ProjectDetailScreen
 import id.znetworks.nexus.feature.projects.ProjectsScreen
+import id.znetworks.nexus.feature.pipeline.ALL_PIPELINES_ID
+import id.znetworks.nexus.feature.pipeline.AllPipelinesScreen
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import androidx.compose.animation.core.tween
@@ -618,6 +620,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     tabs = if (sidebar) emptySet() else tabs.map { it.route }.toSet())
             }
             composable("project/{id}?view={view}&date={date}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null }, androidx.navigation.navArgument("date") { nullable = true; defaultValue = null })) { entry ->
+                if (entry.arguments?.getString("id") == ALL_PIPELINES_ID) {
+                    AllPipelinesScreen(onBack = { nav.popBackStack() },
+                        onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate(calendarRoute(folder = it)) })
+                } else {
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
@@ -628,6 +634,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     initialView = entry.arguments?.getString("view"),
                     initialDate = entry.arguments?.getString("date"),
                     onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
+                }
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
                 FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },

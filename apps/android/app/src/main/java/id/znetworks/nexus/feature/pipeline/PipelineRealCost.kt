@@ -44,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.EmptyState
+import androidx.compose.material.icons.filled.Payments
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.serialization.json.JsonElement
 
@@ -65,7 +67,7 @@ internal fun costsShown(e: JsonElement?): String = PipelineCosts.historyLines(e)
  * the whole list in one PATCH; Can comment / Can view read them. Delete needs no question: History keeps the line.
  */
 @Composable
-internal fun RealCost(deal: PipelineDeal, canEdit: Boolean, onEdit: ((List<PipelineCost>) -> List<PipelineCost>?) -> Unit) {
+internal fun RealCost(deal: PipelineDeal, canEdit: Boolean, onEmptyClose: () -> Unit = {}, onEdit: ((List<PipelineCost>) -> List<PipelineCost>?) -> Unit) {
     val c = Nx.colors
     val costs = deal.costs
     val margin = deal.margin
@@ -76,10 +78,13 @@ internal fun RealCost(deal: PipelineDeal, canEdit: Boolean, onEdit: ((List<Pipel
         Figure(stringResource(R.string.pc_margin_pct), deal.marginPct?.let { PipelineFormat.pct(it) } ?: "–", tone, Modifier.weight(0.7f))
     }
     Text(stringResource(if (margin == null) R.string.pc_hint_no_net else R.string.pc_hint), fontSize = 12.sp, color = c.mutedFg)
-    if (costs.isEmpty()) Text(stringResource(if (canEdit) R.string.pc_empty else R.string.pc_empty_read), fontSize = 13.sp, color = c.mutedFg)
+    if (costs.isEmpty()) EmptyState(Icons.Filled.Payments, stringResource(R.string.pc_real_cost), stringResource(if (canEdit) R.string.pc_empty else R.string.pc_empty_read),
+        if (canEdit) stringResource(R.string.pc_add) else stringResource(R.string.close),
+        if (canEdit) { { onEdit { PipelineCosts.add(it) } } } else onEmptyClose)
     costs.forEach { cost ->
         // Keyed by the line's id, so a field's draft stays with its line when another line goes.
         key(cost.id) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (canEdit) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 CostField(cost.label, stringResource(R.string.pc_description), stringResource(R.string.pc_description_hint), money = false, Modifier.weight(1f)) { t ->
                     onEdit { PipelineCosts.relabel(it, cost.id, t) } }
@@ -96,9 +101,20 @@ internal fun RealCost(deal: PipelineDeal, canEdit: Boolean, onEdit: ((List<Pipel
                     Text(amount, fontSize = 14.sp, color = c.foreground)
                 }
             }
+            if (deal.budgets.isNotEmpty() || cost.budgetId != null) {
+                val categoryLabel: @Composable (String) -> String = { id ->
+                    if (id.isEmpty()) stringResource(R.string.pv8_no_category)
+                    else deal.budgets.firstOrNull { it.id == id }?.name?.ifBlank { stringResource(R.string.pv8_untitled_category) }
+                        ?: stringResource(R.string.pv8_deleted_category)
+                }
+                if (canEdit && deal.budgets.isNotEmpty()) Pick(stringResource(R.string.pv8_cost_category), cost.budgetId.orEmpty(), listOf("") + deal.budgets.map { it.id }, label = categoryLabel) { id ->
+                    onEdit { PipelineCosts.recategorize(it, cost.id, id.ifBlank { null }) }
+                } else ReadOnly(stringResource(R.string.pv8_cost_category), categoryLabel(cost.budgetId.orEmpty()))
+            }
+            }
         }
     }
-    if (canEdit) NxOutlinedButton(onClick = { onEdit { PipelineCosts.add(it) } }, enabled = costs.size < PipelineCosts.MAX_LINES) {
+    if (canEdit && costs.isNotEmpty()) NxOutlinedButton(onClick = { onEdit { PipelineCosts.add(it) } }, enabled = costs.size < PipelineCosts.MAX_LINES) {
         Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.pc_add))
     }
 }
@@ -109,7 +125,7 @@ private fun Figure(label: String, value: String, color: Color, modifier: Modifie
     Column(modifier.background(c.background, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp)
         .semantics(mergeDescendants = true) {}) {
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 

@@ -289,6 +289,7 @@ class AppContainer(private val context: Context) {
                 // A cached roster or task list must not outlive the session that fetched it.
                 responseCache.clearAll()
                 viewer.reset()
+                id.znetworks.nexus.feature.pipeline.PipelineSession.presentation.value = false
                 gideon.reset()
                 offline.reset()
                 if (deliberate) shortcuts.clearAll()

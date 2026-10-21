@@ -4,6 +4,7 @@ import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Request
 import java.io.File
 import java.net.URLEncoder
@@ -13,7 +14,20 @@ class PipelineApi(private val api: ApiClient) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     private fun base(projectId: String) = "/api/projects/${enc(projectId)}/pipeline"
 
-    suspend fun load(projectId: String) = PipelineData.of(api.get(base(projectId), JsonObject.serializer()))
+    private fun query(vararg params: Pair<String, String?>) = params.mapNotNull { (key, value) -> value?.let { "${enc(key)}=${enc(it)}" } }
+        .joinToString("&").let { if (it.isBlank()) "" else "?$it" }
+
+    suspend fun load(projectId: String, year: Int? = null) =
+        PipelineData.of(api.get(base(projectId) + query("year" to year?.toString()), JsonObject.serializer()))
+
+    /** Caller checks the workspace role first. A 403 must hide the All Pipelines entry points. */
+    suspend fun boards(workspaceId: String? = null) =
+        PipelineBoards.of(api.get("/api/pipelines/boards" + query("workspaceId" to workspaceId), JsonObject.serializer()))
+
+    /** The combined view is always read only, including if an older server omits canEdit. */
+    suspend fun all(workspaceId: String? = null, source: String? = null, year: Int? = null) =
+        PipelineData.of(api.get("/api/pipelines/all" + query("workspaceId" to workspaceId, "source" to source, "year" to year?.toString()),
+            JsonObject.serializer())).copy(canEdit = false)
 
     /** One deal and its edit history, newest first (at most 200). */
     suspend fun deal(projectId: String, dealId: String): Pair<PipelineDeal, List<PipelineChange>> {
@@ -69,18 +83,46 @@ class PipelineApi(private val api: ApiClient) {
     suspend fun deleteTerm(projectId: String, dealId: String, termId: String) = termDeal(
         api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/terms/${enc(termId)}")).delete().build(), JsonObject.serializer()))
 
+    /** One key is generated per add invocation. A caller retrying a tap can retain and pass that same key. */
+    suspend fun addItem(projectId: String, dealId: String, kind: String, fields: JsonObject = JsonObject(emptyMap()),
+                        clientRequestId: String = java.util.UUID.randomUUID().toString()): PipelineDeal? {
+        val body = JsonObject(fields + mapOf("kind" to JsonPrimitive(kind), "clientRequestId" to JsonPrimitive(clientRequestId)))
+        return termDeal(api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/items"))
+            .post(body.toString().toJsonBody()).build(), JsonObject.serializer()))
+    }
+
+    /** Only changed item fields are sent; every response replaces the whole cached deal. */
+    suspend fun updateItem(projectId: String, dealId: String, itemId: String, fields: JsonObject) = termDeal(
+        api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/items/${enc(itemId)}"))
+            .patch(fields.toString().toJsonBody()).build(), JsonObject.serializer()))
+
+    /** Restorable from Control Room > Audit as pipeline_item. */
+    suspend fun deleteItem(projectId: String, dealId: String, itemId: String) = termDeal(
+        api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/items/${enc(itemId)}"))
+            .delete().build(), JsonObject.serializer()))
+
     /** Remove a link or an attached file (§13.1) → the deal. The bytes stay until the 90-day purge. */
     suspend fun removeDocument(projectId: String, dealId: String, docId: String) =
         (api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/documents/${enc(docId)}")).delete().build(), JsonObject.serializer())["deal"] as? JsonObject)
             ?.let(::PipelineDeal)
 
     /** The .xlsx "Master Project" sheet (the GM's columns) into [dir], to hand to the share sheet. */
-    suspend fun export(projectId: String, lang: String, dir: File): File {
+    suspend fun export(projectId: String, lang: String, dir: File, year: Int? = null): File =
+        exportFile(base(projectId) + "/export" + query("lang" to lang, "year" to year?.toString()), dir, "pipeline")
+
+    suspend fun exportAll(lang: String, dir: File, workspaceId: String? = null, source: String? = null, year: Int? = null): File =
+        exportFile("/api/pipelines/all/export" + query("lang" to lang, "workspaceId" to workspaceId, "source" to source, "year" to year?.toString()),
+            dir, "all-pipelines")
+
+    private suspend fun exportFile(path: String, dir: File, prefix: String): File {
         dir.mkdirs()
-        val file = File(dir, "pipeline-${java.time.LocalDate.now()}.xlsx")
+        val file = File(dir, "$prefix-${java.time.LocalDate.now()}.xlsx")
         val part = File(file.path + ".part").also { it.delete() }
-        api.download("${base(projectId)}/export?lang=$lang", part, null)
-        part.renameTo(file)
+        api.download(path, part, null)
+        if (!part.renameTo(file)) {
+            part.copyTo(file, overwrite = true)
+            part.delete()
+        }
         return file
     }
 }

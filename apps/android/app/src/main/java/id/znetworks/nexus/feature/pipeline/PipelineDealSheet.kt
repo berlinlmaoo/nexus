@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -60,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -101,16 +104,17 @@ private fun str(s: String?) = s?.let(::JsonPrimitive) ?: JsonNull
  * when it is left, BD / PM from the board project's members, payment terms, links, who changed it last, its History, Delete.
  */
 @Composable
-fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, onClose: () -> Unit) {
+fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, sourceName: String? = null, onBackToAll: (() -> Unit)? = null, onClose: () -> Unit) {
     val c = Nx.colors
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
     var laterOpen by remember(deal.id) { mutableStateOf(false) }
-    val save = { fields: JsonObject -> vm.update(deal.id, JsonObject(fields + buildMap {
+    val save = { fields: JsonObject -> if (data.canEdit) vm.update(deal.id, JsonObject(fields + buildMap {
         if ("links" in fields) put("linksBase", deal.raw["links"] ?: JsonArray(emptyList()))
     })) }
     val v = data.vocab
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        CompositionLocalProvider(LocalPipelineCanEdit provides data.canEdit) {
         Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
@@ -119,6 +123,12 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) { StageChip(deal.stage) }
                 HealthPill(deal.healthKey); Spacer(Modifier.width(8.dp))
+            }
+            if (sourceName != null) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Business, null, tint = c.mutedFg, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(sourceName, color = c.mutedFg, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                if (onBackToAll != null) TextButton(onClick = onBackToAll) { Text(stringResource(R.string.pv8_back_all)) }
             }
             PrimaryTabRow(selectedTabIndex = tab, containerColor = c.background) {
                 Tab(tab == 0, { tab = 0 }, text = { Text(stringResource(R.string.pl_details)) })
@@ -132,7 +142,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                 if (blocker != null) BlockerBanner(blocker, deal.healthKey == "CRITICAL")
                 deal.reasons.filter { blocker == null || it.code != "BLOCKER" }.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
                 PhaseStepper(deal)
-                Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
+                if (data.canEdit) Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
                 ExecutionBox(deal, vm.state.collectAsState().value.busy, onOpenFolder, onOpenProject) { vm.execution(deal, onOpenFolder, onOpenProject) }
                 Group(stringResource(R.string.pl_s_commercial), stringResource(R.string.pl_s_bd)) {
                     TextSave(stringResource(R.string.pl_f_brand), deal.brand) { save(one("brand", JsonPrimitive(it))) }
@@ -144,12 +154,17 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                     Money(stringResource(R.string.pl_f_contract_value), deal.contractValue) { save(one("contractValue", JsonPrimitive(it))) }
                     Money(stringResource(R.string.pl_f_net_value), deal.netValue) { save(one("netValue", JsonPrimitive(it))) }
                     DateSave(stringResource(R.string.pl_f_main_date), deal.date("mainDate")) { save(one("mainDate", str(it))) }
+                    Money(stringResource(R.string.pv8_barter_value), deal.barterValue, preserveDraft = true, currencyPrefix = true) { save(one("barterValue", JsonPrimitive(it))) }
+                    TextSave(stringResource(R.string.pv8_barter_compensation), deal.barterCompensation, maxLength = 500,
+                        placeholder = stringResource(R.string.pv8_barter_hint), preserveDraft = true) { save(one("barterCompensation", JsonPrimitive(it.trim()))) }
                 }
+                if (!LocalPipelinePresentation.current) Group(stringResource(R.string.pv8_cashback), null) { PipelineItems(deal, "cashback", data, vm, onClose) }
                 // Open or lost: what Legal, PM and Finance fill in after the win folds under one row (tap opens).
                 if (deal.isWon || laterOpen) {
                     Group(stringResource(R.string.pl_ph_contract), "Legal") {
                         Pick(stringResource(R.string.pl_f_contract_status), deal.text("contractStatus"), v.contractStatuses) { save(one("contractStatus", JsonPrimitive(it))) }
                     }
+                    Group(stringResource(R.string.pv8_contacts), null) { PipelineItems(deal, "contact", data, vm, onClose) }
                     Group(stringResource(R.string.pl_f_vreg), "Admin") {
                         Pick(stringResource(R.string.pl_f_vreg), deal.text("vregStatus"), v.vregStatuses) { save(one("vregStatus", JsonPrimitive(it))) }
                     }
@@ -184,8 +199,9 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                         Money(stringResource(R.string.pl_f_net_cash), deal.netCash, allowNegative = true) { save(one("netCash", JsonPrimitive(it))) }
                     }
                     Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
+                    if (!LocalPipelinePresentation.current) Group(stringResource(R.string.pv8_budget), "Strategist") { PipelineItems(deal, "budget", data, vm, onClose) }
                     // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms; read-only for Can comment / Can view.
-                    if (!LocalPipelinePresentation.current) Group(stringResource(R.string.pc_title), "Finance") { RealCost(deal, data.canEdit) { edit -> vm.editCosts(deal.id, edit) } }
+                    if (!LocalPipelinePresentation.current) Group(stringResource(R.string.pc_title), "Finance") { RealCost(deal, data.canEdit, onEmptyClose = onClose) { edit -> vm.editCosts(deal.id, edit) } }
                     Group(stringResource(R.string.pl_ph_closing), "Finance") {
                         Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
                     }
@@ -203,11 +219,12 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                     TextSave(stringResource(R.string.pl_f_blocker), deal.text("blocker"), multiline = true) { save(one("blocker", JsonPrimitive(it))) }
                     TextSave(stringResource(R.string.pl_f_notes), deal.text("notes"), multiline = true) { save(one("notes", JsonPrimitive(it))) }
                 }
-                Group(stringResource(R.string.pl_f_links), null) { Documents(deal, v.linkTypes, vm) { save(one("links", JsonArray(it.map(PipelineLink::json)))) } }
+                Group(stringResource(R.string.pl_f_links), null) { Documents(deal, v.linkTypes, vm, onEmptyClose = onClose) { save(one("links", JsonArray(it.map(PipelineLink::json)))) } }
                 val who = deal.updatedBy?.name
                 deal.updatedAt?.let { at -> Text(if (who != null) stringResource(R.string.pl_last_by, who, stamp(at)) else stringResource(R.string.pl_last, stamp(at)), fontSize = 11.sp, color = c.mutedFg) }
-                TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, null, tint = c.dangerText); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pl_delete), color = c.dangerText) }
+                if (data.canEdit) TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, null, tint = c.dangerText); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pl_delete), color = c.dangerText) }
             }
+        }
         }
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(stringResource(R.string.pl_delete_q, deal.name.ifBlank { stringResource(R.string.pl_untitled) })) },
@@ -268,9 +285,10 @@ internal fun dayLabel(iso: String): String =
 @Composable
 internal fun ReadOnly(label: String, value: String) {
     val c = Nx.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+        Spacer(Modifier.width(8.dp))
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = TextAlign.End, modifier = Modifier.weight(1.3f))
     }
 }
 
@@ -294,11 +312,13 @@ internal fun Group(title: String, who: String?, content: @Composable () -> Unit)
 
 /** Saved when the field is left (or Done), only if it changed. */
 @Composable
-internal fun TextSave(label: String, value: String, big: Boolean = false, multiline: Boolean = false, number: Boolean = false, onSave: (String) -> Unit) {
-    var t by remember(value) { mutableStateOf(value) }
+internal fun TextSave(label: String, value: String, big: Boolean = false, multiline: Boolean = false, number: Boolean = false, maxLength: Int = Int.MAX_VALUE, placeholder: String? = null, preserveDraft: Boolean = false, prefix: String? = null, onSave: (String) -> Unit) {
+    if (!LocalPipelineCanEdit.current) { ReadOnly(label, value.ifBlank { "–" }); return }
+    var draft by remember(if (preserveDraft) null else value) { mutableStateOf(PipelineFieldDraft(value)) }
+    LaunchedEffect(value) { if (preserveDraft) draft = draft.refresh(value) }
     var focused by remember { mutableStateOf(false) }
-    fun commit() { if (t != value) onSave(t) }
-    NxTextField(t, { t = it }, label = { Text(label) }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
+    fun commit() { draft.pending()?.let(onSave) }
+    NxTextField(draft.text, { draft = draft.edit(it.take(maxLength)) }, label = { Text(label) }, placeholder = placeholder?.let { { Text(it) } }, prefix = prefix?.let { { Text(it) } }, singleLine = !multiline, minLines = if (multiline) 2 else 1, maxLines = if (multiline) 6 else 1,
         textStyle = androidx.compose.material3.LocalTextStyle.current.let { if (big) it.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp) else it },
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Text, imeAction = if (multiline) ImeAction.Default else ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -307,19 +327,21 @@ internal fun TextSave(label: String, value: String, big: Boolean = false, multil
 
 /** Rupiah: typed with any grouping, saved as a plain number; a negative only where allowed (net cash). */
 @Composable
-internal fun Money(label: String, value: Double, allowNegative: Boolean = false, onSave: (Double) -> Unit) {
+internal fun Money(label: String, value: Double, allowNegative: Boolean = false, preserveDraft: Boolean = false, currencyPrefix: Boolean = false, onSave: (Double) -> Unit) {
     if (LocalPipelinePresentation.current) {
         NxTextField(PipelinePresentation.MASK, {}, enabled = false, readOnly = true,
             label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         return
     }
-    TextSave(label, if (value == 0.0) "" else PipelineFormat.idrFull(value).removePrefix("Rp").removePrefix("-Rp").let { if (value < 0) "-$it" else it }, number = !allowNegative) { t ->
-        PipelineFormat.parseMoney(t)?.takeIf { allowNegative || it >= 0 }?.let(onSave)
+    if (!LocalPipelineCanEdit.current) { ReadOnly(label, PipelineFormat.idrFull(value)); return }
+    TextSave(label, if (value == 0.0) "" else PipelineFormat.idrFull(value).removePrefix("Rp").removePrefix("-Rp").trim().let { if (value < 0) "-$it" else it }, number = !allowNegative, preserveDraft = preserveDraft, prefix = if (currencyPrefix) "Rp " else null) { t ->
+        PipelineFormat.parseMoney(t)?.takeIf { it.isFinite() && kotlin.math.abs(it) <= 1e15 && (allowNegative || it >= 0) }?.let(onSave)
     }
 }
 
 @Composable
 internal fun Pick(title: String, current: String, options: List<String>, label: (@Composable (String) -> String)? = null, onPick: (String) -> Unit) {
+    if (!LocalPipelineCanEdit.current) { ReadOnly(title, (label?.invoke(current) ?: current).ifBlank { "–" }); return }
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -327,7 +349,7 @@ internal fun Pick(title: String, current: String, options: List<String>, label: 
         Box {
             NxOutlinedButton(onClick = { open = true }) {
                 // An option this build doesn't know is shown as stored.
-                Text(if (current.isBlank()) "–" else label?.invoke(current) ?: current, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
+                Text((label?.invoke(current) ?: current).ifBlank { "–" }, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
                 Icon(Icons.Filled.KeyboardArrowDown, null)
             }
             DropdownMenu(open, { open = false }) {
@@ -340,6 +362,7 @@ internal fun Pick(title: String, current: String, options: List<String>, label: 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
+    if (!LocalPipelineCanEdit.current) { ReadOnly(label, iso?.let(::dayLabel) ?: "–"); return }
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -359,6 +382,7 @@ internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
 /** BD or PM: a member of the board project, nobody, or someone outside NEXUS by name (a user id wins over the text). */
 @Composable
 private fun PersonPick(label: String, userId: String?, shown: String?, people: List<PipelinePerson>, role: String, save: (JsonObject) -> Unit) {
+    if (!LocalPipelineCanEdit.current) { ReadOnly(label, shown ?: stringResource(R.string.pl_not_assigned)); return }
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     var typing by remember { mutableStateOf(false) }
@@ -410,6 +434,7 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                     val term = ch.termLabel?.takeIf { it.isNotBlank() } ?: stringResource(R.string.pl_t_term)
                     Column {
                         when {
+                            ch.itemKind != null -> ItemHistory(ch, who)
                             // A document attached or removed (§13.1): "<who> attached SPK · <name>".
                             tf == null && (ch.field == "document.added" || ch.field == "document.removed") -> {
                                 val e = PipelineChange.doc(if (ch.field == "document.added") ch.after else ch.before)
@@ -422,7 +447,7 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                                 Text("$who ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 val costs = ch.field == "costs"
                                 val masked = LocalPipelinePresentation.current && PipelinePresentation.isMoney(ch.field)
-                                Text("${if (costs) costsShown(ch.before) else if (masked) PipelinePresentation.MASK else shown(ch.before)} → ${if (costs) costsShown(ch.after) else if (masked) PipelinePresentation.MASK else shown(ch.after)}",
+                                Text("${if (costs) costsShown(ch.before) else if (masked) PipelinePresentation.MASK else shown(ch.before, PipelinePresentation.isMoney(ch.field))} → ${if (costs) costsShown(ch.after) else if (masked) PipelinePresentation.MASK else shown(ch.after, PipelinePresentation.isMoney(ch.field))}",
                                     fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
                             // A payment term (§11.2): added / deleted / restored with its amount, or one of its fields.
@@ -473,7 +498,7 @@ private fun ExecutionBox(deal: PipelineDeal, busy: Boolean, onOpenFolder: (Strin
     val c = Nx.colors
     val folder = deal.executionFolderId
     val project = deal.executionProjectId ?: deal.executionCalendarProjectId
-    if (folder == null && project == null && !deal.isWon) return
+    if (folder == null && project == null && (!deal.isWon || !LocalPipelineCanEdit.current)) return
     Column(Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         when {
             folder != null -> {
@@ -493,7 +518,7 @@ private fun ExecutionBox(deal: PipelineDeal, busy: Boolean, onOpenFolder: (Strin
                 val name = deal.executionProjectName ?: (deal.raw["executionCalendarProject"] as? kotlinx.serialization.json.JsonObject)?.get("name")?.let { (it as? JsonPrimitive)?.contentOrNull }
                 Text(stringResource(R.string.pl_open_exec) + (name?.let { " · $it" } ?: ""), color = c.violetText, fontWeight = FontWeight.SemiBold)
             }
-            else -> {
+            else -> if (LocalPipelineCanEdit.current) {
                 TextButton(onClick = onCreate, enabled = !busy) {
                     if (busy) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                     Text(stringResource(R.string.pl_make_exec), color = c.violetText, fontWeight = FontWeight.SemiBold)
