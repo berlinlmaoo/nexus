@@ -12,7 +12,7 @@ import {
 import { servicesOf, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
 import { CELL, DateField, MoneyField, SelectField } from "./fields";
 import { useMoneyFmt } from "./presentation";
-import { HEALTH_ORDER, HEALTH_TEXT, HealthPill, dealPayment, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_ORDER, HEALTH_TEXT, HealthPill, SourceChip, dealPayment, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
 
 type SortKey = "code" | "name" | "stage" | "probability" | "netValue" | "outstandingReceivable" | "daysOverdue" | "nextActionDate" | "health" | "pm";
 
@@ -121,6 +121,7 @@ export function PipelineTable({
                   {d.name || t("Untitled deal")}
                 </button>
                 {d.brand && <span className="block max-w-40 truncate sm:max-w-72 text-xs text-muted-foreground">{d.brand}</span>}
+                <SourceChip deal={d} className="mt-0.5 max-w-40 sm:max-w-72" />
               </td>
               <td className="max-w-56 px-2 text-sm text-muted-foreground" title={servicesOf(d).join(", ")}>
                 <span className="line-clamp-2">{servicesOf(d).join(", ")}</span>

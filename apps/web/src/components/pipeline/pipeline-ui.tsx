@@ -98,6 +98,11 @@ export function fmtDayShort(iso: string | null | undefined, locale: string): str
 }
 
 /** The Indonesian names the GM gave three stages; every other key reads the same in both languages. */
+/** The English label of each contact role key (CONTACT_ROLES); translated with t(). */
+const CONTACT_ROLE_LABEL: Record<string, string> = {
+  Client: "Client", Vendor: "Vendor", Broker: "Broker", "PM (client side)": "PM (client side)", Finance: "Finance", Admin: "Admin", Other: "Other contact",
+};
+
 export function useVocabLabels() {
   const { t } = useLang();
   return {
@@ -106,7 +111,9 @@ export function useVocabLabels() {
     risk: (k: string) => sentenceCase(k === "Aman" ? t("On track") : t(k)),
     /** A status value of the GM's lists (contract, payment, closing …), as shown: sentence case. */
     status: (k: string | null | undefined) => (k ? sentenceCase(t(k)) : ""),
-    link: (k: string) => (k === "Kontrak" ? t("Contract") : k === "Lainnya" ? t("Other link") : k === "SPK" ? t("SPK (Work Order)") : k),
+    link: (k: string) => (k === "Kontrak" ? t("Contract") : k === "Lainnya" ? t("Other link") : k === "SPK" ? t("SPK (Work Order)") : k === "Quotation" ? t("Quotation") : k === "Report" ? t("Report") : k),
+    /** A project contact's role (v8): stored English keys, labelled per language. */
+    contactRole: (k: string) => t(CONTACT_ROLE_LABEL[k] ?? k),
     plain: (k: string) => k,
   };
 }
@@ -385,6 +392,19 @@ export function StagePill({ stage, className }: { stage: string; className?: str
 }
 
 /** "Name" of a deal's BD or PM: the NEXUS user, else the free text, else null. */
+/**
+ * The company (board) a deal is on, shown on every deal of All Pipelines (owner, 21 Oct 2026). Nothing on a
+ * single board, where `source` is absent.
+ */
+export function SourceChip({ deal, className }: { deal: Pick<PipelineDeal, "source">; className?: string }) {
+  if (!deal.source?.name) return null;
+  return (
+    <span title={deal.source.name} className={cn("inline-flex max-w-full min-w-0 items-center rounded-full bg-primary/10 px-2 text-[11px] font-medium leading-5 text-primary", className)}>
+      <span className="truncate">{deal.source.name}</span>
+    </span>
+  );
+}
+
 export function personName(user: { name: string | null } | null, text: string | null): string | null {
   return user?.name?.trim() || text?.trim() || null;
 }

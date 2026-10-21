@@ -24,7 +24,8 @@ export function PageHeader({
   hero,
   gutter,
 }: {
-  title: string;
+  /** Usually text; a Pipeline board's title can be its board switcher (v8). */
+  title: ReactNode;
   subtitle?: string;
   /** Only for an identity mark (a project or folder icon). Pages get no decorative glyph: one header style
    *  everywhere (audit 12 Oct 2026). */

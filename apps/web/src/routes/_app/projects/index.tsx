@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AllPipelinesRow } from "@/components/pipeline/AllPipelinesEntry";
 import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -660,6 +661,9 @@ function ProjectsPage() {
             </div>
           </div>
         </section>
+
+        {/* All Pipelines (owner, 21 Oct 2026): pinned on top for BoD / One Above All; nothing for anyone else. */}
+        <AllPipelinesRow workspaceId={primaryWorkspaceId || undefined} />
 
         {(() => {
           const renderItems = (items: ProjectWithComputed[]) =>

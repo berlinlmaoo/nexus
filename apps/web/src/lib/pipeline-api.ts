@@ -118,7 +118,27 @@ export type PipelineDeal = {
   costTotal?: number;
   margin?: number | null;
   marginPct?: number | null;
+  /** Control Tower v8 (21 Oct 2026). Older servers omit all of these (read as empty / 0 / null). */
+  barterValue?: number;
+  barterCompensation?: string;
+  cashback?: PipelineCashback[];
+  cashbackTotal?: number;
+  contacts?: PipelineContact[];
+  budgets?: PipelineBudget[];
+  budgetTotal?: number;
+  eventYear?: number | null;
+  /** All Pipelines only: the board the deal is on. */
+  source?: { projectId: string; name: string };
 };
+
+/** A cashback recipient (v8): POST/PATCH/DELETE …/pipeline/:dealId/items. */
+export type PipelineCashback = { id: string; dealId: string; position: number; name: string; amount: number; createdAt: string; updatedAt: string };
+/** A project contact (v8). `role` is one of CONTACT_ROLES. */
+export type PipelineContact = { id: string; dealId: string; position: number; role: string; name: string; phone: string; createdAt: string; updatedAt: string };
+/** A budget category (v8): spent = Σ cost lines booked against it; remaining < 0 = over budget. */
+export type PipelineBudget = PipelineCashback & { spent: number; remaining: number };
+export type PipelineItemKind = "cashback" | "contact" | "budget";
+export type PipelineItemPatch = { name?: string; amount?: number; role?: string; phone?: string; position?: number };
 
 /** The lists a list PATCH started from (race audit 16 Oct 2026, M6): with them the server merges the edit
  *  into the deal as it is NOW — a cost line or link someone else added meanwhile stays. */
@@ -126,7 +146,7 @@ export type PipelineListBases = { costsBase?: readonly PipelineCostItem[]; links
 
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
-  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary" | "costTotal" | "margin" | "marginPct">>;
+  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary" | "costTotal" | "margin" | "marginPct" | "cashback" | "cashbackTotal" | "contacts" | "budgets" | "budgetTotal" | "eventYear" | "source">>;
 
 export type PipelineResponse = {
   project: { id: string; name: string; type: string; workspaceId: string };
@@ -137,6 +157,24 @@ export type PipelineResponse = {
    *  Older servers omit both (then everyone who reads may write, as before). */
   viewerAccessLevel?: "FULL" | "EDIT" | "COMMENT" | "VIEW";
   canEdit?: boolean;
+  /** v8: every year with a deal (newest first). */
+  years?: number[];
+};
+
+/** A Pipeline board, as All Pipelines lists it (BoD / One Above All only). */
+export type PipelineBoardRef = { id: string; name: string; icon: string; color: string; status: string; dealCount: number };
+
+/** GET /api/pipelines/all — read-only, BoD / One Above All only (403 otherwise). */
+export type AllPipelinesResponse = {
+  workspaceId: string;
+  boards: PipelineBoardRef[];
+  deals: PipelineDeal[];
+  summary: PipelineSummary;
+  years: number[];
+  year: number | null;
+  source: string | null;
+  today: string;
+  canEdit: false;
 };
 
 export type PipelineChange = {
@@ -186,9 +224,30 @@ export const pipelineApi = {
   /** Take a document (link or file) off the deal; the file itself stays until the 90-day purge. */
   removeDocument: (projectId: string, dealId: string, docId: string) =>
     apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" }),
-  exportXlsx: (projectId: string, lang: "id" | "en") =>
-    downloadFile(`${base(projectId)}/export?lang=${lang}`, "pipeline.xlsx"),
+  exportXlsx: (projectId: string, lang: "id" | "en", year?: number | null) =>
+    downloadFile(`${base(projectId)}/export?lang=${lang}${year ? `&year=${year}` : ""}`, "pipeline.xlsx"),
+  /** Cashback recipients, contacts and budget categories (v8). Every answer carries the whole deal. */
+  addItem: (projectId: string, dealId: string, payload: PipelineItemPatch & { kind: PipelineItemKind; clientRequestId?: string }) =>
+    apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/items`, { method: "POST", body: JSON.stringify(payload) }),
+  updateItem: (projectId: string, dealId: string, itemId: string, payload: PipelineItemPatch) =>
+    apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/items/${encodeURIComponent(itemId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  removeItem: (projectId: string, dealId: string, itemId: string) =>
+    apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/items/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
 };
+
+/** All Pipelines (v8, owner 21 Oct 2026): BoD / One Above All only — the server answers 403 to anyone else. */
+export const allPipelinesApi = {
+  boards: () => apiFetch<{ workspaceId: string; boards: PipelineBoardRef[] }>("/api/pipelines/boards"),
+  list: () => apiFetch<AllPipelinesResponse>("/api/pipelines/all"),
+  exportXlsx: (lang: "id" | "en", opts: { year?: number | null; source?: string | null }) => {
+    const q = new URLSearchParams({ lang });
+    if (opts.year) q.set("year", String(opts.year));
+    if (opts.source) q.set("source", opts.source);
+    return downloadFile(`/api/pipelines/all/export?${q.toString()}`, "all-pipelines.xlsx");
+  },
+};
+export const allPipelinesKey = ["nexus", "pipelines", "all"] as const;
+export const pipelineBoardsKey = ["nexus", "pipelines", "boards"] as const;
 
 /** A deal's services: the list, or the single `service` from an older server. */
 export function servicesOf(d: Pick<PipelineDeal, "service" | "services">): string[] {

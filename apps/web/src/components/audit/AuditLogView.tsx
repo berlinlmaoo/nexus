@@ -346,6 +346,9 @@ const RESTORABLE_TYPES = new Set([
   "vault_file", "vault_folder", "vault_file_version", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
   "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
   "pipeline_deal", "outlet_sales_event",
+  // A payment term (9 Oct 2026; the server could always restore it, the button was missing) and a deal's
+  // cashback recipient / contact / budget category (v8, 21 Oct 2026).
+  "pipeline_term", "pipeline_item",
 ]);
 
 /** The button, per kind. A kind this list doesn't know (a newer server) gets plain "Restore". */
@@ -365,6 +368,8 @@ const RESTORE_BUTTON: Record<string, string> = {
   quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
   chat_group: "Restore group chat",
   pipeline_deal: "Restore deal",
+  pipeline_term: "Restore payment term",
+  pipeline_item: "Restore item",
   outlet_sales_event: "Restore event",
 };
 
@@ -396,6 +401,9 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it.";
     // A Pipeline Dashboard deal (9 Oct 2026): its code is never given to another deal, so it fits back in.
     case "pipeline_deal": return "It goes back to its pipeline with its code and its edit history.";
+    case "pipeline_term": return "It goes back on its deal, and the receivable is counted with it again.";
+    // v8: a budget category comes back with the cost lines that were booked against it.
+    case "pipeline_item": return "It goes back on its deal. A budget category comes back with the cost lines booked against it.";
     // An Outlet Sales Dashboard night (10 Oct 2026): back on its outlet's calendar and in the month's totals.
     case "outlet_sales_event": return "It goes back to its outlet with its whole report, and counts in its month's totals again.";
     case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : null;
