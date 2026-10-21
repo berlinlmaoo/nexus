@@ -95,7 +95,9 @@ fun ProjectSheetTab(projectId: String, onOpenWeb: () -> Unit) {
     val s by store.ui.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
+    RealtimeRoom("project:$projectId")
     RealtimeRoom(s.sheetId?.let { "sheet:$it" })
+    id.znetworks.nexus.core.realtime.LiveRefresh(projectId, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.projectContent(it, projectId, "sheets", "sheet-comments") }, refreshOnResume = true, debounceMs = 400) { store.loadTabs().join() }
     // Back in front: anything unsent goes at once.
     LifecycleResumeEffect(Unit) { store.flush(); onPauseOrDispose { } }
     LaunchedEffect(s.notice) { s.notice?.let { id.znetworks.nexus.ui.components.UiNotice.show(it); store.noticeShown() } }

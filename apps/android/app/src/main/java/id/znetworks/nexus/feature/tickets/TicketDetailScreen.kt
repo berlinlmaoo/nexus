@@ -151,6 +151,7 @@ class TicketDetailViewModel(app: Application, handle: SavedStateHandle) : Androi
 
 @Composable
 fun TicketDetailScreen(onBack: () -> Unit, vm: TicketDetailViewModel = viewModel()) {
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.id, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.complaint(it, vm.id) }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var reply by rememberSaveable { mutableStateOf("") }
@@ -166,7 +167,7 @@ fun TicketDetailScreen(onBack: () -> Unit, vm: TicketDetailViewModel = viewModel
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
                     TicketRules.SETTABLE.filter { it != t.status }.forEach { st ->
-                        DropdownMenuItem(text = { Text(ticketStatusLabel(st)) }, onClick = { menu = false; vm.setStatus(st) })
+                        DropdownMenuItem(text = { Pill(if (st == "CLOSED") stringResource(R.string.round3_closed_choice) else ticketStatusLabel(st), ticketStatusColor(st)) }, onClick = { menu = false; vm.setStatus(st) })
                     }
                 }
             }

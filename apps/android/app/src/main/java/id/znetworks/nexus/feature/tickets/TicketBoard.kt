@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
@@ -79,7 +80,9 @@ internal fun TicketBoard(s: TicketsState, meId: String?, move: (Ticket, String) 
                     shouldStartDragAndDrop = { it.toAndroidDragEvent().clipDescription?.label == "nexus-ticket" }, target = target) else Modifier
                 BoardLane(modifier = drop.then(if (hovering) Modifier.border(2.dp, Nx.colors.violetText, RoundedCornerShape(12.dp)) else Modifier)) {
                     val tickets = shown.filter { TicketBoardRules.column(it.status) == column }
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().background(ticketStatusColor(if (column == "DONE") "RESOLVED" else column).copy(alpha = .12f), RoundedCornerShape(10.dp)).heightIn(min = 48.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(ticketStatusColor(if (column == "DONE") "RESOLVED" else column), CircleShape))
+                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(when (column) { "OPEN" -> R.string.ui_ticket_new; "AWAITING_DECISION" -> R.string.tk_awaiting; "IN_REVIEW" -> R.string.tk_in_review; else -> R.string.ui_ticket_done }), fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
                         Text(tickets.size.toString(), color = Nx.colors.mutedFg, fontSize = 12.sp)
                     }
@@ -103,7 +106,7 @@ private fun TicketBoardCard(t: Ticket, moving: Boolean, modifier: Modifier, open
         Text(t.subject.ifBlank { stringResource(R.string.tk_no_subject) }, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill(ticketCategoryLabel(t.category), c.mutedFg)
-            if (t.closed) Pill(stringResource(R.string.tk_closed), c.mutedFg)
+            Pill(ticketStatusLabel(t.status), ticketStatusColor(t.status))
         }
         Text(t.reporter?.name ?: stringResource(R.string.tk_someone), color = c.mutedFg, fontSize = 12.sp)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

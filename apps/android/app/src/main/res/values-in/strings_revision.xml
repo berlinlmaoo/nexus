@@ -9,7 +9,7 @@
     <string name="rev_meeting_bytes">%1$s dari %2$s · %3$d %%</string>
     <string name="rev_meeting_upload">Unggah</string>
     <string name="rev_meeting_transcribe">Transkripsi</string>
-    <string name="rev_meeting_ready_step">Notulen &amp; tugas siap</string>
+    <string name="rev_meeting_ready_step">Notulen &amp; task siap</string>
     <string name="rev_meeting_ready">Siap — buka untuk meninjau</string>
     <string name="rev_meeting_transcribing">Mentranskripsi… sekitar %1$d menit lagi</string>
     <string name="rev_status_4h">4 jam</string>

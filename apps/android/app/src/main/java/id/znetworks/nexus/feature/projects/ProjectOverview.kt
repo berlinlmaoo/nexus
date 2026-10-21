@@ -465,6 +465,7 @@ private fun StatusUpdatesCard(projectId: String) {
     var problem by remember { mutableStateOf<Int?>(null) }
     var all by rememberSaveable { mutableStateOf(false) }
     var reload by remember { mutableStateOf(0) }
+    id.znetworks.nexus.core.realtime.LiveRefresh(projectId, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.projectContent(it, projectId, "status-updates") }, refreshOnResume = true, debounceMs = 400) { reload++ }
     LaunchedEffect(projectId, reload) { rows = runCatching { api.statusUpdates(projectId) }.getOrElse { rows ?: emptyList() } }
     Card(stringResource(R.string.ov_updates), Icons.Filled.AutoAwesome, action = {
         TextButton(onClick = {

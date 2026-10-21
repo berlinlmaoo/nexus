@@ -35,21 +35,23 @@ internal fun MessagesPager(s: MessagesState, meId: String?, typing: Set<String>,
     val pager = rememberPagerState(initialPage = MessageTabRules.restored(prefs.getString(key, null)), pageCount = { 3 })
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager.settledPage, key) { prefs.edit().putString(key, MessageTabRules.types[pager.settledPage]).apply() }
+    val grouped = remember(s.conversations) { s.conversations.groupBy { it.type } }
+    val counts = remember(s.conversations) { MessageTabRules.types.map { MessageTabRules.unread(s.conversations, it) } }
     val c = Nx.colors
     Column(modifier) {
-        PrimaryTabRow(pager.currentPage, containerColor = c.background, contentColor = c.foreground) {
+        PrimaryTabRow(pager.settledPage, containerColor = c.background, contentColor = c.foreground) {
             listOf(R.string.chat_direct, R.string.chat_groups, R.string.chat_projects).forEachIndexed { index, label ->
-                Tab(pager.currentPage == index, onClick = { scope.launch { pager.animateScrollToPage(index) } }, text = {
+                Tab(pager.settledPage == index, onClick = { scope.launch { pager.animateScrollToPage(index) } }, text = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(stringResource(label), fontSize = 13.sp, maxLines = 1)
-                        val unread = MessageTabRules.unread(s.conversations, MessageTabRules.types[index])
+                        val unread = counts[index]
                         if (unread > 0) Badge { Text(if (unread > 99) "99+" else unread.toString()) }
                     }
                 })
             }
         }
-        HorizontalPager(pager, Modifier.weight(1f), key = { MessageTabRules.types[it] }) { index ->
-            val rows = s.conversations.filter { it.type == MessageTabRules.types[index] }
+        HorizontalPager(pager, Modifier.weight(1f), key = { MessageTabRules.types[it] }, beyondViewportPageCount = 1) { index ->
+            val rows = grouped[MessageTabRules.types[index]].orEmpty()
             when {
                 s.loading && s.conversations.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.error != null && s.conversations.isEmpty() -> EmptyState(Icons.Filled.Forum, stringResource(R.string.chat_load_failed), s.error, stringResource(R.string.try_again), refresh, Modifier.fillMaxSize())

@@ -46,7 +46,7 @@
     <string name="ui_meeting_speaker_caption">Mulai dengan perkenalan singkat: “Hai, saya Berlin…”. Suara hanya dipakai untuk memberi label rekaman ini.</string>
     <string name="ui_meeting_start_recording">Mulai merekam</string>
     <string name="ui_meeting_upload_audio">Unggah file audio</string>
-    <string name="ui_meeting_footer">Maks. %1$d menit · %2$d MB · diproses di server milik perusahaan. Periksa notula dan tugas sebelum Terapkan.</string>
+    <string name="ui_meeting_footer">Maks. %1$d menit · %2$d MB · diproses di server milik perusahaan. Periksa notula dan task sebelum Terapkan.</string>
     <string name="ui_gideon_personalize">Personalisasi</string>
     <string name="ui_gideon_delete_chat">Hapus chat ini</string>
     <string name="ui_gideon_clear_history">Hapus seluruh riwayat chat</string>
@@ -60,5 +60,5 @@
     <plurals name="ui_vault_moved"><item quantity="other">%1$d item dipindahkan ke %2$s</item></plurals>
     <string name="ui_ticket_system_status">Status Menunggu keputusan diatur otomatis.</string>
     <string name="ui_timeline_names">Nama</string>
-    <string name="ui_calendar_count_legend">angka = tugas pada hari itu</string>
+    <string name="ui_calendar_count_legend">angka = task pada hari itu</string>
 </resources>

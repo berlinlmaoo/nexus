@@ -52,7 +52,7 @@ internal fun meetingProgressStep(status: String): Int = when (status) {
             }
         }
         Text(stringResource(R.string.rev_meeting_notify), color = c.mutedFg, fontSize = 13.sp)
-        NxButton(stringResource(R.string.meet_open), onOpen, kind = NxButtonKind.PRIMARY, modifier = Modifier.fillMaxWidth())
+        Button(onClick = onOpen, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = c.violet, contentColor = c.background)) { Text(stringResource(R.string.meet_open)) }
         NxButton(stringResource(R.string.rev_meeting_done), onDone, modifier = Modifier.fillMaxWidth())
         if (meeting.status == "UPLOADING") TextButton(onClick = onCancel, enabled = !busy) {
             Text(stringResource(R.string.rev_meeting_cancel_upload), color = c.dangerText)

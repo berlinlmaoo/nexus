@@ -1,7 +1,7 @@
 <resources>
     <string name="calp_tab">Kalender</string>
     <string name="calp_title">Proyek privat</string>
-    <string name="calp_help">Staf di luar proyek privat melihat “Tugas internal” menggantikan judul tugas di kalender. Perubahan berlaku pada permintaan kalender berikutnya.</string>
+    <string name="calp_help">Staf di luar proyek privat melihat “Task internal” menggantikan judul task di kalender. Perubahan berlaku pada permintaan kalender berikutnya.</string>
     <string name="calp_private">Privat di kalender</string>
     <string name="calp_visible">Terlihat di kalender</string>
 </resources>

@@ -388,6 +388,7 @@ fun ProjectFormsTab(projectId: String, onOpenForm: (String) -> Unit, onBuildForm
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
+    id.znetworks.nexus.core.realtime.LiveRefresh(projectId, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.projectContent(it, projectId, "forms") }, refreshOnResume = true, debounceMs = 400) { tick++ }
     LaunchedEffect(projectId, tick) { try { forms = api.builderForms(projectId); error = null } catch (e: ApiError) { error = e.describe(res) } }
     // Back from the builder: what was saved shows here.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle

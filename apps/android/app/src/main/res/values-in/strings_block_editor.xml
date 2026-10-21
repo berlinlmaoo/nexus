@@ -19,7 +19,7 @@
     <string name="be_add">Tambah blok</string>
     <string name="be_bullet">Daftar poin</string>
     <string name="be_numbered">Daftar bernomor</string>
-    <string name="be_todo">Daftar tugas</string>
+    <string name="be_todo">Daftar task</string>
     <string name="be_quote">Kutipan</string>
     <string name="be_divider">Pemisah</string>
     <string name="be_local">Draf disimpan di perangkat ini. Simpan untuk menggabungkannya dengan dokumen terkini.</string>

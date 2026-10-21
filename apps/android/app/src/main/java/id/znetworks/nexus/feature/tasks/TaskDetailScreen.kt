@@ -146,7 +146,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.taskId, liveMs = 60_000, fallbackMs = 60_000, matches = {
         id.znetworks.nexus.core.realtime.RealtimeEvents.touchesTask(it, vm.taskId) &&
             !id.znetworks.nexus.core.net.ConcurrentEdits.older(it.updatedAt, s.task?.updatedAt)
-    }) { vm.load().join() }
+    }, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
 
     Column(Modifier.fillMaxSize().background(c.card).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {

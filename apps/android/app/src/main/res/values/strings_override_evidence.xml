@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="override_sick_hint">Attach the sick note</string>
+    <string name="override_evidence_hint">Attach a supporting photo or file</string>
+    <string name="override_evidence_optional">Optional. Photo or PDF, up to 10 MB. Saved without it, the day is marked “no evidence attached”.</string>
+    <string name="override_take_photo">Take photo</string>
+    <string name="override_choose_file">Choose file</string>
+    <string name="override_save_without">Save without evidence</string>
+    <string name="override_evidence">Evidence</string>
+    <string name="override_correction_evidence">Correction evidence</string>
+    <string name="override_no_evidence">No evidence attached</string>
+    <string name="override_custom_times">Set custom times</string>
+    <string name="override_check_in_time">Check-in (HH:mm)</string>
+    <string name="override_check_out_time">Check-out (HH:mm; blank = check-in only)</string>
+</resources>

@@ -254,6 +254,7 @@ fun ProjectPagesTab(projectId: String, onOpenDoc: (String) -> Unit, canEdit: Boo
     var retry by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     val resources = LocalContext.current.resources
+    id.znetworks.nexus.core.realtime.LiveRefresh(projectId, 120_000, 30_000, { id.znetworks.nexus.core.realtime.RealtimeEvents.projectContent(it, projectId, "pages") }, refreshOnResume = true, debounceMs = 400) { retry++ }
     LaunchedEffect(projectId, retry) { try { docs = api.all(projectId); error = null } catch(e: ApiError) { error = e.describe(resources) } }
     Column {
     if (canEdit) NewPageButton(projectId) { retry++; onOpenDoc(it) }

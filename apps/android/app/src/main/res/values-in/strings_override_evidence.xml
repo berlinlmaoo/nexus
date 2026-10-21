@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="override_sick_hint">Lampirkan surat sakit</string>
+    <string name="override_evidence_hint">Lampirkan foto atau file pendukung</string>
+    <string name="override_evidence_optional">Opsional. Foto atau PDF, maksimal 10 MB. Kalau disimpan tanpa bukti, hari ini ditandai “tanpa bukti”.</string>
+    <string name="override_take_photo">Ambil foto</string>
+    <string name="override_choose_file">Pilih file</string>
+    <string name="override_save_without">Simpan tanpa bukti</string>
+    <string name="override_evidence">Bukti</string>
+    <string name="override_correction_evidence">Bukti koreksi</string>
+    <string name="override_no_evidence">Tanpa bukti</string>
+    <string name="override_custom_times">Atur waktu khusus</string>
+    <string name="override_check_in_time">Masuk (HH:mm)</string>
+    <string name="override_check_out_time">Pulang (HH:mm; kosong = hanya masuk)</string>
+</resources>

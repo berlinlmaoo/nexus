@@ -355,7 +355,7 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     androidx.compose.runtime.LaunchedEffect(Unit) { shortcuts.refresh() }
     val s by vm.state.collectAsStateWithLifecycle()
     // Live (owner, 8 Oct): a project or folder changed anywhere in the workspace; polling only as a fallback.
-    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = 120_000, fallbackMs = 30_000, matches = id.znetworks.nexus.core.realtime.RealtimeEvents::isProjectsOrFolders) { vm.load().join() }
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = 120_000, fallbackMs = 30_000, matches = id.znetworks.nexus.core.realtime.RealtimeEvents::isProjectsOrFolders, refreshOnResume = true, debounceMs = 400) { vm.load().join() }
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
