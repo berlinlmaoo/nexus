@@ -2694,7 +2694,7 @@
     <string name="pl_on_track">On track</string>
     <string name="pl_link_spk">SPK (Work Order)</string>
     <string name="pl_link_contract">Contract</string>
-    <string name="pl_link_other">Other link</string>
+    <string name="pl_link_other">Other</string>
     <string name="pl_details">Details</string>
     <string name="pl_history">History</string>
     <string name="pl_saves_on_leave">Every field saves when you leave it.</string>

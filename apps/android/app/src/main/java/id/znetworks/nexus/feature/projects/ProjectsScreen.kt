@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewKanban
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -122,6 +123,8 @@ data class ProjectsState(
     val toast: TreeToast? = null,
     /** Workspace people for New project's members (PROJECT-SETUP-MEMBERS); loaded when the form opens. */
     val roster: List<RosterMember> = emptyList(),
+    /** Verified BoD/OAA-only discovery; null keeps the entry hidden. */
+    val pipelineBoards: id.znetworks.nexus.feature.pipeline.PipelineBoards? = null,
 )
 
 data class TreeToast(val text: String, val undo: (() -> Unit)? = null, val at: Long = System.nanoTime())
@@ -143,6 +146,8 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun load() = viewModelScope.launch {
+        val boards = id.znetworks.nexus.feature.pipeline.PipelineAllAccess.load(c.api, c.viewer)
+        _state.update { it.copy(pipelineBoards = boards) }
         try {
             val p = api.projects()
             val f = runCatching { api.folders().value }.getOrDefault(_state.value.folders)
@@ -359,6 +364,7 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
+    var confirmAllPipelines by remember { mutableStateOf(false) }
     var folderEdit by remember { mutableStateOf<ProjectFolder?>(null) }
     var folderCreate by rememberSaveable { mutableStateOf(false) }
     // FOLDERS-DND: where a new project / subfolder goes, and what "Move to…" is moving.
@@ -421,6 +427,20 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                     placeholder = { Text(stringResource(R.string.projects_search)) }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
             }
             s.savedAt?.let { item { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) } }
+            s.pipelineBoards?.takeUnless { id.znetworks.nexus.feature.pipeline.PipelineAllAccess.denied.value }?.let { discovery -> item(key = "all-pipelines") {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card)
+                    .border(1.dp, c.border, RoundedCornerShape(12.dp)).clickable {
+                        if (id.znetworks.nexus.feature.pipeline.PipelineSession.presentation.value) confirmAllPipelines = true
+                        else onOpenProject(id.znetworks.nexus.feature.pipeline.ALL_PIPELINES_ID)
+                    }.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Filled.Layers, null, tint = c.violetText, modifier = Modifier.size(24.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.pv8_entry_all), fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(androidx.compose.ui.res.pluralStringResource(R.plurals.pv8_entry_boards, discovery.boards.size, discovery.boards.size), fontSize = 12.sp, color = c.mutedFg)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                }
+            } }
             when {
                 s.loading && s.projects.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                 s.error != null && s.projects.isEmpty() -> item {
@@ -460,6 +480,12 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         androidx.compose.material3.SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
     }
+
+    if (confirmAllPipelines) AlertDialog(onDismissRequest = { confirmAllPipelines = false },
+        title = { Text(stringResource(R.string.pv8_entry_confirm_title)) },
+        text = { Text(stringResource(R.string.pv8_entry_confirm_body)) },
+        confirmButton = { TextButton(onClick = { confirmAllPipelines = false; onOpenProject(id.znetworks.nexus.feature.pipeline.ALL_PIPELINES_ID) }) { Text(stringResource(R.string.pv8_entry_confirm_action)) } },
+        dismissButton = { TextButton(onClick = { confirmAllPipelines = false }) { Text(stringResource(R.string.cancel)) } })
 
     // Who may make a Pipeline board (company workspace, §16): read once from the viewer.
     val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer

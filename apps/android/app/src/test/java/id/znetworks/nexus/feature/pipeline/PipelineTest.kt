@@ -40,7 +40,7 @@ class PipelineTest {
         val b = d.deals[1]
         assertEquals(0.0, b.contractValue, 0.0); assertEquals("Freelancer", b.bdShown); assertEquals("Pipeline", b.stageGroup)
         // The server's own option list wins (a new stage shows up without a release).
-        assertTrue("Future stage" in d.vocab.stages); assertEquals(listOf("SPK", "Kontrak", "MOU", "Invoice", "Lainnya"), d.vocab.linkTypes)
+        assertTrue("Future stage" in d.vocab.stages); assertEquals(listOf("Deck", "Quotation", "Kontrak", "SPK", "MOU", "Invoice", "Report", "Lainnya"), d.vocab.linkTypes)
         assertEquals(250000000.5, d.summary.n("weightedValue"), 0.0); assertEquals(1, d.summary.i("criticalCount"))
         // An empty response still draws.
         assertEquals(PipelineVocab.STAGES, data("{}").vocab.stages)
@@ -67,7 +67,7 @@ class PipelineTest {
     @Test fun rupiah() {
         assertEquals("Rp950Jt", PipelineFormat.idr(950_000_000.0, id = true)); assertEquals("Rp950M", PipelineFormat.idr(950_000_000.0, id = false))
         assertEquals("Rp1,2M", PipelineFormat.idr(1_200_000_000.0, id = true)); assertEquals("Rp1.2B", PipelineFormat.idr(1_200_000_000.0, id = false))
-        assertEquals("-Rp5Rb", PipelineFormat.idr(-5000.0, id = true)); assertEquals("Rp950.000.000", PipelineFormat.idrFull(950_000_000.0, id = true))
+        assertEquals("-Rp5Rb", PipelineFormat.idr(-5000.0, id = true)); assertEquals("Rp 950.000.000", PipelineFormat.idrFull(950_000_000.0, id = true))
         assertEquals(950000000.0, PipelineFormat.parseMoney("Rp 950.000.000")!!, 0.0); assertEquals(-5000.0, PipelineFormat.parseMoney("-5,000")!!, 0.0)
         assertEquals(0.0, PipelineFormat.parseMoney(" ")!!, 0.0); assertNull(PipelineFormat.parseMoney("abc")); assertEquals("25%", PipelineFormat.pct(0.25))
     }

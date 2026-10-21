@@ -2,6 +2,7 @@ package id.znetworks.nexus.feature.pipeline
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -10,14 +11,16 @@ import kotlinx.serialization.json.JsonPrimitive
 // stored. The whole list goes back in one PATCH `{ "costs": [...] }`, like the links.
 
 /** One real-cost line: "Vendor sound", Rp12.000.000. The id is made by the client that adds it and kept by the server. */
-data class PipelineCost(val id: String, val label: String, val amount: Double) {
+data class PipelineCost(val id: String, val label: String, val amount: Double, val budgetId: String? = null, val raw: JsonObject? = null) {
     /** What a PATCH of `costs` sends back for this line. */
-    fun json() = JsonObject(mapOf("id" to JsonPrimitive(id), "label" to JsonPrimitive(label), "amount" to JsonPrimitive(amount.toLong())))
+    fun json() = JsonObject((raw ?: emptyMap()) + mapOf("id" to JsonPrimitive(id), "label" to JsonPrimitive(label),
+        "amount" to JsonPrimitive(amount.toLong()), "budgetId" to (budgetId?.let(::JsonPrimitive) ?: JsonNull)))
 
     companion object {
         /** A line without an id is dropped (as the server does); a missing label is "", a missing amount 0. */
         fun of(e: JsonElement?): PipelineCost? = (e as? JsonObject)?.let { o ->
-            o["id"].str()?.let { PipelineCost(it, o["label"].str().orEmpty(), o["amount"].num()?.takeIf { a -> a.isFinite() } ?: 0.0) }
+            o["id"].str()?.let { PipelineCost(it, o["label"].str().orEmpty(), o["amount"].num()?.takeIf { a -> a.isFinite() } ?: 0.0,
+                o["budgetId"].str()?.takeIf { b -> b.isNotBlank() }, o) }
         }
     }
 }
@@ -51,12 +54,20 @@ object PipelineCosts {
 
     fun remove(list: List<PipelineCost>, id: String) = list.filterNot { it.id == id }
 
+    fun recategorize(list: List<PipelineCost>, id: String, budgetId: String?) =
+        list.map { if (it.id == id) it.copy(budgetId = budgetId?.takeIf(String::isNotBlank)) else it }
+
+    fun assignBudget(list: List<PipelineCost>, id: String, budgetId: String?) = recategorize(list, id, budgetId)
+
     /** Would the server take this list? (It answers 400 INVALID_FIELD "costs" otherwise.) */
     fun valid(list: List<PipelineCost>) = list.size <= MAX_LINES &&
-        list.all { it.label.length <= LABEL_MAX && it.amount.isFinite() && it.amount >= 0 && it.amount == Math.round(it.amount).toDouble() }
+        list.all { it.label.length <= LABEL_MAX && it.amount.isFinite() && it.amount >= 0 && it.amount <= 1e15 &&
+            it.amount == Math.round(it.amount).toDouble() && (it.budgetId == null || Regex("^[A-Za-z0-9_-]{1,64}$").matches(it.budgetId)) }
 
-    /** The PATCH body for the whole list. */
-    fun patch(list: List<PipelineCost>) = JsonObject(mapOf("costs" to JsonArray(list.map(PipelineCost::json))))
+    /** Send the list edited from as well, so the server can retain a colleague's concurrent changes. */
+    fun patch(list: List<PipelineCost>, base: List<PipelineCost>? = null) = JsonObject(
+        mapOf("costs" to JsonArray(list.map(PipelineCost::json))) +
+            (base?.let { mapOf("costsBase" to JsonArray(it.map(PipelineCost::json))) } ?: emptyMap()))
 
     fun total(list: List<PipelineCost>) = list.sumOf { it.amount }
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pv8_entry_all">All Pipelines</string>
+    <plurals name="pv8_entry_boards">
+        <item quantity="one">%1$d board · combined</item>
+        <item quantity="other">%1$d boards · combined</item>
+    </plurals>
+    <string name="pv8_entry_confirm_title">Show all companies?</string>
+    <string name="pv8_entry_confirm_body">Presentation mode is on. All Pipelines shows the deals of every company\'s board on this screen. Amounts stay hidden.</string>
+    <string name="pv8_entry_confirm_action">Show all companies</string>
+</resources>

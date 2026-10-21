@@ -139,6 +139,7 @@ fun ProjectPageHeader(
     addInTabs: Boolean = false,
     extraActions: @Composable () -> Unit = {},
     presentation: Boolean = false,
+    titleContent: (@Composable () -> Unit)? = null,
 ) {
     val c = Nx.colors
     val access = ProjectAccess.of(detail)
@@ -152,7 +153,7 @@ fun ProjectPageHeader(
             detail?.let { ProjectMark(it.icon, 22.dp, projectId = it.id) }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
+                if (titleContent != null) titleContent() else Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 access.readOnlyChip?.let { l ->
                     val hint = stringResource(R.string.acc_hint)

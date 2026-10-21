@@ -72,7 +72,7 @@ class PipelineCostsTest {
 
     @Test fun patchIsTheWholeList() {
         val p = PipelineCosts.patch(listOf(PipelineCost("c_1", "Sound", 12000000.0), PipelineCost("c_2", "", 0.0)))
-        assertEquals("""{"costs":[{"id":"c_1","label":"Sound","amount":12000000},{"id":"c_2","label":"","amount":0}]}""", p.toString())
+        assertEquals("""{"costs":[{"id":"c_1","label":"Sound","amount":12000000,"budgetId":null},{"id":"c_2","label":"","amount":0,"budgetId":null}]}""", p.toString())
         // Laid over the deal (the optimistic edit), it reads back the same.
         val d = deal("""{"id":"a","netValue":20000000}""").with(p)
         assertEquals(2, d.costs.size); assertEquals(8000000.0, d.margin!!, 0.0)

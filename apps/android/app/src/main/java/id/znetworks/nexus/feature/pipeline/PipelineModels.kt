@@ -52,6 +52,45 @@ data class PipelinePhase(val key: String, val state: String, val blocked: Boolea
 
 data class PipelineReason(val code: String, val days: Int?, val text: String?)
 
+/** Cashback, contact and budget rows use the same item endpoints. Missing v8 values stay empty on older servers. */
+data class PipelineItem(val raw: JsonObject, val kind: String) {
+    val id get() = raw["id"].str().orEmpty()
+    val dealId get() = raw["dealId"].str().orEmpty()
+    val position get() = raw["position"].num() ?: 0.0
+    val name get() = raw["name"].str().orEmpty()
+    val amount get() = raw["amount"].num()?.takeIf { it.isFinite() } ?: 0.0
+    val role get() = raw["role"].str() ?: "Client"
+    val phone get() = raw["phone"].str().orEmpty()
+    val spent get() = raw["spent"].num()?.takeIf { it.isFinite() } ?: 0.0
+    val remaining get() = raw["remaining"].num()?.takeIf { it.isFinite() } ?: (amount - spent)
+    val createdAt get() = raw["createdAt"].str()
+    val updatedAt get() = raw["updatedAt"].str()
+}
+
+data class PipelineSource(val projectId: String, val name: String) {
+    companion object {
+        fun of(e: JsonElement?) = (e as? JsonObject)?.let { o ->
+            o["projectId"].str()?.takeIf { it.isNotBlank() }?.let { PipelineSource(it, o["name"].str().orEmpty()) }
+        }
+    }
+}
+
+data class PipelineBoard(val id: String, val name: String, val icon: String?, val color: String?, val status: String, val dealCount: Int) {
+    companion object {
+        fun of(e: JsonElement?) = (e as? JsonObject)?.let { o ->
+            o["id"].str()?.takeIf { it.isNotBlank() }?.let {
+                PipelineBoard(it, o["name"].str().orEmpty(), o["icon"].str(), o["color"].str(), o["status"].str() ?: "ACTIVE", o["dealCount"].num()?.toInt() ?: 0)
+            }
+        }
+    }
+}
+
+data class PipelineBoards(val workspaceId: String?, val boards: List<PipelineBoard>) {
+    companion object {
+        fun of(o: JsonObject) = PipelineBoards(o["workspaceId"].str(), (o["boards"] as? JsonArray).orEmpty().mapNotNull(PipelineBoard::of))
+    }
+}
+
 /** One deal, read from its raw JSON (every getter has a default). */
 data class PipelineDeal(val raw: JsonObject) {
     private fun s(k: String, d: String = "") = raw[k].str() ?: d
@@ -75,6 +114,18 @@ data class PipelineDeal(val raw: JsonObject) {
     val probability get() = n("probability")
     val contractValue get() = n("contractValue")
     val netValue get() = n("netValue")
+    val barterValue get() = n("barterValue")
+    val barterCompensation get() = s("barterCompensation")
+    private fun items(key: String, kind: String) = (raw[key] as? JsonArray).orEmpty()
+        .mapNotNull { (it as? JsonObject)?.let { o -> PipelineItem(o, kind).takeIf { item -> item.id.isNotBlank() } } }
+        .sortedBy { it.position }
+    val cashback get() = items("cashback", "cashback")
+    val contacts get() = items("contacts", "contact")
+    val budgets get() = items("budgets", "budget")
+    val cashbackTotal get() = raw["cashbackTotal"].num() ?: cashback.sumOf { it.amount }
+    val budgetTotal get() = raw["budgetTotal"].num() ?: budgets.sumOf { it.amount }
+    val eventYear get() = raw["eventYear"].num()?.takeIf { it.isFinite() }?.toInt()
+    val source get() = PipelineSource.of(raw["source"])
     val invoiceValue get() = n("invoiceValue")
     val outstandingReceivable get() = n("outstandingReceivable")
     val netCash get() = n("netCash")
@@ -230,7 +281,8 @@ data class PipelineVocab(val raw: JsonObject) {
     val closingStatuses get() = l("closingStatuses", listOf("Not Ready", "In Progress", "Waiting BAST", "Waiting Client Payment", "Waiting Vendor Settlement",
         "Waiting Deliverables", "Ready to Close", "Closed"))
     val termStatuses get() = l("termStatuses", listOf("Not Invoiced", "Invoiced", "Partial", "Paid", "Overdue"))
-    val linkTypes get() = l("linkTypes", listOf("SPK", "Kontrak", "MOU", "Invoice", "Lainnya"))
+    val linkTypes get() = l("linkTypes", listOf("Deck", "Quotation", "Kontrak", "SPK", "MOU", "Invoice", "Report", "Lainnya"))
+    val contactRoles get() = l("contactRoles", listOf("Client", "Vendor", "Broker", "PM (client side)", "Finance", "Admin", "Other"))
 
     companion object {
         const val LOST = "Lost / Cancelled"
@@ -250,6 +302,8 @@ data class PipelineChange(val id: String, val field: String, val before: JsonEle
                           val termId: String? = null, val termLabel: String? = null) {
     /** "term.amount" → "amount" (also "created" / "deleted" / "restored"); null for a change to the deal itself. */
     val termField get() = if (field.startsWith("term.")) field.removePrefix("term.") else null
+    val itemKind get() = field.substringBefore('.').takeIf { it in setOf("cashback", "contact", "budget") && '.' in field }
+    val itemField get() = if (itemKind != null) field.substringAfter('.') else null
 
     companion object {
         /** The entry a `document.added` / `document.removed` row carries. */
@@ -262,16 +316,24 @@ data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSumm
                         /** FULL | EDIT | COMMENT | VIEW; null from an older server. */
                         val viewerAccessLevel: String? = null,
                         /** Full / Can edit = true; Can comment / Can view read only. An older server says nothing: true. */
-                        val canEdit: Boolean = true) {
+                        val canEdit: Boolean = true,
+                        val years: List<Int> = emptyList(),
+                        val year: Int? = null,
+                        val boards: List<PipelineBoard> = emptyList(),
+                        val source: String? = null) {
     companion object {
         fun of(o: JsonObject) = PipelineData(
             deals = (o["deals"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::PipelineDeal) },
             summary = PipelineSummary(o["summary"] as? JsonObject ?: JsonObject(emptyMap())),
             vocab = PipelineVocab(o["vocab"] as? JsonObject ?: JsonObject(emptyMap())),
             today = o["today"].str()?.take(10) ?: java.time.LocalDate.now(id.znetworks.nexus.core.time.OfficeTime.ZONE).toString(),
-            workspaceId = (o["project"] as? JsonObject)?.get("workspaceId").str(),
+            workspaceId = o["workspaceId"].str() ?: (o["project"] as? JsonObject)?.get("workspaceId").str(),
             viewerAccessLevel = o["viewerAccessLevel"].str(),
             canEdit = (o["canEdit"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.toBooleanStrictOrNull() ?: true,
+            years = (o["years"] as? JsonArray).orEmpty().mapNotNull { it.num()?.takeIf { n -> n.isFinite() }?.toInt() }.distinct().sortedDescending(),
+            year = o["year"].num()?.takeIf { it.isFinite() }?.toInt(),
+            boards = (o["boards"] as? JsonArray).orEmpty().mapNotNull(PipelineBoard::of),
+            source = o["source"].str(),
         )
     }
 }
@@ -352,9 +414,10 @@ object PipelineFormat {
         return (if (n < 0) "-" else "") + "Rp" + nf.format(v) + s
     }
 
-    /** Full: Rp950.000.000. */
+    /** Whole rupiah use the owner's format in both languages: Rp 950.000.000. */
+    @Suppress("UNUSED_PARAMETER")
     fun idrFull(n: Double, id: Boolean = isId()): String =
-        (if (n < 0) "-" else "") + "Rp" + java.text.NumberFormat.getNumberInstance(if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS)
+        (if (n < 0) "-" else "") + "Rp " + java.text.NumberFormat.getNumberInstance(java.util.Locale.forLanguageTag("id-ID"))
             .apply { maximumFractionDigits = 0 }.format(kotlin.math.round(kotlin.math.abs(n)))
 
     /** What someone typed in a money field ("950.000.000", "Rp 950000000", "-5000"); blank = 0, garbage = null. */
@@ -374,7 +437,10 @@ object PipelineText {
     /** Three stages the GM named in Indonesian; every other stage key is shown as stored. */
     fun stage(k: String): Int? = when (k) { "Negotiation" -> R.string.pl_stage_negotiation; "Won – Contract Pending" -> R.string.pl_stage_won_pending; "Won – In Execution" -> R.string.pl_stage_won_exec; else -> null }
     fun risk(k: String): Int? = if (k == "Aman") R.string.pl_on_track else null
-    fun link(k: String): Int? = when (k) { "SPK" -> R.string.pl_link_spk; "Kontrak" -> R.string.pl_link_contract; "Lainnya" -> R.string.pl_link_other; else -> null }
+    fun link(k: String): Int? = when (k) {
+        "SPK" -> R.string.pl_link_spk; "Kontrak" -> R.string.pl_link_contract; "Lainnya" -> R.string.pl_link_other
+        "Quotation" -> R.string.pv8_link_quotation; "Report" -> R.string.pv8_link_report; else -> null
+    }
     fun health(k: String) = when (k) { "CRITICAL" -> R.string.pl_critical; "ATTENTION" -> R.string.pl_attention; "HEALTHY" -> R.string.pl_healthy; "NOT_STARTED" -> R.string.pl_not_started; else -> R.string.pl_lost }
     fun phase(k: String): Int? = when (k) {
         "commercial" -> R.string.pl_ph_commercial; "contract" -> R.string.pl_ph_contract; "readiness" -> R.string.pl_ph_readiness
@@ -440,6 +506,7 @@ object PipelineText {
         "name" -> R.string.pl_f_name; "brand" -> R.string.pl_f_brand; "service" -> R.string.pl_f_service; "bdUserId", "bdName" -> R.string.pl_f_bd
         "pmUserId", "pmName" -> R.string.pl_f_pm; "stage" -> R.string.pl_f_stage; "probability" -> R.string.pl_f_probability
         "contractValue" -> R.string.pl_f_contract_value; "netValue" -> R.string.pl_f_net_value; "invoiceValue" -> R.string.pl_f_invoice_value
+        "barterValue" -> R.string.pv8_barter_value; "barterCompensation" -> R.string.pv8_barter_compensation
         "contractStatus" -> R.string.pl_f_contract_status; "vregStatus" -> R.string.pl_f_vreg; "readiness" -> R.string.pl_f_readiness
         "deliverableStatus" -> R.string.pl_f_deliv_status; "deliverableRisk" -> R.string.pl_f_deliv_risk; "paymentStatus" -> R.string.pl_f_payment_status
         "outstandingReceivable" -> R.string.pl_f_receivable; "paymentDueDate" -> R.string.pl_f_due_date; "maxDaysOverdue" -> R.string.pl_f_days_typed

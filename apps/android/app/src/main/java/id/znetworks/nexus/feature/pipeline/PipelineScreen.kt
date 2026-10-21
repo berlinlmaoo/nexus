@@ -14,6 +14,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.border
@@ -98,6 +99,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -114,31 +117,56 @@ data class PipelineState(
     val openDealId: String? = null,
     /** Files on their way to a deal (§13.1): name and progress 0…1, per deal. */
     val uploads: List<PipelineUpload> = emptyList(),
+    val year: Int? = null,
+    val source: String? = null,
 )
 
 data class PipelineUpload(val key: String, val dealId: String, val name: String, val progress: Float)
 
 class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     val projectId: String = handle["id"] ?: ""
+    val combined: Boolean = projectId == ALL_PIPELINES_ID
     private val c = (app as NexusApplication).container
     val api = PipelineApi(c.api)
     private val res get() = getApplication<Application>().resources
     private val _state = MutableStateFlow(PipelineState())
     val state = _state.asStateFlow()
+    private var loadNumber = 0L
 
     init { load() }
 
     /** A reload keeps what is on screen; only a first load says it failed. */
     fun load() = viewModelScope.launch {
+        val request = ++loadNumber
+        val filter = _state.value
         try {
-            val d = api.load(projectId)
+            val d = if (combined) {
+                // A role alone never exposes combined data; the boards route must also allow it.
+                val access = PipelineAllAccess.load(c.api, c.viewer)
+                if (access == null) {
+                    if (request == loadNumber) _state.update { it.copy(data = null, loading = false, forbidden = true) }
+                    return@launch
+                }
+                api.all(access.workspaceId, filter.source, filter.year)
+            } else api.load(projectId, filter.year)
+            if (request != loadNumber) return@launch
             _state.update { it.copy(data = d, loading = false, error = null, forbidden = false) }
-            if (_state.value.people.isEmpty()) people()
+            if (!combined && _state.value.people.isEmpty()) people()
         } catch (e: ApiError) {
+            if (request != loadNumber) return@launch
             val h = e as? ApiError.Http
-            _state.update { it.copy(loading = false, forbidden = h?.status == 403, error = if (it.data == null) e.describe(res) else null) }
+            if (combined && h?.status == 403) PipelineAllAccess.hide()
+            _state.update {
+                val filterFailed = it.data != null && (filter.year != it.data.year || filter.source != it.data.source)
+                it.copy(data = if (h?.status == 403) null else it.data, loading = false, forbidden = h?.status == 403,
+                    year = if (filterFailed) it.data?.year else it.year, source = if (filterFailed) it.data?.source else it.source,
+                    notice = if (filterFailed) e.describe(res) else it.notice, error = if (it.data == null) e.describe(res) else null)
+            }
         }
     }
+
+    fun selectYear(year: Int?) { _state.update { it.copy(year = year) }; load() }
+    fun selectSource(source: String?) { if (combined) { _state.update { it.copy(source = source) }; load() } }
 
     private var peopleAt = 0L
 
@@ -156,12 +184,13 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
 
     fun open(id: String?) {
         _state.update { it.copy(openDealId = id) }
-        if (id != null && (System.currentTimeMillis() - peopleAt > 60_000 || membersChangedAt >= peopleAt)) people()
+        if (!combined && id != null && (System.currentTimeMillis() - peopleAt > 60_000 || membersChangedAt >= peopleAt)) people()
     }
     fun dismiss() = _state.update { it.copy(notice = null) }
 
     /** New deal (optionally in a stage); opens it. */
     fun create(stage: String? = null) = viewModelScope.launch {
+        if (combined || _state.value.data?.canEdit != true || _state.value.busy) return@launch
         _state.update { it.copy(busy = true) }
         try {
             val d = api.create(projectId, JsonObject(stage?.let { mapOf("stage" to JsonPrimitive(it)) } ?: emptyMap()))
@@ -176,6 +205,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
      * deal goes back and the server's sentence (INVALID_FIELD names the field) or ours is shown.
      */
     fun update(dealId: String, fields: JsonObject, onDone: (PipelineDeal?) -> Unit = {}) {
+        if (combined || _state.value.data?.canEdit != true) { onDone(null); return }
         val before = _state.value.data?.deals?.firstOrNull { it.id == dealId }
         replace(dealId) { it.with(fields) }
         viewModelScope.launch {
@@ -202,7 +232,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         val next = edit(now.costs) ?: return
         if (next == now.costs) return
         if (!PipelineCosts.valid(next)) { _state.update { it.copy(notice = res.getString(R.string.pc_invalid)) }; return }
-        update(dealId, JsonObject(PipelineCosts.patch(next) + ("costsBase" to kotlinx.serialization.json.JsonArray(now.costs.map(PipelineCost::json)))))
+        update(dealId, PipelineCosts.patch(next, now.costs))
     }
 
     /** Make (or find) the won deal's execution folder (§15), then open it; an answer without a folder opens the project. */
@@ -229,7 +259,12 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
 
     fun export(lang: String, onFile: (java.io.File) -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
-        try { onFile(api.export(projectId, lang, java.io.File(getApplication<Application>().cacheDir, "shared/pipeline"))) }
+        try {
+            val dir = java.io.File(getApplication<Application>().cacheDir, "shared/pipeline")
+            val filter = _state.value
+            onFile(if (combined) api.exportAll(lang, dir, filter.data?.workspaceId, filter.source, filter.year)
+                else api.export(projectId, lang, dir, filter.year))
+        }
         catch (e: ApiError) { _state.update { it.copy(notice = res.getString(R.string.pl_export_failed)) } }
         _state.update { it.copy(busy = false) }
     }
@@ -259,6 +294,38 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
     fun updateTerm(dealId: String, termId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) =
         term(R.string.pl_save_failed, { api.updateTerm(projectId, dealId, termId, fields) }, onDone)
     fun deleteTerm(dealId: String, termId: String) = term(R.string.pl_t_delete_failed, { api.deleteTerm(projectId, dealId, termId) })
+
+    /** Item answers carry the entire deal, including the server's budget usage and derived totals. */
+    private val itemLock = Mutex()
+    private fun item(call: suspend () -> PipelineDeal?) = viewModelScope.launch {
+        itemLock.withLock {
+            if (combined || _state.value.data?.canEdit != true) return@withLock
+            _state.update { it.copy(busy = true) }
+            try {
+                call()?.let { d -> replace(d.id) { d } }
+                load()
+            } catch (e: ApiError) {
+                val h = e as? ApiError.Http
+                _state.update { it.copy(notice = if (h?.code == "TOO_MANY_ITEMS") res.getString(R.string.pb8_item_too_many)
+                    else h?.serverMessage ?: res.getString(R.string.pl_save_failed)) }
+            } finally { _state.update { it.copy(busy = false) } }
+        }
+    }
+
+    fun addItem(dealId: String, kind: String) {
+        if (_state.value.busy) return
+        val requestId = java.util.UUID.randomUUID().toString()
+        item { api.addItem(projectId, dealId, kind, clientRequestId = requestId) }
+    }
+    fun updateItem(dealId: String, itemId: String, fields: JsonObject) =
+        item { api.updateItem(projectId, dealId, itemId, fields) }
+    fun deleteItem(dealId: String, itemId: String) = item {
+        val deal = _state.value.data?.deals?.firstOrNull { it.id == dealId }
+        val name = (deal?.cashback.orEmpty() + deal?.contacts.orEmpty() + deal?.budgets.orEmpty()).firstOrNull { it.id == itemId }?.name.orEmpty()
+        api.deleteItem(projectId, dealId, itemId).also {
+            _state.update { s -> s.copy(notice = res.getString(R.string.pb8_item_deleted, name.ifBlank { res.getString(R.string.pl_untitled) })) }
+        }
+    }
 
     // Documents (§13.1): files go up on the shared chunk route; the last chunk answers the deal, which replaces ours.
     fun attach(dealId: String, uri: android.net.Uri, docType: String, label: String) = viewModelScope.launch {
@@ -381,19 +448,29 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
     var seenRequest by rememberSaveable { mutableStateOf(newDealRequest) }
     LaunchedEffect(newDealRequest) { if (newDealRequest != seenRequest) { seenRequest = newDealRequest; vm.create() } }
     LiveRefresh(vm.projectId, liveMs = null, fallbackMs = 60_000,
-        matches = { it.name == RealtimeEvents.PIPELINE_CHANGED && (it.projectId == null || it.projectId == vm.projectId) }) { vm.load().join() }
+        matches = { it.name == RealtimeEvents.PIPELINE_CHANGED && (it.projectId == null ||
+            if (vm.combined) s.data?.boards.orEmpty().any { board -> board.id == it.projectId } else it.projectId == vm.projectId) }) { vm.load().join() }
 
     val d = s.data
+    if (vm.combined) d?.boards.orEmpty().forEach { board ->
+        androidx.compose.runtime.key(board.id) { id.znetworks.nexus.core.realtime.RealtimeRoom("project:${board.id}") }
+    }
     androidx.compose.runtime.CompositionLocalProvider(LocalPipelinePresentation provides presentation) {
     when {
         s.loading && d == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Text(stringResource(R.string.pl_loading), fontSize = 12.sp, color = c.mutedFg) }
         }
-        s.forbidden && d == null -> EmptyState(Icons.Filled.Lock, stringResource(R.string.pl_forbidden), stringResource(R.string.pl_forbidden_sub), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+        s.forbidden && d == null -> EmptyState(Icons.Filled.Lock,
+            stringResource(if (vm.combined) R.string.pb8_forbidden else R.string.pl_forbidden), stringResource(R.string.pl_forbidden_sub), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
         d == null -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pl_load_failed), stringResource(R.string.pl_load_failed_sub), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-        d.deals.isEmpty() -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pl_empty), stringResource(R.string.pl_empty_sub), stringResource(R.string.pl_add_first), { vm.create() }, Modifier.fillMaxSize())
         else -> Column(Modifier.fillMaxSize()) {
             Kpis(d.summary)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.combined) BoardFilter(stringResource(R.string.pb8_company), stringResource(R.string.pb8_all_companies),
+                    d.boards.map { it.id to it.name }, s.source, vm::selectSource)
+                BoardFilter(stringResource(R.string.pb8_year), stringResource(R.string.pb8_all_years),
+                    d.years.map { it.toString() to it.toString() }, s.year?.toString(), { vm.selectYear(it?.toIntOrNull()) })
+            }
             // Header (§12.3): search full width + one menu (PM ›, BD ›, clear, Excel), the views, health chips on their own row.
             val pms = d.deals.mapNotNull { x -> (x.pmUserId ?: x.pmShown)?.let { it to (x.pmShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
             val bds = d.deals.mapNotNull { x -> (x.bdUserId ?: x.bdShown)?.let { it to (x.bdShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
@@ -431,9 +508,16 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
             val shown = PipelineFilter.apply(d.deals, q, pm, bd, health, service)
             if (shown.size != d.deals.size) Text(stringResource(R.string.pl_shown_of, shown.size, d.deals.size), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
             Box(Modifier.weight(1f)) {
-                if (shown.isEmpty()) EmptyState(Icons.Filled.Search, stringResource(R.string.pl_no_match),
+                if (d.deals.isEmpty() && s.year == null && s.source == null) {
+                    if (vm.combined) EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pb8_empty), stringResource(R.string.pb8_combined_subtitle),
+                        stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+                    else EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pl_empty), stringResource(R.string.pl_empty_sub),
+                        stringResource(if (d.canEdit && !presentation) R.string.pl_add_first else R.string.try_again),
+                        { if (d.canEdit && !presentation) vm.create() else vm.load() }, Modifier.fillMaxSize())
+                }
+                else if (shown.isEmpty()) EmptyState(Icons.Filled.Search, stringResource(R.string.pl_no_match),
                     pluralStringResource(R.plurals.pl_filters_hide, d.deals.size, d.deals.size), stringResource(R.string.clear_search),
-                    { q = ""; pm = null; bd = null; health = null; service = null }, Modifier.fillMaxSize())
+                    { q = ""; pm = null; bd = null; health = null; service = null; vm.selectYear(null); vm.selectSource(null) }, Modifier.fillMaxSize())
                 else when (view) {
                     PipelineView.BOARD -> Board(shown, d, vm)
                     PipelineView.LIST -> ByStage(shown, d, vm)
@@ -442,8 +526,28 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, onOpe
             }
         }
     }
-    s.openDealId?.let { id -> d?.deals?.firstOrNull { it.id == id }?.let { deal -> DealSheet(deal, d, s.people, vm, onOpenProject = { pid -> vm.open(null); onOpenProject(pid) }, onOpenFolder = { fid -> vm.open(null); onOpenFolder(fid) }) { vm.open(null) } } }
+    s.openDealId?.let { id -> d?.deals?.firstOrNull { it.id == id }?.let { deal ->
+        if (vm.combined) deal.source?.let { source ->
+            SourceDealSheet(deal.id, source, onOpenProject, onOpenFolder) { vm.open(null); vm.load() }
+        }
+        else DealSheet(deal, d, s.people, vm, onOpenProject = { pid -> vm.open(null); onOpenProject(pid) }, onOpenFolder = { fid -> vm.open(null); onOpenFolder(fid) }) { vm.open(null) }
+    } }
     s.notice?.let { androidx.compose.material3.AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
+    }
+}
+
+/** Company and year are the only view filters that ask the server for a matching KPI summary. */
+@Composable
+private fun BoardFilter(label: String, all: String, options: List<Pair<String, String>>, selected: String?, onSelect: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        FilterChip(selected != null, { open = true }, { Text(options.firstOrNull { it.first == selected }?.second ?: selected ?: all) },
+            trailingIcon = { Icon(Icons.Filled.KeyboardArrowDown, label, Modifier.size(18.dp)) })
+        DropdownMenu(open, { open = false }) {
+            Text(label, fontSize = 11.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+            DropdownMenuItem({ Text(all, fontWeight = if (selected == null) FontWeight.Bold else null) }, { open = false; onSelect(null) })
+            options.forEach { (id, name) -> DropdownMenuItem({ Text(name, fontWeight = if (id == selected) FontWeight.Bold else null) }, { open = false; onSelect(id) }) }
+        }
     }
 }
 
@@ -545,15 +649,18 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
     val name = d.name.ifBlank { stringResource(R.string.pl_untitled) }
+    val editable = data.canEdit && !LocalPipelinePresentation.current
     Box {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
-            .combinedClickable(onClick = { vm.open(d.id) }, onLongClick = { menu = true }, onLongClickLabel = stringResource(R.string.pl_move_named, name))
+            .then(if (editable) Modifier.combinedClickable(onClick = { vm.open(d.id) }, onLongClick = { menu = true }, onLongClickLabel = stringResource(R.string.pl_move_named, name))
+                else Modifier.clickable { vm.open(d.id) })
             .padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.code, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, modifier = Modifier.weight(1f))
                 if (d.stageGroup != "Lost") HealthPill(d.healthKey)
             }
             Text(name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            SourceChip(d)
             if (d.brand.isNotBlank() || d.value > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.brand, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (d.value > 0) Text(pipelineMoney(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
@@ -599,7 +706,7 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
                 }
             }
         }
-        DropdownMenu(menu, { menu = false }) {
+        DropdownMenu(menu && editable, { menu = false }) {
             Text(stringResource(R.string.pl_move_to), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
             data.vocab.stages.filter { it != d.stage }.forEach { st ->
                 DropdownMenuItem(text = { Text(stageLabel(st)) }, onClick = { menu = false; vm.update(d.id, JsonObject(mapOf("stage" to JsonPrimitive(st)))) })
@@ -610,7 +717,7 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
 
 /** A column head on ONE line, fixed while its cards scroll: dot · stage · count · total (when > 0) · "+" (not on Lost). */
 @Composable
-private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel) {
+private fun StageHead(st: String, col: List<PipelineDeal>, data: PipelineData, vm: PipelineViewModel) {
     val c = Nx.colors
     val label = stageLabel(st)
     val a11y = pluralStringResource(R.plurals.pl_stage_n, col.size, label, col.size)
@@ -622,7 +729,7 @@ private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel
         val total = col.sumOf { it.value }
         if (total > 0) Text(" · " + pipelineMoney(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
+        if (data.canEdit && !LocalPipelinePresentation.current && st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
     }
 }
@@ -631,7 +738,7 @@ private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel
 private fun StageColumn(st: String, col: List<PipelineDeal>, data: PipelineData, vm: PipelineViewModel, modifier: Modifier) {
     val c = Nx.colors
     Column(modifier) {
-        StageHead(st, col, vm)
+        StageHead(st, col, data, vm)
         // Empty: a quiet line, no dashed box.
         if (col.isEmpty()) Text(stringResource(R.string.pl_no_deals), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(vertical = 8.dp))
         else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -690,6 +797,7 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.card).clickable { vm.open(d.id) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(d.name.ifBlank { stringResource(R.string.pl_untitled) }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        SourceChip(d)
                         Text(listOf(d.code, d.brand, d.pmShown ?: "").filter { it.isNotBlank() }.joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -720,6 +828,7 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
                         Text(d.name.ifBlank { stringResource(R.string.pl_untitled) }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
                         HealthPill(d.healthKey)
                     }
+                    SourceChip(d)
                     d.reasons.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(d.healthKey)) }
                 }
             }
@@ -734,6 +843,7 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
                     Column(Modifier.weight(1f)) {
                         Text(d.text("nextAction").ifBlank { stringResource(R.string.pl_no_next_written) }, fontSize = 13.sp, color = c.foreground)
                         Text(d.name, fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
+                        SourceChip(d)
                     }
                 }
             }
@@ -743,7 +853,10 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
             if (late.isEmpty()) Text(stringResource(R.string.pl_no_late), fontSize = 12.sp, color = c.mutedFg)
             late.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable { vm.open(d.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(d.name, fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
+                    Column(Modifier.weight(1f)) {
+                        Text(d.name, fontSize = 13.sp, color = c.foreground, maxLines = 1)
+                        SourceChip(d)
+                    }
                     Text(pipelineMoney(d.receivable) + " · " + pluralStringResource(R.plurals.pl_n_days, d.daysOverdue, d.daysOverdue), fontSize = 12.sp, color = c.danger)
                 }
             }
@@ -754,6 +867,7 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
             blocked.forEach { d ->
                 Column(Modifier.fillMaxWidth().clickable { vm.open(d.id) }.padding(vertical = 6.dp)) {
                     Text(d.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
+                    SourceChip(d)
                     Text(d.text("blocker"), fontSize = 12.sp, color = c.danger)
                 }
             }

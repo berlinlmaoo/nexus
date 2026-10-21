@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pb8_all_pipelines">All Pipelines</string>
+    <string name="pb8_all_companies">All companies</string>
+    <string name="pb8_company">Company</string>
+    <string name="pb8_all_years">All years</string>
+    <string name="pb8_year">Filter by year</string>
+    <string name="pb8_pipeline_boards">Pipeline boards</string>
+    <string name="pb8_switch_board">Switch pipeline board</string>
+    <string name="pb8_show_all_title">Show all companies?</string>
+    <string name="pb8_show_all">Show all companies</string>
+    <string name="pb8_show_all_body">Presentation mode is on. All Pipelines shows the deals of every company\'s board on this screen. Amounts stay hidden.</string>
+    <string name="pb8_combined_subtitle">Every company\'s pipeline board, combined. Read-only: open a deal to change it in its own board.</string>
+    <string name="pb8_forbidden">All Pipelines is for BoD and One Above All</string>
+    <string name="pb8_empty">No deals in any pipeline yet</string>
+    <string name="pb8_item_too_many">A deal can have up to 100 items of each kind.</string>
+    <string name="pb8_item_deleted">%1$s deleted. Control Room → Audit can restore it.</string>
+    <plurals name="pb8_boards_combined">
+        <item quantity="one">%d board · combined</item>
+        <item quantity="other">%d boards · combined</item>
+    </plurals>
+</resources>

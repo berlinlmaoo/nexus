@@ -67,6 +67,7 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.core.files.FileOpener
 import id.znetworks.nexus.ui.components.PdfViewerDialog
 import id.znetworks.nexus.ui.components.PhotoViewer
+import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.launch
 
@@ -89,14 +90,15 @@ internal fun docView(l: PipelineLink): DocView {
  * the deal's `links` (the whole list, files sent back as received). Removing a file asks first; a link goes at once.
  */
 @Composable
-internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineViewModel, onSaveLinks: (List<PipelineLink>) -> Unit) {
+internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineViewModel, onEmptyClose: () -> Unit = {}, onSaveLinks: (List<PipelineLink>) -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val api = (context.applicationContext as NexusApplication).container.api
     val scope = rememberCoroutineScope()
     val uploads = vm.state.collectAsStateWithLifecycle().value.uploads.filter { it.dealId == deal.id }
     val links = deal.links
-    var type by remember { mutableStateOf(types.firstOrNull() ?: "Lainnya") }
+    val canEdit = LocalPipelineCanEdit.current
+    var type by remember(types) { mutableStateOf(types.firstOrNull() ?: "Lainnya") }
     var url by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var removing by remember { mutableStateOf<PipelineLink?>(null) }
@@ -112,7 +114,9 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
         scope.launch { runCatching { FileOpener.open(context, api, l.url, l.fileName ?: l.shownName, l.mimeType, share) } }
     }
 
-    if (links.isEmpty() && uploads.isEmpty()) Text(stringResource(R.string.pl_no_docs), fontSize = 12.sp, color = c.mutedFg)
+    if (links.isEmpty() && uploads.isEmpty()) EmptyState(Icons.Filled.Description, stringResource(R.string.pl_f_links), stringResource(R.string.pl_no_docs),
+        if (canEdit) stringResource(R.string.pl_doc_attach) else stringResource(R.string.close),
+        if (canEdit) { { pickFile.launch(arrayOf("*/*")) } } else onEmptyClose)
     links.forEach { l ->
         val typeWord = PipelineText.link(l.type)?.let { stringResource(it) } ?: l.type
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -135,7 +139,7 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
                 if (sub.isNotBlank()) Text(sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (l.isFile) IconButton(onClick = { open(l, share = true) }) { Icon(Icons.Filled.Download, stringResource(R.string.pl_doc_download), tint = c.mutedFg) }
-            IconButton(onClick = { if (l.isFile) removing = l else onSaveLinks(links.filterNot { it.id == l.id }) }) {
+            if (canEdit) IconButton(onClick = { if (l.isFile) removing = l else onSaveLinks(links.filterNot { it.id == l.id }) }) {
                 Icon(Icons.Filled.Delete, stringResource(R.string.pl_doc_remove), tint = c.dangerText) }
         }
     }
@@ -146,6 +150,7 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
         }
     }
     // One type for whatever is added next: a link, a file or a photo.
+    if (canEdit) {
     Pick(stringResource(R.string.pl_link_type), type, types, label = { k -> PipelineText.link(k)?.let { stringResource(it) } ?: k }) { type = it }
     NxTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_doc_name_opt)) }, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,6 +164,7 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
     TextButton(onClick = {
         onSaveLinks(links + PipelineLink("l_${System.currentTimeMillis()}", type, label.trim(), url.trim())); url = ""; label = ""
     }, enabled = ok) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_add_link)) }
+    }
 
     removing?.let { l ->
         AlertDialog(onDismissRequest = { removing = null }, title = { Text(stringResource(R.string.pl_doc_remove_q, l.shownName)) },
@@ -179,6 +185,7 @@ internal fun Documents(deal: PipelineDeal, types: List<String>, vm: PipelineView
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ServicesRow(deal: PipelineDeal, data: PipelineData, onSave: (List<String>) -> Unit) {
+    if (!LocalPipelineCanEdit.current) { ReadOnly(stringResource(R.string.pl_f_services), deal.services.joinToString(", ").ifBlank { stringResource(R.string.pl_no_services) }); return }
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clickable { open = true }.heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {

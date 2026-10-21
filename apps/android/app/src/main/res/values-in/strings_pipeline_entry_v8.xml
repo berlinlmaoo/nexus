@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pv8_entry_all">Semua Pipeline</string>
+    <plurals name="pv8_entry_boards">
+        <item quantity="other">%1$d board · gabungan</item>
+    </plurals>
+    <string name="pv8_entry_confirm_title">Tampilkan semua perusahaan?</string>
+    <string name="pv8_entry_confirm_body">Mode Presentasi aktif. Semua Pipeline menampilkan deal dari board setiap perusahaan di layar ini. Nominal tetap disembunyikan.</string>
+    <string name="pv8_entry_confirm_action">Tampilkan semua perusahaan</string>
+</resources>
