@@ -378,11 +378,16 @@ export function PipelineView({
                   className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
-              {all && boards.length > 0 && (
-                <SelectPicker variant="field" ariaLabel={t("Filter by company")} value={source} onChange={setSource} renderValue={allLabel(t("Company"), t("All companies"))} options={[{ value: ALL, label: t("All companies") }, ...boards.map((b) => ({ value: b.id, label: b.name }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-48 lg:flex-none", source && "border-foreground/30 text-foreground")} />
-              )}
-              {years.length > 0 && (
-                <SelectPicker variant="field" ariaLabel={t("Filter by year")} value={year} onChange={setYear} renderValue={allLabel(t("Year"), t("All years"))} options={[{ value: ALL, label: t("All years") }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-32 lg:flex-none", year && "border-foreground/30 text-foreground")} />
+              {/* Company (All Pipelines) and Year (v8): their own row on a phone, so every picker keeps its label. */}
+              {(years.length > 0 || (all && boards.length > 0)) && (
+                <div className="order-3 flex min-w-0 basis-full gap-2 lg:basis-auto">
+                  {all && boards.length > 0 && (
+                    <SelectPicker variant="field" ariaLabel={t("Filter by company")} value={source} onChange={setSource} renderValue={allLabel(t("All companies"), t("All companies"))} options={[{ value: ALL, label: t("All companies") }, ...boards.map((b) => ({ value: b.id, label: b.name }))]} className={cn(pickerControl, "min-w-0 flex-1 px-3 lg:w-48 lg:flex-none", source && "border-foreground/30 text-foreground")} />
+                  )}
+                  {years.length > 0 && (
+                    <SelectPicker variant="field" ariaLabel={t("Filter by year")} value={year} onChange={setYear} renderValue={allLabel(t("All years"), t("All years"))} options={[{ value: ALL, label: t("All years") }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} className={cn(pickerControl, "min-w-0 flex-1 px-3 lg:w-32 lg:flex-none", year && "border-foreground/30 text-foreground")} />
+                  )}
+                </div>
               )}
               <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} renderValue={allLabel("PM", t("All PMs"))} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-foreground/30 text-foreground")} />
               <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} renderValue={allLabel("BD", t("All BDs"))} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-foreground/30 text-foreground")} />
