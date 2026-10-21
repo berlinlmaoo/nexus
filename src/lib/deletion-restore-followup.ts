@@ -94,6 +94,21 @@ export async function afterRestore(input: {
         emitPipelineChanged(term.deal.projectId, term.dealId, actorId)
       }
     }
+    if (entityType === "pipeline_item") {
+      // A cashback recipient / contact / budget category is back on its deal (Control Tower v8, 21 Oct 2026):
+      // the history says so (its delete wrote "<kind>.deleted") and open pipelines refetch.
+      const item = await prisma.pipelineDealItem.findUnique({
+        where: { id: input.entityId },
+        select: { kind: true, name: true, role: true, amount: true, dealId: true, deal: { select: { projectId: true } } },
+      })
+      if (item) {
+        projectId = item.deal.projectId
+        await prisma.pipelineDealChange.create({
+          data: { dealId: item.dealId, userId: actorId, field: `${item.kind}.restored`, termId: input.entityId, termLabel: item.name || item.role || item.kind, after: { name: item.name, amount: item.amount } },
+        })
+        emitPipelineChanged(item.deal.projectId, item.dealId, actorId)
+      }
+    }
     if (entityType === "chat_group") {
       // The group is back with its members: their lists refetch it ("membership", the reason every
       // client already refetches on). No line is written in the chat for it.

@@ -4124,6 +4124,11 @@ model PipelineDeal {
   /// Real cost lines [{ id, label, amount }] (Control Tower v4, 14 Oct 2026). Margin = netValue − Σ amount,
   /// derived, never stored (lib/pipeline.ts marginOf). Same access as the deal. SQL: 2026-10-14-pipeline-real-cost.sql.
   costs          Json      @default("[]")
+  /// Barter (Control Tower v8, 21 Oct 2026): what the client pays in kind, its value in rupiah and the form it
+  /// takes ("2 slot iklan TV"). Shown in Commercial & pipeline; the value is money (hidden in presentation).
+  /// Neither changes Margin or Real Profit. SQL: prisma/sql/2026-10-21-pipeline-v8.sql.
+  barterValue        Float  @default(0)
+  barterCompensation String @default("")
 
   createdById String?
   createdBy   User?    @relation("PipelineDealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -4154,6 +4159,8 @@ model PipelineDeal {
   /// Payments per term (owner, 9 Oct 2026: "perlu per termin"). When a deal has any, its receivable,
   /// payment status and days overdue come from them; the manual columns above stay for deals without.
   terms   PipelinePaymentTerm[]
+  /// Cashback recipients, project contacts and budget categories (Control Tower v8, 21 Oct 2026).
+  items   PipelineDealItem[]
   legalDocuments LegalDocument[]
 
   @@unique([projectId, code])
@@ -4192,6 +4199,30 @@ model PipelineDealChange {
 /// One payment term (installment) of a deal: "DP", "Termin 1", … (owner, 9 Oct 2026: "perlu per termin").
 /// Its status (Not Invoiced / Invoiced / Partial / Paid / Overdue) is derived, never stored — see
 /// termStatusOf in lib/pipeline.ts. SQL: prisma/sql/2026-10-09-pipeline-terms.sql.
+/// One entry of a deal's open lists (Control Tower v8, 21 Oct 2026), by `kind`:
+///   "cashback" — a cashback recipient: name + amount (money; the section is hidden in presentation mode);
+///   "contact"  — a project contact: role (CONTACT_ROLES) + name + phone;
+///   "budget"   — a budget category (Strategist): name + amount; cost lines point at it by `budgetId`.
+/// A row of its own so each entry is added / edited / deleted alone (no lost update between two editors) and
+/// a delete is restorable from Control Room → Audit ("pipeline_item"). Margin and Real Profit ignore all three.
+/// SQL: prisma/sql/2026-10-21-pipeline-v8.sql (clientRequestId: partial unique index per deal, there).
+model PipelineDealItem {
+  id        String       @id @default(uuid(7))
+  dealId    String
+  deal      PipelineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  kind      String
+  position  Float        @default(0)
+  name      String       @default("")
+  role      String       @default("")
+  phone     String       @default("")
+  amount    Float        @default(0)
+  clientRequestId String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([dealId, kind, position])
+}
+
 model PipelinePaymentTerm {
   id          String       @id @default(uuid(7))
   dealId      String

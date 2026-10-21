@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { pipelineToday } from "@/lib/pipeline"
+import { filterByYear, parseYearParam, pipelineToday } from "@/lib/pipeline"
 import { dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
 import { buildPipelineWorkbook, contentDisposition, exportFileName } from "@/lib/pipeline-export"
 
@@ -25,18 +25,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const gate = await pipelineGate(session.user.id, projectId, "read")
     if (!gate.ok) return gate.response
     const lang = request.nextUrl.searchParams.get("lang") === "en" ? "en" : "id"
+    // ?year=YYYY (Control Tower v8): only the deals whose event date falls in that year, as the board's year filter.
+    const year = parseYearParam(request.nextUrl.searchParams.get("year"))
+    if (year === undefined) return NextResponse.json({ field: "year", error: "year must be YYYY.", code: "INVALID_FIELD" }, { status: 400 })
 
     const [rows, me] = await Promise.all([
       prisma.pipelineDeal.findMany({ where: { projectId }, include: dealInclude, orderBy: { code: "asc" } }),
       prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } }),
     ])
     const today = pipelineToday()
-    const deals = rows.map((row) => serializeDeal(row, today))
+    const deals = filterByYear(rows.map((row) => serializeDeal(row, today)), year)
     const wb = buildPipelineWorkbook(deals, {
       boardName: gate.project.name,
       exportedAt: new Date(),
       exportedBy: me?.name || me?.email || null,
       lang,
+      filter: { year },
     })
 
     logAudit({
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       entityName: gate.project.name,
       userId: session.user.id,
       request,
-      metadata: { projectId, rows: rows.length },
+      metadata: { projectId, rows: deals.length, ...(year ? { year } : {}) },
     })
 
     const buf = await wb.xlsx.writeBuffer()

@@ -15,6 +15,7 @@ import {
   costsOf,
   dealInclude,
   historyValue,
+  keepBudgetIds,
   mergeListById,
   normalizeCosts,
   parseDealFields,
@@ -119,7 +120,10 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       const again = await parseDealFields(withoutPeople(body), gate.project.workspaceId, deal)
       const data: Record<string, unknown> = { ...checked.data, ...(again.ok ? again.data : {}) }
       if (costsBase && Array.isArray(data.costs)) {
-        data.costs = mergeListById(costsBase, data.costs as PipelineCostItem[], costsOf(deal.costs), (c) => [c.label, c.amount])
+        // The base is filled from the stored lines like the sent list (an app before v8 sends no budgetId), so a
+        // line it did not touch compares equal and keeps whatever category someone else set meanwhile.
+        const stored = costsOf(deal.costs)
+        data.costs = mergeListById(keepBudgetIds(costsBase, stored), data.costs as PipelineCostItem[], stored, (c) => [c.label, c.amount, c.budgetId ?? null])
       }
       if (linksBase && "links" in body) {
         const sent = idEntries(body.links)
