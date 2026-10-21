@@ -64,13 +64,13 @@ data class CanonicalBody(val doc:JsonObject,val canEdit:Boolean)
 class BlockEditorApi(private val api:ApiClient) {
     suspend fun load(kind:String,id:String):CanonicalBody {
         val safe=URLEncoder.encode(id,"UTF-8")
-        val body=api.get(if(kind=="doc")"/api/docs/$safe?format=canonical"else"/api/tasks/$safe/body",JsonObject.serializer())
+        val body=api.get(if(kind=="doc")"/api/docs/$safe?format=canonical" else "/api/tasks/$safe/body",JsonObject.serializer())
         val doc=if(kind=="doc")body.objectAt("doc").objectAt("content")else body.objectAt("doc")
         if(!BlockTree.valid(doc)||(kind=="doc"&&body.text("format")!="canonical"))throw ApiError.Decoding(IllegalStateException("Canonical document missing"))
         return CanonicalBody(doc,body.flag("canEdit"))
     }
     suspend fun write(kind:String,id:String,action:String,text:String,prompt:String,language:String):JsonObject {
-        val body=buildJsonObject { put("action",action);put("text",text.take(12000));put("prompt",prompt.take(1000));if(action=="tone")put("tone",prompt.take(40));put("language",language);put(if(kind=="doc")"docId"else"taskId",id) }
+        val body=buildJsonObject { put("action",action);put("text",text.take(12000));put("prompt",prompt.take(1000));if(action=="tone")put("tone",prompt.take(40));put("language",language);put(if(kind=="doc")"docId" else "taskId",id) }
         var final:JsonObject?=null
         var failure:String?=null
         api.sendEventLines(Request.Builder().url(api.url("/api/gideon/write")).header("Accept","text/event-stream").post(body.toString().toJsonBody()).build(),180000){line->

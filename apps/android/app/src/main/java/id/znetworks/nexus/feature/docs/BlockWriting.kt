@@ -24,7 +24,7 @@ internal fun BlockWriting(api:BlockEditorApi,kind:String,id:String,text:String,e
     var open by remember{mutableStateOf(false)}
     var action by remember{mutableStateOf("improve")}
     var prompt by remember{mutableStateOf("")}
-    var language by remember{mutableStateOf(if(ctx.resources.configuration.locales[0].language in listOf("id","in"))"id"else"en")}
+    var language by remember{mutableStateOf(if(ctx.resources.configuration.locales[0].language in listOf("id","in"))"id" else "en")}
     var result by remember{mutableStateOf<String?>(null)}
     var busy by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<String?>(null)}

@@ -46,7 +46,7 @@ object AutomationDraft {
             return rule.copy(value=status?.let{JsonPrimitive(it)},config=JsonObject(cfg))
         }
         cfg["bySection"]=JsonPrimitive(true)
-        if(section==null)cfg.remove(if(side=="from")"fromSection"else"toSection")else cfg[if(side=="from")"fromSection"else"toSection"]=JsonPrimitive(section.id)
+        if(section==null)cfg.remove(if(side=="from")"fromSection" else "toSection")else cfg[if(side=="from")"fromSection" else "toSection"]=JsonPrimitive(section.id)
         if(side=="from"){if(status==null)cfg.remove("from")else cfg["from"]=JsonPrimitive(status);return rule.copy(config=JsonObject(cfg))}
         return rule.copy(value=status?.let{JsonPrimitive(it)},config=JsonObject(cfg))
     }
