@@ -81,11 +81,12 @@ export function PipelineTitleSwitcher({ title, current, workspaceId }: { title: 
       <DropdownMenu>
         <DropdownMenuTrigger
           data-pl="board-switcher"
-          className="-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-          aria-label={t("Switch pipeline board")}
+          // Inline, not flex: the heading's own truncation (desktop) and two-line clamp (phone) apply to the name.
+          className="-mx-1 inline rounded-md px-1 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          title={t("Switch pipeline board")}
         >
-          <span className="truncate">{title}</span>
-          <ChevronDown aria-hidden className="h-5 w-5 shrink-0 text-muted-foreground" />
+          {title}
+          <ChevronDown aria-hidden className="ml-1 inline-block h-5 w-5 align-middle text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72 max-w-[calc(100vw-2rem)]">
           <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("Pipeline boards")}</DropdownMenuLabel>

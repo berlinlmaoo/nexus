@@ -398,9 +398,11 @@ export function StagePill({ stage, className }: { stage: string; className?: str
  */
 export function SourceChip({ deal, className }: { deal: Pick<PipelineDeal, "source">; className?: string }) {
   if (!deal.source?.name) return null;
+  // Every board is "Pipeline <Company>": the chip says the company, the full name is its tooltip.
+  const short = deal.source.name.replace(/^pipeline\s+/i, "").trim() || deal.source.name;
   return (
     <span title={deal.source.name} className={cn("inline-flex max-w-full min-w-0 items-center rounded-full bg-primary/10 px-2 text-[11px] font-medium leading-5 text-primary", className)}>
-      <span className="truncate">{deal.source.name}</span>
+      <span className="truncate">{short}</span>
     </span>
   );
 }

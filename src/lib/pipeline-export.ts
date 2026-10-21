@@ -221,6 +221,7 @@ function filterText(meta: ExportMeta): string {
   if (meta.filter?.source) parts.push(en ? `Source: ${meta.filter.source}` : `Sumber: ${meta.filter.source}`)
   if (meta.filter?.year) parts.push(en ? `Event year: ${meta.filter.year} (deals without an event date left out)` : `Tahun event: ${meta.filter.year} (deal tanpa tanggal event tidak ikut)`)
   if (parts.length) return `${parts.join(" · ")}. ${en ? "Other on-screen filters do not apply." : "Filter lain di layar tidak ikut."}`
+  if (meta.sourceOf) return en ? "None: every deal of every pipeline board (on-screen filters do not apply)" : "Tidak ada: semua deal dari semua board pipeline (filter di layar tidak ikut)"
   return en ? "None: every deal on the board (on-screen filters do not apply)" : "Tidak ada: semua deal di board (filter di layar tidak ikut)"
 }
 
