@@ -28,6 +28,7 @@ struct ProjectsView: View {
     @State private var openTaskId: String?
     /// A project New project opens as soon as it is made (an Outlet Sales or Pipeline Dashboard).
     @State private var openBoard: ProjectRef?
+    @State private var allPipelinesOpen = false
     /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
     @State private var tallies: [String: ProjectTally] = [:]
     /// A folder's aggregate view opened from its context menu (the calendar button is a link of its own).
@@ -130,6 +131,9 @@ struct ProjectsView: View {
             } message: { Text(actionError ?? "") }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .navigationDestination(item: $openBoard) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
+            .navigationDestination(isPresented: $allPipelinesOpen) {
+                PipelineAllView(workspaceId: workspaceId)
+            }
             // A project asked for from outside this screen (AppRouter.openProjectPage): pushed here like a
             // tapped row. onAppear covers a request made before the tab existed, onChange a later one.
             .onAppear { takeProjectRequest() }
@@ -185,6 +189,11 @@ struct ProjectsView: View {
                 }
                 await load()
             }
+            // Authorize the pinned row from the page itself. An initially empty, role-gated row in
+            // LazyVStack can have no layout and never begin its own task.
+            .task(id: auth.session?.userId) {
+                await PipelineBoardDirectory.shared.load(viewerId: auth.session?.userId, force: true)
+            }
             // Live (owner, 8 Oct 2026): a project moved to another folder on one device showed on the
             // others only after a manual refresh. Now every 30 s while this list is on screen and the
             // app is in front, at once on coming back to the front, and on the realtime client's word
@@ -239,9 +248,13 @@ struct ProjectsView: View {
         } else if let error {
             errorState(error)
         } else if projects.isEmpty {
-            EmptyState(icon: "rectangle.stack", title: T("No projects yet"),
-                       subtitle: T("A project is one board for a piece of work: its tasks, people and deadlines in one place. You'll see every project you're part of here — create the first one to get going."),
-                       actionTitle: T("New project"), actionIcon: "rectangle.stack.badge.plus") { sheet = .newProject }
+            VStack(spacing: 16) {
+                PipelineAllProjectsEntry { allPipelinesOpen = true }
+                    .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                EmptyState(icon: "rectangle.stack", title: T("No projects yet"),
+                           subtitle: T("A project is one board for a piece of work: its tasks, people and deadlines in one place. You'll see every project you're part of here — create the first one to get going."),
+                           actionTitle: T("New project"), actionIcon: "rectangle.stack.badge.plus") { sheet = .newProject }
+            }
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
@@ -253,11 +266,12 @@ struct ProjectsView: View {
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResults
                     } else {
+                    PipelineAllProjectsEntry { allPipelinesOpen = true }
+
                     ProjectsSummaryCard(shown: visibleProjects.count, total: projects.count,
                                         progressText: summaryProgress, doneText: summaryDone, members: summaryMembers,
                                         statusFilter: $statusFilter, sortMode: $sortMode,
                                         statusOptions: Self.statusOptions, sortOptions: Self.sortOptions)
-
                     let folderTree = tree
                     let rowActions = actions
                     ForEach(rootFolders) { f in

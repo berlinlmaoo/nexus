@@ -5,6 +5,15 @@ import SwiftUI
 struct ProjectDetailView: View {
     let projectId: String
     let projectName: String
+    /// Only a board pushed directly from All Pipelines returns to the combined screen on Back.
+    let pipelineReturnsToAll: Bool
+
+    init(projectId: String, projectName: String, pipelineReturnsToAll: Bool = false) {
+        self.projectId = projectId
+        self.projectName = projectName
+        self.pipelineReturnsToAll = pipelineReturnsToAll
+    }
+
     @Environment(AuthStore.self) private var auth
     @State private var detail: ProjectDetail?
     @State private var lanes: [ProjectDetail.Lane] = []   // detail.taskLists + subtasks merged in (board + list)
@@ -21,6 +30,7 @@ struct ProjectDetailView: View {
     @State private var newFormOpen = false
     @State private var showSettings = false
     @State private var showMeetings = false
+    @State private var confirmPipelineReturn = false
     /// ⌘N / ⌘, / ⌘[ / ⌘] / ⌘F do nothing while a sheet (the task popup, settings…) is up over the
     /// project: focus stays in the top-most sheet (QA BoD R2). SheetCover.swift.
     @State private var cover = SheetCover()
@@ -432,6 +442,12 @@ struct ProjectDetailView: View {
 
     var body: some View {
         redesignChrome(baseBody)
+            // The iPad header measures several ViewThatFits candidates. Keep this load on the
+            // stable screen so a discarded title candidate cannot cancel the directory request.
+            .task(id: "\(projectId)|\(isPipeline)|\(auth.session?.userId ?? "")") {
+                guard isPipeline else { return }
+                await PipelineBoardDirectory.shared.load(viewerId: auth.session?.userId)
+            }
     }
 
     /// The redesign's sheets and alert, kept off `baseBody`'s long modifier chain so the type checker
@@ -676,7 +692,13 @@ struct ProjectDetailView: View {
                 // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14): the
                 // bar's bordered 44 pt circle, no shadow, at the bar's 20 pt inset (run 20, R20-I-07: it was a smaller
                 // shadowed circle at 6 pt).
-                Button { dismiss() } label: {
+                Button {
+                    if pipelineReturnsToAll && PipelinePresentationSession.shared.isPresenting {
+                        confirmPipelineReturn = true
+                    } else {
+                        dismiss()
+                    }
+                } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
                         .frame(width: 44, height: 44)
                         .background(NX.card, in: Circle())
@@ -686,10 +708,19 @@ struct ProjectDetailView: View {
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
                 .accessibilityLabel(T("Back"))
+                .accessibilityIdentifier("pipeline.board.back")
+                .modifier(PipelineAllConfirmation(isPresented: $confirmPipelineReturn, onShow: { dismiss() }))
             }
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
             // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
-            Text(displayName).font(NXFont.display(wide && !isTypedDashboard && !isPipeline ? 32 : wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+            Group {
+                if isPipeline {
+                    PipelineBoardSwitcher(projectId: projectId, title: displayName,
+                        fontSize: wide ? 26 : 20, weight: wide ? .semibold : .bold)
+                } else {
+                    Text(displayName).font(NXFont.display(wide && !isTypedDashboard ? 32 : wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+                }
+            }
                 .lineLimit(wide && titleCap == nil ? 1 : 2).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: titleCap, alignment: .leading)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
@@ -723,7 +754,7 @@ struct ProjectDetailView: View {
     /// A Pipeline Dashboard has no task header (web): "+" is New deal on Pipeline and absent on its other
     /// tabs. An outlet's "Add event" sits in its own header row, next to the month.
     @ViewBuilder private func addButton(labelled: Bool) -> some View {
-        if tab == .pipeline {
+        if tab == .pipeline && canEdit {
             ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: labelled, prominent: true) { newDealRequest += 1 }
         } else if !isPipeline && !isTypedDashboard && canEdit {
             // Can view / Can comment: no Add task / New form (access levels round 2).

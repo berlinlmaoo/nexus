@@ -15,6 +15,8 @@ import SwiftUI
 struct PipelineDealView: View {
     let store: PipelineStore
     let dealId: String
+    var sourceName: String? = nil
+    var fromAll = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var hSize
@@ -51,6 +53,7 @@ struct PipelineDealView: View {
                         .frame(maxWidth: 820, alignment: .leading)
                         .frame(maxWidth: .infinity)
                     }
+                    .accessibilityIdentifier("pipeline.deal.scroll")
                     .safeAreaInset(edge: .bottom, spacing: 0) { footer(deal) }
                 } else {
                     // Gone (deleted here or elsewhere): the sheet closes itself below.
@@ -121,6 +124,7 @@ struct PipelineDealView: View {
     }
 
     private func patch(_ fields: [String: Any]) {
+        guard store.canEdit else { return }
         Task { await store.patch(dealId, fields) }
     }
 
@@ -128,6 +132,22 @@ struct PipelineDealView: View {
 
     private func head(_ deal: PipelineDeal) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let sourceName {
+                HStack(spacing: 8) {
+                    Label(sourceName, systemImage: "building.2")
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("pipeline.deal.company")
+                    Spacer(minLength: 4)
+                    if fromAll {
+                        Button { dismiss() } label: {
+                            Label(T("All Pipelines"), systemImage: "arrow.left")
+                                .font(NXFont.text(12, .semibold))
+                        }
+                        .accessibilityIdentifier("pipeline.deal.backToAll")
+                    }
+                }
+            }
             HStack(spacing: 8) {
                 Text(deal.code).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
                 // The deal's stage as a chip in its column's colour (owner, 9 Oct 2026: "stage di board per
@@ -145,6 +165,7 @@ struct PipelineDealView: View {
             }
             PipelineTextInput(label: T("Deal name"), value: deal.name, required: true, large: true,
                               placeholder: T("Deal name")) { patch(["name": $0]) }
+                .disabled(!store.canEdit)
             Picker("", selection: $showHistory) {
                 Text(T("Details")).tag(false)
                 Text(T("History")).tag(true)
@@ -208,6 +229,25 @@ struct PipelineDealView: View {
             PipelineFieldBox(T("Event / main date")) {
                 PipelineDateInput(label: T("Event / main date"), value: deal.mainDate) { patch(["mainDate": jsonOrNull($0)]) }
             }
+            PipelineFieldBox(T("Barter value")) {
+                PipelineMoneyInput(label: T("Barter value"), value: deal.barterValue, rejectNegative: true,
+                                   onInvalid: { store.actionError = $0 }) { patch(["barterValue": $0]) }
+                    .disabled(!store.canEdit)
+                    .accessibilityIdentifier("pipeline.barter.value")
+            }
+            PipelineFieldBox(T("Barter compensation form")) {
+                PipelineTextInput(label: T("Barter compensation form"), value: deal.barterCompensation,
+                                  placeholder: T("e.g. 2 TV ad slots")) { patch(["barterCompensation": $0]) }
+                    .disabled(!store.canEdit)
+                    .accessibilityIdentifier("pipeline.barter.compensation")
+            }
+        }
+
+        if !presenting {
+            PipelineSection(title: T("Cashback"), owner: T("BD / account"), columns: 1) {
+                PipelineMoneyItemsEditor(store: store, deal: deal, kind: .cashback)
+            }
+            .accessibilityIdentifier("pipeline.cashback.section")
         }
 
         // Contract → closing only start once a deal is won. On an open (or lost) deal they fold under one
@@ -240,6 +280,7 @@ struct PipelineDealView: View {
                 patch(["links": links.map(\.json), "linksBase": deal.links.map(\.json)])
             }
         }
+        .accessibilityIdentifier("pipeline.documents.section")
     }
 
     /// Contract, vendor registration, readiness, billing, terms and closing: the work after a deal is won.
@@ -250,6 +291,11 @@ struct PipelineDealView: View {
                 PipelineMenuInput(label: T("Contract status"), value: deal.contractStatus, options: v.contractStatuses) { patch(["contractStatus": $0]) }
             }
         }
+
+        PipelineSection(title: T("Project contacts"), owner: T("Every division"), columns: 1) {
+            PipelineContactsEditor(store: store, deal: deal)
+        }
+        .accessibilityIdentifier("pipeline.contacts.section")
 
         PipelineSection(title: T("Vendor registration"), owner: T("PM / admin")) {
             PipelineFieldBox(T("Vendor registration")) {
@@ -331,11 +377,16 @@ struct PipelineDealView: View {
         // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms. Presenting (R-20):
         // the section is not drawn at all, not blurred.
         if !presenting {
+            PipelineSection(title: T("Budget expenses"), owner: T("Strategist"), columns: 1) {
+                PipelineMoneyItemsEditor(store: store, deal: deal, kind: .budget)
+            }
+            .accessibilityIdentifier("pipeline.budgets.section")
             PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
                 PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
                     patch(["costs": costs.map(\.json), "costsBase": deal.costs.map(\.json)])
                 }
             }
+            .accessibilityIdentifier("pipeline.costs.section")
         }
 
         PipelineSection(title: T("Closing"), owner: "PM") {
@@ -370,6 +421,7 @@ struct PipelineDealView: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("pipeline.deal.later")
     }
 
     /// A payment value the terms decide: read-only, with where it comes from underneath.
@@ -394,7 +446,7 @@ struct PipelineDealView: View {
     /// no folder opens that project.
     @ViewBuilder private func execution(_ deal: PipelineDeal) -> some View {
         let projectId = deal.executionProjectId ?? deal.executionCalendarProjectId
-        if deal.executionFolderId != nil || projectId != nil || deal.canHaveExecutionProject {
+        if deal.executionFolderId != nil || projectId != nil || (deal.canHaveExecutionProject && store.canEdit) {
             VStack(alignment: .leading, spacing: 6) {
                 if let folderId = deal.executionFolderId {
                     Button {
@@ -425,7 +477,7 @@ struct PipelineDealView: View {
                     .buttonStyle(.plain)
                 } else {
                     Button {
-                        guard !makingExecution else { return }
+                        guard store.canEdit, !makingExecution else { return }
                         makingExecution = true
                         Task {
                             let target = await store.createExecution(deal.id)
@@ -491,13 +543,15 @@ struct PipelineDealView: View {
         HStack(spacing: 10) {
             Text(lastUpdated(deal)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             Spacer(minLength: 8)
-            Button(role: .destructive) { confirmDelete = true } label: {
-                Label(T("Delete"), systemImage: "trash")
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(ChipTone.danger.fg)
-                    .padding(.horizontal, 12).frame(minHeight: 40)
-                    .contentShape(Rectangle())
+            if store.canEdit {
+                Button(role: .destructive) { confirmDelete = true } label: {
+                    Label(T("Delete"), systemImage: "trash")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(ChipTone.danger.fg)
+                        .padding(.horizontal, 12).frame(minHeight: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16).padding(.vertical, 6)
         .background(NX.card)
@@ -551,6 +605,11 @@ struct PipelineDealView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if h.field == "document.added" || h.field == "document.removed" {
                     EmptyView()
+                } else if let item = PipelineItemHistory.parts(h.field), PipelineItemHistory.isLifecycle(item.action) {
+                    if let summary = PipelineItemHistory.value(field: h.field, value: item.action == "deleted" ? h.before : h.after,
+                                                              presenting: presenting) {
+                        Text(summary).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    }
                 } else if h.field == "term.created" || h.field == "term.deleted" || h.field == "term.restored" {
                     if let amount = termAmount(h.field == "term.deleted" ? h.before : h.after) {
                         Text(PipelineFormat.idrFull(amount, hidden: presenting)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -579,6 +638,16 @@ struct PipelineDealView: View {
         // A file attached, or a link/file taken off (owner, 9 Oct 2026): its type and name.
         if h.field == "document.added" { return String(format: T("%@ attached %@"), who, documentName(h.after)) }
         if h.field == "document.removed" { return String(format: T("%@ removed %@"), who, documentName(h.before)) }
+        if let item = PipelineItemHistory.parts(h.field) {
+            let label = (h.termLabel?.isEmpty == false ? h.termLabel : nil)
+            let name = [PipelineText.itemKind(item.kind), label].compactMap { $0 }.joined(separator: " · ")
+            switch item.action {
+            case "created": return "\(who) \(T("added")) \(name)"
+            case "deleted": return "\(who) \(T("deleted")) \(name)"
+            case "restored": return "\(who) \(T("restored")) \(name)"
+            default: return "\(who) \(T("changed")) \(name) · \(PipelineText.itemField(item.action))"
+            }
+        }
         guard let f = h.termField else { return "\(who) \(T("changed")) \(PipelineText.field(h.field))" }
         let term = (h.termLabel?.isEmpty == false ? h.termLabel : nil) ?? T("Payment term")
         switch f {
@@ -615,6 +684,7 @@ struct PipelineDealView: View {
 
     /// A value from the history as people read it: rupiah, dates, percentages, names, stage labels.
     private func shown(_ field: String, _ value: AuditJSON?) -> String {
+        if let item = PipelineItemHistory.value(field: field, value: value, presenting: presenting) { return item }
         guard let value else { return T("empty") }
         switch value {
         case .null: return T("empty")
@@ -629,7 +699,7 @@ struct PipelineDealView: View {
             }
         case .number(let n):
             switch field {
-            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount": return PipelineFormat.idrFull(n, hidden: presenting)
+            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "barterValue", "term.amount", "term.paidAmount": return PipelineFormat.idrFull(n, hidden: presenting)
             case "probability": return PipelineFormat.pct(n)
             default: return n.rounded() == n ? String(Int(n)) : String(n)
             }
@@ -799,33 +869,64 @@ struct PipelineRealCost: View {
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private func row(_ cost: PipelineCost) -> some View {
-        if canEdit {
-            HStack(spacing: 8) {
-                PipelineTextInput(label: T("Cost description"), value: cost.label, placeholder: T("e.g. Sound vendor")) { text in
-                    onSave(deal.costs.map { $0.id == cost.id ? PipelineCost(id: $0.id, label: text, amount: $0.amount) : $0 })
+    private func row(_ cost: PipelineCost) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if canEdit {
+                HStack(spacing: 8) {
+                    PipelineTextInput(label: T("Cost description"), value: cost.label, placeholder: T("e.g. Sound vendor")) { text in
+                        update(cost.id) { $0.label = text }
+                    }
+                    PipelineMoneyInput(label: T("Cost amount"), value: cost.amount) { amount in
+                        update(cost.id) { $0.amount = amount }
+                    }
+                    .frame(width: 150)
+                    Button(role: .destructive) {
+                        onSave(deal.costs.filter { $0.id != cost.id })
+                    } label: {
+                        Image(systemName: "trash").frame(width: 36, height: 40)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(T("Delete cost"))
                 }
-                PipelineMoneyInput(label: T("Cost amount"), value: cost.amount) { amount in
-                    onSave(deal.costs.map { $0.id == cost.id ? PipelineCost(id: $0.id, label: $0.label, amount: amount) : $0 })
+            } else {
+                HStack(spacing: 8) {
+                    Text(cost.label.isEmpty ? "–" : cost.label).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                    Spacer(minLength: 8)
+                    Text(PipelineFormat.idrFull(cost.amount)).font(NXFont.text(14)).foregroundStyle(NX.foreground).monospacedDigit()
                 }
-                .frame(width: 150)
-                Button(role: .destructive) {
-                    onSave(deal.costs.filter { $0.id != cost.id })
-                } label: {
-                    Image(systemName: "trash").frame(width: 36, height: 40)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(T("Delete cost"))
+                .frame(minHeight: 32)
+                .accessibilityElement(children: .combine)
             }
-        } else {
-            HStack(spacing: 8) {
-                Text(cost.label.isEmpty ? "–" : cost.label).font(NXFont.text(14)).foregroundStyle(NX.foreground)
-                Spacer(minLength: 8)
-                Text(PipelineFormat.idrFull(cost.amount)).font(NXFont.text(14)).foregroundStyle(NX.foreground).monospacedDigit()
+            if !deal.budgets.isEmpty {
+                if canEdit {
+                    PipelineMenuInput(label: T("Budget category"), value: cost.budgetId ?? "",
+                                      options: [""] + deal.budgets.map(\.id), emptyText: T("No budget category"), text: categoryName) { id in
+                        update(cost.id) { $0.budgetId = id.isEmpty ? nil : id }
+                    }
+                    .accessibilityIdentifier("pipeline.costs.category." + cost.id)
+                } else {
+                    Text(categoryName(cost.budgetId ?? ""))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
+            } else if cost.budgetId != nil {
+                Text(T("Deleted category")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
-            .frame(minHeight: 32)
-            .accessibilityElement(children: .combine)
         }
+    }
+
+    private func categoryName(_ id: String) -> String {
+        if id.isEmpty { return T("No budget category") }
+        guard let category = deal.budgets.first(where: { $0.id == id }) else { return T("Deleted category") }
+        return category.name.isEmpty ? T("Untitled category") : category.name
+    }
+
+    private func update(_ id: String, change: (inout PipelineCost) -> Void) {
+        onSave(deal.costs.map { current in
+            guard current.id == id else { return current }
+            var changed = current
+            change(&changed)
+            return changed
+        })
     }
 }
 
@@ -956,6 +1057,9 @@ struct PipelineMoneyInput: View {
     let label: String
     let value: Double
     var allowNegative = false
+    /// v8 fields reject a negative entry rather than turning it into a positive amount.
+    var rejectNegative = false
+    var onInvalid: ((String) -> Void)? = nil
     let onCommit: (Double) -> Void
 
     @State private var draft = ""
@@ -997,8 +1101,14 @@ struct PipelineMoneyInput: View {
     }
 
     private func commit() {
+        if rejectNegative && (draft.contains("-") || draft.contains("−")) {
+            draft = value == 0 ? "" : PipelineFormat.plain(value)
+            onInvalid?(T("Amount cannot be negative."))
+            return
+        }
         guard var v = PipelineFormat.parseMoney(draft) else {
             draft = value == 0 ? "" : PipelineFormat.plain(value)
+            if rejectNegative { onInvalid?(T("Enter a valid amount.")) }
             return
         }
         if !allowNegative { v = Swift.abs(v) }
@@ -1045,6 +1155,7 @@ struct PipelineMenuInput: View {
     let label: String
     let value: String
     let options: [String]
+    var emptyText = "–"
     var text: (String) -> String = { $0 }
     let onCommit: (String) -> Void
 
@@ -1057,7 +1168,7 @@ struct PipelineMenuInput: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Text(value.isEmpty ? "–" : text(value)).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(value.isEmpty ? emptyText : text(value)).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
             }
@@ -1066,7 +1177,7 @@ struct PipelineMenuInput: View {
         }
         .menuIndicator(.hidden)
         .accessibilityLabel(label)
-        .accessibilityValue(value.isEmpty ? "–" : text(value))
+        .accessibilityValue(value.isEmpty ? emptyText : text(value))
     }
 }
 
