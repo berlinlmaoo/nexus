@@ -206,6 +206,13 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let reviewedBy: UserRef?
     let supportingDocumentUrl: String?
     let supportingDocumentName: String?
+    /// A Sick/Permit set from the board without the evidence it asks for (owner 20 Oct 2026, optional).
+    let evidenceMissing: Bool?
+    /// The evidence for a board change to Present (from Permit / TK / nothing), or its "no evidence
+    /// attached" mark. Absent from servers before 20 Oct 2026.
+    let correctionEvidenceUrl: String?
+    let correctionEvidenceName: String?
+    let correctionEvidenceMissing: Bool?
     /// "denied" when the person refused Always location for this record — drawn as a "location
     /// off" badge so an empty trail is not mistaken for a day spent inside. Optional (0.1.6).
     let locationTrackingState: String?
@@ -259,6 +266,44 @@ struct AttendanceOverrideResponse: Decodable, Sendable {
     let closedAttendance: Int?
     /// PRESENT only: multi-day requests still covering this date (left alone on purpose).
     let multiDayRequestsLeft: Int?
+    /// The day before the change and what it asked for (SICK_NOTE | PERMIT_EVIDENCE | PRESENT_EVIDENCE),
+    /// both null for an action that asks nothing; `evidenceMissing` = asked but saved without (20 Oct 2026).
+    let from: String?
+    let evidenceAsked: String?
+    let evidence: Evidence?
+    let evidenceMissing: Bool?
+    struct Evidence: Decodable, Sendable { let url: String?; let name: String? }
+}
+
+/// Owner rule (20 Oct 2026, final): a board status change to Sick asks for the sick note, to Permit and
+/// from Permit / TK / nothing to Present for a supporting photo or file. Optional — saved without it, the
+/// day is marked "no evidence attached". The server decides again itself (lib/attendance-override-evidence.ts);
+/// this only decides whether the sheet shows the upload field. Web: StatusOverridePanel.tsx.
+enum OverrideEvidence {
+    enum Kind { case sickNote, supporting }
+
+    /// What the day is now: PRESENT | PERMIT | SICK | LEAVE | DAY_OFF | ABSENT | NONE, from its board row
+    /// (`overrideDayStateOf` on the web). An approved permit wins over a check-in made before it.
+    static func dayState(_ row: AttendanceRow) -> String {
+        let t = (row.requestType ?? "").uppercased()
+        let day = (row.attendanceDayType ?? "").uppercased()
+        if t == "PERMIT" || day == "PERMIT_APPROVED" { return "PERMIT" }
+        if row.checkInAt != nil { return "PRESENT" }
+        if t == "SICK" { return "SICK" }
+        if t == "LEAVE" { return "LEAVE" }
+        if t == "DAY_OFF" || t == "RED_DATE" { return "DAY_OFF" }
+        return row.recordKind == "ABSENT" ? "ABSENT" : "NONE"
+    }
+
+    /// nil = no upload field (→ Leave, → Day off, Clear penalty, Present from Present/Sick/Leave/Day off).
+    static func asked(action: String, from: String) -> Kind? {
+        switch action {
+        case "SICK": return .sickNote
+        case "PERMIT": return .supporting
+        case "PRESENT": return ["PERMIT", "ABSENT", "NONE"].contains(from) ? .supporting : nil
+        default: return nil
+        }
+    }
 }
 
 /// GET /api/attendance/requests?scope= — leave/sick/permit/day-off/red-date requests.

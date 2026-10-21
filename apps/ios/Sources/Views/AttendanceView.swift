@@ -2725,6 +2725,10 @@ struct RecordActionsSheet: View {
     @State private var err: String?
     /// The override waiting for its confirmation (PRESENT … CLEAR_PENALTY).
     @State private var pendingOverride: String?
+    /// An action that asks for evidence opens this step in the panel instead of the confirmation
+    /// (owner 20 Oct 2026: optional, so Save works without a file), and the file chosen in it.
+    @State private var evidenceStep: (action: String, kind: OverrideEvidence.Kind)?
+    @State private var evidenceFile: (name: String, data: Data)?
     @State private var overrideDone: String?
     /// Multi-day requests the server left covering a day just set to Present — told, then closed.
     @State private var multiDayLeft: Int?
@@ -2810,6 +2814,15 @@ struct RecordActionsSheet: View {
                         if row.isCorrected == true {
                             infoLine("pencil.and.list.clipboard", "\(T("Corrected by the board")) · \(row.correctionReason ?? "")")
                         }
+                        // A board change to Present from Permit / TK / nothing: its evidence, or the mark
+                        // that it was saved without (20 Oct 2026).
+                        if row.correctionEvidenceUrl != nil || row.correctionEvidenceMissing == true {
+                            VStack(alignment: .leading, spacing: 6) {
+                                SectionLabel(T("Correction evidence"))
+                                OverrideEvidenceView(url: row.correctionEvidenceUrl, name: row.correctionEvidenceName,
+                                                     missing: row.correctionEvidenceMissing, label: T("Correction evidence"))
+                            }
+                        }
                         if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
                         // Pushed inside this sheet's own stack rather than presented: the sheet
                         // already owns a fullScreenCover and a confirmationDialog.
@@ -2845,6 +2858,9 @@ struct RecordActionsSheet: View {
                         // it is evidence of, never "sick-note.jpg"; any other file keeps its name.
                         if AttendanceRow.fileURL(row.supportingDocumentUrl) != nil, let path = row.supportingDocumentUrl {
                             RequestAttachmentView(path: path, name: row.supportingDocumentName, type: row.requestType, large: true)
+                        } else if row.evidenceMissing == true {
+                            // Set from the board without the sick note / supporting file it asked for.
+                            OverrideEvidenceView(url: nil, name: nil, missing: true)
                         }
                     }
 
@@ -2933,28 +2949,24 @@ struct RecordActionsSheet: View {
         }
     }
 
+    /// Asks for evidence, or for the plain confirmation (owner rule, `OverrideEvidence.asked`).
+    private func ask(_ action: String) {
+        if let kind = OverrideEvidence.asked(action: action, from: OverrideEvidence.dayState(row)) {
+            evidenceFile = nil
+            evidenceStep = (action, kind)
+        } else {
+            pendingOverride = action
+        }
+    }
+
     private var changeStatusPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(T("Change status (board)"))
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-                ForEach(Self.overrideActions, id: \.self) { action in
-                    Button { pendingOverride = action } label: {
-                        Text(Self.overrideLabel(action))
-                            .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(NX.card, in: Capsule())
-                            .overlay(Capsule().strokeBorder(NX.border))
-                    }.buttonStyle(.plain).disabled(busy)
-                }
+            if let step = evidenceStep {
+                evidenceStepView(step.action, kind: step.kind)
+            } else {
+                overrideButtons
             }
-            Button { pendingOverride = "CLEAR_PENALTY" } label: {
-                Label(T("Clear penalty (restore XP & day-off)"), systemImage: "scalemass")
-                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.warning).frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(NX.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.35)))
-            }.buttonStyle(.plain).disabled(busy)
-            Text(T("Every action restores that day's XP & day-off deductions and is written to the audit log."))
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .padding(12)
         .background(NX.violet.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -2969,11 +2981,61 @@ struct RecordActionsSheet: View {
         } message: { action in Text(overrideConsequence(action)) }
     }
 
-    private func applyOverride(_ action: String) async {
+    /// The step an evidence-asking action opens in place of the confirmation (web StatusOverridePanel).
+    private func evidenceStepView(_ action: String, kind: OverrideEvidence.Kind) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(format: T("Change %@ (%@) to %@"), dateLabel, personName, Self.overrideLabel(action)))
+                .font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
+            OverrideEvidencePicker(kind: kind, file: $evidenceFile, disabled: busy)
+            Text(overrideConsequence(action))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button { evidenceStep = nil; evidenceFile = nil } label: {
+                    Text(T("Cancel")).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                }.buttonStyle(.plain).disabled(busy)
+                Button { Task { await applyOverride(action, evidence: evidenceFile) } } label: {
+                    Text(evidenceFile == nil ? T("Save without evidence") : T("Save"))
+                        .font(NXFont.text(14, .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }.buttonStyle(.plain).disabled(busy)
+            }
+        }
+    }
+
+    private var overrideButtons: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                ForEach(Self.overrideActions, id: \.self) { action in
+                    Button { ask(action) } label: {
+                        Text(Self.overrideLabel(action))
+                            .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .background(NX.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(NX.border))
+                    }.buttonStyle(.plain).disabled(busy)
+                }
+            }
+            Button { ask("CLEAR_PENALTY") } label: {
+                Label(T("Clear penalty (restore XP & day-off)"), systemImage: "scalemass")
+                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.warning).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(NX.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.35)))
+            }.buttonStyle(.plain).disabled(busy)
+            Text(T("Every action restores that day's XP & day-off deductions and is written to the audit log."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+    }
+
+    private func applyOverride(_ action: String, evidence: (name: String, data: Data)? = nil) async {
         guard let uid = overrideUserId, let day = overrideDayKey else { return }
         busy = true; err = nil; overrideDone = nil
         do {
-            let r = try await APIClient.shared.attendanceOverride(userId: uid, date: day, action: action)
+            let r = try await APIClient.shared.attendanceOverride(userId: uid, date: day, action: action, evidence: evidence)
+            evidenceStep = nil; evidenceFile = nil
             if action == "CLEAR_PENALTY" {
                 overrideDone = r.refunded == true
                     ? String(format: T("Penalty for %@ cleared — XP & day-off restored."), dateLabel)
@@ -2981,6 +3043,7 @@ struct RecordActionsSheet: View {
             } else {
                 overrideDone = "\(personName) · \(dateLabel) → \(Self.overrideLabel(action))"
                     + (r.refunded == true ? " · \(T("Penalty restored."))" : "")
+                    + (r.evidenceMissing == true ? " · \(T("No evidence attached"))" : "")
             }
             await onDone()
             if let n = r.multiDayRequestsLeft, n > 0 {

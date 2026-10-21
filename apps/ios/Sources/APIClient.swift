@@ -2758,12 +2758,34 @@ struct APIClient {
     /// Every action refunds that day's attendance XP penalties and any auto-cut day-off. A refusal
     /// (403 not BoD, 409 the day is part of a multi-day request) surfaces as `.http` with the
     /// server's own sentence.
-    func attendanceOverride(userId: String, date: String, action: String, note: String? = nil) async throws -> AttendanceOverrideResponse {
+    /// `evidence` (owner 20 Oct 2026, optional: → Sick, → Permit, Permit/TK/nothing → Present ask for it):
+    /// the same fields as multipart/form-data with the file in `evidence`; without it, JSON as before.
+    /// Sent as octet-stream like the request attachments — the server judges it by the name's extension,
+    /// and a bad file comes back as 400 DOCUMENT_TYPE / DOCUMENT_TOO_LARGE with nothing changed.
+    func attendanceOverride(userId: String, date: String, action: String, note: String? = nil,
+                            evidence: (name: String, data: Data)? = nil) async throws -> AttendanceOverrideResponse {
         var req = makeRequest("/api/attendance/override", method: "POST")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["userId": userId, "date": date, "action": action]
-        if let note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { body["note"] = note }
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let note = note.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        guard let evidence else {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var body: [String: Any] = ["userId": userId, "date": date, "action": action]
+            if let note { body["note"] = note }
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            return try await run(req, decode: AttendanceOverrideResponse.self)
+        }
+        let boundary = "Boundary-\(UUID().uuidString)"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
+        field("userId", userId); field("date", date); field("action", action)
+        if let note { field("note", note) }
+        let fileName = evidence.name.replacingOccurrences(of: "\"", with: "_").replacingOccurrences(of: "\r", with: "_").replacingOccurrences(of: "\n", with: "_")
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"evidence\"; filename=\"\(fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(evidence.data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
         return try await run(req, decode: AttendanceOverrideResponse.self)
     }
     func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {

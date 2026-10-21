@@ -60,6 +60,8 @@ struct RequestAttachmentView: View {
     let type: String?
     /// The sheets draw the photo wide; the list draws a thumbnail.
     var large = false
+    /// What a photo is called when its type does not say ("Correction evidence"); nil = by `type`.
+    var label: String? = nil
     @State private var preview: AttachmentPreview?
     @State private var fetching = false
     @State private var failed = false
@@ -89,7 +91,7 @@ struct RequestAttachmentView: View {
     }
 
     @ViewBuilder private func photo(_ url: URL) -> some View {
-        let label = reqPhotoLabel(type)
+        let label = self.label ?? reqPhotoLabel(type)
         Button {
             preview = AttachmentPreview(id: path, name: label, kind: .image, source: url)
         } label: {
