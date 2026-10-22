@@ -86,12 +86,15 @@ export function PipelineTitleSwitcher({ title, current, workspaceId }: { title: 
       <DropdownMenu>
         <DropdownMenuTrigger
           data-pl="board-switcher"
-          // Inline, not flex: the heading's own truncation (desktop) and two-line clamp (phone) apply to the name.
-          className="-mx-1 inline rounded-md px-1 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          // A button is laid out as one block inside the heading, so the heading's two-line clamp never reached the
+          // name (3 lines at 1440, 5 at 390; QA final #2 pre-run, P-1). The name clamps itself the same way as the
+          // plain project title (two lines, between words, balanced) and PageHeader's fit shrinks it to 75% first
+          // (data-title-clamp); the chevron sits after it and is never cut off.
+          className="-mx-1 inline-flex max-w-full items-end rounded-md px-1 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
           title={t("Switch pipeline board")}
         >
-          {title}
-          <ChevronDown aria-hidden className="ml-1 inline-block h-5 w-5 align-middle text-muted-foreground" />
+          <span data-title-clamp className="min-w-0 line-clamp-2 whitespace-normal break-words [text-wrap:balance]">{title}</span>
+          <ChevronDown aria-hidden className="mb-[0.2em] ml-1 h-5 w-5 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72 max-w-[calc(100vw-2rem)]">
           <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("Pipeline boards")}</DropdownMenuLabel>

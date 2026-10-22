@@ -21,8 +21,12 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
       // Height only: an inline title control (the Pipeline board switcher) pokes a few px out sideways by design.
       // A title that is a control (the Pipeline board switcher, an inline button) is not cut by line-clamp, so
       // more than two lines of it counts as not fitting too.
+      // A title control clamps its own name (`data-title-clamp`, the Pipeline board switcher): the heading's clamp
+      // cannot reach inside a button, so the name's own overflow counts too (QA final #2 pre-run, P-1).
       const over = () => {
         const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+        const inner = el.querySelector<HTMLElement>("[data-title-clamp]");
+        if (inner && inner.scrollHeight > inner.clientHeight + 1) return true;
         return el.scrollHeight > el.clientHeight + 1 || (lh > 0 && el.scrollHeight > lh * 2 + 2);
       };
       for (let size = base; over() && size > min; ) {

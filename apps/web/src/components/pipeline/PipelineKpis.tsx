@@ -53,15 +53,19 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
       <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">
         <dl className="flex w-max min-w-full items-stretch gap-px sm:grid sm:w-auto sm:grid-cols-30 xl:grid-cols-8">
           {tiles.map((tile) => (
+            // Each tile is a subgrid of the strip's rows (sm and up), so a label that takes two lines moves the
+            // readings of its whole row down with it and the numbers stay level.
             <div
               key={tile.label}
               className={cn(
-                "min-w-[9.75rem] flex-1 bg-card px-4 py-3 sm:min-w-0",
+                "min-w-[9.75rem] flex-1 bg-card px-4 py-3 sm:row-span-4 sm:grid sm:min-w-0 sm:grid-rows-subgrid sm:gap-y-0",
                 tile.kind === "money" ? "sm:col-span-6" : "sm:col-span-10",
                 "xl:col-span-1",
               )}
             >
-              <dt className="truncate text-xs font-medium text-muted-foreground">{tile.label}</dt>
+              {/* Never cut ("Deliverables on t…" at 1440, QA final #2 pre-run, P-2): wraps between words onto a
+                  second line instead. */}
+              <dt className="line-clamp-2 break-words text-xs font-medium text-muted-foreground [text-wrap:balance]">{tile.label}</dt>
               <dd
                 title={tile.full}
                 className={cn(
