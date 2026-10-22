@@ -4,10 +4,10 @@ import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, ChevronRight, Download, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Link2, Loader2, LogOut, MessageSquare,
+  ArrowLeft, Camera, ChevronRight, Download, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Link2, Loader2, LogOut, MessageSquare,
   Pencil, Search, Trash2, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
 } from "lucide-react";
-import { Avatar } from "@/components/Avatar";
+import { Avatar, AvatarFace } from "@/components/Avatar";
 import { PresenceChip } from "@/lib/presence";
 import { ProjectTile } from "@/components/projects/ProjectIcon";
 import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
@@ -309,6 +309,8 @@ function InfoBody({
           <Avatar userId={peer.userId} name={peer.name} avatar={peer.avatar} size={88} />
         ) : isProject && c.projectId ? (
           <ProjectTile projectId={c.projectId} size={88} className="rounded-2xl" />
+        ) : isGroup ? (
+          <GroupPhoto info={data} title={title} onChanged={onChanged} />
         ) : (
           <span className="grid h-[88px] w-[88px] place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-border"><UsersIcon className="h-9 w-9" /></span>
         )}
@@ -479,6 +481,95 @@ function InfoBody({
 }
 
 const DESCRIPTION_MAX = 500;
+
+const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const PHOTO_MAX = 5 * 1024 * 1024;
+
+/**
+ * The group photo (owner, 22 Oct 2026): the picture at the top of group info, changed or removed by any member
+ * (canEditAvatar, the rename rule). POST/DELETE /api/conversations/:id/avatar; every member's list, header and
+ * info follow through `conversation-updated` (realtime.tsx refetches on reason "membership").
+ */
+function GroupPhoto({ info, title, onChanged }: { info: Info; title: string; onChanged: () => void }) {
+  const { t } = useLang();
+  const c = info.conversation;
+  const photo = c.avatarUrl ?? null;
+  const canEdit = c.canEditAvatar ?? c.canEdit;
+  const input = useRef<HTMLInputElement>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const upload = useMutation({
+    mutationFn: (file: File) => nexusApi.uploadConversationAvatar(c.id, file),
+    onSuccess: () => { toast.success(t("Group photo updated")); onChanged(); },
+    onError: (e) => toast.error(t("Couldn't upload the photo"), { description: e instanceof ApiError ? e.message : undefined }),
+  });
+  const remove = useMutation({
+    mutationFn: () => nexusApi.removeConversationAvatar(c.id),
+    onSuccess: () => { setConfirmRemove(false); toast.success(t("Group photo removed")); onChanged(); },
+    onError: () => { setConfirmRemove(false); toast.error(t("Couldn't remove the photo")); onChanged(); },
+  });
+  const pick = (file?: File | null) => {
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type) && file.type !== "") { toast.error(t("Couldn't upload the photo"), { description: t("PNG, JPG or WEBP, up to 5 MB") }); return; }
+    if (file.size > PHOTO_MAX) { toast.error(t("Couldn't upload the photo"), { description: t("PNG, JPG or WEBP, up to 5 MB") }); return; }
+    upload.mutate(file);
+  };
+  const busy = upload.isPending || remove.isPending;
+  const face = photo ? (
+    <AvatarFace name={title} seed={c.id} avatar={photo} size={88} />
+  ) : (
+    <span className="grid h-[88px] w-[88px] place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-border"><UsersIcon className="h-9 w-9" /></span>
+  );
+  if (!canEdit) return face;
+  return (
+    <div className="relative">
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={photo ? t("Change photo") : t("Add group photo")}
+            title={photo ? t("Change photo") : t("Add group photo")}
+            className="group/photo relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            {face}
+            <span className="absolute inset-0 grid place-items-center rounded-full bg-black/0 text-white transition-colors group-hover/photo:bg-black/35">
+              {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Camera className="h-6 w-6 opacity-0 transition-opacity group-hover/photo:opacity-100" />}
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 grid h-8 w-8 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm"><Camera className="h-4 w-4" /></span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center">
+          <DropdownMenuItem onSelect={() => input.current?.click()}>
+            <Camera className="h-4 w-4" /> {photo ? t("Change photo") : t("Add group photo")}
+          </DropdownMenuItem>
+          {photo && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setConfirmRemove(true)} className="text-destructive focus:text-destructive">
+                <Trash2 className="h-4 w-4" /> {t("Remove photo")}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={confirmRemove} onOpenChange={(o) => { if (!remove.isPending) setConfirmRemove(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Remove group photo?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("Everyone in the group will see the default icon again.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); remove.mutate(); }} disabled={remove.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Remove")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
 
 /** The group description, edited in place by any member (canEdit). */
 function Description({ info, onSaved }: { info: Info; onSaved: () => void }) {

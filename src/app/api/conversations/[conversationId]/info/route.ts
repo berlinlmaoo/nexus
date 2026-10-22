@@ -20,6 +20,7 @@ import { canDeleteGroup, isRoomAdmin, MESSAGE_KIND_SYSTEM, orderInfoMembers } fr
  *   isAdmin    MANAGER, BOD or ONE_ABOVE_ALL in the room's workspace — the people who may add and remove
  *              members (owner, 8 Oct 2026). A room without a workspace: nobody.
  *   canEdit    may change the name and the description: any member of a GROUP. Project rooms and DMs: no.
+ *   canEditAvatar / avatarUrl   the group photo (22 Oct 2026): same rule as canEdit; avatarUrl null = none.
  *   canDelete  may delete the group (DELETE /api/conversations/:id, 9 Oct 2026): canManageMembers, or
  *              being its only remaining member — who can no longer leave it (LAST_MEMBER). GROUP only.
  *   createdBy  the author of the group's "created the group" line; null for groups from before those
@@ -38,7 +39,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
     const convo = await prisma.conversation.findUnique({
       where: { id: conversationId },
       select: {
-        id: true, type: true, name: true, description: true, projectId: true, workspaceId: true, createdAt: true,
+        id: true, type: true, name: true, description: true, projectId: true, workspaceId: true, createdAt: true, avatarUrl: true,
         project: { select: { name: true } },
         members: { select: { userId: true, user: { select: { id: true, name: true, avatar: true, deactivatedAt: true } } } },
       },
@@ -86,6 +87,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
         type: convo.type,
         name: convo.type === "PROJECT" ? (convo.project?.name ?? convo.name) : convo.name,
         description: convo.description,
+        avatarUrl: convo.type === "GROUP" ? convo.avatarUrl ?? null : null,
         projectId: convo.projectId,
         createdAt: convo.createdAt,
         createdBy: created?.user ? { id: created.user.id, name: created.user.name } : null,
@@ -93,6 +95,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
         mutedUntil,
         canManageMembers,
         canEdit: convo.type === "GROUP" && !!access.member,
+        // The group photo follows the rename rule (22 Oct 2026); POST/DELETE /api/conversations/:id/avatar.
+        canEditAvatar: convo.type === "GROUP" && !!access.member,
         canDelete: canDeleteGroup({ kind: convo.type, canManageMembers, isMember: !!access.member, memberCount: members.length }),
       },
       members,

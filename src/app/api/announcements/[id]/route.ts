@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { orgRoleOf } from "@/lib/org"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { effectiveOrigin, effectiveSource } from "@/lib/announcement-origin"
 
 async function isBoD(userId: string): Promise<boolean> {
   // Company workspace only: every sign-up is One Above All of their own personal workspace.
@@ -24,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       where: { id },
       select: {
         id: true, title: true, body: true, tone: true, imageUrl: true, active: true, createdAt: true, targetUserIds: true, createdById: true,
-        kind: true, attachmentUrl: true, attachmentName: true,
+        kind: true, attachmentUrl: true, attachmentName: true, origin: true, source: true,
       },
     })
     if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -34,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
     const author = a.createdById ? await prisma.user.findUnique({ where: { id: a.createdById }, select: { name: true } }) : null
     const { targetUserIds: _t, createdById: _c, ...rest } = a
-    return NextResponse.json({ announcement: { ...rest, targeted: a.targetUserIds.length > 0, authorName: author?.name ?? null } })
+    return NextResponse.json({ announcement: { ...rest, origin: effectiveOrigin(a), source: effectiveSource(a), targeted: a.targetUserIds.length > 0, authorName: author?.name ?? null } })
   } catch (error) {
     console.error("announcement get error:", error)
     return NextResponse.json({ error: "Failed" }, { status: 500 })

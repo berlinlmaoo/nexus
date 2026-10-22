@@ -87,6 +87,7 @@ import { ID_GIDEON_PERF } from "@/lib/i18n/id-gideon-perf";
 import { ID_PRESENCE } from "@/lib/i18n/id-presence";
 import { ID_ATT_EVIDENCE } from "@/lib/i18n/id-att-evidence";
 import { ID_PIPELINE_V8 } from "@/lib/i18n/id-pipeline-v8";
+import { ID_OCT22 } from "@/lib/i18n/id-oct22";
 import { ID_UI_A } from "@/lib/i18n/id-ui-a";
 import { ID_UI_B } from "@/lib/i18n/id-ui-b";
 
@@ -118,6 +119,7 @@ Object.assign(ID, ID_PRESENCE);
 // Evidence on a board status change (20 Oct 2026).
 Object.assign(ID, ID_ATT_EVIDENCE);
 Object.assign(ID, ID_PIPELINE_V8);
+Object.assign(ID, ID_OCT22);
 Object.assign(ID, ID_UI_A);
 // UI round 19 Oct 2026, web part B (GIDEON Memory, meeting notes form, GIDEON header).
 Object.assign(ID, ID_UI_B);

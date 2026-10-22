@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     const convos = await prisma.conversation.findMany({
       where: { id: { in: memberships.map((m) => m.conversationId) } },
       select: {
-        id: true, type: true, name: true, projectId: true, workspaceId: true,
+        id: true, type: true, name: true, projectId: true, workspaceId: true, avatarUrl: true,
         project: { select: { name: true, workspaceId: true } },
         ...memberInclude,
       },
@@ -141,6 +141,8 @@ export async function GET(req: NextRequest) {
         // every client falls back to `name` when it finds no other member.
         name: c.type === "PROJECT" ? (c.project?.name ?? c.name) : c.name?.trim() ? c.name : former?.name ?? c.name,
         projectId: c.projectId,
+        // Group photo (22 Oct 2026); null for DMs and project rooms, and for a group without one.
+        avatarUrl: c.type === "GROUP" ? c.avatarUrl ?? null : null,
         members: c.members,
         memberCount: c.members.length,
         lastMessage: lastOf.get(c.id) ?? null,

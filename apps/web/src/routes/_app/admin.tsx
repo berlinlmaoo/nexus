@@ -16,7 +16,7 @@ import { OrgChart } from "@/components/OrgChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
-import { PageBody, PageTabs } from "@/components/PageLayout";
+import { PageBody, PageTabs, Segmented } from "@/components/PageLayout";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { LoadError, isForbidden } from "@/components/LoadError";
 import { friendlyError } from "@/lib/task-undo";
@@ -46,9 +46,11 @@ const ADMIN_TABS = ["users", "approval", "org", "extra-dayoff", "suspects", "aud
 type AdminTab = (typeof ADMIN_TABS)[number];
 export const Route = createFileRoute("/_app/admin")({
   // ?gideon=performance opens Control Room › GIDEON › Performance (the link in a GIDEON alert, 18 Oct 2026).
-  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab; gideon?: "performance" } => ({
+  // ?origin=system opens Announcements › System (the link on a posted GIDEON card, 22 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab; gideon?: "performance"; origin?: "system" } => ({
     tab: typeof s.tab === "string" && (ADMIN_TABS as readonly string[]).includes(s.tab) && s.tab !== "users" ? (s.tab as AdminTab) : undefined,
     gideon: s.gideon === "performance" ? "performance" : undefined,
+    origin: s.origin === "system" ? "system" : undefined,
   }),
   component: Admin,
 });
@@ -2139,7 +2141,13 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
 function AnnouncementsAdmin() {
   const qc = useQueryClient();
   const { t, tn, locale } = useLang();
-  const list = useQuery({ queryKey: ["nexus", "announcements"], queryFn: () => nexusApi.announcements(), retry: false });
+  // Manual (the composer's own posts) by default; System holds Absen Monitor warnings, GIDEON posts and
+  // scripted per-person nudges (owner, 22 Oct 2026). In the URL like the tab itself.
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const origin: "manual" | "system" = search.origin === "system" ? "system" : "manual";
+  const setOrigin = (o: "manual" | "system") => { void navigate({ search: (prev) => ({ ...prev, origin: o === "system" ? "system" : undefined }), replace: true }); };
+  const list = useQuery({ queryKey: ["nexus", "announcements", origin], queryFn: () => nexusApi.announcements(origin), retry: false, placeholderData: (prev) => prev });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [tone, setTone] = useState("info");
@@ -2168,13 +2176,17 @@ function AnnouncementsAdmin() {
       title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [], repeatDays, repeatAtTime,
       ...(spOn && attachment ? { kind: "sp" as const, attachmentUrl: attachment.url, attachmentName: attachment.name } : {}),
     }),
-    onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); invalidate(); toast.success(t("Posted")); },
+    onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); setOrigin("manual"); invalidate(); toast.success(t("Posted")); },
     onError: (e: unknown) => toast.error(t("Couldn't post"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   // A failed deactivate/delete used to look like nothing happened (QA 13 Oct 2026).
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate, onError: (e: unknown, v) => toastFailure(v.active ? t("Couldn't turn the announcement back on") : t("Couldn't deactivate the announcement"), e) });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: () => { invalidate(); toast.success(t("Announcement deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete the announcement"), e) });
-  const rows = list.data?.announcements ?? [];
+  // An older server ignores ?origin and sends everything without `origin`: filter here too.
+  const rows = (list.data?.announcements ?? []).filter((a) => (a.origin ?? (a.kind === "warning" ? "system" : "manual")) === origin);
+  const counts = list.data?.counts;
+  const sourceLabel = (s?: string) =>
+    s === "gideon" ? t("GIDEON") : s === "attendance_warning" ? t("Attendance warning") : s === "template" ? t("Automatic") : null;
 
   return (
     <div className="space-y-5">
@@ -2306,6 +2318,20 @@ function AnnouncementsAdmin() {
           </div>
 
           <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Segmented
+                label={t("Announcement list")}
+                value={origin}
+                onChange={setOrigin}
+                options={[
+                  { key: "manual", label: <>{t("Announcements")}{counts ? <span className="tabular-nums text-muted-foreground">{counts.manual}</span> : null}</> },
+                  { key: "system", label: <>{/* "System" in both languages (owner, 22 Oct 2026) */}System{counts ? <span className="tabular-nums text-muted-foreground">{counts.system}</span> : null}</> },
+                ]}
+              />
+              <span className="text-xs text-muted-foreground">
+                {origin === "manual" ? t("Posted from this page.") : t("Attendance warnings, app reminders and GIDEON posts.")}
+              </span>
+            </div>
             {list.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
             {rows.map((a: NexusAdminAnnouncement) => (
               <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
@@ -2313,6 +2339,7 @@ function AnnouncementsAdmin() {
                   <div className="flex flex-wrap items-center gap-2">
                     {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
                     {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">{t("Warning")}</span>}
+                    {origin === "system" && a.kind !== "warning" && sourceLabel(a.source) && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{sourceLabel(a.source)}</span>}
                     <span className="text-sm font-bold">{notificationTitle({ title: a.title })}</span>
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{a.active ? t("Active") : t("Inactive")}</span>
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
@@ -2336,7 +2363,9 @@ function AnnouncementsAdmin() {
                 </div>
               </div>
             ))}
-            {!list.isLoading && rows.length === 0 && <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} />}
+            {!list.isLoading && rows.length === 0 && (origin === "manual"
+              ? <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} message={t("Post one above to tell everyone, or a few people, something.")} />
+              : <EmptyState icon={Megaphone} tone="muted" compact title={t("Nothing from the system")} message={t("Attendance warnings, app reminders and GIDEON posts show up here.")} />)}
           </div>
         </>
       )}

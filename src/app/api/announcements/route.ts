@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 import { notifyAnnouncement } from "@/lib/notification-service"
+import { effectiveOrigin, effectiveSource, originWhere, parseOriginFilter } from "@/lib/announcement-origin"
 
 // BoD and above can post/manage announcements.
 async function isBoD(userId: string): Promise<boolean> {
@@ -13,16 +14,28 @@ async function isBoD(userId: string): Promise<boolean> {
   return role === "BOD" || role === "ONE_ABOVE_ALL"
 }
 
-export async function GET() {
+/**
+ * GET /api/announcements[?origin=manual|system|all]  (BoD / One Above All)
+ *
+ * `origin` (22 Oct 2026): manual = the Control Room composer's own posts, system = everything else (Absen
+ * Monitor warnings, GIDEON posts, scripted nudges; lib/announcement-origin.ts). Absent = all, as before, so
+ * released apps keep their list. Each row carries `origin` + `source`; `counts` covers both origins.
+ */
+export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!(await isBoD(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const announcements = await prisma.announcement.findMany({
+    const filter = parseOriginFilter(req.nextUrl.searchParams.get("origin"))
+    const [announcements, manualCount, systemCount] = await Promise.all([prisma.announcement.findMany({
+      where: originWhere(filter),
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { seenBy: true } } },
-    })
+    }),
+      prisma.announcement.count({ where: originWhere("manual") }),
+      prisma.announcement.count({ where: originWhere("system") }),
+    ])
     const targetIds = [...new Set(announcements.flatMap((a) => a.targetUserIds))]
     const targetUsers = targetIds.length
       ? await prisma.user.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
@@ -41,7 +54,10 @@ export async function GET() {
         lastRepeatedAt: a.lastRepeatedAt?.toISOString() ?? null,
         targetUserIds: a.targetUserIds, targetCount: a.targetUserIds.length,
         targets: a.targetUserIds.map((id) => ({ id, name: nameOf.get(id) ?? null })),
+        origin: effectiveOrigin(a),
+        source: effectiveSource(a),
       })),
+      counts: { manual: manualCount, system: systemCount },
     })
   } catch (error) {
     console.error("announcements list error:", error)
@@ -106,6 +122,9 @@ export async function POST(req: NextRequest) {
       data: {
         title: String(title).trim(), body: String(body).trim(), tone: t, active: true,
         createdById: session.user.id, targetUserIds: targets,
+        // The composer's own post. GIDEON posts through this same endpoint and re-marks its row afterwards
+        // (gideon-tools/announcement.ts).
+        origin: "manual", source: "composer",
         kind: k, attachmentUrl: url, attachmentName: attName,
         repeatUntil,
         repeatAtTime: repeatUntil ? timeRaw : null,
