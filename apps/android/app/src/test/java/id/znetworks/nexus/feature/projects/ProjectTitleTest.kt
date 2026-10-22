@@ -35,6 +35,17 @@ class ProjectTitleTest {
         }
     }
 
+    @Test fun twoLineNamesBalanceWithoutShrinkingOrLeavingAnAvoidableOrphan() {
+        // Greedy wrapping would put "Annual Operations Project" above the orphan "Planning".
+        val name = "Annual Operations Project Planning"
+        val title = ProjectTitleLayout.fit(name, 500f, measure)
+        assertTrue(title.fits)
+        assertEquals(19f, title.fontSize, 0f)
+        assertEquals(listOf("Annual Operations", "Project Planning"), title.lines)
+        assertEquals(name, title.lines.joinToString(" "))
+        assertTrue(title.lines.all { measure(it, title.fontSize) <= 500f })
+    }
+
     @Test fun extremePhraseLeavesOnlyTheSecondLineForEllipsis() {
         val name = "One two three four five six seven eight nine ten eleven twelve"
         val title = ProjectTitleLayout.fit(name, 150f, measure)

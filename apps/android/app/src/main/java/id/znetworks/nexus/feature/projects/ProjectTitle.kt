@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.theme.TextFont
+import kotlin.math.abs
 
 /** Project names share a two-line, word-only layout, including the Pipeline board switcher. */
 @Composable
@@ -81,6 +82,20 @@ internal object ProjectTitleLayout {
             }
         }
         lines += line
-        return lines
+        if (lines.size == 1) return lines
+        // The largest fitting font is already selected by the caller. Balance only the word breaks
+        // at this size; prefer two words on each line when that alternative fits, avoiding an orphan.
+        data class Split(val lines: List<String>, val at: Int, val firstWidth: Float, val secondWidth: Float)
+        val splits = (1 until words.size).mapNotNull { at ->
+            val first = words.take(at).joinToString(" ")
+            val second = words.drop(at).joinToString(" ")
+            val firstWidth = measure(first, size)
+            val secondWidth = measure(second, size)
+            if (firstWidth <= width && secondWidth <= width) Split(listOf(first, second), at, firstWidth, secondWidth) else null
+        }
+        val withoutOrphan = splits.filter { it.at >= 2 && words.size - it.at >= 2 }
+        return (withoutOrphan.ifEmpty { splits }).minWithOrNull(
+            compareBy<Split> { abs(it.firstWidth - it.secondWidth) }.thenByDescending { it.firstWidth }
+        )?.lines ?: lines
     }
 }
