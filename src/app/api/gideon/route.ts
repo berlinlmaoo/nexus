@@ -16,7 +16,7 @@ import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, t
 import { searchWorkspace } from '@/lib/workspace-search'
 import { creditNotice, decideTier, parseShimUsage, recordGideonUsage, type ShimUsage } from '@/lib/gideon-credits'
 import { getTierStatus, tierUnavailableText } from '@/lib/gideon-tier-status'
-import { fetchShim, shimFailureKind, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
+import { fetchShim, isShimOffline, shimFailureKind, SHIM_OFFLINE, SHIM_OFFLINE_TEXT, SHIM_RESTART, SHIM_RESTART_TEXT } from '@/lib/gideon-shim-retry'
 import { buildGideonPrompt, DEFAULT_HISTORY_MODE, HISTORY_MODES, type HistoryMode } from '@/lib/gideon-history'
 import { dropRunQuestion, MEMORY_RULES, memoryFeatureOn, memoryPromptLines, parkRunQuestion, suggestMemoryFromQuestion } from '@/lib/gideon-memory'
 
@@ -478,6 +478,13 @@ export async function POST(req: NextRequest) {
         failure = SHIM_RESTART
         await sendEvent({ type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART })
       }
+      // GIDEON offline (22 Oct 2026): the shim cannot be reached at all — refused, no route, a connect that times out,
+      // or a gateway with nothing behind it. Said plainly with a stable code (`shim_offline`) instead of
+      // "Gideon error (502)."; the sentence keeps the words released Android builds map to "can't be reached".
+      const shimOffline = async () => {
+        failure = SHIM_OFFLINE
+        await sendEvent({ type: 'error', content: SHIM_OFFLINE_TEXT[uiLang], code: SHIM_OFFLINE })
+      }
       const timeoutMs = tier === 'experimental' ? 440000 : 150000
       // Token-by-token when the shim offers it (GIDEON_STREAM_URL) and there is no document: the
       // streaming runner reads images but has no document reader.
@@ -490,6 +497,7 @@ export async function POST(req: NextRequest) {
         const res = shim.res
         if (shim.restarting) { await shimRestarted(); return }
         if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
+        if (!res.ok && (await isShimOffline(streamUrl, { status: res.status, headers: res.headers }).catch(() => false))) { await shimOffline(); return }
         if (!res.ok || !res.body) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` })
@@ -545,6 +553,7 @@ export async function POST(req: NextRequest) {
         const res = shim.res
         if (shim.restarting) { await shimRestarted(); return }
         if (tier === 'experimental' && res.status === 503) { await model0Refused(); return }
+        if (!res.ok && (await isShimOffline(url, { status: res.status, headers: res.headers }).catch(() => false))) { await shimOffline(); return }
         if (!res.ok) {
           failure = `shim ${res.status}`
           await sendEvent({ type: 'error', content: res.status === 415 ? 'Dokumen belum bisa dibaca GIDEON di server ini.' : `Gideon error (${res.status}).` })
@@ -669,9 +678,13 @@ export async function POST(req: NextRequest) {
       console.error('GIDEON API error:', error)
       // A connection the shim broke by restarting (deploy, config change) is `shim_restart`, not a model error.
       failure = failure || (shimUrlUsed ? await shimFailureKind(error, shimUrlUsed, shimSince).catch(() => (error instanceof Error ? error.message : 'error')) : (error instanceof Error ? error.message : 'error'))
+      // Not a restart: is the shim there at all? (A connect failure says so by itself; anything else asks /health.)
+      if (failure !== SHIM_RESTART && shimUrlUsed && (await isShimOffline(shimUrlUsed, { error }).catch(() => false))) failure = SHIM_OFFLINE
       await sendEvent(failure === SHIM_RESTART
         ? { type: 'error', content: SHIM_RESTART_TEXT[uiLang], code: SHIM_RESTART }
-        : { type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
+        : failure === SHIM_OFFLINE
+          ? { type: 'error', content: SHIM_OFFLINE_TEXT[uiLang], code: SHIM_OFFLINE }
+          : { type: 'error', content: uiLang === 'en' ? "GIDEON can't be reached right now. Try again in a moment." : 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
       unsubscribe()
       dropRunQuestion(runId)

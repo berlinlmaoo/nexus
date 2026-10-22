@@ -1,6 +1,7 @@
 import path from "path"
 import { finishRun, startRun } from "@/lib/gideon-runs"
-import { fetchShim, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
+import { fetchShim, isShimConnectFailure, isShimOffline, shimFailureKind, SHIM_RESTART } from "@/lib/gideon-shim-retry"
+import { reviewErrorText, type ReviewFailureKind } from "@/lib/gideon-ticket-retry"
 import { readFile } from "fs/promises"
 import sharp from "sharp"
 import prisma from "@/lib/prisma"
@@ -393,6 +394,33 @@ function buildPrompt(input: {
 /** How long a review may hold its ticket's claim: the model call's own timeout (280 s) plus margin. */
 export const REVIEW_CLAIM_MS = 6 * 60_000
 
+/** Does this server send tickets to GIDEON at all? (Not on dev: NEXUS_GIDEON_NO_ATTENDANCE=1.) */
+export function ticketReviewsEnabled(): boolean {
+  return Boolean(process.env.GIDEON_CHAT_URL) && process.env.NEXUS_GIDEON_NO_ATTENDANCE !== "1"
+}
+
+/**
+ * How a review ended. `unreachable` / `failed` leave the ticket QUEUED: the attempt is recorded on the ticket
+ * (recordTicketReviewFailure) and /api/cron/gideon-watch retries it (lib/gideon-ticket-retry.ts). Nothing here ever
+ * marks a ticket answered or given up on without an answer.
+ */
+export type ReviewOutcome = "answered" | "skipped" | "in_progress" | "disabled" | ReviewFailureKind
+
+/**
+ * One failed attempt on a ticket: count it, remember when this run of failures began and what the last one was.
+ * Raw SQL so it does not bump updatedAt (the inbox sorts by it; a failed retry is not activity on the ticket).
+ */
+export async function recordTicketReviewFailure(complaintId: string, kind: ReviewFailureKind, detail?: string | null): Promise<void> {
+  const at = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Complaint"
+       SET "gideonReviewAttempts" = "gideonReviewAttempts" + 1,
+           "gideonReviewFailedAt" = ${at}::timestamp(3),
+           "gideonReviewFailingSince" = COALESCE("gideonReviewFailingSince", ${at}::timestamp(3)),
+           "gideonReviewError" = ${reviewErrorText(kind, detail)}
+     WHERE id = ${complaintId}`.catch((error) => console.error("gideon-ticket: could not record failed review", { complaintId, error }))
+}
+
 /**
  * Fire-and-forget from the create route. Never throws into the caller: a ticket that was filed
  * successfully must not report failure because an assistant could not read the photo.
@@ -406,13 +434,13 @@ export const REVIEW_CLAIM_MS = 6 * 60_000
  * answers written by the old, wrong prompt. Only a human-triggered sweep passes force; nothing on the
  * automatic paths (ticket created, new message) does, and nothing should.
  */
-export async function reviewSupportTicket(complaintId: string, opts?: { force?: boolean }): Promise<void> {
+export async function reviewSupportTicket(complaintId: string, opts?: { force?: boolean }): Promise<ReviewOutcome> {
   const url = process.env.GIDEON_CHAT_URL
   const secret = process.env.ORACLE_LLM_SECRET || ""
-  if (!url) return
+  if (!url) return "disabled"
   // Tickets are about attendance. A server where GIDEON must never see attendance (the dev server,
   // NEXUS_GIDEON_NO_ATTENDANCE=1) does not send them at all.
-  if (process.env.NEXUS_GIDEON_NO_ATTENDANCE === "1") return
+  if (process.env.NEXUS_GIDEON_NO_ATTENDANCE === "1") return "disabled"
 
   // One review per ticket at a time (race audit 16 Oct 2026, M21). The self-answer guards below read the
   // thread and the model then thinks for up to 280 s; two triggers that both read the thread before either
@@ -425,8 +453,12 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     UPDATE "Complaint" SET "gideonReviewingAt" = ${claimedAt.toISOString()}::timestamp(3)
      WHERE id = ${complaintId}
        AND ("gideonReviewingAt" IS NULL OR "gideonReviewingAt" < ${new Date(claimedAt.getTime() - REVIEW_CLAIM_MS).toISOString()}::timestamp(3))`
-  if (claimed !== 1) return
+  if (claimed !== 1) return "in_progress"
 
+  // How this review ended (see ReviewOutcome). Stays "skipped" for the guards below; set to a failure kind the
+  // moment the shim call goes wrong, so the finally block can record the attempt and keep the ticket queued.
+  let outcome: ReviewOutcome = "skipped"
+  let failureDetail: string | null = null
   let runId: string | null = null
   let runOk = false
   let runError: string | null = null
@@ -445,7 +477,7 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
         },
       },
     })
-    if (!complaint || !isGideonTicketCategory(complaint.category)) return
+    if (!complaint || !isGideonTicketCategory(complaint.category)) return outcome
     const category: GideonTicketCategory = complaint.category
 
     const thread = complaint.messages
@@ -454,9 +486,9 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     // a loop where GIDEON's own message would prompt another, the second stops a burst where several
     // replies land while it is still thinking about the first.
     if (!opts?.force) {
-      if (last && (last.author as { email?: string } | null)?.email === GIDEON_EMAIL) return
+      if (last && (last.author as { email?: string } | null)?.email === GIDEON_EMAIL) return outcome
       const lastGideon = [...thread].reverse().find((m) => (m.author as { email?: string } | null)?.email === GIDEON_EMAIL)
-      if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return
+      if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return outcome
     }
 
     // Logged like every other GIDEON run (Insights), so a review that fails is visible there and not
@@ -508,18 +540,26 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       signal: AbortSignal.timeout(280000),
     }, { stream: false }).catch(async (error) => {
       runError = await shimFailureKind(error, url, claimedAt.getTime()).catch(() => null)
+      // Never reached the shim, or it is not there now: queued for the watch cron, which retries once /health
+      // answers. Anything else (a timeout while it was thinking, a broken answer) is a failed attempt, backed off.
+      const offline = runError === SHIM_RESTART || isShimConnectFailure(error) || (await isShimOffline(url, { error }).catch(() => false))
+      outcome = offline ? "unreachable" : "failed"
+      failureDetail = runError
       throw error
     })
     const res = shim.res
     if (shim.restarting) {
       console.error("gideon-ticket: shim restarting", { complaintId })
       runError = SHIM_RESTART
-      return
+      outcome = "unreachable"
+      return outcome
     }
     if (!res.ok) {
       console.error("gideon-ticket: shim refused", { complaintId, status: res.status })
       runError = `shim ${res.status}`
-      return
+      outcome = (await isShimOffline(url, { status: res.status, headers: res.headers }).catch(() => false)) ? "unreachable" : "failed"
+      failureDetail = runError
+      return outcome
     }
     const shimData = (await res.json()) as { reply?: string; usage?: unknown }
     runUsage = shimData.usage
@@ -531,7 +571,9 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       // di-grep: "gideon-ticket: balasan kosong".
       console.error("gideon-ticket: balasan kosong dari shim — agen Hermes kemungkinan gagal (cek journal gideon-shim di host agen)", { complaintId, category })
       runError = "empty reply"
-      return
+      outcome = "failed"
+      failureDetail = runError
+      return outcome
     }
     runOk = true
 
@@ -547,7 +589,11 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
           body: scrubGideonReply(reply).slice(0, BODY_MAX),
         },
       })
-      await tx.complaint.update({ where: { id: complaintId }, data: { lastMessageAt: new Date() } })
+      // Answered: the ticket leaves the retry queue and its failure count starts over.
+      await tx.complaint.update({
+        where: { id: complaintId },
+        data: { lastMessageAt: new Date(), gideonReviewAttempts: 0, gideonReviewFailedAt: null, gideonReviewFailingSince: null, gideonReviewError: null },
+      })
       // Say on the ticket that it has been answered, WITHOUT pretending a director picked it up.
       // AWAITING_DECISION keeps the ticket in the BoD inbox (COMPLAINT_INBOX_STATUSES) and only adds
       // "there is something here to decide". IN_REVIEW would take it out of the queue and claim a
@@ -569,6 +615,7 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     // The reporter is told on their phone. The answer lands up to a few minutes after they filed,
     // usually after they have put the phone down — without a push the thread just quietly grows.
     // GIDEON's answer shows in every open copy of the thread and moves the card (19 Oct 2026).
+    outcome = "answered"
     void emitComplaintChanged(complaintId, "message")
     const owner = await prisma.complaint.findUnique({ where: { id: complaintId }, select: { reporterId: true, workspaceId: true } })
     if (owner) {
@@ -578,11 +625,18 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     console.error("gideon-ticket: review failed", { complaintId, error })
     // Already classified when the shim call itself broke (`shim_restart` for a restart).
     runError = runError ?? (error instanceof Error ? error.message : "review failed")
+    // A throw after the answer was posted (the push, say) does not un-answer the ticket.
+    if (outcome !== "answered" && outcome !== "unreachable") {
+      outcome = "failed"
+      failureDetail = failureDetail ?? runError
+    }
   } finally {
     if (runId) await finishRun(runId, { ok: runOk, error: runError, usage: runUsage })
+    if (outcome === "unreachable" || outcome === "failed") await recordTicketReviewFailure(complaintId, outcome, failureDetail)
     // Let go of the claim — only our own (a stale one taken over by another process is theirs now).
     await prisma.$executeRaw`
       UPDATE "Complaint" SET "gideonReviewingAt" = NULL
        WHERE id = ${complaintId} AND "gideonReviewingAt" = ${claimedAt.toISOString()}::timestamp(3)`.catch(() => {})
   }
+  return outcome
 }

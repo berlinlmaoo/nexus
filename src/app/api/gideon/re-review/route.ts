@@ -82,8 +82,11 @@ export async function POST(req: NextRequest) {
       const failed: { id: string; error: string }[] = []
       for (const t of eligible) {
         try {
-          await reviewSupportTicket(t.id, { force: true })
-          done.push(t.id)
+          // The outcome, not just "did not throw" (22 Oct 2026): a sweep run while GIDEON is offline used to report
+          // every ticket as done. A failed one stays queued for /api/cron/gideon-watch.
+          const outcome = await reviewSupportTicket(t.id, { force: true })
+          if (outcome === "answered") done.push(t.id)
+          else failed.push({ id: t.id, error: outcome })
         } catch (err) {
           failed.push({ id: t.id, error: err instanceof Error ? err.message : String(err) })
         }
