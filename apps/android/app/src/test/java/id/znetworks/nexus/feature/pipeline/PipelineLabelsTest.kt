@@ -35,7 +35,7 @@ class PipelineLabelsTest {
             assertTrue(value, lines.flatMap { it.split(' ') }.all { it in value.split(' ') })
         }
         // The three 48 dp controls in a narrow lane leave too little space for the full ID chip.
-        assertFalse(WordBoundaryLayout.fits("Belum dikerjakan", 284f - 16f - 8f - 144f - 29f - 20f, 2, measure))
-        assertTrue(WordBoundaryLayout.fits("Belum dikerjakan", 284f - 16f - 8f - 29f - 20f, 2, measure))
+        assertFalse(WordBoundaryLayout.fits("Belum dikerjakan", 284f - 16f - 8f - 144f - 29f - 20f - 8f, 2, measure))
+        assertTrue(WordBoundaryLayout.fits("Belum dikerjakan", 284f - 16f - 8f - 29f - 20f - 8f, 2, measure))
     }
 }
