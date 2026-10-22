@@ -461,7 +461,8 @@ struct ConvoRow: View {
         let typingHere = ChatTyping.shared.isTyping(in: convo.id)
         HStack(spacing: 12) {
             if convo.isGroupish {
-                ChatRoomGlyph(projectId: convo.projectId, projectIcon: projectIcon)
+                ChatRoomGlyph(projectId: convo.projectId, projectIcon: projectIcon,
+                              conversationId: convo.type == "GROUP" ? convo.id : nil, avatarUrl: convo.avatarUrl)
             } else {
                 AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40, userId: convo.type == "DM" ? convo.members?.first { ($0.userId ?? $0.user?.id) != meId }.flatMap { $0.userId ?? $0.user?.id } : nil, name: convo.title(meId: meId))
             }
@@ -712,7 +713,7 @@ struct ChatThreadView: View {
             // The title opens the chat's info, as on WhatsApp.
             Button { if !roomDeleted { showInfo = true } } label: {
                 HStack(spacing: 10) {
-                if isRoom { ChatRoomGlyph(projectId: projectId, size: 32) }
+                if isRoom { ChatRoomGlyph(projectId: projectId, size: 32, conversationId: conversationId) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(shownTitle ?? title)
                         .font(NXFont.display(17, .bold))
@@ -782,7 +783,7 @@ struct ChatThreadView: View {
     private var titleButton: some View {
         Button { if !roomDeleted { showInfo = true } } label: {
             HStack(spacing: 8) {
-                if isRoom { ChatRoomGlyph(projectId: projectId, size: 28) }
+                if isRoom { ChatRoomGlyph(projectId: projectId, size: 28, conversationId: conversationId) }
                 VStack(spacing: 0) {
                     Text(shownTitle ?? title)
                         .font(NXFont.text(15, .semibold))

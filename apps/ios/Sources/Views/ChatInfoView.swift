@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -51,12 +52,14 @@ private enum ChatInfoConfirm: Identifiable {
     case remove(ChatInfoMember)
     case exit
     case delete
+    case removePhoto
 
     var id: String {
         switch self {
         case .remove(let m): return "remove-" + m.userId
         case .exit: return "exit"
         case .delete: return "delete"
+        case .removePhoto: return "remove-photo"
         }
     }
 }
@@ -106,6 +109,11 @@ struct ChatInfoView: View {
     @State private var route: ChatInfoRoute?
     @State private var memberActions: ChatInfoMember?
     @State private var confirm: ChatInfoConfirm?
+    /// The group photo: Change / Remove (a centred alert), the library, and the upload in flight.
+    @State private var photoMenu = false
+    @State private var showPhotoPicker = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var photoBusy = false
 
     private var meId: String? { auth.session?.userId }
     private var conversation: ChatInfo? { info?.conversation }
@@ -128,6 +136,13 @@ struct ChatInfoView: View {
     private var canManage: Bool { (conversation?.canManageMembers ?? context.canManageMembers) == true }
     /// Today any member of a GROUP may rename it; the server says so per room once it can.
     private var canEdit: Bool { isGroup && (conversation?.canEdit ?? true) }
+    /// Whoever may rename the group may change its photo — any member (owner, 22 Oct 2026). The server
+    /// says so per room; a server without `canEditAvatar` has no group photos, so nothing is offered.
+    private var canEditPhoto: Bool { isGroup && !legacy && conversation?.canEditAvatar == true }
+    /// The group's photo as the store (fed by this screen, the list and realtime) last heard it.
+    private var groupPhoto: String? {
+        ChatStore.shared.photo(conversationId: context.conversationId, fallback: conversation?.avatarUrl)
+    }
     /// The server says so per room (Manager and above, or the only member left); nil = no such route.
     private var canDelete: Bool { isGroup && !legacy && conversation?.canDelete == true }
     /// The viewer is the only one left: a group can't be left by its last member, only deleted.
@@ -293,6 +308,9 @@ struct ChatInfoView: View {
             Button(T("Exit group"), role: .destructive) { Task { await leaveGroup() } }
         case .delete:
             Button(T("Delete group"), role: .destructive) { Task { await deleteGroup() } }
+        case .removePhoto:
+            // Not T("Remove"): in Indonesian that is "Keluarkan", taking a member out.
+            Button(T("Remove photo"), role: .destructive) { Task { await removePhoto() } }
         }
         Button(T("Cancel"), role: .cancel) {}
     }
@@ -305,6 +323,8 @@ struct ChatInfoView: View {
             return Text(T("You stop getting this group's messages. A manager can add you back."))
         case .delete:
             return Text(T("Its messages and members go with it. It can be restored from Control Room → Audit."))
+        case .removePhoto:
+            return Text(T("Everyone in the group will see the default icon again."))
         }
     }
 
@@ -313,6 +333,7 @@ struct ChatInfoView: View {
         case .remove(let m): return String(format: T("Remove %@ from %@?"), m.displayName, groupName)
         case .exit: return String(format: T("Exit “%@”?"), groupName)
         case .delete: return String(format: T("Delete “%@”?"), groupName)
+        case .removePhoto: return T("Remove group photo?")
         case nil: return ""
         }
     }
@@ -361,10 +382,58 @@ struct ChatInfoView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("View profile"))
+        } else if canEditPhoto {
+            // No photo yet: straight to the library. With one: Change or Remove, in a centred alert.
+            Button { if groupPhoto == nil { showPhotoPicker = true } else { photoMenu = true } } label: {
+                groupGlyph
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(NX.violet, in: Circle())
+                            .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
+                            .accessibilityHidden(true)
+                    }
+                    .overlay {
+                        if photoBusy {
+                            ZStack {
+                                Circle().fill(NX.background.opacity(0.6))
+                                ProgressView()
+                            }
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(photoBusy)
+            .accessibilityLabel(groupPhoto == nil ? T("Add group photo") : T("Change group photo"))
+            .accessibilityIdentifier("chat.info.photo")
+            .alert(T("Group photo"), isPresented: $photoMenu) {
+                // The library, or the Remove confirmation, opens once this alert has finished closing.
+                Button(T("Change photo")) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotoPicker = true }
+                }
+                Button(T("Remove photo"), role: .destructive) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { confirm = .removePhoto }
+                }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: {
+                Text(T("PNG, JPG or WEBP, up to 5 MB"))
+            }
+            .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto, matching: .images, photoLibrary: .shared())
+            .onChange(of: pickedPhoto) { _, item in
+                guard let item else { return }
+                Task { await uploadPhoto(item) }
+            }
         } else {
-            // A project room shows its project's mark (photo or grey page), a group the people glyph.
-            ChatRoomGlyph(projectId: isProject ? (conversation?.projectId ?? context.projectId) : nil, size: 88)
+            groupGlyph
         }
+    }
+
+    /// A project room shows its project's mark (photo or grey page), a group its photo or the people glyph.
+    private var groupGlyph: some View {
+        ChatRoomGlyph(projectId: isProject ? (conversation?.projectId ?? context.projectId) : nil, size: 88,
+                      conversationId: isGroup ? context.conversationId : nil, avatarUrl: conversation?.avatarUrl)
     }
 
     private var subtitle: String {
@@ -837,6 +906,57 @@ struct ChatInfoView: View {
         if let newName { onRenamed(newName) }
         notice = nil
         await changed()
+    }
+
+    /// Same handling as the profile and project photos: the library hands back HEIC more often than
+    /// not, which the server refuses, so it goes up as JPEG with the long edge capped. The server
+    /// stores it on the group and tells every member (realtime); this screen and the store follow at once.
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        photoBusy = true
+        show(nil, isError: true)
+        defer { photoBusy = false; pickedPhoto = nil }
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+            show(T("Couldn't read that photo."), isError: true)
+            return
+        }
+        let maxEdge: CGFloat = 1024
+        let scale = min(1, maxEdge / max(image.size.width, image.size.height))
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: target).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else {
+            show(T("Couldn't read that photo."), isError: true)
+            return
+        }
+        do {
+            let url = try await APIClient.shared.uploadConversationPhoto(context.conversationId, fileName: "group.jpg",
+                                                                        mime: "image/jpeg", data: jpeg)
+            store.setPhoto(context.conversationId, url: url)
+            // No system line in the thread for a photo: this screen says so itself.
+            show(T("Group photo updated"), isError: false)
+            await changed()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch let failure {
+            show((failure as? LocalizedError)?.errorDescription ?? T("Couldn't upload the photo"), isError: true)
+        }
+    }
+
+    private func removePhoto() async {
+        photoBusy = true
+        show(nil, isError: true)
+        defer { photoBusy = false }
+        do {
+            try await APIClient.shared.removeConversationPhoto(context.conversationId)
+            store.setPhoto(context.conversationId, url: nil)
+            show(T("Group photo removed"), isError: false)
+            await changed()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch let failure {
+            show((failure as? LocalizedError)?.errorDescription ?? T("Couldn't remove the photo"), isError: true)
+        }
     }
 
     private func message(_ m: ChatInfoMember) async {

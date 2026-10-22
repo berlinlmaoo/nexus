@@ -34,6 +34,10 @@ final class ChatStore {
     /// nil until known. False once the server answered 404 to a mute: the old server has no such
     /// route, and an option that can only fail is better not drawn.
     private(set) var muteSupported: Bool?
+    /// conversationId → the group's photo as the server last said it, "" for a group known to have
+    /// none. The chat list, the thread's header and Group info all draw from this, so a photo changed
+    /// in one of them (or by someone else, over realtime) shows in all three at once.
+    private(set) var photoById: [String: String] = [:]
 
     @ObservationIgnored private var unreadById: [String: Int] = [:]
     /// nil until tried; false once /api/conversations/unread answered 404 (old server).
@@ -89,6 +93,7 @@ final class ChatStore {
         for c in list {
             unread[c.id] = c.unreadCount ?? 0
             muted[c.id] = c.mutedUntil ?? ""
+            if c.type == "GROUP" { photoById[c.id] = c.avatarUrl ?? "" }
         }
         unreadById = unread
         mutedUntilById = muted
@@ -126,6 +131,18 @@ final class ChatStore {
         mutedUntilById[conversationId] = raw ?? ""
         muteSupported = true
         if unreadEndpoint != true { totalUnread = max(0, localTotal()) }
+    }
+
+    /// The group's photo was just changed or removed (nil), here or over realtime.
+    func setPhoto(_ conversationId: String, url: String?) {
+        let value = url ?? ""
+        if photoById[conversationId] != value { photoById[conversationId] = value }
+    }
+
+    /// The group's photo: what this store last heard, else what the caller's payload carried.
+    func photo(conversationId: String?, fallback: String? = nil) -> String? {
+        guard let conversationId, let known = photoById[conversationId] else { return fallback }
+        return known.isEmpty ? nil : known
     }
 
     /// The server answered 404 to a mute.
