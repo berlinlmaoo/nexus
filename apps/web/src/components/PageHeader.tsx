@@ -19,7 +19,12 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
       if (!base) return;
       const min = Math.floor(base * 0.75);
       // Height only: an inline title control (the Pipeline board switcher) pokes a few px out sideways by design.
-      const over = () => el.scrollHeight > el.clientHeight + 1;
+      // A title that is a control (the Pipeline board switcher, an inline button) is not cut by line-clamp, so
+      // more than two lines of it counts as not fitting too.
+      const over = () => {
+        const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+        return el.scrollHeight > el.clientHeight + 1 || (lh > 0 && el.scrollHeight > lh * 2 + 2);
+      };
       for (let size = base; over() && size > min; ) {
         size -= 1;
         el.style.fontSize = `${size}px`;
