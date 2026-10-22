@@ -218,6 +218,8 @@ export function extraStepLabel(tool: string, a: string, t: LangApi["t"]): string
     case "decide_attendance_request": return a ? t("Preparing a decision: {name}", { name: a }) : t("Preparing a decision");
     case "bulk_update_tasks": return t("Preparing changes to several tasks");
     case "add_subtasks": return a ? t("Adding subtasks to {name}", { name: a }) : t("Adding subtasks");
+    case "get_deal": return a ? t("Reading the deal {name}", { name: a }) : t("Reading a deal");
+    case "all_pipelines": return a ? t("Reading All Pipelines: {name}", { name: a }) : t("Reading All Pipelines");
     case "move_deal_stage": return a ? t("Moving the deal {name}", { name: a }) : t("Moving a deal");
     case "add_payment_term": return a ? t("Adding a payment term to {name}", { name: a }) : t("Adding a payment term");
     case "log_outlet_sales": return t("Entering outlet sales");

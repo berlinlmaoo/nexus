@@ -86,7 +86,7 @@ _BRIDGE = {"tool_search", "tool_describe", "tool_call"}
 # A question about something only a DEFERRED tool can see (Pipeline, Legal, Room Booking) answered with
 # "not found" by a run that never opened the catalog is a miss too: the workspace search cannot see deals,
 # legal documents or bookings, so "not found" there means "did not look" (18 Oct 2026, Aphrodite on a deal).
-_DEFERRED_DOMAIN = re.compile(r"\b(deal|deals|pipeline|legal|kontrak|contract|nda|pks|spk|mou|ruang|ruangan|room|booking|book|meeting room)\b", re.I)
+_DEFERRED_DOMAIN = re.compile(r"\b(deal|deals|pipeline|pipelines|cashback|barter|legal|kontrak|contract|nda|pks|spk|mou|ruang|ruangan|room|booking|book|meeting room)\b", re.I)
 _NOT_FOUND = re.compile(r"(belum|tidak|nggak|gak|ga) (bisa |dapat )?(memastikan|menemukan|ketemu|ditemukan|teridentifikasi|ada data)|not find|couldn't find|could not find|can't confirm|no (results|match)", re.I)
 
 
@@ -235,7 +235,9 @@ _ANNOUNCE_NUDGE = (
 # nine search_workspace calls, never nexus_search_legal_documents). Deals, legal documents and bookings live ONLY
 # behind their own tool, so a "not found" without that tool is a miss.
 _DOMAIN_TOOLS = (
-    (re.compile(r"\b(deal|deals|pipeline)\b", re.I), ("nexus_search_deals",)),
+    # All Pipelines (v8, 22 Oct 2026): the combined view; for a non-BoD the tool itself answers the refusal.
+    (re.compile(r"\b(all pipelines|semua pipeline)\b", re.I), ("nexus_all_pipelines",)),
+    (re.compile(r"\b(deal|deals|pipeline|pipelines|cashback|barter)\b", re.I), ("nexus_search_deals", "nexus_get_deal")),
     (re.compile(r"(?<!project )(?<!proyek )\b(legal|kontrak|contract|nda|pks|spk|mou)\b", re.I), ("nexus_search_legal_documents",)),
     (re.compile(r"\b(ruang|ruangan|room|booking|book|meeting room)\b", re.I), ("nexus_list_room_bookings", "nexus_book_room")),
 )

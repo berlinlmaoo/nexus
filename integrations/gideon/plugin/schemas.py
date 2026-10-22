@@ -343,12 +343,17 @@ SCHEMAS = {
         },
     ),
     "nexus_search_deals": object_schema(
-        "Search the Pipeline (sales deals) the person can see: deal name, brand, code, stage, BD and PM (the deal's "
-        "people in charge / PIC), contract and net value in Rupiah, probability, contract / payment / deliverable status, "
-        "next action and blocker. Use it for any question about a deal, a client brand, a stage or who handles a deal.",
+        "Search the Pipeline (sales deals) on the boards the person can open: deal name, brand, code, board (company), stage, "
+        "BD and PM (the deal's people in charge / PIC), contract and net value in Rupiah, probability, contract / payment / "
+        "deliverable status, next action, blocker, event year, and the totals of cashback, barter and budget (with how many "
+        "budget categories are over). Use it for any question about a deal, a client brand, a stage, a year or who handles a "
+        "deal. For ONE deal's cashback recipients, project contacts, budget per category (spent / remaining), real cost "
+        "lines, barter form or documents, call nexus_get_deal next.",
         {
             "query": {"type": "string", "description": "Deal name, brand, code, or a BD / PM name."},
             "stage": {"type": "string", "description": "A stage, e.g. Incoming, Proposal / Quotation, Negotiation, Closing, Won – In Execution, Closed, Lost / Cancelled."},
+            "board": {"type": "string", "description": "Part of a Pipeline board's name (each company has its own board, e.g. Suwara, Intoo)."},
+            "year": {"type": "integer", "description": "Event year (year of the deal's main date), e.g. 2026. Deals without a main date are left out."},
             "limit": LIMIT,
             "offset": OFFSET,
         },
