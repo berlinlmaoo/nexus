@@ -194,7 +194,8 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
         when (conv.type) {
             // The other person's photo, else the web's two-letter initials of the title ("BZ", "DM"), never "?".
             "DM" -> Avatar(conv.title(meId, dmFallback), conv.other(meId)?.avatar, 44.dp, initials = conv.initials(meId, dmFallback), userId = conv.other(meId)?.id)
-            // A project room shows its project's mark (photo or the page icon), like iOS; a group keeps the group icon.
+            "GROUP" -> ChatGroupAvatar(conv.name, conv.avatarUrl, 44.dp, conv.id)
+            // A project room shows its project's mark (photo or the page icon), like iOS.
             "PROJECT" -> {
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
                     id.znetworks.nexus.feature.projects.ProjectMark(null, 30.dp, projectId = conv.projectId)

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import okhttp3.OkHttpClient
@@ -60,6 +61,9 @@ data class RealtimeEvent(
     val raw: String? = null,
     val updatedAt: String? = null,
     val userIds: List<String> = emptyList(),
+    /** conversation-updated change=avatar: an explicit null removes the photo. */
+    val avatarUrl: String? = null,
+    val avatarChanged: Boolean = false,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -121,7 +125,8 @@ object RealtimeEvents {
             WORKSPACE_CHANGED, AUDIT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), folderId = o.str("folderId"),
                 icon = o.str("icon"), iconChanged = o.containsKey("icon"))
             // { conversationId, lastMessageAt, reason? } / the message itself
-            CONVERSATION_UPDATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"))
+            CONVERSATION_UPDATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"),
+                avatarUrl = o.str("avatarUrl"), avatarChanged = o.str("change") == "avatar" && (o["avatarUrl"] == JsonNull || o.str("avatarUrl") != null))
             // The message itself: its sender ends their "typing".
             MESSAGE_CREATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId") ?: (o["user"] as? JsonObject)?.str("id"))
             TYPING -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId"), personName = o.str("name"), avatar = o.str("avatar"),

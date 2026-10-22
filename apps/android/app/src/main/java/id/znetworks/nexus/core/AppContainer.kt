@@ -135,6 +135,7 @@ class AppContainer(private val context: Context) {
     private var attendanceLiveRefresh: kotlinx.coroutines.Job? = null
 
     init {
+        id.znetworks.nexus.feature.chat.ChatAvatars.useCache(responseCache)
         appScope.launch { realtime.state.collect { if (it != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typing.clear() } }
         appScope.launch { while (true) { kotlinx.coroutines.delay(1_000); if (!typing.isEmpty()) typing.expire() } }
         appScope.launch {
@@ -159,7 +160,10 @@ class AppContainer(private val context: Context) {
                     "presence-changed" -> presenceStatuses.receive(e.raw)
                     "gideon-tiers" -> gideonTiers.receive(e.raw)
                     id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED,
-                    id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> { chatEvents.tryEmit(e.conversationId); badges.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> {
+                        if (e.avatarChanged && e.conversationId != null) id.znetworks.nexus.feature.chat.ChatAvatars.changed(e.conversationId, e.avatarUrl)
+                        chatEvents.tryEmit(e.conversationId); badges.refresh()
+                    }
                     id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION -> badges.refresh()
                     id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh(); gideonTiers.refresh(); presenceStatuses.refresh(); refreshCalendarWidgets(force = true) }
                 }
@@ -294,6 +298,7 @@ class AppContainer(private val context: Context) {
                 offline.reset()
                 if (deliberate) shortcuts.clearAll()
                 id.znetworks.nexus.ui.components.ImageMemory.clear()
+                id.znetworks.nexus.feature.chat.ChatAvatars.clear()
                 // Location stops with the session; unsent points go with it.
                 workTrail.stopForLogout()
                 // The widget must not keep this person's hours on a phone handed to somebody else.

@@ -16,7 +16,7 @@ class ResponseCache(private val dir: File, private val userId: () -> String?) {
         return File(File(dir, uid.replace(Regex("[^A-Za-z0-9_-]"), "_")), "$safe.json")
     }
 
-    fun save(key: String, body: String) {
+    @Synchronized fun save(key: String, body: String, savedAtMillis: Long? = null) {
         // Entries over 8 MB are not stored, as on iOS.
         if (body.length > 8 * 1024 * 1024) return
         val f = file(key) ?: return
@@ -25,15 +25,23 @@ class ResponseCache(private val dir: File, private val userId: () -> String?) {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(body)
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            savedAtMillis?.let { f.setLastModified(it) }
         }
     }
 
-    fun load(key: String): Hit? {
+    @Synchronized fun load(key: String): Hit? {
         val f = file(key)?.takeIf { it.exists() } ?: return null
         return runCatching { Hit(f.readText(), f.lastModified()) }.getOrNull()
     }
 
-    fun clearAll() {
+    /** Atomically amend one field after a realtime event without changing the copy's original age. */
+    @Synchronized fun update(key: String, transform: (String) -> String?) {
+        val hit = load(key) ?: return
+        val body = runCatching { transform(hit.body) }.getOrNull() ?: return
+        save(key, body, hit.savedAtMillis)
+    }
+
+    @Synchronized fun clearAll() {
         dir.deleteRecursively()
     }
 }
