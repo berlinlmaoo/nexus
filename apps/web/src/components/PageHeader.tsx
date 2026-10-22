@@ -40,7 +40,12 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
     void document.fonts?.ready.then(schedule).catch(() => {});
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
     if (ro && el.parentElement) ro.observe(el.parentElement);
-    return () => { cancelAnimationFrame(frame); ro?.disconnect(); el.style.fontSize = ""; };
+    // A title that is a control swaps its content after mount (the Pipeline switcher replaces the plain name once
+    // the boards load) without the heading's box changing size, so content changes re-fit too. Attributes are
+    // not watched: the fit's own inline font size must not trigger it again.
+    const mo = typeof MutationObserver === "undefined" ? null : new MutationObserver(schedule);
+    mo?.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => { cancelAnimationFrame(frame); ro?.disconnect(); mo?.disconnect(); el.style.fontSize = ""; };
   }, [ref, on, key]);
 }
 
