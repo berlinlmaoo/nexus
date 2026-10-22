@@ -362,8 +362,8 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         _state.update { it.copy(roster = list) }
     }
 
-    /** The conversation as the server has it now (members, canManageMembers). */
-    private suspend fun refreshConversation() {
+    /** The conversation as the server has it now (members, permissions and group photo). */
+    suspend fun refreshConversation() {
         val conv: Conversation? = try { api.conversations().value.conversations.firstOrNull { it.id == id } } catch (e: ApiError) { null }
         if (conv != null) _state.update { it.copy(conversation = conv) }
     }
@@ -472,6 +472,11 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     // message-created goes to the conversation's own room (pages/api/socket.ts): sit in it while open.
     id.znetworks.nexus.core.realtime.RealtimeRoom(if (s.deleted) null else "conversation:${vm.id}")
+    // Message polling does not reload the room itself. A photo/name change, or returning from info,
+    // must also refresh the conversation used by the header.
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.id, liveMs = null, fallbackMs = null,
+        matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED && it.conversationId == vm.id },
+        refreshOnResume = true) { if (!vm.state.value.deleted) vm.refreshConversation() }
     LaunchedEffect(lifecycle, vm.id) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             ChatPresence.openConversationId = vm.id
@@ -513,6 +518,12 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             // The header opens the chat's info, like WhatsApp (SYSTEM-MESSAGES part 2).
             val infoHint = stringResource(R.string.ci_open_info)
+            if (conv?.type == "GROUP" && !s.deleted) {
+                Box(Modifier.clip(CircleShape).clickable(onClickLabel = infoHint, onClick = onOpenInfo)) {
+                    ChatGroupAvatar(conv.name, conv.avatarUrl, 36.dp, conv.id)
+                }
+                Spacer(Modifier.width(10.dp))
+            }
             Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = conv != null && !s.deleted, onClickLabel = infoHint, onClick = onOpenInfo)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(conv?.title(vm.meId, stringResource(R.string.chat_direct_message)) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,

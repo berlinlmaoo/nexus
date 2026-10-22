@@ -310,7 +310,8 @@ fun LegalRequestScreen(requestId: String, onBack: () -> Unit, onOpenDoc: (String
     LgPage {
         Column(Modifier.fillMaxSize()) {
             val r = detail?.request
-            PageHeader(r?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request), onBack = onBack)
+            PageHeader(r?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request), onBack = onBack,
+                titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(r?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request)) })
             when {
                 r == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 r == null -> LgLoadError(error!!, stringResource(R.string.lg_request_failed), { tick++ }, onBack, Modifier.fillMaxSize())

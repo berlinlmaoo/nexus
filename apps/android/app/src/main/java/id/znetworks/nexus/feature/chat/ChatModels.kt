@@ -56,6 +56,8 @@ data class Conversation(
     /** False in a project room the viewer may only read (Can view, 13 Oct); null = an older server. */
     val canPost: Boolean? = null,
     val peer: ChatPeer? = null,
+    /** Group photo (22 Oct); omitted by older servers and null when no photo is set. */
+    val avatarUrl: String? = null,
 ) {
     fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
         mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false
@@ -101,11 +103,17 @@ data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMo
                                               val projectId: String? = null, val createdAt: String? = null, val createdBy: ChatRef? = null,
                                               val memberCount: Int = 0, val mutedUntil: String? = null, val canManageMembers: Boolean = false, val canEdit: Boolean = false,
                                               /** DELETE-GROUP (9 Oct): may delete this GROUP. Absent on older servers → no Delete. */
-                                              val canDelete: Boolean = false)
+                                              val canDelete: Boolean = false,
+                                              val avatarUrl: String? = null,
+                                              /** Same authority as renaming; null on servers before group photos. */
+                                              val canEditAvatar: Boolean? = null)
 @Serializable data class ChatInfoMember(val userId: String, val name: String? = null, val avatar: String? = null, val isMe: Boolean = false,
                                         val isAdmin: Boolean = false, val deactivatedAt: String? = null)
 @Serializable data class ChatMediaCounts(val photos: Int = 0, val links: Int = 0, val docs: Int = 0) { val total get() = photos + links + docs }
 @Serializable data class ChatInfo(val conversation: ChatInfoConversation, val members: List<ChatInfoMember> = emptyList(), val counts: ChatMediaCounts = ChatMediaCounts())
+/** Avatar mutations return only these fields, rather than a full conversation. */
+@Serializable data class ChatAvatarConversation(val id: String, val avatarUrl: String? = null)
+@Serializable data class ChatAvatarResponse(val conversation: ChatAvatarConversation)
 @Serializable data class ChatMediaItem(val messageId: String? = null, val createdAt: String? = null, val sender: ChatRef? = null, val url: String? = null,
                                        val attachmentType: String? = null, val title: String? = null,
                                        val name: String? = null, val size: Long? = null)

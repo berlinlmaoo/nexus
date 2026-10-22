@@ -6,6 +6,7 @@ import id.znetworks.nexus.feature.presence.PresenceLine
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,8 +85,10 @@ import id.znetworks.nexus.core.files.FileOpener
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.realtime.LiveRefresh
 import id.znetworks.nexus.core.realtime.RealtimeEvents
+import id.znetworks.nexus.core.realtime.RealtimeRoom
 import id.znetworks.nexus.feature.projects.ProjectsApi
 import id.znetworks.nexus.feature.projects.RosterMember
+import id.znetworks.nexus.feature.auth.rememberAvatarPicker
 import id.znetworks.nexus.ui.components.Avatar
 import id.znetworks.nexus.ui.components.LeftPill
 import id.znetworks.nexus.ui.theme.DisplayFont
@@ -142,8 +145,35 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
         try { block() } catch (e: ApiError) { notice = res.getString(ChatInfoLogic.errorRes(e, generic)) }
         busy = false
     }
-    LaunchedEffect(id) { load() }
-    LiveRefresh(id, liveMs = null, fallbackMs = null, matches = { it.name == RealtimeEvents.CONVERSATION_UPDATED && it.conversationId == id }) { load() }
+    fun changePhoto(removing: Boolean, block: suspend () -> ChatAvatarConversation) {
+        if (busy || info?.conversation?.let { ChatInfoLogic.canEditPhoto(it, legacy) } != true) return
+        scope.launch {
+            busy = true; notice = null
+            try {
+                val updated = block()
+                info = info?.let { it.copy(conversation = it.conversation.copy(avatarUrl = updated.avatarUrl)) }
+                changed()
+                Toast.makeText(context, res.getString(if (removing) R.string.cg_photo_removed else R.string.cg_photo_updated), Toast.LENGTH_SHORT).show()
+            } catch (e: ApiError) {
+                notice = res.getString(ChatGroupPhotoRules.errorRes(e, removing))
+                if ((e as? ApiError.Http)?.status in listOf(403, 404)) {
+                    info = info?.let { it.copy(conversation = it.conversation.copy(canEditAvatar = false)) }
+                    load()
+                }
+            } finally { busy = false }
+        }
+    }
+    val pickPhoto = rememberAvatarPicker { jpeg ->
+        if (info?.conversation?.let { ChatInfoLogic.canEditPhoto(it, legacy) } != true) return@rememberAvatarPicker
+        when {
+            jpeg == null -> notice = res.getString(R.string.chat_photo_unreadable)
+            !ChatGroupPhotoRules.accepts(jpeg.size.toLong()) -> notice = res.getString(R.string.cg_photo_too_large)
+            else -> changePhoto(removing = false) { api.uploadGroupAvatar(id, jpeg) }
+        }
+    }
+    RealtimeRoom("conversation:$id")
+    LiveRefresh(id, liveMs = null, fallbackMs = null,
+        matches = { it.name == RealtimeEvents.CONVERSATION_UPDATED && it.conversationId == id }, refreshOnResume = true) { load() }
 
     val x = info
     val conv = x?.conversation
@@ -165,11 +195,18 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
             x == null -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) { Text(loadError!!, color = c.mutedFg, textAlign = TextAlign.Center) }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 val cv = x.conversation
+                val groupPhoto = groupPhotoUrl(cv.id, cv.avatarUrl)
                 // Header: the picture (DM: the person), name, kind and member count, description.
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (isDm) Avatar(other?.name, other?.avatar, 88.dp, userId = other?.userId)
+                    else if (isGroup) ChatGroupAvatar(cv.name, groupPhoto, 88.dp, cv.id)
                     else Box(Modifier.size(88.dp).background(c.violet.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
                         Icon(if (cv.type == "PROJECT") Icons.Filled.ViewKanban else Icons.Filled.Groups, null, tint = c.violetText, modifier = Modifier.size(40.dp))
+                    }
+                    if (ChatInfoLogic.canEditPhoto(cv, legacy)) {
+                        ChatGroupPhotoActions(groupPhoto, busy, onPick = pickPhoto,
+                            onRemove = { changePhoto(removing = true) { api.removeGroupAvatar(id) } })
+                        Text(stringResource(R.string.cg_photo_hint), fontSize = 12.sp, color = c.mutedFg, textAlign = TextAlign.Center)
                     }
                     Spacer(Modifier.size(4.dp))
                     Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground, textAlign = TextAlign.Center)

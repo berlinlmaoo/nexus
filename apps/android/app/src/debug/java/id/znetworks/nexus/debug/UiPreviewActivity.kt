@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import id.znetworks.nexus.ui.shell.Tab
@@ -45,6 +48,8 @@ class UiPreviewActivity : ComponentActivity() {
             NexusTheme(theme = if (intent.getBooleanExtra("dark", false)) id.znetworks.nexus.ui.theme.AppTheme.DARK else id.znetworks.nexus.ui.theme.AppTheme.LIGHT) {
                 Box(Modifier.fillMaxSize().background(Nx.colors.background).safeDrawingPadding()) {
                     when (screen) {
+                        "project-headers" -> ProjectHeadersPreview(intent.getStringExtra("title"))
+                        "fixes-22oct-switcher", "fixes-22oct-kpis", "fixes-22oct-status" -> FixesLabelsPreview(screen, intent.getStringExtra("title"))
                         "r21-sick", "r21-permit", "r21-present" -> {
                             val action = screen.removePrefix("r21-").uppercase()
                             id.znetworks.nexus.feature.attendance.history.OverrideEvidenceStep(
@@ -242,6 +247,57 @@ private fun Nav8Preview() {
             androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Doni cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
         }
         Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, onItem = {}, onSearch = {}, tabs = emptySet()) }
+    }
+}
+
+/** Uses the production headers and synthetic names only; no session or network is required. */
+@androidx.compose.runtime.Composable
+private fun ProjectHeadersPreview(customTitle: String?) {
+    val indonesian = java.util.Locale.getDefault().language in listOf("id", "in")
+    val names = if (indonesian) listOf(
+        "Perencanaan Proyek Operasional Tahunan", "Dashboard Pipeline Penjualan Tahunan", "Laporan Penjualan Outlet Tahunan", "Laporan Media Sosial Perusahaan", "Arsip Dokumen dan Perjanjian Legal",
+    ) else listOf(
+        "Annual Operations Project Planning", "Annual Sales Pipeline Dashboard", "Annual Outlet Sales Dashboard", "Company Social Media Report", "Legal Documents and Agreements Archive",
+    )
+    val members = listOf("Rina", "Doni", "Mira").mapIndexed { index, name ->
+        id.znetworks.nexus.feature.projects.ProjectMemberRef(userId = "preview-member-$index", user = id.znetworks.nexus.feature.projects.UserRef(name = name))
+    }
+    val boards = listOf(id.znetworks.nexus.feature.pipeline.PipelineBoard("preview", names[1], null, null, "ACTIVE", 3))
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+        fun labelText(kind: String) = if (customTitle == null) kind else "$kind · custom"
+        listOf("TASK", "PIPELINE", "OUTLET_SALES", "SOCIAL_MEDIA_REPORT").forEachIndexed { index, type ->
+            androidx.compose.material3.Text(labelText(type), fontSize = 11.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 12.dp, top = 12.dp))
+            id.znetworks.nexus.feature.projects.ProjectPageHeader(
+                id.znetworks.nexus.feature.projects.ProjectDetail("preview", customTitle ?: names[index], type = type, members = members),
+                onBack = {}, onMembers = {}, onGideon = {}, onSettings = {}, onAdd = {}, addInTabs = true,
+                titleContent = if (type == "PIPELINE") ({ id.znetworks.nexus.feature.pipeline.PipelineBoardSwitcher(customTitle ?: names[index], "preview", boards) {} }) else null,
+                extraActions = {
+                    if (type == "PIPELINE") id.znetworks.nexus.ui.components.HeaderIconButton(androidx.compose.material.icons.Icons.Outlined.Visibility,
+                        androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.pl_hide_amounts), {}, size = 36.dp)
+                })
+            androidx.compose.material3.HorizontalDivider(color = Nx.colors.border)
+        }
+        androidx.compose.material3.Text("ALL_PIPELINES", fontSize = 11.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 12.dp, top = 12.dp))
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            id.znetworks.nexus.ui.components.HeaderIconButton(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.back), {})
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                id.znetworks.nexus.feature.pipeline.PipelineBoardSwitcher(customTitle ?: androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.pb8_all_pipelines), "all-pipelines", boards) {}
+                androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.pb8_combined_subtitle), fontSize = 12.sp, color = Nx.colors.mutedFg)
+            }
+            id.znetworks.nexus.ui.components.HeaderIconButton(androidx.compose.material.icons.Icons.Outlined.Visibility,
+                androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.pl_hide_amounts), {})
+        }
+        androidx.compose.material3.Text("LEGAL", fontSize = 11.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 12.dp, top = 12.dp))
+        id.znetworks.nexus.ui.components.PageHeader(customTitle ?: names[4], onBack = {},
+            titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(customTitle ?: names[4]) })
+        androidx.compose.material3.Text("SHORT", fontSize = 11.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 12.dp, top = 12.dp))
+        id.znetworks.nexus.feature.projects.ProjectPageHeader(id.znetworks.nexus.feature.projects.ProjectDetail("preview-short", "Ops", members = members),
+            onBack = {}, onMembers = {}, onGideon = {}, onSettings = {}, onAdd = null)
+        listOf("SupercalifragilisticexpialidociousWithoutAnyWordBoundary", "SupercalifragilisticexpialidociousWithoutAnyWordBoundary with more words", "This extremely long project name keeps every important word and eventually needs an ellipsis to stay compact").forEach { name ->
+            id.znetworks.nexus.feature.projects.ProjectPageHeader(id.znetworks.nexus.feature.projects.ProjectDetail("preview-extreme", name, members = members),
+                onBack = {}, onMembers = {}, onGideon = {}, onSettings = {}, onAdd = null)
+        }
     }
 }
 

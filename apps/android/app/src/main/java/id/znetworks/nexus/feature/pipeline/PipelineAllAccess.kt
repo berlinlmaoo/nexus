@@ -47,6 +47,7 @@ import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.realtime.LiveRefresh
 import id.znetworks.nexus.core.realtime.RealtimeEvents
+import id.znetworks.nexus.feature.projects.ProjectTitle
 import id.znetworks.nexus.ui.components.HeaderIconButton
 import id.znetworks.nexus.ui.theme.Nx
 
@@ -88,15 +89,14 @@ fun PipelineBoardTitle(name: String, currentId: String, onOpenBoard: (String) ->
 }
 
 @Composable
-private fun PipelineBoardSwitcher(name: String, currentId: String, boards: List<PipelineBoard>?, onOpenBoard: (String) -> Unit) {
+internal fun PipelineBoardSwitcher(name: String, currentId: String, boards: List<PipelineBoard>?, onOpenBoard: (String) -> Unit) {
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     val label = stringResource(R.string.pb8_switch_board)
-    Box {
-        Row(Modifier.then(if (boards != null) Modifier.clickable { menu = true }.semantics { contentDescription = label } else Modifier), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false))
+    Box(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().then(if (boards != null) Modifier.clickable { menu = true }.semantics { contentDescription = label } else Modifier), verticalAlignment = Alignment.CenterVertically) {
+            ProjectTitle(name, Modifier.weight(1f), minFontSize = 19f * .75f)
             if (boards != null) Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.mutedFg, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(menu && boards != null, { menu = false }) {

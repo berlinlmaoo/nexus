@@ -318,7 +318,8 @@ fun MyLegalRequestScreen(requestId: String, onBack: () -> Unit) {
     LiveRefresh(requestId, liveMs = null, fallbackMs = 60_000, matches = { it.name == RealtimeEvents.WORKSPACE_CHANGED && it.kind == "submissions" }) { load() }
     LgPage {
         Column(Modifier.fillMaxSize()) {
-            PageHeader(request?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request_title), onBack = onBack)
+            PageHeader(request?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request_title), onBack = onBack,
+                titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(request?.templateName?.ifEmpty { null } ?: stringResource(R.string.lg_request_title)) })
             val r = request
             when {
                 notFound -> EmptyState(Icons.Filled.SearchOff, stringResource(R.string.lg_request_gone), stringResource(R.string.lg_request_gone_body), stringResource(R.string.back), onBack, Modifier.fillMaxSize())

@@ -70,15 +70,29 @@ object ChatInfoLogic {
     /** Info for a server without /info: what the conversation list already says; no media, search or roles. */
     fun legacy(conv: Conversation, meId: String?) = ChatInfo(
         conversation = ChatInfoConversation(conv.id, conv.type, conv.name, projectId = conv.projectId, memberCount = conv.members.size,
-            mutedUntil = conv.mutedUntil, canManageMembers = conv.type == "GROUP" && conv.canManageMembers != false, canEdit = conv.type == "GROUP"),
+            mutedUntil = conv.mutedUntil, canManageMembers = conv.type == "GROUP" && conv.canManageMembers != false, canEdit = conv.type == "GROUP", avatarUrl = conv.avatarUrl),
         members = conv.members.map { m -> ChatInfoMember(m.uid, m.user?.name, m.user?.avatar, isMe = m.uid == meId) },
     )
 
     /** Remove someone else: Manager+ in a GROUP, never yourself (leaving is Exit group). */
     fun canRemove(info: ChatInfo, m: ChatInfoMember) = info.conversation.type == "GROUP" && info.conversation.canManageMembers && !m.isMe
 
+    /** The server grants this to GROUP members; a missing capability keeps older servers read-only. */
+    fun canEditPhoto(conversation: ChatInfoConversation, legacy: Boolean = false) =
+        conversation.type == "GROUP" && conversation.canEditAvatar == true && !legacy
+
     const val NAME_MAX = 80
     const val DESCRIPTION_MAX = 500
     const val QUERY_MIN = 2
     const val QUERY_MAX = 100
+}
+
+object ChatGroupPhotoRules {
+    const val MAX_BYTES = 5L * 1024 * 1024
+    fun accepts(bytes: Long) = bytes in 1L..MAX_BYTES
+    fun errorRes(e: Throwable, removing: Boolean): Int = when ((e as? ApiError.Http)?.code) {
+        "TOO_LARGE" -> R.string.cg_photo_too_large
+        "BAD_TYPE" -> R.string.cg_photo_bad_type
+        else -> ChatInfoLogic.errorRes(e, if (removing) R.string.cg_photo_error_remove else R.string.cg_photo_error)
+    }
 }

@@ -45,6 +45,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -76,6 +79,8 @@ import id.znetworks.nexus.feature.chat.chatTime
 import id.znetworks.nexus.feature.projects.Pill
 import id.znetworks.nexus.feature.projects.TabEmpty
 import id.znetworks.nexus.ui.components.Avatar
+import id.znetworks.nexus.ui.components.ConfirmDialog
+import id.znetworks.nexus.ui.components.PendingConfirm
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.launch
@@ -96,11 +101,13 @@ import java.time.ZoneOffset
                                       val createdAt: String? = null, val seenCount: Int = 0, val repeatUntil: String? = null, val repeatAtTime: String? = null, val targetCount: Int? = null,
                                       /** Batch 2: "announcement" | "warning" | "sp", the SP's PDF, and who it went to (empty = everyone). */
                                       val kind: String? = null, val imageUrl: String? = null, val attachmentUrl: String? = null, val attachmentName: String? = null,
-                                      val targets: List<AnnounceTarget> = emptyList(), val targetUserIds: List<String> = emptyList())
+                                      val targets: List<AnnounceTarget> = emptyList(), val targetUserIds: List<String> = emptyList(),
+                                      val origin: String? = null, val source: String? = null)
 @Serializable data class AnnounceTarget(val id: String, val name: String? = null)
 /** `POST /api/announcements/attachment` → 201. */
 @Serializable data class AnnounceAttachment(val url: String, val name: String? = null, val size: Long? = null)
 @Serializable data class Announcements(val announcements: List<Announcement> = emptyList())
+enum class AnnouncementOrigin(val apiValue: String) { MANUAL("manual"), SYSTEM("system") }
 @Serializable data class UsageUser(val id: String, val name: String? = null, val avatar: String? = null, val asked: Int = 0, val answered: Int = 0, val toolCalls: Int = 0, val lastUsed: String? = null)
 @Serializable data class UsageTotals(val people: Int = 0, val asked: Int = 0, val toolCalls: Int = 0)
 @Serializable data class GideonUsage(val users: List<UsageUser> = emptyList(), val totals: UsageTotals = UsageTotals())
@@ -163,7 +170,8 @@ class AdminMoreApi(private val api: ApiClient) {
         deadline?.let { put("deadline", it) }
     })
     suspend fun deleteQuest(id: String) = send("DELETE", "/api/gamification/quests/admin?id=$id", null)
-    suspend fun announcements() = api.get("/api/announcements", Announcements.serializer()).announcements
+    suspend fun announcements(origin: AnnouncementOrigin = AnnouncementOrigin.MANUAL) =
+        api.get("/api/announcements?origin=${origin.apiValue}", Announcements.serializer()).announcements
     suspend fun announce(title: String, body: String, tone: String, repeatDays: Int, at: String, targets: List<String> = emptyList(), pdf: AnnounceAttachment? = null) =
         send("POST", "/api/announcements", AnnounceRules.body(title, body, tone, repeatDays, at, targets, pdf))
     /** The SP's PDF (≤ 10 MB; the server answers 413 / 415 otherwise). */
@@ -281,25 +289,55 @@ fun AnnouncementsTab() {
     val c = Nx.colors
     val res = LocalContext.current.resources
     val scope = rememberCoroutineScope()
-    var list by remember { mutableStateOf<List<Announcement>?>(null) }
+    var origin by rememberSaveable { mutableStateOf(AnnouncementOrigin.MANUAL) }
+    var tick by remember { mutableIntStateOf(0) }
+    var list by remember(origin, tick) { mutableStateOf<List<Announcement>?>(null) }
+    var loadError by remember(origin, tick) { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var pdf by remember { mutableStateOf<Pair<String, String>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(tick) { list = runCatching { api.announcements() }.getOrDefault(emptyList()) }
-    fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
+    var ask by remember { mutableStateOf<PendingConfirm?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(origin, tick) {
+        try { list = api.announcements(origin) }
+        catch (e: ApiError) { loadError = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+    }
+    fun run(block: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            try { block(); tick++ }
+            catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+            finally { busy = false }
+        }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         NxOutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.an_new)) }
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf(AnnouncementOrigin.MANUAL to R.string.ch_announcements, AnnouncementOrigin.SYSTEM to R.string.an_origin_system).forEachIndexed { index, (value, label) ->
+                SegmentedButton(origin == value, { origin = value; ask = null }, SegmentedButtonDefaults.itemShape(index, 2),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, c.border), icon = {}) { Text(stringResource(label)) }
+            }
+        }
         val l = list
-        if (l == null) CircularProgressIndicator(Modifier.size(20.dp))
-        else if (l.isEmpty()) TabEmpty(Icons.Filled.Campaign, stringResource(R.string.an_empty))
+        if (loadError != null) {
+            TabEmpty(Icons.Filled.Campaign, loadError!!)
+            TextButton(onClick = { tick++ }) { Text(stringResource(R.string.try_again)) }
+        } else if (l == null) CircularProgressIndicator(Modifier.size(20.dp))
+        else if (l.isEmpty()) {
+            val title = stringResource(if (origin == AnnouncementOrigin.MANUAL) R.string.an_empty else R.string.an_system_empty)
+            val message = stringResource(if (origin == AnnouncementOrigin.MANUAL) R.string.an_manual_empty_body else R.string.an_system_empty_body)
+            TabEmpty(Icons.Filled.Campaign, "$title\n\n$message")
+        }
         l?.forEach { a ->
             AdminCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     when (a.kind) { "sp" -> { Pill("SP", c.danger); Spacer(Modifier.width(6.dp)) }; "warning" -> { Pill(stringResource(R.string.an_kind_warning), c.warning); Spacer(Modifier.width(6.dp)) } }
                     Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f))
                     Pill(stringResource(if (a.active) R.string.an_active else R.string.an_inactive), if (a.active) c.success else c.mutedFg)
-                    IconButton(onClick = { run { api.deleteAnnouncement(a.id) } }) { Icon(Icons.Filled.Close, stringResource(R.string.delete), tint = c.danger) }
+                    IconButton(onClick = {
+                        ask = PendingConfirm(res.getString(R.string.an_delete_q, a.title), res.getString(R.string.an_delete_body), res.getString(R.string.delete)) { run { api.deleteAnnouncement(a.id) } }
+                    }, enabled = !busy) { Icon(Icons.Filled.Close, stringResource(R.string.delete), tint = c.danger) }
                 }
                 Text(a.body, fontSize = 13.sp, color = c.foreground, maxLines = 4)
                 a.attachmentUrl?.let { url ->
@@ -313,11 +351,15 @@ fun AnnouncementsTab() {
                     fontSize = 11.sp, color = c.mutedFg, maxLines = 2)
                 Text(listOfNotNull(chatTime(a.createdAt), stringResource(R.string.an_read_by, a.seenCount),
                     a.repeatUntil?.let { stringResource(R.string.an_repeats, it.take(10), a.repeatAtTime.orEmpty()) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
-                TextButton(onClick = { run { api.setActive(a.id, !a.active) } }) { Text(stringResource(if (a.active) R.string.an_deactivate else R.string.an_activate)) }
+                TextButton(onClick = {
+                    if (a.active) ask = PendingConfirm(res.getString(R.string.an_deactivate_q, a.title), res.getString(R.string.an_deactivate_body), res.getString(R.string.an_deactivate)) { run { api.setActive(a.id, false) } }
+                    else run { api.setActive(a.id, true) }
+                }, enabled = !busy) { Text(stringResource(if (a.active) R.string.an_deactivate else R.string.an_activate)) }
             }
         }
     }
-    if (creating) AnnouncementComposer(api, onDismiss = { creating = false }, onPosted = { creating = false; tick++ })
+    if (creating) AnnouncementComposer(api, onDismiss = { creating = false }, onPosted = { creating = false; origin = AnnouncementOrigin.MANUAL; tick++ })
+    ConfirmDialog(ask) { ask = null }
     pdf?.let { (url, name) -> id.znetworks.nexus.ui.components.PdfViewerDialog(url, name) { pdf = null } }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cg_photo_add">Tambah foto grup</string>
+    <string name="cg_photo_change">Ganti foto</string>
+    <string name="cg_photo_remove">Hapus foto</string>
+    <string name="cg_photo_remove_q">Hapus foto grup?</string>
+    <string name="cg_photo_remove_body">Semua anggota akan melihat ikon bawaan lagi.</string>
+    <string name="cg_photo_updated">Foto grup diperbarui</string>
+    <string name="cg_photo_removed">Foto grup dihapus</string>
+    <string name="cg_photo_error">Gagal mengunggah foto</string>
+    <string name="cg_photo_error_remove">Foto tidak bisa dihapus</string>
+    <string name="cg_photo_hint">PNG, JPG, atau WEBP, maks. 5 MB</string>
+    <string name="cg_photo_too_large">Ukuran foto maksimal 5 MB.</string>
+    <string name="cg_photo_bad_type">Pilih gambar PNG, JPG, atau WEBP.</string>
+</resources>

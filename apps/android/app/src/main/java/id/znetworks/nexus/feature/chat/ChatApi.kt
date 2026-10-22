@@ -3,6 +3,7 @@ package id.znetworks.nexus.feature.chat
 import kotlinx.serialization.json.JsonNull
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
+import id.znetworks.nexus.feature.auth.AvatarUpload
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -17,7 +18,14 @@ import java.net.URLEncoder
 /** Conversations and messages (API.md §2.5). No socket on mobile: an open thread polls. */
 class ChatApi(private val api: ApiClient) {
     /** Also provisions the project rooms the caller belongs to (server side effect). */
-    suspend fun conversations() = api.getCached("/api/conversations", "conversations", ConversationsResponse.serializer())
+    suspend fun conversations(): ApiClient.Cached<ConversationsResponse> {
+        val startedAt = ChatAvatars.revision()
+        return api.getCached("/api/conversations", "conversations", ConversationsResponse.serializer()).also { response ->
+            response.value.conversations.filter { it.type == "GROUP" }.forEach {
+                ChatAvatars.observed(it.id, it.avatarUrl, startedAt, cached = response.savedAtMillis != null)
+            }
+        }
+    }
 
     suspend fun messages(id: String) = api.getCached("/api/conversations/$id/messages?limit=50", "messages-$id", MessagesResponse.serializer())
 
@@ -33,7 +41,25 @@ class ChatApi(private val api: ApiClient) {
         api.get("/api/conversations/$id/messages?limit=100&after=${URLEncoder.encode(afterId, "UTF-8")}", MessagesResponse.serializer())
 
     // Group info (8 Oct): an older server answers 404 to each; the screens fall back (ChatInfoLogic.missingRoute).
-    suspend fun info(id: String) = api.get("/api/conversations/$id/info", ChatInfo.serializer())
+    suspend fun info(id: String): ChatInfo {
+        val startedAt = ChatAvatars.revision()
+        return api.get("/api/conversations/$id/info", ChatInfo.serializer()).also {
+            if (it.conversation.type == "GROUP") ChatAvatars.observed(id, it.conversation.avatarUrl, startedAt)
+        }
+    }
+    /** GROUP members only (canEditAvatar); the existing avatar picker sends a bounded upright JPEG. */
+    suspend fun uploadGroupAvatar(id: String, jpeg: ByteArray): ChatAvatarConversation {
+        val startedAt = ChatAvatars.revision()
+        return api.send(Request.Builder().url(api.url("/api/conversations/$id/avatar")).post(AvatarUpload.part(jpeg)).build(), ChatAvatarResponse.serializer()).conversation.also {
+            ChatAvatars.mutated(it.id, it.avatarUrl, startedAt)
+        }
+    }
+    suspend fun removeGroupAvatar(id: String): ChatAvatarConversation {
+        val startedAt = ChatAvatars.revision()
+        return api.send(Request.Builder().url(api.url("/api/conversations/$id/avatar")).delete().build(), ChatAvatarResponse.serializer()).conversation.also {
+            ChatAvatars.mutated(it.id, it.avatarUrl, startedAt)
+        }
+    }
     suspend fun media(id: String, type: String, cursor: String?) = api.get("/api/conversations/$id/media?type=$type" +
         (cursor?.let { "&cursor=" + URLEncoder.encode(it, "UTF-8") } ?: ""), ChatMediaPage.serializer())
     suspend fun search(id: String, q: String, cursor: String?) = api.get("/api/conversations/$id/search?q=" + URLEncoder.encode(q, "UTF-8") +

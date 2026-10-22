@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cg_photo_add">Add group photo</string>
+    <string name="cg_photo_change">Change photo</string>
+    <string name="cg_photo_remove">Remove photo</string>
+    <string name="cg_photo_remove_q">Remove group photo?</string>
+    <string name="cg_photo_remove_body">Everyone in the group will see the default icon again.</string>
+    <string name="cg_photo_updated">Group photo updated</string>
+    <string name="cg_photo_removed">Group photo removed</string>
+    <string name="cg_photo_error">Couldn\'t upload the photo</string>
+    <string name="cg_photo_error_remove">Couldn\'t remove the photo</string>
+    <string name="cg_photo_hint">PNG, JPG or WEBP, up to 5 MB</string>
+    <string name="cg_photo_too_large">Photo must be 5 MB or smaller.</string>
+    <string name="cg_photo_bad_type">Choose a PNG, JPG or WEBP image.</string>
+</resources>
