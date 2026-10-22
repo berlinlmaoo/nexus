@@ -1,6 +1,16 @@
 # Android fixes — 22 October 2026
 
-Branch: `fix/android-ann-groupphoto`. Based on DEV `e1a593b6bcde32f4ae909fb9b38fb71d0427b25b` from `nexus-dev-22oct-b.bundle`, including the deployed announcement/group-photo contract and title follow-ups. Implements the FINAL v2 native contract and the owner's added project-header requirement. Application source: `987d25eadae7010ef2b305b599b64f4ee2be031a`.
+Branch: `fix/android-ann-groupphoto`. Based on DEV `e1a593b6bcde32f4ae909fb9b38fb71d0427b25b` from `nexus-dev-22oct-b.bundle`, including the deployed announcement/group-photo contract and title follow-ups. Implements the FINAL v2 native contract and the owner's added project-header requirement. Initial application source: `987d25eadae7010ef2b305b599b64f4ee2be031a`; P-1–P-3 follow-up source: `6463f4ca`.
+
+## Owner QA follow-up: P-1–P-3
+
+- **P-1:** the All Pipelines/project switcher uses the measured, word-boundary title component, shrinking from 19 sp to 14.25 sp (75%) before an extreme name receives an ellipsis. It retains two lines and the switcher button.
+- **P-2:** Pipeline KPI labels have two word-wrapped lines without ellipsis. Tablet layout measures all eight labels before choosing eight, four, two or one columns; narrow phones retain horizontally scrolling tiles. Measurements include rounded tile padding. At 150% text size, “Weighted forecast” and “Deliverables on track” remain complete on two lines.
+- **P-3:** column headers reserve the full status label and count. The three existing 48 dp controls move below the chip if necessary. “Belum dikerjakan” with count 123 and “Sedang dikerjakan” remain complete; no mid-word break or clipped count is used.
+
+The follow-up passed `testDebugUnitTest` and `assembleDebug`: **995 tests, zero failures/errors/skips**. Five added regressions cover the switcher minimum, KPI word budgets and column count/control spacing. APK SHA-256: `B2D85E5C4CC13B7A4D2D3877BAF638EEB1C8352D8CCEC0F94DBE111CF7D9200B` (local verification only).
+
+Production components were captured and visually reviewed in EN/light and ID/dark on 411 dp and 320 dp phones and a 1067 dp tablet, including tablet 150% text size. All eight tablet KPI labels, phone scroll endpoints, three status names/counts and all nine header controls remain visible. The column options callback was exercised. Private matrix, screenshots and build records: `C:/Users/Berlin/android-fixes-22oct-followup-evidence/`. No server fixture was created for this follow-up. It shares the already-owned emulator/build lock with the subsequent parity task; the cleanup below describes the initial delivery.
 
 ## Changes
 
