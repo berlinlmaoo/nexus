@@ -18,7 +18,8 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
       const base = parseFloat(getComputedStyle(el).fontSize) || 0;
       if (!base) return;
       const min = Math.floor(base * 0.75);
-      const over = () => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+      // Height only: an inline title control (the Pipeline board switcher) pokes a few px out sideways by design.
+      const over = () => el.scrollHeight > el.clientHeight + 1;
       for (let size = base; over() && size > min; ) {
         size -= 1;
         el.style.fontSize = `${size}px`;
