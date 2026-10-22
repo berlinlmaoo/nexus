@@ -3301,6 +3301,13 @@ model Complaint {
   /// (ticket created + a reply, a re-review sweep) never answer the same ticket twice. A claim older than
   /// lib/gideon-ticket.ts REVIEW_CLAIM_MS is stale (a crashed process) and may be taken over.
   gideonReviewingAt DateTime?
+  /// GIDEON auto-support retry queue (22 Oct 2026, lib/gideon-ticket-retry.ts): failed review attempts since GIDEON
+  /// last answered this ticket, when the last one failed, when this run of failures began, and why
+  /// ("unreachable" | "failed: <detail>"). All reset when GIDEON answers. /api/cron/gideon-watch retries from these.
+  gideonReviewAttempts     Int       @default(0)
+  gideonReviewFailedAt     DateTime?
+  gideonReviewFailingSince DateTime?
+  gideonReviewError        String?
   messages      ComplaintMessage[]
   events        ComplaintEvent[]
   // Evidence photos. A separate table rather than parallel `String[]` columns (url/mime/size arrays

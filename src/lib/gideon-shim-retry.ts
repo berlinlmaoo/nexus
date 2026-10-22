@@ -193,3 +193,81 @@ export const SHIM_RESTART_TEXT = {
   en: "GIDEON is restarting. Try again in a moment.",
   id: "GIDEON lagi dimulai ulang. Coba lagi sebentar lagi ya.",
 } as const
+
+/**
+ * GIDEON offline: the shim cannot be reached at all (22 Oct 2026). While NEXUS ran on the failover VPS (19–22 Oct)
+ * the shim was unreachable for three days; chat answered "Gideon error (502)." or a generic sentence, and a support
+ * ticket filed then was never answered. Recorded as its own failure kind and said as what it is, with a stable code.
+ *
+ * Deliberately NOT in NON_MODEL_FAILURES: unlike a restart (seconds), an offline shim is an outage people feel, and
+ * the Performance panel should keep showing it.
+ */
+export const SHIM_OFFLINE = "shim_offline"
+
+/**
+ * What the person is told when GIDEON is offline. Both sentences keep the phrases released Android builds already
+ * map to their own "can't be reached" message ("gak bisa dihubungi" / "can't be reached"), so an older app shows
+ * something sensible too; iOS and the web show the sentence as is.
+ */
+export const SHIM_OFFLINE_TEXT = {
+  en: "GIDEON is offline right now and can't be reached. Try again in a few minutes.",
+  id: "GIDEON lagi offline, gak bisa dihubungi. Coba lagi beberapa menit lagi ya.",
+} as const
+
+/**
+ * A fetch that never reached the shim: refused, no route, no DNS, or the TCP connect timing out (a host that drops
+ * packets — what an unreachable tailnet peer looks like; undici gives up after 10 s with UND_ERR_CONNECT_TIMEOUT).
+ * An overall request timeout is NOT one: the shim may have been thinking.
+ */
+export function isShimConnectFailure(err: unknown): boolean {
+  if (connectionDropKind(err) === "refused") return true
+  if (!err || typeof err !== "object") return false
+  const e = err as { code?: string; cause?: unknown }
+  const cause = (e.cause && typeof e.cause === "object" ? e.cause : {}) as { code?: string }
+  const code = String(cause.code || e.code || "")
+  return ["UND_ERR_CONNECT_TIMEOUT", "ETIMEDOUT", "ECONNREFUSED"].includes(code)
+}
+
+/**
+ * Is the shim answering at all? One GET /health with a short timeout. Any answer below 500 counts as up (a shim
+ * without /health answers 404), and so does any answer the shim itself signed (`x-gideon-shim`, e.g. draining for a
+ * restart). A gateway 5xx with nothing behind it, another 5xx, or no answer = down.
+ */
+export async function shimReachable(url: string, opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<boolean> {
+  const f = opts.fetchImpl ?? fetch
+  let health: string
+  try {
+    health = new URL("/health", url).toString()
+  } catch {
+    return false
+  }
+  try {
+    const r = await f(health, { signal: AbortSignal.timeout(opts.timeoutMs ?? 3000) })
+    await r.body?.cancel().catch(() => {})
+    if (isGatewayDown(r.status, r.headers)) return false
+    return r.status < 500 || Boolean(r.headers.get("x-gideon-shim"))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Was a failed shim call GIDEON being offline (as opposed to the model failing)? Pass the thrown `error`, or the
+ * `status`/`headers` of a non-OK answer. A connect failure or a gateway with nothing behind it says so by itself;
+ * anything ambiguous (a dropped socket, a bare 5xx) is settled by asking /health.
+ */
+export async function isShimOffline(
+  url: string,
+  failure: { error?: unknown; status?: number; headers?: HeaderBag | null },
+  opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {},
+): Promise<boolean> {
+  if (failure.status !== undefined) {
+    if (failure.status < 500) return false
+    if (isGatewayDown(failure.status, failure.headers)) return true
+    // The shim itself answered (restarting, stopped, Model 0 away): it is there.
+    if (failure.headers?.get("x-gideon-shim")) return false
+  } else if (isShimConnectFailure(failure.error)) {
+    return true
+  }
+  return !(await shimReachable(url, opts))
+}

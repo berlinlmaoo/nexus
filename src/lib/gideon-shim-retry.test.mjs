@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   SHIM_RESTART, isNonModelFailure, isShimRestartResponse, isShimStoppedResponse, isGatewayDown, connectionDropKind, retryDelayMs,
   fetchShim, shimFailureKind, shimRestartedSince, ShimRestartError, waitForFreshShim,
+  SHIM_OFFLINE, SHIM_OFFLINE_TEXT, isShimConnectFailure, shimReachable, isShimOffline,
 } from "./gideon-shim-retry.ts"
 
 const H = (o = {}) => new Headers(o)
@@ -148,6 +149,44 @@ const URL_CHAT = "http://relay:8766/chat"
   const { impl, calls } = scripted([resp(503, { "x-gideon-shim": "restarting", "retry-after": "1" }), resp(200, { "x-gideon-shim": "ready", "x-gideon-shim-started": fresh }, "ok"), resp(200)])
   const r = await fetchShim(URL_STREAM, { method: "POST" }, { stream: true, fetchImpl: impl })
   assert.equal(r.res.status, 200); assert.equal(r.retried, true); assert.deepEqual(calls, [URL_STREAM, "http://relay:8766/health", URL_STREAM])
+}
+
+// ── GIDEON offline (22 Oct 2026) ──
+{
+  const connectTimeout = Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("Connect Timeout Error"), { name: "ConnectTimeoutError", code: "UND_ERR_CONNECT_TIMEOUT" }) })
+  assert.equal(isShimConnectFailure(fetchError("ECONNREFUSED")), true)
+  assert.equal(isShimConnectFailure(fetchError("ENOTFOUND")), true, "DNS: the relay/peer is gone")
+  assert.equal(isShimConnectFailure(fetchError("EHOSTUNREACH")), true)
+  assert.equal(isShimConnectFailure(connectTimeout), true, "a blackholed host times out on connect")
+  assert.equal(isShimConnectFailure(fetchError("ECONNRESET")), false, "dropped mid-answer: ask /health")
+  assert.equal(isShimConnectFailure(Object.assign(new Error("timeout"), { name: "TimeoutError" })), false, "overall timeout: it may have been thinking")
+  assert.equal(isShimConnectFailure(null), false)
+  assert.equal(SHIM_OFFLINE, "shim_offline")
+  // Released Android maps these words to its own "can't be reached" sentence.
+  assert.match(SHIM_OFFLINE_TEXT.en, /can't be reached/)
+  assert.match(SHIM_OFFLINE_TEXT.id, /gak bisa dihubungi/)
+  assert.equal(isNonModelFailure(SHIM_OFFLINE), false, "an offline shim stays visible on Performance")
+}
+{ // shimReachable: /health answers → up; gateway with nothing behind / no answer → down
+  let s = scripted([resp(200, { "x-gideon-shim": "ready" }, "ok")])
+  assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), true); assert.deepEqual(s.calls, ["http://relay:8766/health"])
+  s = scripted([resp(404)]); assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), true, "old shim without /health is still there")
+  s = scripted([resp(503, { "x-gideon-shim": "draining" })]); assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), true, "draining = there")
+  s = scripted([resp(502)]); assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), false, "relay 502, no shim behind")
+  s = scripted([resp(500)]); assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), false)
+  s = scripted([fetchError("ECONNREFUSED")]); assert.equal(await shimReachable(URL_CHAT, { fetchImpl: s.impl }), false)
+  assert.equal(await shimReachable("not a url"), false)
+}
+{ // isShimOffline: decides without /health when it can, asks /health when it can't
+  let s = scripted([])
+  assert.equal(await isShimOffline(URL_CHAT, { error: fetchError("ECONNREFUSED") }, { fetchImpl: s.impl }), true); assert.equal(s.calls.length, 0)
+  assert.equal(await isShimOffline(URL_CHAT, { status: 502, headers: H() }, { fetchImpl: s.impl }), true, "gateway, nothing behind")
+  assert.equal(await isShimOffline(URL_CHAT, { status: 500, headers: H({ "x-gideon-shim": "ready" }) }, { fetchImpl: s.impl }), false, "the shim itself answered")
+  assert.equal(await isShimOffline(URL_CHAT, { status: 429, headers: H() }, { fetchImpl: s.impl }), false, "4xx is never offline")
+  assert.equal(s.calls.length, 0)
+  s = scripted([resp(200, {}, "ok")]); assert.equal(await isShimOffline(URL_CHAT, { error: new TypeError("terminated") }, { fetchImpl: s.impl }), false, "dropped, but /health answers")
+  s = scripted([fetchError("ECONNREFUSED")]); assert.equal(await isShimOffline(URL_CHAT, { error: new TypeError("terminated") }, { fetchImpl: s.impl }), true, "dropped and gone")
+  s = scripted([fetchError("ECONNREFUSED")]); assert.equal(await isShimOffline(URL_CHAT, { status: 500, headers: H() }, { fetchImpl: s.impl }), true, "bare 500 and /health is down")
 }
 
 console.log("gideon-shim-retry: all assertions passed")
