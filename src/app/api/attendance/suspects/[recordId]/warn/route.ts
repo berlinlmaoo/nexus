@@ -65,6 +65,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
         body: message,
         tone: "warning",
         kind: "warning",
+        // A personal push from Absen Monitor: Control Room lists it under System, not with announcements.
+        origin: "system",
+        source: "attendance_warning",
         active: true,
         targetUserIds: [record.userId],
         imageUrl,

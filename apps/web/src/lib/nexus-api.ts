@@ -722,6 +722,8 @@ export type NexusConversation = {
   peer?: { id: string; name: string | null; avatar: string | null; left: boolean } | null;
   /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
   description?: string | null;
+  /** Group photo (servers since 22 Oct 2026); null/missing = the placeholder. Always null for DMs and project rooms. */
+  avatarUrl?: string | null;
 };
 
 /** GET /api/conversations/:id/info — the group info screen (server since 8 Oct 2026). */
@@ -740,6 +742,9 @@ export type NexusConversationInfo = {
     canManageMembers: boolean;
     /** May change the name and the description (any member of a GROUP). */
     canEdit: boolean;
+    /** Group photo and who may change it (servers since 22 Oct 2026; same rule as canEdit). */
+    avatarUrl?: string | null;
+    canEditAvatar?: boolean;
     /**
      * May delete the group (servers since 9 Oct 2026): canManageMembers, or being its only member left.
      * Missing = a server without DELETE /api/conversations/:id — offer no Delete.
@@ -1523,7 +1528,12 @@ export type NexusAnnouncement = { id: string; title: string; body: string; tone:
 // repeatUntil/repeatAtTime: while set, the notice goes out again every day until that date.
 // seenCount is per REPEAT — a repeat clears the seen rows so the pop-up comes back, which
 // makes the number mean "seen since it last went out" rather than an all-time total.
-export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; targets?: Array<{ id: string; name: string | null }>; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
+/**
+ * Where an announcement came from (servers since 22 Oct 2026): "manual" = Control Room's composer, "system" =
+ * Absen Monitor warnings, GIDEON posts, scripted nudges. Missing on older servers (treat as manual).
+ */
+export type NexusAnnouncementOrigin = "manual" | "system";
+export type NexusAdminAnnouncement = NexusAnnouncement & { origin?: NexusAnnouncementOrigin; source?: "composer" | "gideon" | "attendance_warning" | "template" | "legacy" | string; active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; targets?: Array<{ id: string; name: string | null }>; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
 
 export type NexusForm = {
   id: string;
@@ -2599,6 +2609,14 @@ export const nexusApi = {
       method: "PATCH",
       body: JSON.stringify({ name }),
     }),
+  /** Group photo (servers since 22 Oct 2026): PNG / JPG / WEBP up to 5 MB, any member of the GROUP. */
+  uploadConversationAvatar: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiFetch<{ conversation: { id: string; avatarUrl: string | null }; url: string }>(`/api/conversations/${id}/avatar`, { method: "POST", body: fd });
+  },
+  removeConversationAvatar: (id: string) =>
+    apiFetch<{ conversation: { id: string; avatarUrl: null } }>(`/api/conversations/${id}/avatar`, { method: "DELETE" }),
   /** GROUP rooms only: the description (≤ 500; null or "" clears it). Any member may change it. */
   setConversationDescription: (id: string, description: string | null) =>
     apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`, {
@@ -3152,7 +3170,9 @@ export const nexusApi = {
   /** One announcement by id, seen or not — what `?announcement=` on a tapped notification resolves. */
   announcement: (id: string) => apiFetch<{ announcement: NexusAnnouncement & { authorName?: string | null } }>(`/api/announcements/${id}`),
   dismissAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}/seen`, { method: "POST" }),
-  announcements: () => apiFetch<{ announcements: NexusAdminAnnouncement[] }>("/api/announcements"),
+  /** `origin` (servers since 22 Oct 2026): manual | system; omitted = all, as before. `counts` covers both. */
+  announcements: (origin?: NexusAnnouncementOrigin | "all") =>
+    apiFetch<{ announcements: NexusAdminAnnouncement[]; counts?: { manual: number; system: number } }>(`/api/announcements${origin ? `?origin=${origin}` : ""}`),
   uploadAnnouncementAttachment: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);

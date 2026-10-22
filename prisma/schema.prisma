@@ -2266,7 +2266,15 @@ model Announcement {
   // runs every quarter hour, and it is set at creation so the first day's push is not doubled.
   lastRepeatedAt DateTime?
 
+  // Who made it (owner, 22 Oct 2026: per-person pushes cluttered the Control Room list). "manual" = typed in the
+  // Control Room composer; "system" = everything else (Absen Monitor warnings, GIDEON-posted, scripted nudges).
+  // Control Room shows manual by default and the rest under "System". `source` is the finer reason:
+  // composer | gideon | attendance_warning | template | legacy (2026-10-22-announcement-origin-group-avatar.sql).
+  origin         String         @default("manual")
+  source         String         @default("composer")
+
   @@index([active, createdAt])
+  @@index([origin, createdAt])
   @@index([active, repeatUntil])
 }
 
@@ -2741,6 +2749,10 @@ model Conversation {
   /// Group description (8 Oct 2026), shown on the group info screen; ≤ 500 characters, null = none.
   /// Any member of a GROUP may change it, like the name. DMs and project rooms have none.
   description String?
+
+  /// Group photo (owner, 22 Oct 2026): /api/files/avatars/group-<id>-<ts>.<ext>, null = the placeholder.
+  /// GROUP only; any member may change it, like the name (POST/DELETE /api/conversations/:id/avatar).
+  avatarUrl String?
 
   members  ConversationMember[]
   messages Message[]

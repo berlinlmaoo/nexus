@@ -1,6 +1,38 @@
-import { type CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
 import { cn } from "@/lib/utils";
+
+/**
+ * A long title that does not fit its two lines is made smaller, down to 75% of its size, before anything is
+ * cut (owner, 22 Oct 2026: "Finance Manag…" / "Pipelin e Z N…" on the iPhone). The title wraps only between
+ * words; the ellipsis after the second line is the last resort, for a name that is still too long at 75%.
+ * Clears its own inline size on every pass, so a wider window or a shorter name gets the full size back.
+ */
+function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unknown) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return;
+    let frame = 0;
+    const fit = () => {
+      el.style.fontSize = "";
+      const base = parseFloat(getComputedStyle(el).fontSize) || 0;
+      if (!base) return;
+      const min = Math.floor(base * 0.75);
+      const over = () => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+      for (let size = base; over() && size > min; ) {
+        size -= 1;
+        el.style.fontSize = `${size}px`;
+      }
+    };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
+    fit();
+    // Web fonts change the measure once they are in.
+    void document.fonts?.ready.then(schedule).catch(() => {});
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    if (ro && el.parentElement) ro.observe(el.parentElement);
+    return () => { cancelAnimationFrame(frame); ro?.disconnect(); el.style.fontSize = ""; };
+  }, [ref, on, key]);
+}
 
 /**
  * The page header. From md up the whole header is one sticky block, as it always was.
@@ -43,6 +75,10 @@ export function PageHeader({
   /** The project page's shared side gutters (nx-gx: 96px on wide screens), so the header lines up with the view. */
   gutter?: boolean;
 }) {
+  // The compact (project) title: two lines at most, between words, smaller before it is cut (useFitTitle).
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useFitTitle(titleRef, !!compact, typeof title === "string" ? title : titleRef.current?.textContent ?? null);
+
   // Height of the pinned title bar on a phone, so the tab strip sticks right under it.
   const barRef = useRef<HTMLDivElement>(null);
   const [barH, setBarH] = useState(0);
@@ -99,7 +135,10 @@ export function PageHeader({
         {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
             icon buttons (UI tour run 13, W-M15), balanced, so the second line is never one orphaned word (UI tour
             run 20, R20-WM-12: "ZZ QA Social Media / Report"). */}
-        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", hero && "font-display md:text-[32px] md:font-bold md:leading-[1.25]", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug max-sm:[text-wrap:balance]")}>{title}</h1>
+        {/* Every width (22 Oct 2026; was phone only, the desktop cut the name mid-word with an ellipsis): wraps
+            between words onto a second line and shrinks to fit (useFitTitle). break-words only splits a single
+            word that is wider than the whole line on its own. */}
+        <h1 ref={titleRef} className={cn("text-xl md:text-2xl font-semibold tracking-tight", !compact && "truncate", hero && "font-display md:text-[32px] md:font-bold md:leading-[1.25]", compact && "line-clamp-2 whitespace-normal break-words [text-wrap:balance] max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>

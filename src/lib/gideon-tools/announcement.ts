@@ -68,7 +68,16 @@ export const announcementTools: Record<string, ExtraTool> = {
         },
       })
       if (!r.ok) return { ok: false, message: webError(r, "Couldn't post the announcement") }
-      return { ok: true, link: "/admin?tab=announcements", result: { announcementId: r.body?.announcement?.id ?? null } }
+      const announcementId = typeof r.body?.announcement?.id === "string" ? (r.body.announcement.id as string) : null
+      // Posted by the person's own session, so the endpoint stored it as a composer post. GIDEON's posts are
+      // listed under System in Control Room (owner, 22 Oct 2026); a failure here only leaves it under
+      // Announcements, it never undoes the post.
+      if (announcementId) {
+        await prisma.announcement
+          .updateMany({ where: { id: announcementId, origin: "manual" }, data: { origin: "system", source: "gideon" } })
+          .catch((error) => console.error("gideon announcement origin:", error))
+      }
+      return { ok: true, link: "/admin?tab=announcements&origin=system", result: { announcementId } }
     },
   },
 }

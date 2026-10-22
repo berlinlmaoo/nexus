@@ -114,6 +114,13 @@ export type ConversationUpdatedPayload = {
    * Control Room → Audit brings it back with "membership".
    */
   reason?: "message" | "read" | "mute" | "membership" | "deleted"
+  /**
+   * What changed, when it is not the membership itself (22 Oct 2026). "avatar": the group photo (POST/DELETE
+   * /api/conversations/:id/avatar), sent with reason "membership" so released clients refetch list + info,
+   * and with the new `avatarUrl` (null = removed) for clients that patch in place.
+   */
+  change?: "avatar"
+  avatarUrl?: string | null
 }
 
 /** `conversation-updated` to each user's own `user:<id>` room (their other tabs and devices). */
