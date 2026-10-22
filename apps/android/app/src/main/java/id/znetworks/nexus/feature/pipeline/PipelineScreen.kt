@@ -73,11 +73,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,7 +96,11 @@ import id.znetworks.nexus.core.realtime.RealtimeEvents
 import id.znetworks.nexus.ui.components.Avatar
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.describe
+import id.znetworks.nexus.ui.components.WordBoundaryText
+import id.znetworks.nexus.ui.components.WordBoundaryLayout
+import id.znetworks.nexus.ui.components.rememberWordMeasure
 import id.znetworks.nexus.ui.theme.Nx
+import id.znetworks.nexus.ui.theme.TextFont
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -591,7 +597,7 @@ private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
 /** The KPI strip over every deal (§12.3): small chips sideways on a phone, one card of equal tiles on a tablet; a zero is muted. */
 @Composable
-private fun Kpis(sm: PipelineSummary) {
+internal fun Kpis(sm: PipelineSummary) {
     val c = Nx.colors
     data class Tile(val label: String, val value: String, val sub: String, val zero: Boolean, val tone: Color? = null, val detail: String? = null, val warn: String? = null)
     val overdue = sm.n("receivableOverdue")
@@ -613,8 +619,11 @@ private fun Kpis(sm: PipelineSummary) {
         Tile(stringResource(R.string.pl_k_ready), "${sm.i("readyCount")}", stringResource(R.string.pl_k_blocked, sm.i("blockedCount")), sm.i("readyCount") == 0),
         Tile(stringResource(R.string.pl_k_on_track), "${sm.i("deliverablesOnTrack")}", stringResource(R.string.pl_k_completed, sm.i("deliverablesDone")), sm.i("deliverablesOnTrack") == 0),
     )
+    val labelStyle = TextStyle(fontFamily = TextFont, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+    val measureLabel = rememberWordMeasure(labelStyle)
+    val density = LocalDensity.current
     @Composable fun TileBody(t: Tile, modifier: Modifier) = Column(modifier) {
-        Text(t.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        WordBoundaryText(t.label, labelStyle, Modifier.fillMaxWidth(), minLines = 2)
         Text(t.value, fontSize = 17.sp, fontWeight = if (t.zero) FontWeight.Normal else FontWeight.Bold, color = if (t.zero) c.mutedFg else t.tone ?: c.foreground, maxLines = 1)
         Text(t.sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         t.detail?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -623,11 +632,17 @@ private fun Kpis(sm: PipelineSummary) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (maxWidth < 600.dp) LazyRow(Modifier.fillMaxWidth().wrapContentHeight(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(tiles) { t -> TileBody(t, Modifier.widthIn(min = 104.dp, max = 160.dp).background(c.card, RoundedCornerShape(12.dp))
+            items(tiles) { t -> TileBody(t, Modifier.width(160.dp).background(c.card, RoundedCornerShape(12.dp))
                 .border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 7.dp)) }
         }
-        else Row(Modifier.fillMaxWidth().padding(12.dp).background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(vertical = 10.dp)) {
-            tiles.forEach { t -> TileBody(t, Modifier.weight(1f).padding(horizontal = 10.dp)) }
+        else {
+            val columns = with(density) { WordBoundaryLayout.kpiColumns(tiles.map { it.label }, (constraints.maxWidth - 2 * 12.dp.roundToPx()).toFloat(), (2 * 10.dp.roundToPx()).toFloat(), measureLabel) }
+            Column(Modifier.fillMaxWidth().padding(12.dp).background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                tiles.chunked(columns).forEach { row ->
+                    Row(Modifier.fillMaxWidth()) { row.forEach { t -> TileBody(t, Modifier.weight(1f).padding(horizontal = 10.dp)) } }
+                }
+            }
         }
     }
 }

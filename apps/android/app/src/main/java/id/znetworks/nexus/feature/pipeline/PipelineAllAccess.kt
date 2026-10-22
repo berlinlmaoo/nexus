@@ -96,7 +96,7 @@ internal fun PipelineBoardSwitcher(name: String, currentId: String, boards: List
     val label = stringResource(R.string.pb8_switch_board)
     Box(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().then(if (boards != null) Modifier.clickable { menu = true }.semantics { contentDescription = label } else Modifier), verticalAlignment = Alignment.CenterVertically) {
-            ProjectTitle(name, Modifier.weight(1f))
+            ProjectTitle(name, Modifier.weight(1f), minFontSize = 19f * .75f)
             if (boards != null) Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.mutedFg, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(menu && boards != null, { menu = false }) {

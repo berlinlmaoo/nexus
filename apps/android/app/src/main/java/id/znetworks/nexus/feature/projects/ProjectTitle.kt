@@ -21,11 +21,11 @@ import kotlin.math.abs
 
 /** Project names share a two-line, word-only layout, including the Pipeline board switcher. */
 @Composable
-fun ProjectTitle(name: String, modifier: Modifier = Modifier) {
+fun ProjectTitle(name: String, modifier: Modifier = Modifier, minFontSize: Float = 14f) {
     val measure = rememberProjectTitleMeasure()
     BoxWithConstraints(modifier) {
-        val title = remember(name, constraints.maxWidth, measure) {
-            ProjectTitleLayout.fit(name, constraints.maxWidth.toFloat(), measure)
+        val title = remember(name, constraints.maxWidth, measure, minFontSize) {
+            ProjectTitleLayout.fit(name, constraints.maxWidth.toFloat(), minFontSize, measure)
         }
         Column(Modifier.fillMaxWidth().clearAndSetSemantics { text = AnnotatedString(name) }) {
             title.lines.forEach { line ->
@@ -53,19 +53,22 @@ internal fun rememberProjectTitleMeasure(): (String, Float) -> Float {
 internal object ProjectTitleLayout {
     data class Result(val lines: List<String>, val fontSize: Float, val fits: Boolean)
 
-    fun fit(name: String, width: Float, measure: (String, Float) -> Float): Result {
+    fun fit(name: String, width: Float, measure: (String, Float) -> Float): Result = fit(name, width, 14f, measure)
+
+    fun fit(name: String, width: Float, minFontSize: Float, measure: (String, Float) -> Float): Result {
+        val minimum = minFontSize.coerceIn(1f, 19f)
         val words = name.trim().split(Regex("\\s+")).filter(String::isNotEmpty)
         if (words.isEmpty()) return Result(listOf(""), 19f, true)
-        for (step in 0..10) {
-            val size = 19f - step * .5f
+        val sizes = (0..36).map { 19f - it * .5f }.takeWhile { it > minimum } + minimum
+        for (size in sizes) {
             completeLines(words, width, size, measure)?.let { return Result(it, size, true) }
         }
         // Preserve complete words on line one; line two carries the remainder and receives the ellipsis.
         // If even the first word is too wide, Text ellipsizes it without wrapping it into another line.
         var end = 1
-        while (end < words.size && measure(words.take(end + 1).joinToString(" "), 14f) <= width) end++
+        while (end < words.size && measure(words.take(end + 1).joinToString(" "), minimum) <= width) end++
         val lines = listOf(words.take(end).joinToString(" "), words.drop(end).joinToString(" ")).filter(String::isNotEmpty)
-        return Result(lines, 14f, false)
+        return Result(lines, minimum, false)
     }
 
     private fun completeLines(words: List<String>, width: Float, size: Float, measure: (String, Float) -> Float): List<String>? {

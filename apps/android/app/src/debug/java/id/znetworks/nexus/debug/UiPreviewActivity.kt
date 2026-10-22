@@ -49,6 +49,7 @@ class UiPreviewActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(Nx.colors.background).safeDrawingPadding()) {
                     when (screen) {
                         "project-headers" -> ProjectHeadersPreview(intent.getStringExtra("title"))
+                        "fixes-22oct-switcher", "fixes-22oct-kpis", "fixes-22oct-status" -> FixesLabelsPreview(screen, intent.getStringExtra("title"))
                         "r21-sick", "r21-permit", "r21-present" -> {
                             val action = screen.removePrefix("r21-").uppercase()
                             id.znetworks.nexus.feature.attendance.history.OverrideEvidenceStep(

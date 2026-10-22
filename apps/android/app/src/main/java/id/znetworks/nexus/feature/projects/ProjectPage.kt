@@ -3,6 +3,8 @@ package id.znetworks.nexus.feature.projects
 import id.znetworks.nexus.ui.components.NxCheckbox
 
 import id.znetworks.nexus.ui.components.NxTextField
+import id.znetworks.nexus.ui.components.WordBoundaryText
+import androidx.compose.ui.text.TextStyle
 
 import androidx.compose.ui.zIndex
 
@@ -434,17 +436,17 @@ fun GroupPill(g: TaskGroup, label: String, calc: String?) {
     val c = Nx.colors
     val dark = Nx.isDark
     val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (tone != null) {
-            Row(Modifier.clip(RoundedCornerShape(6.dp)).background(tone.bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).background(tone.bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(7.dp).background(tone.dot, CircleShape))
                 Spacer(Modifier.width(6.dp))
-                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = tone.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                WordBoundaryText(label, TextStyle(fontFamily = TextFont, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = tone.fg), Modifier.weight(1f, fill = false))
             }
-        } else Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        } else WordBoundaryText(label, TextStyle(fontFamily = TextFont, fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = c.foreground), Modifier.weight(1f, fill = false))
         if (calc != null) {
             Spacer(Modifier.width(8.dp))
-            Text(calc, fontSize = 12.sp, color = tone?.dot ?: c.mutedFg)
+            Text(calc, fontSize = 12.sp, color = tone?.dot ?: c.mutedFg, softWrap = false, maxLines = 1)
         }
     }
 }
@@ -541,14 +543,9 @@ private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access
             id.znetworks.nexus.ui.components.BoardLane(collapsed) {
                 // The status group's name above the first column of each group (iOS).
 
-                Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (!collapsed) Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
-                    androidx.compose.material3.IconButton(onClick = { collapsed = !collapsed }) { Icon(if (collapsed) Icons.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (collapsed) R.string.expand else R.string.collapse), tint = c.mutedFg) }
-                    if (!collapsed) {
-                    if (g.laneId != null && access.canManage) SectionStatusButton(g.laneId, lanes, vm)
-                    if (access.canEdit && groupCreate(g, cfg.groupBy, vm) != null) androidx.compose.material3.IconButton(onClick = { vm.requestInline(g.key) }) { Icon(Icons.Filled.Add, stringResource(R.string.pp_new_task), tint = c.mutedFg) }
-                    }
-                }
+                GroupColumnHeader(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc), collapsed, { collapsed = !collapsed },
+                    options = if (g.laneId != null && access.canManage) ({ SectionStatusButton(g.laneId, lanes, vm) }) else null,
+                    onAdd = if (access.canEdit && groupCreate(g, cfg.groupBy, vm) != null) ({ vm.requestInline(g.key) }) else null)
                 if (!collapsed) {
                 Spacer(Modifier.height(6.dp))
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null

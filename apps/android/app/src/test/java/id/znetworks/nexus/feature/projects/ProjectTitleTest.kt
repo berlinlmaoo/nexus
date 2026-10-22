@@ -16,6 +16,18 @@ class ProjectTitleTest {
         assertTrue(title.fits)
     }
 
+    @Test fun switcherUsesExactSeventyFivePercentFloorBeforeEllipsis() {
+        val minimum = 19f * .75f
+        val full = ProjectTitleLayout.fit("Forecasting", 11 * minimum, minimum, measure)
+        assertTrue(full.fits)
+        assertEquals(minimum, full.fontSize, 0f)
+        assertEquals(listOf("Forecasting"), full.lines)
+        val extreme = ProjectTitleLayout.fit("Forecasting", 50f, minimum, measure)
+        assertFalse(extreme.fits)
+        assertEquals(minimum, extreme.fontSize, 0f)
+        assertEquals(listOf("Forecasting"), extreme.lines)
+    }
+
     @Test fun fullNameShrinksToFitTwoWholeWordLines() {
         val title = ProjectTitleLayout.fit("Social Media Report", 185f, measure)
         assertEquals(listOf("Social Media", "Report"), title.lines)
