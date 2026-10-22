@@ -25,6 +25,7 @@ import { DealDocuments } from "./DealDocuments";
 import { BudgetSection, CashbackSection, ContactsSection, useDealItems } from "./DealLists";
 import { Field, Section } from "./drawer-parts";
 import { useMoneyFmt } from "./presentation";
+import { useWeb017Launch } from "@/lib/meetings";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
@@ -78,6 +79,7 @@ export function DealDrawer({
 }) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<"details" | "history">("details");
+  const allPipelinesOn = useWeb017Launch();
   const [confirming, setConfirming] = useState(false);
   return (
     <Sheet open={!!deal} onOpenChange={(open) => { if (!open) { onClose(); setTab("details"); } }}>
@@ -105,7 +107,7 @@ export function DealDrawer({
                 </div>
               </div>
               {/* Opened from All Pipelines (owner, 21 Oct 2026): which company's board this deal is on, and the way back. */}
-              {fromAll && boardName && (
+              {fromAll && boardName && allPipelinesOn && (
                 <div className="mt-2 flex flex-wrap items-center gap-2" data-pl="deal-company">
                   <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
                     <Building2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
@@ -289,6 +291,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
   const reasons = deal.health.reasons.filter((r) => r.code !== "BLOCKER" || !deal.blocker?.trim());
   // Cashback, contacts and budget (Control Tower v8): one row each on the server.
   const items = useDealItems(projectId, deal);
+  // Pipeline v8 sections and fields wait for the web's 0.1.7 launch switch (lib/web-launch.ts).
+  const v8 = useWeb017Launch();
   // Contract → closing: the same sections whether folded (open / lost deal) or not.
   const later = (
     <>
@@ -297,7 +301,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         </Section>
 
         {/* Project contacts (v8): below Contract. */}
-        <ContactsSection deal={deal} canEdit={canEdit} items={items} />
+        {v8 && <ContactsSection deal={deal} canEdit={canEdit} items={items} />}
 
         <Section title={t("Vendor registration")} owner={t("PM / admin")}>
           <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
@@ -342,7 +346,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         </Section>
 
         {/* Budget expenses (v8, Strategist): right before Real cost; both hidden while presenting. */}
-        <BudgetSection deal={deal} canEdit={canEdit} items={items} />
+        {v8 && <BudgetSection deal={deal} canEdit={canEdit} items={items} />}
         {!hidden && <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />}
 
         <Section title={t("Closing")} owner="PM">
@@ -379,12 +383,12 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         <Field label={L("Net project value")}><MoneyField label={L("Net project value")} value={deal.netValue} disabled={off} onCommit={(v) => onPatch({ netValue: v })} /></Field>
         <Field label={L("Event / main date")}><DateField label={L("Event / main date")} value={deal.mainDate} disabled={off} onCommit={(v) => onPatch({ mainDate: v })} /></Field>
         {/* Barter (v8): what the client pays in kind. The value is money (masked while presenting). */}
-        <Field label={L("Barter value")}><MoneyField label={L("Barter value")} value={deal.barterValue ?? 0} disabled={off} onCommit={(v) => onPatch({ barterValue: v })} /></Field>
-        <Field label={L("Barter compensation form")} wide><TextField label={L("Barter compensation form")} placeholder={t("e.g. 2 TV ad slots")} value={deal.barterCompensation ?? ""} maxLength={500} disabled={off} onCommit={(v) => onPatch({ barterCompensation: v })} /></Field>
+        {v8 && <Field label={L("Barter value")}><MoneyField label={L("Barter value")} value={deal.barterValue ?? 0} disabled={off} onCommit={(v) => onPatch({ barterValue: v })} /></Field>}
+        {v8 && <Field label={L("Barter compensation form")} wide><TextField label={L("Barter compensation form")} placeholder={t("e.g. 2 TV ad slots")} value={deal.barterCompensation ?? ""} maxLength={500} disabled={off} onCommit={(v) => onPatch({ barterCompensation: v })} /></Field>}
       </Section>
 
       {/* Cashback (v8): right after Net value's section; not rendered at all while presenting. */}
-      <CashbackSection deal={deal} canEdit={canEdit} items={items} />
+      {v8 && <CashbackSection deal={deal} canEdit={canEdit} items={items} />}
 
       {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
           one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
@@ -555,6 +559,8 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
   const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
   const costs: PipelineCostItem[] = deal.costs ?? [];
   // Budget category per line (v8), offered once the deal has at least one category. "" = none.
+  // Off (web 0.1.7 launch switch): no picker; a category set from the apps stays on the line untouched.
+  const v8 = useWeb017Launch();
   const budgets = deal.budgets ?? [];
   const budgetName = (id: string) => (id ? budgets.find((b) => b.id === id)?.name || (budgets.some((b) => b.id === id) ? t("Untitled category") : t("Deleted category")) : t("No budget category"));
   const m = marginOf({ netValue: deal.netValue, costs });
@@ -630,7 +636,7 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
-                {budgets.length > 0 && (
+                {v8 && budgets.length > 0 && (
                   <div className="basis-full">
                     <SelectField
                       label={t("Cost {n} budget category", { n: i + 1 })}

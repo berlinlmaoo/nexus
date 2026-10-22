@@ -14,6 +14,7 @@ import {
   allPipelinesApi, allPipelinesKey, pipelineApi, pipelineKey, servicesOf,
   type AllPipelinesResponse, type PipelineBoardRef, type PipelineDeal, type PipelineDealPatch, type PipelineListBases, type PipelineResponse,
 } from "@/lib/pipeline-api";
+import { useWeb017Launch } from "@/lib/meetings";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
@@ -69,6 +70,8 @@ export function PipelineView({
   const qc = useQueryClient();
   const navigate = useNavigate();
   const all = mode === "all";
+  // Year filter and the v8 Excel columns wait for the web 0.1.7 launch switch (lib/web-launch.ts).
+  const v8 = useWeb017Launch();
   const key = all ? allPipelinesKey : pipelineKey(projectId);
   const q = useQuery<PipelineResponse | AllPipelinesResponse>({
     queryKey: key,
@@ -143,7 +146,7 @@ export function PipelineView({
   // cost lines included); Can comment / Can view only read (14 Oct 2026). An older server says nothing:
   // everyone who reads may write, as before. All Pipelines is always read-only.
   const canEdit = !all && !!data && data.canEdit !== false;
-  const years = useMemo(() => dealYearsOf(allDeals), [allDeals]);
+  const years = useMemo(() => (v8 ? dealYearsOf(allDeals) : []), [allDeals, v8]);
   // The deals the page is about: the company and year picked (deals without an event date leave with a year).
   const deals = useMemo(
     () => allDeals.filter((d) => (!source || d.source?.projectId === source) && (!year || eventYearOf(d) === Number(year))),
@@ -269,7 +272,7 @@ export function PipelineView({
     setExporting(true);
     try {
       if (all) await allPipelinesApi.exportXlsx(lang, { year: year ? Number(year) : null, source: source || null });
-      else await pipelineApi.exportXlsx(projectId, lang, year ? Number(year) : null);
+      else await pipelineApi.exportXlsx(projectId, lang, year ? Number(year) : null, !v8);
     }
     catch (error) { toast.error(errorText(error, t("The Excel file didn't download. Try again."))); }
     finally { setExporting(false); }

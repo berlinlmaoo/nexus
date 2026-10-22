@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 import { PresenceChip } from "@/lib/presence";
+import { useWeb017Launch } from "@/lib/meetings";
 import { ProjectTile } from "@/components/projects/ProjectIcon";
 import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
 import {
@@ -494,7 +495,9 @@ function GroupPhoto({ info, title, onChanged }: { info: Info; title: string; onC
   const { t } = useLang();
   const c = info.conversation;
   const photo = c.avatarUrl ?? null;
-  const canEdit = c.canEditAvatar ?? c.canEdit;
+  // Changing / removing waits for the web's 0.1.7 launch switch (lib/web-launch.ts); a photo set from the apps shows.
+  const launched = useWeb017Launch();
+  const canEdit = launched && (c.canEditAvatar ?? c.canEdit);
   const input = useRef<HTMLInputElement>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const upload = useMutation({

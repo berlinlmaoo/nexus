@@ -212,6 +212,24 @@ export type ExportMeta = {
   sourceOf?: (d: SerializedDeal) => string
   /** The view's filters, when the file was asked for with them (year filter, All Pipelines' source). */
   filter?: { year: number | null; source?: string | null }
+  /**
+   * "legacy" = only the 34 columns from before v8 (?columns=legacy, 22 Oct 2026): what the web asks for while its
+   * 0.1.7 features are still hidden (app-config flags.web017Launch off). Default = every column.
+   */
+  columns?: "all" | "legacy"
+}
+
+/** The Master Project columns that existed before Control Tower v8 (1–34). */
+export const LEGACY_MASTER_COLUMN_COUNT = 34
+
+/** The Master Project columns for a file: all of them, or the pre-v8 ones. */
+export function masterColumnsFor(columns: ExportMeta["columns"]): Col[] {
+  return columns === "legacy" ? MASTER_COLUMNS.slice(0, LEGACY_MASTER_COLUMN_COUNT) : MASTER_COLUMNS
+}
+
+/** ?columns=legacy → "legacy"; anything else (or absent) → "all". */
+export function parseColumnsParam(v: string | null): "all" | "legacy" {
+  return v === "legacy" ? "legacy" : "all"
 }
 
 /** The Info sheet's "Filter" line: none, or the year / source the file was asked for with. */
@@ -233,11 +251,12 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
   wb.title = `${meta.boardName} — Pipeline`
 
   // 1 · Master Project — the GM's columns.
+  const master = masterColumnsFor(meta.columns)
   tableSheet(
     wb,
     "Master Project",
-    MASTER_COLUMNS.map((c) => ({ header: en ? c.en : c.id, width: c.width, kind: c.kind })),
-    deals.map((d) => MASTER_COLUMNS.map((c) => c.value(d, meta.lang, meta))),
+    master.map((c) => ({ header: en ? c.en : c.id, width: c.width, kind: c.kind })),
+    deals.map((d) => master.map((c) => c.value(d, meta.lang, meta))),
     2,
   )
 

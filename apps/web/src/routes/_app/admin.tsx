@@ -34,6 +34,8 @@ import { SuspectAttendanceAdmin } from "@/components/attendance/SuspectAttendanc
 import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdmin";
 import { useLang } from "@/lib/lang";
 import { PresenceLine } from "@/lib/presence";
+import { useWebAppConfig } from "@/lib/meetings";
+import { announcementOriginFor, web017On } from "@/lib/web-launch";
 import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
@@ -2145,9 +2147,16 @@ function AnnouncementsAdmin() {
   // scripted per-person nudges (owner, 22 Oct 2026). In the URL like the tab itself.
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const origin: "manual" | "system" = search.origin === "system" ? "system" : "manual";
+  const picked: "manual" | "system" = search.origin === "system" ? "system" : "manual";
   const setOrigin = (o: "manual" | "system") => { void navigate({ search: (prev) => ({ ...prev, origin: o === "system" ? "system" : undefined }), replace: true }); };
-  const list = useQuery({ queryKey: ["nexus", "announcements", origin], queryFn: () => nexusApi.announcements(origin), retry: false, placeholderData: (prev) => prev });
+  // The Manual / System split waits for the web's 0.1.7 launch switch (lib/web-launch.ts). Off = one combined
+  // list (origin=all) with no segmented control, exactly as before. The list waits for the config so it never
+  // shows one way and then the other.
+  const launchCfg = useWebAppConfig();
+  const split = web017On(launchCfg.data);
+  const origin = announcementOriginFor(split, picked);
+  const list = useQuery({ queryKey: ["nexus", "announcements", origin ?? "all"], queryFn: () => nexusApi.announcements(origin ?? "all"), retry: false, placeholderData: (prev) => prev, enabled: !launchCfg.isPending });
+  const listLoading = launchCfg.isPending || list.isLoading;
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [tone, setTone] = useState("info");
@@ -2183,7 +2192,7 @@ function AnnouncementsAdmin() {
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate, onError: (e: unknown, v) => toastFailure(v.active ? t("Couldn't turn the announcement back on") : t("Couldn't deactivate the announcement"), e) });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: () => { invalidate(); toast.success(t("Announcement deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete the announcement"), e) });
   // An older server ignores ?origin and sends everything without `origin`: filter here too.
-  const rows = (list.data?.announcements ?? []).filter((a) => (a.origin ?? (a.kind === "warning" ? "system" : "manual")) === origin);
+  const rows = (list.data?.announcements ?? []).filter((a) => !origin || (a.origin ?? (a.kind === "warning" ? "system" : "manual")) === origin);
   const counts = list.data?.counts;
   const sourceLabel = (s?: string) =>
     s === "gideon" ? t("GIDEON") : s === "attendance_warning" ? t("Attendance warning") : s === "template" ? t("Automatic") : null;
@@ -2318,10 +2327,10 @@ function AnnouncementsAdmin() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            {split && <div className="flex flex-wrap items-center justify-between gap-2">
               <Segmented
                 label={t("Announcement list")}
-                value={origin}
+                value={picked}
                 onChange={setOrigin}
                 options={[
                   { key: "manual", label: <>{t("Announcements")}{counts ? <span className="tabular-nums text-muted-foreground">{counts.manual}</span> : null}</> },
@@ -2331,8 +2340,8 @@ function AnnouncementsAdmin() {
               <span className="text-xs text-muted-foreground">
                 {origin === "manual" ? t("Posted from this page.") : t("Attendance warnings, app reminders and GIDEON posts.")}
               </span>
-            </div>
-            {list.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+            </div>}
+            {listLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
             {rows.map((a: NexusAdminAnnouncement) => (
               <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
                 <div className="min-w-0 flex-1">
@@ -2363,7 +2372,9 @@ function AnnouncementsAdmin() {
                 </div>
               </div>
             ))}
-            {!list.isLoading && rows.length === 0 && (origin === "manual"
+            {!listLoading && rows.length === 0 && (!origin
+              ? <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} />
+              : origin === "manual"
               ? <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} message={t("Post one above to tell everyone, or a few people, something.")} />
               : <EmptyState icon={Megaphone} tone="muted" compact title={t("Nothing from the system")} message={t("Attendance warnings, app reminders and GIDEON posts show up here.")} />)}
           </div>
