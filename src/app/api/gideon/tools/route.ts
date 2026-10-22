@@ -47,6 +47,9 @@ import { EXTRA_DISABLED_TEXT, extraTool, extraToolEnabled, runExtraTool } from '
 import { folderProjectIds } from '@/lib/gideon-tools/tasks-bulk'
 import { MEMORY_ACTIONS, MemoryRefusal, runMemoryTool } from '@/lib/gideon-memory'
 import { emitComplaintChanged } from '@/lib/complaint-realtime'
+import { readableBoardWhere, yearOf, yearWhere } from '@/lib/gideon-tools/pipeline-read'
+import { budgetUsageOf } from '@/lib/pipeline'
+import { costsOf } from '@/lib/pipeline-server'
 
 type GideonAction =
   | 'list_projects'
@@ -2071,17 +2074,26 @@ async function resolveTicketByGideon(actor: { id: string }, input: Record<string
 const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`
 
 /**
- * Deals on the Pipeline boards this person can open (a board is an ordinary project for access: member, or BoD /
- * One Above All). Matches the deal name, brand, code, BD or PM; filters by stage. Compact rows.
+ * Deals on the Pipeline boards this person can open (a board is an ordinary project for access: projectAccessLevel ≥
+ * View — member of the board and its workspace, or BoD / One Above All). Matches the deal name, brand, code, BD or PM;
+ * filters by stage, board and (Control Tower v8) the event year. Compact rows; nexus_get_deal reads one in full.
  */
 async function searchDeals(actor: User, input: Record<string, unknown>) {
   const query = asString(input.query)
   const stage = asString(input.stage)
-  const boardWhere: Prisma.ProjectWhereInput = { ...actorScopedProjectWhere(actor, {}), type: 'PIPELINE' }
   const projectId = asString(input.projectId)
-  if (projectId) boardWhere.id = projectId
+  const board = asString(input.board)
+  const boardWhere: Prisma.ProjectWhereInput = {
+    AND: [
+      readableBoardWhere(actor.id),
+      ...(projectId ? [{ id: projectId }] : []),
+      ...(board ? [{ name: { contains: board, mode: 'insensitive' as const } }] : []),
+    ],
+  }
   const where: Prisma.PipelineDealWhereInput = { project: boardWhere }
   const and: Prisma.PipelineDealWhereInput[] = []
+  const year = yearOf(input.year)
+  if (year !== null) and.push(yearWhere(year))
   if (query) {
     and.push({
       OR: [
@@ -2106,6 +2118,8 @@ async function searchDeals(actor: User, input: Record<string, unknown>) {
         services: true, service: true, contractStatus: true, paymentStatus: true, outstandingReceivable: true, deliverableStatus: true,
         deliverableRisk: true, closingStatus: true, mainDate: true, nextAction: true, nextActionDate: true, blocker: true,
         bdName: true, pmName: true, bd: { select: { name: true } }, pm: { select: { name: true } }, project: { select: { name: true } },
+        // Control Tower v8 (22 Oct 2026): totals only here; nexus_get_deal lists them.
+        barterValue: true, costs: true, items: { select: { id: true, kind: true, name: true, amount: true } },
       },
       orderBy: [{ contractValue: 'desc' }, { updatedAt: 'desc' }],
       take: limit,
@@ -2132,10 +2146,22 @@ async function searchDeals(actor: User, input: Record<string, unknown>) {
     if (d.mainDate) row.mainDate = wibDayKey(d.mainDate)
     if (d.nextAction) row.nextAction = `${d.nextAction}${d.nextActionDate ? ` (${wibDayKey(d.nextActionDate)})` : ''}`
     if (d.blocker) row.blocker = d.blocker.slice(0, 160)
+    if (d.mainDate) row.eventYear = d.mainDate.getUTCFullYear()
+    if (d.barterValue) row.barter = rupiah(d.barterValue)
+    const cashback = d.items.filter((i) => i.kind === 'cashback')
+    if (cashback.length) row.cashback = `${rupiah(cashback.reduce((t, i) => t + i.amount, 0))} (${cashback.length} recipient${cashback.length > 1 ? 's' : ''})`
+    const contacts = d.items.filter((i) => i.kind === 'contact').length
+    if (contacts) row.contacts = contacts
+    const budgets = d.items.filter((i) => i.kind === 'budget')
+    if (budgets.length) {
+      const use = budgetUsageOf(budgets, costsOf(d.costs))
+      const over = use.filter((u) => u.remaining < 0).length
+      row.budget = `${rupiah(budgets.reduce((t, i) => t + i.amount, 0))} in ${budgets.length} categor${budgets.length > 1 ? 'ies' : 'y'}${over ? `, ${over} over budget` : ''}`
+    }
     return row
   })
   return {
-    ...page(items, total, offset, limit, 'pass query (deal, brand, code, BD or PM) or stage'),
+    ...page(items, total, offset, limit, 'pass query (deal, brand, code, BD or PM), stage, board or year'),
     ...(total ? {} : { note: 'No deal on a Pipeline board this person can open matches. Say so; do not guess.' }),
   }
 }

@@ -47,6 +47,8 @@ export const EXTRA_TOOL_META: Record<string, Meta> = {
   bulk_update_tasks: { write: true, approval: "always", label: L("Preparing changes to {a}", "Preparing changes to several tasks") },
   add_subtasks: { write: true, approval: "always", label: L("Adding subtasks to {a}", "Adding subtasks") },
   // 6. Pipeline
+  get_deal: { write: false, label: L("Reading the deal {a}", "Reading a deal") },
+  all_pipelines: { write: false, label: L("Reading All Pipelines: {a}", "Reading All Pipelines") },
   move_deal_stage: { write: true, approval: "always", label: L("Moving the deal {a}", "Moving a deal") },
   add_payment_term: { write: true, approval: "always", label: L("Adding a payment term to {a}", "Adding a payment term") },
   // 7. Outlet Sales / Social Media Report

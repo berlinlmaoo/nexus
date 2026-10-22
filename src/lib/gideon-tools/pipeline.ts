@@ -5,6 +5,7 @@ import { PIPELINE_STAGES } from "@/lib/pipeline"
 import { parseTermFields, pipelineGate, probabilityForStage } from "@/lib/pipeline-server"
 import { dayLabel, num, rupiah, str } from "./util"
 import { webError, type ExtraTool, type Input } from "./types"
+import { allPipelines, getDeal, readableBoardWhere } from "./pipeline-read"
 
 /**
  * Pipeline through GIDEON (owner, 18 Oct 2026): move a deal to another stage, record a payment term. Same access as
@@ -19,14 +20,8 @@ async function findDeal(actor: User, input: Input) {
   const id = str(input.dealId)
   const q = str(input.deal) ?? str(input.name) ?? str(input.query) ?? str(input.code)
   const board = str(input.projectId)
-  const projectScope = {
-    type: "PIPELINE" as const,
-    ...(board ? { id: board } : {}),
-    OR: [
-      { members: { some: { userId: actor.id } } },
-      { workspace: { members: { some: { userId: actor.id, role: { in: ["ONE_ABOVE_ALL" as const, "BOD" as const] } } } } },
-    ],
-  }
+  // The board's read rule (projectAccessLevel >= View), so a match list never names a deal the board would not show.
+  const projectScope = board ? { AND: [readableBoardWhere(actor.id), { id: board }] } : readableBoardWhere(actor.id)
   const select = { id: true, code: true, name: true, stage: true, probability: true, contractValue: true, projectId: true, project: { select: { name: true } } } as const
   if (id) {
     const d = await prisma.pipelineDeal.findFirst({ where: { id, project: projectScope }, select })
@@ -142,6 +137,9 @@ async function describeTerm(actor: User, input: Input) {
 }
 
 export const pipelineTools: Record<string, ExtraTool> = {
+  // Control Tower v8 reads (22 Oct 2026): pipeline-read.ts.
+  get_deal: { read: getDeal, stepArg: (i) => str(i.deal) ?? str(i.code) ?? str(i.name) ?? null },
+  all_pipelines: { read: allPipelines, stepArg: (i) => str(i.source) ?? str(i.board) ?? str(i.company) ?? null },
   move_deal_stage: {
     describe: describeMove,
     stepArg: (i) => str(i.deal) ?? str(i.name) ?? null,
