@@ -1,0 +1,10 @@
+<resources>
+    <string name="an_origin_system">System</string>
+    <string name="an_manual_empty_body">Kirim satu di atas untuk memberi tahu semua orang, atau beberapa orang.</string>
+    <string name="an_system_empty">Belum ada dari System</string>
+    <string name="an_system_empty_body">Peringatan absensi, pengingat app, dan kiriman GIDEON muncul di sini.</string>
+    <string name="an_deactivate_q">Nonaktifkan “%1$s”?</string>
+    <string name="an_deactivate_body">Pengumuman tidak lagi muncul untuk penerimanya. Kamu bisa mengaktifkannya lagi nanti.</string>
+    <string name="an_delete_q">Hapus “%1$s”?</string>
+    <string name="an_delete_body">Pengumuman hilang untuk semua penerima.</string>
+</resources>

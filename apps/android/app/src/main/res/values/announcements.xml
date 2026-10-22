@@ -1,0 +1,10 @@
+<resources>
+    <string name="an_origin_system">System</string>
+    <string name="an_manual_empty_body">Post one above to tell everyone, or a few people, something.</string>
+    <string name="an_system_empty">Nothing from the system</string>
+    <string name="an_system_empty_body">Attendance warnings, app reminders and GIDEON posts show up here.</string>
+    <string name="an_deactivate_q">Deactivate “%1$s”?</string>
+    <string name="an_deactivate_body">It stops appearing to its recipients. You can activate it again later.</string>
+    <string name="an_delete_q">Delete “%1$s”?</string>
+    <string name="an_delete_body">It disappears for all recipients.</string>
+</resources>
