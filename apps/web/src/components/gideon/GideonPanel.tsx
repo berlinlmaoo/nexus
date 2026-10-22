@@ -43,7 +43,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { LoadError } from "@/components/LoadError";
 import { BetaBadge } from "@/components/meetings/BetaBadge";
 import { NewMeetingDialog } from "@/components/meetings/NewMeetingDialog";
-import { TIER_REASON, useGideonTiers, useMeetingNotesEnabled } from "@/lib/meetings";
+import { TIER_REASON, useGideonTiers, useMeetingNotesEnabled, useWeb017Launch } from "@/lib/meetings";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
@@ -206,6 +206,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   /** Meeting notes (Beta, 18 Oct 2026): the "Meeting recording" dialog from the + menu. */
   const [meetingOpen, setMeetingOpen] = useState(false);
   const meetingsOn = useMeetingNotesEnabled();
+  // GIDEON Memory's web entry points wait for the 0.1.7 launch switch (lib/web-launch.ts).
+  const memoryOn = useWeb017Launch();
   /** Which tiers can answer now (Model 0 is away while the office GPU transcribes a meeting). Live over the socket. */
   const tierStatus = useGideonTiers();
   /** The answer was refused because the chosen tier is away: the composer offers GIDEON Phaëthon. */
@@ -662,7 +664,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => { onClose?.(); void router.navigate({ to: "/settings", search: { section: "gideon-memory" } }); }}><Brain className="mr-2 h-4 w-4" />{t("GIDEON Memory")}</DropdownMenuItem>
+            {memoryOn && <DropdownMenuItem onSelect={() => { onClose?.(); void router.navigate({ to: "/settings", search: { section: "gideon-memory" } }); }}><Brain className="mr-2 h-4 w-4" />{t("GIDEON Memory")}</DropdownMenuItem>}
             {!isPage && <DropdownMenuSeparator />}
             {!isPage && <DropdownMenuLabel className="text-xs">{t("Open as")}</DropdownMenuLabel>}
             {!isPage && (
@@ -1386,6 +1388,8 @@ export function AssistantTurn({ turn, onDecided, question, projectId, editorTarg
   const proposals = turn.proposals ?? [];
   // Local: Save / Don't save changes the chip at once (history refreshes the real status on the next open).
   const [memoryOverrides, setMemoryOverrides] = useState<Record<string, GideonMemory>>({});
+  // GIDEON Memory chips under an answer wait for the web's 0.1.7 launch switch (lib/web-launch.ts).
+  const memoryOn = useWeb017Launch();
   const memories = (turn.memories ?? []).map((m) => memoryOverrides[m.id] ?? m);
   const setMemories = (f: (cur: GideonMemory[]) => GideonMemory[]) => {
     const next = f(memories);
@@ -1462,7 +1466,7 @@ export function AssistantTurn({ turn, onDecided, question, projectId, editorTarg
       )}
 
       {/* GIDEON Memory (19 Oct 2026): the person's own; never drawn in the OAA review (the server strips it too). */}
-      {!readOnly && memories.length > 0 && (
+      {!readOnly && memoryOn && memories.length > 0 && (
         <div className="space-y-1.5">
           {memories.map((m) => <GideonMemoryChip key={m.id} memory={m} onChange={(next) => setMemories((cur) => cur.map((x) => (x.id === next.id ? next : x)))} />)}
         </div>

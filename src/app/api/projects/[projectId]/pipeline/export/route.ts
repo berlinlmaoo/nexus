@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { filterByYear, parseYearParam, pipelineToday } from "@/lib/pipeline"
 import { dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
-import { buildPipelineWorkbook, contentDisposition, exportFileName } from "@/lib/pipeline-export"
+import { buildPipelineWorkbook, contentDisposition, exportFileName, parseColumnsParam } from "@/lib/pipeline-export"
 
 /**
  * "Download Excel" of a Pipeline board (owner, 9 Oct 2026; tidied 14 Oct 2026 to the GM's export): the
@@ -41,6 +41,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       exportedBy: me?.name || me?.email || null,
       lang,
       filter: { year },
+      // ?columns=legacy: the pre-v8 columns (the web while flags.web017Launch is off); apps get every column.
+      columns: parseColumnsParam(request.nextUrl.searchParams.get("columns")),
     })
 
     logAudit({

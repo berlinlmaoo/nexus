@@ -224,8 +224,9 @@ export const pipelineApi = {
   /** Take a document (link or file) off the deal; the file itself stays until the 90-day purge. */
   removeDocument: (projectId: string, dealId: string, docId: string) =>
     apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" }),
-  exportXlsx: (projectId: string, lang: "id" | "en", year?: number | null) =>
-    downloadFile(`${base(projectId)}/export?lang=${lang}${year ? `&year=${year}` : ""}`, "pipeline.xlsx"),
+  /** `legacyColumns`: the pre-v8 columns only (?columns=legacy) — the web while its 0.1.7 features are hidden. */
+  exportXlsx: (projectId: string, lang: "id" | "en", year?: number | null, legacyColumns = false) =>
+    downloadFile(`${base(projectId)}/export?lang=${lang}${year ? `&year=${year}` : ""}${legacyColumns ? "&columns=legacy" : ""}`, "pipeline.xlsx"),
   /** Cashback recipients, contacts and budget categories (v8). Every answer carries the whole deal. */
   addItem: (projectId: string, dealId: string, payload: PipelineItemPatch & { kind: PipelineItemKind; clientRequestId?: string }) =>
     apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/items`, { method: "POST", body: JSON.stringify(payload) }),

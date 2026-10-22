@@ -11,6 +11,8 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { isAbort } from "@/lib/nexus-api";
 import { humanSize } from "@/lib/vault-media";
 import { LINK_TYPES, summarize } from "@/lib/pipeline";
+import { useWeb017Launch } from "@/lib/meetings";
+import { linkTypesFor } from "@/lib/web-launch";
 import {
   dealKey, pipelineApi, pipelineKey, type PipelineDeal, type PipelineDealPatch, type PipelineLink, type PipelineResponse,
 } from "@/lib/pipeline-api";
@@ -59,6 +61,8 @@ export function DealDocuments({
   const labels = useVocabLabels();
   const qc = useQueryClient();
   const [type, setType] = useState<string>("SPK");
+  // The v8 types (Deck, Quotation, Report) wait for the web 0.1.7 launch switch; saved documents keep their type.
+  const linkTypes = linkTypesFor(useWeb017Launch(), LINK_TYPES);
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);
@@ -226,7 +230,7 @@ export function DealDocuments({
 
       {canEdit && (
         <form onSubmit={(e) => { e.preventDefault(); addLink(); }} className="grid gap-2 sm:grid-cols-[10.5rem_1fr]">
-          <SelectPicker variant="field" ariaLabel={t("Link type")} value={type} onChange={setType} options={LINK_TYPES.map((k) => ({ value: k, label: labels.link(k) }))} className="w-full rounded-lg px-2.5 py-1.5" />
+          <SelectPicker variant="field" ariaLabel={t("Link type")} value={type} onChange={setType} options={linkTypes.map((k) => ({ value: k, label: labels.link(k) }))} className="w-full rounded-lg px-2.5 py-1.5" />
           <div className="relative">
             <Link2 aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input aria-label={t("Link")} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("Paste a link (https://…)")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2.5 text-sm pointer-coarse:min-h-[44px]" />

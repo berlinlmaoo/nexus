@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { getLang } from "@/lib/lang";
+import { meetingNotesOn, web017On } from "@/lib/web-launch";
 
 export type MeetingStatus = "UPLOADING" | "QUEUED" | "TRANSCRIBING" | "SUMMARIZING" | "READY" | "APPLYING" | "APPLIED" | "FAILED";
 export type MeetingLanguage = "auto" | "id" | "en";
@@ -227,14 +228,24 @@ export function useWebAppConfig() {
   return useQuery({
     queryKey: ["app-config", "web"],
     queryFn: () => mjson<WebAppConfig>("/api/app/config?platform=web"),
-    staleTime: 5 * 60_000,
+    // A flag turned on on the server (web017Launch at release) shows up at the next load, or within a minute
+    // when the tab comes back to the front.
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 }
 
+/** Meeting notes on the web: meetingNotesEnabled AND the 0.1.7 launch switch (lib/web-launch.ts). */
 export function useMeetingNotesEnabled(): boolean {
   const cfg = useWebAppConfig();
-  return cfg.data?.flags?.meetingNotesEnabled !== false;
+  return meetingNotesOn(cfg.data);
+}
+
+/** The 0.1.7 launch switch (lib/web-launch.ts): false until the config has said true. */
+export function useWeb017Launch(): boolean {
+  const cfg = useWebAppConfig();
+  return web017On(cfg.data);
 }
 
 // ---------------------------------------------------------------- GIDEON tier availability

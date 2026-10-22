@@ -64,6 +64,13 @@ export type AppConfig = {
      *  DM headers, Control Room and GIDEON (get_person_status, set_my_status). Off = GET /api/presence answers
      *  enabled:false with no statuses, setting is refused, no realtime events; the apps hide every status. */
     presenceStatus: boolean
+    /** Web launch of the iPhone 0.1.7 features (owner, 22 Oct 2026). The WEB app only: off = it hides Pipeline v8
+     *  (cashback, project contacts, budget, barter, year filter, the new document types, All Pipelines), the
+     *  Announcements "System" list, the group photo controls, the meeting notes entry points and GIDEON Memory, and
+     *  shows those screens as they were before. UI only — the APIs stay open for iOS 0.1.7 / Android. Default off
+     *  (prod until 0.1.7 is out); turned on in the AppSetting row (runbook L.41), no deploy. The web hides them until
+     *  it has read this as true. */
+    web017Launch: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -91,7 +98,7 @@ const GIDEON_TOOL_FLAG_DEFAULTS = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, web017Launch: false, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {

@@ -18,6 +18,8 @@ import { thumbUrl } from "@/lib/thumb";
 import { ActiveSessions } from "@/components/settings/ActiveSessions";
 import { formatPhone } from "@/lib/phone-format";
 import { GideonMemorySection } from "@/components/settings/GideonMemorySection";
+import { useWebAppConfig } from "@/lib/meetings";
+import { web017On } from "@/lib/web-launch";
 
 // The section is in the URL (?section=security), so a reload, Back or a shared link opens the same one
 // (QA 13 Oct 2026: it always fell back to Profile).
@@ -54,7 +56,13 @@ function Settings() {
   const { t } = useLang();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const active: string = search.section ?? "profile";
+  // GIDEON Memory waits for the web's 0.1.7 launch switch (lib/web-launch.ts): no tab while off, and a link to it
+  // lands on Profile once the config has answered (nothing is drawn for it before).
+  const launchCfg = useWebAppConfig();
+  const memoryOn = web017On(launchCfg.data);
+  const shown = sections.filter((s) => s.id !== "gideon-memory" || memoryOn);
+  const asked: string = search.section ?? "profile";
+  const active: string = asked === "gideon-memory" && !memoryOn && !launchCfg.isPending ? "profile" : asked;
   const setActive = (id: string) => { void navigate({ search: { section: id === "profile" ? undefined : (id as SectionId) }, replace: true }); };
   return (
     <div>
@@ -63,14 +71,14 @@ function Settings() {
           "Securi" with no sign of more (UI tour run 12, WM2). From lg the list on the left. */}
       <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} tabs={
         <PageTabs className="lg:hidden" label={t("Settings sections")} value={active} onChange={setActive}
-          tabs={sections.map((s) => ({ key: s.id, label: t(s.label), icon: s.icon }))} />
+          tabs={shown.map((s) => ({ key: s.id, label: t(s.label), icon: s.icon }))} />
       } />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Pinned under the page header while a long section scrolls (UI tour run 13, W-D8: it slid under the
             header and "Security" was cut). It sticks where it sits at rest, the header plus the body's 2rem
             padding, so it no longer moves up when the page scrolls (UI tour run 16, R16-WD-9). */}
         <aside className="hidden lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+2rem)] lg:col-span-1 lg:block lg:space-y-1 lg:self-start">
-          {sections.map((s) => (
+          {shown.map((s) => (
             <button key={s.id} onClick={() => setActive(s.id)} aria-current={active === s.id ? "page" : undefined}
               className={`shrink-0 whitespace-nowrap min-h-11 lg:min-h-0 lg:w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
               <s.icon className="h-4 w-4 shrink-0" /> {t(s.label)}
@@ -83,7 +91,7 @@ function Settings() {
           {active === "notifications" && <NotificationsSection />}
           {active === "security" && <SecuritySection />}
           {active === "appearance" && <AppearanceSection />}
-          {active === "gideon-memory" && <GideonMemorySection />}
+          {active === "gideon-memory" && memoryOn && <GideonMemorySection />}
           {active === "mcp" && <McpTokensSection />}
           {!["profile","members","notifications","security","appearance","gideon-memory","mcp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
