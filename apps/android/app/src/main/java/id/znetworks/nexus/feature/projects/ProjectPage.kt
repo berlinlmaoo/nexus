@@ -8,6 +8,7 @@ import androidx.compose.ui.zIndex
 
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,6 +105,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
@@ -146,22 +149,22 @@ fun ProjectPageHeader(
     Column(Modifier.fillMaxWidth().background(c.background)) {
         // Phone header (owner, 14 Oct 2026: "kegedean di HP"): back, mark, the name, faces, GIDEON and settings like the
         // web phone; "Add task" sits at the end of the tab row (ProjectTabRow), so the name keeps its room.
-        Row(Modifier.fillMaxWidth().padding(start = 0.dp, end = 12.dp, top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        ProjectHeaderLayout(detail?.name.orEmpty(), if (titleContent != null) 20.dp else 0.dp,
+            Modifier.fillMaxWidth().padding(start = 0.dp, end = 12.dp, top = 4.dp, bottom = 2.dp), leading = {
             if (!presentation) androidx.compose.material3.IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = c.foreground, modifier = Modifier.size(22.dp))
             }
             detail?.let { ProjectMark(it.icon, 22.dp, projectId = it.id) }
             Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                if (titleContent != null) titleContent() else Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }, title = {
+                if (titleContent != null) titleContent() else ProjectTitle(detail?.name.orEmpty())
                 access.readOnlyChip?.let { l ->
                     val hint = stringResource(R.string.acc_hint)
                     Text(accessLabel(l), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
                         modifier = Modifier.padding(top = 2.dp).clip(CircleShape).background(c.muted).padding(horizontal = 8.dp, vertical = 2.dp)
                             .semantics { contentDescription = hint })
                 }
-            }
+            }, actions = {
             if (detail != null) {
                 extraActions()
                 if (!presentation) {
@@ -177,6 +180,34 @@ fun ProjectPageHeader(
                     HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true, size = 36.dp)
                 }
             }
+        })
+    }
+}
+
+/** Keep a short phone header compact; move its controls below when they would truncate the project name. */
+@Composable
+private fun ProjectHeaderLayout(name: String, titleEndSpace: Dp, modifier: Modifier,
+                                leading: @Composable () -> Unit, title: @Composable () -> Unit, actions: @Composable () -> Unit) {
+    val measureTitle = rememberProjectTitleMeasure()
+    Layout(content = {
+        Row(verticalAlignment = Alignment.CenterVertically) { leading() }
+        Column { title() }
+        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
+    }, modifier = modifier) { children, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val start = children[0].measure(loose)
+        val end = children[2].measure(loose)
+        val compactWidth = (constraints.maxWidth - start.width - end.width).coerceAtLeast(0)
+        val ownActionRow = constraints.maxWidth < 600.dp.roundToPx() && end.width > 0 &&
+            !ProjectTitleLayout.fit(name, (compactWidth - titleEndSpace.roundToPx()).coerceAtLeast(0).toFloat(), measureTitle).fits
+        val titleWidth = if (ownActionRow) (constraints.maxWidth - start.width).coerceAtLeast(0) else compactWidth
+        val label = children[1].measure(Constraints(minWidth = titleWidth, maxWidth = titleWidth, maxHeight = constraints.maxHeight))
+        val topHeight = maxOf(start.height, label.height, if (ownActionRow) 0 else end.height)
+        val height = constraints.constrainHeight(topHeight + if (ownActionRow) end.height else 0)
+        layout(constraints.maxWidth, height) {
+            start.placeRelative(0, (topHeight - start.height) / 2)
+            label.placeRelative(start.width, (topHeight - label.height) / 2)
+            end.placeRelative(constraints.maxWidth - end.width, if (ownActionRow) topHeight else (topHeight - end.height) / 2)
         }
     }
 }

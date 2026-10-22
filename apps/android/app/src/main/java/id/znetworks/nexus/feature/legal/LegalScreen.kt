@@ -123,6 +123,7 @@ fun LegalScreen(nav: LegalNav, initialTab: String? = null, focusRequest: String?
                 PageTab("members", stringResource(R.string.lg_tab_members), icon = Icons.Filled.People),
             )
             PageHeader(stringResource(R.string.lg_title), subtitle = stringResource(R.string.lg_subtitle), onBack = nav.back,
+                titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(stringResource(R.string.lg_title)) },
                 tabs = if (me != null) ({ PageTabs(tabs, tab, { tab = it }) }) else null)
             val m = me
             val e = error
@@ -163,7 +164,8 @@ fun LegalOnly(onBack: () -> Unit, content: @Composable () -> Unit) {
         null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         false -> LgPage {
             Column(Modifier.fillMaxSize()) {
-                PageHeader(stringResource(R.string.lg_title), onBack = onBack)
+                PageHeader(stringResource(R.string.lg_title), onBack = onBack,
+                    titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(stringResource(R.string.lg_title)) })
                 LgNotInvited(onBack, Modifier.fillMaxSize())
             }
         }

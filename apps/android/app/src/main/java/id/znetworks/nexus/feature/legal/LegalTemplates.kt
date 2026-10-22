@@ -247,7 +247,8 @@ fun LegalTemplateScreen(templateId: String, onBack: () -> Unit) {
     }
     LgPage {
         Column(Modifier.fillMaxSize()) {
-            PageHeader(template?.name ?: stringResource(R.string.lg_template), onBack = onBack)
+            PageHeader(template?.name ?: stringResource(R.string.lg_template), onBack = onBack,
+                titleContent = { id.znetworks.nexus.feature.projects.ProjectTitle(template?.name ?: stringResource(R.string.lg_template)) })
             val t = template
             val d = draft
             when {
