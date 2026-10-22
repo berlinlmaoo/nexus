@@ -947,6 +947,9 @@ function ProjectDetail() {
 
 const LANE_W: Record<ViewConfig["cardSize"], string> = { small: "w-64", medium: "w-72", large: "w-96" };
 /** The same widths in px, for the board's fit check. */
+// An empty lane is narrow (sm:w-48, R15-WB-8) but never narrower than its header: it grows to fit its status
+// chip and tools, up to the normal lane width (QA final #2 pre-run, P-3: "In Pr…" in an empty column).
+const LANE_MAX_W: Record<ViewConfig["cardSize"], string> = { small: "sm:max-w-64", medium: "sm:max-w-72", large: "sm:max-w-96" };
 const LANE_PX: Record<ViewConfig["cardSize"], number> = { small: 256, medium: 288, large: 384 };
 
 /** Values a view's filter asks for, written into a task made inside it (Notion pre-fills them; C-BUG-9). */
@@ -1301,7 +1304,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         // Phone: a lane nearly fills the screen, so the next one peeks in by its card edges only, never by half a
         // value ("Rp 3", UI tour run 15, R15-WM-2). Wider screens: an empty lane is narrow, so the columns with
         // cards come into view (R15-WB-8).
-        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-xl p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[max(16rem,calc(100dvh-var(--page-sticky-top,0px)-var(--page-snap-extra,0px)-var(--tabbar-room)-2.25rem))]", dragLaneId === g.key && "opacity-40")}
+        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-xl p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && cn("sm:w-max sm:min-w-48", LANE_MAX_W[cfg.cardSize]), showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[max(16rem,calc(100dvh-var(--page-sticky-top,0px)-var(--page-snap-extra,0px)-var(--tabbar-room)-2.25rem))]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1338,19 +1341,21 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         {/* shrink-0: in a column taller than the screen the flex column squeezed this header to its pill's height,
             so that column's "New task" sat ~6px above the others' (QA 16 Oct 2026). */}
         {showHeader && (
-          <div className="mb-1 flex h-7 shrink-0 items-center gap-1 px-0.5" style={{ color: tone.text }}>
+          // The status chip always shows its whole name: past the lane's width it wraps between words (min-h-7,
+          // not h-7) instead of ending in "In Pr…" (QA final #2 pre-run, P-3).
+          <div className="mb-1 flex min-h-7 shrink-0 items-center gap-1 px-0.5" style={{ color: tone.text }}>
             <span
               draggable={!!section}
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
               onDragEnd={() => setDragLaneId(null)}
               title={section ? t("Drag to reorder columns") : undefined}
-              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 font-display text-sm font-semibold", section && "cursor-grab active:cursor-grabbing")}
+              className={cn("inline-flex min-w-0 items-center gap-1.5 rounded-[14px] px-2 py-0.5 font-display text-sm font-semibold", section && "cursor-grab active:cursor-grabbing")}
               style={{ backgroundColor: tone.bg, color: tone.text }}
             >
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
-              <span className="truncate">{laneLabel(g)}</span>
+              <span className="min-w-0 break-words [text-wrap:balance]">{laneLabel(g)}</span>
             </span>
-            <span className="pl-1 text-sm tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
+            <span className="shrink-0 pl-1 text-sm tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
             <div className="ml-auto flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
               {/* Collapse sits with the column's other tools (Notion), so the pill starts at the column's edge. */}
               <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={quiet}>
