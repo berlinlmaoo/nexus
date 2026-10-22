@@ -19,14 +19,26 @@ import SwiftUI
 @Observable
 final class PipelineStore {
     let projectId: String
+    let workspaceId: String?
+    let isAll: Bool
+    private(set) var boards: [PipelineBoardRef] = []
+    private(set) var years: [Int] = []
+    /// View-only filters; the server computes the same KPIs over exactly this year/company.
+    var year: Int? { didSet { if year != oldValue { scopeError = nil } } }
+    var source: String? { didSet { if source != oldValue { scopeError = nil } } }
+    private(set) var scopeError: String?
+    private(set) var appliedYear: Int?
+    private(set) var appliedSource: String?
+    /// Never label the previous scope's deals or KPIs as a newly selected year/company.
+    var hasUnappliedScope: Bool { loaded && (year != appliedYear || source != appliedSource) }
     private(set) var deals: [PipelineDeal] = []
     private(set) var summary = PipelineSummary()
     private(set) var vocab = PipelineVocab.fallback
     private(set) var today = PipelineFormat.today
     private(set) var people: [PipelinePerson] = []
     private(set) var loaded = false
-    /// May the viewer change deals (Full / Can edit)? From the server's answer; true until it says.
-    private(set) var canEdit = true
+    /// May the viewer change deals (Full / Can edit)? Only after the server grants it.
+    private(set) var canEdit = false
     /// Bumped on every successful read, so an open deal's History refetches with it.
     private(set) var revision = 0
     var loadError: String?
@@ -39,35 +51,69 @@ final class PipelineStore {
     /// When the project's members were last read for the BD/PM pickers (a member the lead adds shows up
     /// within a minute, without reading the project on every edit's reload).
     @ObservationIgnored private var peopleAt: Date?
+    @ObservationIgnored private var readGeneration = 0
 
-    init(projectId: String) { self.projectId = projectId }
+    init(projectId: String, workspaceId: String? = nil, isAll: Bool = false) {
+        self.projectId = projectId
+        self.workspaceId = workspaceId
+        self.isAll = isAll
+    }
 
     func deal(_ id: String) -> PipelineDeal? { deals.first { $0.id == id } }
 
     /// The first load and every quiet reload. A reload that fails leaves what is drawn alone.
     func load() async {
+        readGeneration += 1
+        let generation = readGeneration
+        let requestedYear = year
+        let requestedSource = source
+        scopeError = nil
         do {
-            let r = try await APIClient.shared.pipeline(projectId: projectId)
-            deals = r.deals
-            summary = r.summary
-            vocab = r.vocab
-            today = r.today ?? PipelineFormat.today
-            canEdit = r.canEdit
+            if isAll {
+                let r = try await APIClient.shared.pipelineAll(workspaceId: workspaceId, source: requestedSource, year: requestedYear)
+                guard generation == readGeneration && year == requestedYear && source == requestedSource else { return }
+                deals = r.deals; summary = r.summary; vocab = r.vocab
+                today = r.today ?? PipelineFormat.today
+                boards = r.boards; years = r.years
+                canEdit = false
+            } else {
+                let r = try await APIClient.shared.pipeline(projectId: projectId, year: requestedYear)
+                guard generation == readGeneration && year == requestedYear else { return }
+                deals = r.deals; summary = r.summary; vocab = r.vocab
+                today = r.today ?? PipelineFormat.today
+                years = r.years
+                canEdit = r.canEdit
+            }
             loadError = nil
+            appliedYear = requestedYear
+            appliedSource = requestedSource
             forbidden = false
             loaded = true
             revision += 1
-            if people.isEmpty || (peopleAt.map { Date().timeIntervalSince($0) > 60 } ?? true) {
+            if !isAll && (people.isEmpty || (peopleAt.map { Date().timeIntervalSince($0) > 60 } ?? true)) {
                 await loadPeople()
             }
         }
-        catch APIError.unauthorized { signedOut = true }
-        // Not a member of the board (owner, 9 Oct 2026: members only, added by its lead) → 403.
-        catch APIError.http(403, _) { forbidden = true }
         catch {
-            if !loaded { loadError = (error as? LocalizedError)?.errorDescription ?? T("Check your connection, then try again.") }
+            guard generation == readGeneration && year == requestedYear && source == requestedSource else { return }
+            switch error {
+            case APIError.unauthorized: signedOut = true
+            case APIError.http(403, _): forbidden = true; canEdit = false
+            default:
+                let message = (error as? LocalizedError)?.errorDescription ?? T("Check your connection, then try again.")
+                if !loaded { loadError = message }
+                else if hasUnappliedScope { scopeError = message }
+            }
         }
     }
+
+    /// Item endpoints answer the whole deal, including derived budget totals and remaining amounts.
+    func replaceDeal(_ saved: PipelineDeal) {
+        if let i = deals.firstIndex(where: { $0.id == saved.id }) { deals[i] = saved }
+        revision += 1
+    }
+
+    func reportFailure(_ error: Error, fallback: String) { fail(error, fallback) }
 
     /// BD and PM are picked from the board's own members (owner, 9 Oct 2026: access to the pipeline is
     /// project membership, added by its lead like a task project).
@@ -85,6 +131,7 @@ final class PipelineStore {
     /// reload brings the KPIs along. A refusal puts the deal back as it was and says why.
     @discardableResult
     func patch(_ id: String, _ fields: [String: Any]) async -> Bool {
+        guard canEdit && !isAll else { return false }
         guard let i = deals.firstIndex(where: { $0.id == id }) else { return false }
         let before = deals[i]
         var local = before
@@ -122,6 +169,7 @@ final class PipelineStore {
     }
 
     func create(_ fields: [String: Any]) async -> PipelineDeal? {
+        guard canEdit && !isAll else { return nil }
         do {
             let deal = try await APIClient.shared.pipelineCreate(projectId: projectId, fields: fields)
             deals.append(deal)
@@ -134,6 +182,7 @@ final class PipelineStore {
     }
 
     func delete(_ id: String) async -> Bool {
+        guard canEdit && !isAll else { return false }
         guard let i = deals.firstIndex(where: { $0.id == id }) else { return false }
         let gone = deals.remove(at: i)
         do {
@@ -226,7 +275,11 @@ final class PipelineStore {
 
     func exportFile() async -> URL? {
         do {
-            return try await APIClient.shared.pipelineExport(projectId: projectId, lang: AppLanguage.shared.lang.rawValue)
+            if isAll {
+                return try await APIClient.shared.pipelineAllExport(lang: AppLanguage.shared.lang.rawValue,
+                    workspaceId: workspaceId, source: source, year: year)
+            }
+            return try await APIClient.shared.pipelineExport(projectId: projectId, lang: AppLanguage.shared.lang.rawValue, year: year)
         } catch {
             fail(error, T("The Excel file didn't download. Try again."))
             return nil
@@ -298,8 +351,11 @@ struct PipelineTab: View {
     @State private var healthFilter = ""
     @State private var route: PipelineRoute?
     @State private var exporting = false
-    /// Presentation mode (R-20): plain state on purpose, never stored, so the Pipeline always opens with it off.
-    @State private var presenting = false
+    /// Shared only for the signed-in app session, so switching boards never exposes amounts.
+    @State private var presentation = PipelinePresentationSession.shared
+    @State private var directory = PipelineBoardDirectory.shared
+
+    private var presenting: Bool { presentation.isPresenting }
 
     init(projectId: String, newDealRequest: Int) {
         self.projectId = projectId
@@ -307,11 +363,17 @@ struct PipelineTab: View {
         _store = State(initialValue: PipelineStore(projectId: projectId))
     }
 
+    init(allIn workspaceId: String?) {
+        projectId = ""
+        newDealRequest = 0
+        _store = State(initialValue: PipelineStore(projectId: "", workspaceId: workspaceId, isAll: true))
+    }
+
     private var mode: PipelineMode { PipelineMode(rawValue: modeRaw) ?? .board }
     private var wide: Bool { hSize == .regular }
 
     private var filtering: Bool {
-        !search.trimmingCharacters(in: .whitespaces).isEmpty || !pmFilter.isEmpty || !bdFilter.isEmpty || !serviceFilter.isEmpty || !healthFilter.isEmpty
+        store.year != nil || store.source != nil || !search.trimmingCharacters(in: .whitespaces).isEmpty || !pmFilter.isEmpty || !bdFilter.isEmpty || !serviceFilter.isEmpty || !healthFilter.isEmpty
     }
 
     /// Search covers name, code, brand, BD and PM, like the web. Filters never change the KPIs.
@@ -337,7 +399,7 @@ struct PipelineTab: View {
     var body: some View {
         Group {
             if store.forbidden {
-                EmptyState(icon: "lock", title: T("This pipeline is for its project members"),
+                EmptyState(icon: "lock", title: T(store.isAll ? "All Pipelines is for BoD and One Above All" : "This pipeline is for its project members"),
                            subtitle: T("Ask the Project Owner or a board member to add you to the project."))
             } else if !store.loaded {
                 if let err = store.loadError {
@@ -348,11 +410,14 @@ struct PipelineTab: View {
                     ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
                         .accessibilityLabel(T("Loading the pipeline"))
                 }
-            } else if store.deals.isEmpty {
+            } else if store.hasUnappliedScope {
+                pendingScope
+            } else if store.deals.isEmpty && !filtering && !store.isAll {
                 ScrollView {
                     EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No deals in this pipeline yet"),
                                subtitle: T("Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card."),
-                               actionTitle: T("Add your first deal"), action: { route = .newDeal("Incoming") })
+                               actionTitle: store.canEdit ? T("Add your first deal") : nil,
+                               action: store.canEdit ? { route = .newDeal("Incoming") } : nil)
                         .frame(minHeight: 440)
                 }
                 .refreshable { await store.load() }
@@ -366,9 +431,23 @@ struct PipelineTab: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .task { await store.load() }
-        .liveRefresh(every: 60, on: [.nexusPipelineChanged], projectId: projectId) { await store.load() }
-        .onChange(of: newDealRequest) { _, _ in route = .newDeal("Incoming") }
+        .task {
+            await store.load()
+        }
+        .liveRefresh(every: 60, on: store.isAll ? [] : [.nexusPipelineChanged], projectId: store.isAll ? nil : projectId) {
+            if !store.isAll || directory.canView { await store.load() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusPipelineChanged)) { note in
+            guard store.isAll && directory.canView else { return }
+            if let changed = note.userInfo?[RealtimeKey.projectId] as? String,
+               !store.boards.contains(where: { $0.id == changed }) { return }
+            Task { await store.load() }
+        }
+        .modifier(PipelineBoardRooms(boardIds: store.isAll ? store.boards.map(\.id) : []))
+        .onChange(of: store.forbidden) { _, forbidden in
+            if forbidden && store.isAll { directory.hide() }
+        }
+        .onChange(of: newDealRequest) { _, _ in if store.canEdit && !store.isAll { route = .newDeal("Incoming") } }
         .onChange(of: store.signedOut) { _, out in if out { auth.logout() } }
         .sheet(item: $route) { r in sheet(r).environment(\.pipelinePresenting, presenting) }
         // While a sheet is up it shows the refusal itself (PipelineDealView); this one is for the board.
@@ -400,7 +479,11 @@ struct PipelineTab: View {
     @ViewBuilder private func sheet(_ r: PipelineRoute) -> some View {
         switch r {
         case .deal(let id):
-            PipelineDealView(store: store, dealId: id)
+            if store.isAll, let source = store.deal(id)?.source {
+                PipelineSourceDealSheet(projectId: source.projectId, sourceName: source.name, dealId: id)
+            } else {
+                PipelineDealView(store: store, dealId: id)
+            }
         case .newDeal(let stage):
             // The GM's flow: the new deal opens straight away, for BD, Legal, PM and Finance to fill in.
             PipelineNewDealSheet(store: store, stage: stage) { deal in route = .deal(deal.id) }
@@ -411,6 +494,27 @@ struct PipelineTab: View {
 
     // MARK: header
 
+    private var pendingScope: some View {
+        VStack(spacing: 0) {
+            scopeFilters.padding(.horizontal, 16).padding(.vertical, 12)
+            Divider().overlay(NX.border)
+            if let error = store.scopeError {
+                ErrorState(message: error, icon: "chart.bar.doc.horizontal") { Task { await store.load() } }
+            } else {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel(T("Loading the pipeline"))
+            }
+        }
+    }
+
+    private var scopeFilters: some View {
+        HStack(spacing: 8) {
+            if store.isAll { companyPicker }
+            yearPicker
+            if !store.isAll { Spacer(minLength: 0) }
+        }
+    }
+
     /// Owner, 9 Oct 2026 ("UI UX di hape jg sempit bgt, tolong di rapihkan biar nyaman"): on a phone the
     /// header is four calm rows — the KPI chips scrolling sideways, search across the width with one menu
     /// for the PM/BD filters and Excel, a standard segmented Board · Table · Health, then the health chips.
@@ -420,6 +524,7 @@ struct PipelineTab: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             PipelineKpiStrip(summary: store.summary, wide: wide)
+            scopeFilters
             if wide {
                 HStack(spacing: 10) {
                     searchField.frame(maxWidth: 380)
@@ -480,7 +585,7 @@ struct PipelineTab: View {
     /// The eye: presentation mode on and off (R-20). Tinted while it is on, so nobody forgets it.
     private var presentationToggle: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.15)) { presenting.toggle() }
+            withAnimation(.easeOut(duration: 0.15)) { presentation.isPresenting.toggle() }
         } label: {
             Image(systemName: presenting ? "eye.slash" : "eye")
                 .font(.system(size: 17, weight: .semibold))
@@ -589,13 +694,25 @@ struct PipelineTab: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    private func resetFilters() { search = ""; pmFilter = ""; bdFilter = ""; serviceFilter = ""; healthFilter = "" }
+    private func resetFilters() {
+        search = ""; pmFilter = ""; bdFilter = ""; serviceFilter = ""; healthFilter = ""
+        if store.year != nil || store.source != nil {
+            store.year = nil; store.source = nil
+            Task { await store.load() }
+        }
+    }
 
     // MARK: content
 
     @ViewBuilder private var content: some View {
         let list = shown
-        if filtering && list.isEmpty {
+        if store.isAll && store.deals.isEmpty && !filtering {
+            ScrollView {
+                EmptyState(icon: "square.3.layers.3d", title: T("No deals in any pipeline yet"),
+                    subtitle: T("Every company's pipeline board, combined. Read-only: open a deal to change it in its own board."))
+            }
+            .refreshable { await store.load() }
+        } else if filtering && list.isEmpty {
             ScrollView {
                 EmptyState(icon: "magnifyingglass", title: T("No deal matches"),
                            subtitle: store.deals.count == 1 ? T("The filters hide the only deal.")
@@ -606,6 +723,7 @@ struct PipelineTab: View {
             switch mode {
             case .board:
                 PipelineBoard(deals: list, stages: store.vocab.stages, today: store.today, compact: !wide,
+                              canEdit: store.canEdit && !store.isAll,
                               onOpen: { route = .deal($0) },
                               onMove: { id, stage in Task { await store.patch(id, ["stage": stage]) } },
                               onAdd: { route = .newDeal($0) },
@@ -618,6 +736,60 @@ struct PipelineTab: View {
                                    onOpen: { route = .deal($0) }, onRefresh: { await store.load() })
             }
         }
+    }
+
+    private var yearPicker: some View {
+        Menu {
+            Button { setYear(nil) } label: { check(store.year == nil, T("All years")) }
+            ForEach(store.years, id: \.self) { year in
+                Button { setYear(year) } label: { check(store.year == year, String(year)) }
+            }
+        } label: {
+            filterLabel(store.year.map(String.init) ?? T("All years"), icon: "calendar")
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel(T("Filter by year"))
+        .accessibilityValue(store.year.map(String.init) ?? T("All years"))
+        .accessibilityIdentifier("pipeline.filter.year")
+    }
+
+    private var companyPicker: some View {
+        Menu {
+            Button { setSource(nil) } label: { check(store.source == nil, T("All companies")) }
+            ForEach(store.boards) { board in
+                Button { setSource(board.id) } label: { check(store.source == board.id, board.name) }
+            }
+        } label: {
+            filterLabel(store.boards.first { $0.id == store.source }?.name ?? T("All companies"), icon: "building.2")
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel(T("Company"))
+        .accessibilityIdentifier("pipeline.filter.company")
+    }
+
+    private func filterLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon).font(.system(size: 13))
+            Text(title).font(NXFont.text(13, .semibold)).lineLimit(1)
+            Spacer(minLength: 3)
+            Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(NX.foreground)
+        .padding(.horizontal, 12).frame(minWidth: 120, maxWidth: store.isAll ? .infinity : 230, minHeight: 38)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func setYear(_ year: Int?) {
+        guard store.year != year else { return }
+        store.year = year
+        Task { await store.load() }
+    }
+
+    private func setSource(_ source: String?) {
+        guard store.source != source else { return }
+        store.source = source
+        Task { await store.load() }
     }
 }
 
@@ -937,6 +1109,7 @@ struct PipelineBoard: View {
     let stages: [String]
     let today: String
     let compact: Bool
+    var canEdit = true
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
     let onAdd: (String) -> Void
@@ -967,6 +1140,7 @@ struct PipelineBoard: View {
                     .padding(.top, 12)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
+                .accessibilityIdentifier("pipeline.board.scroll")
                 .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollTargetBehavior(.viewAligned)
                 .scrollPosition(id: $page)
@@ -981,12 +1155,14 @@ struct PipelineBoard: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(maxHeight: .infinity, alignment: .top)
             }
+            .accessibilityIdentifier("pipeline.board.scroll")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private func column(_ col: PipelineStageColumn) -> some View {
         PipelineColumnView(stage: col.stage, deals: col.deals, stages: stages, today: today,
+                           canEdit: canEdit,
                            onOpen: onOpen, onMove: onMove, onAdd: onAdd, onRefresh: onRefresh)
     }
 
@@ -1021,6 +1197,7 @@ struct PipelineColumnView: View {
     let deals: [PipelineDeal]
     let stages: [String]
     let today: String
+    var canEdit = true
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
     let onAdd: (String) -> Void
@@ -1043,7 +1220,7 @@ struct PipelineColumnView: View {
                     Text(PipelineFormat.idr(total, hidden: presenting)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                         .monospacedDigit().lineLimit(1)
                 }
-                if stage != PipelineVocab.lostStage {
+                if canEdit && stage != PipelineVocab.lostStage {
                     Button { onAdd(stage) } label: {
                         Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground)
                             .frame(width: 32, height: 32)
@@ -1060,7 +1237,7 @@ struct PipelineColumnView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     ForEach(deals) { d in
-                        PipelineDealCard(deal: d, stages: stages, today: today, onOpen: onOpen, onMove: onMove)
+                        PipelineDealCard(deal: d, stages: stages, today: today, canEdit: canEdit, onOpen: onOpen, onMove: onMove)
                     }
                     if deals.isEmpty {
                         Text(T("No deals")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -1095,6 +1272,7 @@ struct PipelineDealCard: View {
     let deal: PipelineDeal
     let stages: [String]
     let today: String
+    var canEdit = true
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
     @Environment(\.pipelinePresenting) private var presenting
@@ -1118,13 +1296,15 @@ struct PipelineDealCard: View {
     var body: some View {
         Button { onOpen(deal.id) } label: { card }
             .buttonStyle(PressableCardStyle())
+            .accessibilityIdentifier("pipeline.deal.\(deal.id)")
             .contextMenu {
-                Section(T("Move to stage")) { stageButtons }
+                if canEdit { Section(T("Move to stage")) { stageButtons } }
             }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
+            PipelineCompanyChip(source: deal.source)
             HStack(spacing: 6) {
                 Text(deal.code).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
                 Spacer(minLength: 6)
@@ -1280,28 +1460,39 @@ struct PipelineTable: View {
 
     var body: some View {
         let list = rows
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: wide ? [.sectionHeaders] : []) {
-                Section {
-                    ForEach(list) { d in
-                        Button { onOpen(d.id) } label: { wide ? AnyView(wideRow(d)) : AnyView(compactRow(d)) }
-                            .buttonStyle(.plain)
-                            .hoverEffect(.highlight)
-                        Divider().overlay(NX.border)
-                    }
-                    totals(list)
-                } header: {
-                    VStack(spacing: 0) {
-                        sortBar
-                        if wide { wideHeader }
-                        Divider().overlay(NX.border)
-                    }
-                    .background(NX.background)
-                }
+        GeometryReader { geometry in
+            // A regular size class can still leave a narrow detail pane beside the iPad sidebar.
+            // Keep company/deal names readable and let the remaining columns scroll into view.
+            ScrollView(wide ? [.horizontal, .vertical] : .vertical) {
+                tableContent(list)
+                    .frame(width: wide ? max(geometry.size.width, 1220) : geometry.size.width)
             }
-            .padding(.bottom, 20)
+            .accessibilityIdentifier("pipeline.table.scroll")
+            .refreshable { await onRefresh() }
         }
-        .refreshable { await onRefresh() }
+    }
+
+    private func tableContent(_ list: [PipelineDeal]) -> some View {
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: wide ? [.sectionHeaders] : []) {
+            Section {
+                ForEach(list) { d in
+                    Button { onOpen(d.id) } label: { wide ? AnyView(wideRow(d)) : AnyView(compactRow(d)) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("pipeline.deal.\(d.id)")
+                        .hoverEffect(.highlight)
+                    Divider().overlay(NX.border)
+                }
+                totals(list)
+            } header: {
+                VStack(spacing: 0) {
+                    sortBar
+                    if wide { wideHeader }
+                    Divider().overlay(NX.border)
+                }
+                .background(NX.background)
+            }
+        }
+        .padding(.bottom, 20)
     }
 
     private var sortBar: some View {
@@ -1338,13 +1529,13 @@ struct PipelineTable: View {
     private var wideHeader: some View {
         HStack(spacing: 10) {
             head(T("Code")).frame(width: 78, alignment: .leading)
-            head(T("Deal")).frame(maxWidth: .infinity, alignment: .leading)
+            head(T("Deal")).frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
             head(T("Stage")).frame(width: 150, alignment: .leading)
             head(T("Prob.")).frame(width: 44, alignment: .trailing)
             head(T("Net value")).frame(width: 96, alignment: .trailing)
             head(T("Receivable")).frame(width: 96, alignment: .trailing)
             head(T("Overdue")).frame(width: 56, alignment: .trailing)
-            head(T("Next action")).frame(maxWidth: .infinity, alignment: .leading)
+            head(T("Next action")).frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
             head(T("Health")).frame(width: 88, alignment: .leading)
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
@@ -1358,11 +1549,12 @@ struct PipelineTable: View {
         HStack(spacing: 10) {
             Text(d.code).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().frame(width: 78, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
+                PipelineCompanyChip(source: d.source)
                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text([d.brand, d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 6) {
                 Circle().fill(PipelineStyle.groupTone(d.stage)).frame(width: 6, height: 6)
                 Text(PipelineText.stage(d.stage)).font(NXFont.text(12)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -1384,7 +1576,7 @@ struct PipelineTable: View {
                     Text(PipelineFormat.day(d.nextActionDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
             Group {
                 // A pill only where there is something to say; an open deal's "Not started" is plain text.
                 if d.health.key == "NOT_STARTED" {
@@ -1404,6 +1596,7 @@ struct PipelineTable: View {
             Circle().fill(PipelineStyle.healthDot(d.health.key)).frame(width: 8, height: 8).padding(.top, 5)
                 .accessibilityLabel(PipelineText.health(d.health.key))
             VStack(alignment: .leading, spacing: 3) {
+                PipelineCompanyChip(source: d.source)
                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text([d.code, PipelineText.stage(d.stage), d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -1511,6 +1704,7 @@ struct PipelineHealthView: View {
                     if i > 0 { Divider().overlay(NX.border) }
                     Button { onOpen(d.id) } label: {
                         VStack(alignment: .leading, spacing: 6) {
+                            PipelineCompanyChip(source: d.source)
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 PipelineHealthPill(key: d.health.key)
                                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -1526,6 +1720,7 @@ struct PipelineHealthView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("pipeline.deal.\(d.id)")
                 }
             }
         }
@@ -1550,6 +1745,7 @@ struct PipelineHealthView: View {
                         ForEach(group.deals) { d in
                             Button { onOpen(d.id) } label: {
                                 VStack(alignment: .leading, spacing: 1) {
+                                    PipelineCompanyChip(source: d.source)
                                     HStack(alignment: .firstTextBaseline) {
                                         Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                         Spacer(minLength: 4)
@@ -1561,6 +1757,7 @@ struct PipelineHealthView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("pipeline.deal.\(d.id)")
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -1581,6 +1778,7 @@ struct PipelineHealthView: View {
                     Button { onOpen(d.id) } label: {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             VStack(alignment: .leading, spacing: 1) {
+                                PipelineCompanyChip(source: d.source)
                                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                 Text("\(d.paymentStatusShown) · \(PipelineFormat.idr(d.receivable, hidden: presenting))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                             }
@@ -1593,6 +1791,7 @@ struct PipelineHealthView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("pipeline.deal.\(d.id)")
                 }
             }
         }
@@ -1607,6 +1806,7 @@ struct PipelineHealthView: View {
                     if i > 0 { Divider().overlay(NX.border) }
                     Button { onOpen(d.id) } label: {
                         VStack(alignment: .leading, spacing: 2) {
+                            PipelineCompanyChip(source: d.source)
                             Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                             Text(d.blocker).font(NXFont.text(12)).foregroundStyle(ChipTone.warning.fg).multilineTextAlignment(.leading)
                         }
@@ -1615,6 +1815,7 @@ struct PipelineHealthView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("pipeline.deal.\(d.id)")
                 }
             }
         }

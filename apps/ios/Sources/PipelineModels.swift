@@ -170,6 +170,17 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     /// Real cost lines (Control Tower v4, 14 Oct 2026). Empty on a deal without cost data and on a server
     /// from before them. The margin is worked out below on the net value, as the server does.
     var costs: [PipelineCost]
+    /// Pipeline v8 additions are optional on the wire; an older board starts with empty lists.
+    var barterValue: Double
+    var barterCompensation: String
+    var cashback: [PipelineCashback]
+    var cashbackTotal: Double
+    var contacts: [PipelineContact]
+    var budgets: [PipelineBudget]
+    var budgetTotal: Double
+    var eventYear: Int?
+    /// Present only when the deal came from All Pipelines. Opening it uses this projectId.
+    var source: PipelineDealSource?
 
     private enum CodingKeys: String, CodingKey {
         case id, code, position, name, brand, service, services, bdUserId, bdName, bd, pmUserId, pmName, pm, stage, probability
@@ -180,6 +191,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         case executionProjectId, executionProject
         case executionCalendarProjectId, executionCalendarProject, executionFolderId, executionFolder
         case terms, termSummary, costs
+        case barterValue, barterCompensation, cashback, cashbackTotal, contacts, budgets, budgetTotal, eventYear, source
     }
 
     init(from decoder: Decoder) throws {
@@ -225,6 +237,17 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         termSummary = (try? c.decodeIfPresent(PipelineTermSummary.self, forKey: .termSummary)) ?? nil
         let rawCosts = (try? c.decodeIfPresent([PipelineFailable<PipelineCost>].self, forKey: .costs)) ?? []
         costs = rawCosts.compactMap(\.value)
+        barterValue = n(.barterValue); barterCompensation = s(.barterCompensation)
+        let rawCashback = (try? c.decodeIfPresent([PipelineFailable<PipelineCashback>].self, forKey: .cashback)) ?? []
+        cashback = rawCashback.compactMap(\.value)
+        cashbackTotal = n(.cashbackTotal)
+        let rawContacts = (try? c.decodeIfPresent([PipelineFailable<PipelineContact>].self, forKey: .contacts)) ?? []
+        contacts = rawContacts.compactMap(\.value)
+        let rawBudgets = (try? c.decodeIfPresent([PipelineFailable<PipelineBudget>].self, forKey: .budgets)) ?? []
+        budgets = rawBudgets.compactMap(\.value)
+        budgetTotal = n(.budgetTotal)
+        eventYear = try? c.decodeIfPresent(Int.self, forKey: .eventYear)
+        source = try? c.decodeIfPresent(PipelineDealSource.self, forKey: .source)
     }
 
     /// Σ of the cost lines (server: costTotalOf).
@@ -287,6 +310,8 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             case "invoiceValue": if let num { invoiceValue = num }
             case "outstandingReceivable": if let num { outstandingReceivable = num }
             case "netCash": if let num { netCash = num }
+            case "barterValue": if let num { barterValue = num }
+            case "barterCompensation": if let str { barterCompensation = str }
             case "maxDaysOverdue": if let num { maxDaysOverdue = Int(num) }
             case "contractStatus": if let str { contractStatus = str }
             case "vregStatus": if let str { vregStatus = str }
@@ -299,7 +324,9 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             case "blocker": if let str { blocker = str }
             case "notes": if let str { notes = str }
             case "paymentDueDate": paymentDueDate = str
-            case "mainDate": mainDate = str
+            case "mainDate":
+                mainDate = str
+                eventYear = str.flatMap { Int($0.prefix(4)) }
             case "nextActionDate": nextActionDate = str
             case "bdName": bdName = str
             case "pmName": pmName = str
@@ -307,8 +334,13 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
                 if let list = value as? [[String: Any]] {
                     costs = list.compactMap { item in
                         guard let id = item["id"] as? String else { return nil }
+                        // Omission keeps an older client's category; explicit null clears it.
+                        let budgetId = item.keys.contains("budgetId")
+                            ? (item["budgetId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                            : costs.first(where: { $0.id == id })?.budgetId
                         return PipelineCost(id: id, label: item["label"] as? String ?? "",
-                                            amount: (item["amount"] as? NSNumber)?.doubleValue ?? 0)
+                                            amount: (item["amount"] as? NSNumber)?.doubleValue ?? 0,
+                                            budgetId: budgetId)
                     }
                 }
             case "bdUserId": bdUserId = str; if str == nil { bd = nil }
@@ -416,28 +448,145 @@ struct PipelineCost: Decodable, Hashable, Identifiable, Sendable {
     let id: String
     var label: String
     var amount: Double
+    var budgetId: String?
 
-    init(id: String, label: String, amount: Double) {
+    init(id: String, label: String, amount: Double, budgetId: String? = nil) {
         self.id = id
         self.label = label
         self.amount = amount
+        self.budgetId = budgetId
     }
 
-    private enum CodingKeys: String, CodingKey { case id, label, amount }
+    private enum CodingKeys: String, CodingKey { case id, label, amount, budgetId }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
         amount = (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0
+        budgetId = (try? c.decodeIfPresent(String.self, forKey: .budgetId)).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// What a PATCH of `costs` sends back for this line.
-    var json: [String: Any] { ["id": id, "label": label, "amount": amount] }
+    var json: [String: Any] { ["id": id, "label": label, "amount": amount, "budgetId": budgetId as Any? ?? NSNull()] }
 
     /// A new line's id, in the shape the server keeps ("c_" + 16 hex).
     static func newId() -> String {
         "c_" + String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(16))
     }
+}
+
+/// The company is the deal's own pipeline board, never a manually editable source field.
+struct PipelineDealSource: Decodable, Hashable, Sendable {
+    let projectId: String
+    let name: String
+
+    private enum CodingKeys: String, CodingKey { case projectId, name }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        projectId = try c.decode(String.self, forKey: .projectId)
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+    }
+
+    var companyName: String { name.hasPrefix("Pipeline ") ? String(name.dropFirst(9)) : name }
+}
+
+/// An ordered cashback recipient. Server-created ids also survive deletion/restoration from Audit.
+struct PipelineCashback: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    let dealId: String
+    var position: Double
+    var name: String
+    var amount: Double
+    let createdAt: String?
+    let updatedAt: String?
+
+    private enum CodingKeys: String, CodingKey { case id, dealId, position, name, amount, createdAt, updatedAt }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        dealId = (try? c.decodeIfPresent(String.self, forKey: .dealId)) ?? ""
+        position = (try? c.decodeIfPresent(Double.self, forKey: .position)) ?? 0
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        amount = (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+}
+
+struct PipelineContact: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    let dealId: String
+    var position: Double
+    var role: String
+    var name: String
+    var phone: String
+    let createdAt: String?
+    let updatedAt: String?
+
+    private enum CodingKeys: String, CodingKey { case id, dealId, position, role, name, phone, createdAt, updatedAt }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        dealId = (try? c.decodeIfPresent(String.self, forKey: .dealId)) ?? ""
+        position = (try? c.decodeIfPresent(Double.self, forKey: .position)) ?? 0
+        role = (try? c.decodeIfPresent(String.self, forKey: .role)) ?? "Client"
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        phone = (try? c.decodeIfPresent(String.self, forKey: .phone)) ?? ""
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+}
+
+/// Spent and remaining are server-derived; the budget does not enter margin or real-profit KPIs.
+struct PipelineBudget: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    let dealId: String
+    var position: Double
+    var name: String
+    var amount: Double
+    var spent: Double
+    var remaining: Double
+    let createdAt: String?
+    let updatedAt: String?
+
+    private enum CodingKeys: String, CodingKey { case id, dealId, position, name, amount, spent, remaining, createdAt, updatedAt }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        dealId = (try? c.decodeIfPresent(String.self, forKey: .dealId)) ?? ""
+        position = (try? c.decodeIfPresent(Double.self, forKey: .position)) ?? 0
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        amount = (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0
+        spent = (try? c.decodeIfPresent(Double.self, forKey: .spent)) ?? 0
+        remaining = (try? c.decodeIfPresent(Double.self, forKey: .remaining)) ?? 0
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+}
+
+/// Item answers carry the whole deal, which callers replace in the cache after every write.
+struct PipelineItemResponse: Decodable, Sendable {
+    let deal: PipelineDeal?
+    let item: PipelineItem?
+    let duplicate: Bool
+
+    private enum CodingKeys: String, CodingKey { case deal, item, duplicate }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deal = try? c.decodeIfPresent(PipelineDeal.self, forKey: .deal)
+        item = try? c.decodeIfPresent(PipelineItem.self, forKey: .item)
+        duplicate = (try? c.decodeIfPresent(Bool.self, forKey: .duplicate)) ?? false
+    }
+}
+
+/// A kind-tagged item returned by POST/PATCH; budget spent/remaining live in deal.budgets instead.
+struct PipelineItem: Decodable, Sendable {
+    let id: String
+    let kind: String
+    let name: String?
+    let amount: Double?
+    let role: String?
+    let phone: String?
 }
 
 /// The KPI strip, over EVERY deal of the project (never the filtered view), as the server sums it.
@@ -507,6 +656,7 @@ struct PipelineVocab: Decodable, Sendable {
     var paymentStatuses: [String]
     var closingStatuses: [String]
     var linkTypes: [String]
+    var contactRoles: [String]
 
     static let lostStage = "Lost / Cancelled"
 
@@ -526,21 +676,24 @@ struct PipelineVocab: Decodable, Sendable {
         paymentStatuses: ["Not Yet", "Upcoming", "Due", "Overdue", "Partial", "Paid"],
         closingStatuses: ["Not Ready", "In Progress", "Waiting BAST", "Waiting Client Payment", "Waiting Vendor Settlement",
                           "Waiting Deliverables", "Ready to Close", "Closed"],
-        linkTypes: ["SPK", "Kontrak", "MOU", "Invoice", "Lainnya"]
+        linkTypes: ["Deck", "Quotation", "Kontrak", "SPK", "MOU", "Invoice", "Report", "Lainnya"],
+        contactRoles: ["Client", "Vendor", "Broker", "PM (client side)", "Finance", "Admin", "Other"]
     )
 
     init(stages: [String], services: [String], probabilities: [Double], contractStatuses: [String], vregStatuses: [String],
          readiness: [String], deliverableStatuses: [String], deliverableRisks: [String], paymentStatuses: [String],
-         closingStatuses: [String], linkTypes: [String]) {
+         closingStatuses: [String], linkTypes: [String],
+         contactRoles: [String] = ["Client", "Vendor", "Broker", "PM (client side)", "Finance", "Admin", "Other"]) {
         self.stages = stages; self.services = services; self.probabilities = probabilities
         self.contractStatuses = contractStatuses; self.vregStatuses = vregStatuses; self.readiness = readiness
         self.deliverableStatuses = deliverableStatuses; self.deliverableRisks = deliverableRisks
         self.paymentStatuses = paymentStatuses; self.closingStatuses = closingStatuses; self.linkTypes = linkTypes
+        self.contactRoles = contactRoles
     }
 
     private enum CodingKeys: String, CodingKey {
         case stages, services, probabilities, contractStatuses, vregStatuses, readiness, deliverableStatuses
-        case deliverableRisks, paymentStatuses, closingStatuses, linkTypes
+        case deliverableRisks, paymentStatuses, closingStatuses, linkTypes, contactRoles
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -556,6 +709,7 @@ struct PipelineVocab: Decodable, Sendable {
         readiness = l(.readiness, f.readiness); deliverableStatuses = l(.deliverableStatuses, f.deliverableStatuses)
         deliverableRisks = l(.deliverableRisks, f.deliverableRisks); paymentStatuses = l(.paymentStatuses, f.paymentStatuses)
         closingStatuses = l(.closingStatuses, f.closingStatuses); linkTypes = l(.linkTypes, f.linkTypes)
+        contactRoles = l(.contactRoles, f.contactRoles)
     }
 
     /// The server's stageGroupOf: Pipeline · Pre-Execution · Execution · Closed · Lost.
@@ -610,8 +764,11 @@ struct PipelineResponse: Decodable, Sendable {
     /// May the viewer change deals (14 Oct 2026)? Full / Can edit yes, Can comment / Can view no. A server
     /// from before it says nothing: true, as before.
     let canEdit: Bool
+    /// All available years, even while the server has filtered the deals/summary to `year`.
+    let years: [Int]
+    let year: Int?
 
-    private enum CodingKeys: String, CodingKey { case project, deals, summary, vocab, today, canEdit }
+    private enum CodingKeys: String, CodingKey { case project, deals, summary, vocab, today, canEdit, years, year }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         project = try? c.decodeIfPresent(PipelineProjectRef.self, forKey: .project)
@@ -622,6 +779,72 @@ struct PipelineResponse: Decodable, Sendable {
         vocab = (try? c.decodeIfPresent(PipelineVocab.self, forKey: .vocab)) ?? .fallback
         today = try? c.decodeIfPresent(String.self, forKey: .today)
         canEdit = ((try? c.decodeIfPresent(Bool.self, forKey: .canEdit)) ?? nil) ?? true
+        years = (try? c.decodeIfPresent([Int].self, forKey: .years)) ?? []
+        year = try? c.decodeIfPresent(Int.self, forKey: .year)
+    }
+}
+
+/// A pipeline board available to the BoD/OAA combined view and board switcher.
+struct PipelineBoardRef: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let icon: String?
+    let color: String?
+    let status: String
+    let dealCount: Int
+
+    private enum CodingKeys: String, CodingKey { case id, name, icon, color, status, dealCount }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        icon = try? c.decodeIfPresent(String.self, forKey: .icon)
+        color = try? c.decodeIfPresent(String.self, forKey: .color)
+        status = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? "ACTIVE"
+        dealCount = (try? c.decodeIfPresent(Int.self, forKey: .dealCount)) ?? 0
+    }
+}
+
+struct PipelineBoardsResponse: Decodable, Sendable {
+    let workspaceId: String?
+    let boards: [PipelineBoardRef]
+
+    private enum CodingKeys: String, CodingKey { case workspaceId, boards }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        workspaceId = try? c.decodeIfPresent(String.self, forKey: .workspaceId)
+        let raw = (try? c.decodeIfPresent([PipelineFailable<PipelineBoardRef>].self, forKey: .boards)) ?? []
+        boards = raw.compactMap(\.value)
+    }
+}
+
+/// GET /api/pipelines/all. Read-only even if a malformed/older answer claims edit permission.
+struct PipelineAllResponse: Decodable, Sendable {
+    let workspaceId: String?
+    let boards: [PipelineBoardRef]
+    let deals: [PipelineDeal]
+    let summary: PipelineSummary
+    let vocab: PipelineVocab
+    let today: String?
+    let years: [Int]
+    let year: Int?
+    let source: String?
+    var canEdit: Bool { false }
+
+    private enum CodingKeys: String, CodingKey { case workspaceId, boards, deals, summary, vocab, today, years, year, source }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        workspaceId = try? c.decodeIfPresent(String.self, forKey: .workspaceId)
+        let rawBoards = (try? c.decodeIfPresent([PipelineFailable<PipelineBoardRef>].self, forKey: .boards)) ?? []
+        boards = rawBoards.compactMap(\.value)
+        let rawDeals = (try? c.decodeIfPresent([PipelineFailable<PipelineDeal>].self, forKey: .deals)) ?? []
+        deals = rawDeals.compactMap(\.value)
+        summary = (try? c.decodeIfPresent(PipelineSummary.self, forKey: .summary)) ?? PipelineSummary()
+        vocab = (try? c.decodeIfPresent(PipelineVocab.self, forKey: .vocab)) ?? .fallback
+        today = try? c.decodeIfPresent(String.self, forKey: .today)
+        years = (try? c.decodeIfPresent([Int].self, forKey: .years)) ?? []
+        year = try? c.decodeIfPresent(Int.self, forKey: .year)
+        source = try? c.decodeIfPresent(String.self, forKey: .source)
     }
 }
 
@@ -686,9 +909,34 @@ enum PipelineText {
     static func link(_ k: String) -> String {
         switch k {
         case "Kontrak": return T("Contract")
-        case "Lainnya": return T("Other link")
+        case "Lainnya": return T("Other")
         case "SPK": return T("SPK (Work Order)")
+        case "Quotation": return T("Quotation")
+        case "Report": return T("Report")
         default: return k
+        }
+    }
+
+    static func contactRole(_ key: String) -> String {
+        key == "Other" ? T("Other contact") : T(key)
+    }
+
+    static func itemKind(_ key: String) -> String {
+        switch key {
+        case "cashback": return T("Cashback")
+        case "contact": return T("Project contact")
+        case "budget": return T("Budget expenses")
+        default: return key
+        }
+    }
+
+    static func itemField(_ key: String) -> String {
+        switch key {
+        case "name": return T("Name")
+        case "amount": return T("Amount")
+        case "role": return T("Role")
+        case "phone": return T("Phone")
+        default: return key
         }
     }
 
@@ -804,6 +1052,8 @@ enum PipelineText {
         case "probability": en = "Probability"
         case "contractValue": en = "Contract value"
         case "netValue": en = "Net project value"
+        case "barterValue": en = "Barter value"
+        case "barterCompensation": en = "Barter compensation form"
         case "invoiceValue": en = "Invoice value"
         case "contractStatus": en = "Contract status"
         case "vregStatus": en = "Vendor registration"

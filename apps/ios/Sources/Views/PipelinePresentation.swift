@@ -6,7 +6,16 @@ import SwiftUI
 // table, health view, the deal sheet, payment terms and history — so the board can be shown on a big
 // screen. Amounts read "Rp ••••" and money fields are locked; the card's margin line and the whole
 // Real cost & margin section are not drawn at all. A screen mask only: the Excel export keeps the real
-// numbers. Never remembered: the Pipeline always opens with it off, so nobody forgets it is on.
+// numbers. Kept in memory across boards for this app session; never stored across app launches.
+
+@MainActor
+@Observable
+final class PipelinePresentationSession {
+    static let shared = PipelinePresentationSession()
+    var isPresenting = false
+    private init() {}
+    func reset() { isPresenting = false }
+}
 
 private struct PipelinePresentingKey: EnvironmentKey { static let defaultValue = false }
 

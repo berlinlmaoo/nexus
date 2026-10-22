@@ -19,8 +19,31 @@ extension APIClient {
     }
 
     /// Deals with their server-computed health and phases, the KPI summary, and every option list.
-    func pipeline(projectId: String) async throws -> PipelineResponse {
-        try await pipelineRun(makeRequest(pipelineBase(projectId)), as: PipelineResponse.self)
+    func pipeline(projectId: String, year: Int? = nil) async throws -> PipelineResponse {
+        let suffix = year.map { "?year=\($0)" } ?? ""
+        return try await pipelineRun(makeRequest(pipelineBase(projectId) + suffix), as: PipelineResponse.self)
+    }
+
+    /// Call only for a BOD/ONE_ABOVE_ALL workspace role; a 403 hides both entry points.
+    func pipelineBoards(workspaceId: String? = nil) async throws -> PipelineBoardsResponse {
+        let path = Self.pipelineQuery("/api/pipelines/boards", workspaceId: workspaceId)
+        return try await pipelineRun(makeRequest(path), as: PipelineBoardsResponse.self)
+    }
+
+    /// Source and year are view filters. The server summary follows them, before the usual UI filters.
+    func pipelineAll(workspaceId: String? = nil, source: String? = nil, year: Int? = nil) async throws -> PipelineAllResponse {
+        let path = Self.pipelineQuery("/api/pipelines/all", workspaceId: workspaceId, source: source, year: year)
+        return try await pipelineRun(makeRequest(path), as: PipelineAllResponse.self)
+    }
+
+    private static func pipelineQuery(_ path: String, lang: String? = nil, workspaceId: String? = nil,
+                                      source: String? = nil, year: Int? = nil) -> String {
+        var parts: [String] = []
+        if let lang { parts.append("lang=\(pipelineEnc(lang))") }
+        if let workspaceId { parts.append("workspaceId=\(pipelineEnc(workspaceId))") }
+        if let source { parts.append("source=\(pipelineEnc(source))") }
+        if let year { parts.append("year=\(year)") }
+        return path + (parts.isEmpty ? "" : "?" + parts.joined(separator: "&"))
     }
 
     /// One deal and its edit history (newest first, at most 200).
@@ -76,6 +99,36 @@ extension APIClient {
         return try await pipelineRun(req, as: PipelineTermResponse.self)
     }
 
+    // MARK: Cashback, project contacts and budget categories
+
+    /// Generate clientRequestId once when the user taps Add, then reuse it if that request is retried.
+    /// All successful item operations return the entire deal; replace the cached deal with it.
+    func pipelineAddItem(projectId: String, dealId: String, kind: String, fields: [String: Any] = [:],
+                         clientRequestId: String) async throws -> PipelineItemResponse {
+        var req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/items", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body = fields
+        body["kind"] = kind
+        body["clientRequestId"] = clientRequestId
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await pipelineRun(req, as: PipelineItemResponse.self)
+    }
+
+    /// Send only the changed fields, keeping concurrent changes to other fields/items intact.
+    func pipelineUpdateItem(projectId: String, dealId: String, itemId: String,
+                            fields: [String: Any]) async throws -> PipelineItemResponse {
+        var req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/items/\(Self.pipelineEnc(itemId))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        return try await pipelineRun(req, as: PipelineItemResponse.self)
+    }
+
+    /// Restorable from Control Room → Audit. A missing item stays a server 404.
+    func pipelineDeleteItem(projectId: String, dealId: String, itemId: String) async throws -> PipelineItemResponse {
+        let req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/items/\(Self.pipelineEnc(itemId))", method: "DELETE")
+        return try await pipelineRun(req, as: PipelineItemResponse.self)
+    }
+
     // MARK: Documents (owner, 9 Oct 2026: "kenapa ga attach documentnya jg?")
 
     /// Attach a file to a deal's "Documents & links": the shared chunk route with target=pipeline, for
@@ -99,8 +152,17 @@ extension APIClient {
 
     /// The .xlsx "Master Project" sheet (the GM's columns), saved to a temporary file named as the server
     /// names it. The caller hands the file to the share sheet.
-    func pipelineExport(projectId: String, lang: String) async throws -> URL {
-        let req = makeRequest("\(pipelineBase(projectId))/export?lang=\(lang)")
+    func pipelineExport(projectId: String, lang: String, year: Int? = nil) async throws -> URL {
+        let path = Self.pipelineQuery("\(pipelineBase(projectId))/export", lang: lang, year: year)
+        return try await pipelineDownload(makeRequest(path))
+    }
+
+    func pipelineAllExport(lang: String, workspaceId: String? = nil, source: String? = nil, year: Int? = nil) async throws -> URL {
+        let path = Self.pipelineQuery("/api/pipelines/all/export", lang: lang, workspaceId: workspaceId, source: source, year: year)
+        return try await pipelineDownload(makeRequest(path))
+    }
+
+    private func pipelineDownload(_ req: URLRequest) async throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pipeline-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let raw = dir.appendingPathComponent("download")

@@ -60,8 +60,8 @@ struct PipelineDocumentsEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if deal.links.isEmpty && uploads.isEmpty {
-                Text(T("No SPK, contract, MOU or invoice yet. Attach the file or paste a link."))
-                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                EmptyState(icon: "doc.text", title: T("No documents or links yet."),
+                           subtitle: store.canEdit ? T("Attach a file or paste a link.") : "", compact: true, quietTitle: true)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(deal.links.enumerated()), id: \.element.id) { i, l in
@@ -76,8 +76,10 @@ struct PipelineDocumentsEditor: View {
                 .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
             }
-            form
+            if store.canEdit { form }
         }
+        .onAppear { validateType() }
+        .onChange(of: linkTypes) { _, _ in validateType() }
         .sheet(item: $route) { r in
             switch r {
             case .files:
@@ -154,12 +156,14 @@ struct PipelineDocumentsEditor: View {
             .buttonStyle(.plain)
             .disabled(opening == l.id)
             Spacer(minLength: 4)
-            Button { askRemove(l) } label: {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
-                    .frame(width: 32, height: 32).touchTarget44(drawn: 32)
+            if store.canEdit {
+                Button { askRemove(l) } label: {
+                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 32, height: 32).touchTarget44(drawn: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(l.isFile ? T("Remove document") : T("Remove link"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(l.isFile ? T("Remove document") : T("Remove link"))
         }
         .padding(.horizontal, 10).padding(.vertical, 4)
         .contextMenu {
@@ -167,8 +171,10 @@ struct PipelineDocumentsEditor: View {
             if l.isFile {
                 Button { share(l) } label: { Label(T("Share"), systemImage: "square.and.arrow.up") }
             }
-            Button(role: .destructive) { askRemove(l) } label: {
-                Label(l.isFile ? T("Remove document") : T("Remove link"), systemImage: "trash")
+            if store.canEdit {
+                Button(role: .destructive) { askRemove(l) } label: {
+                    Label(l.isFile ? T("Remove document") : T("Remove link"), systemImage: "trash")
+                }
             }
         }
     }
@@ -215,6 +221,7 @@ struct PipelineDocumentsEditor: View {
                 }
                 .menuIndicator(.hidden)
                 .accessibilityLabel(T("Link type"))
+                .accessibilityIdentifier("pipeline.documents.type")
                 TextField(T("Paste a link (https://…)"), text: $url)
                     .font(NXFont.text(14)).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .modifier(PipelineInputChrome())
@@ -258,6 +265,10 @@ struct PipelineDocumentsEditor: View {
         onCommitLinks(deal.links + [PipelineLink(id: id, type: type, label: label.trimmingCharacters(in: .whitespaces), url: u)])
         url = ""
         label = ""
+    }
+
+    private func validateType() {
+        if !linkTypes.contains(type), let first = linkTypes.first { type = first }
     }
 
     /// One after another, each with its own bar. The name field names a single file; with several each

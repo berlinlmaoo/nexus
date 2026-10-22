@@ -42,6 +42,8 @@ final class AuthStore {
                 ResponseCache.clearAll()
                 OfflineSync.shared.reset()
                 Viewer.shared.reset()
+                PipelinePresentationSession.shared.reset()
+                PipelineBoardDirectory.shared.reset()
                 PresenceStore.shared.reset()
                 GideonMemoryStore.shared.reset()
                 RealtimeClient.shared.reset()
@@ -102,6 +104,8 @@ final class AuthStore {
             userName: res.user.name ?? "",
             userEmail: res.user.email ?? fallbackEmail
         )
+        PipelinePresentationSession.shared.reset()
+        PipelineBoardDirectory.shared.reset()
         PresenceStore.shared.reset()
         GideonMemoryStore.shared.reset()
         Keychain.save(s)
@@ -176,6 +180,8 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()
+        PipelinePresentationSession.shared.reset()
+        PipelineBoardDirectory.shared.reset()
         PresenceStore.shared.reset()
         GideonMemoryStore.shared.reset()
         // Nor the realtime connection: it is authenticated as this person, and the next one to sign in

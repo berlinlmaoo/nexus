@@ -104,3 +104,27 @@ swiftc "$NATIVE_CHECK_TMP/form-wire.swift" Sources/FormCoedit.swift Tests/FormCo
 "$NATIVE_CHECK_TMP/form-coedit"
 swiftc Sources/StartupModalQueue.swift Tests/StartupModalQueue/main.swift -o "$NATIVE_CHECK_TMP/startup-modals"
 "$NATIVE_CHECK_TMP/startup-modals"
+
+# Pipeline v8: real DTOs, category clearing/merge base, and API request/filter/idempotency contract.
+python3 - "$NATIVE_CHECK_TMP" <<'PYPIPELINE'
+from pathlib import Path
+import sys
+out = Path(sys.argv[1])
+client = Path('Sources/APIClient.swift').read_text()
+a = client.index('        let url: URL', client.index('func makeRequest('))
+b = client.index('        var req = URLRequest(url: url)', a)
+stub = Path('Tests/PipelineV8/Stub.swift').read_text().replace('        // BUILD_REQUEST_URL', client[a:b])
+audit = Path('Sources/AuditModels.swift').read_text()
+stub += '\n' + audit[audit.index('enum AuditJSON:'):]
+presentation = Path('Sources/Views/PipelinePresentation.swift').read_text()
+a = presentation.index('extension PipelineFormat {')
+b = presentation.index('\n}', a) + 2
+stub += '\n' + presentation[a:b]
+navigation = Path('Sources/Views/PipelineNavigation.swift').read_text()
+a = navigation.index('@MainActor')
+b = navigation.index('enum PipelineNavigationTarget:')
+stub += '\nimport Observation\n' + navigation[a:b]
+(out / 'pipeline-stub.swift').write_text(stub)
+PYPIPELINE
+swiftc Sources/AppDateLocale.swift Sources/PipelineModels.swift Sources/PipelineAPI.swift Sources/PipelineItemHistory.swift "$NATIVE_CHECK_TMP/pipeline-stub.swift" Tests/PipelineV8/main.swift -o "$NATIVE_CHECK_TMP/pipeline-v8"
+"$NATIVE_CHECK_TMP/pipeline-v8"
