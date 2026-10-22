@@ -1755,8 +1755,10 @@ struct APIClient {
         return true
     }
 
-    func announcements() async throws -> [AdminAnnouncement] {
-        (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
+    /// The Control Room list of one origin — written in the composer ("manual") or posted any other way
+    /// ("system") — with the counts of both. Without `origin` the server answers every row (old builds).
+    func announcements(origin: AnnouncementOrigin) async throws -> AnnouncementsResponse {
+        try await run(makeRequest("/api/announcements?origin=\(origin.rawValue)"), decode: AnnouncementsResponse.self)
     }
     /// `repeatDays` counts the days AFTER today the notice should come back, at `repeatAtTime`
     /// ("HH:mm", Asia/Jakarta). 0 is the old behaviour exactly — posted once, never repeated — and

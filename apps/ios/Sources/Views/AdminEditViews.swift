@@ -126,7 +126,12 @@ struct GideonUsage: Decodable, Sendable {
     }
 }
 
-struct AnnouncementsResponse: Decodable, Sendable { let announcements: [AdminAnnouncement]? }
+struct AnnouncementsResponse: Decodable, Sendable {
+    let announcements: [AdminAnnouncement]?
+    /// Both origins whatever the filter (servers from 22 Oct 2026): the numbers on the segments.
+    let counts: Counts?
+    struct Counts: Decodable, Sendable { let manual: Int?; let system: Int? }
+}
 struct AdminAnnouncement: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -145,6 +150,10 @@ struct AdminAnnouncement: Decodable, Identifiable, Sendable {
     let targetUserIds: [String]?
     let targets: [Target]?
     struct Target: Decodable, Sendable { let id: String?; let name: String? }
+    /// "manual" (the Control Room composer) | "system" (everything else). Servers from 22 Oct 2026.
+    let origin: String?
+    /// Finer detail of a system one: "composer" | "gideon" | "attendance_warning" | "template" | "legacy".
+    let source: String?
 }
 
 /// POST /api/announcements/attachment → the stored PDF.
@@ -856,7 +865,15 @@ struct CreateQuestSheet: View {
 
 // MARK: - Announcements admin
 
+/// Which announcements a list shows: the ones an admin wrote in the composer, or the ones posted any
+/// other way (attendance warnings, check-out reminders, install-the-app nudges, GIDEON's) — `origin` on
+/// GET /api/announcements.
+enum AnnouncementOrigin: String, Hashable { case manual, system }
+
 struct AdminAnnouncementsSection: View {
+    /// Admin-written by default (owner, 22 Oct 2026): the automatic per-person ones buried them.
+    @State private var origin: AnnouncementOrigin = .manual
+    @State private var counts: AnnouncementsResponse.Counts?
     @State private var rows: [AdminAnnouncement] = []
     @State private var loading = true
     @State private var showCreate = false
@@ -878,21 +895,67 @@ struct AdminAnnouncementsSection: View {
                             Label(T("New announcement"), systemImage: "megaphone.fill").font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain)
-                        if rows.isEmpty { TabEmpty(icon: "megaphone", text: T("No announcements yet.")) }
+                        if rows.isEmpty {
+                            if origin == .manual {
+                                EmptyState(icon: "megaphone", title: T("No announcements yet."),
+                                           subtitle: T("Post one above to tell everyone, or a few people, something."), compact: true)
+                            } else {
+                                EmptyState(icon: "gearshape.2", title: T("Nothing from the system"),
+                                           subtitle: T("Attendance warnings, app reminders and GIDEON posts show up here."), compact: true)
+                            }
+                        }
                         else { ForEach(rows) { announcementRow($0) } }
                     }.padding(16)
                 }
             }
         }
-        .task { await load() }
-        .sheet(isPresented: $showCreate) { CreateAnnouncementSheet { await load() } }
+        // Above the list, so it stays put while a tab loads or fails.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                NXSegmented(selection: $origin, options: [.manual, .system], label: segmentLabel, title: T("Show"))
+                Text(origin == .manual ? T("Posted from this page.") : T("Attendance warnings, app reminders and GIDEON posts."))
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 4)
+            }
+            .padding(.horizontal, 16).padding(.top, 12)
+            .background(NX.background)
+        }
+        .task(id: origin) {
+            // Another tab's rows are never shown under this one's name, not even while it loads.
+            rows = []; loadFailure = nil; loading = true
+            await load()
+        }
+        // What the composer posts is always a manual one: back to that list to show it.
+        .sheet(isPresented: $showCreate) {
+            CreateAnnouncementSheet { if origin == .manual { await load() } else { origin = .manual } }
+        }
         .failureToast($toast)
+    }
+    /// "Announcements 12" / "System 31", as the web. "System" is the same word in both languages (owner,
+    /// 22 Oct 2026), so it does not go through T().
+    private func segmentLabel(_ o: AnnouncementOrigin) -> String {
+        let name = o == .manual ? T("Announcements") : "System"
+        guard let n = o == .manual ? counts?.manual : counts?.system else { return name }
+        return "\(name) \(AppNumber.int(n))"
+    }
+    /// What posted a system one, as the web's caption. A legacy row says nothing.
+    private func sourceCaption(_ a: AdminAnnouncement) -> String? {
+        guard a.origin == "system" else { return nil }
+        switch a.source {
+        case "gideon": return "GIDEON"
+        case "attendance_warning": return T("Attendance warning")
+        case "template": return T("Automatic")
+        default: return nil
+        }
     }
     private func announcementRow(_ a: AdminAnnouncement) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(a.title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 NexusChip(text: (a.active ?? false) ? T("Active") : T("Inactive"), tone: (a.active ?? false) ? .success : .neutral)
+                if let caption = sourceCaption(a) {
+                    NexusChip(text: caption, tone: a.source == "attendance_warning" ? .orange : .accent)
+                }
                 Spacer()
                 Button { Task { await deleteAnnouncement(a) } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
             }
@@ -915,10 +978,16 @@ struct AdminAnnouncementsSection: View {
         }.nexusCard(padding: 12)
     }
     private func load() async {
+        let asked = origin
         do {
-            rows = try await APIClient.shared.announcements()
+            let page = try await APIClient.shared.announcements(origin: asked)
+            // The tab changed while this was out: its own load is on its way.
+            guard asked == origin else { return }
+            rows = page.announcements ?? []
+            if let fresh = page.counts { counts = fresh }
             loadFailure = nil
         } catch {
+            if error is CancellationError || asked != origin { return }
             loadFailure = error
             if !rows.isEmpty { toast = FailureToastPayload(title: T("Couldn't refresh the announcements"), error: error) }
         }
