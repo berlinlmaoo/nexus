@@ -5,7 +5,7 @@ import { type CSSProperties, type ElementType, type HTMLAttributes, useLayoutEff
  * while it can still be read in full (owner rule, QA final #2, 24 Oct 2026: no cut-off text, but no layout
  * change). In this order:
  *   1. wraps between words onto a second line (never inside a word);
- *   2. if two lines are not enough, shrinks a little, 1/2 px at a time, down to `minScale` of its size;
+ *   2. if two lines are not enough, shrinks a little, 1/2 px at a time, down to `minScale` (75%, like the title);
  *   3. only then: an ellipsis after the second line. A single word wider than the whole line is split only in
  *      this last step, after the shrink.
  * The full text is always the element's tooltip. The same approach as the project title fit (PageHeader).
@@ -15,7 +15,7 @@ export function FitText({
   text,
   as: Tag = "span",
   lines = 2,
-  minScale = 0.8,
+  minScale = 0.75,
   title,
   style,
   ...rest
