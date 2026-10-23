@@ -34,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.theme.Nx
+import id.znetworks.nexus.ui.components.WholeWordAutoSizeText
 import kotlin.math.roundToInt
 
 /**
@@ -204,7 +206,7 @@ internal fun FolderNode(f: ProjectFolder, depth: Int, scope: String, a: TreeActi
                 Spacer(Modifier.size(6.dp))
                 IconTile(f.icon, "📁", size = 30)
                 Spacer(Modifier.size(10.dp))
-                Text(f.name, fontWeight = FontWeight.Medium, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                WholeWordAutoSizeText(f.name, LocalTextStyle.current.copy(fontWeight = FontWeight.Medium, color = c.foreground), Modifier.weight(1f))
                 // The count only while closed: open, what is inside shows itself.
                 if (!open) Text("${a.tree.count(f.id)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
                     modifier = Modifier.background(c.muted, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))

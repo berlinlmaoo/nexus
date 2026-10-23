@@ -21,11 +21,11 @@ import kotlin.math.abs
 
 /** Project names share a two-line, word-only layout, including the Pipeline board switcher. */
 @Composable
-fun ProjectTitle(name: String, modifier: Modifier = Modifier, minFontSize: Float = 14f) {
+fun ProjectTitle(name: String, modifier: Modifier = Modifier, minFontSize: Float = 14f, normalFontSize: Float = 19f) {
     val measure = rememberProjectTitleMeasure()
     BoxWithConstraints(modifier) {
-        val title = remember(name, constraints.maxWidth, measure, minFontSize) {
-            ProjectTitleLayout.fit(name, constraints.maxWidth.toFloat(), minFontSize, measure)
+        val title = remember(name, constraints.maxWidth, measure, minFontSize, normalFontSize) {
+            ProjectTitleLayout.fit(name, constraints.maxWidth.toFloat(), minFontSize, measure, normalFontSize)
         }
         Column(Modifier.fillMaxWidth().clearAndSetSemantics { text = AnnotatedString(name) }) {
             title.lines.forEach { line ->
@@ -55,11 +55,12 @@ internal object ProjectTitleLayout {
 
     fun fit(name: String, width: Float, measure: (String, Float) -> Float): Result = fit(name, width, 14f, measure)
 
-    fun fit(name: String, width: Float, minFontSize: Float, measure: (String, Float) -> Float): Result {
-        val minimum = minFontSize.coerceIn(1f, 19f)
+    fun fit(name: String, width: Float, minFontSize: Float, measure: (String, Float) -> Float, normalFontSize: Float = 19f): Result {
+        val normal = normalFontSize.coerceIn(1f, 19f)
+        val minimum = minFontSize.coerceIn(1f, normal)
         val words = name.trim().split(Regex("\\s+")).filter(String::isNotEmpty)
-        if (words.isEmpty()) return Result(listOf(""), 19f, true)
-        val sizes = (0..36).map { 19f - it * .5f }.takeWhile { it > minimum } + minimum
+        if (words.isEmpty()) return Result(listOf(""), normal, true)
+        val sizes = (0..36).map { normal - it * .5f }.takeWhile { it > minimum } + minimum
         for (size in sizes) {
             completeLines(words, width, size, measure)?.let { return Result(it, size, true) }
         }

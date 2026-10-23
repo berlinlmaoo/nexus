@@ -60,6 +60,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -89,6 +90,7 @@ import id.znetworks.nexus.feature.projects.Pill
 import id.znetworks.nexus.feature.projects.TabEmpty
 import id.znetworks.nexus.feature.projects.dueDate
 import id.znetworks.nexus.ui.components.Avatar
+import id.znetworks.nexus.ui.components.WholeWordAutoSizeText
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
@@ -155,7 +157,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                                 }
                                 Avatar(r.name, r.avatar, 40.dp, userId = r.userId); Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    WholeWordAutoSizeText(r.name ?: "—", LocalTextStyle.current.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground))
                                     Text(stringResource(R.string.home_level_n, r.level) + (r.levelName?.let { " – $it" } ?: ""), fontSize = 13.sp, color = c.mutedFg, maxLines = 1)
                                 }
                                 Text("%,d".format(Locale.getDefault(), r.totalXp), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
@@ -205,7 +207,7 @@ private fun Podium(top: List<List<BoardRow>>) {
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(if (entry.size > 1) stringResource(R.string.lb_tied, entry.size) else "", fontSize = 12.sp, color = c.mutedFg, minLines = 1)
-                    Text(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, minLines = 2, textAlign = TextAlign.Center)
+                    WholeWordAutoSizeText(entry.take(2).joinToString(", ") { it.name ?: "—" }.ifEmpty { "—" }, LocalTextStyle.current.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = TextAlign.Center), minLines = 2)
                     Text(if (entry.size > 2) stringResource(R.string.lb_more, entry.size - 2) else "", fontSize = 11.sp, color = c.mutedFg, minLines = 1)
                     Text(r?.let { "%,d".format(Locale.getDefault(), it.totalXp) + " XP" } ?: "—", fontSize = 13.sp, color = c.mutedFg)
                     Spacer(Modifier.height(8.dp))
