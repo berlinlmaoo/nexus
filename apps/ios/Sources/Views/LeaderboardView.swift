@@ -310,13 +310,15 @@ struct RankRow: View {
                     .accessibilityHidden(true)
                 AvatarView(url: row.avatar, initial: row.initial, size: 36, userId: row.userId, name: row.name)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                    WordWrapText(text: row.name ?? "—", size: 15) { NXFont.text($0, .semibold) }
+                        .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
                 // The unit on every value, "1.000 XP" / "−142 XP", as the web (UI tour run 16, decision 5).
                 Text("\(AppNumber.int(row.totalXp)) XP")
-                    .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                    .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .contentShape(Rectangle())

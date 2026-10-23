@@ -214,9 +214,10 @@ struct TaskRow: View {
             Button(action: onOpen) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(UntitledText.task(task.title)).font(NXFont.text(15, .semibold))
+                        // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                        WordWrapText(text: UntitledText.task(task.title), size: 15) { NXFont.text($0, .semibold) }
                             .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
-                            .strikethrough(task.isDone).lineLimit(1)
+                            .strikethrough(task.isDone).fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 10) {
                             Label(task.laneName, systemImage: "sparkles").labelStyle(.titleAndIcon).lineLimit(1)
                             if task.commentCount > 0 { Label("\(task.commentCount)", systemImage: "bubble.left") }
