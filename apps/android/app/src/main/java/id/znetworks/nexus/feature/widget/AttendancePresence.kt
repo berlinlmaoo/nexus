@@ -3,12 +3,17 @@ package id.znetworks.nexus.feature.widget
 import android.content.Context
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.NexusJson
+import id.znetworks.nexus.core.session.Session
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.AttendanceKind
 import id.znetworks.nexus.feature.attendance.AttendanceToday
 import id.znetworks.nexus.feature.attendance.MyShift
 import id.znetworks.nexus.feature.attendance.PendingAttendance
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -114,16 +119,39 @@ object PresenceLogic {
  * AttendancePresence). Called when today is read, when the queue or the trail changes; wiped on
  * sign-out so a widget never keeps one person's hours on a phone handed to somebody else.
  */
-class AttendancePresence(
-    private val context: Context,
-    private val api: ApiClient,
+class AttendancePresence internal constructor(
     private val scope: CoroutineScope,
     private val queue: () -> List<PendingAttendance>,
     private val hereName: () -> String?,
-    private val signedIn: () -> Boolean,
+    private val currentSession: () -> Session?,
+    private val server: () -> String,
+    private val fetchRecent: suspend () -> List<DayDot>,
+    private val readSnapshot: () -> String?,
+    private val writeSnapshot: (String?) -> Unit,
+    private val redraw: suspend () -> Unit,
 ) {
-    private val prefs = context.getSharedPreferences("nexus.widget", Context.MODE_PRIVATE)
+    constructor(context: Context, api: ApiClient, scope: CoroutineScope,
+        queue: () -> List<PendingAttendance>, hereName: () -> String?, currentSession: () -> Session?,
+    ) : this(scope, queue, hereName, currentSession, server = { api.url("/").toString() },
+        fetchRecent = {
+            val to = OfficeTime.today()
+            val from = to.minusDays(6)
+            PresenceLogic.dots(api.get("/api/attendance/history?scope=me&dateFrom=$from&dateTo=$to&compact=1", CompactResponse.serializer()).records)
+        },
+        readSnapshot = { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) },
+        writeSnapshot = { raw -> context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+            if (raw == null) clear() else putString(KEY, raw)
+        }.apply() },
+        redraw = { AttendanceWidget.updateAll(context) })
+
     private val lock = Mutex()
+    private val stateLock = Any()
+    private var generation = 0L
+    private var memoryOwner: Owner? = null
+    private val _revision = MutableStateFlow(0L)
+    /** A running Glance session must discard its captured value after a save or sign-out. */
+    val revision = _revision.asStateFlow()
+    fun invalidate() { _revision.update { it + 1 } }
     /** The last today the app read (null before the first read this launch). */
     @Volatile var lastToday: AttendanceToday? = null
         private set
@@ -131,40 +159,84 @@ class AttendancePresence(
     private var recentAt = 0L
     private var recentKey: String? = null
 
-    fun refresh(today: AttendanceToday? = null, forceRecent: Boolean = false) = scope.launch {
-        if (!signedIn()) return@launch
-        if (today != null) lastToday = today
-        lock.withLock {
-            val rec = lastToday?.today
-            // The dots change with a check-in/out or a new day; otherwise at most every 15 min.
-            val key = "${OfficeTime.today()}|${rec?.checkInAt}|${rec?.checkOutAt}"
-            val now = System.currentTimeMillis()
-            if (forceRecent || key != recentKey || now - recentAt > 15 * 60_000L) {
-                runCatching { fetchRecent() }.getOrNull()?.let { recent = it; recentAt = now; recentKey = key }
+    fun refresh(today: AttendanceToday? = null, forceRecent: Boolean = false): kotlinx.coroutines.Job {
+        // Capture before launch too: queued work from the previous login cannot adopt the next one.
+        val ticket = synchronized(stateLock) { owner()?.let { Request(it, generation) } }
+        return scope.launch {
+            if (ticket == null) return@launch
+            val saved = lock.withLock {
+                val request = synchronized(stateLock) {
+                    if (!current(ticket)) return@withLock false
+                    if (!ticket.owner.sameAs(memoryOwner)) {
+                        resetMemory()
+                        memoryOwner = ticket.owner
+                    }
+                    if (today != null) lastToday = today
+                    val rec = lastToday?.today
+                    val key = "${OfficeTime.today()}|${rec?.checkInAt}|${rec?.checkOutAt}"
+                    val now = System.currentTimeMillis()
+                    Triple(key, now, forceRecent || key != recentKey || now - recentAt > 15 * 60_000L)
+                }
+                val fetched = if (request.third) try { fetchRecent() }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { null }
+                else null
+                synchronized(stateLock) {
+                    if (!current(ticket)) return@withLock false
+                    fetched?.let { recent = it; recentAt = request.second; recentKey = request.first }
+                    val snapshot = PresenceLogic.build(lastToday, queue(), recent, hereName(), OfficeTime.today().toString())
+                    if (!current(ticket)) return@withLock false
+                    writeSnapshot(NexusJson.encodeToString(SavedAttendance.serializer(),
+                        SavedAttendance(ticket.owner.userId, ticket.owner.server, snapshot)))
+                    invalidate()
+                    true
+                }
             }
-            save(PresenceLogic.build(lastToday, queue(), recent, hereName(), OfficeTime.today().toString()))
+            if (saved) redraw()
         }
-        AttendanceWidget.updateAll(context)
     }
 
-    fun stop() = scope.launch {
-        lock.withLock { lastToday = null; recent = emptyList(); recentKey = null; prefs.edit().clear().apply() }
-        AttendanceWidget.updateAll(context)
+    fun stop(): kotlinx.coroutines.Job {
+        // Do not wait behind an in-flight history request to remove private data or notify Glance.
+        synchronized(stateLock) {
+            generation++
+            memoryOwner = null
+            resetMemory()
+            writeSnapshot(null)
+            invalidate()
+        }
+        return scope.launch { redraw() }
     }
 
-    private suspend fun fetchRecent(): List<DayDot> {
-        val to = OfficeTime.today()
-        val from = to.minusDays(6)
-        return PresenceLogic.dots(api.get("/api/attendance/history?scope=me&dateFrom=$from&dateTo=$to&compact=1", CompactResponse.serializer()).records)
+    /** Recheck auth after the read; old unowned snapshots are deliberately not migrated. */
+    fun load(): AttendanceSnapshot? = synchronized(stateLock) {
+        val before = owner() ?: return@synchronized null
+        val saved = readSnapshot()?.let {
+            runCatching { NexusJson.decodeFromString(SavedAttendance.serializer(), it) }.getOrNull()
+        } ?: return@synchronized null
+        saved.snapshot.takeIf { saved.userId == before.userId && saved.server == before.server && before.sameAs(owner()) }
     }
 
-    private fun save(s: AttendanceSnapshot) = prefs.edit().putString(KEY, NexusJson.encodeToString(AttendanceSnapshot.serializer(), s)).apply()
+    private fun resetMemory() { lastToday = null; recent = emptyList(); recentAt = 0L; recentKey = null }
+    private fun owner() = currentSession()?.let { Owner(server(), it) }
+    private fun current(request: Request) = request.generation == generation && request.owner.sameAs(owner())
+
+    // Credentials only participate in in-memory equality; never serialize or log them.
+    private class Owner(val server: String, session: Session) {
+        val userId = session.userId
+        private val token = session.token
+        private val cookieName = session.cookieName
+        fun sameAs(other: Owner?) = other != null && server == other.server && userId == other.userId &&
+            token == other.token && cookieName == other.cookieName
+    }
+    private class Request(val owner: Owner, val generation: Long)
 
     companion object {
+        private const val PREFS = "nexus.widget"
         private const val KEY = "snapshot"
-        fun load(context: Context): AttendanceSnapshot? =
-            context.getSharedPreferences("nexus.widget", Context.MODE_PRIVATE).getString(KEY, null)
-                ?.let { runCatching { NexusJson.decodeFromString(AttendanceSnapshot.serializer(), it) }.getOrNull() }
     }
 }
+
+@Serializable
+private data class SavedAttendance(val userId: String, val server: String, val snapshot: AttendanceSnapshot)
 

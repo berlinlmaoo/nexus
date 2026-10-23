@@ -6,6 +6,9 @@ import android.net.Uri
 import android.os.SystemClock
 import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -41,6 +44,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import id.znetworks.nexus.R
+import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.core.time.OfficeTime
 import java.time.Instant
 import java.time.LocalDate
@@ -71,14 +75,21 @@ class AttendanceWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = AttendancePresence.load(context)
-        provideContent { Content(snapshot) }
+        val container = (context.applicationContext as NexusApplication).container
+        provideContent {
+            val session by container.sessionStore.session.collectAsState()
+            val revision by container.presence.revision.collectAsState()
+            key(session, revision) { Content(if (session == null) null else container.presence.load()) }
+        }
     }
 
     companion object {
         val SMALL = DpSize(110.dp, 110.dp)
         val MEDIUM = DpSize(250.dp, 110.dp)
-        suspend fun updateAll(context: Context) = runCatching { AttendanceWidget().updateAll(context) }
+        suspend fun updateAll(context: Context) = runCatching {
+            (context.applicationContext as NexusApplication).container.presence.invalidate()
+            AttendanceWidget().updateAll(context)
+        }
     }
 }
 
