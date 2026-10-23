@@ -1070,11 +1070,12 @@ struct PipelineKpiStrip: View {
 
     private func reading(_ tile: Tile) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(tile.label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Two lines between words, never "Deliverables on tr…" in an iPad / Mac column (owner QA 22 Oct 2026).
+            WordWrapText(text: tile.label, size: 11) { NXFont.text($0, .semibold) }.foregroundStyle(NX.mutedFg)
             Text(tile.value).font(NXFont.display(17, .bold))
                 .foregroundStyle(tile.zero ? NX.mutedFg.opacity(0.75) : (tile.tone ?? NX.foreground))
                 .monospacedDigit().lineLimit(1)
-            Text(tile.sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+            WordWrapText(text: tile.sub, size: 11) { NXFont.text($0).monospacedDigit() }.foregroundStyle(NX.mutedFg)
             if let warn = tile.warn {
                 Text(warn).font(NXFont.text(11)).foregroundStyle(ChipTone.warning.fg).monospacedDigit().lineLimit(1)
             }
