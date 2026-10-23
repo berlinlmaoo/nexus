@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.theme.Nx
-import id.znetworks.nexus.ui.components.WholeWordAutoSizeText
 import kotlin.math.roundToInt
 
 /**
@@ -192,34 +191,39 @@ internal fun FolderNode(f: ProjectFolder, depth: Int, scope: String, a: TreeActi
     val pinned = f.id in s.pinnedFolders
     Column(Modifier.padding(start = (depth * 12).dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Box {
-            Row(
-                Modifier.fillMaxWidth().dropTarget(a.drag, key).clip(RoundedCornerShape(14.dp))
+            FolderNamePriorityRow(f.name, LocalTextStyle.current.copy(fontWeight = FontWeight.Medium, color = c.foreground),
+                modifier = Modifier.fillMaxWidth().dropTarget(a.drag, key).clip(RoundedCornerShape(14.dp))
                     .background(if (lit) c.accentBg else c.card)
                     .border(if (lit) 2.dp else 1.dp, if (lit) c.violet else c.border, RoundedCornerShape(14.dp))
                     // The whole row opens / closes the folder; long-press is its menu (FOLDERS-DND).
                     .combinedClickable(onClickLabel = stringResource(if (open) R.string.folder_collapse else R.string.folder_expand),
                         onLongClick = { menu = true }) { a.toggleOpen(f.id) }
                     .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(if (open) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
-                Spacer(Modifier.size(6.dp))
-                IconTile(f.icon, "📁", size = 30)
-                Spacer(Modifier.size(10.dp))
-                WholeWordAutoSizeText(f.name, LocalTextStyle.current.copy(fontWeight = FontWeight.Medium, color = c.foreground), Modifier.weight(1f))
-                // The count only while closed: open, what is inside shows itself.
-                if (!open) Text("${a.tree.count(f.id)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
-                    modifier = Modifier.background(c.muted, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
-                // Every task due across this folder's projects. Its own action, set apart from the row (owner, 10 Oct).
-                Spacer(Modifier.size(10.dp))
-                IconButton(onClick = { a.openFolderView(f.id) }, modifier = Modifier.size(48.dp)) {
-                    Box(Modifier.size(30.dp).clip(CircleShape).background(c.violet.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText, modifier = Modifier.size(18.dp))
+                leading = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (open) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                        Spacer(Modifier.size(6.dp))
+                        IconTile(f.icon, "📁", size = 30)
+                        Spacer(Modifier.size(10.dp))
                     }
-                }
-                if (s.canManage) DragHandle(a.drag, TreeDrag.FolderItem(f))
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more), tint = c.mutedFg) }
-            }
+                },
+                controls = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // The count only while closed: open, what is inside shows itself.
+                        if (!open) Text("${a.tree.count(f.id)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
+                            modifier = Modifier.background(c.muted, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
+                        // Every task due across this folder's projects. Its own action, set apart from the row (owner, 10 Oct).
+                        Spacer(Modifier.size(10.dp))
+                        IconButton(onClick = { a.openFolderView(f.id) }, modifier = Modifier.size(48.dp)) {
+                            Box(Modifier.size(30.dp).clip(CircleShape).background(c.violet.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        if (s.canManage) DragHandle(a.drag, TreeDrag.FolderItem(f))
+                        IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.MoreHoriz, stringResource(R.string.more), tint = c.mutedFg) }
+                    }
+                },
+            )
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.fm_open_view)) }, onClick = { menu = false; a.openFolderView(f.id) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.fm_new_project)) }, onClick = { menu = false; a.newProjectIn(f) })
