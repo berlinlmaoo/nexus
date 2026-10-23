@@ -125,6 +125,8 @@ data class PipelineState(
     val uploads: List<PipelineUpload> = emptyList(),
     val year: Int? = null,
     val source: String? = null,
+    /** Payment dialog values and submissions outlive the composition during rotation. */
+    val termDraft: PipelineTermDraft? = null,
 )
 
 data class PipelineUpload(val key: String, val dealId: String, val name: String, val progress: Float)
@@ -138,6 +140,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
     private val _state = MutableStateFlow(PipelineState())
     val state = _state.asStateFlow()
     private var loadNumber = 0L
+    private val termOwner = c.sessionStore.current
 
     init { load() }
 
@@ -276,6 +279,44 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
     }
 
     // Payment terms (§11.2): every answer carries the whole deal (receivable, health), which replaces ours.
+    private fun termDraftAllowed(): Boolean = termOwner != null && c.sessionStore.current == termOwner &&
+        !combined && _state.value.data?.canEdit == true && !PipelineSession.presentation.value
+
+    fun openTermDraft(deal: PipelineDeal, term: PipelineTerm? = null) {
+        if (!termDraftAllowed() || _state.value.termDraft?.busy == true) return
+        val amount = if (term == null) PipelineTerms.suggestedAmount(deal) else term.amount
+        val fields = PipelineTermFields(amount = if (amount == 0.0) "" else PipelineFormat.idrFull(amount).removePrefix("Rp"),
+            date = if (term == null) null else java.time.LocalDate.now(id.znetworks.nexus.core.time.OfficeTime.ZONE).toString())
+        _state.update { it.copy(termDraft = PipelineTermDraft(java.util.UUID.randomUUID().toString(), deal.id, term?.id, fields)) }
+    }
+
+    fun editTermDraft(key: String, change: (PipelineTermFields) -> PipelineTermFields) {
+        if (!termDraftAllowed()) return
+        _state.update { s -> s.copy(termDraft = s.termDraft?.let { if (it.key == key) it.edit(change(it.fields)) else it }) }
+    }
+    fun closeTermDraft(key: String) = _state.update { s -> s.copy(termDraft = s.termDraft?.let { if (it.key == key) it.requestClose() else it }) }
+    fun keepTermDraft(key: String) = _state.update { s -> s.copy(termDraft = s.termDraft?.let { if (it.key == key) it.keepEditing() else it }) }
+    fun discardTermDraft(key: String) = _state.update { s -> s.copy(termDraft = s.termDraft?.let { if (it.key == key) it.discardChanges() else it }) }
+
+    fun submitTermDraft(key: String) {
+        if (!termDraftAllowed()) return
+        val current = _state.value.termDraft?.takeIf { it.key == key } ?: return
+        val deal = _state.value.data?.deals?.firstOrNull { it.id == current.dealId } ?: return
+        if (current.termId != null && deal.terms.none { it.id == current.termId }) return
+        val sent = current.submit() ?: return
+        _state.update { it.copy(termDraft = sent) }
+        val done: (Boolean) -> Unit = { success ->
+            _state.update { s -> s.copy(termDraft = s.termDraft?.completed(sent, success)) }
+        }
+        if (sent.termId == null) addTerm(sent.dealId, JsonObject(mapOf(
+            "label" to JsonPrimitive(sent.fields.label.trim()), "amount" to JsonPrimitive(sent.amount!!),
+            "dueDate" to (sent.fields.date?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull),
+        )), done)
+        else updateTerm(sent.dealId, sent.termId, JsonObject(mapOf(
+            "paidAmount" to JsonPrimitive(sent.amount!!), "paidAt" to JsonPrimitive(sent.fields.date!!),
+        )), done)
+    }
+
     private fun term(failed: Int, call: suspend () -> PipelineDeal?, onDone: (Boolean) -> Unit = {}) = viewModelScope.launch {
         try {
             call()?.let { d -> replace(d.id) { d } }
