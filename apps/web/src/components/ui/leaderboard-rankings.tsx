@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { FitText } from "@/components/FitText"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
 import { AvatarFace } from "@/components/Avatar";
 import { formatCount } from "@/lib/number-format"
@@ -85,8 +86,9 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                     <AvatarFace name={item.userName} avatar={item.avatarUrl} seed={item.userName || item.userId} size={40} decorative className="ring-0" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    {/* Two lines before "…", like the tie ribbon (UI tour run 16, R16-WM-10). */}
-                    <div className="line-clamp-2 font-semibold leading-tight">{item.userName}</div>
+                    {/* Two lines between words, then a little smaller, before "…" (UI tour run 16, R16-WM-10; QA
+                        final #2: "Muchammad Farchan Febriananto" was cut at 390). */}
+                    <FitText as="div" text={item.userName} className="font-semibold leading-tight" />
                     {item.byline && <div className="line-clamp-2 text-sm leading-tight text-muted-foreground">{item.byline}</div>}
                   </div>
                   <span className="shrink-0 text-base font-bold tabular-nums">{formatValue(item.value)}</span>
