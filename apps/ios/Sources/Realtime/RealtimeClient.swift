@@ -244,6 +244,12 @@ final class RealtimeClient {
                let id = payload?["conversationId"]?.string {
                 center.post(name: .nexusChatDeleted, object: nil, userInfo: [RealtimeKey.conversationId: id])
             }
+            // A group's photo changed (22 Oct 2026): patched in place, so the list, the thread's header and
+            // Group info swap it at once. The old file is deleted on the server, so the old url must go now.
+            if name == "conversation-updated", payload?["change"]?.string == "avatar",
+               let id = payload?["conversationId"]?.string {
+                ChatStore.shared.setPhoto(id, url: payload?["avatarUrl"]?.string)
+            }
             // A message from someone typing in that chat ends their dots.
             if name == "message-created" {
                 ChatTyping.shared.messageArrived(conversationId: payload?["conversationId"]?.string,

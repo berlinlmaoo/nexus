@@ -162,28 +162,48 @@ final class ProjectIconStore {
 
 /// The round picture of a group-ish chat room (UI tour run 9): a PROJECT room shows its project's
 /// mark — the uploaded photo, else the calm grey page — the way web does; a plain GROUP keeps the grey
-/// people glyph. Used by the chat list, the chat header and Chat info so the three always agree.
+/// people glyph, or its own photo once an admin has set one (22 Oct 2026). Used by the chat list, the
+/// chat header and Chat info so the three always agree.
 struct ChatRoomGlyph: View {
     /// Set for a project room.
     let projectId: String?
     /// The project's icon the caller already has (list payload); the live store wins when it knows it.
     var projectIcon: String? = nil
     var size: CGFloat = 40
+    /// Set for a GROUP: its photo is read from ChatStore, which hears every change to it.
+    var conversationId: String? = nil
+    /// The group's photo the caller already has (list payload); the store wins when it knows it.
+    var avatarUrl: String? = nil
+
+    /// With `w`, the server answers a small WebP of the photo (snapped to its own widths) instead of
+    /// the whole upload: a list of 40 pt circles should not fetch 1024 px pictures.
+    private var photo: URL? {
+        guard projectId == nil, let raw = ChatStore.shared.photo(conversationId: conversationId, fallback: avatarUrl),
+              !raw.isEmpty else { return nil }
+        let sized = raw + (raw.contains("?") ? "&" : "?") + "w=\(Int(size * 3))"
+        return URL(string: sized.hasPrefix("http") ? sized : Config.baseURL.absoluteString + sized)
+    }
 
     var body: some View {
         ZStack {
             Circle().fill(NX.muted)
             if let projectId {
                 ProjectMark(icon: projectIcon, color: nil, size: size, glyph: size * 0.5, projectId: projectId)
+            } else if let photo {
+                CachedImage(url: photo) { img in img.resizable().scaledToFill() } placeholder: { peopleGlyph }
             } else {
-                Image(systemName: "person.2")
-                    .font(.system(size: size * 0.35, weight: .medium))
-                    .foregroundStyle(NX.mutedFg)
+                peopleGlyph
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
         .accessibilityHidden(true)
+    }
+
+    private var peopleGlyph: some View {
+        Image(systemName: "person.2")
+            .font(.system(size: size * 0.35, weight: .medium))
+            .foregroundStyle(NX.mutedFg)
     }
 }

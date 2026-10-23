@@ -1755,8 +1755,10 @@ struct APIClient {
         return true
     }
 
-    func announcements() async throws -> [AdminAnnouncement] {
-        (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
+    /// The Control Room list of one origin — written in the composer ("manual") or posted any other way
+    /// ("system") — with the counts of both. Without `origin` the server answers every row (old builds).
+    func announcements(origin: AnnouncementOrigin) async throws -> AnnouncementsResponse {
+        try await run(makeRequest("/api/announcements?origin=\(origin.rawValue)"), decode: AnnouncementsResponse.self)
     }
     /// `repeatDays` counts the days AFTER today the notice should come back, at `repeatAtTime`
     /// ("HH:mm", Asia/Jakarta). 0 is the old behaviour exactly — posted once, never repeated — and
@@ -1941,7 +1943,9 @@ struct APIClient {
     /// One conversation by id. For a chat a push or a link pointed at that the list on screen does
     /// not have yet — a group somebody added you to a minute ago.
     func conversation(_ id: String) async throws -> Conversation {
-        try await run(makeRequest("/api/conversations/\(enc(id))"), decode: ConversationResponse.self).conversation
+        let convo = try await run(makeRequest("/api/conversations/\(enc(id))"), decode: ConversationResponse.self).conversation
+        if convo.type == "GROUP" { await ChatStore.shared.setPhoto(convo.id, url: convo.avatarUrl) }
+        return convo
     }
 
     /// The unread total behind the badges. Newer server only: the old one routes this path to the
@@ -2008,8 +2012,11 @@ struct APIClient {
     /// The chat's info screen: the room, its members (admins first, then A–Z) and how much media it
     /// holds. A server from before the screen has no such route and answers 404 without a sentence
     /// (`APIClient.isMissingRoute`); the screen then draws what the conversation list already knows.
+    /// Also tells ChatStore the group's photo, so the thread's header and the list follow Group info.
     func conversationInfo(_ id: String) async throws -> ChatInfoResponse {
-        try await runChat(makeRequest("/api/conversations/\(enc(id))/info"), decode: ChatInfoResponse.self)
+        let info = try await runChat(makeRequest("/api/conversations/\(enc(id))/info"), decode: ChatInfoResponse.self)
+        if let room = info.conversation, room.type == "GROUP" { await ChatStore.shared.setPhoto(id, url: room.avatarUrl) }
+        return info
     }
 
     /// One page of a chat's photos, links or docs (`type` = "photos" | "links" | "docs"), newest first.
@@ -2032,6 +2039,38 @@ struct APIClient {
 
     /// Change a group's name and/or description: PATCH `{ name?, description? }`. A nil `name` is
     /// left out; an empty `description` is sent as null, which clears it. Only a GROUP has either.
+    /// A GROUP's photo (22 Oct 2026): multipart field "file", PNG / JPG / WEBP up to 5 MB; any member may,
+    /// as with the name. Answers the stored photo's url, already saved on the group — no PATCH after it.
+    func uploadConversationPhoto(_ id: String, fileName: String, mime: String, data: Data,
+                                 progress: UploadProgress? = nil) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/conversations/\(enc(id))/avatar", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        struct Uploaded: Decodable { let url: String }
+        return try await runChat(req, decode: Uploaded.self, badRequest: Self.groupPhotoRefusal, reporting: progress).url
+    }
+
+    /// Back to the people glyph. Idempotent on the server: no photo is still a success.
+    func removeConversationPhoto(_ id: String) async throws {
+        _ = try await runChat(makeRequest("/api/conversations/\(enc(id))/avatar", method: "DELETE"), decode: ChatAck.self)
+    }
+
+    /// The upload's 400s (NO_FILE / BAD_TYPE / TOO_LARGE / NOT_A_GROUP) in this app's words. `runChat`
+    /// hands over the server's sentence; the codes' sentences are fixed, so they are recognised by it.
+    private static func groupPhotoRefusal(_ message: String?) -> String {
+        let lower = (message ?? "").lowercased()
+        if lower.contains("too large") { return T("That photo is over 5 MB.") }
+        if lower.contains("file type") { return T("PNG, JPG or WEBP, up to 5 MB") }
+        if lower.contains("group") { return T("Only group chats have a photo.") }
+        return T("Couldn't upload the photo")
+    }
+
     func updateConversationDetails(_ id: String, name: String?, description: String) async throws {
         var req = makeRequest("/api/conversations/\(enc(id))", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -2085,10 +2124,11 @@ struct APIClient {
     /// `managerRequired` the 403 MANAGER_REQUIRED, when the route is about more than adding and removing.
     private func runChat<Response: Decodable>(_ req: URLRequest, decode: Response.Type,
                                               managerRequired: String? = nil,
-                                              badRequest: ((String?) -> String)? = nil) async throws -> Response {
+                                              badRequest: ((String?) -> String)? = nil,
+                                              reporting progress: UploadProgress? = nil) async throws -> Response {
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await perform(req)
+            (data, response) = try await perform(req, reporting: progress)
         } catch {
             throw APIError.nothingAnswered(error)
         }

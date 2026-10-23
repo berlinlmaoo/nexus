@@ -19,6 +19,8 @@ struct Conversation: Decodable, Identifiable, Sendable {
     /// false = a project room this person can read but not post in (Can view, access levels round 2,
     /// 13 Oct 2026). nil = a server from before it: posting stays open.
     let canPost: Bool?
+    /// A GROUP's own photo (22 Oct 2026); nil = none, a DM or project room, or a server from before.
+    let avatarUrl: String?
 
     struct Member: Decodable, Sendable {
         let userId: String?
@@ -27,7 +29,7 @@ struct Conversation: Decodable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil, canManageMembers, canPost
+        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil, canManageMembers, canPost, avatarUrl
     }
 
     /// Written out only so `mutedUntil` and `canManageMembers` can be read leniently. Every other
@@ -46,6 +48,7 @@ struct Conversation: Decodable, Identifiable, Sendable {
         mutedUntil = try? c.decodeIfPresent(String.self, forKey: .mutedUntil)
         canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
         canPost = (try? c.decodeIfPresent(Bool.self, forKey: .canPost)) ?? nil
+        avatarUrl = (try? c.decodeIfPresent(String.self, forKey: .avatarUrl)) ?? nil
     }
 
     var isGroupish: Bool { type == "PROJECT" || type == "GROUP" }
@@ -313,9 +316,13 @@ struct ChatInfo: Decodable, Sendable {
     /// May delete the group (servers since 9 Oct 2026): Manager and above, or the only member left.
     /// nil = a server without DELETE /api/conversations/:id — no Delete is offered.
     let canDelete: Bool?
+    /// A GROUP's own photo (22 Oct 2026); nil = none.
+    let avatarUrl: String?
+    /// May change the photo: the same rule as `canEdit` (any member of a GROUP), sent alongside it.
+    let canEditAvatar: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, name, description, projectId, createdAt, createdBy, memberCount, mutedUntil, canManageMembers, canEdit, canDelete
+        case id, type, name, description, projectId, createdAt, createdBy, memberCount, mutedUntil, canManageMembers, canEdit, canDelete, avatarUrl, canEditAvatar
     }
 
     init(from decoder: Decoder) throws {
@@ -332,6 +339,8 @@ struct ChatInfo: Decodable, Sendable {
         canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
         canEdit = try? c.decodeIfPresent(Bool.self, forKey: .canEdit)
         canDelete = try? c.decodeIfPresent(Bool.self, forKey: .canDelete)
+        avatarUrl = (try? c.decodeIfPresent(String.self, forKey: .avatarUrl)) ?? nil
+        canEditAvatar = try? c.decodeIfPresent(Bool.self, forKey: .canEditAvatar)
     }
 
     init(id: String?, type: String?, name: String?, description: String?, projectId: String?,
@@ -348,6 +357,8 @@ struct ChatInfo: Decodable, Sendable {
         self.canManageMembers = canManageMembers
         self.canEdit = canEdit
         self.canDelete = nil
+        self.avatarUrl = nil
+        self.canEditAvatar = nil
     }
 }
 
