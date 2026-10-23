@@ -160,9 +160,12 @@ export async function revokeLegalMember(viewer: LegalActor, targetUserId: string
   if (!mayRevoke(viewer, row.invitedById)) {
     throw new LegalMemberError("You can only remove people you invited", 403)
   }
-  await prisma.legalMember.update({
-    where: { userId: targetUserId },
+  // Only the request that actually flips the row wins: a second tap (or a second admin) at the same moment
+  // gets the same 404 as a later one, so one removal leaves one audit row and keeps the first revokedAt.
+  const flipped = await prisma.legalMember.updateMany({
+    where: { userId: targetUserId, revokedAt: null },
     data: { revokedAt: new Date(), revokedById: viewer.userId },
   })
+  if (flipped.count === 0) throw new LegalMemberError("This person has no Legal access", 404)
   return { userId: targetUserId, name: row.user.name, invitedById: row.invitedById }
 }

@@ -12,6 +12,7 @@ import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { flushLiveRoom } from "@/lib/collab-rooms"
+import { resolveLegacyId } from "@/lib/legacy-ids"
 import type { Prisma } from "@/generated/prisma/client"
 
 /** Same set of ids, order and repeats ignored. */
@@ -60,7 +61,7 @@ export async function applyTaskUpdate({
     actualHours,
     tags,
     projectContextId,
-    taskListId,
+    taskListId: rawTaskListId,
     position,
     assigneeIds,
     addAssigneeIds,
@@ -72,6 +73,8 @@ export async function applyTaskUpdate({
     recurPattern,
     taskType,
   } = validation.data
+  // Old section ids (pre-UUIDv7) are read as the converted ones, so the stored row and the socket payload agree.
+  const taskListId = rawTaskListId ? await resolveLegacyId(rawTaskListId) : rawTaskListId
   // May be set below from the section the task moves into (TaskList.taskStatus, project templates).
   let status = requestedStatus
 
@@ -105,7 +108,9 @@ export async function applyTaskUpdate({
     return NextResponse.json({ error: "Task not found" }, { status: 404 })
   }
 
-  const effectiveProjectId = projectContextId ?? existing.taskList.projectId
+  // A client still holding a pre-UUIDv7 project id (released app opened before the id conversion) sends it as
+  // the context: compare against the converted id, or every move would read as "not linked to this project".
+  const effectiveProjectId = projectContextId ? await resolveLegacyId(projectContextId) : existing.taskList.projectId
 
   const { allowed } = await checkProjectAccess(session.user.id!, effectiveProjectId, ["MEMBER"])
   if (!allowed) {

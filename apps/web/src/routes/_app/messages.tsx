@@ -345,7 +345,7 @@ function Messages() {
           )}
           {rows.length > 0 && (
             <div className="sticky top-0 z-10 bg-background/95 px-3 pb-2 pt-2 backdrop-blur md:pl-6">
-              <div role="tablist" aria-label={t("Chats")} className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+              <div role="tablist" aria-label={t("Chats")} className="flex gap-1 rounded-xl bg-muted p-1">
                 {(["DM", "GROUP", "PROJECT"] as const).map((kind) => {
                   const n = tabUnread(kind);
                   const on = tab === kind;
@@ -361,7 +361,7 @@ function Messages() {
                       onClick={() => setTab(kind)}
                       onKeyDown={onTabKey}
                       className={cn(
-                        "flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        "flex min-w-0 flex-auto items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                         on ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
                       )}
                     >
