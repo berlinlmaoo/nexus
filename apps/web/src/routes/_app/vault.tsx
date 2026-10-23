@@ -770,7 +770,7 @@ function VaultPage() {
           <span className="min-w-0">
             {/* Two lines before the cut, full name on hover (B-D2, 19 Oct 2026: "Ringkasan Rapat…" at 1440). */}
             <span className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]" title={item.name}>{item.name}</span>
-            <span className="line-clamp-2 text-xs text-muted-foreground">
+            <span className="block text-xs text-muted-foreground">
               {isFolder ? tn(item.childCount, "{n} item", "{n} items") : humanSize(item.size)}
               {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
               {item.minReadRole && ` · ${t(roleLabel(item.minReadRole))}`}
