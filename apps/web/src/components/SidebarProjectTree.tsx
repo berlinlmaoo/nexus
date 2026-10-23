@@ -32,6 +32,7 @@ import {
 } from "@/components/projects/project-tree";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { FitText } from "@/components/FitText";
 
 const EXPANDED_KEY = "nexus:sidebar:expanded-folders";
 const ROOT = "__root__";
@@ -277,10 +278,12 @@ export function SidebarProjectTree() {
       <SidebarMenuItem key={opts.key} {...(opts.draggable ? dragProps({ kind: "project", id: p.id, from: p.folderId ?? null }) : {})} className={cn(drag?.kind === "project" && drag.id === p.id && "opacity-50")}>
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-8 pr-7">
+            {/* A long name takes a second line, then shrinks a little, before an ellipsis (FitText; QA final #2:
+                "PATS: INDONESIA TAKEOVER" was cut at 175 px). One-line rows keep their 32 px. */}
+            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7">
               <Link to="/projects/$projectId" params={{ projectId: p.id }} draggable={false} title={p.name}>
                 <ProjectGlyph project={p} />
-                <span className="truncate">{p.name}</span>
+                <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-tight" />
               </Link>
             </SidebarMenuButton>
           </ContextMenuTrigger>
@@ -335,7 +338,7 @@ export function SidebarProjectTree() {
               {...(!pinCopy ? dragProps({ kind: "folder", id: f.id, from: f.parentFolderId ?? null }) : {})}
               {...dropInto(f.id, openKey)}
               className={cn(
-                "group/folder relative flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md pl-1 pr-1 text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring transition-colors",
+                "group/folder relative flex min-h-8 cursor-pointer py-1 select-none items-center gap-1.5 rounded-md pl-1 pr-1 text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring transition-colors",
                 "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2",
                 activeFolderId === f.id && "bg-sidebar-accent text-sidebar-accent-foreground",
                 isTarget && "bg-primary/10 text-primary ring-1 ring-inset ring-primary/60",
@@ -343,7 +346,7 @@ export function SidebarProjectTree() {
             >
               <ChevronRight aria-hidden className={cn("h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50 transition-transform duration-150", open && "rotate-90")} />
               <FolderGlyph folder={f} open={open} className={cn(!f.color && "text-sidebar-foreground/60")} />
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              <FitText text={f.name} title={null} className="min-w-0 flex-1 leading-tight" />
               {containsActive && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
               {!open && count > 0 && (
                 <span className="shrink-0 pr-1 text-[11px] font-normal tabular-nums text-sidebar-foreground/40 group-hover/folder:hidden group-focus-within/folder:hidden [@media(hover:none)]:hidden">{count}</span>

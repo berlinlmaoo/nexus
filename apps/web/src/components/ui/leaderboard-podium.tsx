@@ -4,6 +4,7 @@ import * as React from "react"
 import { Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { FitText } from "@/components/FitText"
 import { AvatarFace } from "@/components/Avatar"
 import { formatCount } from "@/lib/number-format"
 
@@ -72,7 +73,8 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
               </span>}
             </div>
             {group.length === 1 ? (
-              <div className="line-clamp-2 max-w-full text-balance text-center text-sm font-semibold leading-tight [overflow-wrap:anywhere]">{group[0].userName}</div>
+              // Between words only (overflow-wrap:anywhere split "Adrinfisol" at 390), smaller before "…" (FitText).
+              <FitText as="div" text={group[0].userName} className="max-w-full text-balance text-center text-sm font-semibold leading-tight" />
             ) : (
               <div className="flex max-w-full flex-col items-center" title={group.map((g) => g.userName).join(", ")}>
                 <span className="text-sm font-semibold">{tiedLabel(group.length)}</span>
