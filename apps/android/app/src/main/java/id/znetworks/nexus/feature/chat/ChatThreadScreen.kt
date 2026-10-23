@@ -119,6 +119,9 @@ import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.components.rememberCameraCapture
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.core.net.NexusJson
+import id.znetworks.nexus.core.realtime.RealtimeEvent
+import id.znetworks.nexus.core.realtime.RealtimeEvents
 import id.znetworks.nexus.feature.attendance.LocationProvider
 import id.znetworks.nexus.feature.attendance.requests.AttachmentReader
 import id.znetworks.nexus.ui.components.Avatar
@@ -131,6 +134,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -163,25 +167,92 @@ data class ThreadState(
     val deleted: Boolean = false,
     val denied: Boolean = false,
     val tooLongText: String? = null,
+    val composer: ChatComposerDraft = ChatComposerDraft(),
+    /** Restored references stay hidden until this process verifies fresh read access. */
+    val composerAuthorized: Boolean = false,
+    val writeDenied: Boolean = false,
 )
 
-class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
+class ChatThreadViewModel(app: Application, private val handle: SavedStateHandle) : AndroidViewModel(app) {
     val id: String = handle["id"] ?: ""
     private val c = (app as NexusApplication).container
     private val api = ChatApi(c.api)
     private val res get() = getApplication<Application>().resources
-    private val _state = MutableStateFlow(ThreadState())
+    private val ownerSession = c.sessionStore.current
+    private val composerScope = ChatComposerScope(c.api.url("/").toString(), ownerSession?.userId.orEmpty(), id)
+    private val _state = MutableStateFlow(ThreadState(composer = ChatComposerDraft.restore(handle, composerScope)))
     val state = _state.asStateFlow()
     val meId: String? get() = c.sessionStore.current?.userId
     private var markedReadId: String? = null
-    /** The @tags picked from the list, by user id: sent as mentionedUserIds while still in the text. */
-    val picked = mutableMapOf<String, String>()
+    private var writeAccess = ChatComposerWriteAccess()
+
+    private fun sessionCurrent() = composerScope.accepts(ownerSession, c.sessionStore.current, c.api.url("/").toString())
+    private fun active(): Boolean {
+        if (!sessionCurrent()) {
+            handle.remove<String>(ChatComposerDraft.SAVED_KEY)
+            _state.update { it.copy(composer = ChatComposerDraft(composerScope), composerAuthorized = false,
+                deleted = true, denied = true, conversation = null, messages = emptyList(), replyTo = null, attachment = null,
+                loading = false, sending = false, uploading = false, roster = null, notice = null) }
+            return false
+        }
+        return !_state.value.deleted
+    }
+
+    private fun writeAllowed(): Boolean = active() && _state.value.composerAuthorized && !_state.value.writeDenied && _state.value.conversation?.canPost != false
+    val canSend: Boolean get() = sessionCurrent() && !_state.value.deleted && _state.value.composerAuthorized && !_state.value.writeDenied && _state.value.conversation?.canPost != false
+    private suspend fun awaitWriteAllowed(): Boolean {
+        if (!active()) return false
+        // A restored ActivityResult can arrive before the fresh read started by the new ViewModel.
+        state.first { it.composerAuthorized || it.deleted || it.writeDenied || it.conversation?.canPost == false }
+        return writeAllowed()
+    }
+
+    private fun composer(next: ChatComposerDraft) {
+        if (!sessionCurrent()) { active(); return }
+        next.save(handle)
+        _state.update { it.copy(composer = next,
+            replyTo = if (it.composerAuthorized && !it.deleted) next.reply?.message(id) else null,
+            attachment = if (it.composerAuthorized && !it.deleted) next.attachment else null) }
+    }
+
+    private fun authorizeRead() {
+        if (!active()) return
+        _state.update { it.copy(composerAuthorized = true, replyTo = it.composer.reply?.message(id), attachment = it.composer.attachment) }
+    }
+
+    private fun conversation(conv: Conversation, fresh: Boolean = false, startedGeneration: Long = writeAccess.generation) {
+        if (!active()) return
+        writeAccess = writeAccess.observed(conv.canPost, fresh, startedGeneration)
+        _state.update { it.copy(conversation = conv, writeDenied = writeAccess.denied) }
+    }
+
+    /** A write refusal does not remove readable messages or erase the author's own text. */
+    private fun writeRefused() {
+        writeAccess = writeAccess.refused()
+        composer(_state.value.composer.denied())
+        _state.update { it.copy(writeDenied = true, conversation = it.conversation?.copy(canPost = false), uploading = false) }
+    }
+
+    fun editText(text: String) {
+        if (!active() || _state.value.writeDenied || _state.value.conversation?.canPost == false) return
+        composer(_state.value.composer.editText(text))
+    }
+    fun pickMention(userId: String, name: String) {
+        if (writeAllowed()) composer(_state.value.composer.mention(userId, name))
+    }
 
     init {
+        // The default Navigation ViewModel factory supplies the framework-restored handle above.
+        composer(_state.value.composer)
+        viewModelScope.launch { c.sessionStore.session.collect { if (!sessionCurrent()) active() } }
         viewModelScope.launch {
-            val conv = runCatching { api.conversations().value.conversations.firstOrNull { it.id == id } }.getOrNull()
-            if (conv != null) _state.update { it.copy(conversation = conv) }
-            else try { api.info(id) } catch (e: ApiError) { unavailable(e) }
+            if (!active()) return@launch
+            val startedGeneration = writeAccess.generation
+            val response = runCatching { api.conversations() }.getOrNull()
+            val conv = response?.value?.conversations?.firstOrNull { it.id == id }
+            if (!active()) return@launch
+            if (conv != null) conversation(conv, fresh = response != null && response.savedAtMillis == null, startedGeneration = startedGeneration)
+            else try { api.info(id); authorizeRead() } catch (e: ApiError) { if (active()) unavailable(e) }
         }
         // The first page once; after that the screen polls only while it is visible (CHAT-REPORT P0).
         // Opened on a message (a search result): the page around it instead.
@@ -190,12 +261,15 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     private suspend fun firstPage() {
-        if (_state.value.deleted) return
+        if (!active()) return
         try {
             val r = api.messages(id)
+            if (!active()) return
+            if (r.savedAtMillis == null) authorizeRead()
             _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.value.messages), hasMore = r.value.hasMore, nextCursor = r.value.nextCursor,
                 loading = false, savedAt = r.savedAtMillis) }
         } catch (e: ApiError) {
+            if (!active()) return
             if (unavailable(e)) return
             _state.update { it.copy(loading = false, notice = if (it.messages.isEmpty()) e.describe(res) else it.notice) }
         }
@@ -207,7 +281,23 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         markDeleted(status == 403); return true
     }
 
-    fun markDeleted(denied: Boolean = false) { _state.update { it.copy(deleted = true, denied = denied, loading = false, notice = null, messages = emptyList(), conversation = null, replyTo = null) }; ChatNotifier.cancel(getApplication(), id) }
+    fun markDeleted(denied: Boolean = false) {
+        if (!sessionCurrent()) { active(); return }
+        composer(_state.value.composer.denied())
+        _state.update { it.copy(deleted = true, denied = denied, composerAuthorized = false, loading = false, notice = null,
+            messages = emptyList(), conversation = null, replyTo = null, attachment = null, uploading = false, sending = false, roster = null) }
+        ChatNotifier.cancel(getApplication(), id)
+    }
+
+    fun receiveAccess(event: RealtimeEvent) {
+        if (RealtimeEvents.groupDeleted(event, id)) { markDeleted(); return }
+        if (event.name != RealtimeEvents.JOIN_DENIED) return
+        val room = runCatching {
+            val raw = NexusJson.parseToJsonElement(event.raw.orEmpty()) as? kotlinx.serialization.json.JsonObject
+            (raw?.get("room") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        }.getOrNull()
+        if (room == "conversation:$id" || event.projectId != null && event.projectId == _state.value.conversation?.projectId) markDeleted(denied = true)
+    }
 
     /**
      * Only what is new (`after=<last id>`), merged by id: nothing held is ever dropped. An older server that
@@ -215,11 +305,13 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
      * fetched with `before` until they meet what is held (at most 5).
      */
     suspend fun poll() {
-        if (_state.value.deleted) return
+        if (!active()) return
         val held = _state.value.messages
         val last = held.lastOrNull()?.id ?: return firstPage()
         try {
             val page = api.newer(id, last).messages
+            if (!active()) return
+            authorizeRead()
             if (_state.value.newerPending && page.size < 100) _state.update { it.copy(newerPending = false) }
             var merged = ChatMerge.merge(held, page)
             if (ChatMerge.gap(held, page, 50)) {
@@ -227,13 +319,14 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 var guard = 0
                 while (before != null && guard++ < 5) {
                     val older = api.earlier(id, before).messages
+                    if (!active()) return
                     merged = ChatMerge.merge(merged, older)
                     if (older.isEmpty() || older.any { o -> held.any { it.id == o.id } }) break
                     before = older.minByOrNull { it.createdAt.orEmpty() }?.createdAt
                 }
             }
             _state.update { it.copy(messages = merged, loading = false, savedAt = null) }
-        } catch (e: ApiError) { unavailable(e) /* else a failed poll keeps what is on screen; the next one tries again */ }
+        } catch (e: ApiError) { if (active()) unavailable(e) /* else a failed poll keeps what is on screen; the next one tries again */ }
     }
 
     /**
@@ -241,13 +334,15 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
      * while the thread is visible and the app in front (no marking read in the background).
      */
     suspend fun markReadVisible() {
+        if (!active()) return
         val last = _state.value.messages.lastOrNull()?.id ?: return
         if (last == markedReadId || _state.value.savedAt != null) return
         markedReadId = last
-        if (runCatching { api.markRead(id, last) }.isSuccess) c.badges.refresh()
+        if (runCatching { api.markRead(id, last) }.isSuccess && active()) c.badges.refresh()
     }
 
     fun loadEarlier(): kotlinx.coroutines.Job? {
+        if (!active()) return null
         val s0 = _state.value
         val before = ChatMerge.before(s0.messages, s0.nextCursor) ?: return null
         if (s0.loadingEarlier) return null
@@ -255,9 +350,11 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         return viewModelScope.launch {
             try {
                 val r = api.earlier(id, before)
+                if (!active()) return@launch
+                authorizeRead()
                 _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.messages), hasMore = r.hasMore, nextCursor = r.nextCursor) }
-            } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
-            _state.update { it.copy(loadingEarlier = false) }
+            } catch (e: ApiError) { if (active() && !unavailable(e)) _state.update { it.copy(notice = e.describe(res)) } }
+            if (active()) _state.update { it.copy(loadingEarlier = false) }
         }
     }
 
@@ -265,32 +362,38 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
     /** PATCH mute (CHAT-CONTRACT). A 404 = the server has no mute yet: the option goes away. */
     fun mute(m: Mute) = viewModelScope.launch {
+        if (!active()) return@launch
         val until = ChatMute.until(m)
         try {
             val r = api.mute(id, until)
+            if (!active()) return@launch
             _state.update { s -> s.copy(conversation = s.conversation?.copy(mutedUntil = r.mutedUntil)) }
             c.badges.refresh()
         } catch (e: ApiError) {
+            if (!active()) return@launch
             if ((e as? ApiError.Http)?.status == 404) _state.update { it.copy(muteSupported = false, notice = res.getString(R.string.chat_mute_unavailable)) }
             else _state.update { it.copy(notice = e.describe(res)) }
         }
     }
 
-    fun reply(m: Message?) = _state.update { it.copy(replyTo = m) }
+    fun reply(m: Message?) { if (writeAllowed()) composer(_state.value.composer.selectReply(m)) }
     fun dismissNotice() = _state.update { it.copy(notice = null) }
-    fun clearAttachment() = _state.update { it.copy(attachment = null) }
+    fun clearAttachment() { if (writeAllowed()) composer(_state.value.composer.attach(null)) }
 
     fun attachDocument(uri: Uri) {
-        val f = c.uploads.describe(uri)
-        if (f == null || !ChatDocuments.accepts(f.name, f.size)) { _state.update { it.copy(notice = res.getString(R.string.chat_file_rules)) }; return }
-        if (_state.value.uploading) return
+        if (!active() || _state.value.writeDenied || _state.value.conversation?.canPost == false || _state.value.uploading) return
+        val attachmentRevision = _state.value.composer.attachmentRevision
         _state.update { it.copy(uploading = true, notice = null) }
         viewModelScope.launch {
             try {
+                if (!awaitWriteAllowed()) return@launch
+                val f = runCatching { c.uploads.describe(uri) }.getOrNull()
+                if (f == null || !ChatDocuments.accepts(f.name, f.size)) { _state.update { it.copy(notice = res.getString(R.string.chat_file_rules)) }; return@launch }
+                if (!writeAllowed()) return@launch
                 val up = c.uploads.send(f, "/api/upload/chat", listOf("conversationId" to id), emptyList(), ChatUpload.serializer()) { _, _ -> }
-                _state.update { it.copy(attachment = up) }
-            } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
-            _state.update { it.copy(uploading = false) }
+                if (writeAllowed() && _state.value.composer.attachmentRevision == attachmentRevision) composer(_state.value.composer.attach(up))
+            } catch (e: ApiError) { uploadFailed(e) }
+            finally { if (active()) _state.update { it.copy(uploading = false) } }
         }
     }
 
@@ -304,68 +407,90 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     /** The composer clears only after the server says yes: a failed send leaves the text in place. */
-    fun send(text: String, onSent: () -> Unit) {
+    fun send() {
+        if (!writeAllowed()) return
         val s = _state.value
-        if (s.deleted || s.sending || (text.isBlank() && s.attachment == null)) return
+        val sent = s.composer
+        val text = sent.text
+        if (s.sending || s.uploading || (text.isBlank() && sent.attachment == null)) return
         if (ChatComposerLimit.tooLong(text)) { _state.update { it.copy(tooLongText = text) }; return }
         _state.update { it.copy(sending = true, notice = null, tooLongText = null) }
         viewModelScope.launch {
             try {
-                api.send(id, text, Mentions.ids(text, picked), s.attachment, s.replyTo?.id)
-                picked.clear()
-                _state.update { it.copy(attachment = null, replyTo = null) }
-                onSent()
+                if (!writeAllowed()) return@launch
+                api.send(id, text, Mentions.ids(text, sent.picked), sent.attachment, sent.reply?.id)
+                if (!active()) return@launch
+                composer(_state.value.composer.acknowledged(sent))
                 poll()
             } catch (e: ApiError) {
+                if (!active()) return@launch
+                if ((e as? ApiError.Http)?.status == 403) writeRefused()
+                else if ((e as? ApiError.Http)?.status == 404) { markDeleted(); return@launch }
                 _state.update { if ((e as? ApiError.Http)?.code == "MESSAGE_TOO_LONG") it.copy(tooLongText = text) else it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.chat_send_failed)) }
-            }
-            _state.update { it.copy(sending = false) }
+            } finally { if (active()) _state.update { it.copy(sending = false) } }
         }
     }
 
     /** Photos go up as JPEG (HEIC and friends are refused by the server), at most 8 MB. */
     fun attach(uri: Uri) {
+        if (!active() || _state.value.writeDenied || _state.value.conversation?.canPost == false || _state.value.uploading) return
+        val attachmentRevision = _state.value.composer.attachmentRevision
         _state.update { it.copy(uploading = true, notice = null) }
         viewModelScope.launch {
             try {
+                if (!awaitWriteAllowed()) return@launch
                 val jpeg = withContext(Dispatchers.IO) { AttachmentReader.uprightJpeg(getApplication(), uri) }
+                if (!writeAllowed()) return@launch
                 when {
                     jpeg == null -> _state.update { it.copy(notice = res.getString(R.string.chat_photo_unreadable)) }
                     jpeg.size > ChatApi.MAX_IMAGE -> _state.update { it.copy(notice = res.getString(R.string.td_file_too_big)) }
-                    else -> { val up = api.uploadImage(id, jpeg); _state.update { it.copy(attachment = up) } }
+                    else -> { val up = api.uploadImage(id, jpeg)
+                        if (writeAllowed() && _state.value.composer.attachmentRevision == attachmentRevision) composer(_state.value.composer.attach(up)) }
                 }
-            } catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
-            _state.update { it.copy(uploading = false) }
+            } catch (e: ApiError) { uploadFailed(e) }
+            finally { if (active()) _state.update { it.copy(uploading = false) } }
         }
     }
 
+    private fun uploadFailed(e: ApiError) {
+        if (!active()) return
+        if ((e as? ApiError.Http)?.status == 403) writeRefused()
+        else if ((e as? ApiError.Http)?.status == 404) { markDeleted(); return }
+        _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
+    }
+
     fun sendLocation() {
-        if (_state.value.sending) return
+        if (!writeAllowed() || _state.value.sending) return
         _state.update { it.copy(sending = true, notice = null) }
         viewModelScope.launch {
             try {
                 val fix = c.location.currentFix()
+                if (!writeAllowed()) return@launch
                 api.send(id, ChatPayload.location(fix.lat, fix.lng, res.getString(R.string.chat_my_location)), emptyList(), null, null)
+                if (!active()) return@launch
                 poll()
             } catch (e: LocationProvider.Failure) {
-                _state.update { it.copy(notice = res.getString(R.string.chat_location_failed)) }
+                if (active()) _state.update { it.copy(notice = res.getString(R.string.chat_location_failed)) }
             } catch (e: ApiError) {
-                _state.update { it.copy(notice = e.describe(res)) }
+                uploadFailed(e)
             }
-            _state.update { it.copy(sending = false) }
+            finally { if (active()) _state.update { it.copy(sending = false) } }
         }
     }
 
     fun loadRoster() = viewModelScope.launch {
-        if (_state.value.roster != null) return@launch
+        if (!active() || _state.value.roster != null) return@launch
         val list = try { ProjectsApi(c.api).roster().members } catch (e: ApiError) { emptyList() }
-        _state.update { it.copy(roster = list) }
+        if (active()) _state.update { it.copy(roster = list) }
     }
 
     /** The conversation as the server has it now (members, permissions and group photo). */
     suspend fun refreshConversation() {
-        val conv: Conversation? = try { api.conversations().value.conversations.firstOrNull { it.id == id } } catch (e: ApiError) { null }
-        if (conv != null) _state.update { it.copy(conversation = conv) }
+        if (!active()) return
+        val startedGeneration = writeAccess.generation
+        val response = try { api.conversations() } catch (e: ApiError) { null }
+        val conv = response?.value?.conversations?.firstOrNull { it.id == id }
+        if (conv != null && active()) conversation(conv, fresh = response != null && response.savedAtMillis == null, startedGeneration = startedGeneration)
     }
 
     /**
@@ -374,6 +499,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
      * and above may do — a MANAGER_REQUIRED refusal shows this app's sentence and hides the control.
      */
     fun addPeople(userIds: List<String>) = viewModelScope.launch {
+        if (!active()) return@launch
         val conv = _state.value.conversation ?: return@launch
         if (userIds.isEmpty()) return@launch
         _state.update { it.copy(adding = true, notice = null) }
@@ -383,21 +509,24 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 val projects = ProjectsApi(c.api)
                 // One request for everyone (PROJECT-SETUP-MEMBERS B, `{ userIds }`); people already in are skipped by the server.
                 val added = try { projects.addMembers(pid, userIds) } catch (e: ApiError) { -1 }
+                if (!active()) return@launch
                 _state.update { it.copy(notice = res.getString(if (added < 0) R.string.chat_add_partial else R.string.chat_added_project)) }
             } else {
                 val updated = api.addMembers(id, userIds)
+                if (!active()) return@launch
                 // No toast: the thread's own log line ("You added Mira") is the confirmation now (SYSTEM-MESSAGES).
-                _state.update { it.copy(conversation = if (updated.members.isNotEmpty()) updated else it.conversation) }
+                if (updated.members.isNotEmpty()) conversation(updated)
                 poll()
                 refreshConversation()
             }
         } catch (e: ApiError) {
+            if (!active()) return@launch
             if (ChatRules.managerRequired(e)) {
                 _state.update { it.copy(notice = res.getString(R.string.chat_manager_required), conversation = it.conversation?.copy(canManageMembers = false)) }
                 refreshConversation()
             } else _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
         }
-        _state.update { it.copy(adding = false) }
+        if (active()) _state.update { it.copy(adding = false) }
     }
 
     /**
@@ -405,13 +534,17 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
      * polls. An older server without `around` gets older pages until it shows up (at most 5).
      */
     suspend fun jumpTo(messageId: String) {
+        if (!active()) return
         if (_state.value.messages.any { it.id == messageId }) { _state.update { it.copy(anchorId = messageId, loading = false) }; return }
         try {
             val r = api.around(id, messageId)
+            if (!active()) return
+            authorizeRead()
             _state.update { it.copy(messages = r.messages, hasMore = r.hasMore, nextCursor = r.nextCursor, loading = false,
                 anchorId = messageId.takeIf { mid -> r.messages.any { m -> m.id == mid } }, newerPending = r.hasMoreNewer) }
             if (r.messages.none { it.id == messageId }) _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }
         } catch (e: ApiError) {
+            if (!active()) return
             if (unavailable(e)) return
             val h = e as? ApiError.Http
             if (h?.status == 400 && h.code == "UNKNOWN_MESSAGE") { firstPage(); _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }; return }
@@ -421,6 +554,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 if (_state.value.messages.any { m -> m.id == messageId }) { _state.update { it.copy(anchorId = messageId) }; return }
                 if (!_state.value.hasMore) return@repeat
                 (loadEarlier() ?: return@repeat).join()
+                if (!active()) return
             }
             if (_state.value.messages.any { m -> m.id == messageId }) _state.update { it.copy(anchorId = messageId) }
             else _state.update { it.copy(notice = res.getString(R.string.ci_err_jump)) }
@@ -430,8 +564,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     fun clearAnchor() = _state.update { it.copy(anchorId = null) }
 
     fun rename(name: String) = viewModelScope.launch {
-        try { val conv = api.rename(id, name); _state.update { it.copy(conversation = conv) } }
-        catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
+        if (!active()) return@launch
+        try { val conv = api.rename(id, name); if (active()) conversation(conv) }
+        catch (e: ApiError) { if (active()) _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
     }
 }
 
@@ -442,7 +577,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     val c = Nx.colors
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    var input by rememberSaveable { mutableStateOf("") }
+    val input = s.composer.text
     var menu by remember { mutableStateOf(false) }
     var attachMenu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -484,7 +619,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             try {
                 launch { container.chatEvents.collect { cid -> if (cid == null || cid == vm.id) { vm.poll(); vm.markReadVisible() } } }
                 // Deleted elsewhere (conversation-updated, reason "deleted"): close it with a note.
-                launch { container.realtime.events.collect { e -> if (id.znetworks.nexus.core.realtime.RealtimeEvents.groupDeleted(e, vm.id)) vm.markDeleted() } }
+                launch { container.realtime.events.collect { event -> vm.receiveAccess(event) } }
                 while (!vm.state.value.deleted) { vm.poll(); vm.markReadVisible(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(container.realtime.connected, ChatApi.THREAD_POLL_LIVE_MS, ChatApi.THREAD_POLL_MS)) }
             } finally {
                 if (ChatPresence.openConversationId == vm.id) ChatPresence.openConversationId = null
@@ -495,7 +630,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
     // "… is typing" (TYPING.md): who types here, and what this phone says while its person types.
     val typers = container.typing.rooms.collectAsStateWithLifecycle().value[vm.id].orEmpty()
     val typingSender = remember(vm.id) { TypingSender(vm.id, container.realtime::sendTyping) }
-    LaunchedEffect(input) { typingSender.onText(input); if (input.isNotBlank()) { delay(TypingSender.IDLE_MS); typingSender.stop() } }
+    LaunchedEffect(input, s.composerAuthorized, s.deleted, s.writeDenied) {
+        if (vm.canSend) typingSender.onText(input) else typingSender.stop()
+        if (input.isNotBlank()) { delay(TypingSender.IDLE_MS); typingSender.stop() }
+    }
     val rtState by container.realtime.state.collectAsStateWithLifecycle()
     LaunchedEffect(rtState) { if (rtState != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typingSender.forget() }
     androidx.compose.runtime.DisposableEffect(vm.id) { onDispose { typingSender.stop() } }
@@ -631,7 +769,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                                 onClick = { msgMenu = false; clipboard.setText(AnnotatedString(m.content)) })
                         }
                     }
-                    IconButton(onClick = { vm.reply(m) }) { Icon(Icons.AutoMirrored.Filled.Reply, stringResource(R.string.chat_reply), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
+                    IconButton(onClick = { vm.reply(m) }, enabled = vm.canSend) { Icon(Icons.AutoMirrored.Filled.Reply, stringResource(R.string.chat_reply), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
                 }
             }
             if (typers.isNotEmpty()) item(key = "typing") { TypingIndicator(typers, conv?.type == "DM") }
@@ -651,7 +789,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                         Text(stringResource(R.string.chat_replying_to, r.user?.name ?: ""), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.violetText)
                         Text(ChatDocuments.preview(r.attachmentType, r.attachmentName, stringResource(R.string.files)) ?: r.content.ifBlank { "📷" }, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(onClick = { vm.reply(null) }) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
+                    IconButton(onClick = { vm.reply(null) }, enabled = vm.canSend) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
                 }
             }
             if (s.uploading || s.attachment != null) Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -660,12 +798,12 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 else RemoteImage(s.attachment?.url, Modifier.size(56.dp).clip18(), ContentScale.Crop, maxPx = 200)
                 Spacer(Modifier.width(8.dp))
                 Text(if (s.attachment?.kind == "file" && !s.uploading) s.attachment?.name.orEmpty() + " · " + id.znetworks.nexus.feature.tasks.sizeText(s.attachment?.size) else stringResource(if (s.uploading) R.string.chat_uploading else R.string.chat_photo_ready), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-                if (!s.uploading) IconButton(onClick = vm::clearAttachment) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
+                if (!s.uploading) IconButton(onClick = vm::clearAttachment, enabled = vm.canSend) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
             }
-            if (matches.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (matches.isNotEmpty() && vm.canSend) Row(Modifier.horizontalScroll(rememberScrollState()).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 matches.forEach { m ->
                     Row(Modifier.clip18().background(c.muted).clickable {
-                        input = Mentions.insert(input, m.displayName); vm.picked[m.uid] = Mentions.tag(m.displayName)
+                        vm.pickMention(m.uid, m.displayName)
                     }.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(m.displayName, m.user?.avatar, 20.dp, userId = m.uid); Spacer(Modifier.width(6.dp)); Text(m.displayName, fontSize = 12.sp, color = c.foreground)
                     }
@@ -673,11 +811,14 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             }
             if (length >= ChatComposerLimit.COUNTER_FROM || tooLong) Text(stringResource(if (tooLong) R.string.qa_chat_too_long else R.string.qa_chat_count, formattedLength), color = if (tooLong) c.dangerText else c.mutedFg, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp))
             // Can view in a project room: read, no composer (web N-03).
-            if (s.conversation?.canPost == false) Text(stringResource(R.string.chat_view_only), fontSize = 12.sp, color = c.mutedFg,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp))
+            if (s.conversation?.canPost == false || s.writeDenied) {
+                Text(stringResource(R.string.chat_view_only), fontSize = 12.sp, color = c.mutedFg,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp))
+                if (input.isNotBlank()) TextField(input, {}, enabled = false, maxLines = 5, modifier = Modifier.fillMaxWidth())
+            }
             else Row(verticalAlignment = Alignment.Bottom) {
                 Box {
-                    IconButton(onClick = { attachMenu = true }, enabled = !s.uploading, modifier = Modifier.border(1.dp, c.border, CircleShape)) { Icon(Icons.Filled.AttachFile, stringResource(R.string.chat_attach), tint = c.mutedFg) }
+                    IconButton(onClick = { attachMenu = true }, enabled = vm.canSend && !s.uploading, modifier = Modifier.border(1.dp, c.border, CircleShape)) { Icon(Icons.Filled.AttachFile, stringResource(R.string.chat_attach), tint = c.mutedFg) }
                     DropdownMenu(attachMenu, { attachMenu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, leadingIcon = { Icon(Icons.Filled.Description, null) }, onClick = {
                             attachMenu = false; documents.launch(arrayOf("*/*"))
@@ -695,10 +836,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                         })
                     }
                 }
-                TextField(input, { input = it }, placeholder = { Text(stringResource(R.string.chat_placeholder), fontSize = 14.sp) }, maxLines = 5,
+                TextField(input, vm::editText, placeholder = { Text(stringResource(R.string.chat_placeholder), fontSize = 14.sp) }, maxLines = 5,
                     colors = TextFieldDefaults.colors(focusedContainerColor = c.muted, unfocusedContainerColor = c.muted, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
                     shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).padding(horizontal = 6.dp).onFocusChanged { if (!it.isFocused) typingSender.stop() })
-                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, modifier = Modifier.background(if (input.isNotBlank() || s.attachment != null) c.onyx else c.mutedFg, CircleShape), enabled = !tooLong && !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
+                IconButton(onClick = { typingSender.stop(); vm.send() }, modifier = Modifier.background(if (input.isNotBlank() || s.attachment != null) c.onyx else c.mutedFg, CircleShape), enabled = vm.canSend && !tooLong && !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
                     if (s.sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.background)
                 }
