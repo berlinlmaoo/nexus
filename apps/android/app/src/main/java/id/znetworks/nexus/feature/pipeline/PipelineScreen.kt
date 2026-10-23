@@ -140,7 +140,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
     private val _state = MutableStateFlow(PipelineState())
     val state = _state.asStateFlow()
     private var loadNumber = 0L
-    private val termOwner = c.sessionStore.current
+    private val termOwner = PipelineTermOwner(c.api.url("/").toString(), c.sessionStore.current)
 
     init { load() }
 
@@ -279,7 +279,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
     }
 
     // Payment terms (§11.2): every answer carries the whole deal (receivable, health), which replaces ours.
-    private fun termDraftAllowed(): Boolean = termOwner != null && c.sessionStore.current == termOwner &&
+    private fun termDraftAllowed(): Boolean = termOwner.accepts(c.api.url("/").toString(), c.sessionStore.current) &&
         !combined && _state.value.data?.canEdit == true && !PipelineSession.presentation.value
 
     fun openTermDraft(deal: PipelineDeal, term: PipelineTerm? = null) {

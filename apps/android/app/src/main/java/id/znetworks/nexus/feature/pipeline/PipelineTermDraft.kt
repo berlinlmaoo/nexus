@@ -1,5 +1,17 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.session.Session
+
+/** Only credentials identify this draft's owner; refreshed profile metadata does not change ownership. */
+internal class PipelineTermOwner(private val serverBase: String, session: Session?) {
+    private val token = session?.token
+    private val cookieName = session?.cookieName
+    private val userId = session?.userId
+
+    fun accepts(currentBase: String, current: Session?): Boolean = current != null && token != null &&
+        serverBase == currentBase && token == current.token && cookieName == current.cookieName && userId == current.userId
+}
+
 /** The opening values remain fixed while realtime refreshes the deal beneath the dialog. */
 data class PipelineTermFields(val label: String = "", val amount: String, val date: String? = null)
 

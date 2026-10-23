@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.session.Session
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -75,5 +76,24 @@ class PipelineTermDraftTest {
         }
         assertNull(payment().edit(payment().fields.copy(date = null)).submit())
         assertNotNull(newTerm().edit(PipelineTermFields(amount = "")).submit())
+    }
+
+    @Test fun profileMetadataRefreshDoesNotDisableTheRetainedDraftOwner() {
+        val session = Session("credential", "session", "owner", "Before", "before@example.test", 100L)
+        val owner = PipelineTermOwner("https://dev.example.test/", session)
+        assertTrue(owner.accepts("https://dev.example.test/", session.copy(
+            userName = "After", userEmail = "after@example.test", expiresAtMillis = 200L)))
+    }
+
+    @Test fun anotherCredentialAccountOrServerCannotUseTheRetainedDraftOwner() {
+        val base = "https://dev.example.test/"
+        val session = Session("credential", "session", "owner")
+        val owner = PipelineTermOwner(base, session)
+        assertFalse(owner.accepts(base, session.copy(token = "replacement")))
+        assertFalse(owner.accepts(base, session.copy(cookieName = "another-cookie")))
+        assertFalse(owner.accepts(base, session.copy(userId = "another-owner")))
+        assertFalse(owner.accepts("https://other.example.test/", session))
+        assertFalse(owner.accepts(base, null))
+        assertFalse(PipelineTermOwner(base, null).accepts(base, session))
     }
 }
