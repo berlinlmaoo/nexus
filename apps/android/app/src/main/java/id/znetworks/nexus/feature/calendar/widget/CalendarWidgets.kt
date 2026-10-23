@@ -10,6 +10,9 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -168,6 +171,8 @@ object CalendarWidgets {
     @Volatile var previewOverride: ((GlanceScope) -> SavedGlance?)? = null
 
     suspend fun updateAll(context: Context) {
+        // A running Glance session reuses provideContent, so publish changes to its observed inputs.
+        (context.applicationContext as NexusApplication).container.calendarSnapshots.invalidate()
         CalMonthWidget().updateAll(context); CalMonthUpcomingWidget().updateAll(context); CalWeekWidget().updateAll(context)
         CalDoWidget().updateAll(context); CalPlanWidget().updateAll(context); CalActWidget().updateAll(context); CalLaterWidget().updateAll(context)
     }
@@ -231,20 +236,27 @@ abstract class CalendarWidget(private val kind: CalWidgetKind) : GlanceAppWidget
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrDefault(AppWidgetManager.INVALID_APPWIDGET_ID)
-        val lc = CalendarWidgets.localized(context)
+        val container = (context.applicationContext as NexusApplication).container
         val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
         fontFactor = minOf(scale, WIDGET_MAX_FONT_SCALE) / scale
         fontScaleUsed = minOf(scale, WIDGET_MAX_FONT_SCALE)
         systemFontScale = scale
-        val data = dataFor(context, lc, CalendarWidgetPrefs.scope(context, appWidgetId))
         // The Bagan's dark colours, as the app shows them (audit 2 #10).
         val uid = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
         if (uid != null) runCatching {
             CalendarDiskCache(java.io.File(context.cacheDir, "calendar")).structure(uid)?.value?.units
         }.getOrNull()?.let { units -> darkOf = NightHues.darkMap(units.map { it.color to it.colorDark }) }
         provideContent {
-            if (Build.VERSION.SDK_INT >= 31) GlanceTheme { Root(lc, kind, data) }
-            else GlanceTheme(colors = NexusWidgetColors) { Root(lc, kind, data) }
+            // update/updateAll do not restart a live provideGlance invocation. Auth and snapshot
+            // invalidations must be read in composition; never close over a previous person's Ready.
+            val session by container.sessionStore.session.collectAsState()
+            val revision by container.calendarSnapshots.revision.collectAsState()
+            key(session, revision) {
+                val lc = CalendarWidgets.localized(context)
+                val data = dataFor(context, lc, CalendarWidgetPrefs.scope(context, appWidgetId))
+                if (Build.VERSION.SDK_INT >= 31) GlanceTheme { Root(lc, kind, data) }
+                else GlanceTheme(colors = NexusWidgetColors) { Root(lc, kind, data) }
+            }
         }
     }
 }
