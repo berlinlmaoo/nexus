@@ -87,6 +87,7 @@ export const ID_PIPELINE: Record<string, string> = {
   "Download Excel": "Unduh Excel",
   "Preparing…": "Menyiapkan…",
   "Search deals": "Cari deal",
+  "Search deals…": "Cari deal…",
   "Search deal, brand, code, BD or PM…": "Cari deal, brand, kode, BD, atau PM…",
   "Filter by PM": "Saring per PM",
   "Filter by BD": "Saring per BD",

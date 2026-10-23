@@ -347,7 +347,8 @@ export function PipelineView({
   );
   const pickerControl = "h-9 rounded-lg bg-card pointer-coarse:h-11";
   const control = "h-9 rounded-lg border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
-  // "All PMs" reads as just "PM" on a phone, where the three filters share one row (they were "Semu…").
+  // "All PMs" reads as just "PM" on a phone, where the three filters share one row (they were "Semu…"). There each
+  // one starts from its own label width (flex-auto, px-2) so "Service" is not cut to "Ser…" at 360–390 px.
   const allLabel = (short: string, long: string) => (o: { value: string; label: string } | null) =>
     o && o.value !== ALL ? <span className="truncate">{o.label}</span> : (
       <span className="truncate text-muted-foreground"><span className="lg:hidden">{short}</span><span className="hidden lg:inline">{long}</span></span>
@@ -377,7 +378,8 @@ export function PipelineView({
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t("Search deal, brand, code, BD or PM…")}
+                  placeholder={t("Search deals…")}
+                  title={t("Search deal, brand, code, BD or PM…")}
                   className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
@@ -392,10 +394,10 @@ export function PipelineView({
                   )}
                 </div>
               )}
-              <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} renderValue={allLabel("PM", t("All PMs"))} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-foreground/30 text-foreground")} />
-              <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} renderValue={allLabel("BD", t("All BDs"))} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-foreground/30 text-foreground")} />
+              <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} renderValue={allLabel("PM", t("All PMs"))} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-auto px-2 lg:w-36 lg:flex-none lg:px-3", pm && "border-foreground/30 text-foreground")} />
+              <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} renderValue={allLabel("BD", t("All BDs"))} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-auto px-2 lg:w-36 lg:flex-none lg:px-3", bd && "border-foreground/30 text-foreground")} />
               {serviceNames.length > 1 && (
-                <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} renderValue={allLabel(t("Service"), t("All services"))} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-foreground/30 text-foreground")} />
+                <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} renderValue={allLabel(t("Service"), t("All services"))} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-auto px-2 lg:w-40 lg:flex-none lg:px-3", service && "border-foreground/30 text-foreground")} />
               )}
               <button
                 type="button"
