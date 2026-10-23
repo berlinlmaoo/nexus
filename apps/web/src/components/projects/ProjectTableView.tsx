@@ -208,7 +208,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     // One row height for every row (UI tour run 14, WD-11: a link or file cell made some rows taller), and a cell
     // never grows the row. From md a denser 36px row with the name on one line, as Notion (UI tour run 20, R20-WD-7:
     // rows were ~48px); a phone keeps two lines of name.
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 md:h-9 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid min-h-12 md:min-h-9 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} className={cn(frozen, isPhone && bulk.isSelected(task.id) && "bg-accent")} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center overflow-hidden border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
@@ -405,13 +405,15 @@ function NameCell({ task, handle, onRename, onOpen, className }: { task: NexusTa
       ) : (
         // The name wraps to two lines before it is cut (UI tour run 14, WB-12: names that start alike,
         // "REIMBURSE PATS SPOR…", read the same on every row). A click edits it, as the field did.
+        // Two lines on a computer too (QA final #2, 24 Oct 2026: one line cut "PATS Entertainment Master Calendar");
+        // the row grows from its 36 px minimum for a two-line name.
         <button
           type="button"
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
           title={task.title}
           // Breaks between words only, never inside one (Q-1: the column is sized to the longest word), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug [overflow-wrap:normal] [word-break:normal] [hyphens:none] hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug [overflow-wrap:normal] [word-break:normal] [hyphens:none] hover:border-border max-md:px-1 max-md:text-[13px]", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>
