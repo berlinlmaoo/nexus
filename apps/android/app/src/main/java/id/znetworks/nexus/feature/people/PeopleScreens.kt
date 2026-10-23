@@ -47,6 +47,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -151,7 +153,10 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                         Column(Modifier.fillMaxWidth().clip(shape).background(if (mine) c.violet.copy(alpha = 0.08f) else c.card).then(
                             if (first && last) Modifier.border(1.dp, c.border, shape) else Modifier.joinedRowOutline(c.border, first, last))) {
                             Row(Modifier.fillMaxWidth().clickable { onOpenPerson(r.userId) }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("$rank", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.width(22.dp), textAlign = TextAlign.Center)
+                                BasicText("$rank", modifier = Modifier.width(22.dp),
+                                    style = LocalTextStyle.current.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, textAlign = TextAlign.Center),
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                                    autoSize = TextAutoSize.StepBased(minFontSize = 10.5.sp, maxFontSize = 14.sp, stepSize = .25.sp))
                                 Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
                                     if (rank == 1) Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
                                 }
