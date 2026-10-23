@@ -102,6 +102,7 @@ struct PipelineBoardSwitcher: View {
     let title: String
     var fontSize: CGFloat = 20
     var weight: Font.Weight = .bold
+    var idealWraps = false
     @Environment(AuthStore.self) private var auth
     @State private var directory = PipelineBoardDirectory.shared
     @State private var presentation = PipelinePresentationSession.shared
@@ -158,8 +159,7 @@ struct PipelineBoardSwitcher: View {
     }
 
     private var titleText: some View {
-        Text(title).font(NXFont.display(fontSize, weight)).foregroundStyle(NX.foreground)
-            .multilineTextAlignment(.leading)
+        WordWrapText.projectTitle(title, size: fontSize, weight: weight, idealWraps: idealWraps).foregroundStyle(NX.foreground)
     }
 
     private func showAll() { target = .all(workspaceId: directory.workspaceId) }

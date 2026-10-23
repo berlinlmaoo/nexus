@@ -194,16 +194,24 @@ struct StatusPill: View {
     let name: String
     let colorKey: String
     var size: CGFloat = 12
+    /// Onto more lines between words instead of "…" (a board column's header): up to three, so a long name
+    /// stays readable instead of shrinking ("P&L Review & / Post-Mortem Note", 23 Oct 2026).
+    var wraps = false
 
     var body: some View {
         let s = StatusColor.swatch(colorKey)
         HStack(spacing: 5) {
             Circle().fill(s.dot).frame(width: 7, height: 7)
-            Text(name).font(NXFont.text(size, .semibold)).lineLimit(1)
+            if wraps {
+                WordWrapText(text: name, size: size, lines: 3) { NXFont.text($0, .semibold) }
+            } else {
+                Text(name).font(NXFont.text(size, .semibold)).lineLimit(1)
+            }
         }
         .foregroundStyle(s.fg)
         .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(s.bg, in: Capsule())
+        // A capsule on one line; rounded, not a lozenge, on two.
+        .background(s.bg, in: wraps ? AnyShape(RoundedRectangle(cornerRadius: 10, style: .continuous)) : AnyShape(Capsule()))
     }
 }
 

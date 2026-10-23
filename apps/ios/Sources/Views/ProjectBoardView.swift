@@ -666,13 +666,16 @@ struct ProjectDetailView: View {
                 // keep their words (UI tour run 20, iPad R20-I-08: "ZZ QA Social / Media Report" on two lines;
                 // R20-I-09: no member avatar).
                 ViewThatFits(in: .horizontal) {
-                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: true) } }
-                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: false) } }
-                    headerRow(titleCap: nil) { headerActions(labelled: true) }
-                    headerRow(titleCap: 300) { headerActions(labelled: true) }
+                    headerRow(wraps: false) { HStack(spacing: 10) { members; headerActions(labelled: true) } }
+                    headerRow(wraps: false) { HStack(spacing: 10) { members; headerActions(labelled: false) } }
+                    headerRow(wraps: false) { headerActions(labelled: true) }
+                    // The name on two lines beside the words while it fits there at its smallest size, else beside
+                    // icons: a 45-letter name was cut to "…" in the old 300 pt cap (owner, 22 Oct 2026).
+                    headerRow(wraps: true) { headerActions(labelled: true) }
+                    headerRow(wraps: true) { headerActions(labelled: false) }
                 }
             } else {
-                headerRow(titleCap: nil) {
+                headerRow(wraps: false) {
                     if detail != nil { headerActions(labelled: false) } else if !wideBar { addButton }
                 }
             }
@@ -682,8 +685,9 @@ struct ProjectDetailView: View {
         .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
 
-    /// The header's row: back, mark, name, then `actions`. `titleCap`: the name wraps to two lines inside it.
-    private func headerRow<Actions: View>(titleCap: CGFloat?, @ViewBuilder actions: () -> Actions) -> some View {
+    /// The header's row: back, mark, name, then `actions`. `wraps`: the row's ideal width counts the name wrapped
+    /// onto two lines at its smallest size, not on one line (WordWrapText.idealWraps).
+    private func headerRow<Actions: View>(wraps: Bool, @ViewBuilder actions: () -> Actions) -> some View {
         HStack(spacing: 10) {
             // ≡ while the iPad / Mac sidebar is collapsed: "≡ ✅ Tasks Tracker" (Notion, owner 14 Oct 2026).
             SidebarReopenButton()
@@ -713,23 +717,31 @@ struct ProjectDetailView: View {
             }
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
             // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
-            Group {
-                if isPipeline {
-                    PipelineBoardSwitcher(projectId: projectId, title: displayName,
-                        fontSize: wide ? 26 : 20, weight: wide ? .semibold : .bold)
-                } else {
-                    Text(displayName).font(NXFont.display(wide && !isTypedDashboard ? 32 : wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+            // Two lines everywhere, wrapped only between words, smaller before any "…" (owner, 22 Oct 2026, WordWrapText).
+            // The name and its chip fill the room themselves instead of a Spacer: the spacer's 6 pt and its extra
+            // 10 pt gap left a phone's name 94 pt, too narrow for "Entertainment" even at 15 pt (owner, 22 Oct 2026).
+            HStack(spacing: 10) {
+                Group {
+                    if isPipeline {
+                        PipelineBoardSwitcher(projectId: projectId, title: displayName,
+                            fontSize: wide ? 26 : 20, weight: wide ? .semibold : .bold, idealWraps: wraps)
+                    } else {
+                        WordWrapText.projectTitle(displayName, size: wide && !isTypedDashboard ? 32 : wide ? 26 : 20,
+                                                  weight: wide ? .semibold : .bold, idealWraps: wraps)
+                            .foregroundStyle(NX.foreground)
+                    }
                 }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
             }
-                .lineLimit(wide && titleCap == nil ? 1 : 2).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: titleCap, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
                 .layoutPriority(1)
-            if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
-            Spacer(minLength: 6)
             // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Ask GIDEON" onto
-            // two lines and cut "Project sett…" (UI tour run 13, I-10).
-            actions()
+            // two lines and cut "Project sett…" (UI tour run 13, I-10). Never squeezed by the name: beside a two-line
+            // name they ran off the edge ("Project settin…", 23 Oct 2026); the row then takes icons instead.
+            actions().fixedSize()
         }
     }
 
@@ -2405,7 +2417,9 @@ struct LaneColumn: View {
     private var header: some View {
         HStack(spacing: 8) {
             if statusStyle {
-                StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
+                // The whole name beside the count and "⋯", wrapped between words in a 200 pt empty lane
+                // ("Belum dikerjakan", owner QA 22 Oct 2026).
+                StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13, wraps: true).layoutPriority(1)
             } else {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if linked {
@@ -2423,10 +2437,15 @@ struct LaneColumn: View {
                         .lineLimit(1)
                 }
             }
+            // Their own size beside a wrapping chip, which otherwise squeezed the count to "(" (iPad, 22 Oct 2026).
             Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                .fixedSize()
             Spacer(minLength: 0)
-            if let options { optionMenu(options) }
-            else if let onSetStatus { sectionStatusMenu(onSetStatus) }
+            Group {
+                if let options { optionMenu(options) }
+                else if let onSetStatus { sectionStatusMenu(onSetStatus) }
+            }
+            .fixedSize()
         }
         .padding(.horizontal, 2)
     }
