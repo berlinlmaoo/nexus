@@ -128,7 +128,8 @@ struct MessagesView: View {
     private func unavailableChatState(_ title: String) -> some View {
         EmptyState(icon: "bubble.left.and.bubble.right", title: T(title),
                    subtitle: T("It was deleted, or you no longer have access to it."),
-                   actionTitle: T("Back to chats"), action: { unavailableChat = nil })
+                   // A back chevron, as the other "Back to chats": EmptyState's default "+" read as New chat (QA final #2, I-13).
+                   actionTitle: T("Back to chats"), actionIcon: "chevron.left", action: { unavailableChat = nil })
             .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier("chat.unavailable")
     }
