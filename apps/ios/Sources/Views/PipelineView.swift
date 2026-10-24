@@ -1209,17 +1209,27 @@ struct PipelineColumnView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // One line: stage, count, total, add. It stays put while the cards scroll under it.
+            // Stage, count, total, add. It stays put while the cards scroll under it.
             HStack(spacing: 8) {
                 Circle().fill(PipelineStyle.groupTone(stage)).frame(width: 8, height: 8)
-                Text(PipelineText.stage(stage)).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text("\(deals.count)").font(NXFont.text(12, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 7).padding(.vertical, 1)
-                    .background(NX.background, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
-                Spacer(minLength: 6)
+                // The whole stage name, two lines between words, smaller before any "…", as the project title:
+                // "Proposal / Quota…" was cut beside the total (owner, QA final #2, 24 Oct 2026). The name and its
+                // count fill the room instead of a Spacer; the count, total and add button keep their size.
+                HStack(spacing: 8) {
+                    WordWrapText(text: PipelineText.stage(stage), size: 15) { NXFont.text($0, .bold) }
+                        .foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+                    Text("\(deals.count)").font(NXFont.text(12, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(NX.background, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
+                        .fixedSize()
+                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
                 if total > 0 {
                     Text(PipelineFormat.idr(total, hidden: presenting)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                        .monospacedDigit().lineLimit(1)
+                        .monospacedDigit().lineLimit(1).fixedSize()
                 }
                 if canEdit && stage != PipelineVocab.lostStage {
                     Button { onAdd(stage) } label: {
