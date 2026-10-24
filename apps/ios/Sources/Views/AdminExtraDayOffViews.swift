@@ -386,11 +386,11 @@ struct AdminExtraDayOffSection: View {
                     if busy { ProgressView().tint(.white) } else { Image(systemName: "calendar.badge.plus") }
                     Text(T("Give")).font(NXFont.text(13, .bold))
                 }
-                // Disabled: grey on grey, still readable. White on a 40% violet nearly vanished on the
+                // Disabled: grey text on the card colour with a border, still readable. White on a 40% violet nearly vanished on the
                 // summary bar's own tint (visual QA 24 Oct 2026, iPad).
                 .foregroundStyle(canSubmit || busy ? Color.white : NX.mutedFg)
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(canSubmit || busy ? NX.violet : NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(canSubmit || busy ? NX.violet : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
                     if !(canSubmit || busy) { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border) }
                 }
