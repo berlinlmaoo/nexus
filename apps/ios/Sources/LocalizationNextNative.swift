@@ -14,8 +14,8 @@ extension AppLanguage {
         "Also editing: %@": "Ikut mengedit: %1$@",
         "%@ is editing": "%1$@ sedang mengedit",
         "%@ and %@ more are editing": "%1$@ dan %2$@ lainnya sedang mengedit",
-        "Too long: %@ / 4,000 characters. Shorten it or split it into several messages.": "Terlalu panjang: %1$@ / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.",
-        "%@ / 4,000 characters": "%1$@ / 4.000 karakter",
+        "Too long: %@ / %@ characters. Shorten it or split it into several messages.": "Terlalu panjang: %1$@ / %2$@ karakter. Persingkat atau pecah jadi beberapa pesan.",
+        "%@ / %@ characters": "%1$@ / %2$@ karakter",
         // Control Room › Announcements: deleting asks first (QA final #2, owner 24 Oct 2026; web 9fffa945).
         "Delete this announcement?": "Hapus pengumuman ini?",
         "It disappears for everyone right away. You can restore it from Control Room > Audit.": "Langsung hilang untuk semua orang. Bisa dipulihkan dari Control Room > Audit.",
