@@ -1406,12 +1406,14 @@ struct ChatThreadView: View {
                 // A picture on its own is a message. send() always allowed that; the button did
                 // not, so a photo-only reply looked broken until you typed something.
                 let empty = input.trimmingCharacters(in: .whitespaces).isEmpty && pendingAttachment == nil
+                // Also grey above 4,000 characters, where it is disabled too (QA final #2: it stayed black).
+                let idle = empty || input.unicodeScalars.count > 4000
                 Button { Task { await send() } } label: {
                     // Grey while there is nothing to send, as the web's disabled Send (UI tour run 16, R16-B-25).
                     Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(empty ? NX.mutedFg : ChatInk.onMine)
-                        .frame(width: 40, height: 40).background(empty ? NX.muted : NX.onyx, in: Circle())
-                }.disabled(empty || sending || input.unicodeScalars.count > 4000)
+                        .foregroundStyle(idle ? NX.mutedFg : ChatInk.onMine)
+                        .frame(width: 40, height: 40).background(idle ? NX.muted : NX.onyx, in: Circle())
+                }.disabled(idle || sending)
                 .accessibilityLabel(T("Send"))
             }
             .padding(12)
