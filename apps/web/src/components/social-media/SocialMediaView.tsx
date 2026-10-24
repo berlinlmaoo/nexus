@@ -84,7 +84,7 @@ export function SocialMediaView({
   return (
     <div className="flex flex-col gap-4 p-4 md:p-8" aria-busy={q.isFetching || undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <MonthSwitcher month={month} today={today} onChange={setMonth} />
+        <MonthSwitcher month={month} today={today} onChange={setMonth} className="max-sm:w-full max-sm:justify-between" />
         {/* Labelled on a phone too (UI tour run 13, W-M13: a bare icon). */}
         <div className="flex flex-wrap items-center gap-2">
           {data.canManage && (

@@ -167,9 +167,10 @@ function CreatedByLine({ creator, createdAt }: { creator: NexusUser; createdAt: 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1.5 text-sm text-muted-foreground">
       <MiniAvatar user={creator} size={20} />
-      <span className="text-foreground">{displayName(creator)}</span>
+      {/* The date is glued to the name's last word (no-break spaces), so a narrow screen wraps inside the name
+          instead of starting a line with "· 5 Oct" (visual QA 24 Oct). */}
+      <span className="min-w-0 flex-1"><span className="text-foreground">{displayName(creator)}</span>{date && <span className="whitespace-nowrap">{"\u00a0·\u00a0"}{date}</span>}</span>
       {creator.deactivatedAt && <PersonLeftTag />}
-      {date && <span>· {date}</span>}
     </div>
   );
 }

@@ -462,7 +462,7 @@ function FormBody({
       })}
 
       {/* On a phone it floats just above the app's tab bar (MobileTabBar: fixed, ~5.5rem tall with its gap). */}
-      <div className="sticky bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0">
+      <div className="sticky bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 shadow-soft md:bottom-0">
         {event ? (
           <button
             type="button"
