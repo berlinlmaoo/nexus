@@ -592,8 +592,9 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const setListOpen = (open: boolean) => { setListOpenState(open); try { localStorage.setItem("gideon-chatlist-open", open ? "1" : "0"); } catch { /* private mode */ } };
 
   // The tier menu (U-7, owner 19 Oct 2026): Artemis / Phaëthon (Default) / Aphrodite / Model 0 (Experimental).
+  // It opens below the chat title under the trigger (sideOffset), not over it (visual QA 24 Oct 2026).
   const tierMenuContent = (
-              <DropdownMenuContent align="center" side="bottom" className="w-64">
+              <DropdownMenuContent align="center" side="bottom" sideOffset={20} className="w-64">
                 <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("GIDEON tier")}</DropdownMenuLabel>
                 {GIDEON_TIERS.map((x) => {
                   const st = tierStatus.data?.[x.id as keyof NonNullable<typeof tierStatus.data>];
