@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -106,9 +107,9 @@ private fun str(s: String?) = s?.let(::JsonPrimitive) ?: JsonNull
 @Composable
 fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, sourceName: String? = null, onBackToAll: (() -> Unit)? = null, onClose: () -> Unit) {
     val c = Nx.colors
-    var tab by remember { mutableStateOf(0) }
+    var tab by rememberSaveable(deal.id) { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var laterOpen by remember(deal.id) { mutableStateOf(false) }
+    var laterOpen by rememberSaveable(deal.id) { mutableStateOf(false) }
     val save = { fields: JsonObject -> if (data.canEdit) vm.update(deal.id, JsonObject(fields + buildMap {
         if ("links" in fields) put("linksBase", deal.raw["links"] ?: JsonArray(emptyList()))
     })) }

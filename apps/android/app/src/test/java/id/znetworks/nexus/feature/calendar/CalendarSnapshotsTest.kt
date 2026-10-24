@@ -6,6 +6,11 @@ import id.znetworks.nexus.feature.calendar.widget.CalendarSnapshots.Pass
 import id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork
 import id.znetworks.nexus.feature.calendar.widget.SavedGlance
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -121,6 +126,70 @@ class CalendarSnapshotsTest {
         store.refresh(force = true)
         assertEquals(listOf(GlanceScope.ALL), asked)
         assertNull(store.load(GlanceScope.ME)); assertNull(store.load(GlanceScope.DIVISION)); assertNotNull(store.load(GlanceScope.ALL))
+    }
+
+    @Test fun aLiveObserverSeesRefreshWipeAndClearWithoutRestartingTheStore() = runBlocking {
+        val revisions = mutableListOf<Long>()
+        val observed = mutableListOf<SavedGlance?>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            store.revision.take(5).collect { value -> revisions += value; observed += store.load(GlanceScope.ME) }
+        }
+        store.refresh(force = true); yield()
+        store.wipe(); yield()
+        store.refresh(force = true); yield()
+        store.clear(); yield()
+        collector.join()
+        assertEquals(5, revisions.size)
+        assertTrue(revisions.zipWithNext().all { (before, after) -> after > before })
+        assertNull(observed[0]); assertNotNull(observed[1]); assertNull(observed[2])
+        assertNotNull(observed[3]); assertNull(observed[4])
+    }
+
+    @Test fun signedOutAndDisabledRefreshInvalidatePreviouslyRenderedSnapshots() = runBlocking {
+        store.refresh(force = true)
+        val signedInRevision = store.revision.value
+        user = null
+        assertEquals(Pass.SIGNED_OUT, store.refresh(force = true))
+        assertTrue(store.revision.value > signedInRevision)
+        assertNull(store.load(GlanceScope.ME))
+        user = "u_staff"; store.refresh(force = true)
+        val enabledRevision = store.revision.value
+        on = false
+        assertEquals(Pass.DISABLED, store.refresh(force = true))
+        assertTrue(store.revision.value > enabledRevision)
+        on = true
+        assertNull(store.load(GlanceScope.ME))
+    }
+
+    @Test fun droppingTheLastPlacedScopeInvalidatesItsLiveContent() = runBlocking {
+        store.refresh(force = true)
+        val before = store.revision.value
+        placed = emptySet()
+        assertEquals(Pass.NO_WIDGETS, store.refresh(force = true))
+        assertTrue(store.revision.value > before)
+        assertNull(store.load(GlanceScope.ME))
+    }
+
+    @Test fun presentationInvalidationReloadsCurrentOwnerInsteadOfKeepingAnOldReady() = runBlocking {
+        store.refresh(force = true)
+        val revisions = mutableListOf<Long>()
+        val owners = mutableListOf<String?>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            store.revision.take(3).collect { value -> revisions += value; owners += store.load(GlanceScope.ME)?.userId }
+        }
+        user = "u_next"; store.invalidate(); yield()
+        answerAs = "u_next"; store.refresh(force = true); yield()
+        collector.join()
+        assertEquals(listOf("u_staff", null, "u_next"), owners)
+        assertTrue(revisions.zipWithNext().all { (before, after) -> after > before })
+    }
+
+    @Test fun ownerChangedDuringTheFileReadCannotPublishThePreviousUsersSnapshot() = runBlocking {
+        store.refresh(force = true)
+        var reads = 0
+        val changingOwner = CalendarSnapshots(dir, fetch = { snapshot(it) },
+            currentUserId = { if (++reads == 1) "u_staff" else "u_next" }, widgetsOn = { true }, changed = {})
+        assertNull(changingOwner.load(GlanceScope.ME))
     }
 
     @Test fun nextRedrawIsTheFirstChangeOrMidnight() {

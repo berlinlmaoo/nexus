@@ -199,7 +199,7 @@ class AppContainer(private val context: Context) {
         id.znetworks.nexus.feature.widget.AttendancePresence(context, api, appScope,
             queue = { attendanceQueue.state.value.entries },
             hereName = { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHere(workTrail.state)?.name },
-            signedIn = { sessionStore.current != null })
+            currentSession = { sessionStore.current })
     }
 
     /** In noBackupFilesDir, never cacheDir: an OS cache purge must never delete a check-in. */

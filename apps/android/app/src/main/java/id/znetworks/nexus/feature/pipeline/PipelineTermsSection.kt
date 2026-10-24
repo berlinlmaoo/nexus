@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -38,17 +39,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.R
-import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.ui.theme.Nx
+import id.znetworks.nexus.ui.components.ConfirmDialog
+import id.znetworks.nexus.ui.components.PendingConfirm
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import java.time.LocalDate
 
 private fun f(vararg p: Pair<String, JsonElement>) = JsonObject(mapOf(*p))
 private fun day(s: String?): JsonElement = s?.let(::JsonPrimitive) ?: JsonNull
-private fun moneyText(v: Double) = if (v == 0.0) "" else PipelineFormat.idrFull(v).removePrefix("Rp")
 
 /**
  * Payment terms of a deal (PIPELINE-DASHBOARD §11.2, web 5ff5b6a, iOS f316ef4): DP, Termin 1 … each with its
@@ -60,7 +61,7 @@ internal fun PaymentTerms(deal: PipelineDeal, vm: PipelineViewModel) {
     val c = Nx.colors
     val terms = deal.terms
     val ts = deal.termSummary
-    var adding by remember { mutableStateOf(false) }
+    val state by vm.state.collectAsStateWithLifecycle()
     if (ts != null && terms.isNotEmpty()) {
         Text(stringResource(R.string.pl_t_paid_of, pipelineFullMoney(ts.totalPaid), pipelineFullMoney(ts.totalAmount)), fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold, color = c.foreground)
@@ -73,8 +74,16 @@ internal fun PaymentTerms(deal: PipelineDeal, vm: PipelineViewModel) {
     }
     if (terms.isEmpty()) Text(stringResource(R.string.pl_t_empty), fontSize = 12.sp, color = c.mutedFg)
     terms.forEach { t -> key(t.id) { TermCard(deal, t, vm) } }
-    if (LocalPipelineCanEdit.current) TextButton(onClick = { adding = true }, enabled = !LocalPipelinePresentation.current) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
-    if (adding && LocalPipelineCanEdit.current && !LocalPipelinePresentation.current) NewTerm(deal, vm) { adding = false }
+    if (LocalPipelineCanEdit.current) TextButton(onClick = { vm.openTermDraft(deal) }, enabled = !LocalPipelinePresentation.current) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_t_add)) }
+    if (LocalPipelineCanEdit.current && !LocalPipelinePresentation.current) state.termDraft?.takeIf { it.dealId == deal.id }?.let { draft ->
+        key(draft.key) {
+            if (draft.termId == null) NewTerm(draft, vm)
+            else deal.terms.firstOrNull { it.id == draft.termId }?.let { MarkPaid(it, draft, vm) }
+            ConfirmDialog(if (draft.discard) PendingConfirm(stringResource(R.string.os_discard_q), null, stringResource(R.string.be_discard)) {
+                vm.discardTermDraft(draft.key)
+            } else null) { vm.keepTermDraft(draft.key) }
+        }
+    }
 }
 
 @Composable
@@ -95,7 +104,6 @@ internal fun TermPill(t: PipelineTerm) {
 @Composable
 private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel) {
     val c = Nx.colors
-    var paying by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val save = { fields: JsonObject -> vm.updateTerm(deal.id, t.id, fields) }
     Column(Modifier.fillMaxWidth().background(c.background, RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(10.dp),
@@ -119,13 +127,10 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
             DateSave(stringResource(R.string.pl_t_paid_at), t.paidAt) { save(f("paidAt" to day(it))) }
         }
         TextSave(stringResource(R.string.pl_t_note), t.note, multiline = true) { save(f("note" to JsonPrimitive(it))) }
-        if (!t.isPaid && LocalPipelineCanEdit.current) TextButton(onClick = { paying = true }, enabled = !LocalPipelinePresentation.current) {
+        if (!t.isPaid && LocalPipelineCanEdit.current) TextButton(onClick = { vm.openTermDraft(deal, t) }, enabled = !LocalPipelinePresentation.current) {
             Icon(Icons.Filled.CheckCircle, null, Modifier.size(16.dp), tint = c.success); Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.pl_t_mark_paid), color = c.success, fontWeight = FontWeight.SemiBold)
         }
-    }
-    if (paying && !LocalPipelinePresentation.current) MarkPaid(t, onDismiss = { paying = false }) { amount, date ->
-        vm.updateTerm(deal.id, t.id, f("paidAmount" to JsonPrimitive(amount), "paidAt" to JsonPrimitive(date))) { ok -> if (ok) paying = false }
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
         title = { Text(stringResource(R.string.pl_t_delete_q, t.label.ifBlank { stringResource(R.string.pl_t_term) })) },
@@ -137,48 +142,45 @@ private fun TermCard(deal: PipelineDeal, t: PipelineTerm, vm: PipelineViewModel)
 
 /** "Mark paid": the total received so far (starts at the whole term) and the day, today unless changed. */
 @Composable
-private fun MarkPaid(t: PipelineTerm, onDismiss: () -> Unit, onSave: (Double, String) -> Unit) {
-    var amount by remember { mutableStateOf(moneyText(t.amount)) }
-    var date by remember { mutableStateOf(LocalDate.now(OfficeTime.ZONE).toString()) }
-    val parsed = PipelineFormat.parseMoney(amount)?.takeIf { it >= 0 }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pl_t_mark_paid)) },
+private fun MarkPaid(t: PipelineTerm, draft: PipelineTermDraft, vm: PipelineViewModel) {
+    val parsed = draft.amount
+    val dismiss = { vm.closeTermDraft(draft.key) }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(stringResource(R.string.pl_t_mark_paid)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NxTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_total_received)) },
+                NxTextField(draft.fields.amount, { value -> vm.editTermDraft(draft.key) { it.copy(amount = value) } }, enabled = !draft.busy, singleLine = true, label = { Text(stringResource(R.string.pl_t_total_received)) },
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                DateSave(stringResource(R.string.pl_t_paid_at), date) { it?.let { d -> date = d } }
+                CompositionLocalProvider(LocalPipelineCanEdit provides !draft.busy) {
+                    DateSave(stringResource(R.string.pl_t_paid_at), draft.fields.date) { value -> value?.let { day -> vm.editTermDraft(draft.key) { it.copy(date = day) } } }
+                }
                 if (parsed != null && parsed > t.amount) Text(stringResource(R.string.qa_term_overpaid_warning, pipelineFullMoney(parsed - t.amount)), color = Nx.colors.warningFg, fontSize = 12.sp)
             }
         },
-        confirmButton = { TextButton(onClick = { parsed?.let { onSave(it, date) } }, enabled = parsed != null) { Text(stringResource(R.string.save)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
+        confirmButton = { TextButton(onClick = { vm.submitTermDraft(draft.key) }, enabled = draft.valid && !draft.busy) { Text(stringResource(R.string.save)) } },
+        dismissButton = { TextButton(onClick = dismiss, enabled = !draft.busy) { Text(stringResource(R.string.cancel)) } })
 }
 
 /** "Add term": a name (blank → the server's "Termin n"), the amount left of the invoice (else contract) value, a due date. */
 @Composable
-private fun NewTerm(deal: PipelineDeal, vm: PipelineViewModel, onClose: () -> Unit) {
-    var label by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf(moneyText(PipelineTerms.suggestedAmount(deal))) }
-    var due by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    val parsed = PipelineFormat.parseMoney(amount)?.takeIf { it >= 0 }
-    AlertDialog(onDismissRequest = onClose, title = { Text(stringResource(R.string.pl_t_new)) },
+private fun NewTerm(draft: PipelineTermDraft, vm: PipelineViewModel) {
+    val parsed = draft.amount
+    val dismiss = { vm.closeTermDraft(draft.key) }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(stringResource(R.string.pl_t_new)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NxTextField(label, { label = it }, singleLine = true, label = { Text(stringResource(R.string.pl_f_name)) },
+                NxTextField(draft.fields.label, { value -> vm.editTermDraft(draft.key) { it.copy(label = value) } }, enabled = !draft.busy, singleLine = true, label = { Text(stringResource(R.string.pl_f_name)) },
                     placeholder = { Text(stringResource(R.string.pl_t_label_hint)) }, modifier = Modifier.fillMaxWidth())
-                NxTextField(amount, { amount = it }, singleLine = true, label = { Text(stringResource(R.string.pl_t_amount)) },
+                NxTextField(draft.fields.amount, { value -> vm.editTermDraft(draft.key) { it.copy(amount = value) } }, enabled = !draft.busy, singleLine = true, label = { Text(stringResource(R.string.pl_t_amount)) },
                     isError = parsed == null, supportingText = if (parsed == null) { { Text(stringResource(R.string.pl_t_number)) } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                DateSave(stringResource(R.string.pl_f_due_date), due) { due = it }
+                CompositionLocalProvider(LocalPipelineCanEdit provides !draft.busy) {
+                    DateSave(stringResource(R.string.pl_f_due_date), draft.fields.date) { value -> vm.editTermDraft(draft.key) { it.copy(date = value) } }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                busy = true
-                vm.addTerm(deal.id, f("label" to JsonPrimitive(label.trim()), "amount" to JsonPrimitive(parsed ?: 0.0), "dueDate" to day(due))) { ok -> busy = false; if (ok) onClose() }
-            }, enabled = parsed != null && !busy) { Text(stringResource(R.string.pl_t_add)) }
+            TextButton(onClick = { vm.submitTermDraft(draft.key) }, enabled = draft.valid && !draft.busy) { Text(stringResource(R.string.pl_t_add)) }
         },
-        dismissButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) } })
+        dismissButton = { TextButton(onClick = dismiss, enabled = !draft.busy) { Text(stringResource(R.string.cancel)) } })
 }

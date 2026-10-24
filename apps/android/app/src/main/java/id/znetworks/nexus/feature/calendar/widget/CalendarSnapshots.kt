@@ -3,6 +3,9 @@ package id.znetworks.nexus.feature.calendar.widget
 import id.znetworks.nexus.core.net.NexusJson
 import id.znetworks.nexus.feature.calendar.CalGlance
 import id.znetworks.nexus.feature.calendar.GlanceScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -39,6 +42,12 @@ class CalendarSnapshots(
 ) {
     private val lock = Mutex()
     @Volatile private var lastPass = 0L
+    private val _revision = MutableStateFlow(0L)
+    /** Live Glance sessions observe this as well as auth: updateAll does not restart provideGlance. */
+    val revision = _revision.asStateFlow()
+
+    /** Also invalidated for clock, language and per-widget scope changes without a new snapshot. */
+    fun invalidate() { _revision.update { it + 1 } }
 
     private fun file(scope: GlanceScope) = File(dir, "${scope.wire}.json")
 
@@ -46,7 +55,7 @@ class CalendarSnapshots(
         val me = currentUserId() ?: return null
         if (!widgetsOn()) return null
         val saved = runCatching { NexusJson.decodeFromString(SavedGlance.serializer(), file(scope).readText()) }.getOrNull() ?: return null
-        return saved.takeIf { it.userId == me && it.snapshot.userId == me }
+        return saved.takeIf { it.userId == me && it.snapshot.userId == me && currentUserId() == me && widgetsOn() }
     }
 
     /** What [refresh] did, for tests and logs. */
@@ -58,7 +67,8 @@ class CalendarSnapshots(
             if (!widgetsOn()) return@withLock Pass.DISABLED.also { wipe() }
             val wanted = scopes()
             // Scopes no widget shows any more are not kept.
-            GlanceScope.entries.filter { it !in wanted }.forEach { file(it).delete() }
+            val removed = GlanceScope.entries.filter { it !in wanted }.map { file(it).delete() }.any { it }
+            if (removed) invalidate()
             if (wanted.isEmpty()) return@withLock Pass.NO_WIDGETS
             if (!force && now() - lastPass < THROTTLE_MS) return@withLock Pass.THROTTLED
             lastPass = now()
@@ -70,7 +80,7 @@ class CalendarSnapshots(
                 write(scope, SavedGlance(now(), me, s))
                 any = true
             }
-            if (any) Pass.SAVED else Pass.FAILED
+            if (any) { invalidate(); Pass.SAVED } else Pass.FAILED
         }
         if (result != Pass.THROTTLED && result != Pass.NO_WIDGETS) changed()
         return result
@@ -82,7 +92,7 @@ class CalendarSnapshots(
     }
 
     /** Synchronous delete, for the sign-out listener: the files go before anything else runs. */
-    fun wipe() { GlanceScope.entries.forEach { file(it).delete() } }
+    fun wipe() { GlanceScope.entries.forEach { file(it).delete() }; invalidate() }
 
     private fun write(scope: GlanceScope, saved: SavedGlance) {
         dir.mkdirs()
