@@ -17,8 +17,9 @@ struct WordWrapText: View {
 
     private static let steps = 6
 
-    /// One word per line: as a Text, its width is the widest word.
-    private var wordColumn: String { text.split(whereSeparator: \.isWhitespace).joined(separator: "\n") }
+    /// One word per line: as a Text, its width is the widest word. A zero-width space is a break too: file
+    /// names carry one after "_" (LegalLabels.title) so that they wrap at the joins.
+    private var wordColumn: String { text.split(whereSeparator: { $0.isWhitespace || $0 == "\u{200B}" }).joined(separator: "\n") }
     private var scales: [CGFloat] {
         (0...Self.steps).map { 1 - (1 - minimumScale) * CGFloat($0) / CGFloat(Self.steps) }
     }
@@ -103,6 +104,15 @@ private struct WordWrapLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         choice(width: proposal.width, subviews: subviews).size
+    }
+
+    /// The shown text's baselines, so a dot or icon aligned to `.firstTextBaseline` sits on its first line as
+    /// beside a plain Text (the Outlet calendar chip, QA final #2).
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
+                           subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
+        let chosen = choice(width: proposal.width, subviews: subviews)
+        return bounds.minY + subviews[chosen.index].dimensions(in: ProposedViewSize(width: chosen.measured, height: nil))[guide]
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

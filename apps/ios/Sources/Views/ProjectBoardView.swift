@@ -673,10 +673,14 @@ struct ProjectDetailView: View {
                     // icons: a 45-letter name was cut to "…" in the old 300 pt cap (owner, 22 Oct 2026).
                     headerRow(wraps: true) { headerActions(labelled: true) }
                     headerRow(wraps: true) { headerActions(labelled: false) }
+                    headerRow(wraps: true, nameBelow: true) { headerActions(labelled: false) }
                 }
             } else {
-                headerRow(wraps: false) {
-                    if detail != nil { headerActions(labelled: false) } else if !wideBar { addButton }
+                // The name beside the buttons while it fits there on two lines at its smallest size, else on its own
+                // line under them: an iPhone SE left it ~40 pt, "[TE…" and "ZZ / …" (QA final #2, 24 Oct 2026, I-15).
+                ViewThatFits(in: .horizontal) {
+                    headerRow(wraps: true) { phoneHeaderActions }
+                    headerRow(wraps: true, nameBelow: true) { phoneHeaderActions }
                 }
             }
         }
@@ -685,64 +689,91 @@ struct ProjectDetailView: View {
         .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
 
+    @ViewBuilder private var phoneHeaderActions: some View {
+        if detail != nil { headerActions(labelled: false) } else if !wideBar { addButton }
+    }
+
     /// The header's row: back, mark, name, then `actions`. `wraps`: the row's ideal width counts the name wrapped
-    /// onto two lines at its smallest size, not on one line (WordWrapText.idealWraps).
-    private func headerRow<Actions: View>(wraps: Bool, @ViewBuilder actions: () -> Actions) -> some View {
-        HStack(spacing: 10) {
-            // ≡ while the iPad / Mac sidebar is collapsed: "≡ ✅ Tasks Tracker" (Notion, owner 14 Oct 2026).
-            SidebarReopenButton()
-            // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
-            if isPresented {
-                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14): the
-                // bar's bordered 44 pt circle, no shadow, at the bar's 20 pt inset (run 20, R20-I-07: it was a smaller
-                // shadowed circle at 6 pt).
-                Button {
-                    if pipelineReturnsToAll && PipelinePresentationSession.shared.isPresenting {
-                        confirmPipelineReturn = true
-                    } else {
-                        dismiss()
-                    }
-                } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
-                        .frame(width: 44, height: 44)
-                        .background(NX.card, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border, lineWidth: 1))
-                        .contentShape(Circle())
+    /// onto two lines at its smallest size, not on one line (WordWrapText.idealWraps). `nameBelow`: back, mark and
+    /// `actions` on the first line, the name on its own full-width line under them.
+    @ViewBuilder
+    private func headerRow<Actions: View>(wraps: Bool, nameBelow: Bool = false, @ViewBuilder actions: () -> Actions) -> some View {
+        if nameBelow {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    headerLeading
+                    Spacer(minLength: 0)
+                    actions().fixedSize()
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .accessibilityLabel(T("Back"))
-                .accessibilityIdentifier("pipeline.board.back")
-                .modifier(PipelineAllConfirmation(isPresented: $confirmPipelineReturn, onShow: { dismiss() }))
+                headerTitle(wraps: false)
             }
-            ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
-            // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
-            // Two lines everywhere, wrapped only between words, smaller before any "…" (owner, 22 Oct 2026, WordWrapText).
-            // The name and its chip fill the room themselves instead of a Spacer: the spacer's 6 pt and its extra
-            // 10 pt gap left a phone's name 94 pt, too narrow for "Entertainment" even at 15 pt (owner, 22 Oct 2026).
+        } else {
             HStack(spacing: 10) {
-                Group {
-                    if isPipeline {
-                        PipelineBoardSwitcher(projectId: projectId, title: displayName,
-                            fontSize: wide ? 26 : 20, weight: wide ? .semibold : .bold, idealWraps: wraps)
-                    } else {
-                        WordWrapText.projectTitle(displayName, size: wide && !isTypedDashboard ? 32 : wide ? 26 : 20,
-                                                  weight: wide ? .semibold : .bold, idealWraps: wraps)
-                            .foregroundStyle(NX.foreground)
-                    }
-                }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
+                headerLeading
+                headerTitle(wraps: wraps)
+                // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Ask GIDEON" onto
+                // two lines and cut "Project sett…" (UI tour run 13, I-10). Never squeezed by the name: beside a two-line
+                // name they ran off the edge ("Project settin…", 23 Oct 2026); the row then takes icons instead.
+                actions().fixedSize()
             }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
-                .layoutPriority(1)
-            // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Ask GIDEON" onto
-            // two lines and cut "Project sett…" (UI tour run 13, I-10). Never squeezed by the name: beside a two-line
-            // name they ran off the edge ("Project settin…", 23 Oct 2026); the row then takes icons instead.
-            actions().fixedSize()
         }
+    }
+
+    /// Sidebar reopen, back (when pushed) and the project's mark.
+    @ViewBuilder private var headerLeading: some View {
+        // ≡ while the iPad / Mac sidebar is collapsed: "≡ ✅ Tasks Tracker" (Notion, owner 14 Oct 2026).
+        SidebarReopenButton()
+        // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
+        if isPresented {
+            // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14): the
+            // bar's bordered 44 pt circle, no shadow, at the bar's 20 pt inset (run 20, R20-I-07: it was a smaller
+            // shadowed circle at 6 pt).
+            Button {
+                if pipelineReturnsToAll && PipelinePresentationSession.shared.isPresenting {
+                    confirmPipelineReturn = true
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
+                    .frame(width: 44, height: 44)
+                    .background(NX.card, in: Circle())
+                    .overlay(Circle().strokeBorder(NX.border, lineWidth: 1))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(T("Back"))
+            .accessibilityIdentifier("pipeline.board.back")
+            .modifier(PipelineAllConfirmation(isPresented: $confirmPipelineReturn, onShow: { dismiss() }))
+        }
+        ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
+    }
+
+    /// The project's name (or Pipeline board switcher) and its access chip, filling the room left to it.
+    private func headerTitle(wraps: Bool) -> some View {
+        // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
+        // Two lines everywhere, wrapped only between words, smaller before any "…" (owner, 22 Oct 2026, WordWrapText).
+        // The name and its chip fill the room themselves instead of a Spacer: the spacer's 6 pt and its extra
+        // 10 pt gap left a phone's name 94 pt, too narrow for "Entertainment" even at 15 pt (owner, 22 Oct 2026).
+        HStack(spacing: 10) {
+            Group {
+                if isPipeline {
+                    PipelineBoardSwitcher(projectId: projectId, title: displayName,
+                        fontSize: wide ? 26 : 20, weight: wide ? .semibold : .bold, idealWraps: wraps)
+                } else {
+                    WordWrapText.projectTitle(displayName, size: wide && !isTypedDashboard ? 32 : wide ? 26 : 20,
+                                              weight: wide ? .semibold : .bold, idealWraps: wraps)
+                        .foregroundStyle(NX.foreground)
+                }
+            }
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
+        }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
+            .layoutPriority(1)
     }
 
     /// Ask GIDEON, Project settings and (outside the wide tab row) the add button.
@@ -2623,10 +2654,11 @@ struct BoardCard: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
-                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
+                // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
+                // PEKANB…" (UI tour run 15, Q-M11). A word wider than the card shrinks (to 0.75) before it is
+                // split: "Supercalifragilisticexpialidoc / ious" (QA final #2, I-12).
+                WordWrapText(text: UntitledText.wrapped(task.title), size: 14, lines: 20) { NXFont.text($0, task.isDone ? .medium : .bold) }
                     .foregroundStyle(task.isDone ? NX.mutedFg.opacity(0.8) : NX.foreground)
-                    // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
-                    // PEKANB…" (UI tour run 15, Q-M11).
                     .strikethrough(task.isDone)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

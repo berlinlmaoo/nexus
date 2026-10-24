@@ -3248,7 +3248,7 @@ extension APIClient {
         let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
         let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
         if obj["code"] as? String == "MESSAGE_TOO_LONG", let length = obj["length"] as? Int {
-            return String(format: T("Too long: %@ / 4,000 characters. Shorten it or split it into several messages."), AppNumber.int(length))
+            return String(format: T("Too long: %@ / %@ characters. Shorten it or split it into several messages."), AppNumber.localInt(length), AppNumber.localInt(4000))
         }
         if let code = obj["code"] as? String, let message = NativeRefusal.message(code, maxBytes: obj["maxBytes"] as? Int) { return message }
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a

@@ -128,7 +128,8 @@ struct MessagesView: View {
     private func unavailableChatState(_ title: String) -> some View {
         EmptyState(icon: "bubble.left.and.bubble.right", title: T(title),
                    subtitle: T("It was deleted, or you no longer have access to it."),
-                   actionTitle: T("Back to chats"), action: { unavailableChat = nil })
+                   // A back chevron, as the other "Back to chats": EmptyState's default "+" read as New chat (QA final #2, I-13).
+                   actionTitle: T("Back to chats"), actionIcon: "chevron.left", action: { unavailableChat = nil })
             .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier("chat.unavailable")
     }
@@ -1427,11 +1428,13 @@ struct ChatThreadView: View {
         .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
     }
 
+    /// Both numbers in the UI language's grouping, "3,650 / 4,000" / "3.650 / 4.000", as the web: the English
+    /// text read "3.650 / 4,000" (QA final #2, I-11).
     private var messageLengthNotice: String {
-        let n = AppNumber.int(input.unicodeScalars.count)
+        let n = AppNumber.localInt(input.unicodeScalars.count), max = AppNumber.localInt(4000)
         return input.unicodeScalars.count > 4000
-            ? String(format: T("Too long: %@ / 4,000 characters. Shorten it or split it into several messages."), n)
-            : String(format: T("%@ / 4,000 characters"), n)
+            ? String(format: T("Too long: %@ / %@ characters. Shorten it or split it into several messages."), n, max)
+            : String(format: T("%@ / %@ characters"), n, max)
     }
 
     // MARK: typing

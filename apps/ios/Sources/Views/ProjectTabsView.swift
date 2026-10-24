@@ -725,7 +725,10 @@ struct TimelineTab: View {
                     Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
                         .rotationEffect(.degrees(isCollapsed ? -90 : 0))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(g.name).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        // Two lines between words, smaller before any "…": the phone's ~120 pt Name column cut
+                        // "On Prog…" on one line (QA final #2, I-2).
+                        WordWrapText(text: g.name, size: 15) { NXFont.text($0, .bold) }
+                            .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                         // Without the Duration and Progress columns the group still says its span and
                         // progress, "23 days · 100%" (web; UI tour run 14, P-I6 / N-02).
                         if !showMeta, gDur > 0, let pct {
@@ -776,11 +779,19 @@ struct TimelineTab: View {
                         // "…" cut "FEE HOSTING PR NADIA RAHMA - 22 A…"; the row grows instead.
                         // The phone's ~120 pt column (Q-1, Berlin 20 Oct: not wider): a smaller name, two lines,
                         // and a size its longest word fits, so "REIMBURSE" never breaks into "REIMBURS / E".
-                        Text(UntitledText.wrapped(t.title))
-                            .font(NXFont.text(compact ? Self.phoneNameSize(t.title, subtask: t.isSubtask) : showMeta ? 13 : 14, .medium))
+                        // iPad / Mac: a word wider than the column shrinks (to 0.75) before it is split
+                        // ("Supercalifragilisticexpia / lidocious", QA final #2, I-12).
+                        SwiftUI.Group {
+                            if compact {
+                                Text(UntitledText.wrapped(t.title))
+                                    .font(NXFont.text(Self.phoneNameSize(t.title, subtask: t.isSubtask), .medium))
+                                    .lineLimit(2).truncationMode(.tail)
+                            } else {
+                                WordWrapText(text: UntitledText.wrapped(t.title), size: showMeta ? 13 : 14, lines: 20) { NXFont.text($0, .medium) }
+                            }
+                        }
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
                             .strikethrough(t.isDone)
-                            .lineLimit(compact ? 2 : nil).truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).

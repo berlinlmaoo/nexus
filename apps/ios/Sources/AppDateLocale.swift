@@ -97,6 +97,10 @@ enum AppNumber {
         return n < 0 ? "\u{2212}" + digits : digits
     }
 
+    /// Grouped in the UI language, "4,000" in English and "4.000" in Indonesian. Only where the owner asked for it:
+    /// the chat length counter, as the web's (QA final #2, I-11). Everything else stays Indonesian (int).
+    static func localInt(_ n: Int) -> String { n.formatted(.number.locale(AppDateLocale.current)) }
+
     /// "Rp 6.000.000", a space after "Rp", in both languages; "−Rp 5.000" below zero.
     static func rupiah(_ n: Int64) -> String {
         let digits = groupedFormatter.string(from: NSNumber(value: n.magnitude)) ?? String(n.magnitude)

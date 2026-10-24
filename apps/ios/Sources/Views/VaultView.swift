@@ -612,7 +612,9 @@ struct VaultView: View {
             rowIcon(item)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(NXFont.text(webChrome ? 15 : 14, webChrome ? .medium : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines between words, smaller before any "…", as every name (QA final #2, I-4).
+                WordWrapText(text: item.name, size: webChrome ? 15 : 14) { NXFont.text($0, webChrome ? .medium : .bold) }
+                    .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                 Text(Self.subtitle(item)).font(NXFont.text(webChrome ? 13 : 11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 6)
@@ -723,7 +725,9 @@ struct VaultView: View {
 
             HStack(spacing: 2) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(item.name).font(NXFont.text(webChrome ? 13 : 12, webChrome ? .medium : .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Two lines between words, smaller before any "…", as every name (QA final #2, I-4).
+                    WordWrapText(text: item.name, size: webChrome ? 13 : 12) { NXFont.text($0, webChrome ? .medium : .semibold) }
+                        .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                     Text(Self.subtitle(item)).font(NXFont.text(webChrome ? 12 : 10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)

@@ -881,6 +881,8 @@ struct AdminAnnouncementsSection: View {
     @State private var loadFailure: Error?
     /// A failed delete / (de)activate, as a toast (web lib/failure.ts). These used to fail silently.
     @State private var toast: FailureToastPayload?
+    /// The row whose trash was tapped: deleting asks first, in a centred alert (owner, QA final #2; web 9fffa945).
+    @State private var confirmDelete: AdminAnnouncement?
 
     var body: some View {
         Group {
@@ -930,6 +932,13 @@ struct AdminAnnouncementsSection: View {
             CreateAnnouncementSheet { if origin == .manual { await load() } else { origin = .manual } }
         }
         .failureToast($toast)
+        .alert(T("Delete this announcement?"), isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+               presenting: confirmDelete) { a in
+            Button(T("Delete"), role: .destructive) { Task { await deleteAnnouncement(a) } }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { _ in
+            Text(T("It disappears for everyone right away. You can restore it from Control Room > Audit."))
+        }
     }
     /// "Announcements 12" / "System 31", as the web. "System" is the same word in both languages (owner,
     /// 22 Oct 2026), so it does not go through T().
@@ -951,13 +960,18 @@ struct AdminAnnouncementsSection: View {
     private func announcementRow(_ a: AdminAnnouncement) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(a.title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines between words, smaller before any "…": an iPhone SE cut "NEXUS sekarang ada app Androi…"
+                // (QA final #2, I-16). The chips and the trash keep their size.
+                WordWrapText(text: a.title, size: 14) { NXFont.text($0, .bold) }
+                    .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 NexusChip(text: (a.active ?? false) ? T("Active") : T("Inactive"), tone: (a.active ?? false) ? .success : .neutral)
+                    .fixedSize()
                 if let caption = sourceCaption(a) {
-                    NexusChip(text: caption, tone: a.source == "attendance_warning" ? .orange : .accent)
+                    NexusChip(text: caption, tone: a.source == "attendance_warning" ? .orange : .accent).fixedSize()
                 }
                 Spacer()
-                Button { Task { await deleteAnnouncement(a) } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
+                Button { confirmDelete = a } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }
+                    .buttonStyle(.plain).accessibilityLabel(T("Delete"))
             }
             if let b = a.body, !b.isEmpty { Text(b).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3) }
             if let ts = a.targets, !ts.isEmpty {

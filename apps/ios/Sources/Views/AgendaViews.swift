@@ -382,6 +382,10 @@ struct NXSegmented<T: Hashable>: View {
             }
             .pickerStyle(.segmented)
         }
+        // Its own height, never the container's: inside a safe-area inset the segmented Picker above took the
+        // whole proposal, and each option's accessibility frame was 343 pt tall over the list below, where
+        // VoiceOver and UI automation then pressed (QA final #2, I-14). The pill itself is unchanged.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func segment(_ option: T) -> some View {

@@ -89,6 +89,15 @@ struct LegalDocumentView: View {
         // The document's title once it is in (I-25 / M-22: a generic "Document"); the number stays in the header.
         .navigationTitle(model.doc.map { $0.title.isEmpty ? T("Document") : $0.title } ?? T("Document"))
         .navigationBarTitleDisplayMode(.inline)
+        // The bar's one line cut "[TEST] seq 03_SPK_City_Head_PATS_…": two lines between words and after "_",
+        // smaller before any "…", as every title (QA final #2, I-5).
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                WordWrapText(text: LegalLabels.title(model.doc.map { $0.title.isEmpty ? T("Document") : $0.title } ?? T("Document")),
+                             size: 15) { NXFont.text($0, .semibold) }
+                    .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
+            }
+        }
         .modifier(MacPlainBackButton())
         .task { await model.load() }
         // PDFs are made in the background after generate / save / upload / approve: while a recent Word
