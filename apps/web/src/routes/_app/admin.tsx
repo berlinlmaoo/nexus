@@ -7,6 +7,10 @@ import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, ChevronRight, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
@@ -2191,6 +2195,8 @@ function AnnouncementsAdmin() {
   // A failed deactivate/delete used to look like nothing happened (QA 13 Oct 2026).
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate, onError: (e: unknown, v) => toastFailure(v.active ? t("Couldn't turn the announcement back on") : t("Couldn't deactivate the announcement"), e) });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: () => { invalidate(); toast.success(t("Announcement deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete the announcement"), e) });
+  // Deleting asks first, like every other destructive action (QA final #2).
+  const [confirmDel, setConfirmDel] = useState<NexusAdminAnnouncement | null>(null);
   // An older server ignores ?origin and sends everything without `origin`: filter here too.
   const rows = (list.data?.announcements ?? []).filter((a) => !origin || (a.origin ?? (a.kind === "warning" ? "system" : "manual")) === origin);
   const counts = list.data?.counts;
@@ -2368,7 +2374,7 @@ function AnnouncementsAdmin() {
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? t("Deactivate") : t("Activate")}</button>
-                  <button onClick={() => del.mutate(a.id)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => setConfirmDel(a)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
@@ -2378,6 +2384,18 @@ function AnnouncementsAdmin() {
               ? <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} message={t("Post one above to tell everyone, or a few people, something.")} />
               : <EmptyState icon={Megaphone} tone="muted" compact title={t("Nothing from the system")} message={t("Attendance warnings, app reminders and GIDEON posts show up here.")} />)}
           </div>
+          <AlertDialog open={!!confirmDel} onOpenChange={(o) => { if (!o) setConfirmDel(null); }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("Delete this announcement?")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("It disappears for everyone right away. You can restore it from Control Room → Audit.")}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (confirmDel) del.mutate(confirmDel.id); setConfirmDel(null); }}>{t("Delete")}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </div>
