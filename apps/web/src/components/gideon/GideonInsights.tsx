@@ -121,7 +121,7 @@ export function GideonRunList({ runs, compact }: { runs: GideonRunRow[]; compact
             <tr key={r.id} onClick={() => setOpenId(r.id)} className="cursor-pointer border-b border-border/60 align-top last:border-0 hover:bg-accent/40">
               <td className="max-w-[11rem] px-3 py-2 sm:max-w-[18rem]">
                 <div className="truncate font-medium">{r.titleHidden ? <span className="text-muted-foreground">{t("Chat (private)")}</span> : r.title || "—"}</div>
-                {r.error && <div className="truncate text-xs text-destructive" title={r.error}>{errorLabel(r.error, t)}</div>}
+                {r.error && <div className="line-clamp-2 break-words text-xs text-destructive" title={r.error}>{errorLabel(r.error, t)}</div>}
               </td>
               {!compact && <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{r.user?.name ?? "—"}</td>}
               <td className="whitespace-nowrap px-3 py-2"><span className="inline-flex items-center gap-1.5 text-xs font-semibold"><span className={cn("h-2 w-2 rounded-full", STATUS_TONE[r.status] ?? "bg-muted")} />{t(STATUS_LABEL[r.status] ?? r.status)}</span></td>

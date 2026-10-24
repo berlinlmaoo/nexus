@@ -10,5 +10,6 @@ export const ID_BERLIN_REV_PERF: Record<string, string> = {
   "Typical (p50)": "Umumnya (p50)",
   "No answers in 15 min": "Tidak ada jawaban dalam 15 mnt",
   "{n} answers in 24 h": "{n} jawaban dalam 24 jam",
+  "{n} answer in 24 h": "{n} jawaban dalam 24 jam",
   "Set by the system": "Diatur oleh sistem",
 };

@@ -240,7 +240,7 @@ function TierCard({ tier }: { tier: PerfTier }) {
         </dl>
       )}
       <div className="mt-auto text-xs text-muted-foreground">
-        {t("{n} answers in 24 h", { n: formatCount(tier.answers24h) })}
+        {L.tn(tier.answers24h, "{n} answer in 24 h", "{n} answers in 24 h", { n: formatCount(tier.answers24h) })}
         {/* Answers lost to a shim restart: shown apart, never counted as errors. */}
         {(tier.restarts15m ?? 0) > 0 && (
           <span title={t("Restarts aren't counted as errors.")}>{" · "}{L.tn(tier.restarts15m ?? 0, "1 restart", "{n} restarts")}</span>
