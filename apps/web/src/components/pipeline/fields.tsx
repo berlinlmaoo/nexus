@@ -140,7 +140,8 @@ export function MoneyField({
         aria-label={label}
         // In a table cell the "Rp" shows only next to an amount, so an empty column stays quiet.
         value={grouped ? `Rp ${grouped}` : ""}
-        placeholder={cell ? undefined : "Rp 0"}
+        // An empty cell shows a quiet dash, not a blank that reads as not loaded (visual QA 24 Oct).
+        placeholder={cell ? "—" : "Rp 0"}
         disabled={disabled}
         onFocus={(e) => { focused.current = true; requestAnimationFrame(() => e.target.select()); }}
         onChange={(e) => setDraft(clean(e.target.value))}

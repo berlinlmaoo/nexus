@@ -37,7 +37,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
 
   const DealLink = ({ d }: { d: PipelineDeal }) => (
     <span className="flex min-w-0 max-w-full items-center gap-1.5">
-      <button type="button" onClick={() => onOpen(d.id)} className="block min-w-0 max-w-full truncate rounded text-left text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+      <button type="button" onClick={() => onOpen(d.id)} className="line-clamp-2 min-w-0 max-w-full break-words rounded text-left text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
         {d.name || t("Untitled deal")}
       </button>
       <SourceChip deal={d} className="shrink-0 max-w-[45%]" />

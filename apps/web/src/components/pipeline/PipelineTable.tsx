@@ -115,7 +115,7 @@ export function PipelineTable({
                 <button
                   type="button"
                   onClick={() => onOpen(d.id)}
-                  className="block max-w-40 truncate sm:max-w-72 rounded text-left font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                  className="line-clamp-2 max-w-40 break-words sm:max-w-72 rounded text-left font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                   title={d.name}
                 >
                   {d.name || t("Untitled deal")}
