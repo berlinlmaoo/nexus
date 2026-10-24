@@ -236,7 +236,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   // Notion's column names: 14px in the page's grey, a type glyph before each, on the open canvas (no boxed card
   // around the table, 16 Oct 2026 pass).
   const headerRow = (hk: string) => (
-          <div key={`head-${hk}`} className={cn("sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-sm text-muted-foreground", hk !== "all" && "border-t")} style={{ gridTemplateColumns: gridTemplate }}>
+          <div key={`head-${hk}`} className={cn("sticky top-0 z-[3] grid h-9 items-stretch border-b border-border bg-card text-sm text-muted-foreground", hk !== "all" && "border-t")} style={{ gridTemplateColumns: gridTemplate }}>
             <div className={cn("flex items-center gap-1.5 py-2", isPhone ? "z-[2] px-2" : "px-3", frozen)}><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);

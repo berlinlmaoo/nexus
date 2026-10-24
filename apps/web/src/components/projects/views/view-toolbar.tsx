@@ -216,6 +216,13 @@ function useTabOverflowMenu(on: boolean, tabs: ToolbarTab[], activeKey: string |
       if (total <= room) { setFit(tabs.length); return; }
       let used = 0, n = 0;
       while (n < tabs.length && used + cost(n) + moreW + GAP <= room) { used += cost(n); n++; }
+      // The active tab past the cut takes the row's last place below: when it is wider than the tab it displaces,
+      // give up places until it fits whole. Overflowing, the row scrolled the first tab away or hid the active one
+      // ("Spreadsheet" open with no tab lit, visual QA 24 Oct).
+      const ai = tabs.findIndex((x) => x.key === activeKey);
+      if (ai >= n) {
+        while (n > 1 && used - cost(n - 1) + widths[ai] + GAP + moreW + GAP > room) { n--; used -= cost(n); }
+      }
       setFit(Math.max(1, n));
     };
     read();
