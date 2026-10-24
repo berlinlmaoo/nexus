@@ -116,12 +116,22 @@ struct PipelineBoardSwitcher: View {
                     Section(T("Pipeline boards")) {
                         ForEach(directory.boards) { board in
                             let count = String(format: T(board.dealCount == 1 ? "%d deal" : "%d deals"), board.dealCount)
-                            let title = "\(board.name) · \(count)"
+                            // The count is the item's subtitle (a menu draws a second Text under the first), not
+                            // " · 43 deals" glued to a long name that broke onto its own line (visual QA 24 Oct 2026).
                             Button {
                                 if board.id != projectId { target = .board(id: board.id, name: board.name) }
                             } label: {
-                                if board.id == projectId { Label(title, systemImage: "checkmark") }
-                                else { Text(title) }
+                                if board.id == projectId {
+                                    Label {
+                                        Text(board.name)
+                                        Text(count)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
+                                } else {
+                                    Text(board.name)
+                                    Text(count)
+                                }
                             }
                             .accessibilityIdentifier("pipeline.switch.board.\(board.id)")
                         }

@@ -356,8 +356,8 @@ struct PipelineDealView: View {
                         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 }
             } else {
-                PipelineFieldBox(T("Days overdue (typed)")) {
-                    PipelineDaysInput(label: T("Days overdue (typed)"), value: deal.maxDaysOverdue) { patch(["maxDaysOverdue": $0]) }
+                PipelineFieldBox(T("Days overdue (entered by hand)")) {
+                    PipelineDaysInput(label: T("Days overdue (entered by hand)"), value: deal.maxDaysOverdue) { patch(["maxDaysOverdue": $0]) }
                 }
             }
             }
@@ -716,7 +716,7 @@ struct PipelineDealView: View {
                 }
                 return String(format: T("%d cost lines · %@"), a.count, PipelineFormat.idrFull(total, hidden: presenting))
             }
-            return field == "links" ? String(format: T("%d links"), a.count) : value.pretty
+            return field == "links" ? String(format: T(a.count == 1 ? "%d link" : "%d links"), a.count) : value.pretty
         case .bool(let b): return b ? "✓" : "–"
         case .object: return value.pretty
         }
@@ -1008,6 +1008,16 @@ struct PipelineTextInput: View {
         Group {
             if multiline {
                 TextField(placeholder, text: $draft, axis: .vertical).lineLimit(2...10)
+            } else if large {
+                // The deal's name in the sheet's head wraps between words to a second line instead of
+                // cutting "ALLOBANK – KOL MANAGEMENT WEVE…" on one (visual QA 24 Oct 2026). A name has no
+                // line breaks: Return ends editing, as the one-line field did.
+                TextField(placeholder, text: $draft, axis: .vertical).lineLimit(1...2)
+                    .onChange(of: draft) { _, v in
+                        guard v.contains("\n") else { return }
+                        draft = v.replacingOccurrences(of: "\n", with: "")
+                        focused = false
+                    }
             } else {
                 TextField(placeholder, text: $draft)
             }
