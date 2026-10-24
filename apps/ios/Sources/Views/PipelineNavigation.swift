@@ -116,14 +116,25 @@ struct PipelineBoardSwitcher: View {
                     Section(T("Pipeline boards")) {
                         ForEach(directory.boards) { board in
                             let count = String(format: T(board.dealCount == 1 ? "%d deal" : "%d deals"), board.dealCount)
-                            let title = "\(board.name) · \(count)"
-                            Button {
-                                if board.id != projectId { target = .board(id: board.id, name: board.name) }
-                            } label: {
-                                if board.id == projectId { Label(title, systemImage: "checkmark") }
-                                else { Text(title) }
+                            // The count is the item's subtitle (a menu draws a second Text under the first), not
+                            // " · 43 deals" glued to a long name that broke onto its own line (visual QA 24 Oct 2026).
+                            // The board on screen is a ticked toggle: a menu draws its check AND the subtitle, which a
+                            // Label inside a Button did not (the count went missing on that row).
+                            if board.id == projectId {
+                                Toggle(isOn: .constant(true)) {
+                                    Text(board.name)
+                                    Text(count)
+                                }
+                                .accessibilityIdentifier("pipeline.switch.board.\(board.id)")
+                            } else {
+                                Button {
+                                    target = .board(id: board.id, name: board.name)
+                                } label: {
+                                    Text(board.name)
+                                    Text(count)
+                                }
+                                .accessibilityIdentifier("pipeline.switch.board.\(board.id)")
                             }
-                            .accessibilityIdentifier("pipeline.switch.board.\(board.id)")
                         }
                     }
                     Divider()

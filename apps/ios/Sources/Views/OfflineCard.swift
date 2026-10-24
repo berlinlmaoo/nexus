@@ -20,7 +20,8 @@ struct OfflineCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(T("OFFLINE COPY")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
-                Text(T("Kept on this phone so NEXUS still opens with no signal."))
+                // "This device", not "this phone": the same card is on the iPad and the Mac (visual QA 24 Oct).
+                Text(T("Kept on this device so NEXUS still opens with no signal."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -66,7 +67,9 @@ struct OfflineCard: View {
         let fraction = min(1, Double(used) / Double(AttachmentCache.offlineBudget))
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(used > 0 ? Self.size(used) : T("Nothing yet"))
+                // The figure counts saved files only. Once the data pass has run, "Nothing yet" contradicted the
+                // "Saved … ago" row under it (visual QA 24 Oct): say what is actually missing.
+                Text(used > 0 ? Self.size(used) : sync.lastDataSync != nil ? T("No files yet") : T("Nothing yet"))
                     .font(NXFont.display(22, .bold)).foregroundStyle(NX.foreground)
                     .contentTransition(.numericText())
                 Text(String(format: T("of %@"), Self.size(AttachmentCache.offlineBudget)))

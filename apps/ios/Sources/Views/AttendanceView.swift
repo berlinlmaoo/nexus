@@ -1579,13 +1579,17 @@ struct FunMetricCard: View {
                 .lineLimit(2).minimumScaleFactor(0.6).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
             if !helper.isEmpty {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(helper).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                // The chevron rides inline after the last word: beside a wrapped line it sat mid-sentence
+                // ("See how your days off >" / "were used", visual QA 24 Oct 2026).
+                Group {
                     if action != nil {
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        Text("\(helper) \(Image(systemName: "chevron.right"))")
+                    } else {
+                        Text(helper)
                     }
                 }
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 3)
             }
         }

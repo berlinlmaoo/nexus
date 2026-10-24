@@ -393,7 +393,14 @@ struct TaskDetailView: View {
                     ForEach(priorities, id: \.self) { p in
                         Button(TaskPriorityName.label(p)) { Task { await update(t, ["priority": p]) } }
                     }
-                } label: { Text(TaskPriorityName.label(t.priority)).font(NXFont.text(14)).foregroundStyle(NX.foreground) }
+                } label: {
+                    // The same coloured chip as the board and My Tasks, not plain text (visual QA 24 Oct 2026).
+                    if let p = t.priority, p.uppercased() != "NONE" {
+                        PriorityPill(priority: p)
+                    } else {
+                        Text(TaskPriorityName.label(t.priority)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                    }
+                }
                 .disabled(!canEditTask)
             }
             propertyRow("Assignees", icon: "person.2") {

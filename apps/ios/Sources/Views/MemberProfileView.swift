@@ -1006,9 +1006,12 @@ private struct RecordXpCard: View {
 
     /// "for Mon, 14 Sep · written 15 Sep" — an attendance penalty names the day it is about.
     private func subtitle(_ e: RecordXpEntry) -> String {
-        let written = e.createdAt.map { AgendaRange.dayLabel(AgendaRange.dayKey($0)) } ?? ""
+        let writtenKey = e.createdAt.map { AgendaRange.dayKey($0) }
+        let written = writtenKey.map { AgendaRange.dayLabel($0) } ?? ""
         guard let day = e.dateKey else { return written }
-        return String(format: T("for %@"), AgendaRange.dayLabel(day)) + (written.isEmpty ? "" : " · \(written)")
+        // Written the same day it is about: the day once, not "for Sunday 4 Oct · Sunday 4 Oct" (visual QA 24 Oct 2026).
+        let showWritten = !written.isEmpty && writtenKey != day
+        return String(format: T("for %@"), AgendaRange.dayLabel(day)) + (showWritten ? " · \(written)" : "")
     }
 
     private func loadOlder() async {

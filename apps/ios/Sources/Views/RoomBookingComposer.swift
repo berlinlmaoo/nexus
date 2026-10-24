@@ -45,7 +45,12 @@ struct RoomBookingComposer: View {
                     Picker(T("Room"), selection: $room) {
                         ForEach(RoomBooking.rooms, id: \.self) { r in Text(RoomBooking.label(r)).tag(r) }
                     }
-                    TextField(T("e.g. Client meeting"), text: $title)
+                    // Labelled like the Room row above it: on its own, the placeholder was the only hint of
+                    // what the field is (visual QA 24 Oct 2026).
+                    HStack(spacing: 12) {
+                        Text(T("Title"))
+                        TextField(T("e.g. Client meeting"), text: $title).multilineTextAlignment(.trailing)
+                    }
                 }
                 Section {
                     DatePicker(T("Date"), selection: $day, displayedComponents: .date)
@@ -62,7 +67,8 @@ struct RoomBookingComposer: View {
                     }
                 } footer: { footer }
                 Section(T("Notes (optional)")) {
-                    TextField(T("Notes (optional)"), text: $notes, axis: .vertical).lineLimit(2...4)
+                    // The section header already says "Notes (optional)"; the field repeated it word for word.
+                    TextField(T("e.g. Guests, equipment or setup needed"), text: $notes, axis: .vertical).lineLimit(2...4)
                 }
                 if let err {
                     Section { Text(err).foregroundStyle(NX.danger) }

@@ -688,12 +688,25 @@ private struct TicketBoardLane: View {
     @State private var targeted = false
     @Environment(\.horizontalSizeClass) private var hSize
     private var target: String { status == "DONE" ? "RESOLVED" : status }
+    private var emptyHint: String {
+        switch status {
+        case "OPEN": return T("New tickets land here.")
+        case "AWAITING_DECISION": return T("Attendance corrections waiting for the board's decision.")
+        case "IN_REVIEW": return T("Tickets the board is looking into.")
+        default: return T("Resolved and closed tickets.")
+        }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             TicketLaneHeader(status: target, count: items.count)
             ScrollView(.vertical) {
                 LazyVStack(spacing: 10) {
-                    if items.isEmpty { EmptyState(icon: "ticket", title: T("No tickets yet"), subtitle: "").padding(.vertical, 12) }
+                    // Says what this column holds rather than "No tickets yet" in a lane beside a full one
+                    // (visual QA 24 Oct 2026).
+                    if items.isEmpty {
+                        EmptyState(icon: "ticket", title: T("Nothing here"), subtitle: emptyHint, compact: true)
+                            .padding(.vertical, 12)
+                    }
                     ForEach(items) { item in
                         if canManage { card(item).draggable(item.id) }
                         else { card(item) }
@@ -701,7 +714,10 @@ private struct TicketBoardLane: View {
                 }.padding(.bottom, 8)
             }
         }.modifier(BoardColumnStyle(fill: NX.card.opacity(0.6), targeted: targeted))
-            .frame(width: hSize == .compact && items.isEmpty ? 200 : 280)
+            // An empty lane is narrower, so the next lane still shows at the screen's edge and nobody
+            // misses the tickets in it (visual QA 24 Oct 2026: two empty lanes filled the phone, and on
+            // iPad the In review column started off-screen).
+            .frame(width: items.isEmpty ? 200 : 280)
             .dropDestination(for: String.self) { ids, _ in
                 guard canManage, let id = ids.first, ids.count == 1 else { return false }
                 onMove(id, target)
@@ -1818,7 +1834,9 @@ struct NewTicketSheet: View {
             .opacity(photos.count >= Self.maxPhotos ? 0.5 : 1)
             Text(photos.isEmpty ? T("At least one photo is required.") : "\(photos.count)/\(Self.maxPhotos)")
                 .font(NXFont.text(11))
-                .foregroundStyle(photos.isEmpty ? NX.danger : NX.mutedFg)
+                // Red only once the rest of the ticket is written and the photo is what still blocks
+                // it; on an untouched form it read as an error before any input (visual QA 24 Oct 2026).
+                .foregroundStyle(photos.isEmpty && !trimmedSubject.isEmpty && !trimmedBody.isEmpty ? NX.danger : NX.mutedFg)
         }
     }
 

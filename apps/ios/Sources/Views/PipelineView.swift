@@ -996,7 +996,7 @@ struct PipelineKpiStrip: View {
     private func readings(_ s: PipelineSummary) -> [Tile] {
         [
             Tile(id: "open", label: T("Open pipeline"), value: PipelineFormat.idr(s.openValue),
-                 sub: String(format: T("%d open deals"), s.openCount), zero: s.openValue == 0),
+                 sub: String(format: T(s.openCount == 1 ? "%d open deal" : "%d open deals"), s.openCount), zero: s.openValue == 0),
             Tile(id: "weighted", label: T("Weighted forecast"), value: PipelineFormat.idr(s.weightedValue),
                  sub: T("Value × probability"), zero: s.weightedValue == 0),
             Tile(id: "won", label: T("Won"), value: PipelineFormat.idr(s.wonValue),
@@ -1009,9 +1009,9 @@ struct PipelineKpiStrip: View {
             Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
                  sub: String(format: T("%d/%d with costs"), s.costDealCount, s.costEligibleCount),
                  zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil,
-                 warn: s.costNoNetCount > 0 ? String(format: T("%d deals have costs but no net value"), s.costNoNetCount) : nil),
+                 warn: s.costNoNetCount > 0 ? String(format: T(s.costNoNetCount == 1 ? "%d deal has costs but no net value" : "%d deals have costs but no net value"), s.costNoNetCount) : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
-                 sub: String(format: T("%d need attention"), s.attentionCount),
+                 sub: String(format: T(s.attentionCount == 1 ? "%d needs attention" : "%d need attention"), s.attentionCount),
                  zero: s.criticalCount == 0, tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
             Tile(id: "ready", label: T("Ready to execute"), value: "\(s.readyCount)",
                  sub: String(format: T("%d blocked"), s.blockedCount), zero: s.readyCount == 0,
@@ -1038,7 +1038,9 @@ struct PipelineKpiStrip: View {
 
     /// Phone: one small card per reading, scrolling sideways.
     private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // iPad / Mac fall back here when the eight readings do not fit side by side: the scroller shows once,
+        // so the cut tile at the edge reads as "more to the right" (visual QA 24 Oct 2026: "C 5 6").
+        ScrollView(.horizontal, showsIndicators: wide) {
             HStack(spacing: 8) {
                 ForEach(tiles) { tile in
                     reading(tile)
@@ -1049,7 +1051,9 @@ struct PipelineKpiStrip: View {
                 }
             }
             .padding(.vertical, 1)
+            .padding(.bottom, wide ? 6 : 0)
         }
+        .scrollIndicatorsFlash(onAppear: wide)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -1321,9 +1325,8 @@ struct PipelineDealCard: View {
                 Spacer(minLength: 6)
                 if deal.health.key != "NONE" { PipelineHealthPill(key: deal.health.key) }
             }
-            Text(deal.name.isEmpty ? T("Untitled deal") : deal.name)
-                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
-                .multilineTextAlignment(.leading).lineLimit(2)
+            WordWrapText(text: deal.name.isEmpty ? T("Untitled deal") : deal.name, size: 15) { NXFont.text($0, .semibold) }
+                .foregroundStyle(NX.foreground)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !deal.brand.isEmpty || deal.shownValue > 0 {
                 HStack(spacing: 6) {
@@ -1378,7 +1381,9 @@ struct PipelineDealCard: View {
                     if needsPm {
                         Text(T("No PM yet")).font(NXFont.text(12, .semibold)).foregroundStyle(ChipTone.danger.fg).lineLimit(1)
                     } else if !people.isEmpty {
-                        Text(people.map(\.name).joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        // Two lines between names before "…" (visual QA 24 Oct 2026: "Ariq · Henryca…").
+                        WordWrapText(text: people.map(\.name).joined(separator: " · "), size: 12) { NXFont.text($0) }
+                            .foregroundStyle(NX.mutedFg)
                             .accessibilityLabel(people.map { "\($0.role) \($0.name)" }.joined(separator: ", "))
                     }
                     Spacer(minLength: 4)
@@ -1478,6 +1483,9 @@ struct PipelineTable: View {
                 tableContent(list)
                     .frame(width: wide ? max(geometry.size.width, 1220) : geometry.size.width)
             }
+            // The columns past Net value are off to the right on an iPad: show the scroller once so it reads
+            // as scrollable (visual QA 24 Oct 2026: HEALTH off-screen with no hint).
+            .scrollIndicatorsFlash(onAppear: wide)
             .accessibilityIdentifier("pipeline.table.scroll")
             .refreshable { await onRefresh() }
         }
@@ -1546,11 +1554,16 @@ struct PipelineTable: View {
             head(T("Net value")).frame(width: 96, alignment: .trailing)
             head(T("Receivable")).frame(width: 96, alignment: .trailing)
             head(T("Overdue")).frame(width: 56, alignment: .trailing)
-            head(T("Next action")).frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
+            head(T("Next action")).frame(width: Self.nextActionWidth, alignment: .leading)
             head(T("Health")).frame(width: 88, alignment: .leading)
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
     }
+
+    /// One flexible column (Deal) and every other column a fixed width: with two flexible columns each
+    /// row split the spare width by its own text, so a row with a long next action pushed Stage, Prob.
+    /// and Net value ~45 pt left of the rows around it (visual QA 24 Oct 2026, iPad).
+    private static let nextActionWidth: CGFloat = 200
 
     private func head(_ text: String) -> some View {
         Text(text.uppercased()).font(NXFont.text(10, .bold)).tracking(0.4).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -1561,7 +1574,8 @@ struct PipelineTable: View {
             Text(d.code).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().frame(width: 78, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 PipelineCompanyChip(source: d.source)
-                Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 13) { NXFont.text($0, .semibold) }
+                    .foregroundStyle(NX.foreground)
                 Text([d.brand, d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
@@ -1587,7 +1601,7 @@ struct PipelineTable: View {
                     Text(PipelineFormat.day(d.nextActionDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
+            .frame(width: Self.nextActionWidth, alignment: .leading)
             Group {
                 // A pill only where there is something to say; an open deal's "Not started" is plain text.
                 if d.health.key == "NOT_STARTED" {
@@ -1608,7 +1622,8 @@ struct PipelineTable: View {
                 .accessibilityLabel(PipelineText.health(d.health.key))
             VStack(alignment: .leading, spacing: 3) {
                 PipelineCompanyChip(source: d.source)
-                Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 14) { NXFont.text($0, .semibold) }
+                    .foregroundStyle(NX.foreground)
                 Text([d.code, PipelineText.stage(d.stage), d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 if !d.nextAction.isEmpty {
@@ -1716,9 +1731,9 @@ struct PipelineHealthView: View {
                     Button { onOpen(d.id) } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             PipelineCompanyChip(source: d.source)
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            HStack(alignment: .top, spacing: 8) {
                                 PipelineHealthPill(key: d.health.key)
-                                Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 14) { NXFont.text($0, .semibold) }.foregroundStyle(NX.foreground)
                                 Spacer(minLength: 4)
                                 Text(PipelineFormat.idr(d.netValue, hidden: presenting)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
                             }
@@ -1757,8 +1772,8 @@ struct PipelineHealthView: View {
                             Button { onOpen(d.id) } label: {
                                 VStack(alignment: .leading, spacing: 1) {
                                     PipelineCompanyChip(source: d.source)
-                                    HStack(alignment: .firstTextBaseline) {
-                                        Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                    HStack(alignment: .top) {
+                                        WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 13) { NXFont.text($0, .semibold) }.foregroundStyle(NX.foreground)
                                         Spacer(minLength: 4)
                                         Text(PipelineFormat.day(d.nextActionDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
                                     }
@@ -1790,7 +1805,7 @@ struct PipelineHealthView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             VStack(alignment: .leading, spacing: 1) {
                                 PipelineCompanyChip(source: d.source)
-                                Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 13) { NXFont.text($0, .semibold) }.foregroundStyle(NX.foreground)
                                 Text("\(d.paymentStatusShown) · \(PipelineFormat.idr(d.receivable, hidden: presenting))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                             }
                             Spacer(minLength: 4)
@@ -1818,7 +1833,7 @@ struct PipelineHealthView: View {
                     Button { onOpen(d.id) } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             PipelineCompanyChip(source: d.source)
-                            Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            WordWrapText(text: d.name.isEmpty ? T("Untitled deal") : d.name, size: 13) { NXFont.text($0, .semibold) }.foregroundStyle(NX.foreground)
                             Text(d.blocker).font(NXFont.text(12)).foregroundStyle(ChipTone.warning.fg).multilineTextAlignment(.leading)
                         }
                         .padding(.horizontal, 14).padding(.vertical, 10)

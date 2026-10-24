@@ -335,7 +335,9 @@ struct PersonReportSections: View {
         let now = report.headline
         let before = report.previous
         return VStack(alignment: .leading, spacing: 8) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            // Top-aligned, equal-height tiles: a tile with a second line (On time "0/0", Late "min in total") made its row
+            // taller and the shorter tiles beside it sat centred lower (visual QA 24 Oct 2026).
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12, alignment: .top)], spacing: 12) {
                 ReportKPITile(label: T("Completed"), value: ReportFormat.number(now?.completed ?? 0),
                               delta: .between(now?.completed, before?.completed, higherIsBetter: true))
                 ReportKPITile(label: T("On time"), value: ReportFormat.percent(now?.onTime),
@@ -677,7 +679,8 @@ struct ReportKPITile: View {
             .foregroundStyle(deltaColor)
             if let sub { Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Room for the label, value, comparison and one sub-line, so every tile in the grid is one height.
+        .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
         .nexusCard(padding: 14, radius: 18)
         .accessibilityElement(children: .combine)
     }

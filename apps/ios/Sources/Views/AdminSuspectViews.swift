@@ -176,21 +176,34 @@ struct AdminSuspectSection: View {
                 Button { shift(1) } label: { Image(systemName: "chevron.right") }.disabled(periodKey == nil || isCurrent)
             }
             .foregroundStyle(NX.violetText)
-            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
-                chip(0, T("Fake GPS"), list?.counts?.fakeOpen)
-                chip(1, T("No face"), list?.counts?.noFaceOpen)
-                chip(2, T("Worth a look"), list?.counts?.checkOpen)
-                chip(3, T("Reviewed"), (list?.counts?.valid ?? 0) + (list?.counts?.invalid ?? 0))
-            } }
+            // All four chips on one line when they fit (tighter padding before scrolling); the scrolling row
+            // fades at its edges so a chip past the card's edge reads as "more", not cut ("Reviewed 1", visual
+            // QA 24 Oct 2026).
+            ViewThatFits(in: .horizontal) {
+                chipRow(padding: 12)
+                chipRow(padding: 9)
+                ScrollView(.horizontal, showsIndicators: false) { chipRow(padding: 12) }.nxEdgeFade(16)
+            }
         }
         .nexusCard()
     }
 
-    private func chip(_ i: Int, _ title: String, _ n: Int?) -> some View {
+    private func chipRow(padding: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            chip(0, T("Fake GPS"), list?.counts?.fakeOpen, padding: padding)
+            chip(1, T("No face"), list?.counts?.noFaceOpen, padding: padding)
+            chip(2, T("Worth a look"), list?.counts?.checkOpen, padding: padding)
+            chip(3, T("Reviewed"), (list?.counts?.valid ?? 0) + (list?.counts?.invalid ?? 0), padding: padding)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func chip(_ i: Int, _ title: String, _ n: Int?, padding: CGFloat = 12) -> some View {
         Button { tab = i } label: {
             Text(n.map { "\(title) \($0)" } ?? title)
                 .font(NXFont.text(12, .semibold))
-                .padding(.horizontal, 12).padding(.vertical, 6)
+                .lineLimit(1)
+                .padding(.horizontal, padding).padding(.vertical, 6)
                 .nxChoiceChip(on: tab == i)
                 .frame(minHeight: 44).contentShape(Rectangle())
         }

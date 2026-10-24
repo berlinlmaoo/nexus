@@ -69,7 +69,7 @@ struct ReflectionsView: View {
                             Text(error).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
                         } else if days.isEmpty {
                             EmptyState(icon: "pencil.line", title: "\(T("No reflections in")) \(monthLabel)",
-                                       subtitle: T("A reflection is written at check-out. Once one is checked out with, it shows up here with GIDEON's summary of the day."))
+                                       subtitle: T("A reflection is written at check-out. After a check-out with one, it shows up here with GIDEON's summary of the day."))
                         } else {
                             monthCard
                             dayList

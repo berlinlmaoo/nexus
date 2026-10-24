@@ -253,7 +253,7 @@ private struct OrgViewChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let logo { OrgLogo(url: logo, name: title, size: 16, rounded: 8) }
+                if let logo { OrgLogo(url: logo, name: title, size: 16, rounded: 8, onLight: !active) }
                 Text(title).font(NXFont.text(12, .semibold)).lineLimit(1)
             }
             .foregroundStyle(active ? Color.white : NX.mutedFg)
@@ -683,14 +683,17 @@ private struct OrgLogo: View {
     let name: String
     let size: CGFloat
     let rounded: CGFloat
+    /// Drawn on a light surface (a filter chip), not a dark card: the initials stand-in must not be white.
+    var onLight = false
     @State private var image: UIImage? = nil
     @State private var light = false
 
-    init(url: String?, name: String, size: CGFloat, rounded: CGFloat) {
+    init(url: String?, name: String, size: CGFloat, rounded: CGFloat, onLight: Bool = false) {
         self.url = url
         self.name = name
         self.size = size
         self.rounded = rounded
+        self.onLight = onLight
         if let u = OrgLogo.resolve(url),
            let hit = ImageLoader.memory.object(forKey: ImageLoader.cacheKey(u, ImageLoader.tilePixel) as NSURL) {
             _image = State(initialValue: hit)
@@ -706,9 +709,10 @@ private struct OrgLogo: View {
                     .background(light ? Color(hex: "#0f1b2d") : Color.white,
                                 in: RoundedRectangle(cornerRadius: rounded, style: .continuous))
             } else {
-                Text(initials).font(NXFont.text(size > 20 ? 11 : 7, .bold)).foregroundStyle(.white)
+                // White on a white chip was an empty gap before the IP's name (visual QA 24 Oct 2026, iPad).
+                Text(initials).font(NXFont.text(size > 20 ? 11 : 7, .bold)).foregroundStyle(onLight ? NX.mutedFg : .white)
                     .frame(width: size, height: size)
-                    .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: rounded, style: .continuous))
+                    .background(onLight ? NX.muted : Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: rounded, style: .continuous))
             }
         }
         .task(id: url) {

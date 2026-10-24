@@ -114,7 +114,10 @@ struct FormCard: View {
                 Image(systemName: "doc.text.fill").font(.system(size: 16)).foregroundStyle(NX.violetText)
                     .frame(width: 36, height: 36).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(form.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Long names wrap between words on two lines, then shrink, before "…": cut on one line,
+                    // eight similar form names could not be told apart (visual QA 24 Oct 2026).
+                    WordWrapText(text: form.name, size: 15) { NXFont.display($0, .bold) }
+                        .foregroundStyle(NX.foreground)
                     Text(projectName).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
@@ -125,7 +128,8 @@ struct FormCard: View {
             }
             HStack(spacing: 6) {
                 Image(systemName: "tray.full").font(.system(size: 11))
-                Text("\(form.submissionCount) submission\(form.submissionCount == 1 ? "" : "s")").font(NXFont.text(12, .semibold))
+                Text(form.submissionCount == 1 ? T("1 submission") : String(format: T("%d submissions"), form.submissionCount))
+                    .font(NXFont.text(12, .semibold))
             }.foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
