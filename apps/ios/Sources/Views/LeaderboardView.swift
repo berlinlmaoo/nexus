@@ -313,7 +313,10 @@ struct RankRow: View {
                     // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
                     WordWrapText(text: row.name ?? "—", size: 15) { NXFont.text($0, .semibold) }
                         .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
-                    Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    // The same rule as the name: an iPhone SE cut "Level 3 · Sil…" on one line (QA final #2, I-17). "Level 3 ·"
+                    // stays together, so a break comes before the tier's name.
+                    WordWrapText(text: "Level\u{00A0}\(row.level)\(row.levelName.map { "\u{00A0}· \($0)" } ?? "")", size: 14) { NXFont.text($0) }
+                        .foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 // The unit on every value, "1.000 XP" / "−142 XP", as the web (UI tour run 16, decision 5).
