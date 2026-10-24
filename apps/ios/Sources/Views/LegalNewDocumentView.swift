@@ -148,7 +148,10 @@ struct LegalNewDocumentSheet: View {
                         HStack(spacing: 12) {
                             Image(systemName: "doc.text").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(tpl.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                                // Wraps between words like on Templates, instead of "…(Lisensi IP & Kemitr…"
+                                // (visual QA 24 Oct 2026).
+                                WordWrapText(text: tpl.name, size: 14) { NXFont.text($0, .medium) }
+                                    .foregroundStyle(NX.foreground)
                                 Text("\(LegalLabels.docType(tpl.docType)) · \(tpl.company?.name ?? T("Any company"))")
                                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             }

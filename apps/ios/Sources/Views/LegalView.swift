@@ -460,8 +460,9 @@ struct LegalDocumentsPane: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
             // Folded in the middle rather than shrunk to an unreadable ~6 pt (UI tour run 16, R16-M-01).
-            Text(LegalLabels.shortNumber(number)).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).minimumScaleFactor(0.85)
+            // The number's own folding (whole, then folded at "/") rather than one fixed short form: in the
+            // narrow Number column "PKS/PATS-UNIV/…/0…" lost its sequence (iPad visual QA 24 Oct 2026).
+            LegalNumberText(number: number, font: .system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
         }
         .accessibilityElement(children: .combine)
         .help(number)

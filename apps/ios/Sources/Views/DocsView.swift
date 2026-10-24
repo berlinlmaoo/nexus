@@ -91,8 +91,10 @@ struct DocCard: View {
             Text(doc.emoji).font(.system(size: 22))
                 .frame(width: 44, height: 44).background(NX.muted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(UntitledText.any(doc.title)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let preview = doc.contentText, !preview.isEmpty {
+                // Long titles wrap between words on two lines, then shrink, before "…" (visual QA 24 Oct 2026).
+                WordWrapText(text: UntitledText.any(doc.title), size: 15) { NXFont.display($0, .bold) }
+                    .foregroundStyle(NX.foreground)
+                if let preview = doc.contentText.map(Self.plainPreview), !preview.isEmpty {
                     Text(preview).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 } else if let pname = doc.project?.name {
                     Text(pname).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
@@ -102,6 +104,25 @@ struct DocCard: View {
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg.opacity(0.5))
         }
         .nexusCard(padding: 14)
+    }
+
+    /// The page's text as a reader sees it: the preview showed the raw Markdown ("# MOM:",
+    /// "**Tanggal:**", visual QA 24 Oct 2026). Drops heading / quote / list markers, emphasis and code
+    /// marks, and keeps a link's text without its address.
+    static func plainPreview(_ raw: String) -> String {
+        var s = raw
+        let rules: [(String, String)] = [
+            (#"\[([^\]]*)\]\([^)]*\)"#, "$1"),          // [text](url) → text
+            (#"(^|\s)#{1,6}\s+"#, "$1"),                  // # Heading
+            (#"(^|\s)>\s+"#, "$1"),                       // > quote
+            (#"(^|\n)\s*(?:[-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?"#, "$1"), // list items, task boxes
+            (#"\*\*|__|~~|`"#, ""),                      // bold, strike, code marks
+        ]
+        for (pattern, template) in rules {
+            s = s.replacingOccurrences(of: pattern, with: template, options: .regularExpression)
+        }
+        return s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

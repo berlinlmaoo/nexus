@@ -1592,7 +1592,13 @@ struct ProjectPagesTab: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if docs.isEmpty { TabEmpty(icon: "doc.text", text: T("No pages in this project yet.")) }
+            // Why it is empty and where pages come from (house rule for empty states, visual QA 24 Oct 2026).
+            // No action: a page is written on the web; here it is read.
+            else if docs.isEmpty {
+                EmptyState(icon: "doc.text", title: T("No pages yet"),
+                           subtitle: T("A brief, an SOP or meeting notes for this project. Pages are written on the web and show up here to read."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
