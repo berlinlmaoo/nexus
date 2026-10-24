@@ -32,7 +32,9 @@ struct Gamification: Decodable, Sendable {
 
     var streakCurrent: Int { streak?.current ?? 0 }
     var questList: [Quest] { quests ?? [] }
-    var questsDone: Int { questList.filter { $0.claimed == true }.count }
+    /// A quest counts once it is complete (its bar full), claimed or not, as the web: "0/11" above eleven full
+    /// bars read as a contradiction (visual QA 24 Oct 2026).
+    var questsDone: Int { questList.filter { $0.claimed == true || ($0.target > 0 && $0.progress >= $0.target) }.count }
     /// Progress toward the next level floor (0…1).
     var levelPct: Double {
         guard let next = xp.nextFloor, next > 0 else { return 1 }
