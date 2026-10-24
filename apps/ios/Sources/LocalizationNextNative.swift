@@ -16,6 +16,9 @@ extension AppLanguage {
         "%@ and %@ more are editing": "%1$@ dan %2$@ lainnya sedang mengedit",
         "Too long: %@ / 4,000 characters. Shorten it or split it into several messages.": "Terlalu panjang: %1$@ / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.",
         "%@ / 4,000 characters": "%1$@ / 4.000 karakter",
+        // Control Room › Announcements: deleting asks first (QA final #2, owner 24 Oct 2026; web 9fffa945).
+        "Delete this announcement?": "Hapus pengumuman ini?",
+        "It disappears for everyone right away. You can restore it from Control Room > Audit.": "Langsung hilang untuk semua orang. Bisa dipulihkan dari Control Room > Audit.",
         "This message is too long. Shorten it or split it into several messages.": "Pesan ini terlalu panjang. Persingkat atau pecah jadi beberapa pesan.",
         "You're no longer in this chat": "Kamu sudah tidak ada di chat ini",
         "The meeting rooms and the studio belong to the Z Networks workspace. Ask an admin to add you to it if you need to book a room.": "Ruang meeting dan studio milik workspace Z Networks. Minta admin menambahkanmu ke workspace itu kalau perlu booking ruangan.",
