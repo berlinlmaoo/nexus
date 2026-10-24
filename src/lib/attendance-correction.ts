@@ -263,9 +263,13 @@ export function describeCorrection(input: {
     d
       ? new Intl.DateTimeFormat("en-GB", { timeZone: ATTENDANCE_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(d)
       : "—"
+  // No earlier time reads "masuk 10:00 (sebelumnya kosong)", not "masuk — → 10:00" (a dash and an
+  // arrow side by side, visual QA 24 Oct 2026).
+  const change = (label: string, before: Date | null, after: Date | null) =>
+    before ? `${label} ${hm(before)} → ${hm(after)}` : `${label} ${hm(after)} (sebelumnya kosong)`
   const parts: string[] = []
-  if (input.proposedCheckInAt) parts.push(`masuk ${hm(input.beforeCheckInAt)} → ${hm(input.proposedCheckInAt)}`)
-  if (input.proposedCheckOutAt) parts.push(`pulang ${hm(input.beforeCheckOutAt)} → ${hm(input.proposedCheckOutAt)}`)
+  if (input.proposedCheckInAt) parts.push(change("masuk", input.beforeCheckInAt, input.proposedCheckInAt))
+  if (input.proposedCheckOutAt) parts.push(change("pulang", input.beforeCheckOutAt, input.proposedCheckOutAt))
   return `${input.dateKey}: ${parts.join(", ")}`
 }
 

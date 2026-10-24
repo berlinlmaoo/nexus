@@ -110,7 +110,7 @@ function ForgotPasswordPage() {
           <form className="space-y-5" onSubmit={requestCode}>
             <div className="space-y-1.5">
               <label className="ml-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Email")}</label>
-              <input type="email" required autoFocus disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("you@patsgroup.id")} autoComplete="username" className={inputCls} />
+              <input type="email" required autoFocus disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("name@company.com")} autoComplete="username" className={inputCls} />
             </div>
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
             <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">

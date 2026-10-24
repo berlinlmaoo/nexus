@@ -41,7 +41,7 @@ function RoomChooser() {
           </Link>
         ))}
       </div>
-      <div className="text-sm text-muted-foreground">URL: {typeof window !== "undefined" ? window.location.host : "nexus.patsgroup.id"}/room-display/studio · /vip · /meeting</div>
+      <div className="text-sm text-muted-foreground">URL: /room-display/studio · /vip · /meeting</div>
     </div>
   );
 }

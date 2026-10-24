@@ -268,7 +268,7 @@ function Admin() {
     <div>
       {/* Sections are the header's tabs, the same light underline row as every page (they were a black
           segmented pill inside the content, UI sweep 12 Oct 2026). */}
-      <PageHeader title={t("Control Room")} subtitle={t("Everyone in the workspace and their roles.")} tabs={
+      <PageHeader title={t("Control Room")} subtitle={t(SECTION_SUBTITLE[view] ?? SECTION_SUBTITLE.users)} tabs={
         <PageTabs label={t("Control Room sections")} value={view} onChange={setView} tabs={[
           { key: "users", label: t("Users"), icon: UsersIcon },
           ...(canAnnounce ? [
@@ -322,7 +322,7 @@ function Admin() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative max-w-sm flex-1">
+              <div className="relative max-w-sm flex-1 max-sm:max-w-none max-sm:basis-full">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-ring" />
               </div>
@@ -2360,7 +2360,8 @@ function AnnouncementsAdmin() {
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{t("Repeats daily {time} until {date}", { time: a.repeatAtTime ?? "", date: new Date(a.repeatUntil).toLocaleDateString(locale) })}</span>
                     )}
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
+                    {/* The tone in the same small-caps style as the chips beside it; it was the raw lowercase value ("info"). */}
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">{a.tone === "info" ? t("Info") : a.tone === "success" ? t("Success") : a.tone === "warning" ? t("Warning") : a.tone}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>
                   {a.attachmentUrl && (
@@ -2500,6 +2501,22 @@ function GideonUsage() {
  * is running, not how many phones they own. "Belum dilaporkan" is honest — the version columns are
  * newer than most installs, and a guess would be worse than a blank.
  */
+// The header line under "Control Room" follows the open section; it said "Everyone in the workspace and their
+// roles." on every tab (visual QA 24 Oct 2026).
+const SECTION_SUBTITLE: Record<string, string> = {
+  users: "Everyone in the workspace and their roles.",
+  approval: "Who approves whose attendance requests.",
+  org: "The IPs and divisions, and who belongs where.",
+  calendar: "Which projects show their task titles on the calendar.",
+  "extra-dayoff": "Give someone an extra day off.",
+  suspects: "Check-ins that look off, to review.",
+  audit: "Who changed what, and when.",
+  quests: "Quests you give people, and their XP.",
+  announcements: "Announcements to everyone in the workspace.",
+  gideon: "How GIDEON is used and how it's running.",
+  app: "Who uses the NEXUS app, and on which devices.",
+};
+
 function AppInstalls() {
   const { t, locale } = useLang();
   const q = useQuery({ queryKey: ["nexus", "app-installs"], queryFn: nexusApi.appInstalls, retry: false });

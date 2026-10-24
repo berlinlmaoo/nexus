@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Cpu, Gauge, Loader2, MessageSquareWarning, Repeat2, ThermometerSun, Wrench, XCircle, Zap } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { GideonMark } from "./GideonMark";
-import { useLang, type LangApi } from "@/lib/lang";
+import { getLang, useLang, type LangApi } from "@/lib/lang";
 import { formatCount } from "@/lib/number-format";
 import { cn } from "@/lib/utils";
 import { PERF_TIERS, PERF_TIER_NAME, useGideonPerf, type PerfAlertKey, type PerfSummary, type PerfTier, type PerfTierId } from "@/lib/gideon-perf";
@@ -44,18 +44,27 @@ const ALERT_LABEL: Record<PerfAlertKey, string> = {
 const card = "rounded-2xl border border-border bg-card p-4 shadow-soft";
 const tooltipStyle = { borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)", fontSize: 12 } as const;
 
+/**
+ * A number with a fraction, e.g. "11.9" GB or "82.6" tokens/s: in English the decimal point is a dot, like the
+ * rest of the English UI ("98.4%"); Indonesian keeps "11,9". Grouped values (1.000 and up) keep formatCount.
+ */
+function dec(n: number, digits: number): string {
+  if (getLang() !== "en" || Math.abs(n) >= 1000) return formatCount(n, digits);
+  const s = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: digits, useGrouping: false });
+  return n < 0 && /[1-9]/.test(s) ? `−${s}` : s;
+}
 function ms(v: number | null): string {
   if (v == null) return "—";
-  return v < 1000 ? `${formatCount(v)} ms` : `${formatCount(v / 1000, 1)} s`;
+  return v < 1000 ? `${formatCount(v)} ms` : `${dec(v / 1000, 1)} s`;
 }
 function pct(v: number | null, digits = 0): string {
-  return v == null ? "—" : `${formatCount(v * 100, digits)}%`;
+  return v == null ? "—" : `${dec(v * 100, digits)}%`;
 }
 function gb(mib: number | null | undefined, digits = 1): string {
-  return mib == null ? "—" : formatCount(mib / 1024, digits);
+  return mib == null ? "—" : dec(mib / 1024, digits);
 }
 function bytesGb(b: number): string {
-  return formatCount(b / 1024 ** 3, 1);
+  return dec(b / 1024 ** 3, 1);
 }
 function hourLabel(iso: string, L: LangApi) {
   return new Date(iso).toLocaleTimeString(L.locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
@@ -227,7 +236,7 @@ function TierCard({ tier }: { tier: PerfTier }) {
           <Metric label={t("Error rate")} value={tier.errorRate == null ? "—" : pct(tier.errorRate, 1)} warn={errorHigh} hint={tier.failures15m ? L.tn(tier.failures15m, "1 failed", "{n} failed") : undefined} />
           <Metric label={t("Answering now")} value={formatCount(tier.inFlight)} />
           <Metric label={t("Answers · 15 min")} value={formatCount(tier.answers15m)} />
-          <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? formatCount(tier.avgCredits15m, 1) : "—"} />
+          <Metric label={t("Credits per answer")} value={tier.id === "experimental" ? t("Free") : tier.avgCredits15m != null ? dec(tier.avgCredits15m, 1) : "—"} />
         </dl>
       )}
       <div className="mt-auto text-xs text-muted-foreground">
@@ -319,10 +328,10 @@ function Model0Panel({ d }: { d: PerfSummary }) {
             </div>
             <div className="min-w-0 rounded-xl border border-border/70 p-3">
               <div className="text-xs font-medium text-muted-foreground">{t("Speed (last 24 h)")}</div>
-              <div className="mt-1 font-display text-xl font-bold tabular-nums">{d.model0.avgEvalTps24h != null ? t("{n} tokens/s", { n: formatCount(d.model0.avgEvalTps24h, 1) }) : "—"}</div>
+              <div className="mt-1 font-display text-xl font-bold tabular-nums">{d.model0.avgEvalTps24h != null ? t("{n} tokens/s", { n: dec(d.model0.avgEvalTps24h, 1) }) : "—"}</div>
               <div className="text-[11px] text-muted-foreground">
                 {L.tn(d.model0.gens24h, "1 generation", "{n} generations")}
-                {lastLoad ? ` · ${t("last load {s} s at {time}", { s: lastLoad.loadSec != null ? formatCount(lastLoad.loadSec, 1) : "—", time: hourLabel(lastLoad.at, L) })}` : ""}
+                {lastLoad ? ` · ${t("last load {s} s at {time}", { s: lastLoad.loadSec != null ? dec(lastLoad.loadSec, 1) : "—", time: hourLabel(lastLoad.at, L) })}` : ""}
               </div>
             </div>
             <div className="min-w-0 rounded-xl border border-border/70 p-3">
@@ -360,7 +369,7 @@ function Model0Panel({ d }: { d: PerfSummary }) {
                     {d.model0.recent.slice(0, 5).map((r) => (
                       <tr key={r.at} className="border-t border-border/60 tabular-nums">
                         <td className="py-1.5 pr-3 text-muted-foreground">{timeLabel(r.at, L)}</td>
-                        <td className="py-1.5 pr-3 text-right font-semibold">{r.evalTps != null ? formatCount(r.evalTps, 1) : "—"}</td>
+                        <td className="py-1.5 pr-3 text-right font-semibold">{r.evalTps != null ? dec(r.evalTps, 1) : "—"}</td>
                         <td className="hidden py-1.5 pr-3 text-right text-muted-foreground sm:table-cell">{r.promptTps != null ? t("{n}/s", { n: formatCount(r.promptTps) }) : "—"}</td>
                         <td className="py-1.5 pr-3 text-right">{r.outTokens != null ? formatCount(r.outTokens) : "—"}</td>
                         <td className="py-1.5 text-right">{ms(r.totalMs)}</td>
@@ -436,7 +445,7 @@ function Charts({ d }: { d: PerfSummary }) {
           <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => formatCount(v)} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string, n: string) => [`${formatCount(Number(v), 1)} s`, n]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string, n: string) => [`${dec(Number(v), 1)} s`, n]} />
             {legend}
             {PERF_TIERS.map((id) => (
               <Line key={id} type="monotone" dataKey={`p_${id}`} name={tierName(id)} stroke={TIER_VAR[id]} strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: TIER_VAR[id] }} activeDot={{ r: 4, stroke: "var(--card)", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />
@@ -459,7 +468,7 @@ function Charts({ d }: { d: PerfSummary }) {
           <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             {grid}{x}
             <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string) => [`${formatCount(Number(v), 1)}%`, t("Cache hits")]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number | string) => [`${dec(Number(v), 1)}%`, t("Cache hits")]} />
             <Line type="monotone" dataKey="cache" name={t("Cache hits")} stroke="var(--sidebar-primary)" strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: "var(--sidebar-primary)" }} activeDot={{ r: 4, stroke: "var(--card)", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>

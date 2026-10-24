@@ -151,6 +151,9 @@ export function DocPageHeader(p: PageHeaderProps) {
           }}
           placeholder={t("Untitled")}
           aria-label={t("Page title")}
+          // Above 16 px already: keeps its size on a phone (styles.css shrank every field to 16 px, so the page
+          // title read smaller than the headings under it, visual QA 24 Oct 2026).
+          data-keep-font
           className="mt-2 block w-full resize-none overflow-hidden bg-transparent font-display text-[2rem] font-bold leading-tight tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40 md:text-[2.5rem]"
         />
       </div>
