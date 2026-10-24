@@ -207,7 +207,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onO
           {editing ? (
             <EditBox post={post} members={members} onCancel={() => setEditing(false)} onSave={(text, m) => { onEdit(post.id, text, m); setEditing(false); }} />
           ) : (
-            post.text && <div className="mt-0.5 text-[15px] leading-[21px] text-foreground"><RenderText text={post.text} /></div>
+            post.text && <div className="mt-0.5 text-[15px] leading-[21px] text-foreground"><RenderText text={post.text} names={post.mentions.map((m) => m.name)} /></div>
           )}
 
           {post.images.length > 0 && <ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} bleed />}

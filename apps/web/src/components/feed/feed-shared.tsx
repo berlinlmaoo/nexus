@@ -24,13 +24,20 @@ export function timeAgo(iso: string): string {
 }
 
 const MENTION_RE = /(@[\p{L}\p{N}._-]+)/gu;
-/** Plain-text post body with @mentions highlighted (XSS-safe — never injects HTML). */
-export function RenderText({ text }: { text: string }) {
-  const parts = text.split(MENTION_RE);
+const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * Plain-text post body with @mentions highlighted (XSS-safe — never injects HTML). `names` are the people
+ * the text can mention (the post's mentions, or the members): "@QA Dev 6" is then highlighted whole, not
+ * just "@QA" (names have spaces; 24 Oct 2026). Without names, a single word after @ is highlighted.
+ */
+export function RenderText({ text, names }: { text: string; names?: (string | null | undefined)[] }) {
+  const known = [...new Set((names ?? []).filter((n): n is string => !!n && n.trim().length > 0))].sort((a, b) => b.length - a.length);
+  const re = known.length ? new RegExp(`(@(?:${known.map(esc).join("|")})(?![\\p{L}\\p{N}])|@[\\p{L}\\p{N}._-]+)`, "gu") : MENTION_RE;
+  const parts = text.split(re);
   return (
     <span className="whitespace-pre-wrap break-words">
       {parts.map((p, i) =>
-        p.startsWith("@") && p.length > 1
+        i % 2 === 1 && p.startsWith("@") && p.length > 1
           ? <span key={i} className="font-medium text-accent-foreground">{p}</span>
           : <span key={i}>{p}</span>,
       )}

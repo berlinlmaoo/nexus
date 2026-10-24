@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
@@ -62,6 +62,8 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => mention.onKeyDown(e);
 
   const comments = q.data?.comments ?? [];
+  // Replies carry no mention list; any member's name after @ is highlighted whole.
+  const memberNames = useMemo(() => members.map((m) => m.name).filter((n): n is string => !!n), [members]);
 
   return (
     <div>
@@ -74,7 +76,7 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
         {editing ? (
           <EditBox post={post} members={members} onCancel={() => setEditing(false)} onSave={(text, m) => { onEdit(post.id, text, m); setEditing(false); }} />
         ) : (
-          post.text && <div className="mt-3 text-[15px] leading-[21px] text-foreground"><RenderText text={post.text} /></div>
+          post.text && <div className="mt-3 text-[15px] leading-[21px] text-foreground"><RenderText text={post.text} names={post.mentions.map((m) => m.name)} /></div>
         )}
         {post.images.length > 0 && <ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} bleed />}
         {!editing && <ActionRow post={post} onLike={() => onLike(post)} onReply={() => mention.ref.current?.focus()} />}
@@ -112,7 +114,7 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
       ) : (
         <div className="[&>div:last-child]:border-b-0">
           {comments.map((c, i) => (
-            <Reply key={c.id} c={c} chained={comments[i + 1]?.author.id === c.author.id} />
+            <Reply key={c.id} c={c} names={memberNames} chained={comments[i + 1]?.author.id === c.author.id} />
           ))}
         </div>
       )}
@@ -126,7 +128,7 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
  * One reply. A run of replies by the same person is joined by the thread line under the avatar (and no
  * hairline between them), the way Threads draws an author's chain.
  */
-function Reply({ c, chained }: { c: FeedComment; chained: boolean }) {
+function Reply({ c, chained, names }: { c: FeedComment; chained: boolean; names: string[] }) {
   return (
     <div className={cn("pt-3", chained ? "pb-0" : "border-b border-border pb-3", postX)}>
       <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3">
@@ -139,7 +141,7 @@ function Reply({ c, chained }: { c: FeedComment; chained: boolean }) {
             <span className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-[21px]">{c.author.name}</span>
             <span className="shrink-0 whitespace-nowrap text-[15px] leading-[21px] text-muted-foreground" title={new Date(c.createdAt).toLocaleString()}>{timeAgo(c.createdAt)}</span>
           </div>
-          <div className="mt-0.5 text-[15px] leading-[21px]"><RenderText text={c.text} /></div>
+          <div className="mt-0.5 text-[15px] leading-[21px]"><RenderText text={c.text} names={names} /></div>
         </div>
       </div>
     </div>
