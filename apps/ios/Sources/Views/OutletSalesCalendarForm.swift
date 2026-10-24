@@ -78,8 +78,10 @@ struct OutletCalendarView: View {
                             // panel names the event in full.
                             // Two short lines inside the cell's fixed height, so "ZZ temp night" is not "ZZ temp…" on a
                             // portrait iPad (UI tour run 19, iPad R19-I-10); two chips still fit the 104 pt cell.
-                            Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(2).truncationMode(.tail).minimumScaleFactor(0.9)
+                            // Between whole words and down to 0.75 before "…", as every name: at 0.9 an iPad still cut
+                            // "ZZ QA custom rep…" (QA final #2, I-6).
+                            WordWrapText(text: e.name, size: 11) { NXFont.text($0, .semibold) }
+                                .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)

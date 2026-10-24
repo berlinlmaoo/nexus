@@ -106,6 +106,15 @@ private struct WordWrapLayout: Layout {
         choice(width: proposal.width, subviews: subviews).size
     }
 
+    /// The shown text's baselines, so a dot or icon aligned to `.firstTextBaseline` sits on its first line as
+    /// beside a plain Text (the Outlet calendar chip, QA final #2).
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
+                           subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
+        let chosen = choice(width: proposal.width, subviews: subviews)
+        return bounds.minY + subviews[chosen.index].dimensions(in: ProposedViewSize(width: chosen.measured, height: nil))[guide]
+    }
+
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let chosen = choice(width: proposal.width, subviews: subviews)
         for (i, view) in subviews.enumerated() {
