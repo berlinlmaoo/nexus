@@ -86,7 +86,7 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                     <AvatarFace name={item.userName} avatar={item.avatarUrl} seed={item.userName || item.userId} size={40} decorative className="ring-0" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    {/* Two lines between words, then a little smaller, then more lines, never "…" (R16-WM-10; QA
+                    {/* Two lines between words, then a little smaller, before "…" (UI tour run 16, R16-WM-10; QA
                         final #2: "Muchammad Farchan Febriananto" was cut at 390). */}
                     <FitText as="div" text={item.userName} className="font-semibold leading-tight" />
                     {item.byline && <div className="line-clamp-2 text-sm leading-tight text-muted-foreground">{item.byline}</div>}

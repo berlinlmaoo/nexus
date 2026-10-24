@@ -278,7 +278,7 @@ export function SidebarProjectTree() {
       <SidebarMenuItem key={opts.key} {...(opts.draggable ? dragProps({ kind: "project", id: p.id, from: p.folderId ?? null }) : {})} className={cn(drag?.kind === "project" && drag.id === p.id && "opacity-50")}>
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            {/* A long name takes a second line, then shrinks a little, then more lines; never cut (FitText; QA final #2:
+            {/* A long name takes a second line, then shrinks a little, before an ellipsis (FitText; QA final #2:
                 "PATS: INDONESIA TAKEOVER" was cut at 175 px). One-line rows keep their 32 px. */}
             <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7">
               <Link to="/projects/$projectId" params={{ projectId: p.id }} draggable={false} title={p.name}>

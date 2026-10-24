@@ -2,13 +2,14 @@ import { type CSSProperties, type ElementType, type HTMLAttributes, useLayoutEff
 
 /**
  * A name in a fixed-width spot (the sidebar project tree, a leaderboard row, a My Tasks row) that is never cut
- * (owner, 24 Oct 2026: "gw gamau kepotong"; widths and layout stay as they are). In this order:
- *   1. wraps between whole words, up to `lines` lines (2);
- *   2. if that is not enough, shrinks a little, 1/2 px at a time, down to `minScale` (75%, like the project title);
- *   3. still too long: takes more lines at that size. There is no ellipsis.
- * A single word wider than the whole line is split only after the shrink, as the very last resort.
- * The full text is also the element's tooltip. Clears its own inline size on every pass, so a wider box or a
- * shorter name gets the full size back.
+ * while it can still be read in full (owner rule, QA final #2, 24 Oct 2026: no cut-off text, but no layout
+ * change). In this order:
+ *   1. wraps between words onto a second line (never inside a word);
+ *   2. if two lines are not enough, shrinks a little, 1/2 px at a time, down to `minScale` (75%, like the title);
+ *   3. only then: an ellipsis after the second line. A single word wider than the whole line is split only in
+ *      this last step, after the shrink.
+ * The full text is always the element's tooltip. The same approach as the project title fit (PageHeader).
+ * Clears its own inline size on every pass, so a wider box or a shorter name gets the full size back.
  */
 export function FitText({
   text,
@@ -37,23 +38,21 @@ export function FitText({
       lastWidth = el.clientWidth;
       el.style.fontSize = "";
       el.style.overflowWrap = "normal";
-      el.removeAttribute("data-fit-over");
-      const base = parseFloat(getComputedStyle(el).fontSize) || 0;
+      el.removeAttribute("data-fit-cut");
+      const cs = getComputedStyle(el);
+      const base = parseFloat(cs.fontSize) || 0;
       if (!base || !el.clientWidth) return;
       const min = Math.ceil(base * minScale * 2) / 2;
-      const tooTall = () => {
-        const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
-        return lh > 0 && el.scrollHeight > lh * lines + 2;
-      };
-      const tooWide = () => el.scrollWidth > el.clientWidth + 1;
-      for (let size = base; (tooTall() || tooWide()) && size > min; ) {
+      // Over = more lines than allowed (the clamp hides them) or a word sticking out sideways.
+      const over = () => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+      for (let size = base; over() && size > min; ) {
         size = Math.max(min, size - 0.5);
         el.style.fontSize = `${size}px`;
       }
-      // Last resort for a word wider than the line on its own: split it rather than cut it.
-      if (tooWide()) el.style.overflowWrap = "anywhere";
-      // More lines than `lines` from here on (never an ellipsis); marked for QA.
-      if (tooTall()) el.setAttribute("data-fit-over", "");
+      if (!over()) return;
+      // Last resort: a word too long for a line on its own may now be split, then the clamp's ellipsis.
+      el.style.overflowWrap = "anywhere";
+      if (over()) el.setAttribute("data-fit-cut", "");
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
     fit();
@@ -64,18 +63,19 @@ export function FitText({
     return () => { cancelAnimationFrame(frame); ro?.disconnect(); };
   }, [text, lines, minScale]);
 
-  const wrap: CSSProperties = {
-    display: "block",
-    // Inline, so a parent's `truncate` (shadcn's sidebar button) cannot force one line or an ellipsis again.
+  const clamp: CSSProperties = {
+    display: "-webkit-box",
+    WebkitBoxOrient: "vertical",
+    WebkitLineClamp: lines,
+    overflow: "hidden",
+    // Inline, so a parent's `truncate` (shadcn's sidebar button) cannot force one line again.
     whiteSpace: "normal",
-    textOverflow: "clip",
-    overflow: "visible",
     wordBreak: "normal",
     overflowWrap: "normal",
     ...style,
   };
   return (
-    <Tag ref={ref} data-fit-text="" title={title === null ? undefined : (title ?? text)} style={wrap} {...rest}>
+    <Tag ref={ref} data-fit-text="" title={title === null ? undefined : (title ?? text)} style={clamp} {...rest}>
       {text}
     </Tag>
   );

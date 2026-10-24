@@ -118,7 +118,7 @@ function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: 
         </span>
       </button>
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="min-w-0 flex-1 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-        {/* Two lines, then a little smaller, then more lines; never cut (QA final #2: titles were cut at 390). */}
+        {/* Two lines, then a little smaller, before an ellipsis (QA final #2: titles were cut at 390). */}
         <FitText as="div" text={task.title} className="text-sm font-semibold leading-snug" />
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" />{task.taskList?.name || t("No section")}</span>

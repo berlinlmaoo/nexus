@@ -3,10 +3,9 @@ import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
 import { cn } from "@/lib/utils";
 
 /**
- * A long title that does not fit its two lines is made smaller, down to 75% of its size (owner, 22 Oct 2026:
- * "Finance Manag…" / "Pipelin e Z N…" on the iPhone). The title wraps only between words. A name still too long
- * at 75% takes a third line: it is never cut (owner, 24 Oct 2026: "gw gamau kepotong"). A single word wider than
- * the line is split only after the shrink.
+ * A long title that does not fit its two lines is made smaller, down to 75% of its size, before anything is
+ * cut (owner, 22 Oct 2026: "Finance Manag…" / "Pipelin e Z N…" on the iPhone). The title wraps only between
+ * words; the ellipsis after the second line is the last resort, for a name that is still too long at 75%.
  * Clears its own inline size on every pass, so a wider window or a shorter name gets the full size back.
  */
 function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unknown) {
@@ -16,7 +15,6 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
     let frame = 0;
     const fit = () => {
       el.style.fontSize = "";
-      el.style.overflowWrap = "";
       const base = parseFloat(getComputedStyle(el).fontSize) || 0;
       if (!base) return;
       const min = Math.floor(base * 0.75);
@@ -31,12 +29,10 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
         if (inner && inner.scrollHeight > inner.clientHeight + 1) return true;
         return el.scrollHeight > el.clientHeight + 1 || (lh > 0 && el.scrollHeight > lh * 2 + 2);
       };
-      const tooWide = () => el.scrollWidth > el.clientWidth + 1;
-      for (let size = base; (over() || tooWide()) && size > min; ) {
+      for (let size = base; over() && size > min; ) {
         size -= 1;
         el.style.fontSize = `${size}px`;
       }
-      if (tooWide()) el.style.overflowWrap = "anywhere";
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
     fit();
@@ -155,9 +151,9 @@ export function PageHeader({
             icon buttons (UI tour run 13, W-M15), balanced, so the second line is never one orphaned word (UI tour
             run 20, R20-WM-12: "ZZ QA Social Media / Report"). */}
         {/* Every width (22 Oct 2026; was phone only, the desktop cut the name mid-word with an ellipsis): wraps
-            between words onto a second line and shrinks to fit (useFitTitle). Still too long: a third line, never an
-            ellipsis (24 Oct 2026). A single word wider than the whole line is split only after the shrink. */}
-        <h1 ref={titleRef} className={cn("text-xl md:text-2xl font-semibold tracking-tight", !compact && "truncate", hero && "font-display md:text-[32px] md:font-bold md:leading-[1.25]", compact && "whitespace-normal [text-wrap:balance] max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
+            between words onto a second line and shrinks to fit (useFitTitle). break-words only splits a single
+            word that is wider than the whole line on its own. */}
+        <h1 ref={titleRef} className={cn("text-xl md:text-2xl font-semibold tracking-tight", !compact && "truncate", hero && "font-display md:text-[32px] md:font-bold md:leading-[1.25]", compact && "line-clamp-2 whitespace-normal break-words [text-wrap:balance] max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>
