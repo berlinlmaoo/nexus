@@ -166,7 +166,9 @@ struct HomeLeaderboardCard: View {
                             .accessibilityLabel(String(format: T("Rank %d"), item.rank))
                             AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30, userId: item.row.userId, name: item.row.name)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(item.row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                                WordWrapText(text: item.row.name ?? "—", size: 14) { NXFont.text($0, .semibold) }
+                                    .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                                 // With the tier badge, as the web widget's rows (R20-B-05).
                                 HStack(spacing: 4) {
                                     TierBadge(level: item.row.level, size: 14)
@@ -176,7 +178,7 @@ struct HomeLeaderboardCard: View {
                             }
                             Spacer(minLength: 6)
                             Text("\(AppNumber.int(item.row.totalXp)) XP").font(NXFont.text(13, .semibold))
-                                .foregroundStyle(NX.foreground).monospacedDigit()
+                                .foregroundStyle(NX.foreground).monospacedDigit().fixedSize()
                         }
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))

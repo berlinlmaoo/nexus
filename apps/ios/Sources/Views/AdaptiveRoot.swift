@@ -926,8 +926,10 @@ struct SidebarRoot: View {
         ForEach(refs) { ref in
             HStack(spacing: 10) {
                 projectIcon(ref)
-                Text(ref.name).font(NXFont.text(15, selection == .project(ref) ? .medium : .regular)).lineLimit(1)
+                // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                WordWrapText(text: ref.name, size: 15) { NXFont.text($0, selection == .project(ref) ? .medium : .regular) }
                     .foregroundStyle(selection == .project(ref) ? NX.violetText : NX.foreground)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .tag(NXSelection.project(ref))
             .modifier(MacSidebarRowInsets())

@@ -838,8 +838,10 @@ struct FolderNode: View {
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
                             .rotationEffect(.degrees(isExpanded ? 90 : 0)).frame(width: 20, height: 30)
                         FolderIconTile(folder: folder)
-                        Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                        // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                        WordWrapText(text: folder.name, size: 15) { NXFont.display($0, .bold) }
+                            .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
+                        Text("\(count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).fixedSize()
                         Spacer(minLength: 4)
                     }
                     .contentShape(Rectangle())
@@ -913,7 +915,8 @@ struct FolderNode: View {
     private var dragPreview: some View {
         HStack(spacing: 10) {
             FolderIconTile(folder: folder)
-            Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            WordWrapText(text: folder.name, size: 15) { NXFont.display($0, .bold) }
+                .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -1524,7 +1527,9 @@ struct ProjectsPageListRow: View {
         HStack(spacing: 12) {
             ProjectMark(icon: project.icon, color: project.color, size: 32, projectId: project.id)
             VStack(alignment: .leading, spacing: 2) {
-                Text(project.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                WordWrapText(text: project.name, size: 15) { NXFont.text($0, .semibold) }
+                    .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                 if let d = project.description, !d.isEmpty {
                     Text(d).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
