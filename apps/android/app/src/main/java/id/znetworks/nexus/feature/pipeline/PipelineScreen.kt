@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,6 +100,7 @@ import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.components.WordBoundaryText
 import id.znetworks.nexus.ui.components.WordBoundaryLayout
 import id.znetworks.nexus.ui.components.rememberWordMeasure
+import id.znetworks.nexus.feature.projects.ProjectTitle
 import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.theme.TextFont
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -771,22 +773,23 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
     }
 }
 
-/** A column head on ONE line, fixed while its cards scroll: dot · stage · count · total (when > 0) · "+" (not on Lost). */
+/** Full stage names get two whole-word lines; totals do not compete with the title and controls. */
 @Composable
 private fun StageHead(st: String, col: List<PipelineDeal>, data: PipelineData, vm: PipelineViewModel) {
     val c = Nx.colors
     val label = stageLabel(st)
     val a11y = pluralStringResource(R.plurals.pl_stage_n, col.size, label, col.size)
-    Row(Modifier.fillMaxWidth().height(40.dp).semantics(mergeDescendants = true) { heading(); contentDescription = a11y }, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(groupTone(st), CircleShape)); Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        Spacer(Modifier.width(6.dp))
-        Text("${col.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
-        val total = col.sumOf { it.value }
-        if (total > 0) Text(" · " + pipelineMoney(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
-        Spacer(Modifier.weight(1f))
-        if (data.canEdit && !LocalPipelinePresentation.current && st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
+    val total = col.sumOf { it.value }
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).semantics(mergeDescendants = true) { heading(); contentDescription = a11y }) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(groupTone(st), CircleShape)); Spacer(Modifier.width(6.dp))
+            ProjectTitle(label, Modifier.weight(1f), minFontSize = 13f * .75f, normalFontSize = 13f)
+            Spacer(Modifier.width(6.dp))
+            Text("${col.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+            if (data.canEdit && !LocalPipelinePresentation.current && st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
+        }
+        if (total > 0) Text(pipelineMoney(total), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth().padding(start = 14.dp))
     }
 }
 
