@@ -661,6 +661,8 @@ export async function notifyBlockReminder(data: {
   link: string
   taskId?: string
   projectId?: string
+  /** One notification per reminder row, so a retried send never shows twice. */
+  dedupeKey?: string
 }) {
   await createInAppNotification({
     userId: data.userId,
@@ -673,6 +675,7 @@ export async function notifyBlockReminder(data: {
     projectId: data.projectId,
     link: data.link,
     push: true,
+    dedupeKey: data.dedupeKey,
   })
 }
 
