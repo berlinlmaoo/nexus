@@ -329,7 +329,7 @@ export function ChatThread({
   composerClassName?: string;
 }) {
   const qc = useQueryClient();
-  const { lang, locale, t, tn } = useLang();
+  const { lang, t, tn } = useLang();
   const { socket, connected, join } = useRealtime();
   const visible = usePageVisible();
   const [input, setInput] = useState("");
@@ -731,6 +731,16 @@ export function ChatThread({
     setFlashId(id);
   }, [messages]);
 
+  // The composer grows with what is typed, up to max-h-32, then scrolls (visual QA 24 Oct: with 3,600+ characters
+  // it stayed two lines tall, the first line cut at the top and nothing said there was more).
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 128)}px`;
+    el.style.overflowY = el.scrollHeight + 2 > 128 ? "auto" : "hidden";
+  }, [input]);
+
   // A jump asked for from outside (the info panel's search).
   useEffect(() => {
     if (jump?.id) void jumpTo(jump.id);
@@ -1127,11 +1137,12 @@ export function ChatThread({
           );
         })()}
         {uploadError && <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
+        {/* Thousands take a dot in English too (house style: "3.800"). */}
         {length > MESSAGE_MAX_CHARS - 400 && (
           <p role={tooLong ? "alert" : undefined} data-message-length="" className={cn("mb-2 text-xs tabular-nums", tooLong ? "font-semibold text-destructive" : "text-muted-foreground")}>
             {tooLong
-              ? t("Too long: {n} / {max} characters. Shorten it or split it into several messages.", { n: length.toLocaleString(locale), max: MESSAGE_MAX_CHARS.toLocaleString(locale) })
-              : t("{n} / {max} characters", { n: length.toLocaleString(locale), max: MESSAGE_MAX_CHARS.toLocaleString(locale) })}
+              ? t("Too long: {n} / {max} characters. Shorten it or split it into several messages.", { n: length.toLocaleString("id-ID"), max: MESSAGE_MAX_CHARS.toLocaleString("id-ID") })
+              : t("{n} / {max} characters", { n: length.toLocaleString("id-ID"), max: MESSAGE_MAX_CHARS.toLocaleString("id-ID") })}
           </p>
         )}
 
@@ -1183,7 +1194,8 @@ export function ChatThread({
           />
           {!input && (
             <span aria-hidden className="pointer-events-none absolute left-[13px] right-[13px] top-[9px] truncate text-sm leading-5 text-muted-foreground">
-              {t("Type a message…  (@ to tag someone)")}
+              {/* Short enough for a 390 px phone; the full hint stays the box's accessible name. */}
+              {t("Type a message… (@ to tag)")}
             </span>
           )}
           </div>

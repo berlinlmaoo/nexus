@@ -59,6 +59,7 @@ export const ID_CHAT: Record<string, string> = {
   "Remove picture": "Hapus gambar",
   "Couldn't upload that picture.": "Gambar itu gagal diunggah.",
   "Type a message…  (@ to tag someone)": "Tulis pesan…  (@ untuk menandai orang)",
+  "Type a message… (@ to tag)": "Tulis pesan… (@ untuk tag)",
 
   // Rename, add people, new chat
   "Rename group": "Ganti nama grup",
