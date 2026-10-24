@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { cn } from "@/lib/utils";
+import { EdgeArrows } from "@/components/EdgeArrows";
 import { useLang } from "@/lib/lang";
 import type { PipelineSummary } from "@/lib/pipeline";
 import { useMoneyFmt } from "./presentation";
@@ -19,13 +21,14 @@ type Tile = { label: string; value: string; full?: string; sub: string; subFull?
  * line under the tile (lib/pipeline.ts summarize).
  */
 export function PipelineKpis({ s }: { s: PipelineSummary }) {
-  const { t, lang } = useLang();
+  const { t, tn, lang } = useLang();
+  const scroller = useRef<HTMLDivElement>(null);
   const { fmtIdr, fmtIdrFull, hidden } = useMoneyFmt();
   // Presenting: every money tile reads "Rp ••••" in the same quiet tone, so neither a zero nor a red
   // (negative / overdue) tile gives a figure away.
   const money = (n: number) => ({ value: fmtIdr(n, lang), full: fmtIdrFull(n, lang), zero: hidden || !n });
   const tiles: Tile[] = [
-    { kind: "money", label: t("Open pipeline"), ...money(s.openValue), sub: t("{n} open deals", { n: s.openCount }) },
+    { kind: "money", label: t("Open pipeline"), ...money(s.openValue), sub: tn(s.openCount, "{n} open deal", "{n} open deals") },
     { kind: "money", label: t("Weighted forecast"), ...money(s.weightedValue), sub: t("Value × probability") },
     { kind: "money", label: t("Won"), ...money(s.wonValue), sub: t("{n} active · {lost} lost", { n: s.activeCount, lost: s.lostCount }) },
     {
@@ -43,14 +46,14 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
       warn: (s.costNoNetCount ?? 0) > 0 ? t("{n} deals have costs but no net value", { n: s.costNoNetCount }) : undefined,
       tone: (s.realProfit ?? 0) < 0 ? "bad" : undefined,
     },
-    { kind: "count", label: t("Critical"), value: String(s.criticalCount), zero: !s.criticalCount, sub: t("{n} need attention", { n: s.attentionCount }), tone: s.criticalCount > 0 ? "bad" : undefined },
+    { kind: "count", label: t("Critical"), value: String(s.criticalCount), zero: !s.criticalCount, sub: tn(s.attentionCount, "{n} needs attention", "{n} need attention"), tone: s.criticalCount > 0 ? "bad" : undefined },
     { kind: "count", label: t("Ready to execute"), value: String(s.readyCount), zero: !s.readyCount, sub: t("{n} blocked", { n: s.blockedCount }), tone: s.blockedCount > 0 ? "warn" : s.readyCount > 0 ? "good" : undefined },
     { kind: "count", label: t("Deliverables on track"), value: String(s.deliverablesOnTrack), zero: !s.deliverablesOnTrack, sub: t("{n} completed", { n: s.deliverablesDone }) },
   ];
   if (hidden) for (const tile of tiles) if (tile.kind === "money") { tile.tone = undefined; tile.warn = undefined; }
   return (
     <section data-pl="kpis" aria-label={t("Pipeline at a glance")} className="relative overflow-hidden rounded-xl border border-border bg-border">
-      <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">
+      <div ref={scroller} className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">
         <dl className="flex w-max min-w-full items-stretch gap-px sm:grid sm:w-auto sm:grid-cols-30 xl:grid-cols-8">
           {tiles.map((tile) => (
             // Each tile is a subgrid of the strip's rows (sm and up), so a label that takes two lines moves the
@@ -88,8 +91,9 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
           ))}
         </dl>
       </div>
-      {/* Phone: the row goes on past the edge — say so. */}
-      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-card to-transparent sm:hidden" />
+      {/* Phone: the row goes on past the edge — say so with an arrow, not only a faint fade (the third tile read
+          "Won Rp" cut at the screen edge, visual QA 24 Oct). */}
+      <EdgeArrows target={scroller} className="inset-y-0 sm:hidden" />
     </section>
   );
 }
