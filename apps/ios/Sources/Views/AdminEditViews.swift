@@ -578,7 +578,8 @@ struct AdminUsersSection: View {
                                 Label(T("Mobile"), systemImage: "iphone").font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
                             }
                             if let g = m.googleWorkspaceEmail, !g.isEmpty {
-                                Image(systemName: "at").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.violetText)
+                                // Labelled like the two badges beside it; a lone "@" said nothing (visual QA 24 Oct 2026).
+                                Label(T("Google Workspace"), systemImage: "at").font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
                             }
                         }
                     }
@@ -652,6 +653,8 @@ struct AdminQuestsSection: View {
     @State private var toast: FailureToastPayload?
     /// unit id → "IP › Division", to say who each quest is for.
     @State private var unitPaths: [String: String] = [:]
+    /// The quest whose trash was tapped: deleting asks first, in a centred alert (house rule; the web asks too).
+    @State private var confirmDelete: AdminQuest?
 
     var body: some View {
         Group {
@@ -663,7 +666,7 @@ struct AdminQuestsSection: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         Button { showCreate = true } label: {
-                            Label("Assign quest baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                            Label(T("Assign a new quest"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain).disabled(workspaceId == nil)
                         if quests.isEmpty { TabEmpty(icon: "trophy", text: T("No quests yet. Create one above.")) }
@@ -674,6 +677,13 @@ struct AdminQuestsSection: View {
         }
         .task(id: workspaceId) { await load() }
         .sheet(isPresented: $showCreate) { if let w = workspaceId { CreateQuestSheet(workspaceId: w) { await load() } } }
+        .alert(T("Delete this quest?"), isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+               presenting: confirmDelete) { q in
+            Button(T("Delete"), role: .destructive) { Task { await deleteQuest(q) } }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { q in
+            Text(q.title)
+        }
         .failureToast($toast)
     }
     private func deleteQuest(_ q: AdminQuest) async {
@@ -689,14 +699,15 @@ struct AdminQuestsSection: View {
                 HStack(spacing: 6) {
                     Text("target \(q.requiredCount ?? 0)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     Text("+\(q.xpReward ?? 0) XP").font(NXFont.text(11, .bold)).foregroundStyle(NX.success)
-                    if let d = q.deadline, let dt = ProjDate.parse(d) { Text("· s/d \(ProjDate.dayLabel(dt))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+                    if let d = q.deadline, let dt = ProjDate.parse(d) { Text("· " + String(format: T("until %@"), ProjDate.dayLabel(dt))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
                 }
                 Text("· " + QuestUnits.audience(q, paths: unitPaths, names: memberNames)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
             Spacer()
-            Button { Task { await deleteQuest(q) } } label: {
+            Button { confirmDelete = q } label: {
                 Image(systemName: "trash").font(.system(size: 14)).foregroundStyle(NX.danger)
             }.buttonStyle(.plain)
+            .accessibilityLabel(T("Delete this quest"))
         }.nexusCard(padding: 12)
     }
     private func load() async {
@@ -983,7 +994,7 @@ struct AdminAnnouncementsSection: View {
                     .foregroundStyle(a.kind == "sp" ? NX.danger : NX.mutedFg).lineLimit(1)
             }
             HStack {
-                Text("\(T("read by")) \(a.seenCount ?? 0) \(T("people"))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                Text("\(T("read by")) \(a.seenCount ?? 0) \((a.seenCount ?? 0) == 1 ? T("person") : T("people"))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer()
                 Button { Task { await toggleActive(a) } } label: {
                     Text((a.active ?? false) ? T("Deactivate") : T("Activate")).font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
