@@ -148,7 +148,7 @@ function WorkspaceMembersSection() {
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex-1 min-w-[200px]"><span className="text-xs font-medium text-muted-foreground">{t("Email")}</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("someone@patsgroup.id")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("name@company.com")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             </label>
             <label><span className="text-xs font-medium text-muted-foreground">{t("Role")}</span>
               <SelectPicker variant="field" value={inviteRole} onChange={(v) => setInviteRole(v as OrgRole)} ariaLabel={t("Role")} options={[...myAssignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="mt-1 flex px-3 py-2" />
