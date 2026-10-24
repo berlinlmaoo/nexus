@@ -16,7 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { attendanceReasonText, deductionLabel } from "@/lib/server-text";
+import { attendanceReasonText, attendanceReviewNoteText, deductionLabel } from "@/lib/server-text";
 import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture, type SelfieCaptureHandle } from "@/components/attendance/SelfieCapture";
@@ -663,7 +663,7 @@ function Attendance() {
                     onChange={(e) => setMemberQuery(e.target.value)}
                     aria-label={tr("Search people")}
                     placeholder={tr("Search…")}
-                    className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20"
+                    className={`w-full rounded-lg border border-border bg-background py-1.5 pl-8 ${memberQuery ? "pr-8" : "pr-2"} text-sm outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-primary/20`}
                   />
                   {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="tap-area absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
                 </div>
@@ -1843,7 +1843,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             {r.reviewNote && (
               <p className="mt-1 whitespace-pre-wrap text-xs">
                 <span className="font-semibold">{(r.status || "").toUpperCase() === "REJECTED" ? tr("Reason for rejection:") : tr("Note:")}{" "}</span>
-                “{r.reviewNote}”
+                “{attendanceReviewNoteText(r.reviewNote)}”
               </p>
             )}
           </div>

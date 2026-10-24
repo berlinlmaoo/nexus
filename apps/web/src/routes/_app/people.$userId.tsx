@@ -22,7 +22,7 @@ import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
-import { attendanceReasonText, periodEndText, periodRangeText, xpEntryLabel } from "@/lib/server-text";
+import { attendanceReasonText, attendanceReviewNoteText, periodEndText, periodRangeText, xpEntryLabel } from "@/lib/server-text";
 import { PresenceChip } from "@/lib/presence";
 import { SetStatusDialog } from "@/components/SetStatusDialog";
 
@@ -96,7 +96,7 @@ function MemberRecordPage() {
         subtitle={data ? (data.person.isSelf ? tr("Your attendance, XP and requests, one period at a time.") : tr("Attendance, XP and requests, one period at a time.")) : undefined}
         actions={data ? <PeriodPicker data={data} onChange={setPeriod} /> : undefined}
       />
-      <div className="max-w-6xl space-y-5 p-4 md:p-8">
+      <div className="space-y-5 p-4 md:p-8">
         {record.isLoading ? (
           <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : code === "FORBIDDEN" ? (
@@ -451,7 +451,7 @@ function RequestsCard({ data }: { data: NexusMemberRecord }) {
                     <span className="text-xs text-muted-foreground tabular-nums">{rangeLabel(r.startDate, r.endDate)}{r.days > 1 ? ` · ${tr("{n} days", { n: r.days })}` : ""}</span>
                   </div>
                   <div className="truncate text-xs text-muted-foreground">{attendanceReasonText(r.reason)}</div>
-                  {r.reviewedBy?.name && <div className="truncate text-[11px] text-muted-foreground/80">{r.status === "REJECTED" ? tr("Rejected by {name}", { name: r.reviewedBy.name }) : tr("Reviewed by {name}", { name: r.reviewedBy.name })}{r.reviewNote ? ` — ${r.reviewNote}` : ""}</div>}
+                  {r.reviewedBy?.name && <div className="truncate text-[11px] text-muted-foreground/80">{r.status === "REJECTED" ? tr("Rejected by {name}", { name: r.reviewedBy.name }) : tr("Reviewed by {name}", { name: r.reviewedBy.name })}{r.reviewNote ? ` — ${attendanceReviewNoteText(r.reviewNote)}` : ""}</div>}
                 </div>
                 <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground")}>{statusLabel(r.status)}</span>
               </>

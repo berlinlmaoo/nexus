@@ -133,7 +133,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
                       <div className="flex items-center gap-2.5">
                         <Avatar userId={r.userId} name={r.name} avatar={r.avatar} size={30} />
                         <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-semibold">{r.name}</span><LeftTag leftAt={leftAtOf(r)} /></div>
+                          <div className="flex min-w-0 items-center gap-1.5"><span title={r.name ?? undefined} className="line-clamp-2 min-w-0 break-words font-semibold">{r.name}</span><LeftTag leftAt={leftAtOf(r)} /></div>
                           <div className="truncate text-[11px] text-muted-foreground">{[r.role ? ROLE_LABEL[r.role] ?? r.role : null, ...r.teams.map((t) => t.name)].filter(Boolean).join(" · ") || r.email}</div>
                         </div>
                       </div>
@@ -145,7 +145,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
                       {r.flagCount === 0 ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
-                        <div className="flex flex-nowrap gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {(Object.keys(FLAG_LABEL) as (keyof ReportRosterRow["flags"])[]).filter((k) => r.flags[k]).map((k) => (
                             <span key={k} className={cn("chip chip--sm whitespace-nowrap", FLAG_CHIP[k])}>{tr(FLAG_LABEL[k])}</span>
                           ))}

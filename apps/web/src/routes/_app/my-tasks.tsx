@@ -126,7 +126,7 @@ function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: 
           {update.isError && <span className="text-red-500">{t("Couldn't update")}</span>}
           {/* Phone: due + priority live under the title (they were hidden below md — QA S-22/B16). */}
           {task.dueDate && <span className={cn("md:hidden whitespace-nowrap", late !== null && "font-semibold text-red-600 dark:text-red-400")}>{fmtDue(task.dueDate)}</span>}
-          {task.priority && task.priority !== "NONE" && <span className={`sm:hidden inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority)}</span>}
+          <span className={`sm:hidden inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "NONE")}</span>
         </div>
       </div>
       <span className={`hidden sm:inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "NONE")}</span>

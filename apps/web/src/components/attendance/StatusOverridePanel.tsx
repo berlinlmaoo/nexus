@@ -4,6 +4,7 @@ import { Camera, FileText, Loader2, Paperclip, Pencil, Scale, TriangleAlert, X }
 import { celebrate } from "@/components/Celebration";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { fmtDayKey } from "@/components/reports/report-format";
 
 // Moved here unchanged from routes/_app/attendance.tsx (28 Sep 2026) so the member record page offers
 // the same panel; it now also refreshes that page ("member-record") after a change.
@@ -109,6 +110,8 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone, current = "
   const qc = useQueryClient();
   const { t } = useLang();
   const label = (a: string) => (OVERRIDE_LABEL[a] ? t(OVERRIDE_LABEL[a]) : a);
+  // The day as the board header shows it ("4 Oct"), not the ISO key the API takes (visual QA 24 Oct 2026).
+  const day = fmtDayKey(dateKey);
   // An action that asks for evidence opens this step instead of the plain confirm.
   const [pending, setPending] = useState<{ action: Action; kind: "SICK_NOTE" | "SUPPORTING" } | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -120,9 +123,9 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone, current = "
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["member-record"] });
       if (r.action === "CLEAR_PENALTY") {
-        celebrate(r.refunded ? t("Penalty for {date} cleared. XP and day off restored.", { date: r.date }) : t("No penalty on {date}. This day stays safe from deductions.", { date: r.date }));
+        celebrate(r.refunded ? t("Penalty for {date} cleared. XP and day off restored.", { date: fmtDayKey(r.date) }) : t("No penalty on {date}. This day stays safe from deductions.", { date: fmtDayKey(r.date) }));
       } else {
-        celebrate(`${name ?? "Staff"} · ${r.date} → ${label(r.action)}${r.refunded ? " " + t("(penalty restored)") : ""}`);
+        celebrate(`${name ?? "Staff"} · ${fmtDayKey(r.date)} → ${label(r.action)}${r.refunded ? " " + t("(penalty restored)") : ""}`);
       }
       if ((r.multiDayRequestsLeft ?? 0) > 0) {
         alert(t("Note: this date is still covered by {n} multi-day request(s) (leave or permit over several days). If this day should show as Present, change that request in the Requests section.", { n: r.multiDayRequestsLeft ?? 0 }));
@@ -137,8 +140,8 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone, current = "
     const kind = overrideAsksForEvidence(action, current);
     if (kind) { setFile(null); setPending({ action, kind }); return; }
     const what = action === "CLEAR_PENALTY"
-      ? t("Clear the penalty for {date} for {name}?\n\nDeducted XP (late, forgot to check out, no-show) is refunded and any day off taken automatically is restored. The attendance status does NOT change.", { date: dateKey, name: name ?? t("this staff member") })
-      : t("Change {date} ({name}) to {status}?\n\nThat day’s automatic XP and day-off deductions are restored too.", { date: dateKey, name: name ?? t("this staff member"), status: label(action) });
+      ? t("Clear the penalty for {date} for {name}?\n\nDeducted XP (late, forgot to check out, no-show) is refunded and any day off taken automatically is restored. The attendance status does NOT change.", { date: day, name: name ?? t("this staff member") })
+      : t("Change {date} ({name}) to {status}?\n\nThat day’s automatic XP and day-off deductions are restored too.", { date: day, name: name ?? t("this staff member"), status: label(action) });
     if (window.confirm(what)) override.mutate({ action });
   };
   return (
@@ -146,7 +149,7 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone, current = "
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> {t("Change status (board)")}</div>
       {pending ? (
         <div className="space-y-2.5">
-          <p className="text-sm font-semibold">{t("Change {date} ({name}) to {status}", { date: dateKey, name: name ?? t("this staff member"), status: label(pending.action) })}</p>
+          <p className="text-sm font-semibold">{t("Change {date} ({name}) to {status}", { date: day, name: name ?? t("this staff member"), status: label(pending.action) })}</p>
           <EvidencePicker kind={pending.kind} file={file} onChange={setFile} disabled={override.isPending} />
           <p className="text-[11px] text-muted-foreground">{t("That day’s automatic XP and day-off deductions are restored too.")}</p>
           <div className="flex gap-2">

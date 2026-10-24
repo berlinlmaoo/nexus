@@ -84,7 +84,25 @@ export function attendanceReasonText(reason: string | null | undefined) {
   m = /^Auto: tidak check-in\/out pada (\d{4}-\d{2}-\d{2}) \(potong jatah day-off\)$/.exec(r);
   if (m) return t("Automatic: no check-in or check-out on {date} (taken from the day-off allowance)", { date: dayText(m[1], true) });
   if (r === "Auto: telat >120 menit") return t("Automatic: more than 120 min late");
+  // The attendance board's status change (POST /api/attendance/override) writes this note in Indonesian with the
+  // ISO day and the raw status (visual QA 24 Oct 2026: shown as is in the English UI).
+  m = /^Status (\d{4}-\d{2}-\d{2}) diubah jadi ([A-Z_]+) oleh direksi dari papan absensi\.$/.exec(r);
+  if (m) return t("Status for {date} changed to {status} by the board, from the attendance board.", { date: dayText(m[1], true), status: overrideStatusText(m[2]) });
   return reason ?? "";
+}
+
+const OVERRIDE_STATUS: Record<string, string> = { PRESENT: "Present", PERMIT: "Permit", LEAVE: "Leave", SICK: "Sick", DAY_OFF: "Day off" };
+function overrideStatusText(s: string) {
+  return OVERRIDE_STATUS[s] ? t(OVERRIDE_STATUS[s]) : s;
+}
+
+/** A review note the server wrote (the board's status change); anything a person typed is shown as is. */
+export function attendanceReviewNoteText(note: string | null | undefined) {
+  const r = (note ?? "").trim();
+  if (r === "Diubah oleh direksi dari papan absensi.") return t("Changed by the board, from the attendance board.");
+  const m = /^Diganti jadi ([A-Z_]+) oleh direksi dari papan absensi\.$/.exec(r);
+  if (m) return t("Replaced by {status} by the board, from the attendance board.", { status: overrideStatusText(m[1]) });
+  return note ?? "";
 }
 
 // Notifications -------------------------------------------------------------------------------------------
