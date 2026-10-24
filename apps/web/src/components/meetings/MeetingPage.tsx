@@ -282,7 +282,7 @@ export function MeetingPage({ id }: { id: string }) {
           <Prop icon={User} label={t("Recorded by")}><span className="inline-flex min-w-0 items-center gap-1.5"><Avatar userId={m.createdBy.id} name={m.createdBy.name} avatar={m.createdBy.avatar} size={20} /><span className="truncate">{m.createdBy.name}</span></span></Prop>
           <Prop icon={AudioLines} label={t("Audio")}>
             {m.audio.available ? (
-              <audio ref={audioRef} controls preload="none" src={`/api/meetings/${m.id}/audio`} className="h-8 w-full max-w-sm" />
+              <audio ref={audioRef} controls preload="metadata" src={`/api/meetings/${m.id}/audio`} className="h-8 w-full max-w-sm" />
             ) : (
               <span className="text-muted-foreground">{m.audio.deletedAt ? t("Deleted") : t("Not uploaded yet")}</span>
             )}

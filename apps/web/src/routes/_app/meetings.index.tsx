@@ -48,8 +48,8 @@ function MeetingsPage() {
               <Link key={m.id} to="/meetings/$meetingId" params={{ meetingId: m.id }} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Mic className="h-4 w-4" /></span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{m.title || m.audio.name || t("Untitled meeting")}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="line-clamp-2 break-words text-sm font-medium">{m.title || m.audio.name || t("Untitled meeting")}</span>
+                  <span className="line-clamp-2 text-xs text-muted-foreground">
                     {[m.project?.name, new Date(m.recordedAt ?? m.createdAt).toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { dateStyle: "medium" }), durationText(m.durationSec, t)].filter(Boolean).join(" · ")}
                   </span>
                   {queueLine(m.queue, m.status, t) && <span className="mt-0.5 block truncate text-xs font-medium text-sidebar-primary">{queueLine(m.queue, m.status, t)}</span>}
