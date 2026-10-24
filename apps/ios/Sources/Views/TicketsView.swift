@@ -717,7 +717,7 @@ private struct TicketBoardLane: View {
             // An empty lane is narrower, so the next lane still shows at the screen's edge and nobody
             // misses the tickets in it (visual QA 24 Oct 2026: two empty lanes filled the phone, and on
             // iPad the In review column started off-screen).
-            .frame(width: items.isEmpty ? (hSize == .compact ? 168 : 200) : 280)
+            .frame(width: items.isEmpty ? 200 : 280)
             .dropDestination(for: String.self) { ids, _ in
                 guard canManage, let id = ids.first, ids.count == 1 else { return false }
                 onMove(id, target)
