@@ -1818,6 +1818,10 @@ struct CalPeopleWeek: View {
                 ScrollView(.horizontal, showsIndicators: true) {
                     dayGrid(shown, flexible: false)
                 }
+                // The days past the edge are otherwise unannounced: on an iPad beside the sidebar only
+                // Mon–Thu showed, with the week's tasks on Fri–Sun (visual QA 24 Oct). The standard cue.
+                .scrollIndicatorsFlash(onAppear: true)
+                .scrollIndicatorsFlash(trigger: days)
             }
         }
         .background(NX.card)
@@ -1900,7 +1904,9 @@ struct CalPeopleWeek: View {
                     Text(unit.name.uppercased()).calCaps().foregroundStyle(NX.mutedFg).lineLimit(1)
                 } else if depth == 0 {
                     CalUnitMark(unit: unit, size: 22)
-                    Text(unit.name).font(NXFont.text(CalType.size(14), .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Whole words on two lines, then smaller, before "…" ("PT. The Z Netwo…", visual QA 24 Oct).
+                    WordWrapText(text: unit.name, size: CalType.size(14)) { NXFont.text($0, .bold) }
+                        .foregroundStyle(NX.foreground)
                 } else if depth == 1 {
                     CalUnitMark(unit: unit, size: 18)
                     Text(unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground).lineLimit(1)

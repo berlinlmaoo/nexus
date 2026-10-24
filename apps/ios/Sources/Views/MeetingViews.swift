@@ -34,6 +34,7 @@ struct MeetingQueueBlock: View {
 struct MeetingListView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     var projectId: String? = nil
     @State private var meetings: [MeetingNote] = []
     @State private var loading = true
@@ -69,6 +70,9 @@ struct MeetingListView: View {
             }
         }
         .background(NX.background).navigationTitle(T("Meeting notes")).navigationBarTitleDisplayMode(.inline)
+        // The sidebar's own page already carries the big heading: no second "Meeting notes" in a bar above it
+        // (iPad, visual QA 24 Oct), as the other sidebar pages (NXSidebarPageChrome).
+        .toolbar(projectId == nil && NXSidebarPage.isRoot(.meetingNotes, hSize: hSize, router: router) ? .hidden : .automatic, for: .navigationBar)
         .sheet(isPresented: $showNew) { NewMeetingSheet(projectId: projectId).environment(auth).environment(router) }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .nexusMeetingChanged)) { _ in Task { await load() } }
@@ -166,7 +170,7 @@ struct MeetingDetailView: View {
         .safeAreaInset(edge: .bottom) {
             if meeting.status == "READY" {
                 HStack(spacing: 12) {
-                    Text(meeting.selectedTasks.count == 1 ? T("Save the minutes and create 1 task") : String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
+                    Text(meeting.selectedTasks.isEmpty ? T("Save the minutes (no tasks picked)") : meeting.selectedTasks.count == 1 ? T("Save the minutes and create 1 task") : String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
                     Spacer()
                     Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxAccent).disabled(!meeting.canApplyDraft || store.busy)
                         .accessibilityIdentifier("meetings.apply")
@@ -269,7 +273,8 @@ struct MeetingDetailView: View {
             if !MeetingVoiceStyle.keys(meeting).isEmpty { Text(T("Names come from the introductions at the start. If a voice is wrong, fix it under Speakers below the minutes.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             FlowLayout(spacing: 6) {
                 ForEach(Array((meeting.mom?.attendees ?? []).enumerated()), id: \.offset) { index, name in
-                    HStack { Text(name); if editable(meeting) { Button { store.updateMinutes { if $0.attendees.indices.contains(index) { $0.attendees.remove(at: index) } } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel(String(format: T("Remove %@"), name)) } }.font(NXFont.text(12)).padding(7).background(NX.muted, in: Capsule())
+                    HStack { Text(name); if editable(meeting) { Button { store.updateMinutes { if $0.attendees.indices.contains(index) { $0.attendees.remove(at: index) } } } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).frame(width: 18, height: 18).touchTarget44(drawn: 18) }.accessibilityLabel(String(format: T("Remove %@"), name)) } }.font(NXFont.text(12)).padding(.horizontal, 10).padding(.vertical, 6).background(NX.muted, in: Capsule())
+                        // The ✕ keeps a 44 pt target but is drawn at 18 pt: a 44 pt frame made every pill 58 pt tall (visual QA 24 Oct).
                 }
             }
             if editable(meeting) {

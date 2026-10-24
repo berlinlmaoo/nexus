@@ -214,7 +214,7 @@ struct MeetingUploadBytes: View {
         let percent = sent >= total ? 100 : min(99, Int((fraction * 100).rounded()))
         VStack(alignment: .leading, spacing: 6) {
             ProgressView(value: fraction).tint(NX.violet)
-            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(percent) + " %"))
+            Text(String(format: T("%@ of %@ · %@"), AppNumber.bytes(sent), AppNumber.bytes(total), AppNumber.int(percent) + "%"))  // "40%", as everywhere else in the app (visual QA 24 Oct)
                 .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).accessibilityIdentifier("meetings.upload.bytes")
         }
     }

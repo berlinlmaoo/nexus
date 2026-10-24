@@ -816,7 +816,7 @@ struct DashboardView: View {
             } else {
                 ForEach(quests.prefix(40)) { q in
                     HStack(spacing: 8) {
-                        Text(q.title).font(NXFont.text(13, .semibold)).foregroundStyle(.white).lineLimit(1)
+                        WordWrapText(text: q.title, size: 13) { NXFont.text($0, .semibold) }.foregroundStyle(.white)
                         Spacer(minLength: 8)
                         Text("\(q.progress)/\(q.target) · +\(q.xpReward) XP").font(NXFont.text(11, .semibold))
                             .foregroundStyle(.white.opacity(0.8)).fixedSize()
@@ -891,7 +891,8 @@ struct DashboardView: View {
             } else {
                 ForEach(Array(items.prefix(40).enumerated()), id: \.offset) { _, it in
                     HStack(spacing: 8) {
-                        Text(it.0).font(NXFont.text(13, .semibold)).foregroundStyle(.white).lineLimit(1)
+                        // Whole words on two lines, then smaller, before "…" (visual QA 24 Oct: task titles cut).
+                        WordWrapText(text: it.0, size: 13) { NXFont.text($0, .semibold) }.foregroundStyle(.white)
                         Spacer(minLength: 8)
                         Text(it.1).font(NXFont.text(11, .semibold)).foregroundStyle(.white.opacity(0.8)).fixedSize()
                     }

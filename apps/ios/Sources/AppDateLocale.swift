@@ -114,8 +114,10 @@ enum AppNumber {
     /// File sizes as the web writes them (1024-based): "320 KB", "18.5 MB", "1.2 GB".
     static func bytes(_ count: Double) -> String {
         let b = max(0, count)
-        if b >= 1_073_741_824 { return decimal(b / 1_073_741_824) + " GB" }
-        if b >= 1_048_576 { return decimal(b / 1_048_576) + " MB" }
+        // A whole size without its ".0": "500 MB", "1 GB", not "500.0 MB" (visual QA 24 Oct); "18.5 MB" stays.
+        func size(_ x: Double) -> String { x.formatted(.number.precision(.fractionLength(0...1)).locale(AppDateLocale.current)) }
+        if b >= 1_073_741_824 { return size(b / 1_073_741_824) + " GB" }
+        if b >= 1_048_576 { return size(b / 1_048_576) + " MB" }
         if b >= 1024 { return int(Int((b / 1024).rounded())) + " KB" }
         return int(Int(b)) + " B"
     }

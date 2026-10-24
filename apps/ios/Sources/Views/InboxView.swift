@@ -132,7 +132,8 @@ struct InboxView: View {
                 Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
                     .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+                    // On the rows' own 14 pt edge (NotificationRow), not 4 pt off the screen's (visual QA 24 Oct).
+                    .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 4, trailing: 14))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }

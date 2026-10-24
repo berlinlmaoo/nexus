@@ -340,27 +340,34 @@ struct ChatInfoView: View {
 
     // MARK: header
 
+    private var headerName: some View {
+        Text(groupName)
+            .font(NXFont.display(20, .bold))
+            .foregroundStyle(NX.foreground)
+            .multilineTextAlignment(.center)
+    }
+
     private var header: some View {
         VStack(spacing: 8) {
             picture
-            Button {
-                if canEdit { sheet = .edit }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(groupName)
-                        .font(NXFont.display(20, .bold))
-                        .foregroundStyle(NX.foreground)
-                        .multilineTextAlignment(.center)
-                    if canEdit {
+            // A name that cannot be edited is plain text: as a disabled button it was drawn grey and read as
+            // unavailable (DM and project room info, visual QA 24 Oct).
+            if canEdit {
+                Button {
+                    sheet = .edit
+                } label: {
+                    HStack(spacing: 6) {
+                        headerName
                         Image(systemName: "pencil").font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(NX.violetText)
                             .accessibilityHidden(true)
                     }
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint(T("Edit the group's name and description"))
+            } else {
+                headerName.accessibilityAddTraits(.isHeader)
             }
-            .buttonStyle(.plain)
-            .disabled(!canEdit)
-            .accessibilityHint(canEdit ? T("Edit the group's name and description") : "")
             if isDM { Text(T("Direct message")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg); PresenceChip(userId: dmPartner?.userId) }
             if !isDM {
                 Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)

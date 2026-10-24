@@ -786,10 +786,10 @@ struct ChatThreadView: View {
             HStack(spacing: 8) {
                 if isRoom { ChatRoomGlyph(projectId: projectId, size: 28, conversationId: conversationId) }
                 VStack(spacing: 0) {
-                    Text(shownTitle ?? title)
-                        .font(NXFont.text(15, .semibold))
+                    // Between words on up to two lines, then smaller, before any "…" (visual QA 24 Oct:
+                    // "[QA-RT 16:35:14]…" beside the three header buttons).
+                    WordWrapText(text: shownTitle ?? title, size: 15) { NXFont.text($0, .semibold) }
                         .foregroundStyle(NX.foreground)
-                        .lineLimit(1)
                     HStack(spacing: 5) {
                         if !typingHere, let dmPresence { PresenceDot(tone: dmPresence.tone, size: 7) }
                         Text(typingHere ? T("typing…") : headerSubtitle)
@@ -1379,10 +1379,20 @@ struct ChatThreadView: View {
 
                 // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20), whole in the iPad's conversation pane:
                 // at 15 pt it was cut to "(@ to tag someo…" (UI tour run 16, R16-I-21).
-                TextField(T("Type a message…  (@ to tag someone)"), text: $input, axis: .vertical)
+                // The placeholder is drawn by hand so it can shrink to fit before it is cut: a TextField's own
+                // placeholder only truncates, "(@ to tag someo…" on a phone and in the iPad pane (visual QA 24 Oct).
+                TextField("", text: $input, axis: .vertical)
                     .accessibilityIdentifier("chat.composer")
                     .accessibilityLabel(T("Type a message…  (@ to tag someone)"))
                     .font(NXFont.text(14)).lineLimit(1...4)
+                    .overlay(alignment: .leading) {
+                        if input.isEmpty {
+                            Text(T("Type a message…  (@ to tag someone)"))
+                                .font(NXFont.text(14)).foregroundStyle(Color(uiColor: .placeholderText))
+                                .lineLimit(1).minimumScaleFactor(0.75)
+                                .allowsHitTesting(false).accessibilityHidden(true)
+                        }
+                    }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .focused($composerFocused)
