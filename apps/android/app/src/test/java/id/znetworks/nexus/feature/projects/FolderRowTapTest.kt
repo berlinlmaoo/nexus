@@ -13,6 +13,8 @@ class FolderRowTapTest {
         val calendar = node.indexOf("a.openFolderView(f.id)")
         assertTrue(row in 0 until calendar)
         assertTrue("{ a.toggleOpen(f.id) }" in node)
-        assertTrue("Spacer(Modifier.size(10.dp))\n                IconButton(onClick = { a.openFolderView(f.id) }" in node)
+        val calendarGap = Regex.escape("Spacer(Modifier.size(10.dp))") + "\\s+" +
+            Regex.escape("IconButton(onClick = { a.openFolderView(f.id) }")
+        assertTrue(Regex(calendarGap).containsMatchIn(node))
     }
 }
