@@ -37,8 +37,8 @@ const CANCELLED_PRESENT = "Dibatalkan: hari ini diubah jadi Hadir oleh direksi."
 const CONTROL_ROOM_DAY_OFF = "Day-off diatur oleh direksi (Control Room)"
 
 /** The reader's wording of a server-written note; any other text comes back untouched. */
-export function attendanceSystemNote<T extends string | null | undefined>(text: T, lang: NotifLang): T {
-  if (typeof text !== "string") return text
+export function attendanceSystemNote<T extends string | null | undefined>(text: T, lang: NotifLang | null): T {
+  if (typeof text !== "string" || !lang) return text
   const t = text.trim()
   let m = OVERRIDE.exec(t)
   if (m) {
@@ -64,9 +64,12 @@ export function attendanceSystemNote<T extends string | null | undefined>(text: 
 }
 
 /**
- * The language to word those notes in: the app's or web's explicit choice on this request, else the
- * language this person last chose (stored), else English (owner, 13 Oct 2026).
+ * The language to word those notes in for an app: its explicit choice on this request, else the language
+ * this person last chose (stored), else English (owner, 13 Oct 2026). null for the web, which receives the
+ * stored text and words it itself at render time, in whatever language the page is showing
+ * (apps/web/src/lib/server-text.ts).
  */
-export async function attendanceNoteLang(headers: Headers, userId: string): Promise<NotifLang> {
+export async function attendanceNoteLang(headers: Headers, userId: string): Promise<NotifLang | null> {
+  if ((headers.get("x-nexus-client") ?? "").startsWith("web")) return null
   return langFromRequest(headers) ?? (await recipientLang(userId)) ?? "en"
 }
