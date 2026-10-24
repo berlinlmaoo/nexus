@@ -66,7 +66,9 @@ struct SidebarFolderNode: View {
                 let ref = ProjectRef(id: p.id, name: p.name, icon: p.icon, color: p.color)
                 HStack(spacing: 10) {
                     ProjectRefIcon(ref: ref, size: 20)
-                    Text(p.name).font(NXFont.text(15)).lineLimit(1).modifier(SidebarSelection.TextColor())
+                    // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                    WordWrapText(text: p.name, size: 15) { NXFont.text($0) }
+                        .fixedSize(horizontal: false, vertical: true).modifier(SidebarSelection.TextColor())
                 }
                 .tag(NXSelection.project(ref))
                 .modifier(MacSidebarRowInsets())
@@ -80,9 +82,10 @@ struct SidebarFolderNode: View {
         } label: {
             HStack(spacing: 8) {
                 SidebarFolderGlyph(folder: folder)
-                Text(folder.name).font(NXFont.text(15)).lineLimit(1)
+                WordWrapText(text: folder.name, size: 15) { NXFont.text($0) }
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
-                Text("\(store.count(folder.id))").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                Text("\(store.count(folder.id))").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg).fixedSize()
             }
             .accessibilityElement(children: .combine)
         }

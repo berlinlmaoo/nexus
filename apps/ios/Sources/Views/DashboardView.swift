@@ -1294,7 +1294,9 @@ struct DashboardView: View {
             } label: {
                 HStack(spacing: 10) {
                     ProjectRefIcon(ref: ref, size: 32)
-                    Text(ref.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Two lines between words, smaller before any "…", as the web (owner, QA final #2, 24 Oct 2026).
+                    WordWrapText(text: ref.name, size: 14) { NXFont.text($0, .semibold) }
+                        .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
