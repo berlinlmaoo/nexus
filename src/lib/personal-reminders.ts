@@ -98,15 +98,19 @@ export async function sendDueReminders(now: Date = new Date()): Promise<{ due: n
       } else if (r.sourceKind === "doc") {
         const doc = await prisma.doc.findUnique({ where: { id: r.sourceId }, select: { title: true, projectId: true } })
         if (!doc) { skipped++; continue }
-        await notifyBlockReminder({ userId: r.userId, title: doc.title, text: r.text, link: `/docs/${r.sourceId}`, projectId: doc.projectId })
+        await notifyBlockReminder({ userId: r.userId, title: doc.title, text: r.text, link: `/docs/${r.sourceId}`, projectId: doc.projectId, dedupeKey: `block-reminder|${r.id}` })
       } else {
         const task = await prisma.task.findUnique({ where: { id: r.sourceId }, select: { title: true, taskList: { select: { projectId: true } } } })
         if (!task) { skipped++; continue }
         const projectId = task.taskList.projectId
-        await notifyBlockReminder({ userId: r.userId, title: task.title, text: r.text, link: `/projects/${projectId}/tasks/${r.sourceId}`, taskId: r.sourceId, projectId })
+        await notifyBlockReminder({ userId: r.userId, title: task.title, text: r.text, link: `/projects/${projectId}/tasks/${r.sourceId}`, taskId: r.sourceId, projectId, dedupeKey: `block-reminder|${r.id}` })
       }
       sent++
     } catch {
+      // Release the claim so the next tick tries again (until LATE_LIMIT_MS): without this a failed send left the
+      // reminder marked as gone off and the person was never told. The notification dedupeKey keeps a retry from
+      // sending it twice.
+      await prisma.blockReminder.updateMany({ where: { id: r.id, firedAt: now }, data: { firedAt: null } }).catch(() => {})
       skipped++
     }
   }

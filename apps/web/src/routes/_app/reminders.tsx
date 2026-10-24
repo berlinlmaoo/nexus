@@ -13,6 +13,18 @@ import { useRealtime } from "@/lib/realtime";
 import { toastFailure } from "@/lib/failure";
 import { celebrate } from "@/components/Celebration";
 
+/**
+ * The picker gives an instant in the browser's own zone, but the page promises WIB (and lists in WIB). Send the
+ * picked wall-clock time without a zone instead; the server reads a zone-less time as WIB (parseRemindAt), like
+ * the iOS and Android pickers that are pinned to Asia/Jakarta. Same result in a WIB browser.
+ */
+function wibWallClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export const Route = createFileRoute("/_app/reminders")({ component: RemindersPage });
 
 /**
@@ -45,7 +57,7 @@ function RemindersPage() {
   const [text, setText] = useState("");
   const [at, setAt] = useState<string | null>(null);
   const create = useMutation({
-    mutationFn: () => rjson<{ reminder: Reminder }>("/api/reminders", { method: "POST", body: JSON.stringify({ text, remindAt: at }) }),
+    mutationFn: () => rjson<{ reminder: Reminder }>("/api/reminders", { method: "POST", body: JSON.stringify({ text, remindAt: at ? wibWallClock(at) : at }) }),
     onSuccess: () => { setText(""); setAt(null); celebrate(t("Reminder set")); void qc.invalidateQueries({ queryKey: KEY }); },
     onError: (e: unknown) => toastFailure(t("Couldn't set the reminder."), e),
   });

@@ -33,7 +33,8 @@ export function startAutomationTicker() {
     try {
       const rows = await prisma.$queryRaw<Array<{ ro: boolean }>>`select pg_is_in_recovery() as ro`
       if (rows[0]?.ro) return
-      const res = await runTimeBasedAutomations()
+      // Its own catch: a failing automation must not stop the reminders below from going off.
+      const res = await runTimeBasedAutomations().catch((err) => { log.error("time-based automations tick failed", { error: String(err) }); return { fired: 0 } })
       if (res.fired > 0) log.info("time-based automations fired", res)
       // Personal reminders and the block editor's "Remind me" chips (18 Oct 2026): due ones, each claimed once.
       const rem = await sendDueReminders().catch((err) => { log.error("reminders tick failed", { error: String(err) }); return null })

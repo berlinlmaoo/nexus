@@ -103,7 +103,19 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
   return map
 }
 
+/**
+ * A user-supplied Slack webhook may only be Slack's own incoming-webhook host. Anything else would let a signed-in
+ * user make the server POST to an address of their choosing (internal hosts included) whenever they are notified.
+ */
+export function isSlackWebhookUrl(url: unknown): url is string {
+  return typeof url === "string" && /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]+$/.test(url)
+}
+
 async function sendSlack(webhookUrl: string, message: string) {
+  if (!isSlackWebhookUrl(webhookUrl)) {
+    log.warn("Slack webhook refused: not a hooks.slack.com URL")
+    return
+  }
   try {
     await fetch(webhookUrl, {
       method: "POST",
@@ -661,6 +673,8 @@ export async function notifyBlockReminder(data: {
   link: string
   taskId?: string
   projectId?: string
+  /** One notification per reminder row, so a retried send never shows twice. */
+  dedupeKey?: string
 }) {
   await createInAppNotification({
     userId: data.userId,
@@ -673,6 +687,7 @@ export async function notifyBlockReminder(data: {
     projectId: data.projectId,
     link: data.link,
     push: true,
+    dedupeKey: data.dedupeKey,
   })
 }
 
