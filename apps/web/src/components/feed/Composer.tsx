@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image as ImageIcon, X, Send } from "lucide-react";
+import { Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { useMentionAutocomplete, type MentionUser } from "@/hooks/useMentionAutocomplete";
@@ -13,18 +13,50 @@ const IMG_MAX = 4;
 export type ComposerPayload = { text: string; mentions: string[]; images: File[]; imageMeta: { w?: number; h?: number }[] };
 type Pic = { file: File; url: string; w?: number; h?: number };
 
+/** Grow a textarea with its text (no inner scrollbar until it is very long). */
+export function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, max = 420) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [ref, value, max]);
+}
+
+/** The outlined Threads "Post" button; filled once there is something to post. */
+export function PostButton({ ready, busy, onClick, label }: { ready: boolean; busy?: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick} disabled={!ready || busy}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border px-4 text-[15px] font-semibold transition-[background-color,color,transform] active:scale-[0.96] disabled:active:scale-100",
+        ready ? "border-transparent bg-primary text-primary-foreground hover:bg-primary/90" : "border-border bg-transparent text-foreground/40",
+      )}>
+      {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+      {label}
+    </button>
+  );
+}
+
+/**
+ * The inline "What's new?" row at the top of the feed, as on Threads: avatar · one-line field · Post.
+ * It grows as you type; the photo button and photos show once you are writing. Cmd/Ctrl+Enter posts.
+ */
 export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser; members: MentionUser[]; onPost: (p: ComposerPayload) => void; autoFocus?: boolean }) {
   const { t } = useLang();
   const [pics, setPics] = useState<Pic[]>([]);
+  const [focused, setFocused] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const mention = useMentionAutocomplete({ members });
   const { text } = mention;
+  useAutoGrow(mention.ref, text);
 
   const len = text.length;
   const over = len > TEXT_MAX;
   const remaining = TEXT_MAX - len;
   const showRing = len >= 220;
   const canPost = (text.trim().length > 0 || pics.length > 0) && !over;
+  const expanded = focused || text.length > 0 || pics.length > 0;
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -46,51 +78,64 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
     mention.reset();
     setPics([]);
   };
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submit(); return; }
+    mention.onKeyDown(e);
+  };
 
   // ring geometry
   const r = 10, C = 2 * Math.PI * r, pct = Math.min(len / TEXT_MAX, 1);
 
   return (
-    <div className="border-b border-border px-4 py-3">
-      <div className="flex gap-3">
-        {me && <Avatar userId={me.id} name={me.name} avatar={me.avatar} size={40} className="mt-0.5 shrink-0" />}
-        <div className="relative min-w-0 flex-1">
+    <div className="border-b border-border px-4 py-4 md:px-6">
+      <div className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-start gap-x-3">
+        {me ? <Avatar userId={me.id} name={me.name} avatar={me.avatar} size={36} /> : <div />}
+        <div className="relative min-w-0">
           <textarea
             ref={mention.ref}
             value={text}
             autoFocus={autoFocus}
             onChange={mention.onChange}
-            onKeyDown={mention.onKeyDown}
-            rows={2}
+            onKeyDown={onKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            rows={1}
+            aria-label={t("What's new?")}
             placeholder={t("What's new?")}
-            className="w-full resize-none border-0 bg-transparent px-0 py-1.5 text-[15px] outline-none placeholder:text-muted-foreground"
+            className="block min-h-9 w-full resize-none border-0 bg-transparent px-0 py-[7px] text-[15px] leading-[21px] outline-none placeholder:text-muted-foreground"
           />
           {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
 
           {pics.length > 0 && (
-            <div className={cn("mt-1 grid gap-1.5", pics.length === 1 ? "grid-cols-2" : "grid-cols-4")}>
+            <div className="mt-1.5 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {pics.map((p, i) => (
-                <div key={p.url} className="group relative aspect-square overflow-hidden rounded-xl border border-border">
+                <div key={p.url} className="group relative h-40 shrink-0 overflow-hidden rounded-lg border border-border" style={{ aspectRatio: p.w && p.h ? `${p.w} / ${p.h}` : "4 / 5" }}>
                   <img src={p.url} alt="" className="h-full w-full object-cover" />
-                  <button onClick={() => removePic(i)} aria-label={t("Remove photo")} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 pointer-coarse:opacity-100! transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => removePic(i)} aria-label={t("Remove photo")} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/75"><X className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
           )}
+
+          {/* Kept mounted (only hidden) so a blur → click on it still lands. */}
+          <div className={cn("-ml-2 mt-1 flex items-center gap-1", !expanded && "hidden")}>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => fileRef.current?.click()}
+              disabled={pics.length >= IMG_MAX}
+              aria-label={t("Add photo")}
+              title={t("Add photo")}
+              className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+            {pics.length > 0 && <span className="text-[13px] tabular-nums text-muted-foreground">{pics.length}/{IMG_MAX}</span>}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
         </div>
-      </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={pics.length >= IMG_MAX}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:opacity-40"
-        >
-          <ImageIcon className="h-4 w-4" /> {t("Photo")} {pics.length > 0 && `(${pics.length}/${IMG_MAX})`}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-
-        <div className="flex items-center gap-2.5">
+        <div className="flex h-9 items-center gap-2">
           <AnimatePresence>
             {showRing && (
               <motion.div
@@ -103,20 +148,14 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
                 <svg viewBox="0 0 28 28" className="h-7 w-7 -rotate-90">
                   <circle cx="14" cy="14" r={r} fill="none" strokeWidth="2.5" className="stroke-muted" />
                   <circle cx="14" cy="14" r={r} fill="none" strokeWidth="2.5" strokeLinecap="round"
-                    className={cn(over ? "stroke-rose-500" : remaining <= 20 ? "stroke-amber-500" : "stroke-primary")}
+                    className={cn(over ? "stroke-rose-500" : remaining <= 20 ? "stroke-amber-500" : "stroke-[var(--ring)]")}
                     strokeDasharray={C} strokeDashoffset={C * (1 - pct)} />
                 </svg>
                 {remaining <= 20 && <span className={cn("absolute text-[10px] font-bold tabular-nums", over ? "text-rose-500" : "text-amber-600 dark:text-amber-400")}>{remaining}</span>}
               </motion.div>
             )}
           </AnimatePresence>
-          <button
-            onClick={submit}
-            disabled={!canPost}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97] disabled:scale-100 disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" /> {t("Post")}
-          </button>
+          <PostButton ready={canPost} onClick={submit} label={t("Post")} />
         </div>
       </div>
     </div>

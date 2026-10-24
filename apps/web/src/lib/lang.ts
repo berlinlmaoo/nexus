@@ -90,6 +90,7 @@ import { ID_PIPELINE_V8 } from "@/lib/i18n/id-pipeline-v8";
 import { ID_OCT22 } from "@/lib/i18n/id-oct22";
 import { ID_UI_A } from "@/lib/i18n/id-ui-a";
 import { ID_UI_B } from "@/lib/i18n/id-ui-b";
+import { ID_THREADS_UI } from "@/lib/i18n/id-threads-ui";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -123,6 +124,7 @@ Object.assign(ID, ID_OCT22);
 Object.assign(ID, ID_UI_A);
 // UI round 19 Oct 2026, web part B (GIDEON Memory, meeting notes form, GIDEON header).
 Object.assign(ID, ID_UI_B);
+Object.assign(ID, ID_THREADS_UI);
 // UI round 19 Oct 2026, web part D (Vault, Messages).
 Object.assign(ID, ID_UI_D);
 Object.assign(ID, ID_QA_DEC_B);

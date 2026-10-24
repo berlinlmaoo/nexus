@@ -31,7 +31,7 @@ export function RenderText({ text }: { text: string }) {
     <span className="whitespace-pre-wrap break-words">
       {parts.map((p, i) =>
         p.startsWith("@") && p.length > 1
-          ? <span key={i} className="font-semibold text-primary">{p}</span>
+          ? <span key={i} className="font-medium text-accent-foreground">{p}</span>
           : <span key={i}>{p}</span>,
       )}
     </span>
@@ -54,39 +54,32 @@ export function MentionList({ matches, active, onPick }: { matches: MentionUser[
   );
 }
 
-/** 1–4 image collage. Reserves an aspect-ratio box (uses stored width/height when present) to kill CLS. */
-export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i: number) => void }) {
+/**
+ * Post photos, laid out like Threads (24 Oct 2026): one photo at its own shape, up to 430px tall and never
+ * wider than the text column; two or more in a sideways row of equal-height tiles that scrolls (snap) and
+ * runs to the edge of the post (`bleed`). Width/height from the server reserve the box (no layout shift).
+ */
+export function ImageGrid({ images, onOpen, bleed }: { images: FeedImage[]; onOpen: (i: number) => void; bleed?: boolean }) {
   if (!images.length) return null;
-  const n = images.length;
+  const ratioOf = (im: FeedImage) => (im.width && im.height ? `${im.width} / ${im.height}` : "4 / 5");
 
-  // Single image → fill the column width at the photo's OWN aspect ratio (no white space).
-  if (n === 1) {
+  if (images.length === 1) {
     const im = images[0];
-    const ratio = im.width && im.height ? `${im.width} / ${im.height}` : "4 / 3";
     return (
-      <button aria-label={tr("Open photo")} onClick={() => onOpen(0)} className="mt-2.5 block w-full overflow-hidden rounded-2xl border border-border bg-muted">
-        <img src={im.url} loading="lazy" alt="" className="block w-full object-cover transition duration-300 hover:scale-[1.02]" style={{ aspectRatio: ratio, maxHeight: 680 }} />
+      <button type="button" aria-label={tr("Open photo")} onClick={() => onOpen(0)}
+        className="mt-2 block max-w-full overflow-hidden rounded-lg border border-border/70 bg-muted">
+        <img src={im.url} loading="lazy" alt="" width={im.width ?? undefined} height={im.height ?? undefined}
+          className="block h-auto max-h-[430px] w-auto max-w-full object-contain" style={{ aspectRatio: ratioOf(im) }} />
       </button>
     );
   }
 
-  // 3 images → one tall on the left, two stacked on the right (deterministic; no blank cell).
-  if (n === 3) {
-    return (
-      <div className="mt-2.5 grid aspect-[3/2] grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-2xl border border-border">
-        <button aria-label={tr("Open photo {n} of {total}", { n: 1, total: 3 })} onClick={() => onOpen(0)} className="row-span-2 overflow-hidden bg-muted"><img src={images[0].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
-        <button aria-label={tr("Open photo {n} of {total}", { n: 2, total: 3 })} onClick={() => onOpen(1)} className="overflow-hidden bg-muted"><img src={images[1].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
-        <button aria-label={tr("Open photo {n} of {total}", { n: 3, total: 3 })} onClick={() => onOpen(2)} className="overflow-hidden bg-muted"><img src={images[2].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
-      </div>
-    );
-  }
-
-  // 2 or 4 images → square collage.
   return (
-    <div className="mt-2.5 grid grid-cols-2 gap-1 overflow-hidden rounded-2xl border border-border">
+    <div className={cn("mt-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", bleed && "-mr-4 pr-4 md:-mr-6 md:pr-6")}>
       {images.map((im, i) => (
-        <button aria-label={tr("Open photo {n} of {total}", { n: i + 1, total: images.length })} key={im.id} onClick={() => onOpen(i)} className="relative aspect-square overflow-hidden bg-muted">
-          <img src={im.url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" />
+        <button type="button" key={im.id} aria-label={tr("Open photo {n} of {total}", { n: i + 1, total: images.length })} onClick={() => onOpen(i)}
+          className="h-[220px] shrink-0 snap-start overflow-hidden rounded-lg border border-border/70 bg-muted md:h-[250px]" style={{ aspectRatio: ratioOf(im) }}>
+          <img src={im.url} loading="lazy" alt="" className="h-full w-full object-cover" />
         </button>
       ))}
     </div>

@@ -2,10 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AtSign, ArrowUp, Loader2, X } from "lucide-react";
+import { AtSign, ArrowUp, Loader2 } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { PageHeader } from "@/components/PageHeader";
-import { PageBody, PageTabs } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadError, retryTransient } from "@/components/LoadError";
 import { celebrate } from "@/components/Celebration";
@@ -14,6 +13,8 @@ import { useLang } from "@/lib/lang";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
+import { DetailBar, PostDetail } from "@/components/feed/PostDetail";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/threads")({
   component: ThreadsGate,
@@ -73,8 +74,29 @@ function FeedPage() {
     enabled: !!focusId,
     retry: (n, e) => !(e instanceof ApiError && (e.status === 404 || e.status === 410)) && n < 2,
   });
-  useEffect(() => { if (focusId) window.scrollTo({ top: 0 }); }, [focusId]);
-  const closeFocus = () => navigate({ to: "/threads", search: tabParam ? { tab: tabParam } : {} });
+  // Opening a post remembers where the feed was; Back puts the reader there again (Threads does).
+  const feedScroll = useRef<number | null>(null);
+  const [replyFocus, setReplyFocus] = useState(false);
+  useEffect(() => {
+    if (focusId) { window.scrollTo({ top: 0 }); return; }
+    if (feedScroll.current !== null) {
+      const y = feedScroll.current;
+      feedScroll.current = null;
+      requestAnimationFrame(() => window.scrollTo({ top: y }));
+    }
+  }, [focusId]);
+  const openPost = (post: FeedPostUI, reply = false) => {
+    feedScroll.current = window.scrollY;
+    qc.setQueryData<FeedPostUI>(["feed-post", post.id], (old) => old ?? post);
+    setReplyFocus(reply);
+    void navigate({ to: "/threads", search: { post: post.id, tab: tabParam } });
+  };
+  const closeFocus = () => {
+    // Opened from the feed: step back in history, so the browser's Back and this arrow agree.
+    if (feedScroll.current !== null) { window.history.back(); return; }
+    // Opened from a notification or a link: land on the top of the feed.
+    void navigate({ to: "/threads", search: tabParam ? { tab: tabParam } : {} });
+  };
 
   // One post lives in several caches at once — both tabs and the focused copy. A like or an edit
   // written into only the visible tab left the other copy stale, and whichever was shown next said
@@ -200,93 +222,101 @@ function FeedPage() {
   const failed = feed.isError && !feed.data;
   const empty = !feed.isLoading && !failed && posts.length === 0;
 
+  const tabs: { key: Tab; label: string }[] = [{ key: "all", label: t("All") }, { key: "mentions", label: t("Mentions") }];
+  const meUser = me ? { id: me.id, name: me.name, avatar: me.avatar } : undefined;
+
   return (
     <div>
-      {/* The app's standard header (title, subtitle, the All / Mentions switch in its tabs row) at full
-          width, like every other page; it was a centred 600px column with its own slim bar (audit 12 Oct
-          2026). The wrapper carries the header's stickiness so its height can be measured for the
-          new-posts pill, which sits just under it. */}
+      {/* The app's standard header (title + one line on what this is), like every page. */}
       <div ref={headRef} className="sticky top-0 z-30 md:z-40">
-        <PageHeader
-          title={t("Threads")}
-          subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")}
-          tabs={<PageTabs label={t("Threads")} value={tab} onChange={setTab} tabs={[{ key: "all", label: t("All") }, { key: "mentions", label: t("Mentions") }]} />}
-        />
+        <PageHeader title={t("Threads")} subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")} />
       </div>
 
-      {/* Same gutters as the other pages and full width like them (it was a 2xl column with half the
-          screen empty, UI sweep 12 Oct 2026); each post keeps a readable text column inside its row. */}
-      <PageBody>
-      <div className="overflow-clip rounded-xl border border-border bg-card">
-      {focusId && (
-        <div className="border-b-4 border-border/60">
-          <div className="flex items-center justify-between px-4 pt-2.5 text-xs font-semibold text-muted-foreground">
-            <span>{t("From your notification")}</span>
-            <button onClick={closeFocus} aria-label={t("Close")} className="grid h-7 w-7 place-items-center rounded-full transition hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
-          </div>
-          {focus.isLoading && <PostSkeleton />}
-          {focus.isError && (
-            <div className="px-4 pb-4 pt-1 text-sm text-muted-foreground">
-              {focus.error instanceof ApiError && (focus.error.status === 404 || focus.error.status === 410) ? t("This post was deleted.") : t("Couldn't open this post.")}
-            </div>
-          )}
-          {focus.data && (
-            <PostCard post={focus.data} members={members} onLike={onLike} onDelete={onDelete} onEdit={onEdit} onRetry={onRetry} onCommentAdded={onCommentAdded} initialShowComments />
+      {/* Threads layout (owner, 24 Oct 2026: "copy the look of Threads"): one 640px column, a card with
+          28px corners on wider screens and edge to edge on a phone; tabs as two equal halves on top. */}
+      <div className="mx-auto w-full max-w-[640px] pb-28 md:px-4 md:pb-12 md:pt-6">
+        <div className="overflow-clip bg-card md:rounded-[28px] md:border md:border-border">
+          {focusId ? (
+            <>
+              <div className="sticky z-20 bg-card" style={{ top: headH }}>
+                <DetailBar onBack={closeFocus} replies={focus.data?.commentCount} />
+              </div>
+              {focus.isLoading && <PostSkeleton />}
+              {focus.isError && (
+                <div className="px-6 py-10 text-center text-[15px] text-muted-foreground">
+                  {focus.error instanceof ApiError && (focus.error.status === 404 || focus.error.status === 410) ? t("This post was deleted.") : t("Couldn't open this post.")}
+                </div>
+              )}
+              {focus.data && (
+                <PostDetail key={focus.data.id} post={focus.data} me={meUser} members={members} onLike={onLike} onDelete={onDelete} onEdit={onEdit} onCommentAdded={onCommentAdded} focusReply={replyFocus} />
+              )}
+            </>
+          ) : (
+            <>
+              <div role="tablist" aria-label={t("Threads")} className="sticky z-20 grid grid-cols-2 bg-card" style={{ top: headH }}>
+                {tabs.map((x) => {
+                  const on = tab === x.key;
+                  return (
+                    <button key={x.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(x.key)}
+                      className={cn("relative h-12 text-[15px] font-semibold transition-colors", on ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
+                      {x.label}
+                      <span aria-hidden className={cn("absolute inset-x-0 bottom-0", on ? "h-px bg-foreground" : "h-px bg-border")} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {tab === "all" && me && <Composer me={meUser} members={members} onPost={onPost} />}
+
+              {/* new-posts pill */}
+              <div className="pointer-events-none sticky top-[calc(var(--threads-head,0px)+3.5rem)] z-10 flex h-0 justify-center" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
+                <AnimatePresence>
+                  {newPosts.length > 0 && (
+                    <motion.button
+                      initial={{ y: -12, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -12, opacity: 0, scale: 0.9 }}
+                      onClick={flushNew}
+                      className="pointer-events-auto mt-2 inline-flex h-9 items-center gap-2 rounded-full bg-primary px-3.5 text-sm font-semibold text-primary-foreground shadow-pop"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      {tn(newPosts.length, "{n} new post", "{n} new posts")}
+                      <AvatarStack ids={newPosts.slice(0, 3).map((p) => p.author.id)} size={20} max={3} />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* list — hairline-separated; the last post draws none (the card edge is right under it). */}
+              <div className="[&>article:last-of-type]:border-b-0">
+                {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
+
+                {failed && <LoadError compact error={feed.error} what={t("the posts")} onRetry={() => void feed.refetch()} />}
+                {empty && (
+                  <EmptyState icon={AtSign} tone="muted" title={tab === "mentions" ? t("No mentions yet") : t("No posts yet")}
+                    message={tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")} />
+                )}
+
+                <AnimatePresence initial={false}>
+                  {posts.map((post) => (
+                    <PostCard key={post._tempId ?? post.id} post={post} members={members} onLike={onLike} onDelete={onDelete} onEdit={onEdit} onRetry={onRetry} onOpen={openPost} />
+                  ))}
+                </AnimatePresence>
+
+                <div ref={sentinel} aria-hidden className="h-px" />
+                {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+              </div>
+            </>
           )}
         </div>
-      )}
-
-      {tab === "all" && me && <Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} />}
-
-      {/* new-posts pill */}
-      <div className="pointer-events-none sticky top-[calc(var(--threads-head,0px)+0.5rem)] z-10 flex justify-center" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
-        <AnimatePresence>
-          {newPosts.length > 0 && (
-            <motion.button
-              initial={{ y: -12, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -12, opacity: 0, scale: 0.9 }}
-              onClick={flushNew}
-              className="pointer-events-auto mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-sm font-bold text-primary-foreground shadow-pop"
-            >
-              <ArrowUp className="h-3.5 w-3.5" />
-              {tn(newPosts.length, "{n} new post", "{n} new posts")}
-              <AvatarStack ids={newPosts.slice(0, 3).map((p) => p.author.id)} size={20} max={3} />
-            </motion.button>
-          )}
-        </AnimatePresence>
       </div>
-
-      {/* list — continuous, divider-separated. The last post draws no divider of its own: the card's border is
-          right under it, and the two read as a doubled line (UI tour run 14, R14-WM-6). */}
-      <div className="[&>article:last-of-type]:border-b-0">
-        {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
-
-        {failed && <LoadError compact error={feed.error} what={t("the posts")} onRetry={() => void feed.refetch()} />}
-        {empty && (
-          <EmptyState icon={AtSign} tone="muted" title={tab === "mentions" ? t("No mentions yet") : t("No posts yet")}
-            message={tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")} />
-        )}
-
-        <AnimatePresence initial={false}>
-          {posts.map((post) => (
-            <PostCard key={post._tempId ?? post.id} post={post} members={members} onLike={onLike} onDelete={onDelete} onEdit={onEdit} onRetry={onRetry} onCommentAdded={onCommentAdded} />
-          ))}
-        </AnimatePresence>
-
-        {/* A hairline, not a 32px band: it left an empty strip under the last post (UI tour run 13, W-B9). */}
-        <div ref={sentinel} aria-hidden className="h-px" />
-        {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
-      </div>
-      </div>
-      </PageBody>
     </div>
   );
 }
 
 function PostSkeleton() {
   return (
-    <div className="border-b border-border px-4 py-3">
+    <div className="border-b border-border px-4 py-3 md:px-6">
       <div className="flex items-start gap-3">
-        <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-muted" />
+        <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
         <div className="flex-1 space-y-2">
           <div className="h-3 w-32 animate-pulse rounded bg-muted" />
           <div className="h-3 w-full animate-pulse rounded bg-muted" />
