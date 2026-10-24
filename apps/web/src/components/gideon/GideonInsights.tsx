@@ -8,6 +8,7 @@ import { gideonRunDetail, gideonRuns, type GideonRunRow } from "@/lib/gideon";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { HScroll } from "@/components/HScroll";
+import { formatCount } from "@/lib/number-format";
 
 /**
  * GIDEON "Insights" (12 Oct 2026, after Notion's agent Insights): every run — chat, @mention, scheduled
@@ -19,6 +20,25 @@ import { HScroll } from "@/components/HScroll";
 const TRIGGER_LABEL: Record<string, string> = { CHAT: "Chat", MENTION: "@mention", SCHEDULE: "Schedule", TICKET: "Support ticket", REFLECTION: "Reflection" };
 const STATUS_LABEL: Record<string, string> = { RUNNING: "Running", SUCCEEDED: "Succeeded", FAILED: "Failed" };
 const STATUS_TONE: Record<string, string> = { RUNNING: "bg-primary", SUCCEEDED: "bg-emerald-500", FAILED: "bg-destructive" };
+
+/**
+ * A failed run's error as a reader-facing line. The stable codes (and the bare transport errors) used to show
+ * raw ("shim_offline" in red); the raw text stays in the tooltip and the run's detail for whoever debugs it.
+ */
+const ERROR_LABEL: Record<string, string> = {
+  shim_offline: "GIDEON couldn't be reached",
+  shim_restart: "GIDEON restarted during the answer",
+  model0_unavailable: "Model 0 wasn't available",
+  timeout: "Took too long and was stopped",
+  "fetch failed": "The connection to GIDEON dropped",
+  terminated: "The connection to GIDEON dropped",
+};
+function errorLabel(raw: string, t: LangApi["t"]): string {
+  const key = raw.trim();
+  if (ERROR_LABEL[key]) return t(ERROR_LABEL[key]);
+  if (/^shim \d{3}$/.test(key)) return t("The connection to GIDEON dropped");
+  return raw;
+}
 
 function fmt(iso: string, L: LangApi) {
   return new Date(iso).toLocaleString(L.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
@@ -40,10 +60,10 @@ export function GideonInsights() {
     <div lang={L.lang} className="space-y-4">
       {totals && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Tile label={t("Runs")} value={totals.runs} hint={t("Last {n} days", { n: totals.days })} />
+          <Tile label={t("Runs")} value={formatCount(totals.runs)} hint={t("Last {n} days", { n: totals.days })} />
           <Tile label={t("Completion rate")} value={totals.completionRate == null ? "—" : `${totals.completionRate}%`} hint={L.tn(totals.failures, "1 failure", "{n} failures")} />
-          <Tile label={t("Failures")} value={totals.failures} hint={t("Last {n} days", { n: totals.days })} tone={totals.failures > 0 ? "warn" : undefined} />
-          <Tile label={t("Active people")} value={totals.activeUsers} hint={t("Last {n} days", { n: totals.days })} />
+          <Tile label={t("Failures")} value={formatCount(totals.failures)} hint={t("Last {n} days", { n: totals.days })} tone={totals.failures > 0 ? "warn" : undefined} />
+          <Tile label={t("Active people")} value={formatCount(totals.activeUsers)} hint={t("Last {n} days", { n: totals.days })} />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -99,9 +119,9 @@ export function GideonRunList({ runs, compact }: { runs: GideonRunRow[]; compact
         <tbody>
           {runs.map((r) => (
             <tr key={r.id} onClick={() => setOpenId(r.id)} className="cursor-pointer border-b border-border/60 align-top last:border-0 hover:bg-accent/40">
-              <td className="max-w-[18rem] px-3 py-2">
+              <td className="max-w-[11rem] px-3 py-2 sm:max-w-[18rem]">
                 <div className="truncate font-medium">{r.titleHidden ? <span className="text-muted-foreground">{t("Chat (private)")}</span> : r.title || "—"}</div>
-                {r.error && <div className="truncate text-xs text-destructive" title={r.error}>{r.error}</div>}
+                {r.error && <div className="truncate text-xs text-destructive" title={r.error}>{errorLabel(r.error, t)}</div>}
               </td>
               {!compact && <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{r.user?.name ?? "—"}</td>}
               <td className="whitespace-nowrap px-3 py-2"><span className="inline-flex items-center gap-1.5 text-xs font-semibold"><span className={cn("h-2 w-2 rounded-full", STATUS_TONE[r.status] ?? "bg-muted")} />{t(STATUS_LABEL[r.status] ?? r.status)}</span></td>
