@@ -141,12 +141,15 @@ export function PageHeader({
     <div
       ref={compact ? undefined : barRef}
       data-page-header-sticky={compact ? undefined : ""}
-      className={cn("flex items-start gap-3 min-w-0", compact && "max-sm:items-center max-sm:gap-2", !compact && cn(pinnedBar, barEdge, "max-md:px-4 max-md:pb-2 max-md:pt-[calc(env(safe-area-inset-top)+1rem)]", className))}
+      // flex-1 (here and on the text column): the block takes the room the actions leave. Sized to its content,
+      // a clamped (-webkit-box) title measured narrower than its one-line width and wrapped with free space beside
+      // it ("All / Pipelines", "ZZ QA / v8 Suwara"; visual QA 24 Oct).
+      className={cn("flex flex-1 items-start gap-3 min-w-0", compact && "max-sm:items-center max-sm:gap-2", !compact && cn(pinnedBar, barEdge, "max-md:px-4 max-md:pb-2 max-md:pt-[calc(env(safe-area-inset-top)+1rem)]", className))}
     >
       {/* The identity mark shows on the phone too, as on the desktop and in the iPhone app (UI tour run 7:
           a project opened on the phone had no icon beside its name). */}
       {icon && <div className={cn("shrink-0 text-2xl sm:mt-0.5", hero && "md:mt-0")}>{icon}</div>}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
             icon buttons (UI tour run 13, W-M15), balanced, so the second line is never one orphaned word (UI tour
             run 20, R20-WM-12: "ZZ QA Social Media / Report"). */}
