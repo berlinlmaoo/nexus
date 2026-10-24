@@ -225,7 +225,7 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   return (
     // Wide enough for "+62 8xx xxxx xxxx" (QA B11: the number was cut on a phone).
     <div className="flex min-w-0 items-center gap-1 max-sm:basis-full">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-36 min-w-0 rounded-lg tabular-nums max-sm:flex-1 border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring" />
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-40 min-w-0 rounded-lg tabular-nums max-sm:flex-1 border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-ring" />
       {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label={t("Save number")} title={t("Save")}>{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
@@ -695,12 +695,12 @@ function NotificationsSection() {
         {toggles.map((o) => {
           const on = p?.[o.key] === undefined ? !!o.defaultOn : Boolean(p?.[o.key]);
           return (
-            <label key={o.key} className="flex items-start justify-between p-3 rounded-lg border border-border hover:bg-accent/30 cursor-pointer">
-              <div>
+            <label key={o.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border hover:bg-accent/30 cursor-pointer">
+              <div className="min-w-0">
                 <div className="text-sm font-medium">{o.label}</div>
                 <div className="text-xs text-muted-foreground">{o.desc}</div>
               </div>
-              <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate({ [o.key]: e.target.checked })} className="h-4 w-4 accent-ring mt-1" />
+              <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate({ [o.key]: e.target.checked })} className="h-4 w-4 shrink-0 accent-ring mt-1" />
             </label>
           );
         })}
