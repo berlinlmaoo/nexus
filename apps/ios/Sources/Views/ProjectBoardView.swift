@@ -2654,10 +2654,11 @@ struct BoardCard: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
-                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
+                // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
+                // PEKANB…" (UI tour run 15, Q-M11). A word wider than the card shrinks (to 0.75) before it is
+                // split: "Supercalifragilisticexpialidoc / ious" (QA final #2, I-12).
+                WordWrapText(text: UntitledText.wrapped(task.title), size: 14, lines: 20) { NXFont.text($0, task.isDone ? .medium : .bold) }
                     .foregroundStyle(task.isDone ? NX.mutedFg.opacity(0.8) : NX.foreground)
-                    // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
-                    // PEKANB…" (UI tour run 15, Q-M11).
                     .strikethrough(task.isDone)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
