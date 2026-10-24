@@ -468,7 +468,8 @@ function FontMenu({ p }: { p: ToolbarProps }) {
       disabled={!p.canEdit}
       className="w-[104px] justify-between"
       panelClassName="min-w-52"
-      trigger={<span className="min-w-0 flex-1 truncate text-left text-xs" style={{ fontFamily: fontStack(ff, families) }}>{isDefault ? defaultLabel : ff}</span>}
+      // The 104px trigger says just "Default" (the menu names it in full), so it is not cut to "Default (Sa…".
+      trigger={<span className="min-w-0 flex-1 truncate text-left text-xs" title={isDefault ? defaultLabel : ff} style={{ fontFamily: fontStack(ff, families) }}>{isDefault ? t("Default") : ff}</span>}
     >
       {(close) => (
         <>
