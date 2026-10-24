@@ -725,7 +725,10 @@ struct TimelineTab: View {
                     Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
                         .rotationEffect(.degrees(isCollapsed ? -90 : 0))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(g.name).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        // Two lines between words, smaller before any "…": the phone's ~120 pt Name column cut
+                        // "On Prog…" on one line (QA final #2, I-2).
+                        WordWrapText(text: g.name, size: 15) { NXFont.text($0, .bold) }
+                            .foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
                         // Without the Duration and Progress columns the group still says its span and
                         // progress, "23 days · 100%" (web; UI tour run 14, P-I6 / N-02).
                         if !showMeta, gDur > 0, let pct {
