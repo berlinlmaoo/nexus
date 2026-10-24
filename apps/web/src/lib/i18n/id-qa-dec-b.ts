@@ -6,8 +6,11 @@ export const ID_QA_DEC_B: Record<string, string> = {
   // B-D1 delete booking dialog
   "The room is free again for that time. You can restore the booking from Control Room → Audit.": "Ruangan kosong lagi di jam itu. Booking bisa dipulihkan dari Control Room → Audit.",
   // B-15 4,000 characters per chat message
-  "Too long: {n} / 4,000 characters. Shorten it or split it into several messages.": "Terlalu panjang: {n} / 4.000 karakter. Persingkat atau pecah jadi beberapa pesan.",
-  "{n} / 4,000 characters": "{n} / 4.000 karakter",
+  "Too long: {n} / {max} characters. Shorten it or split it into several messages.": "Terlalu panjang: {n} / {max} karakter. Persingkat atau pecah jadi beberapa pesan.",
+  "{n} / {max} characters": "{n} / {max} karakter",
   // B-13 a link to a chat that is gone
   "You're no longer in this chat": "Kamu sudah tidak ada di chat ini",
+  // Admin › Announcements: deleting asks first
+  "Delete this announcement?": "Hapus pengumuman ini?",
+  "It disappears for everyone right away. You can restore it from Control Room → Audit.": "Langsung hilang untuk semua orang. Bisa dipulihkan dari Control Room → Audit.",
 };

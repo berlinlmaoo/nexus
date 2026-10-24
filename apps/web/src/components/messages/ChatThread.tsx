@@ -329,7 +329,7 @@ export function ChatThread({
   composerClassName?: string;
 }) {
   const qc = useQueryClient();
-  const { lang, t, tn } = useLang();
+  const { lang, locale, t, tn } = useLang();
   const { socket, connected, join } = useRealtime();
   const visible = usePageVisible();
   const [input, setInput] = useState("");
@@ -1130,8 +1130,8 @@ export function ChatThread({
         {length > MESSAGE_MAX_CHARS - 400 && (
           <p role={tooLong ? "alert" : undefined} data-message-length="" className={cn("mb-2 text-xs tabular-nums", tooLong ? "font-semibold text-destructive" : "text-muted-foreground")}>
             {tooLong
-              ? t("Too long: {n} / 4,000 characters. Shorten it or split it into several messages.", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })
-              : t("{n} / 4,000 characters", { n: length.toLocaleString(lang === "id" ? "id-ID" : "en-US") })}
+              ? t("Too long: {n} / {max} characters. Shorten it or split it into several messages.", { n: length.toLocaleString(locale), max: MESSAGE_MAX_CHARS.toLocaleString(locale) })
+              : t("{n} / {max} characters", { n: length.toLocaleString(locale), max: MESSAGE_MAX_CHARS.toLocaleString(locale) })}
           </p>
         )}
 
