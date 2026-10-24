@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Check, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FitText } from "@/components/FitText";
 import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
 import { allPipelinesApi, pipelineBoardsKey, type PipelineBoardRef } from "@/lib/pipeline-api";
@@ -87,13 +88,14 @@ export function PipelineTitleSwitcher({ title, current, workspaceId }: { title: 
         <DropdownMenuTrigger
           data-pl="board-switcher"
           // A button is laid out as one block inside the heading, so the heading's two-line clamp never reached the
-          // name (3 lines at 1440, 5 at 390; QA final #2 pre-run, P-1). The name clamps itself the same way as the
+          // name (3 lines at 1440, 5 at 390; QA final #2 pre-run, P-1). The name wraps the same way as the
           // plain project title (two lines, between words, balanced) and PageHeader's fit shrinks it to 75% first
-          // (data-title-clamp); the chevron sits after it and is never cut off.
+          // (data-title-clamp), then it takes more lines, never an ellipsis (owner, 24 Oct 2026). The chevron sits
+          // after it and is never cut off.
           className="-mx-1 inline-flex max-w-full items-end rounded-md px-1 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
           title={t("Switch pipeline board")}
         >
-          <span data-title-clamp className="min-w-0 line-clamp-2 whitespace-normal break-words [text-wrap:balance]">{title}</span>
+          <span data-title-clamp className="min-w-0 whitespace-normal [text-wrap:balance]">{title}</span>
           <ChevronDown aria-hidden className="mb-[0.2em] ml-1 h-5 w-5 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72 max-w-[calc(100vw-2rem)]">
@@ -101,7 +103,7 @@ export function PipelineTitleSwitcher({ title, current, workspaceId }: { title: 
           {boards.map((b) => (
             <DropdownMenuItem key={b.id} onSelect={() => { if (b.id !== current) navigate({ to: "/projects/$projectId", params: { projectId: b.id } }); }} className="gap-2">
               <Check aria-hidden className={cn("h-4 w-4 shrink-0", b.id === current ? "opacity-100" : "opacity-0")} />
-              <span className="min-w-0 flex-1 truncate">{b.name}</span>
+              <FitText text={b.name} className="min-w-0 flex-1" />
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{tn(b.dealCount, "{n} deal", "{n} deals")}</span>
             </DropdownMenuItem>
           ))}

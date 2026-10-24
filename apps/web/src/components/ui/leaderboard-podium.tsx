@@ -78,7 +78,7 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
             ) : (
               <div className="flex max-w-full flex-col items-center" title={group.map((g) => g.userName).join(", ")}>
                 <span className="text-sm font-semibold">{tiedLabel(group.length)}</span>
-                <span className="line-clamp-2 max-w-full text-balance text-center text-xs leading-tight text-muted-foreground">
+                <span className="max-w-full text-balance text-center text-xs leading-tight text-muted-foreground">
                   {names}{group.length > 2 ? ` ${moreLabel(group.length - 2)}` : ""}
                 </span>
               </div>
