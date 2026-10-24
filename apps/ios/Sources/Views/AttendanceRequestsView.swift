@@ -97,8 +97,12 @@ struct RequestAttachmentView: View {
         } label: {
             if large {
                 VStack(alignment: .leading, spacing: 6) {
-                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                        .frame(height: 160).frame(maxWidth: .infinity)
+                    // The top of the page, where a letter's heading is: centred, a portrait sick note showed
+                    // only its blank middle (visual QA 24 Oct 2026).
+                    Color.clear.frame(height: 160).frame(maxWidth: .infinity)
+                        .overlay(alignment: .top) {
+                            CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     HStack(spacing: 6) {
                         Image(systemName: "photo").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
