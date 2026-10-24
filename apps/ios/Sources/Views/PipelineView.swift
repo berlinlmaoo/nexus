@@ -1480,8 +1480,9 @@ struct PipelineTable: View {
             // A regular size class can still leave a narrow detail pane beside the iPad sidebar.
             // Keep company/deal names readable and let the remaining columns scroll into view.
             ScrollView(wide ? [.horizontal, .vertical] : .vertical) {
-                tableContent(list)
-                    .frame(width: wide ? max(geometry.size.width, 1220) : geometry.size.width)
+                let tableWidth = wide ? max(geometry.size.width, 1220) : geometry.size.width
+                tableContent(list, dealWidth: Self.dealWidth(tableWidth: tableWidth))
+                    .frame(width: tableWidth)
             }
             // The columns past Net value are off to the right on an iPad: show the scroller once so it reads
             // as scrollable (visual QA 24 Oct 2026: HEALTH off-screen with no hint).
@@ -1491,11 +1492,11 @@ struct PipelineTable: View {
         }
     }
 
-    private func tableContent(_ list: [PipelineDeal]) -> some View {
+    private func tableContent(_ list: [PipelineDeal], dealWidth: CGFloat) -> some View {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: wide ? [.sectionHeaders] : []) {
             Section {
                 ForEach(list) { d in
-                    Button { onOpen(d.id) } label: { wide ? AnyView(wideRow(d)) : AnyView(compactRow(d)) }
+                    Button { onOpen(d.id) } label: { wide ? AnyView(wideRow(d, dealWidth: dealWidth)) : AnyView(compactRow(d)) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("pipeline.deal.\(d.id)")
                         .hoverEffect(.highlight)
@@ -1505,7 +1506,7 @@ struct PipelineTable: View {
             } header: {
                 VStack(spacing: 0) {
                     sortBar
-                    if wide { wideHeader }
+                    if wide { wideHeader(dealWidth: dealWidth) }
                     Divider().overlay(NX.border)
                 }
                 .background(NX.background)
@@ -1545,10 +1546,10 @@ struct PipelineTable: View {
         .padding(.horizontal, 14).padding(.vertical, 6)
     }
 
-    private var wideHeader: some View {
+    private func wideHeader(dealWidth: CGFloat) -> some View {
         HStack(spacing: 10) {
             head(T("Code")).frame(width: 78, alignment: .leading)
-            head(T("Deal")).frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
+            head(T("Deal")).frame(width: dealWidth, alignment: .leading)
             head(T("Stage")).frame(width: 150, alignment: .leading)
             head(T("Prob.")).frame(width: 44, alignment: .trailing)
             head(T("Net value")).frame(width: 96, alignment: .trailing)
@@ -1564,12 +1565,20 @@ struct PipelineTable: View {
     /// row split the spare width by its own text, so a row with a long next action pushed Stage, Prob.
     /// and Net value ~45 pt left of the rows around it (visual QA 24 Oct 2026, iPad).
     private static let nextActionWidth: CGFloat = 200
+    /// Every other column is fixed too: the Deal column is exactly what they leave of the table's width, the
+    /// same number on every row and the header. Even as the only flexible column, rows with an overdue
+    /// receivable still came out ~65 pt narrower on iPad (visual QA re-shoot, 25 Oct 2026).
+    private static func dealWidth(tableWidth: CGFloat) -> CGFloat {
+        let fixed: CGFloat = 78 + 150 + 44 + 96 + 96 + 56 + nextActionWidth + 88
+        let gaps: CGFloat = 8 * 10 + 2 * 14
+        return max(230, tableWidth - fixed - gaps)
+    }
 
     private func head(_ text: String) -> some View {
         Text(text.uppercased()).font(NXFont.text(10, .bold)).tracking(0.4).foregroundStyle(NX.mutedFg).lineLimit(1)
     }
 
-    private func wideRow(_ d: PipelineDeal) -> some View {
+    private func wideRow(_ d: PipelineDeal, dealWidth: CGFloat) -> some View {
         HStack(spacing: 10) {
             Text(d.code).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().frame(width: 78, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
@@ -1579,7 +1588,7 @@ struct PipelineTable: View {
                 Text([d.brand, d.pmDisplay.map { "PM \($0)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
-            .frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
+            .frame(width: dealWidth, alignment: .leading)
             HStack(spacing: 6) {
                 Circle().fill(PipelineStyle.groupTone(d.stage)).frame(width: 6, height: 6)
                 Text(PipelineText.stage(d.stage)).font(NXFont.text(12)).foregroundStyle(NX.foreground).lineLimit(1)
