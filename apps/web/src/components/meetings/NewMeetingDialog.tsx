@@ -128,11 +128,12 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
   // U-6 (owner, 19 Oct 2026): one title, labeled rows, one speakers caption, the two ways in as the big buttons at
   // the bottom, one small limits line.
   const row = "flex min-h-12 items-center gap-3 px-3 py-2";
-  const rowLabel = "w-28 shrink-0 text-sm font-medium sm:w-32";
+  const rowLabel = "w-24 shrink-0 text-sm font-medium sm:w-32";
   return (
     <Dialog open={open} onOpenChange={close}>
-      {/* One shrinkable column: the pickers no longer push the sheet past a phone's edge. */}
-      <DialogContent className="max-w-lg grid-cols-[minmax(0,1fr)]">
+      {/* One shrinkable column: the pickers no longer push the sheet past a phone's edge. Tighter on a phone so
+          "Automatic (ID + EN)" fits beside its label now the dialog keeps a margin (visual QA 24 Oct). */}
+      <DialogContent className="max-w-lg grid-cols-[minmax(0,1fr)] max-sm:p-4">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">{t("Meeting notes")}<BetaBadge /></DialogTitle>
           <DialogDescription className="sr-only">{t("GIDEON turns a recording into an overview, minutes and tasks. Nothing is added to the project until you check it and press Apply.")}</DialogDescription>
@@ -147,7 +148,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
             </label>
             <div className={row}>
               <span className={rowLabel}>{t("Project")}</span>
-              <SelectPicker variant="field" className="min-w-0 flex-1" value={projectId} onChange={setProjectId} disabled={busy} clearable={t("Choose later")} placeholder={projects.isLoading ? t("Loading…") : t("Pick a project (optional)")} options={projectOptions} ariaLabel={t("Project")} />
+              <SelectPicker variant="field" className="min-w-0 flex-1" value={projectId} onChange={setProjectId} disabled={busy} clearable={t("Choose later")} placeholder={projects.isLoading ? t("Loading…") : t("Optional")} options={projectOptions} ariaLabel={t("Project")} />
             </div>
             <div className={row}>
               <span className={rowLabel}>{t("Language")}</span>
