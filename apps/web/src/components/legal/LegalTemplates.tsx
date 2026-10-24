@@ -70,7 +70,7 @@ export function LegalTemplates() {
                     <span className="line-clamp-2 min-w-0 text-sm font-medium">{glueDash(tpl.name)}</span>
                     {tpl.archived && <Badge variant="outline">{t("Archived")}</Badge>}
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">
+                  <div className="line-clamp-2 text-xs text-muted-foreground">
                     {docTypeLabel(tpl.docType)} · {tpl.company?.name ?? t("Any company")} · v{tpl.currentVersion} · {t("{n} fields", { n: tpl.fields.length })}
                   </div>
                 </div>

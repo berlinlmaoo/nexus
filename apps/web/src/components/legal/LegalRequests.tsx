@@ -298,13 +298,14 @@ function RequestSheet({ id, onClose, onOpenDocument, members }: { id: string | n
 
             <div className="flex flex-wrap items-center gap-2">
               {r.rejected ? <RejectedLabel /> : <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{columnLabel(r.column)}</span>}
-              <StageChip stage={r.stage} />
+              {/* Rejected already says where it stands; the stage chip said "Rejected" a second time (visual QA 24 Oct). */}
+              {!(r.rejected && r.stage === "REJECTED") && <StageChip stage={r.stage} />}
               {r.document && <button type="button" onClick={() => onOpenDocument(r.document!.id)} className="hover:underline"><DocChip d={r.document} /></button>}
             </div>
 
             {r.rejected && (
               <div className="rounded-lg border border-rose-300/60 bg-rose-50/60 p-3 text-sm dark:border-rose-500/30 dark:bg-rose-500/10">
-                <div className="font-semibold">{t("Declined")}</div>
+                <div className="font-semibold">{t("Rejected")}</div>
                 <p className="mt-0.5 whitespace-pre-wrap">{r.rejectReason}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{t("Move it to To Do or In Progress to reopen it.")}</p>
               </div>

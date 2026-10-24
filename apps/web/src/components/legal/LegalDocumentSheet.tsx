@@ -136,7 +136,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
             <div ref={headRef} className="sticky -top-6 z-10 -mx-6 -mt-6 space-y-3 border-b border-border bg-background px-6 pb-3 pt-6">
             <SheetHeader className="text-left">
               <div className={cn("font-mono text-xs text-muted-foreground", doc.numberReleased && "line-through")}>{doc.number || t("No number")}</div>
-              <SheetTitle className="pr-6">{doc.title}</SheetTitle>
+              <SheetTitle className="pr-6 [overflow-wrap:anywhere]">{doc.title}</SheetTitle>
               <SheetDescription>
                 {docTypeLabel(doc.docType)} · {doc.company.name} · {fmtDay(doc.docDate, lang)}
                 {doc.template ? ` · ${t("from {name} v{v}", { name: doc.template.name, v: doc.template.version })}` : ""}
