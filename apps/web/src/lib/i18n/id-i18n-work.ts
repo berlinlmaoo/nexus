@@ -68,6 +68,7 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Edit profile": "Ubah profil",
   "e.g. Client meeting": "mis. Meeting klien",
   "e.g. My leave balance got deducted wrong this month": "mis. Jatah cutiku terpotong salah bulan ini",
+  "e.g. Leave balance deducted wrongly": "mis. Jatah cuti terpotong salah",
   "e.g. Request amount": "mis. Jumlah permintaan",
   "End": "Selesai",
   "End time has to be after the start time.": "Jam selesai harus setelah jam mulai.",

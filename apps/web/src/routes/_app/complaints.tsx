@@ -271,13 +271,13 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
 
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Short title")}</label>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder={t("e.g. My leave balance got deducted wrong this month")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder={t("e.g. Leave balance deducted wrongly")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
         </div>
 
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("What happened")}</label>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder={t("Describe the issue in as much detail as you can: what happened, when, and what you'd like to happen.")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          <p className="text-right text-[11px] text-muted-foreground">{body.trim().length}/4000</p>
+          <p className="text-right text-[11px] text-muted-foreground">{body.trim().length.toLocaleString("id-ID")}/4.000</p>
         </div>
 
         <div className="space-y-1.5">
@@ -372,6 +372,20 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
 
   // Keep the thread pinned to the latest message.
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [c?.messages?.length]);
+  // ...and keep it pinned while photos and the correction card finish laying out: pinned once, the thread opened
+  // part-way up with the decision note cut under the Close bar (visual QA 24 Oct). Reading higher up unpins it.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    const onScroll = () => { pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 48; };
+    const repin = () => { if (pinned) el.scrollTop = el.scrollHeight; };
+    const ro = new ResizeObserver(repin);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("load", repin, true);
+    return () => { ro.disconnect(); el.removeEventListener("scroll", onScroll); el.removeEventListener("load", repin, true); };
+  }, [c?.messages?.length, corrections.length]);
 
   const cat = c ? catOf(c.category) : null;
   const st = c ? statusOf(c.status) : null;
@@ -685,8 +699,8 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
     <div className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
       <div className="flex items-center gap-1.5">
         <CalendarClock className="h-3.5 w-3.5 text-primary" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{isCancellation ? t("Deduction cancellation") : t("Attendance correction")}</span>
-        <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>
+        <span className="min-w-0 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{isCancellation ? t("Deduction cancellation") : t("Attendance correction")}</span>
+        <span className={cn("ml-auto shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>
       </div>
 
       <div className="mt-2 flex items-center gap-2">
