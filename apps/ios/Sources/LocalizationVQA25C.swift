@@ -8,5 +8,6 @@ extension AppLanguage {
         // Settings › Offline copy
         "Kept on this device so NEXUS still opens with no signal.": "Disimpan di perangkat ini supaya NEXUS tetap kebuka tanpa sinyal.",
         "No files yet": "Belum ada file",
+        "Type a message… (@ to tag)": "Tulis pesan… (@ untuk tag)",
     ]
 }

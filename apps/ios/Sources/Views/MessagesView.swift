@@ -1379,20 +1379,12 @@ struct ChatThreadView: View {
 
                 // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20), whole in the iPad's conversation pane:
                 // at 15 pt it was cut to "(@ to tag someo…" (UI tour run 16, R16-I-21).
-                // The placeholder is drawn by hand so it can shrink to fit before it is cut: a TextField's own
-                // placeholder only truncates, "(@ to tag someo…" on a phone and in the iPad pane (visual QA 24 Oct).
-                TextField("", text: $input, axis: .vertical)
+                // The web's shorter hint (visual QA 24 Oct 2026): the long one was cut to "(@ to tag so…" on a phone
+                // and in the iPad pane. VoiceOver keeps the full sentence.
+                TextField(T("Type a message… (@ to tag)"), text: $input, axis: .vertical)
                     .accessibilityIdentifier("chat.composer")
                     .accessibilityLabel(T("Type a message…  (@ to tag someone)"))
                     .font(NXFont.text(14)).lineLimit(1...4)
-                    .overlay(alignment: .leading) {
-                        if input.isEmpty {
-                            Text(T("Type a message…  (@ to tag someone)"))
-                                .font(NXFont.text(14)).foregroundStyle(Color(uiColor: .placeholderText))
-                                .lineLimit(1).minimumScaleFactor(0.75)
-                                .allowsHitTesting(false).accessibilityHidden(true)
-                        }
-                    }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .focused($composerFocused)
@@ -1438,10 +1430,10 @@ struct ChatThreadView: View {
         .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
     }
 
-    /// Both numbers in the UI language's grouping, "3,650 / 4,000" / "3.650 / 4.000", as the web: the English
-    /// text read "3.650 / 4,000" (QA final #2, I-11).
+    /// Both numbers with the app's one grouping, "3.650 / 4.000", in both languages as the web (owner rule: dots
+    /// always; the English text had read "3.650 / 4,000", QA final #2, I-11, then "3,650 / 4,000").
     private var messageLengthNotice: String {
-        let n = AppNumber.localInt(input.unicodeScalars.count), max = AppNumber.localInt(4000)
+        let n = AppNumber.int(input.unicodeScalars.count), max = AppNumber.int(4000)
         return input.unicodeScalars.count > 4000
             ? String(format: T("Too long: %@ / %@ characters. Shorten it or split it into several messages."), n, max)
             : String(format: T("%@ / %@ characters"), n, max)
