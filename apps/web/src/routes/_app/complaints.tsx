@@ -818,7 +818,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
             rows={2}
             maxLength={1000}
             placeholder={t("Note for the reporter (optional). It goes into the thread with your decision.")}
-            className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+            className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none [field-sizing:content] focus:border-ring"
           />
           <div className="flex gap-2">
             <button onClick={() => decide.mutate("APPROVE")} disabled={decide.isPending}
