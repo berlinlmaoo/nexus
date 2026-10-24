@@ -9,6 +9,7 @@ import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
+import { createPortal } from "react-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { PipelineTitleSwitcher } from "@/components/pipeline/AllPipelinesEntry";
 import { SnapTail } from "@/components/SnapTail";
@@ -816,11 +817,11 @@ function ProjectDetail() {
         ? <div className="nx-gx py-10"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
         : <div className="nx-gx py-10"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its Project Owner to add you.")} /></div>)}
       {!project.isLoading && data && isPipeline && (
-        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} members={data.members} />
           : <PipelineView key={data.id} projectId={data.id} workspaceId={data.workspaceId ?? ""} initialDealId={search.deal} fromAll={search.from === "all"} boardName={data.name} />}</Pending>
       )}
       {!project.isLoading && data && isOutlet && (
-        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} members={data.members} />
           : (
             <OutletSalesView
               key={outletLink.nonce}
@@ -832,7 +833,7 @@ function ProjectDetail() {
           )}</Pending>
       )}
       {!project.isLoading && data && isSocial && (
-        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} members={data.members} />
           : (
             <SocialMediaView
               key={outletLink.nonce}
@@ -877,7 +878,7 @@ function ProjectDetail() {
           {activeModule === "automations" && <><GideonProjectCard projectId={data.id} projectName={data.name} /><AutomationsView projectId={data.id} /></>}
           {activeModule === "pages" && <PagesView project={data} onOpen={(doc) => navigate({ to: "/docs/$docId", params: { docId: doc.id } })} />}
           {activeModule === "forms" && <ProjectFormsView projectId={data.id} />}
-          {activeModule === "chat" && <ProjectChat projectId={data.id} />}
+          {activeModule === "chat" && <ProjectChat projectId={data.id} members={data.members} />}
           {!activeModule && !activeView && (pv.query.isLoading
             ? <div className="space-y-2 nx-gx py-6" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
             : <div className="nx-gx py-10"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
@@ -1707,6 +1708,11 @@ function prefetchTask(qc: ReturnType<typeof useQueryClient>, taskId: string | nu
   }, 120);
 }
 
+/** Phone: render into <body> so a popover leaves the pinned header's stacking context; elsewhere in place. */
+function portalOnPhone(phone: boolean, node: ReactNode) {
+  return phone && typeof document !== "undefined" ? createPortal(node, document.body) : node;
+}
+
 function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   const qc = useQueryClient();
   const members = project.members ?? [];
@@ -1744,10 +1750,13 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog" className="inline-flex items-center justify-center rounded-full transition hover:opacity-80 pointer-coarse:min-h-11 pointer-coarse:min-w-11" title={t("Project members")} aria-label={t("Project members")}>
         {ids.length > 0 ? <AvatarStack ids={ids} size={isMobile ? 24 : 26} max={isMobile ? 2 : 4} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
       </button>
-      {open && (
+      {open && portalOnPhone(isMobile, (
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
-          <div role="dialog" aria-label={t("Project members")} className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-pop">
+          {/* Phone: out of the pinned header (whose stacking put the view tabs over the list) and held inside the
+              screen with a 16px gutter; anchored under the avatars, the 288px panel ran off the left edge and cut
+              the avatars and "Add people to project" (visual QA 24 Oct). */}
+          <div role="dialog" aria-label={t("Project members")} className={cn("z-50 rounded-xl border border-border bg-card p-2 shadow-pop", isMobile ? "fixed inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)]" : "absolute right-0 top-full mt-2 w-80")}>
             <div className={labelCls}>{t("Project members · {n}", { n: members.length })}</div>
             <div className="max-h-72 space-y-0.5 overflow-y-auto">
               {members.map((m) => {
@@ -1756,7 +1765,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
                   <div key={uid} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
                     <Avatar userId={uid} name={m.user?.name} avatar={m.user?.avatar} size={28} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? "—"}</div>
+                      <div className="line-clamp-2 break-words text-sm font-semibold">{m.user?.name ?? m.user?.email ?? "—"}</div>
                       {m.role === "LEAD" && <div className="text-[11px] text-muted-foreground">{t("Project Owner")}</div>}
                     </div>
                     {/* Notion-style: each row has its own access dropdown (change it, or Remove) for someone with
@@ -1782,7 +1791,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
             )}
           </div>
         </>
-      )}
+      ))}
       {picking && <Suspense fallback={null}><AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setPicking(false)} onAdded={() => setPicking(false)} /></Suspense>}
     </div>
   );
@@ -2865,16 +2874,26 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
   );
 }
 
-function ProjectChat({ projectId }: { projectId: string }) {
+function ProjectChat({ projectId, members }: { projectId: string; members?: NexusProject["members"] }) {
   const { t } = useLang();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false });
   const room = (convos.data?.conversations ?? []).find((c) => c.type === "PROJECT" && c.projectId === projectId);
+  const meId = me.data?.user?.id;
   return (
     <div className="p-4 md:p-8">
       <div className="mx-auto h-[70vh] max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
-        {convos.isLoading && <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-        {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />{t("This project's chat room isn't active yet.")}</div></div>}
+        {(convos.isLoading || (!room && me.isLoading)) && <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+        {/* Why it is empty and what to do (empty-state rule; it said only "isn't active yet", visual QA 24 Oct): the
+            room holds the project's members (lib/chat-membership.ts), so someone who sees the project through
+            their role but was never added has no room here. */}
+        {!convos.isLoading && !me.isLoading && !room && (
+          <div className="grid h-full place-items-center">
+            {meId && !(members ?? []).some((m) => (m.userId || m.user?.id) === meId)
+              ? <EmptyState icon={MessageSquare} title={t("You're not in this project's chat")} message={t("The chat room is for the people added to this project. Ask its Project Owner to add you, or reach the team from Messages.")} action={<EmptyAction to="/messages">{t("Open Messages")}</EmptyAction>} />
+              : <EmptyState icon={MessageSquare} title={t("The chat room isn't ready yet")} message={t("It opens for everyone added to this project. Reload in a moment; until then, reach the team from Messages.")} action={<EmptyAction to="/messages">{t("Open Messages")}</EmptyAction>} />}
+          </div>
+        )}
         {room && <ChatThread conversationId={room.id} meId={me.data?.user?.id} readOnly={room.canPost === false} />}
       </div>
     </div>
