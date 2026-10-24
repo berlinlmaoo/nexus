@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { isSlackWebhookUrl } from "@/lib/notification-service"
 
 export async function GET() {
   try {
@@ -56,7 +57,7 @@ export async function PUT(req: NextRequest) {
         slackEnabled: body.slackEnabled ?? false,
         desktopEnabled: body.desktopEnabled ?? false,
         desktopSoundEnabled: body.desktopSoundEnabled ?? true,
-        slackWebhook: body.slackWebhook || null,
+        slackWebhook: isSlackWebhookUrl(body.slackWebhook) ? body.slackWebhook : null,
         taskAssigned: body.taskAssigned ?? true,
         taskDueSoon: body.taskDueSoon ?? true,
         commentMention: body.commentMention ?? true,
@@ -69,7 +70,7 @@ export async function PUT(req: NextRequest) {
         slackEnabled: body.slackEnabled,
         desktopEnabled: body.desktopEnabled,
         desktopSoundEnabled: body.desktopSoundEnabled,
-        slackWebhook: body.slackWebhook,
+        slackWebhook: body.slackWebhook === null || body.slackWebhook === "" ? null : isSlackWebhookUrl(body.slackWebhook) ? body.slackWebhook : undefined,
         taskAssigned: body.taskAssigned,
         taskDueSoon: body.taskDueSoon,
         commentMention: body.commentMention,
@@ -139,6 +140,8 @@ export async function PATCH(req: NextRequest) {
     const raw = input.slackWebhook
     if (raw !== null && typeof raw !== "string")
       return NextResponse.json({ error: "slackWebhook must be a string or null" }, { status: 400 })
+    if (raw && !isSlackWebhookUrl(raw))
+      return NextResponse.json({ error: "slackWebhook must be a https://hooks.slack.com/services/… URL" }, { status: 400 })
     data.slackWebhook = raw || null
   }
 
