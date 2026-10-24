@@ -996,7 +996,7 @@ struct PipelineKpiStrip: View {
     private func readings(_ s: PipelineSummary) -> [Tile] {
         [
             Tile(id: "open", label: T("Open pipeline"), value: PipelineFormat.idr(s.openValue),
-                 sub: String(format: T("%d open deals"), s.openCount), zero: s.openValue == 0),
+                 sub: String(format: T(s.openCount == 1 ? "%d open deal" : "%d open deals"), s.openCount), zero: s.openValue == 0),
             Tile(id: "weighted", label: T("Weighted forecast"), value: PipelineFormat.idr(s.weightedValue),
                  sub: T("Value × probability"), zero: s.weightedValue == 0),
             Tile(id: "won", label: T("Won"), value: PipelineFormat.idr(s.wonValue),
@@ -1009,9 +1009,9 @@ struct PipelineKpiStrip: View {
             Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
                  sub: String(format: T("%d/%d with costs"), s.costDealCount, s.costEligibleCount),
                  zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil,
-                 warn: s.costNoNetCount > 0 ? String(format: T("%d deals have costs but no net value"), s.costNoNetCount) : nil),
+                 warn: s.costNoNetCount > 0 ? String(format: T(s.costNoNetCount == 1 ? "%d deal has costs but no net value" : "%d deals have costs but no net value"), s.costNoNetCount) : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
-                 sub: String(format: T("%d need attention"), s.attentionCount),
+                 sub: String(format: T(s.attentionCount == 1 ? "%d needs attention" : "%d need attention"), s.attentionCount),
                  zero: s.criticalCount == 0, tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
             Tile(id: "ready", label: T("Ready to execute"), value: "\(s.readyCount)",
                  sub: String(format: T("%d blocked"), s.blockedCount), zero: s.readyCount == 0,
