@@ -102,7 +102,7 @@ export function XpPenaltyModal() {
                 <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-3 py-2.5">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{penaltyLabel(p)}</div>
+                    <div title={penaltyLabel(p)} className="line-clamp-2 break-words text-sm font-semibold leading-snug">{penaltyLabel(p)}</div>
                     <div className="text-[11px] text-muted-foreground">{fmtDate(p.createdAt)} {fmtTime(p.createdAt)}</div>
                   </div>
                   <div className="shrink-0 text-sm font-black tabular-nums text-rose-600 dark:text-rose-400">{formatSigned(p.amount)} XP</div>
