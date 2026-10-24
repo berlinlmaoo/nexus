@@ -7,6 +7,7 @@ import { resolveLegacyId } from "@/lib/legacy-ids"
 import { logAudit, logViewOncePerDay } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { buildMemberRecord, buildRecordXp, parseRecordPeriod, recordWindow } from "@/lib/member-record"
+import { attendanceNoteLang, attendanceSystemNote } from "@/lib/attendance-system-note"
 import { memberRecordQuerySchema } from "@/lib/validations"
 
 /**
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       buildMemberRecord({ workspaceId, userId: targetId, periodKey: period.key, viewerId, canManage }),
     ])
     const member = currentMember ?? former
+    const noteLang = await attendanceNoteLang(request.headers, viewerId)
     if (!user || !member) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
 
     if (!isSelf) {
@@ -107,6 +109,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         canRemoveXp: canManage && !isSelf,
       },
       ...record,
+      // Board-made notes are stored in one language; worded for the reader when sent (visual QA 24 Oct).
+      requests: record.requests.map((r) => ({ ...r, reason: attendanceSystemNote(r.reason, noteLang), reviewNote: attendanceSystemNote(r.reviewNote, noteLang) })),
     })
   } catch (error) {
     console.error("member record GET error:", error)

@@ -34,6 +34,7 @@ import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRan
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 import { classifyPermitReason } from "@/lib/permit-reason-guard"
+import { attendanceNoteLang, attendanceSystemNote } from "@/lib/attendance-system-note"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffBalances, dayOffPeriodOf, dayOffUsageKey, dayOffUsedByPeriod, effectiveDayOffQuotas } from "@/lib/day-off-usage"
 import { touchPresenceSoon } from "@/lib/presence"
 
@@ -489,11 +490,14 @@ export async function GET(request: NextRequest) {
             .map((r) => ({ userId: r.userId, periodKey: dayOffPeriodOf(r.startDate) })),
         )
 
+    // Board-made notes are stored in one language; worded for the reader when sent (visual QA 24 Oct).
+    const noteLang = await attendanceNoteLang(request.headers, session.user.id)
     return NextResponse.json({
       scope,
       dayOffUsedThisMonth,
       requests: visibleRequests.map((attendanceRequest) => {
-        const serialized = serializeAttendanceRequest(attendanceRequest)
+        const raw = serializeAttendanceRequest(attendanceRequest)
+        const serialized = { ...raw, reason: attendanceSystemNote(raw.reason, noteLang), reviewNote: attendanceSystemNote(raw.reviewNote, noteLang) }
         if (!requesterDayOff || attendanceRequest.type !== "PERMIT") return serialized
         const balance = requesterDayOff.get(dayOffUsageKey(attendanceRequest.userId, dayOffPeriodOf(attendanceRequest.startDate)))
         return balance ? { ...serialized, requesterDayOff: balance } : serialized

@@ -8,6 +8,7 @@ import { AttendanceDayType, attendancePeriodKey, attendancePeriodRange, enumerat
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
 import { placeLabel } from "@/lib/attendance-place"
+import { attendanceNoteLang, attendanceSystemNote } from "@/lib/attendance-system-note"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffQuotaByUser } from "@/lib/day-off-usage"
 import { attendanceOwedFor } from "@/lib/attendance-score"
@@ -388,6 +389,8 @@ export async function GET(request: NextRequest) {
     if (!context.workspace) {
       return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     }
+    // Board-made notes are stored in one language; worded for the reader when sent (visual QA 24 Oct).
+    const noteLang = await attendanceNoteLang(request.headers, session.user.id)
 
     const parsed = attendanceHistoryQuerySchema.safeParse({
       scope: request.nextUrl.searchParams.get("scope") ?? undefined,
@@ -668,7 +671,7 @@ export async function GET(request: NextRequest) {
           outsideSince: null,
           locationTrackingState: null,
           checkInClient: null,
-          notes: approvedRequest.reason,
+          notes: attendanceSystemNote(approvedRequest.reason, noteLang),
           status: "COMPLETED",
           correctedAt: null,
           correctionReason: null,
