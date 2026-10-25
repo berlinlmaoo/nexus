@@ -25,7 +25,7 @@ function MeetingsPage() {
   const [open, setOpen] = useState(false);
   const rows = list.data?.meetings ?? [];
   const newButton = enabled ? (
-    <button type="button" onClick={() => setOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><Plus className="h-4 w-4" />{t("New meeting notes")}</button>
+    <button type="button" onClick={() => setOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><Plus className="h-4 w-4" />{t("New meeting notes")}</button>
   ) : null;
   return (
     <div className="min-h-dvh">

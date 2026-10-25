@@ -13,6 +13,7 @@ import {
   clock, createMeeting, etaText, isMeetingAudio, MeetingApiError, MEETING_AUDIO_ACCEPT, readDuration, uploadMeetingAudio, useMeeting, useWebAppConfig, type Meeting, type MeetingLanguage,
 } from "@/lib/meetings";
 import { BetaBadge } from "./BetaBadge";
+import { formatCount } from "@/lib/number-format";
 
 /**
  * New meeting notes (Beta, owner 18 Oct 2026). Upload a recording or record here (MediaRecorder), pick the project
@@ -116,7 +117,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
             ) : (
               <>
                 <button type="button" onClick={() => onOpenChange(false)} className="h-10 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent">{t("Done")}</button>
-                <button type="button" onClick={openMeeting} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90">{t("Open meeting")}</button>
+                <button type="button" onClick={openMeeting} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{t("Open meeting")}</button>
               </>
             )}
           </DialogFooter>
@@ -171,7 +172,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><FileAudio className="h-4 w-4" /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{file.name}</span>
-                <span className="block text-xs text-muted-foreground">{(file.size / 1048576).toFixed(1)} MB{duration ? ` · ${clock(duration)}` : ""}</span>
+                <span className="block text-xs text-muted-foreground">{formatCount(file.size / 1048576, 1)} MB{duration ? ` · ${clock(duration)}` : ""}</span>
               </span>
               {!busy && <button type="button" onClick={() => { setFile(null); setDuration(null); }} aria-label={t("Remove")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>}
             </div>
@@ -184,13 +185,13 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
           {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
 
           {file ? (
-            <button type="button" onClick={() => void start()} disabled={busy} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground shadow-soft hover:bg-sidebar-primary/90 disabled:opacity-50">
+            <button type="button" onClick={() => void start()} disabled={busy} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-soft hover:bg-primary/90 disabled:opacity-50">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{t("Upload and transcribe")}
             </button>
           ) : mode === "upload" ? (
             <div className="space-y-2">
               <button type="button" disabled={busy} onClick={() => { setError(null); setIntroEnd(null); setMode("record"); }}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground shadow-soft hover:bg-sidebar-primary/90 disabled:opacity-50">
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-soft hover:bg-primary/90 disabled:opacity-50">
                 <Mic className="h-4 w-4" />{t("Start recording")}
               </button>
               <button type="button" disabled={busy} onClick={() => input.current?.click()}
@@ -209,7 +210,7 @@ export function NewMeetingDialog({ open, onOpenChange, projectId: initialProject
 }
 
 /** MB with one decimal: "12.3 MB". */
-const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+const mb = (n: number) => `${formatCount(n / 1048576, 1)} MB`;
 
 /** The upload is done: follow the meeting live (socket `meeting-changed`, same as the meeting page). */
 function LiveSteps({ id, initial, bytes }: { id: string; initial: Meeting; bytes: number }) {
@@ -385,7 +386,7 @@ function Recorder({ onDone, onDiscard, onCancel, autoStart, recorded, disabled, 
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-sidebar-primary"><Mic className="h-4 w-4" /></span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{t("Recording ready")}</span>
-          <span className="block text-xs text-muted-foreground tabular-nums">{clock(elapsed)} · {(recorded.size / 1048576).toFixed(1)} MB{introductions && introEnd !== null ? ` · ${t("introductions until {time}", { time: clock(introEnd) })}` : ""}</span>
+          <span className="block text-xs text-muted-foreground tabular-nums">{clock(elapsed)} · {formatCount(recorded.size / 1048576, 1)} MB{introductions && introEnd !== null ? ` · ${t("introductions until {time}", { time: clock(introEnd) })}` : ""}</span>
         </span>
         {!disabled && <button type="button" onClick={() => { onDiscard(); setElapsed(0); }} className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">{t("Discard")}</button>}
       </div>
@@ -408,7 +409,7 @@ function Recorder({ onDone, onDiscard, onCancel, autoStart, recorded, disabled, 
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sidebar-primary/30 bg-accent/50 px-3 py-2.5" aria-live="polite">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-sidebar-primary px-2 py-0.5 text-xs font-semibold text-sidebar-primary-foreground"><Users className="h-3 w-3" />{t("Introductions")}</span>
             <span className="min-w-0 flex-1 basis-48 text-xs leading-relaxed">{t("Each person says their name in turn, then tap Done.")}</span>
-            <button type="button" onClick={() => onIntroEnd(Math.round(elapsed * 100) / 100)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-xs font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><Check className="h-3.5 w-3.5" />{t("Done with introductions")}</button>
+            <button type="button" onClick={() => onIntroEnd(Math.round(elapsed * 100) / 100)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"><Check className="h-3.5 w-3.5" />{t("Done with introductions")}</button>
           </div>
         ) : (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -420,7 +421,7 @@ function Recorder({ onDone, onDiscard, onCancel, autoStart, recorded, disabled, 
       )}
       <div className="mt-3 flex gap-2">
         {state === "idle" ? (
-          <button type="button" disabled={disabled} onClick={() => void begin()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90 disabled:opacity-50"><Mic className="h-4 w-4" />{t("Start recording")}</button>
+          <button type="button" disabled={disabled} onClick={() => void begin()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"><Mic className="h-4 w-4" />{t("Start recording")}</button>
         ) : null}
         {state === "idle" ? (
           onCancel && <button type="button" onClick={onCancel} className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-semibold hover:bg-accent">{t("Cancel")}</button>
