@@ -266,7 +266,7 @@ function MemorySummary({ onBack }: { onBack: () => void }) {
             placeholder={t("Add or update…")} aria-label={t("Something for GIDEON to remember")}
             className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60" />
           <button type="submit" disabled={!text.trim() || add.isPending || paused || atMax} aria-label={t("Add")} title={t("Add")}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition hover:bg-sidebar-primary/90 active:scale-95 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted">
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 active:scale-95 disabled:bg-muted disabled:text-muted-foreground/70 disabled:hover:bg-muted">
             {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
           </button>
         </form>
