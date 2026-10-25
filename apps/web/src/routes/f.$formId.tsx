@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, LogIn } from "lucide-react";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useDocumentLang, useLang } from "@/lib/lang";
-import { FormHead, FormRenderer } from "@/components/forms/FormRenderer";
+import { FormRenderer } from "@/components/forms/FormRenderer";
 import type { RichField } from "@/components/forms/form-model";
 import { LegalRequestPage } from "@/components/legal/LegalRequestForm";
 import { isLegalLinkId } from "@/lib/legal-requests-api";
@@ -27,10 +27,13 @@ function PublicForm() {
   const form = useQuery({ queryKey: ["public-form", formId], queryFn: () => nexusApi.publicForm(formId), retry: false });
   const f = form.data;
 
-  // Hardcoded: EVERY form requires a NEXUS login to submit — gate all forms behind sign-in.
+  // Who may send (owner, 25 Oct 2026): a public form without sign-in (isPublic, requireAuth false) takes anyone,
+  // no account; any other form needs one. Signed out on such a form, the questions show read-only and the button
+  // is "Sign in to send", which comes back here after signing in.
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const loggedIn = !!me.data?.user;
   const needsLogin = !me.isLoading && !loggedIn;
+  const openToAll = !!f && f.isPublic === true && f.requireAuth === false;
 
   // Schedule, one-off window or response cap: the backend answers 403 with `accessSchedule` + a message.
   const err = form.error as ApiError | undefined;
@@ -59,26 +62,12 @@ function PublicForm() {
         </div>
       )}
 
-      {f && !me.isLoading && needsLogin && (
-        <div className="@container">
-          <FormHead branding={f.branding}>
-            <h1 className="mt-4 font-display text-[28px] font-bold leading-tight tracking-tight @lg:text-[34px]">{f.name}</h1>
-            {f.description && <p className="mt-2 whitespace-pre-line text-[15px] text-muted-foreground">{f.description}</p>}
-            <div className="mt-8 rounded-xl border border-border bg-muted/30 p-6">
-              <p className="text-sm text-muted-foreground">{t("Sign in to NEXUS before you send this form, so you can follow it in My Submissions.")}</p>
-              <a href={loginUrl} className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99]">
-                <LogIn className="h-4 w-4" /> {t("Sign in to send")}
-              </a>
-            </div>
-          </FormHead>
-        </div>
-      )}
-
-      {f && loggedIn && (
+      {f && !me.isLoading && (
         <FormRenderer
           form={{ name: f.name, description: f.description, fields: (f.fields ?? []) as RichField[], branding: f.branding, settings: f.settings }}
           formKey={formId}
           me={me.data?.user}
+          signInUrl={needsLogin && !openToAll ? loginUrl : undefined}
         />
       )}
     </div>

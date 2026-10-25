@@ -24,10 +24,8 @@ const log = createLogger("notifications")
 
 const DEFAULT_PREFS = {
   emailEnabled: true,
-  slackEnabled: false,
   desktopEnabled: false,
   desktopSoundEnabled: true,
-  slackWebhook: null as string | null,
   taskAssigned: true,
   taskDueSoon: true,
   commentMention: true,
@@ -53,10 +51,8 @@ async function getUserPrefs(userId: string): Promise<NotifPrefs> {
   })
   return {
     emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
-    slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
     desktopEnabled: pref?.desktopEnabled ?? DEFAULT_PREFS.desktopEnabled,
     desktopSoundEnabled: pref?.desktopSoundEnabled ?? DEFAULT_PREFS.desktopSoundEnabled,
-    slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
     taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
     taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
     commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
@@ -88,11 +84,9 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
     const pref = prefs.find((p) => p.userId === userId)
     map.set(userId, {
       emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
-        slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
-      desktopEnabled: pref?.desktopEnabled ?? DEFAULT_PREFS.desktopEnabled,
+          desktopEnabled: pref?.desktopEnabled ?? DEFAULT_PREFS.desktopEnabled,
       desktopSoundEnabled: pref?.desktopSoundEnabled ?? DEFAULT_PREFS.desktopSoundEnabled,
-        slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
-      taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
+          taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
       taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
       commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
       projectInvite: pref?.projectInvite ?? DEFAULT_PREFS.projectInvite,
@@ -103,30 +97,8 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
   return map
 }
 
-/**
- * A user-supplied Slack webhook may only be Slack's own incoming-webhook host. Anything else would let a signed-in
- * user make the server POST to an address of their choosing (internal hosts included) whenever they are notified.
- */
-export function isSlackWebhookUrl(url: unknown): url is string {
-  return typeof url === "string" && /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]+$/.test(url)
-}
-
-async function sendSlack(webhookUrl: string, message: string) {
-  if (!isSlackWebhookUrl(webhookUrl)) {
-    log.warn("Slack webhook refused: not a hooks.slack.com URL")
-    return
-  }
-  try {
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: message }),
-    })
-    log.info("Slack message sent")
-  } catch (error) {
-    log.error("Slack delivery failed", { error: String(error) })
-  }
-}
+// Slack delivery was removed (owner, 25 Oct 2026): NotificationPreference.slackEnabled / slackWebhook stay in the
+// table for old rows but nothing reads them, and the server never sends to a user-supplied URL.
 
 /**
  * Write one notification row, then fan it out to the socket and (optionally) APNs.
@@ -568,14 +540,6 @@ export async function notifyTaskAssigned(data: {
     email.to = user.email
     await sendEmail(email)
   }
-
-  // Slack
-  if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(
-      prefs.slackWebhook,
-      `*Task Assigned*: ${data.assignedByName} assigned "${data.taskTitle}" to ${user.name}`
-    )
-  }
 }
 
 export async function notifyMention(data: {
@@ -626,13 +590,6 @@ export async function notifyMention(data: {
     })
     email.to = user.email
     await sendEmail(email)
-  }
-
-  if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(
-      prefs.slackWebhook,
-      `*Mentioned*: ${data.mentionedByName} mentioned ${user.name} on "${data.taskTitle}"`
-    )
   }
 }
 
@@ -736,11 +693,6 @@ export async function notifyFeedMention(data: {
     pushThreadId: FEED_THREAD_ID,
     pushImage: pushImageUrl(data.imageId, base),
   })
-
-  if (!prefs.commentMention) return
-  if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(prefs.slackWebhook, `*Threads*: ${data.mentionedByName} mentioned ${user.name} in a post`)
-  }
 }
 
 /**
@@ -760,7 +712,7 @@ export async function notifyFeedMention(data: {
  * Always delivered (owner, 9 Oct 2026: "post baru di threads selalu kasih notif ke semua orang di
  * workspace Z Networks dan gausah kasih switch mati"): neither the `commentMention` switch nor Do Not
  * Disturb holds this push back, and there is deliberately no "new posts" switch. Mentions, comments
- * and likes keep their preferences. No WhatsApp or Slack: a message per post per person would be spam.
+ * and likes keep their preferences. No WhatsApp: a message per post per person would be spam.
  */
 export async function notifyFeedPost(data: {
   postId: string
@@ -889,11 +841,6 @@ export async function notifyFeedComment(data: {
     push: prefs.commentMention,
     pushThreadId: `feed:${data.postId}`,
   })
-
-  if (!prefs.commentMention) return
-  if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(prefs.slackWebhook, `*Threads*: ${data.commenterName} commented`)
-  }
 }
 
 /// An announcement, delivered.
@@ -1004,7 +951,6 @@ export async function notifyDueSoon(data: {
     email.to = user.email
     await sendEmail(email)
   }
-
 }
 
 export async function notifyProjectInvite(data: {
@@ -1054,14 +1000,6 @@ export async function notifyProjectInvite(data: {
     })
     email.to = user.email
     await sendEmail(email)
-  }
-
-
-  if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(
-      prefs.slackWebhook,
-      `*Project Invite*: ${data.invitedByName} invited ${user.name} to "${data.projectName}"`
-    )
   }
 }
 

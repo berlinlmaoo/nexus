@@ -13,8 +13,6 @@ interface NotificationPrefsResponse {
   desktopEnabled?: boolean
   desktopSoundEnabled?: boolean
   emailEnabled?: boolean
-  slackEnabled?: boolean
-  slackWebhook?: string | null
   taskAssigned?: boolean
   taskDueSoon?: boolean
   commentMention?: boolean
@@ -95,10 +93,8 @@ export function DesktopNotificationPrompt() {
 
       const nextPrefs = {
         emailEnabled: prefs?.emailEnabled ?? true,
-        slackEnabled: prefs?.slackEnabled ?? false,
         desktopEnabled: true,
         desktopSoundEnabled: prefs?.desktopSoundEnabled ?? true,
-        slackWebhook: prefs?.slackWebhook ?? null,
         taskAssigned: prefs?.taskAssigned ?? true,
         taskDueSoon: prefs?.taskDueSoon ?? true,
         commentMention: prefs?.commentMention ?? true,

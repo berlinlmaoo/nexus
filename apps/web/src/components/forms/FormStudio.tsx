@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Copy, Download, ExternalLink, Eye, GitBranch, GripVertical, ImagePlus,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Copy, Download, ExternalLink, Eye, GitBranch, Globe, GripVertical, ImagePlus,
   Inbox, Laptop, Link2, Loader2, Lock, MoreHorizontal, Paperclip, Plus, Route as RouteIcon, Search, Settings2, Smartphone, SmilePlus, Trash2, User, Users, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +51,18 @@ type FormPeer = { userId: string; name: string; avatar: string | null; color: st
 const SETTABLE_FIELD_TYPES = ["SELECT", "MULTI_SELECT", "STATUS", "TEXT"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** Who can fill a form in: the two stored flags as the builder's three choices (owner, 25 Oct 2026). */
+type FormAccess = "open" | "signin" | "members";
+function accessOf(d: { isPublic?: boolean; requireAuth?: boolean }): FormAccess {
+  if (!d.isPublic) return "members";
+  return d.requireAuth === false ? "open" : "signin";
+}
+const ACCESS_CHOICES: { v: FormAccess; set: { isPublic: boolean; requireAuth: boolean }; icon: ReactNode; l: string; h: string }[] = [
+  { v: "open", set: { isPublic: true, requireAuth: false }, icon: <Globe className="h-4 w-4 shrink-0" />, l: "Anyone with the link", h: "No sign-in. People outside NEXUS can open and send it too." },
+  { v: "signin", set: { isPublic: true, requireAuth: true }, icon: <Link2 className="h-4 w-4 shrink-0" />, l: "Anyone in NEXUS", h: "Signed in with a NEXUS account, even outside this project." },
+  { v: "members", set: { isPublic: false, requireAuth: true }, icon: <Users className="h-4 w-4 shrink-0" />, l: "Project members only", h: "" },
+];
+
 function initialDraft(form: NexusForm | undefined, t: (s: string) => string): FormDraft {
   if (!form) {
     // A new form starts like Notion's: one question, and that one names the task.
@@ -71,7 +83,8 @@ function initialDraft(form: NexusForm | undefined, t: (s: string) => string): Fo
     // Loaded intact (showIf / routing / mapping survive a save); name ↔ label synced, legacy "select" → "dropdown".
     fields: (form.fields ?? []).map((f) => ({ ...f, type: f.type === "select" ? "dropdown" : f.type, name: f.name || f.label || "", label: f.label || f.name || "" })) as RichField[],
     isPublic: form.isPublic ?? false,
-    requireAuth: form.requireAuth ?? false,
+    // Not sent by an older server: treat it as "sign-in required", never as open to everyone.
+    requireAuth: form.requireAuth ?? true,
     accessSchedule: (form.accessSchedule as Record<string, unknown> | null) ?? null,
     branding: form.branding ?? null,
     settings: (form.settings as Record<string, unknown> | null) ?? null,
@@ -698,19 +711,24 @@ function SettingsTab({ draft, change, projectName, members, responseCount }: {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-6 @lg:px-6 @lg:py-10">
       <SettingsCard title={t("Who can fill it in")}>
-        <div className="grid gap-2 @lg:grid-cols-2">
-          {[
-            { v: true, icon: <Link2 className="h-4 w-4" />, l: t("Anyone with the link"), h: t("Anyone in NEXUS who has the link, even outside this project.") },
-            { v: false, icon: <Users className="h-4 w-4" />, l: t("Project members only"), h: t("Only members of {project} can open the link.", { project: projectName || t("this project") }) },
-          ].map((o) => (
-            <button key={String(o.v)} type="button" role="radio" aria-checked={draft.isPublic === o.v} onClick={() => change((d) => ({ ...d, isPublic: o.v }))}
-              className={cn("rounded-lg border p-3 text-left transition-colors", draft.isPublic === o.v ? "border-foreground/60 bg-muted/40" : "border-border hover:bg-muted/40")}>
-              <span className="flex items-center gap-2 text-sm font-semibold">{o.icon} {o.l}{draft.isPublic === o.v && <Check className="ml-auto h-4 w-4" />}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">{o.h}</span>
-            </button>
-          ))}
+        {/* Three choices (owner, 25 Oct 2026): no sign-in at all, any NEXUS account, or the project's members. */}
+        <div role="radiogroup" aria-label={t("Who can fill it in")} className="grid gap-2 @lg:grid-cols-3">
+          {ACCESS_CHOICES.map((o) => {
+            const on = accessOf(draft) === o.v;
+            return (
+              <button key={o.v} type="button" role="radio" aria-checked={on} onClick={() => change((d) => ({ ...d, ...o.set }))}
+                className={cn("rounded-lg border p-3 text-left transition-colors", on ? "border-foreground/60 bg-muted/40" : "border-border hover:bg-muted/40")}>
+                <span className="flex items-center gap-2 text-sm font-semibold">{o.icon} <span className="min-w-0">{t(o.l)}</span>{on && <Check className="ml-auto h-4 w-4 shrink-0" />}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{o.v === "members" ? t("Only members of {project} can open the link.", { project: projectName || t("this project") }) : t(o.h)}</span>
+              </button>
+            );
+          })}
         </div>
-        <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {t("People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions.")}</p>
+        <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+          {accessOf(draft) === "open"
+            ? <><Globe className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {t("Answers sent without an account have no name attached and don't show up in anyone's My Submissions. Ask for a name or email in a question if you need one.")}</>
+            : <><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {t("People sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions.")}</>}
+        </p>
       </SettingsCard>
 
       <SettingsCard title={t("When it's open")} hint={t("Times are in {tz}.", { tz: sched.timezone ?? "Asia/Jakarta" })}>
@@ -843,7 +861,7 @@ function QrCode({ text, size = 200 }: { text: string; size?: number }) {
   );
 }
 
-function ShareTab({ url, saved, isPublic, onGoSettings }: { url: string | null; saved: boolean; isPublic: boolean; onGoSettings: () => void }) {
+function ShareTab({ url, saved, access, onGoSettings }: { url: string | null; saved: boolean; access: FormAccess; onGoSettings: () => void }) {
   const { t } = useLang();
   const [copied, setCopied] = useState(false);
   if (!saved || !url) {
@@ -861,8 +879,8 @@ function ShareTab({ url, saved, isPublic, onGoSettings }: { url: string | null; 
           </div>
         </div>
         <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          {isPublic ? <Link2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
-          {isPublic ? t("Anyone in NEXUS with the link can fill it in.") : t("Only project members can open this link.")}
+          {access === "open" ? <Globe className="h-3.5 w-3.5" /> : access === "signin" ? <Link2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
+          {access === "open" ? t("Anyone with the link can fill it in, no sign-in needed.") : access === "signin" ? t("Anyone in NEXUS with the link can fill it in.") : t("Only project members can open this link.")}
           <button type="button" onClick={onGoSettings} className="font-semibold text-foreground underline-offset-2 hover:underline">{t("Change")}</button>
         </p>
       </SettingsCard>
@@ -1514,8 +1532,8 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                     className="mt-2 text-[15px] text-muted-foreground" />
                 </div>
                 <button type="button" onClick={(e) => { e.stopPropagation(); setTab("settings"); }} className="mt-5 flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted">
-                  {draft.isPublic ? <Link2 className="h-3.5 w-3.5 shrink-0" /> : <Users className="h-3.5 w-3.5 shrink-0" />}
-                  <span className="min-w-0 flex-1">{draft.isPublic ? t("Anyone in NEXUS with the link can fill this in, after signing in.") : t("Only members of this project can fill this in.")}</span>
+                  {accessOf(draft) === "open" ? <Globe className="h-3.5 w-3.5 shrink-0" /> : accessOf(draft) === "signin" ? <Link2 className="h-3.5 w-3.5 shrink-0" /> : <Users className="h-3.5 w-3.5 shrink-0" />}
+                  <span className="min-w-0 flex-1">{accessOf(draft) === "open" ? t("Anyone with the link can fill this in, no sign-in needed.") : accessOf(draft) === "signin" ? t("Anyone in NEXUS with the link can fill this in, after signing in.") : t("Only members of this project can fill this in.")}</span>
                   <span className="shrink-0 font-semibold text-foreground">{t("Change")}</span>
                 </button>
 
@@ -1592,7 +1610,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
       ) : (
         <div className="@container min-h-0 flex-1 overflow-y-auto bg-muted/20">
           {tab === "settings" && <SettingsTab draft={draft} change={change} projectName={projectName} members={members} responseCount={responseCount} />}
-          {tab === "share" && <ShareTab url={url} saved={!!meta.id} isPublic={draft.isPublic} onGoSettings={() => setTab("settings")} />}
+          {tab === "share" && <ShareTab url={url} saved={!!meta.id} access={accessOf(draft)} onGoSettings={() => setTab("settings")} />}
           {tab === "responses" && <ResponsesTab formId={meta.id} projectId={projectId} onTaskOpen={setTaskOpen} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
         </div>
       )}

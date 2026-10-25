@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import prisma from "@/lib/prisma"
-import { bi } from "@/lib/notification-text"
+import { bi, dayText } from "@/lib/notification-text"
 import { createInAppNotification, notifyBlockReminder } from "@/lib/notification-service"
 import { emitRemindersChanged } from "@/lib/socket-emitter"
 
@@ -21,7 +21,10 @@ import { emitRemindersChanged } from "@/lib/socket-emitter"
 export const PERSONAL = "personal"
 export { REMINDER_TEXT_MAX, REMINDER_OPEN_MAX, ReminderRefusal, parseRemindAt, checkReminder } from "./personal-reminders-core"
 import { REMINDER_OPEN_MAX, ReminderRefusal, checkReminder } from "./personal-reminders-core"
-/** A reminder more than a day late (the clock was off for a while) is closed without a notification. */
+/**
+ * A reminder more than a day late (the server was off for a while) is not sent as if it were on time: the person gets
+ * one "Missed reminder: … (was due …)" instead (owner, 25 Oct 2026; it used to be closed without a word).
+ */
 const LATE_LIMIT_MS = 24 * 60 * 60 * 1000
 
 export type ReminderView = { id: string; text: string; remindAt: string; firedAt: string | null; createdAt: string }
@@ -78,20 +81,65 @@ async function notifyPersonalReminder(r: { id: string; userId: string; text: str
   })
 }
 
+/** "Sat 24 Oct 09:00" / "Sab 24 Okt 09.00", WIB. */
+function dueText(d: Date, lang: "en" | "id"): string {
+  const day = dayText(d, lang, { weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "")
+  const time = d.toLocaleTimeString(lang === "id" ? "id-ID" : "en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false })
+  return `${day} ${time}`
+}
+
+/** The late one's notice: in-app + push, once per reminder (dedupeKey), with what it was and when it was due. */
+async function notifyMissedReminder(r: { id: string; userId: string; text: string; remindAt: Date }, title: string, target: { link: string; taskId?: string; projectId?: string | null }) {
+  const what = (title || r.text || "").slice(0, 120)
+  const detail = r.text && r.text !== title ? r.text.slice(0, 200) : ""
+  await createInAppNotification({
+    userId: r.userId,
+    type: "reminder_missed",
+    ...bi(
+      [`Missed reminder: ${what || "Untitled"}`, [`Was due ${dueText(r.remindAt, "en")}.`, detail].filter(Boolean).join(" ")],
+      [`Pengingat terlewat: ${what || "Tanpa judul"}`, [`Seharusnya ${dueText(r.remindAt, "id")}.`, detail].filter(Boolean).join(" ")],
+    ),
+    link: target.link,
+    taskId: target.taskId,
+    projectId: target.projectId ?? undefined,
+    push: true,
+    dedupeKey: `reminder-missed|${r.id}`,
+  })
+}
+
 /**
  * Send every reminder that is due: personal ones and the block editor's "Remind me" chips. Each is claimed first
  * (firedAt with a conditional update), so overlapping runs — the leader's minute tick and the cron route — never
  * send one twice.
  */
-export async function sendDueReminders(now: Date = new Date()): Promise<{ due: number; sent: number; skipped: number }> {
+export async function sendDueReminders(now: Date = new Date()): Promise<{ due: number; sent: number; skipped: number; missed: number }> {
   const due = await prisma.blockReminder.findMany({ where: { firedAt: null, remindAt: { lte: now } }, orderBy: { remindAt: "asc" }, take: 200 })
   let sent = 0
   let skipped = 0
+  let missedCount = 0
   for (const r of due) {
     const claimed = await prisma.blockReminder.updateMany({ where: { id: r.id, firedAt: null }, data: { firedAt: now } })
     if (claimed.count === 0) continue
-    if (now.getTime() - r.remindAt.getTime() > LATE_LIMIT_MS) { skipped++; continue }
+    const missed = now.getTime() - r.remindAt.getTime() > LATE_LIMIT_MS
     try {
+      if (missed) {
+        // Too late to go off as a reminder: tell the person it was missed, once.
+        if (r.sourceKind === PERSONAL) {
+          await notifyMissedReminder(r, r.text, { link: "/reminders" })
+          emitRemindersChanged(r.userId, r.id)
+        } else if (r.sourceKind === "doc") {
+          const doc = await prisma.doc.findUnique({ where: { id: r.sourceId }, select: { title: true, projectId: true } })
+          if (!doc) { skipped++; continue }
+          await notifyMissedReminder(r, doc.title || r.text, { link: `/docs/${r.sourceId}`, projectId: doc.projectId })
+        } else {
+          const task = await prisma.task.findUnique({ where: { id: r.sourceId }, select: { title: true, taskList: { select: { projectId: true } } } })
+          if (!task) { skipped++; continue }
+          const projectId = task.taskList.projectId
+          await notifyMissedReminder(r, task.title || r.text, { link: `/projects/${projectId}/tasks/${r.sourceId}`, taskId: r.sourceId, projectId })
+        }
+        missedCount++
+        continue
+      }
       if (r.sourceKind === PERSONAL) {
         await notifyPersonalReminder(r)
         emitRemindersChanged(r.userId, r.id)
@@ -107,12 +155,12 @@ export async function sendDueReminders(now: Date = new Date()): Promise<{ due: n
       }
       sent++
     } catch {
-      // Release the claim so the next tick tries again (until LATE_LIMIT_MS): without this a failed send left the
-      // reminder marked as gone off and the person was never told. The notification dedupeKey keeps a retry from
-      // sending it twice.
+      // Release the claim so the next tick tries again (past LATE_LIMIT_MS the retry sends the "missed" notice):
+      // without this a failed send left the reminder marked as gone off and the person was never told. The
+      // notification dedupeKey keeps a retry from sending it twice.
       await prisma.blockReminder.updateMany({ where: { id: r.id, firedAt: now }, data: { firedAt: null } }).catch(() => {})
       skipped++
     }
   }
-  return { due: due.length, sent, skipped }
+  return { due: due.length, sent, skipped, missed: missedCount }
 }

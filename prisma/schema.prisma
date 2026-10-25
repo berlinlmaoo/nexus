@@ -1811,6 +1811,10 @@ model Form {
   // When true, submitting requires a logged-in NEXUS account (any user, not just project
   // members) — the form page is still reachable, but submission is gated + submitterId is
   // always captured so the submitter can track their request under "Pengajuan Saya".
+  // When false on a public form (isPublic), anyone may send it without an account (25 Oct 2026).
+  // The column default stays false for the blue-green schema check; every create path sets it
+  // explicitly (POST /api/forms defaults to true) and prisma/sql/2026-10-25-forms-keep-login.sql
+  // moved the existing forms to true once.
   requireAuth Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2341,9 +2345,11 @@ model NotificationPreference {
   id                String   @id @default(uuid(7))
   emailEnabled      Boolean  @default(true)
   // waEnabled / waPhone: retired 12 Oct 2026 (WhatsApp channel); dropped by 2026-10-12-retire-wa-webhooks-DROP.sql.
+  /// Retired 25 Oct 2026 (Slack removed): kept so a running older build still finds it; nothing reads or sends it.
   slackEnabled      Boolean  @default(false)
   desktopEnabled    Boolean  @default(false)
   desktopSoundEnabled Boolean @default(true)
+  /// Retired 25 Oct 2026 (Slack removed): never read, returned or written; the server sends nothing to it.
   slackWebhook      String?
   taskAssigned      Boolean  @default(true)
   taskDueSoon       Boolean  @default(true)

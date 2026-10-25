@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Bell, Mail, Hash, Loader2, MonitorSpeaker, Volume2 } from "lucide-react"
+import { Bell, Mail, Loader2, MonitorSpeaker, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface NotifPrefs {
   emailEnabled: boolean
-  slackEnabled: boolean
   desktopEnabled: boolean
   desktopSoundEnabled: boolean
-  slackWebhook: string | null
   taskAssigned: boolean
   taskDueSoon: boolean
   commentMention: boolean
@@ -69,10 +65,8 @@ function ToggleRow({
 export function NotificationSettings() {
   const [prefs, setPrefs] = useState<NotifPrefs>({
     emailEnabled: true,
-    slackEnabled: false,
     desktopEnabled: false,
     desktopSoundEnabled: true,
-    slackWebhook: null,
     taskAssigned: true,
     taskDueSoon: true,
     commentMention: true,
@@ -177,25 +171,6 @@ export function NotificationSettings() {
             checked={prefs.emailEnabled}
             onChange={() => toggle("emailEnabled")}
           />
-          <Separator />
-          <ToggleRow
-            icon={<Hash className="h-4 w-4" />}
-            label="Slack Notifications"
-            description="Receive notifications via Slack webhook"
-            checked={prefs.slackEnabled}
-            onChange={() => toggle("slackEnabled")}
-          />
-          {prefs.slackEnabled && (
-            <div className="pl-8 space-y-1">
-              <Label htmlFor="slack-webhook" className="text-xs">Webhook URL</Label>
-              <Input
-                id="slack-webhook"
-                placeholder="https://hooks.slack.com/services/..."
-                value={prefs.slackWebhook || ""}
-                onChange={(e) => setPrefs((p) => ({ ...p, slackWebhook: e.target.value || null }))}
-              />
-            </div>
-          )}
           <Separator />
           <ToggleRow
             icon={<MonitorSpeaker className="h-4 w-4" />}

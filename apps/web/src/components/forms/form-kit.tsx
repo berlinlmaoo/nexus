@@ -78,7 +78,8 @@ export function FormCard({ form, projectName, onEdit }: { form: NexusForm; proje
         </button>
         <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
           <span>{tn(form._count?.submissions ?? 0, "{n} submission", "{n} submissions")} · {tn(form.fields?.length ?? 0, "{n} field", "{n} fields")}</span>
-          <span className={cn("rounded-full px-2 py-0.5 font-bold", form.isPublic ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>{form.isPublic ? t("Public") : t("Members")}</span>
+          {/* Public = no sign-in (owner, 25 Oct 2026); Sign-in = any NEXUS account with the link; Members = the project's. */}
+          <span className={cn("rounded-full px-2 py-0.5 font-bold", form.isPublic ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>{!form.isPublic ? t("Members") : form.requireAuth === false ? t("Public") : t("Sign-in")}</span>
         </div>
         <button onClick={copy} className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.98]">
           {copied ? <><Check className="h-3.5 w-3.5 text-success" /> {t("Copied")}</> : <><Copy className="h-3.5 w-3.5" /> {form.isPublic ? t("Copy public link") : t("Copy link")}</>}

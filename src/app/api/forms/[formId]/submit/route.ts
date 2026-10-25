@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { bi } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
-import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { checkRateLimit, checkRateLimitByKey, rateLimitResponse, trustedClientIp } from "@/lib/rate-limit"
 import {
   coerceCustomFieldValueForType,
   normalizeCustomFieldType,
@@ -69,6 +69,17 @@ interface IntakeFormField {
 const TASK_STATUSES = new Set(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"])
 const TASK_PRIORITIES = new Set(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"])
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
+// Public forms without sign-in (owner, 25 Oct 2026): anyone on the internet can send them, so a request without
+// a session is held to tighter limits than a signed-in one. No captcha (owner): rate limits + sizes instead.
+const ANON_MAX_REQUEST_BYTES = 25 * 1024 * 1024
+const ANON_MAX_FILE_SIZE = 10 * 1024 * 1024
+const ANON_MAX_FILES = 5
+const ANON_MAX_DATA_CHARS = 100_000
+/** Per address: 10 responses per 10 minutes, across every form (an office behind one address still fits). */
+const ANON_PER_IP = { limit: 10, windowSeconds: 600 }
+/** Per form: 60 responses per hour without an account, whatever the address. */
+const ANON_PER_FORM = { limit: 60, windowSeconds: 3600 }
+const GUEST_NAME = { en: "A guest", id: "Tamu" }
 const MAX_TITLE_LENGTH = 250
 
 // Same checks as the web form (components/forms/form-model.ts answerProblem): an email needs "@" and a
@@ -84,10 +95,10 @@ function looksLikeUrl(v: string) {
   }
 }
 
-/** A form file over MAX_ATTACHMENT_SIZE. Thrown from the parser, answered 413 by POST (it used to be a 500). */
+/** A form file over the size limit. Thrown from the parser, answered 413 by POST (it used to be a 500). */
 class FormFileTooLargeError extends Error {
-  constructor(fileName: string) {
-    super(`File "${fileName}" is too large. Maximum size is 50 MB.`)
+  constructor(fileName: string, readonly maxBytes: number = MAX_ATTACHMENT_SIZE) {
+    super(`File "${fileName}" is too large. Maximum size is ${Math.round(maxBytes / (1024 * 1024))} MB.`)
     this.name = "FormFileTooLargeError"
   }
 }
@@ -248,7 +259,7 @@ function buildTaskDescriptionFromFields(fields: IntakeFormField[], data: Record<
   return filledDescriptions.join("\n\n")
 }
 
-async function parseSubmissionRequest(request: NextRequest) {
+async function parseSubmissionRequest(request: NextRequest, maxFileSize: number = MAX_ATTACHMENT_SIZE) {
   const contentType = request.headers.get("content-type") ?? ""
 
   if (contentType.includes("multipart/form-data")) {
@@ -264,8 +275,8 @@ async function parseSubmissionRequest(request: NextRequest) {
       const isFieldFile = key.startsWith("file:")
       const isFieldAttachment = key.startsWith("attachment:")
       if ((!isFieldFile && !isFieldAttachment) || !(value instanceof File) || value.size === 0) continue
-      if (value.size > MAX_ATTACHMENT_SIZE) {
-        throw new FormFileTooLargeError(value.name)
+      if (value.size > maxFileSize) {
+        throw new FormFileTooLargeError(value.name, maxFileSize)
       }
       files.push({ fieldId: key.replace("file:", "").replace("attachment:", ""), file: value })
     }
@@ -321,7 +332,15 @@ export async function POST(
     if (!rateLimitAllowed) return rateLimitResponse(resetAt)
 
     const { formId } = await params
-    const { data, files } = await parseSubmissionRequest(request)
+    // No session: only a public form without sign-in will take it (checked below, once the form is loaded), and
+    // never a body bigger than such a response needs. Refused before the body is read.
+    if (!userId) {
+      const declared = Number(request.headers.get("content-length") ?? "")
+      if (!Number.isFinite(declared) || declared <= 0 || declared > ANON_MAX_REQUEST_BYTES) {
+        return NextResponse.json({ error: "This response is too large to send without signing in.", code: "PAYLOAD_TOO_LARGE", maxBytes: ANON_MAX_REQUEST_BYTES }, { status: 413 })
+      }
+    }
+    const { data, files } = await parseSubmissionRequest(request, userId ? MAX_ATTACHMENT_SIZE : ANON_MAX_FILE_SIZE)
     // One attempt = one response (web form, 12 Oct 2026): a repeat of the same key returns the first one.
     const rawKey = request.headers.get("idempotency-key")?.trim() ?? ""
     const idempotencyKey = /^[\w-]{8,100}$/.test(rawKey) ? rawKey : null
@@ -356,45 +375,56 @@ export async function POST(
 
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 })
 
+    // Who may send (owner, 25 Oct 2026; it was "every form needs a login" since June):
+    //  - isPublic + !requireAuth: anyone, no account. The response has no submitter (submitterId null).
+    //  - isPublic + requireAuth: any signed-in NEXUS account, project membership not needed.
+    //  - !isPublic: signed-in members of the form's project only.
+    const anonymous = !userId
+    if (anonymous && (!form.isPublic || form.requireAuth)) {
+      return NextResponse.json({ error: "Sign in to NEXUS to send this form.", code: "LOGIN_REQUIRED" }, { status: 401 })
+    }
+
+    // A response without an account answers with its ids only: the task row is the project's, not the sender's.
+    const anonymousReply = (submissionId: string, task: { id: string; title: string }, extra: Record<string, unknown> = {}) =>
+      ({ submission: { id: submissionId }, task: { id: task.id, title: task.title }, ...extra })
+
     const replay = async () => {
-      if (!idempotencyKey || !userId) return null
+      if (!idempotencyKey) return null
       const first = await prisma.formSubmission.findUnique({
         where: { formId_idempotencyKey: { formId: form.id, idempotencyKey } },
         include: { task: true },
       })
-      // Only the same sender's attempt counts as a repeat.
+      // Only the same sender's attempt counts as a repeat (no account: only an attempt that had none either).
       if (!first || first.submitterId !== userId) return null
       const { task, ...submission } = first
+      if (anonymous) return task ? NextResponse.json(anonymousReply(submission.id, task, { duplicate: true }), { status: 200 }) : null
       return NextResponse.json({ submission, task, duplicate: true }, { status: 200 })
     }
 
-    // Hardcoded policy: EVERY form submission requires a logged-in NEXUS account — no anonymous
-    // submissions. Guarantees the requester is always known (so "Request by" = the real submitter,
-    // never a LEAD fallback).
-    if (!userId) {
-      return NextResponse.json({ error: "Login NEXUS dulu buat ngajuin form ini.", code: "LOGIN_REQUIRED" }, { status: 401 })
-    }
-
-    if (!form.isPublic) {
-      if (!userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
+    if (userId && !form.isPublic) {
       const { allowed } = await checkProjectAccess(userId, form.projectId, ["MEMBER"])
       if (!allowed) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
     }
 
-    // requireAuth: even a public (link-shareable) form can require a logged-in NEXUS account
-    // to submit — ANY authenticated user, no project membership needed. submitterId is then
-    // always captured so the submitter can track their request under "Pengajuan Saya".
-    if (form.requireAuth && !userId) {
-      return NextResponse.json({ error: "Login NEXUS diperlukan untuk mengajukan form ini.", code: "LOGIN_REQUIRED" }, { status: 401 })
-    }
-
     const repeated = await replay()
     if (repeated) return repeated
+
+    if (anonymous) {
+      // The retry of an attempt that already went through was answered above and costs nothing here.
+      const ip = trustedClientIp(request)
+      const perIp = checkRateLimitByKey("form-anon-ip", ip, ANON_PER_IP)
+      if (!perIp.allowed) return rateLimitResponse(perIp.resetAt)
+      const perForm = checkRateLimitByKey("form-anon-form", form.id, ANON_PER_FORM)
+      if (!perForm.allowed) return rateLimitResponse(perForm.resetAt)
+      if (files.length > ANON_MAX_FILES) {
+        return NextResponse.json({ error: `Attach at most ${ANON_MAX_FILES} files.`, code: "TOO_MANY_FILES" }, { status: 400 })
+      }
+      if (JSON.stringify(data).length > ANON_MAX_DATA_CHARS) {
+        return NextResponse.json({ error: "These answers are too long.", code: "PAYLOAD_TOO_LARGE" }, { status: 413 })
+      }
+    }
 
     const accessStatus = getFormAccessStatus(form.accessSchedule)
     if (!accessStatus.allowed) {
@@ -421,16 +451,21 @@ export async function POST(
     }
 
     const fields = Array.isArray(form.fields) ? (form.fields as unknown as IntakeFormField[]) : []
-    const submitter = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
+    const submitter = userId ? await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }) : null
 
     // Autofill fields (e.g. "Request by") are set AUTHORITATIVELY from the logged-in submitter — never
-    // trust the client value (anti-spoof). All forms require login, so userId is present here.
+    // trust the client value (anti-spoof). Without an account there is nothing to fill them from: the
+    // sender types their name / email like any other answer (the web form shows them as plain inputs).
     const autofillFields = fields.filter((f) => f.autofill)
     if (autofillFields.length && userId) {
       for (const f of autofillFields) {
         data[f.id] = f.autofill === "email" ? (submitter?.email ?? "") : (submitter?.name ?? submitter?.email ?? "")
       }
     }
+    // The name a guest typed in a "name" question, for the task title and the notification.
+    const guestName = anonymous
+      ? normalizeText(autofillFields.filter((f) => f.autofill === "name").map((f) => getFieldValue(data, f)).find((v) => normalizeText(v))).slice(0, 80)
+      : ""
 
     const visibleFields = getVisibleFields(fields, data)
     const requiredMissing = visibleFields.find((field) => {
@@ -525,7 +560,7 @@ export async function POST(
 
     // No question fills the task title (a form built from scratch), or an optional one was left empty:
     // name the task after the form and the sender instead of refusing the response (it used to 400).
-    const submitterName = submitter?.name || submitter?.email || "Someone"
+    const submitterName = submitter?.name || submitter?.email || guestName || (anonymous ? GUEST_NAME.en : "Someone")
     const title = (normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "") || `${form.name} · ${submitterName}`).slice(0, MAX_TITLE_LENGTH)
 
     const descriptionFromField = buildTaskDescriptionFromFields(visibleFields, data)
@@ -656,7 +691,7 @@ export async function POST(
 
     const attachments = await createTaskAttachments(files, result.task.id, fallbackCreatorId)
 
-    logAudit({ action: "create", entityType: "formSubmission", entityId: result.submission.id, entityName: form.name, userId: fallbackCreatorId, request, metadata: { formId: form.id, taskId: result.task.id } })
+    logAudit({ action: "create", entityType: "formSubmission", entityId: result.submission.id, entityName: form.name, userId: fallbackCreatorId, request, metadata: { formId: form.id, taskId: result.task.id, ...(anonymous ? { anonymous: true } : {}) } })
 
     for (const attachment of attachments) {
       logAudit({
@@ -703,7 +738,7 @@ export async function POST(
         type: "form_submission",
         ...bi(
           [`New response: ${form.name}`, `${submitterName} sent "${result.task.title}"`],
-          [`Respons baru: ${form.name}`, `${submitterName} mengirim "${result.task.title}"`],
+          [`Respons baru: ${form.name}`, `${anonymous && !guestName ? GUEST_NAME.id : submitterName} mengirim "${result.task.title}"`],
         ),
         taskId: result.task.id,
         projectId: form.projectId,
@@ -712,11 +747,12 @@ export async function POST(
       }).catch(() => {})
     }
 
+    if (anonymous) return NextResponse.json(anonymousReply(result.submission.id, result.task), { status: 201 })
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     if (error instanceof FormFileTooLargeError) {
       return NextResponse.json(
-        { error: error.message, code: "FILE_TOO_LARGE", maxBytes: MAX_ATTACHMENT_SIZE },
+        { error: error.message, code: "FILE_TOO_LARGE", maxBytes: error.maxBytes },
         { status: 413 }
       )
     }

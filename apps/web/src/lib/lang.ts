@@ -91,6 +91,7 @@ import { ID_OCT22 } from "@/lib/i18n/id-oct22";
 import { ID_UI_A } from "@/lib/i18n/id-ui-a";
 import { ID_UI_B } from "@/lib/i18n/id-ui-b";
 import { ID_THREADS_UI } from "@/lib/i18n/id-threads-ui";
+import { ID_DEC25 } from "@/lib/i18n/id-dec25";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -128,6 +129,8 @@ Object.assign(ID, ID_THREADS_UI);
 // UI round 19 Oct 2026, web part D (Vault, Messages).
 Object.assign(ID, ID_UI_D);
 Object.assign(ID, ID_QA_DEC_B);
+// Public forms without sign-in (25 Oct 2026).
+Object.assign(ID, ID_DEC25);
 
 function read(): Lang {
   try {
