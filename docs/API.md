@@ -196,7 +196,6 @@ All endpoints are under `/api/`. Authentication is required unless noted otherwi
 | PUT | `/notifications/preferences` | Update notification preferences | Yes |
 | POST | `/notifications/due-check` | Trigger due-date check (cron) | Yes |
 | POST | `/notifications/email` | Send email notification | Yes |
-| POST | `/notifications/slack` | Send Slack webhook message | Yes |
 | POST | `/notifications/wa` | Send WhatsApp webhook message | Yes |
 
 ## Settings

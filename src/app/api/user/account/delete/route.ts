@@ -36,7 +36,7 @@ import {
  *  - rosters: workspace, team and project memberships (removing them cascades NOTHING — no model
  *    references those rows), and approver-chart edges that pointed at this person (so their staff
  *    fall back to BoD instead of waiting on someone who can never answer);
- *  - personal-only data: notification preferences (hold a Slack webhook), GIDEON chat
+ *  - personal-only data: notification preferences, GIDEON chat
  *    history and its uploaded files, the avatar file.
  *
  * What stays: attendance records/requests/corrections, tasks + assignments + comments, XP, streaks,

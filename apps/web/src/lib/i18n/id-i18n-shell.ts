@@ -77,8 +77,6 @@ export const ID_I18N_SHELL: Record<string, string> = {
   "Couldn't remove that passkey.": "Gagal menghapus passkey itu.",
   "Email notifications": "Notifikasi email",
   "Mentions, assignments and updates by email": "Mention, assign, dan update lewat email",
-  "Slack notifications": "Notifikasi Slack",
-  "Send important events to your Slack": "Kirim kejadian penting ke Slack kamu",
   "Desktop notifications": "Notifikasi desktop",
   "Browser and desktop notifications": "Notifikasi browser dan desktop",
   "Desktop sound": "Suara desktop",

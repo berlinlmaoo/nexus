@@ -4,7 +4,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { isSlackWebhookUrl } from "@/lib/notification-service"
+
+// Slack was removed (owner, 25 Oct 2026). The two columns stay in the table but are never read, returned or
+// written from a request: slackEnabled / slackWebhook in a body (an old web build) are ignored, and no reply
+// carries them. Nothing on the server sends to a user-supplied URL any more.
+const RETIRED_KEYS = new Set(["slackEnabled", "slackWebhook"])
+function withoutSlack<T extends object>(row: T): Omit<T, "slackEnabled" | "slackWebhook"> {
+  return Object.fromEntries(Object.entries(row).filter(([key]) => !RETIRED_KEYS.has(key))) as Omit<T, "slackEnabled" | "slackWebhook">
+}
 
 export async function GET() {
   try {
@@ -18,12 +25,10 @@ export async function GET() {
 
     // Return defaults if no preferences set. (The WhatsApp channel — waEnabled / waPhone — was removed
     // on 12 Oct 2026; no released app reads those keys.)
-    const preferences = pref || {
+    const preferences = pref ? withoutSlack(pref) : {
       emailEnabled: true,
-      slackEnabled: false,
       desktopEnabled: false,
       desktopSoundEnabled: true,
-      slackWebhook: null,
       taskAssigned: true,
       taskDueSoon: true,
       commentMention: true,
@@ -46,7 +51,8 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   try {
-    // waEnabled / waPhone from an old client are ignored: the WhatsApp channel was removed (12 Oct 2026).
+    // waEnabled / waPhone from an old client are ignored: the WhatsApp channel was removed (12 Oct 2026). So are
+    // slackEnabled / slackWebhook (Slack removed, 25 Oct 2026).
     const body = await req.json()
 
     const pref = await prisma.notificationPreference.upsert({
@@ -54,10 +60,8 @@ export async function PUT(req: NextRequest) {
       create: {
         userId: session.user.id,
         emailEnabled: body.emailEnabled ?? true,
-        slackEnabled: body.slackEnabled ?? false,
         desktopEnabled: body.desktopEnabled ?? false,
         desktopSoundEnabled: body.desktopSoundEnabled ?? true,
-        slackWebhook: isSlackWebhookUrl(body.slackWebhook) ? body.slackWebhook : null,
         taskAssigned: body.taskAssigned ?? true,
         taskDueSoon: body.taskDueSoon ?? true,
         commentMention: body.commentMention ?? true,
@@ -67,10 +71,8 @@ export async function PUT(req: NextRequest) {
       },
       update: {
         emailEnabled: body.emailEnabled,
-        slackEnabled: body.slackEnabled,
         desktopEnabled: body.desktopEnabled,
         desktopSoundEnabled: body.desktopSoundEnabled,
-        slackWebhook: body.slackWebhook === null || body.slackWebhook === "" ? null : isSlackWebhookUrl(body.slackWebhook) ? body.slackWebhook : undefined,
         taskAssigned: body.taskAssigned,
         taskDueSoon: body.taskDueSoon,
         commentMention: body.commentMention,
@@ -83,7 +85,7 @@ export async function PUT(req: NextRequest) {
 
     logAudit({ action: "update", entityType: "notificationPreference", entityId: pref.id, userId: session.user.id, request: req })
 
-    return NextResponse.json(pref)
+    return NextResponse.json(withoutSlack(pref))
   } catch (error) {
     console.error("Preferences API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -97,7 +99,6 @@ export async function PUT(req: NextRequest) {
 // when the row is created here for the first time).
 const PATCHABLE_BOOLEANS = [
   "emailEnabled",
-  "slackEnabled",
   "desktopEnabled",
   "desktopSoundEnabled",
   "taskAssigned",
@@ -108,9 +109,7 @@ const PATCHABLE_BOOLEANS = [
   "automation",
 ] as const
 
-type PreferencePatch = Partial<Record<(typeof PATCHABLE_BOOLEANS)[number], boolean>> & {
-  slackWebhook?: string | null
-}
+type PreferencePatch = Partial<Record<(typeof PATCHABLE_BOOLEANS)[number], boolean>>
 
 export async function PATCH(req: NextRequest) {
   const session = await auth()
@@ -136,17 +135,16 @@ export async function PATCH(req: NextRequest) {
     data[key] = value
   }
 
-  if (input.slackWebhook !== undefined) {
-    const raw = input.slackWebhook
-    if (raw !== null && typeof raw !== "string")
-      return NextResponse.json({ error: "slackWebhook must be a string or null" }, { status: 400 })
-    if (raw && !isSlackWebhookUrl(raw))
-      return NextResponse.json({ error: "slackWebhook must be a https://hooks.slack.com/services/… URL" }, { status: 400 })
-    data.slackWebhook = raw || null
-  }
-
-  if (Object.keys(data).length === 0)
+  if (Object.keys(data).length === 0) {
+    // Only retired keys (slackEnabled / slackWebhook from an old web build): nothing to change, answer with the
+    // stored preferences instead of an error so that build keeps working.
+    if (input.slackEnabled !== undefined || input.slackWebhook !== undefined) {
+      const current = await prisma.notificationPreference.findUnique({ where: { userId: session.user.id } })
+      const shown = current ? withoutSlack(current) : {}
+      return NextResponse.json({ ...shown, preferences: shown })
+    }
     return NextResponse.json({ error: "No preference fields to update" }, { status: 400 })
+  }
 
   try {
     const pref = await prisma.notificationPreference.upsert({
@@ -165,7 +163,8 @@ export async function PATCH(req: NextRequest) {
     })
 
     // PUT's flat shape, plus `preferences` like GET.
-    return NextResponse.json({ ...pref, preferences: pref })
+    const shown = withoutSlack(pref)
+    return NextResponse.json({ ...shown, preferences: shown })
   } catch (error) {
     console.error("Preferences API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

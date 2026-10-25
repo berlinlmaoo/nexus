@@ -676,11 +676,9 @@ function NotificationsSection() {
   const p = prefs.data?.preferences;
   const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }), onError: (e) => { toastFailure(t("Couldn't save that setting"), e); void qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }); } });
   const { t } = useLang();
-  const toggles: Array<{ key: "emailEnabled" | "slackEnabled" | "desktopEnabled" | "desktopSoundEnabled" | "automation"; label: string; desc: string; defaultOn?: boolean }> = [
+  // Slack was removed and the two desktop toggles hidden (never wired in this web app) on 25 Oct 2026.
+  const toggles: Array<{ key: "emailEnabled" | "automation"; label: string; desc: string; defaultOn?: boolean }> = [
     { key: "emailEnabled", label: t("Email notifications"), desc: t("Mentions, assignments and updates by email") },
-    { key: "slackEnabled", label: t("Slack notifications"), desc: t("Send important events to your Slack") },
-    { key: "desktopEnabled", label: t("Desktop notifications"), desc: t("Browser and desktop notifications") },
-    { key: "desktopSoundEnabled", label: t("Desktop sound"), desc: t("Play a sound with desktop notifications") },
     { key: "automation", label: t("Automation notifications"), desc: t("Push when a project automation notifies you. Off: they still land in your inbox, silently."), defaultOn: true },
   ];
   return (
