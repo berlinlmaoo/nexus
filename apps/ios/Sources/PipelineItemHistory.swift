@@ -55,7 +55,10 @@ enum PipelineItemHistory {
         switch value {
         case .null: return T("empty")
         case .string(let string): return string.isEmpty ? T("empty") : string
-        case .number(let number): return number.rounded() == number ? String(format: "%.0f", number) : String(number)
+        case .number(let number):
+            return number.rounded() == number
+                ? String(format: "%.0f", number)
+                : number.formatted(.number.precision(.fractionLength(0...6)).grouping(.never).locale(AppDateLocale.current))
         case .bool(let flag): return flag ? "✓" : "–"
         case .array, .object: return "–"
         }

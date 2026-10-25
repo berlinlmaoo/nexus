@@ -134,9 +134,10 @@ struct AutomationsTab: View {
             Spacer(minLength: 6)
             if canEdit {
                 Button { sheet = .new } label: {
+                    // Near-black like every other primary button (owner decision, 25 Oct 2026: no violet fills).
                     Label(T("New automation"), systemImage: "plus").font(NXFont.text(13, .semibold))
-                        .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(NX.violet, in: Capsule())
+                        .foregroundStyle(NX.background).padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(NX.onyx, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -353,12 +354,12 @@ struct AutomationSheet: View {
                 Spacer(minLength: 0)
                 Button { Task { await runNow(a) } } label: {
                     HStack(spacing: 6) {
-                        if running { ProgressView().tint(.white).scaleEffect(0.8) } else { Image(systemName: "play.fill") }
+                        if running { ProgressView().tint(NX.background).scaleEffect(0.8) } else { Image(systemName: "play.fill") }
                         Text(T("Run now"))
                     }
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(.white)
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.background)
                     .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(NX.violet, in: Capsule())
+                    .background(NX.onyx, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(running)

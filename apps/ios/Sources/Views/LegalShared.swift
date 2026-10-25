@@ -131,7 +131,7 @@ enum LegalLabels {
     static func bytes(_ n: Int) -> String {
         if n < 1024 { return "\(n) B" }
         if n < 1024 * 1024 { return "\(Int((Double(n) / 1024).rounded())) KB" }
-        return String(format: "%.1f MB", Double(n) / 1024 / 1024)
+        return AppNumber.decimal(Double(n) / 1024 / 1024) + " MB"
     }
 
     /// "2026-09-30" → "30 Sep 2026" in the interface language.

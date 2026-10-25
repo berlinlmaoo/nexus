@@ -12,7 +12,9 @@ func jsonOrNull(_ value: Any?) -> Any { value ?? NSNull() }
 func nxBytes(_ b: Int) -> String {
     let units = ["B", "KB", "MB", "GB"]; var v = Double(b); var i = 0
     while v >= 1024 && i < units.count - 1 { v /= 1024; i += 1 }
-    return String(format: i == 0 ? "%.0f %@" : "%.1f %@", v, units[i])
+    // The decimal mark of the UI language: "140.2 MB" in English, "140,2 MB" in Indonesian (owner decision,
+    // 25 Oct 2026). String(format:) always wrote a point.
+    return i == 0 ? "\(Int(v)) \(units[i])" : AppNumber.decimal(v) + " " + units[i]
 }
 import UIKit
 
@@ -1313,6 +1315,19 @@ struct APIClient {
     func feedPosts(limit: Int = 30, mentionsMe: Bool = false) async throws -> [FeedPost] {
         let path = "/api/feed/posts?limit=\(limit)" + (mentionsMe ? "&mentions=me" : "")
         return (try await run(makeRequest(path), decode: FeedPostsResponse.self)).all
+    }
+    /// GET /api/feed/posts/[id]: one post shaped like a feed row, for a post page opened from a
+    /// notification or a link (it may be far down the feed). 410 when it was deleted.
+    func feedPost(_ postId: String) async throws -> FeedPost {
+        try await run(makeRequest("/api/feed/posts/\(postId)"), decode: FeedPost.self)
+    }
+    /// PATCH /api/feed/posts/[id] {text, mentions}: author only, within 15 minutes (the route says so
+    /// otherwise). Answers the updated post; photos cannot change.
+    func editPost(_ postId: String, text: String, mentions: [String]) async throws -> FeedPost {
+        var req = makeRequest("/api/feed/posts/\(postId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": mentions] as [String: Any])
+        return try await run(req, decode: FeedPost.self)
     }
     func postComments(_ postId: String) async throws -> [FeedComment] {
         (try await run(makeRequest("/api/feed/posts/\(postId)/comments"), decode: FeedCommentsResponse.self)).all

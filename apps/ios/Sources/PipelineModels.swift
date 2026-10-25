@@ -1104,18 +1104,20 @@ enum PipelineFormat {
         return f.string(from: NSNumber(value: v)) ?? String(Int(v))
     }
 
-    /// Compact: Rp 950Jt / Rp 1,2M (Indonesian) or Rp 950M / Rp 1.2B (English) — the GM's fmtIDR.
+    /// Compact, for narrow cards, tiles and columns: "Rp 963 jt" / "Rp 1,3 M" / "Rp 250 rb" (Indonesian) or
+    /// "Rp 963 M" / "Rp 1.3 B" / "Rp 250 K" (English), a space before the unit (owner decision, 25 Oct 2026).
+    /// Everywhere with room the full amount stays: `idrFull`, "Rp 6.000.000".
     static func idr(_ n: Double?) -> String {
         guard let n, n.isFinite else { return "–" }
         let abs = Swift.abs(n)
-        let suffix = isID ? ("M", "Jt", "Rb") : ("B", "M", "K")
+        let suffix = isID ? ("M", "jt", "rb") : ("B", "M", "K")
         var v = abs
         var s = ""
         if abs >= 1e9 { v = abs / 1e9; s = suffix.0 }
         else if abs >= 1e6 { v = abs / 1e6; s = suffix.1 }
         else if abs >= 1e3 { v = abs / 1e3; s = suffix.2 }
         let digits = (!s.isEmpty && v < 10) ? 1 : 0
-        return "\(n < 0 ? "\u{2212}" : "")Rp \(number(v, digits: digits))\(s)"
+        return "\(n < 0 ? "\u{2212}" : "")Rp \(number(v, digits: digits))\(s.isEmpty ? "" : " " + s)"
     }
 
     /// Full: Rp 950.000.000.

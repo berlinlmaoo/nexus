@@ -56,7 +56,7 @@ struct MeetingProgressPanel: View {
             }
             // The accent, as "Apply" in the review: one main action colour across meeting notes (Q-3, Berlin 20 Oct).
             VStack(spacing: 10) {
-                Button(action: onOpen) { Text(T("Open meeting")).frame(maxWidth: .infinity) }.buttonStyle(.nxAccent).accessibilityIdentifier("meetings.progress.open")
+                Button(action: onOpen) { Text(T("Open meeting")).frame(maxWidth: .infinity) }.buttonStyle(.nxPrimary).accessibilityIdentifier("meetings.progress.open")
                 Button(action: onDone) { Text(T("Done")).frame(maxWidth: .infinity) }.buttonStyle(.nxBordered).accessibilityIdentifier("meetings.progress.done")
             }
         }

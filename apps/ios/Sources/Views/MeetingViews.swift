@@ -172,7 +172,7 @@ struct MeetingDetailView: View {
                 HStack(spacing: 12) {
                     Text(meeting.selectedTasks.isEmpty ? T("Save the minutes (no tasks picked)") : meeting.selectedTasks.count == 1 ? T("Save the minutes and create 1 task") : String(format: T("Save the minutes and create %@ tasks"), AppNumber.int(meeting.selectedTasks.count))).font(NXFont.text(12))
                     Spacer()
-                    Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxAccent).disabled(!meeting.canApplyDraft || store.busy)
+                    Button(T("Apply")) { Task { await store.apply() } }.buttonStyle(.nxPrimary).disabled(!meeting.canApplyDraft || store.busy)
                         .accessibilityIdentifier("meetings.apply")
                 }.padding(16).background(NX.card).overlay(alignment: .top) { Divider() }
             }

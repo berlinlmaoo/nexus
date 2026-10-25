@@ -621,7 +621,7 @@ struct AttendanceView: View {
         return n.inside ? NX.success : NX.warning
     }
     private static func distanceLabel(_ metres: Double) -> String {
-        metres < 1000 ? "\(Int(metres.rounded())) m" : String(format: "%.1f km", metres / 1000)
+        metres < 1000 ? "\(Int(metres.rounded())) m" : AppNumber.decimal(metres / 1000) + " km"
     }
 
     /// Which office the person is standing in, if any. Only asked before a check-in, because after
