@@ -685,6 +685,8 @@ export async function POST(
       if (idempotencyKey && (error as { code?: string })?.code === "P2002") {
         const repeat = await replay()
         if (repeat) return repeat
+        // The key belongs to another sender's response (another account, or a guest): answer 409, never a 500.
+        return NextResponse.json({ error: "This attempt key was already used. Send again to make a new response.", code: "IDEMPOTENCY_KEY_IN_USE" }, { status: 409 })
       }
       throw error
     }
