@@ -1905,6 +1905,9 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
   useTouchDrag();
+  // A list narrower than its columns scrolls sideways (listRowMinWidth); the cut edge fades so it reads as "more".
+  const listScroll = useRef<HTMLDivElement>(null);
+  const listFade = useEdgeFade(listScroll, [keys.join(), groups.length], true);
   const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null) => (
     <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => (
       <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
@@ -1927,10 +1930,10 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       </button>
     ));
   if (!groupBy) {
-    return <div data-touch-drag-root="" className="nx-gx py-3 sm:overflow-x-auto">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
+    return <div ref={listScroll} data-touch-drag-root="" className={cn("nx-gx py-3 sm:overflow-x-auto", listFade)}>{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
-    <div data-touch-drag-root="" className="space-y-5 nx-gx py-3 sm:overflow-x-auto">
+    <div ref={listScroll} data-touch-drag-root="" className={cn("space-y-5 nx-gx py-3 sm:overflow-x-auto", listFade)}>
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
