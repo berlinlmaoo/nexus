@@ -17,9 +17,11 @@ function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjs) {
     pdfjs = Promise.all([
       import("pdfjs-dist/legacy/build/pdf.mjs"),
-      import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
+      // Bundled by Vite as a classic worker with a .js name: nginx serves the package's own .mjs file as
+      // application/octet-stream, which a module worker refuses (the preview stayed "could not be drawn").
+      import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker"),
     ]).then(([lib, worker]) => {
-      lib.GlobalWorkerOptions.workerSrc = worker.default;
+      lib.GlobalWorkerOptions.workerPort = new worker.default();
       return lib;
     }).catch((e) => {
       pdfjs = null; // a failed chunk load may succeed on the next try
