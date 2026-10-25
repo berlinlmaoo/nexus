@@ -58,12 +58,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (post.authorId !== me && !isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // Already a soft delete; the copy of the flag lets Control Room → Audit undo it.
-    await restorableSoftDelete({
+    const { changed } = await restorableSoftDelete({
       entityType: "post", entityId: id, entityName: auditSnippet(post.text) ?? "Post", workspaceId: null,
       userId: me, request, metadata: { moderation: post.authorId !== me, authorId: post.authorId },
       meta: { open: { type: "post", id } },
-      apply: (tx) => tx.post.update({ where: { id }, data: { deletedAt: new Date() } }),
+      // Only a post that is still there: two deletes at once (double tap, author + BoD) make one change and one Audit row.
+      apply: (tx) => tx.post.updateMany({ where: { id, deletedAt: null }, data: { deletedAt: new Date() } }),
     })
+    if (!changed) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting post:", error)
