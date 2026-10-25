@@ -45,7 +45,7 @@ function fmt(iso: string, L: LangApi) {
 }
 function dur(ms: number | null) {
   if (ms == null) return "—";
-  return ms < 1000 ? `${ms} ms` : ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 60_000)} min`;
+  return ms < 1000 ? `${ms} ms` : ms < 60_000 ? `${formatCount(ms / 1000, 1)} s` : `${Math.round(ms / 60_000)} min`;
 }
 
 export function GideonInsights() {

@@ -14,7 +14,7 @@ function monthShort(index: number): string {
   return new Date(Date.UTC(2000, index, 1)).toLocaleDateString(localeOf(), { month: "short", timeZone: "UTC" });
 }
 
-/** 2 → "2", 2.5 → "2,5", 2.04 → "2", 1020 → "1.020", null → "—" (Indonesian grouping in both languages). */
+/** 2 → "2", 2.5 → "2,5" ("2.5" in English), 2.04 → "2", 1020 → "1.020", null → "—" (dot grouping in both languages). */
 export function fmtNum(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const r = Math.round(n * 10) / 10;
@@ -37,7 +37,7 @@ export function fmtRatio(r: ReportRatio | null | undefined): string {
   return `${fmtNum(r.num)}/${fmtNum(r.den)}`;
 }
 
-/** Minutes as hours with one decimal, like iOS: 492 → "8.2 h", null → "—". */
+/** Minutes as hours with one decimal, like iOS: 492 → "8,2 h" ("8.2 h" in English), null → "—". */
 export function fmtHours(minutes: number | null | undefined): string {
   if (minutes == null || !Number.isFinite(minutes)) return "—";
   return t("{n} h", { n: fmtNum(minutes / 60) });

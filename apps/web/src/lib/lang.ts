@@ -92,6 +92,8 @@ import { ID_UI_A } from "@/lib/i18n/id-ui-a";
 import { ID_UI_B } from "@/lib/i18n/id-ui-b";
 import { ID_THREADS_UI } from "@/lib/i18n/id-threads-ui";
 import { ID_DEC25 } from "@/lib/i18n/id-dec25";
+import { setNumberLang } from "@/lib/number-format";
+import { ID_DEC25_B } from "@/lib/i18n/id-dec25-b";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -131,6 +133,8 @@ Object.assign(ID, ID_UI_D);
 Object.assign(ID, ID_QA_DEC_B);
 // Public forms without sign-in (25 Oct 2026).
 Object.assign(ID, ID_DEC25);
+// Visual QA follow-ups (25 Oct 2026).
+Object.assign(ID, ID_DEC25_B);
 
 function read(): Lang {
   try {
@@ -151,6 +155,8 @@ function read(): Lang {
 }
 
 let current: Lang = typeof window === "undefined" ? "id" : read();
+// Decimal marks follow the interface language ("11,9" / "11.9").
+setNumberLang(current);
 // <html lang> stays as index.html sets it ("en"): most screens are not translated yet. A translated
 // screen sets lang={lang} on its own root (Calendar, Bagan) and calls useDocumentLang(lang) while it is
 // mounted, so popovers, drawers, tooltips and dialogs (portaled to <body>, outside that root) are read
@@ -162,6 +168,7 @@ export function getLang(): Lang {
 
 export function setLang(l: Lang) {
   current = l;
+  setNumberLang(l);
   try { localStorage.setItem(KEY, l); } catch { /* ignore */ }
   listeners.forEach((f) => f());
   // A chosen language: notifications and pushes follow it (server User.uiLanguage, 13 Oct 2026).

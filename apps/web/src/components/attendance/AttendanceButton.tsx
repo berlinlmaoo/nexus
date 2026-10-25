@@ -5,6 +5,7 @@ import type { NexusOffice } from "@/lib/nexus-api";
 import type { GeoFix } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import { t, useLang } from "@/lib/lang";
+import { formatCount } from "@/lib/number-format";
 
 /**
  * The one attendance button (owner request, 28 Sep 2026). It replaces PRESENCE IN / PRESENCE OUT side
@@ -68,7 +69,7 @@ export function buzz(pattern: number | number[]) {
 }
 function tick() { buzz(8); }
 
-function distanceLabel(m: number) { return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`; }
+function distanceLabel(m: number) { return m < 1000 ? `${Math.round(m)} m` : `${formatCount(m / 1000, 1)} km`; }
 function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371000, rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;

@@ -1,5 +1,6 @@
 import { t } from "@/lib/lang";
 import type { FieldType, LegalDocType } from "@/lib/legal-api";
+import { formatCount } from "@/lib/number-format";
 
 /** Document types as people call them. The codes (SPK, PKS, …) are what the numbers print. */
 export function docTypeLabel(type: string): string {
@@ -40,7 +41,7 @@ export const SCALAR_FIELD_TYPES: FieldType[] = ["text", "longtext", "date", "num
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${formatCount(n / 1024 / 1024, 1)} MB`;
 }
 
 export function statusLabel(status: string): string {

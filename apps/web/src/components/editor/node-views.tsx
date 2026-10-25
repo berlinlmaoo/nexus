@@ -8,13 +8,14 @@ import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { ctxOf, jakartaDate } from "./editor-context";
 import { EmojiGrid } from "./EmojiPicker";
+import { formatCount } from "@/lib/number-format";
 
 /** Size in KB / MB for a file card. */
 function fmtSize(n: unknown): string {
   const b = typeof n === "number" ? n : Number(n);
   if (!b || Number.isNaN(b)) return "";
   if (b < 1024 * 1024) return `${Math.max(1, Math.round(b / 1024))} KB`;
-  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${formatCount(b / 1024 / 1024, 1)} MB`;
 }
 
 const SAFE_URL = /^(https?:\/\/|\/(?!\/))/i;
