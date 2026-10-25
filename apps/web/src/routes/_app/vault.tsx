@@ -34,6 +34,7 @@ import { VAULT_ITEM_MIME, canMoveInto, dragKind, dropKey, filesOfDrop, type Drag
 import { vaultUploads } from "@/lib/vault-uploads";
 import { failureList, runBulk, type BulkResult } from "@/lib/vault-bulk";
 import { LoadError, retryTransient } from "@/components/LoadError";
+import { PdfPreview } from "@/components/PdfFirstPage";
 
 /**
  * The vault's address (9 Oct 2026): `?folder=<id>` is the folder on screen, so refresh, Back and a
@@ -1398,10 +1399,10 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
             ) : mime.startsWith("audio/") ? (
               <audio src={item.url ?? ""} controls className="w-full p-4" />
             ) : isPdf(item) ? (
-              <iframe src={item.url ?? ""} title={item.name} className="w-full h-[65vh]" />
+              <PdfPreview src={item.url ?? ""} title={item.name} frameClassName="w-full h-[65vh]" pageClassName="rounded-none border-0" />
             ) : item.previewUrl && !officeFailed && !office.isError ? (
               office.isSuccess ? (
-                <iframe src={item.previewUrl} title={item.name} className="w-full h-[65vh] bg-white" onError={() => setOfficeFailed(true)} />
+                <PdfPreview src={item.previewUrl} title={item.name} frameClassName="w-full h-[65vh] bg-white" pageClassName="rounded-none border-0" />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />

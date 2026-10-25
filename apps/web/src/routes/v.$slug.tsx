@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { setLang, useDocumentLang, useLang } from "@/lib/lang";
 import { ApiError, nexusApi, type VaultItem, type VaultPublicFile, type VaultPublicItem } from "@/lib/nexus-api";
 import { fillsTile, humanSize, isPdf, mediaKind } from "@/lib/vault-media";
+import { PdfPreview } from "@/components/PdfFirstPage";
 
 // Two routes, one component, one API. `/v/*` is claimed in the AASA and opens the iOS/Mac app when
 // one is installed; `/s/*` is deliberately not claimed, so an external link handed to a client always
@@ -250,7 +251,7 @@ function FilePreview({ item }: { item: VaultPublicItem }) {
     return (
       <div className="space-y-2">
         {/* An iframe shows only the first page on iPhone Safari; the button opens the PDF itself. */}
-        <iframe src={src} title={item.name} className="h-[70vh] w-full rounded-xl border border-border bg-muted/30" />
+        <PdfPreview src={src} title={item.name} frameClassName="h-[70vh] w-full rounded-xl border border-border bg-muted/30" pageClassName="rounded-xl" />
         <div className="flex justify-center">
           <Button variant="outline" size="sm" asChild>
             <a href={src} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> {t("Open PDF")}</a>
