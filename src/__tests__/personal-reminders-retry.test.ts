@@ -47,18 +47,38 @@ describe('sendDueReminders retry', () => {
   it('a failed send is released and goes out on the next tick', async () => {
     w.failNext = 1
     const first = await sendDueReminders(new Date('2026-10-25T02:00:30Z'))
-    expect(first).toEqual({ due: 2, sent: 1, skipped: 1 })
+    expect(first).toEqual({ due: 2, sent: 1, skipped: 1, missed: 0 })
     expect(w.rows.find((r) => r.id === 'r1').firedAt).toBeNull()
     expect(w.chips[0]).toMatchObject({ dedupeKey: 'block-reminder|r2' })
     const second = await sendDueReminders(new Date('2026-10-25T02:01:30Z'))
-    expect(second).toEqual({ due: 1, sent: 1, skipped: 0 })
+    expect(second).toEqual({ due: 1, sent: 1, skipped: 0, missed: 0 })
     expect(w.sent[0]).toMatchObject({ type: 'reminder', dedupeKey: 'reminder|r1' })
     expect(w.rows.every((r) => r.firedAt !== null)).toBe(true)
   })
 
-  it('more than a day late is still closed without a notification', async () => {
+  it('more than a day late sends one "missed" notification instead (25 Oct 2026)', async () => {
     const res = await sendDueReminders(new Date('2026-10-26T03:00:00Z'))
-    expect(res).toEqual({ due: 2, sent: 0, skipped: 2 })
-    expect(w.sent.length + w.chips.length).toBe(0)
+    expect(res).toEqual({ due: 2, sent: 0, skipped: 0, missed: 2 })
+    expect(w.chips.length).toBe(0)
+    expect(w.sent).toHaveLength(2)
+    // 02:00 UTC = 09:00 WIB, Sunday 25 Oct 2026.
+    expect(w.sent[0]).toMatchObject({ type: 'reminder_missed', push: true, link: '/reminders', dedupeKey: 'reminder-missed|r1', title: 'Missed reminder: call vendor' })
+    expect(w.sent[0].message).toBe('Was due Sun 25 Oct 09:00.')
+    expect(w.sent[0].texts.id).toEqual({ title: 'Pengingat terlewat: call vendor', message: 'Seharusnya Min 25 Okt 09.00.' })
+    expect(w.sent[1]).toMatchObject({ type: 'reminder_missed', dedupeKey: 'reminder-missed|r2', title: 'Missed reminder: Task', taskId: 't1', projectId: 'p1', link: '/projects/p1/tasks/t1' })
+    expect(w.sent[1].message).toBe('Was due Sun 25 Oct 09:00. check')
+    expect(w.rows.every((r) => r.firedAt !== null)).toBe(true)
+    // Claimed: a later tick sends nothing more.
+    const again = await sendDueReminders(new Date('2026-10-26T03:01:00Z'))
+    expect(again).toEqual({ due: 0, sent: 0, skipped: 0, missed: 0 })
+  })
+
+  it('a failed "missed" send is released and retried, still as missed', async () => {
+    w.failNext = 1
+    const first = await sendDueReminders(new Date('2026-10-26T03:00:00Z'))
+    expect(first).toEqual({ due: 2, sent: 0, skipped: 1, missed: 1 })
+    const second = await sendDueReminders(new Date('2026-10-26T03:01:00Z'))
+    expect(second).toEqual({ due: 1, sent: 0, skipped: 0, missed: 1 })
+    expect(w.sent.map((n: any) => n.dedupeKey).sort()).toEqual(['reminder-missed|r1', 'reminder-missed|r2'])
   })
 })
