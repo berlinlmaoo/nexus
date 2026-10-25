@@ -2009,7 +2009,7 @@ export type NexusStatusUpdate = {
 
 /** GET /api/app/android/release — the sideloaded Android build the /download/android page offers. */
 export type AndroidReleaseInfo =
-  | { available: false; minSupported: string; latest: string | null }
+  | { available: false; signedIn?: boolean; minSupported: string; latest: string | null }
   | {
       available: true;
       versionName: string;
@@ -2019,7 +2019,9 @@ export type AndroidReleaseInfo =
       releasedAt: string | null;
       notes: string | null;
       fileName: string;
-      downloadUrl: string;
+      /** null when signed out: the APK is session-only, the page shows "Sign in to download". */
+      downloadUrl: string | null;
+      signedIn?: boolean;
       minSupported: string;
       latest: string | null;
     };

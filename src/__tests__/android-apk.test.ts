@@ -148,21 +148,27 @@ describe("GET /api/app/android/apk", () => {
 })
 
 describe("GET /api/app/android/release", () => {
-  it("401 without a session; available:false before the first build; the facts after", async () => {
+  it("signed out: the facts without a download link; available:false before the first build; the facts after", async () => {
     const { GET } = await import("@/app/api/app/android/release/route")
     authMock.mockResolvedValue(null)
-    expect((await GET()).status).toBe(401)
+    releaseDir(GOOD)
+    const out = await GET()
+    expect(out.status).toBe(200)
+    const outBody = await out.json()
+    expect(outBody).toMatchObject({ available: true, signedIn: false, versionName: "0.1.6", downloadUrl: null })
+    const fromApp = new Request("http://x/api/app/android/release", { headers: { "X-Nexus-Client": "android/0.1.6/1" } })
+    expect((await GET(fromApp)).status).toBe(401)
     authMock.mockResolvedValue({ user: { id: "u1" } })
 
     releaseDir(null)
-    expect(await (await GET()).json()).toEqual({ available: false, minSupported: "0.0.0", latest: null })
+    expect(await (await GET()).json()).toEqual({ available: false, signedIn: true, minSupported: "0.0.0", latest: null })
 
     releaseDir(GOOD)
     process.env.NEXUS_ANDROID_LATEST_VERSION = "0.1.6"
     const res = await GET()
     expect(res.headers.get("cache-control")).toBe("private, no-store")
     expect(await res.json()).toEqual({
-      available: true, versionName: "0.1.6", versionCode: 1, sizeBytes: SIZE, sha256: "ab".repeat(32),
+      available: true, signedIn: true, versionName: "0.1.6", versionCode: 1, sizeBytes: SIZE, sha256: "ab".repeat(32),
       releasedAt: "2026-09-26T03:00:00.000Z", notes: "First build\nSecond line", fileName: "NEXUS-0.1.6.apk",
       downloadUrl: "/api/app/android/apk", minSupported: "0.0.0", latest: "0.1.6",
     })

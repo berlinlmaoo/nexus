@@ -1,22 +1,24 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { AlertTriangle, Download, Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { AlertTriangle, Download, Loader2, LogIn, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { isAuthError, nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
+import { nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { formatCount } from "@/lib/number-format";
 
 // The Android app is sideloaded (no Play Store yet), and only signed-in people may download it (owner
 // decision 24 Sep 2026). This page is what the app opens for "Update", what the update reminder links
 // to, and the URL in the install guide. It lives outside `_app` so a phone gets a plain page, not the
-// dashboard shell; signed out, it sends you to /login and back here.
+// dashboard shell. Signed out it still shows the release and the steps, like a form that needs an
+// account (owner, 25 Oct 2026); the button is "Sign in to download", to /login and back here. The APK
+// itself stays session-only (the release answer has no downloadUrl then).
 //
 // Server side: GET /api/app/android/release (facts) and GET /api/app/android/apk (the file, Range-able,
 // exempt from the 426 gate so a locked build can still update).
 export const Route = createFileRoute("/download/android")({ component: AndroidDownloadPage });
 
 const HERE = "/download/android";
+const SIGN_IN_URL = `/login?callbackUrl=${encodeURIComponent(HERE)}`;
 
 function formatSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${formatCount(bytes / (1024 * 1024), 1)} MB`;
@@ -43,22 +45,15 @@ function rich(s: string): React.ReactNode[] {
 }
 
 function AndroidDownloadPage() {
-  const navigate = useNavigate();
   const { t } = useLang();
   const q = useQuery({
     queryKey: ["android-release"],
     queryFn: nexusApi.androidRelease,
-    retry: (count, error) => (isAuthError(error) ? false : count < 2),
+    retry: (count) => count < 2,
     refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    if (q.error && isAuthError(q.error)) {
-      navigate({ to: "/login", search: { callbackUrl: HERE }, replace: true });
-    }
-  }, [q.error, navigate]);
-
-  if (q.isLoading || (q.error && isAuthError(q.error))) {
+  if (q.isLoading) {
     return (
       <Shell>
         <div className="flex justify-center py-10">
@@ -108,12 +103,25 @@ function Release({ info }: { info: Extract<AndroidReleaseInfo, { available: true
           : t("Build {code}", { code: info.versionCode })}
       </p>
 
-      <Button asChild size="lg" className="mt-5 w-full h-12 text-base">
-        {/* A plain link, not fetch(): the browser's own download manager handles progress and resume. */}
-        <a href={info.downloadUrl} download={info.fileName}>
-          <Download className="h-5 w-5 mr-2" /> {t("Download")}
-        </a>
-      </Button>
+      {info.downloadUrl ? (
+        <Button asChild size="lg" className="mt-5 w-full h-12 text-base">
+          {/* A plain link, not fetch(): the browser's own download manager handles progress and resume. */}
+          <a href={info.downloadUrl} download={info.fileName}>
+            <Download className="h-5 w-5 mr-2" /> {t("Download")}
+          </a>
+        </Button>
+      ) : (
+        <>
+          <Button asChild size="lg" className="mt-5 w-full h-12 text-base">
+            <a href={SIGN_IN_URL}>
+              <LogIn className="h-5 w-5 mr-2" /> {t("Sign in to download")}
+            </a>
+          </Button>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t("Only NEXUS accounts can download the app. After you sign in you come back here.")}
+          </p>
+        </>
+      )}
 
       {notes.length > 0 && (
         <div className="mt-6">
