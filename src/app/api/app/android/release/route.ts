@@ -17,11 +17,11 @@ import { getAndroidVersionPolicy } from "@/lib/version-policy"
  *   { available: true, signedIn, versionName, versionCode, sizeBytes, sha256, releasedAt, notes,
  *     fileName: "NEXUS-<versionName>.apk", downloadUrl: "/api/app/android/apk" | null, minSupported, latest }
  */
-export async function GET(req?: Request) {
+export async function GET(req: Request) {
   const session = await auth()
   const signedIn = Boolean(session?.user?.id)
   // The Android app's in-app updater reads a 401 here as "signed out" (ApkUpdater.kt); keep that for it.
-  if (!signedIn && req?.headers.get("x-nexus-client")?.toLowerCase().startsWith("android/")) {
+  if (!signedIn && req.headers.get("x-nexus-client")?.toLowerCase().startsWith("android/")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
