@@ -13,22 +13,36 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
     const el = ref.current;
     if (!on || !el) return;
     let frame = 0;
+    // The header row, which moves its actions under the title when even 75% does not fit beside them.
+    const row = el.closest<HTMLElement>("[data-page-header-row]");
     const fit = () => {
+      row?.removeAttribute("data-title-wrap");
+      shrink();
+      // Still cut at 75% beside the actions (the avatars, Ask GIDEON, Project settings): the actions take their own
+      // row under the title, which then gets the header's full width before anything is cut (old UI note
+      // "SMIRNOFF + GORDON + CAPT MORGAN: Master…", owner 25 Oct 2026). Every pass starts from the side-by-side
+      // layout, so a wider window or a shorter name puts the actions back beside the title.
+      if (row && over()) {
+        row.setAttribute("data-title-wrap", "");
+        shrink();
+      }
+    };
+    // Height only: an inline title control (the Pipeline board switcher) pokes a few px out sideways by design.
+    // A title that is a control (the Pipeline board switcher, an inline button) is not cut by line-clamp, so
+    // more than two lines of it counts as not fitting too.
+    // A title control clamps its own name (`data-title-clamp`, the Pipeline board switcher): the heading's clamp
+    // cannot reach inside a button, so the name's own overflow counts too (QA final #2 pre-run, P-1).
+    const over = () => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+      const inner = el.querySelector<HTMLElement>("[data-title-clamp]");
+      if (inner && inner.scrollHeight > inner.clientHeight + 1) return true;
+      return el.scrollHeight > el.clientHeight + 1 || (lh > 0 && el.scrollHeight > lh * 2 + 2);
+    };
+    const shrink = () => {
       el.style.fontSize = "";
       const base = parseFloat(getComputedStyle(el).fontSize) || 0;
       if (!base) return;
       const min = Math.floor(base * 0.75);
-      // Height only: an inline title control (the Pipeline board switcher) pokes a few px out sideways by design.
-      // A title that is a control (the Pipeline board switcher, an inline button) is not cut by line-clamp, so
-      // more than two lines of it counts as not fitting too.
-      // A title control clamps its own name (`data-title-clamp`, the Pipeline board switcher): the heading's clamp
-      // cannot reach inside a button, so the name's own overflow counts too (QA final #2 pre-run, P-1).
-      const over = () => {
-        const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
-        const inner = el.querySelector<HTMLElement>("[data-title-clamp]");
-        if (inner && inner.scrollHeight > inner.clientHeight + 1) return true;
-        return el.scrollHeight > el.clientHeight + 1 || (lh > 0 && el.scrollHeight > lh * 2 + 2);
-      };
       for (let size = base; over() && size > min; ) {
         size -= 1;
         el.style.fontSize = `${size}px`;
@@ -45,7 +59,7 @@ function useFitTitle(ref: RefObject<HTMLElement | null>, on: boolean, key: unkno
     // not watched: the fit's own inline font size must not trigger it again.
     const mo = typeof MutationObserver === "undefined" ? null : new MutationObserver(schedule);
     mo?.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => { cancelAnimationFrame(frame); ro?.disconnect(); mo?.disconnect(); el.style.fontSize = ""; };
+    return () => { cancelAnimationFrame(frame); ro?.disconnect(); mo?.disconnect(); el.style.fontSize = ""; row?.removeAttribute("data-title-wrap"); };
   }, [ref, on, key]);
 }
 
@@ -144,7 +158,7 @@ export function PageHeader({
       // flex-1 (here and on the text column): the block takes the room the actions leave. Sized to its content,
       // a clamped (-webkit-box) title measured narrower than its one-line width and wrapped with free space beside
       // it ("All / Pipelines", "ZZ QA / v8 Suwara"; visual QA 24 Oct).
-      className={cn("flex flex-1 items-start gap-3 min-w-0", compact && "max-sm:items-center max-sm:gap-2", !compact && cn(pinnedBar, barEdge, "max-md:px-4 max-md:pb-2 max-md:pt-[calc(env(safe-area-inset-top)+1rem)]", className))}
+      className={cn("flex flex-1 items-start gap-3 min-w-0", compact && "max-sm:items-center max-sm:gap-2 group-data-[title-wrap]/ph:basis-full", !compact && cn(pinnedBar, barEdge, "max-md:px-4 max-md:pb-2 max-md:pt-[calc(env(safe-area-inset-top)+1rem)]", className))}
     >
       {/* The identity mark shows on the phone too, as on the desktop and in the iPhone app (UI tour run 7:
           a project opened on the phone had no icon beside its name). */}
@@ -167,7 +181,10 @@ export function PageHeader({
       <div
         ref={compact ? barRef : undefined}
         data-page-header-sticky={compact ? "" : undefined}
+        data-page-header-row={compact ? "" : undefined}
         className={cn(
+          // A title too long for its two lines beside the actions: the actions wrap under it (useFitTitle).
+          compact && "group/ph data-[title-wrap]:flex-wrap md:data-[title-wrap]:flex-wrap data-[title-wrap]:gap-y-2",
           gutter ? "nx-gx" : "px-4 md:px-8", "md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3", hero && "md:pt-10 md:pb-2 md:items-center",
           // The top padding comes after pinnedBar's safe-area padding, which otherwise replaced it and left the
           // icon buttons touching the top edge (UI tour run 13, W-M6).
@@ -181,7 +198,7 @@ export function PageHeader({
             button beside it (audit 12 Oct 2026). The compact (project) header keeps its icon-sized buttons; the
             others are the page's secondary row on a phone and scroll away. */}
         {actions && (
-          <div className={cn("flex items-center gap-2 md:flex-nowrap md:shrink-0", compact ? "shrink-0 flex-nowrap max-sm:gap-1.5" : cn("flex-wrap pointer-coarse:[&>a]:min-h-11 pointer-coarse:[&>button]:min-h-11 max-md:px-4 max-md:pb-3 max-md:pt-1", className))}>
+          <div className={cn("flex items-center gap-2 md:flex-nowrap md:shrink-0", compact ? "shrink-0 flex-nowrap max-sm:gap-1.5 group-data-[title-wrap]/ph:ml-auto" : cn("flex-wrap pointer-coarse:[&>a]:min-h-11 pointer-coarse:[&>button]:min-h-11 max-md:px-4 max-md:pb-3 max-md:pt-1", className))}>
             {actions}
           </div>
         )}

@@ -8,6 +8,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { SLATE, STATUS, statusTone } from "@/lib/calendar/tone";
 import { CAPS, Face, FOCUS_PILL, fmtTime, PriorityChip, TOUCH_ICON, TOUCH_ROW } from "./bits";
+import { formatCount } from "@/lib/number-format";
 
 /**
  * A task the viewer may read but not change (owner, 5 Oct 2026: someone outside the task's project can
@@ -128,7 +129,7 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
                     <h3 className={cn("mb-1.5 text-muted-foreground", CAPS)}>{t("Attachments")}</h3>
                     <ul className="space-y-1 text-sm">
                       {(task.attachments ?? []).map((a) => (
-                        <li key={a.id} className="flex items-center gap-2"><Paperclip aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{a.filename}</span><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{a.size >= 1048576 ? `${(a.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(a.size / 1024))} KB`}</span></li>
+                        <li key={a.id} className="flex items-center gap-2"><Paperclip aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{a.filename}</span><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{a.size >= 1048576 ? `${formatCount(a.size / 1048576, 1)} MB` : `${Math.max(1, Math.round(a.size / 1024))} KB`}</span></li>
                       ))}
                     </ul>
                   </section>

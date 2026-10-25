@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Info, Megaphone, X
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { PdfPreview } from "@/components/PdfFirstPage";
 
 const TONE: Record<string, { icon: typeof Info; head: string; accent: string }> = {
   info: { icon: Info, head: "from-accent via-card to-secondary", accent: "text-primary" },
@@ -108,7 +109,7 @@ export function AnnouncementModal() {
                     <a href={pdf} target="_blank" rel="noreferrer" aria-label={t("Open PDF in a new tab")} className="grid w-11 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-accent"><ExternalLink className="h-4 w-4" /></a>
                   </div>
                   {current.attachmentName && <p className="truncate text-center text-[11px] text-muted-foreground">{current.attachmentName}</p>}
-                  {pdfOpen && <iframe src={pdf} title={current.attachmentName ?? "PDF"} className="h-[60vh] w-full rounded-xl border border-border bg-muted" />}
+                  {pdfOpen && <PdfPreview src={pdf} title={current.attachmentName ?? "PDF"} frameClassName="h-[60vh] w-full rounded-xl border border-border bg-muted" pageClassName="rounded-xl" />}
                 </div>
               )}
               <button

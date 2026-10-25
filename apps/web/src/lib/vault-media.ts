@@ -1,4 +1,5 @@
 import type { VaultItem } from "@/lib/nexus-api";
+import { formatCount } from "@/lib/number-format";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Z Vault pictures and films on the web (owner, 9 Oct 2026: "I want to see the thumbnail of the
@@ -78,7 +79,7 @@ export function humanSize(bytes: number | null | undefined): string {
   let n = bytes / 1024;
   let i = 0;
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+  return `${n < 10 ? formatCount(n, 1) : Math.round(n)} ${units[i]}`;
 }
 
 /** A PDF, by its type or its name. */

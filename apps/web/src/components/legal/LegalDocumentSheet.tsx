@@ -24,6 +24,7 @@ import { SnapTail } from "@/components/SnapTail";
 import { LEGAL_STATUSES, legalDocsApi, legalVersionsApi, type LegalDocument, type LegalDocumentVersion, type LegalStatus } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { PdfPreview } from "@/components/PdfFirstPage";
 
 /** The statuses a person may pick for a document now (owner, 14 Oct 2026): VOID is one-way, SIGNED is locked
  *  and only voided, and a generated document becomes SIGNED only by uploading its signed copy. */
@@ -192,7 +193,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               <div data-snap-row className="space-y-1.5">
                 {/* Without the browser's own PDF toolbar: its dark bar (download / print / ⋮) repeated the DOCX / PDF
                     buttons above in a light sheet (UI tour run 20, R20-WB-11). */}
-                <iframe title={doc.title} src={`${legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)}#toolbar=0&navpanes=0`} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
+                <PdfPreview title={doc.title} src={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} frameSrc={`${legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)}#toolbar=0&navpanes=0`} frameClassName="h-[60vh] w-full rounded-md border border-border bg-muted" />
                 {/* The preview is a sheet's width: too small to read on a phone (UI tour run 14, R14-WM-22). The
                     browser's own viewer, full screen, can be zoomed. */}
                 <a href={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} target="_blank" rel="noopener noreferrer"

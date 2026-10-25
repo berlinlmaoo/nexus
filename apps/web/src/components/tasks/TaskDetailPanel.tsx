@@ -83,6 +83,8 @@ import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { LoadError, retryTransient } from "@/components/LoadError";
 import { EmptyAction } from "@/components/EmptyState";
 import { Link } from "@tanstack/react-router";
+import { formatCount } from "@/lib/number-format";
+import { PdfPreview } from "@/components/PdfFirstPage";
 
 // The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
 // rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
@@ -1026,7 +1028,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                       if (!picked.length) return;
                       const tooBig = picked.filter((f) => f.size > MAX_ATTACH_BYTES);
                       const ok = picked.filter((f) => f.size <= MAX_ATTACH_BYTES);
-                      setSizeWarn(tooBig.length ? tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (tooBig[0].size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL }) : null);
+                      setSizeWarn(tooBig.length ? tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: formatCount(tooBig[0].size / 1024 / 1024, 1), max: MAX_ATTACH_LABEL }) : null);
                       if (ok.length) uploadMut.mutate(ok);
                     }} />
                   </label>
@@ -1096,7 +1098,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                       if (kind === "pdf") return (
                         // Safari PDFKit needs range-able responses; the cache-bust + server no-store keeps CF
                         // from serving a stale full-200 for a Range request (which renders blank white).
-                        <iframe src={rangeSrc} title={tr("Preview")} className="h-[75vh] w-full rounded-lg bg-white" />
+                        <PdfPreview src={previewAtt.url} frameSrc={rangeSrc} title={previewAtt.name ?? tr("Preview")} frameClassName="h-[75vh] w-full rounded-lg bg-white" pageClassName="rounded-lg" />
                       );
                       if (kind === "video") return (
                         <div>

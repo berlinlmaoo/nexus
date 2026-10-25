@@ -43,6 +43,7 @@ import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { LEVELS, levelForXp, levelLabel } from "@/lib/levels";
+import { DotLine } from "@/components/DotLine";
 import { TierBadge } from "@/components/gamification/TierBadge";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -719,7 +720,7 @@ function LevelChip({ fill = false }: { fill?: boolean }) {
         <div className="min-w-0 flex-1 sm:flex-initial">
           <div className="flex items-baseline gap-1.5">
             {/* One level format everywhere: "Level 6 · Diamond" (UI tour run 13; it read "Diamond Lv.6"). */}
-            <span className="font-display text-sm font-bold tracking-tight">{levelLabel(info.level, info.name, t)}</span>
+            <DotLine className="font-display text-sm font-bold tracking-tight" text={levelLabel(info.level, info.name, t)} />
             {streak > 0 && (
               <span className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3 w-3" />{streak}</span>
             )}
@@ -775,7 +776,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
               <TierBadge level={info.level} size={52} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="font-display text-xl font-bold tracking-tight">{levelLabel(info.level, info.name, t)}</span>
+                  <DotLine className="font-display text-xl font-bold tracking-tight" text={levelLabel(info.level, info.name, t)} />
                   {streak > 0 && <span className="ml-auto mr-8 inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3.5 w-3.5" />{tn(streak, "{n} day", "{n} days")}</span>}
                 </div>
                 <AnimatedBar pct={info.pct} className="mt-2 h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />

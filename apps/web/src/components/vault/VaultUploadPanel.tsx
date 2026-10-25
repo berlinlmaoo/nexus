@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { uploadTotals, useVaultUploads, vaultUploads, type UploadEntry } from "@/lib/vault-uploads";
+import { formatCount } from "@/lib/number-format";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Vault's upload panel (owner, 9 Oct 2026): a card in the middle of the screen with how many
@@ -17,14 +18,14 @@ import { uploadTotals, useVaultUploads, vaultUploads, type UploadEntry } from "@
 // (VaultUploadPanel.swift) with the same words.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** "12.4 MB" — one decimal from KB up, so the numbers visibly move during an upload. */
+/** "12,4 MB" / "12.4 MB" — one decimal from KB up, so the numbers visibly move during an upload. */
 function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
   const units = ["KB", "MB", "GB"];
   let v = n / 1024;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v.toFixed(1)} ${units[i]}`;
+  return `${formatCount(v, 1)} ${units[i]}`;
 }
 
 function Bar({ pct, className }: { pct: number; className?: string }) {

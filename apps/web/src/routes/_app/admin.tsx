@@ -45,6 +45,7 @@ import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
 import { UnitTreePicker } from "@/components/UnitTreePicker";
 import { monthTitle } from "@/lib/month-title";
+import { formatCount } from "@/lib/number-format";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
 // on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
@@ -2266,7 +2267,7 @@ function AnnouncementsAdmin() {
                     <>
                       <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>
                       <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground hover:underline"><FileText className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />{attachment.name}</a>
-                      <span className="text-xs text-muted-foreground">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
+                      <span className="text-xs text-muted-foreground">{formatCount(attachment.size / 1024 / 1024, 2)} MB</span>
                       <button onClick={() => setAttachment(null)} aria-label={t("Remove PDF")} className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
                     </>
                   ) : (
@@ -2349,9 +2350,11 @@ function AnnouncementsAdmin() {
             </div>}
             {listLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
             {rows.map((a: NexusAdminAnnouncement) => (
-              <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
+              // A grid, so on a phone only the title row shares its width with the buttons and the text below runs
+              // the card's full width (it was squeezed into a narrow column beside them, old UI note 25 Oct 2026).
+              <div key={a.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+                <div className="contents">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
                     {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">{t("Warning")}</span>}
                     {origin === "system" && a.kind !== "warning" && sourceLabel(a.source) && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{sourceLabel(a.source)}</span>}
@@ -2363,17 +2366,17 @@ function AnnouncementsAdmin() {
                     {/* The tone in the same small-caps style as the chips beside it; it was the raw lowercase value ("info"). */}
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">{a.tone === "info" ? t("Info") : a.tone === "success" ? t("Success") : a.tone === "warning" ? t("Warning") : a.tone}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>
+                  <p className="col-span-2 col-start-1 mt-1 whitespace-pre-line text-xs text-muted-foreground sm:col-span-1">{a.body}</p>
                   {a.attachmentUrl && (
-                    <a href={a.attachmentUrl} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"><FileText className="h-3.5 w-3.5" />{a.attachmentName ?? "PDF"}</a>
+                    <a href={a.attachmentUrl} target="_blank" rel="noreferrer" className="col-span-2 col-start-1 mt-1.5 inline-flex items-center gap-1 justify-self-start text-xs font-semibold text-primary hover:underline sm:col-span-1"><FileText className="h-3.5 w-3.5" />{a.attachmentName ?? "PDF"}</a>
                   )}
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <p className="col-span-2 col-start-1 mt-1.5 text-[11px] text-muted-foreground sm:col-span-1">
                     {fmtDate(a.createdAt)} · {a.targetCount
                       ? t("to {who}", { who: a.targets?.length ? a.targets.slice(0, 4).map((x) => x.name ?? "?").join(", ") + (a.targets.length > 4 ? ` +${a.targets.length - 4}` : "") : tn(a.targetCount, "{n} person", "{n} people") })
                       : t("to everyone")} · {t("{n} read", { n: a.seenCount })}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1.5 sm:row-span-3">
                   <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? t("Deactivate") : t("Activate")}</button>
                   <button onClick={() => setConfirmDel(a)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-4 w-4" /></button>
                 </div>

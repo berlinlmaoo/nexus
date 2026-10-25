@@ -302,7 +302,7 @@ export function MeetingPage({ id }: { id: string }) {
                 <div className="font-semibold">{t("This didn't work")}</div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{m.error ? t(m.error) : t("Something went wrong.")}</p>
                 {m.can.retry && !(m.errorCode === "unsupported_type" || m.errorCode === "too_long" || m.errorCode === "undecodable" || m.errorCode === "upload_abandoned" || (m.audio.deletedAt && !m.transcript.length)) && (
-                  <button type="button" onClick={() => void retry()} className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-sidebar-primary px-3 text-sm font-semibold text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><RefreshCw className="h-3.5 w-3.5" />{t("Try again")}</button>
+                  <button type="button" onClick={() => void retry()} className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><RefreshCw className="h-3.5 w-3.5" />{t("Try again")}</button>
                 )}
               </div>
             </div>
@@ -412,7 +412,7 @@ export function MeetingPage({ id }: { id: string }) {
               <div className="truncate text-xs text-muted-foreground">{m.project ? t("As a page in {project}", { project: m.project.name }) : t("Choose a project first")}</div>
             </div>
             <button type="button" onClick={() => void apply()} disabled={applying || !m.projectId || included.some((p) => !p.title.trim())}
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] bg-sidebar-primary px-4 text-sm font-semibold text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90 disabled:bg-muted disabled:text-muted-foreground">
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground">
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{t("Apply")}
             </button>
           </div>

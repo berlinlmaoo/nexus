@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Loader2, ShieldCheck, Smartphone } from "lucid
 import { Button } from "@/components/ui/button";
 import { isAuthError, nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { formatCount } from "@/lib/number-format";
 
 // The Android app is sideloaded (no Play Store yet), and only signed-in people may download it (owner
 // decision 24 Sep 2026). This page is what the app opens for "Update", what the update reminder links
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/download/android")({ component: AndroidDo
 const HERE = "/download/android";
 
 function formatSize(bytes: number) {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024 * 1024) return `${formatCount(bytes / (1024 * 1024), 1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
