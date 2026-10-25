@@ -7,7 +7,7 @@ import { AccessLevelPicker, accessChangeFailed, accessLevelLabel } from "@/compo
 import { ProjectAccessContext, canEditLevel, useProjectCanEdit } from "@/components/projects/project-access";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { PageHeader } from "@/components/PageHeader";
@@ -38,7 +38,7 @@ import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { FilterHint, FilterHintProvider, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
-import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
+import { cardTint, GalleryView, GroupHeader, listRowMinWidth, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
@@ -1838,11 +1838,11 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       type="button"
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
       data-snap-row
-      style={{ borderRadius: 6, ...tint }}
+      style={{ borderRadius: 6, ...tint, "--list-row-min": listRowMinWidth(keys, defs) } as CSSProperties}
       {...cardProps}
       // Notion's list: 32px rows on the open page, no rule between them, a soft grey on hover (16 Oct 2026 pass). A
       // phone keeps the hairline, since its rows wrap their properties onto a second line.
-      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] sm:min-h-8 sm:flex-nowrap sm:gap-y-0 sm:rounded-md sm:border-transparent sm:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
+      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] sm:min-h-8 sm:min-w-[var(--list-row-min)] sm:flex-nowrap sm:gap-y-0 sm:rounded-md sm:border-transparent sm:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
       {/* The circle is a checkbox (Notion; C-BUG-26): a click marks done / not done, it doesn't open the task. */}
       <span
@@ -1870,7 +1870,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       {/* Phone: the properties wrap onto a second line under the title instead of disappearing (UI tour
           13 Oct 2026: at 440 px the list showed titles only; the desktop row shows amount, person, dates,
           priority and status). From sm up they sit right-aligned on the same line, as before. */}
-      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:min-w-0 sm:basis-auto sm:shrink sm:flex-nowrap sm:justify-start sm:overflow-hidden sm:pl-0 sm:[&>*]:shrink-0" />
+      {/* sm and up: every column at its full width; a narrow list scrolls sideways (listRowMinWidth). */}
+      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-start sm:pl-0 sm:[&>*]:shrink-0" />
       <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground sm:block" />
     </button>
   );
@@ -1926,17 +1927,17 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       </button>
     ));
   if (!groupBy) {
-    return <div data-touch-drag-root="" className="nx-gx py-3">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
+    return <div data-touch-drag-root="" className="nx-gx py-3 sm:overflow-x-auto">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
-    <div data-touch-drag-root="" className="space-y-5 nx-gx py-3">
+    <div data-touch-drag-root="" className="space-y-5 nx-gx py-3 sm:overflow-x-auto">
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
         const zone = mover.dropZone(g.key, null);
         return (
           <section key={g.key} data-group-key={g.key} aria-label={g.label} {...zone.props} className={cn("transition-shadow", zone.isOver && dropRing)}>
-            <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5" />
+            <GroupHeader sticky group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5" />
             {!isCollapsed && (subs ? (
               <div className="space-y-2 pl-5 pt-1.5">
                 {newRow(g.key, g.key, null)}

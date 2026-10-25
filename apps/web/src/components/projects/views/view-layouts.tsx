@@ -213,6 +213,32 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
   );
 }
 
+/** listSlotWidth in rem, for the row's minimum width (listRowMinWidth). Keep the two in step. */
+function listSlotRem(d: PropDef): number {
+  if (d.key === "assignee") return 3.75;
+  if (d.kind === "date") return 12.5;
+  if (d.kind === "number") return 6.5;
+  if (d.key === "priority") return 4.75;
+  if (d.key === "status" || d.key === "section" || d.kind === "person") return 7.5;
+  return 7;
+}
+
+/**
+ * A List row's minimum width from sm up: the name's own minimum (16rem), every property column at its full width
+ * and the row's checkbox, chevron, gaps and padding. Narrower than that, the list scrolls sideways instead of
+ * cutting the last columns (status, priority, people) at the row's end (owner, 25 Oct 2026: clipped text blocks
+ * the release). Mirrors PropLine's slots: one column for all the dates.
+ */
+export function listRowMinWidth(keys: string[], defs: PropDef[]): string {
+  const items = keys.map((k) => propDef(defs, k)).filter(Boolean) as PropDef[];
+  const firstDate = items.find((d) => d.kind === "date")?.key ?? null;
+  const slots = items.filter((d) => d.kind !== "date" || d.key === firstDate);
+  if (!slots.length) return "0px";
+  const props = slots.reduce((sum, d) => sum + listSlotRem(d), 0) + (slots.length - 1) * 0.375;
+  // padding 1 + checkbox 1 + name 16 + chevron 1 + three 0.625 gaps + 0.5 to spare
+  return `${(props + 1 + 1 + 16 + 1 + 3 * 0.625 + 0.5).toFixed(3)}rem`;
+}
+
 /** A List row's column width for a property (sm and up), wide enough for its usual value. */
 function listSlotWidth(d: PropDef): string {
   if (d.key === "assignee") return "sm:w-[3.75rem] sm:justify-start";

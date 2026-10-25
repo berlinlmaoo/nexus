@@ -89,7 +89,7 @@ function RemindersPage() {
           />
           <div className="flex items-center gap-2">
             <DateField value={at} onChange={setAt} withTime placeholder={t("Pick a time")} ariaLabel={t("When")} className="h-9 min-w-[11rem] rounded-md border border-border px-3 text-sm" />
-            <button type="submit" disabled={!text.trim() || !at || create.isPending} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-sidebar-primary px-3 text-sm font-medium text-sidebar-primary-foreground transition-colors hover:bg-sidebar-primary/90 disabled:opacity-50">
+            <button type="submit" disabled={!text.trim() || !at || create.isPending} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
               {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {t("Add")}
             </button>
           </div>
