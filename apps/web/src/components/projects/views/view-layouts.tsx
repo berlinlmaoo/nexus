@@ -126,14 +126,15 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   if (def.kind === "person") {
     // A real person (a PERSON field): the person glyph (decision 5).
     const names = vals.map((id) => ctx.people.find((p) => p.id === id)?.name ?? id);
-    return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}><UserRound className="h-3 w-3 shrink-0" aria-hidden />{names.join(", ")}</span>;
+    return <span className={cn(pill, "min-w-0 max-w-full bg-muted text-muted-foreground")} title={`${def.label}: ${names.join(", ")}`}><UserRound className="h-3 w-3 shrink-0" aria-hidden /><span className="truncate">{names.join(", ")}</span></span>;
   }
   if (def.kind === "select" || def.kind === "multi") {
     return (
-      <span className="inline-flex flex-wrap gap-1">
+      <span className="inline-flex min-w-0 max-w-full flex-wrap gap-1">
         {vals.slice(0, 3).map((v) => {
           const c = COLOR_PRESETS[optionColor(def.key, v, [def])];
-          return <span key={v} className={pill} style={{ backgroundColor: c.bg, color: c.text }}>{v}</span>;
+          // The text in its own span: an ellipsis is only drawn on a block, not on the flex pill itself.
+          return <span key={v} className={cn(pill, "min-w-0 max-w-full")} style={{ backgroundColor: c.bg, color: c.text }} title={v}><span className="truncate">{v}</span></span>;
         })}
         {vals.length > 3 && <span className={cn(pill, "bg-muted text-muted-foreground")}>+{vals.length - 3}</span>}
       </span>
@@ -146,14 +147,14 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (def.fieldType === "FILE") return <span className={cn(pill, "bg-muted text-muted-foreground")}>{t(vals.length === 1 ? "1 file" : "{n} files", { n: vals.length })}</span>;
   if (def.kind === "text") return <TextProp label={def.label} value={vals[0]} />;
-  return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}>{vals[0]}</span>;
+  return <span className={cn(pill, "min-w-0 max-w-full bg-muted text-muted-foreground")} title={`${def.label}: ${vals[0]}`}><span className="truncate">{vals[0]}</span></span>;
 }
 
 /** A text property on a card: its field name and the text, with the text glyph ("Request by: Sinta"), so it never
  *  reads as a person (UI tour run 19, R19-WB-2, decision 5). */
 function TextProp({ label, value }: { label: string; value: string }) {
   return (
-    <span className={cn(pill, "min-w-0 max-w-[240px] bg-muted text-muted-foreground")} title={`${label}: ${value}`}>
+    <span className={cn(pill, "min-w-0 max-w-[min(240px,100%)] bg-muted text-muted-foreground")} title={`${label}: ${value}`}>
       <Type className="h-3 w-3 shrink-0" aria-hidden />
       <span className="truncate"><span className="opacity-80">{label}:</span> <span className="text-foreground/80">{value}</span></span>
     </span>
@@ -193,7 +194,7 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
             : <PropValue task={task} def={d} ctx={ctx} />;
           // Phone: the dates first and the people right after them, so a wrapped line never leaves an avatar alone
           // on a third line (UI tour run 20, R20-WM-12).
-          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d))}>{content}</span>;
+          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden sm:[&>*]:max-w-full", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d))}>{content}</span>;
         })}
       </div>
     );
