@@ -11,6 +11,7 @@ import { type MorphOrigin } from "@/components/motion/MorphPanel"
 import { AvatarFace } from "@/components/Avatar";
 import { formatCount } from "@/lib/number-format"
 import { t as tr } from "@/lib/lang"
+import { DotLine } from "@/components/DotLine"
 
 export interface LeaderboardRankingItem {
   userId: string
@@ -89,7 +90,7 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                     {/* Two lines between words, then a little smaller, before "…" (UI tour run 16, R16-WM-10; QA
                         final #2: "Muchammad Farchan Febriananto" was cut at 390). */}
                     <FitText as="div" text={item.userName} className="font-semibold leading-tight" />
-                    {item.byline && <div className="line-clamp-2 text-sm leading-tight text-muted-foreground">{item.byline}</div>}
+                    {item.byline && <DotLine className="text-sm leading-tight text-muted-foreground" text={item.byline} />}
                   </div>
                   <span className="shrink-0 text-base font-bold tabular-nums">{formatValue(item.value)}</span>
                 </motion.button>

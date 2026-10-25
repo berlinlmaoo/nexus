@@ -280,7 +280,9 @@ export function SidebarProjectTree() {
           <ContextMenuTrigger asChild>
             {/* A long name takes a second line, then shrinks a little, before an ellipsis (FitText; QA final #2:
                 "PATS: INDONESIA TAKEOVER" was cut at 175 px). One-line rows keep their 32 px. */}
-            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7">
+            {/* The open project keeps the regular weight (its tint marks it): medium made a long name wider than the
+                same name unselected, so it shrank to 75% and was cut (old UI note, 25 Oct 2026). */}
+            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7 data-[active=true]:font-normal">
               <Link to="/projects/$projectId" params={{ projectId: p.id }} draggable={false} title={p.name}>
                 <ProjectGlyph project={p} />
                 <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-tight" />
