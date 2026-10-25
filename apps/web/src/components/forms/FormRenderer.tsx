@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Loader2, Lock, Paperclip, RotateCcw } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Lock, LogIn, Paperclip, RotateCcw } from "lucide-react";
 import type { NexusFormBranding } from "@/lib/nexus-api";
 import { DateField } from "@/components/DateField";
 import { RupiahInput } from "@/components/RupiahInput";
@@ -31,13 +31,15 @@ type Me = { name?: string | null; email?: string | null; avatar?: string | null 
 const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-foreground/40 disabled:cursor-default disabled:opacity-100";
 
 /** One question's input. `disabled` = the builder canvas (looks real, takes no input). */
-export function QuestionControl({ field, value, onChange, disabled, attachment, onAttachment }: {
+export function QuestionControl({ field, value, onChange, disabled, attachment, onAttachment, maxFileMb = 50 }: {
   field: RichField;
   value: unknown;
   onChange: (v: unknown) => void;
   disabled?: boolean;
   attachment?: unknown;
   onAttachment?: (f: File | "") => void;
+  /** Per-file limit shown on a file question: 50 MB signed in, 10 MB without an account (submit/route.ts). */
+  maxFileMb?: number;
 }) {
   const { t, tn } = useLang();
   const label = fieldTitle(field) || t("Question");
@@ -82,7 +84,7 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
       <label className={cn("flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground", !disabled && "cursor-pointer transition-colors hover:border-foreground/40")}>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground"><Paperclip className="h-3.5 w-3.5" /> {t("Upload")}</span>
         {/* The hint wraps (a phone cut it to "One or more files, up t…", UI tour run 7); a file name stays on one line. */}
-        <span className={cn("min-w-0", (Array.isArray(value) && value.length) || value instanceof File ? "truncate" : "leading-snug")}>{Array.isArray(value) && value.length ? tn(value.length, "{n} file selected", "{n} files selected") : value instanceof File ? value.name : t("One or more files, up to 50 MB each")}</span>
+        <span className={cn("min-w-0", (Array.isArray(value) && value.length) || value instanceof File ? "truncate" : "leading-snug")}>{Array.isArray(value) && value.length ? tn(value.length, "{n} file selected", "{n} files selected") : value instanceof File ? value.name : (maxFileMb === 50 ? t("One or more files, up to 50 MB each") : t("One or more files, up to {n} MB each", { n: maxFileMb }))}</span>
         <input type="file" multiple disabled={disabled} required={field.required} className="hidden" onChange={(e) => onChange(Array.from(e.target.files ?? []))} />
       </label>
     );
@@ -123,7 +125,7 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
 }
 
 /** Title + description + control, the way the page shows one question. */
-export function QuestionBlock({ field, value, onChange, disabled, attachment, onAttachment }: Parameters<typeof QuestionControl>[0]) {
+export function QuestionBlock({ field, value, onChange, disabled, attachment, onAttachment, maxFileMb }: Parameters<typeof QuestionControl>[0]) {
   const { t } = useLang();
   const title = fieldTitle(field) || t("Question");
   if (field.type === "checkbox") {
@@ -141,7 +143,7 @@ export function QuestionBlock({ field, value, onChange, disabled, attachment, on
     <div>
       <div className="text-[15px] font-semibold break-words">{title}{field.required && <span className="text-destructive"> *</span>}</div>
       {field.description && <p className="mt-0.5 whitespace-pre-line text-sm text-muted-foreground">{field.description}</p>}
-      <div className="mt-2.5"><QuestionControl field={field} value={value} onChange={onChange} disabled={disabled} attachment={attachment} onAttachment={onAttachment} /></div>
+      <div className="mt-2.5"><QuestionControl field={field} value={value} onChange={onChange} disabled={disabled} attachment={attachment} onAttachment={onAttachment} maxFileMb={maxFileMb} /></div>
     </div>
   );
 }
@@ -162,15 +164,31 @@ export function FormHead({ branding, children }: { branding?: NexusFormBranding 
   );
 }
 
-export function FormRenderer({ form, formKey, me, mode = "live" }: {
+export function FormRenderer({ form, formKey, me, mode = "live", signInUrl }: {
   form: RendererForm;
   /** Id or slug used to send (live mode). */
   formKey?: string;
   me?: Me;
   mode?: "live" | "preview";
+  /**
+   * The form needs an account and nobody is signed in (owner, 25 Oct 2026): the questions show read-only and
+   * the button is "Sign in to send", which goes here and comes back to the form.
+   */
+  signInUrl?: string;
 }) {
   const { t } = useLang();
-  const fields = form.fields;
+  // Live, nobody signed in and no sign-in asked: a public form sent without an account. Questions that fill in
+  // from the account become plain name / email questions the guest types (the server keeps what they typed).
+  const guest = mode === "live" && !me && !signInUrl;
+  const fields = useMemo(
+    () => guest
+      ? form.fields.map((f) => f.autofill
+        ? ({ ...f, autofill: undefined, type: f.autofill === "email" ? "email" : "text", placeholder: f.placeholder || (f.autofill === "email" ? "name@company.com" : t("Your name")) } as RichField)
+        : f)
+      : form.fields,
+    [guest, form.fields, t],
+  );
+  const locked = !!signInUrl;
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [done, setDone] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
@@ -239,7 +257,7 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
   });
 
   const send = () => {
-    if (sending.current) return;
+    if (sending.current || locked) return;
     if (missing.length || invalid.length) { setShowMissing(true); return; }
     if (mode === "preview") { setDone(true); return; }
     sending.current = true;
@@ -263,7 +281,7 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
           {mode === "preview" && <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"><Eye className="h-3.5 w-3.5" /> {t("Preview: nothing was sent.")}</p>}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
             <button type="button" onClick={again} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-accent"><RotateCcw className="h-3.5 w-3.5" /> {t("Send another response")}</button>
-            {mode === "live" && <Link to="/submissions" className="inline-flex items-center rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{t("Open My Submissions")}</Link>}
+            {mode === "live" && me && <Link to="/submissions" className="inline-flex items-center rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{t("Open My Submissions")}</Link>}
           </div>
         </div>
       </div>
@@ -288,11 +306,19 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
         <form className="mt-8 space-y-8 pb-6" noValidate onSubmit={(e) => { e.preventDefault(); send(); }}>
           {visible.map((field) => (
             <div key={field.id} className={cn(showMissing && (missing.includes(field) || invalid.includes(field)) && "rounded-lg ring-2 ring-destructive/40 ring-offset-8 ring-offset-background")}>
-              <QuestionBlock field={field} value={values[field.id]} onChange={(v) => set(field.id, v)} attachment={values[`attachment:${field.id}`]} onAttachment={(f) => set(`attachment:${field.id}`, f)} />
+              <QuestionBlock field={field} value={values[field.id]} onChange={(v) => set(field.id, v)} attachment={values[`attachment:${field.id}`]} onAttachment={(f) => set(`attachment:${field.id}`, f)} disabled={locked} maxFileMb={guest ? 10 : 50} />
               {showMissing && invalid.includes(field) && <p className="mt-1.5 text-xs font-medium text-destructive">{answerProblem(field, values[field.id]) === "email" ? t("Enter an email address, like name@company.com.") : t("Enter a web address, like company.com.")}</p>}
             </div>
           ))}
           {visible.length === 0 && <p className="text-sm text-muted-foreground">{t("This form has no questions yet.")}</p>}
+          {locked ? (
+            <div className="pt-2">
+              <a href={signInUrl} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] @lg:w-auto">
+                <LogIn className="h-4 w-4" /> {t("Sign in to send")}
+              </a>
+              <p className="mt-3 text-xs text-muted-foreground">{t("This form needs a NEXUS account. After you sign in you come back here to fill it in.")}</p>
+            </div>
+          ) : (
           <div className="pt-2">
             <button type="submit" disabled={submit.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50 @lg:w-auto">
               {submit.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {s?.submitLabel || t("Send")}
@@ -300,6 +326,7 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
             {showMissing && missing.length > 0 && <p className="mt-3 text-xs text-muted-foreground">{t("Fill in the required fields first")} <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missing.map((f) => fieldTitle(f) || t("Question")).join(", ")}</span></p>}
             {submit.isError && <p className="mt-3 text-xs font-semibold text-destructive">{(submit.error as Error)?.message || t("Couldn't send the form. Try again.")}</p>}
           </div>
+          )}
         </form>
         <p className="pb-10 pt-6 text-xs text-muted-foreground">{t("Powered by NEXUS Phaëthon")}</p>
       </FormHead>

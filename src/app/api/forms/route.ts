@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
         branding: (normalizeFormBranding(branding) ?? undefined) as InputJsonValue | undefined,
         settings: (normalizeFormSettings(settings) ?? undefined) as InputJsonValue | undefined,
         isPublic: isPublic ?? false,
-        requireAuth: requireAuth ?? false,
+        // Sign-in required unless the builder chose "no sign-in" (25 Oct 2026): a client that does not send it
+        // (released apps) never makes an open form by accident.
+        requireAuth: typeof requireAuth === "boolean" ? requireAuth : true,
         projectId,
       },
       include: { _count: { select: { submissions: true } } },

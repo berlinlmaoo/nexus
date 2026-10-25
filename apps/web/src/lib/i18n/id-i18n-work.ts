@@ -202,7 +202,7 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Short title": "Judul singkat",
   "Sign in to NEXUS before you send this form, so you can follow it in My Submissions.": "Masuk ke NEXUS dulu sebelum mengirim form ini, supaya kamu bisa memantaunya di Pengajuan Saya.",
   "Sign in to see your notifications.": "Masuk untuk melihat notifikasimu.",
-  "Sign in to send": "Masuk untuk mengirim",
+  "Sign in to send": "Masuk untuk kirim",
   "Skipped {n} photo over 8 MB.": "{n} foto di atas 8 MB dilewati.",
   "Skipped {n} photos over 8 MB.": "{n} foto di atas 8 MB dilewati.",
   "Start": "Mulai",
