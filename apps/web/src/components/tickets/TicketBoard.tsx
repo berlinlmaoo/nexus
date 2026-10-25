@@ -198,7 +198,7 @@ export function TicketBoard({
   );
 }
 
-/** One ticket: title, category, reporter, comments, date; GIDEON replied / correction waiting as small icons. */
+/** One ticket: title, category, reporter, comments, date; GIDEON replied as a small icon, a waiting correction as a chip. */
 const TicketCard = memo(function TicketCard({
   c, canEdit, showReporter, categoryLabel, onOpen, onMove,
 }: { c: Complaint; canEdit: boolean; showReporter: boolean; categoryLabel: (key: string) => string; onOpen: (id: string) => void; onMove: (id: string, status: string) => void }) {
@@ -232,9 +232,11 @@ const TicketCard = memo(function TicketCard({
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <span className="rounded-full bg-muted px-1.5 py-px font-medium">{categoryLabel(c.category)}</span>
         {c.status === "CLOSED" && <span className="rounded-full bg-slate-100 px-1.5 py-px font-medium text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-400 dark:ring-slate-500/30">{t("Closed")}</span>}
+        {/* Spelled out, not just an icon: a closed ticket in Done can still carry a correction the board has to
+            decide on (visual QA 24 Oct, owner 25 Oct 2026). */}
         {c.pendingCorrection && c.status !== "AWAITING_DECISION" && (
-          <span className="inline-flex items-center" title={t("Correction awaiting decision")}>
-            <CalendarClock aria-hidden className="h-3.5 w-3.5" /><span className="sr-only">{t("Correction awaiting decision")}</span>
+          <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-px font-medium" style={{ backgroundColor: "var(--st-purple-bg)", color: "var(--st-purple-fg)" }} title={t("Correction awaiting decision")}>
+            <CalendarClock aria-hidden className="h-3 w-3" />{t("Correction pending")}
           </span>
         )}
       </div>
