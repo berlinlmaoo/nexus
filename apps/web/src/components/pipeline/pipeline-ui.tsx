@@ -24,19 +24,25 @@ import { formatRupiah, MINUS } from "@/lib/number-format";
  * only what is shown is translated (id-pipeline.ts).
  */
 
-/** Compact rupiah for cards and KPIs: Rp 950Jt / Rp 1,2M (id) or Rp 950M / Rp 1.2B (en) — the GM's fmtIDR. */
-export function fmtIdr(n: number | null | undefined, lang: Lang): string {
+/**
+ * Compact rupiah for narrow cards and KPIs: "Rp 1,3 M" (miliar), "Rp 963 jt" (juta), "Rp 450 rb" (ribu).
+ * Indonesian units and a decimal comma in both languages, since the amount is Rupiah (owner, 25 Oct 2026:
+ * "Rp 1.3B" / "Rp 963M" read like dollars). Wider places show fmtIdrFull. `_lang` stays for the callers.
+ */
+const COMPACT_IDR_1 = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
+const COMPACT_IDR_0 = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
+export function fmtIdr(n: number | null | undefined, _lang?: Lang): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "–";
+  const sign = n < 0 ? MINUS : "";
+  const units: [number, string][] = [[1e9, "M"], [1e6, "jt"], [1e3, "rb"]];
   const abs = Math.abs(n);
-  const suf = lang === "en" ? { b: "B", m: "M", k: "K" } : { b: "M", m: "Jt", k: "Rb" };
-  let v = abs;
-  let s = "";
-  if (abs >= 1e9) { v = abs / 1e9; s = suf.b; }
-  else if (abs >= 1e6) { v = abs / 1e6; s = suf.m; }
-  else if (abs >= 1e3) { v = abs / 1e3; s = suf.k; }
-  const digits = s && v < 100 ? (v < 10 ? 1 : 0) : 0;
-  const num = new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID", { maximumFractionDigits: digits }).format(v);
-  return `${n < 0 ? MINUS : ""}Rp ${num}${s}`;
+  const i = units.findIndex(([size]) => abs >= size);
+  if (i < 0) return `${sign}Rp ${COMPACT_IDR_0.format(abs)}`;
+  const v = abs / units[i][0];
+  const f = v < 10 ? COMPACT_IDR_1 : COMPACT_IDR_0;
+  // Rounding can carry into the next unit: 999.600.000 reads "Rp 1 M", not "Rp 1.000 jt".
+  if (i > 0 && Number(f.format(v).replace(/\./g, "").replace(",", ".")) >= 1000) return `${sign}Rp 1 ${units[i - 1][1]}`;
+  return `${sign}Rp ${f.format(v)} ${units[i][1]}`;
 }
 
 /**
