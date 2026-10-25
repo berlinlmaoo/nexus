@@ -38,7 +38,7 @@ import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { FilterHint, FilterHintProvider, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
-import { cardTint, GalleryView, GroupHeader, listRowMinWidth, PropLine } from "@/components/projects/views/view-layouts";
+import { cardTint, GalleryView, GroupHeader, listFilledKeys, listRowMinWidth, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
@@ -1810,8 +1810,8 @@ function cfChoices(field: NexusCustomField): string[] {
 /** A List row. Memoised and plain (no framer layoutId), like the board's cards (perf pass, 12 Oct 2026). */
 type RowDrag = (e: React.DragEvent | null, task: NexusTask, from: string, fromRow: string | null) => void;
 
-const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph, dragGroup = null, dragRow = null, onDragTask, onDragEnd }: {
-  task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean;
+const ListRow = memo(function ListRow({ task, keys, narrowDate = false, cfg, defs, ctx, onOpen, morph, dragGroup = null, dragRow = null, onDragTask, onDragEnd }: {
+  task: NexusTask; keys: string[]; narrowDate?: boolean; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean;
   /** The group (and sub-group) the row sits in, when the view's grouping can be changed by dragging. */
   dragGroup?: string | null; dragRow?: string | null; onDragTask?: RowDrag; onDragEnd?: () => void;
 }) {
@@ -1838,7 +1838,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       type="button"
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
       data-snap-row
-      style={{ borderRadius: 6, ...tint, "--list-row-min": listRowMinWidth(keys, defs) } as CSSProperties}
+      style={{ borderRadius: 6, ...tint, "--list-row-min": listRowMinWidth(keys, defs, narrowDate) } as CSSProperties}
       {...cardProps}
       // Notion's list: 32px rows on the open page, no rule between them, a soft grey on hover (16 Oct 2026 pass). A
       // phone keeps the hairline, since its rows wrap their properties onto a second line.
@@ -1859,7 +1859,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       </span>
       {/* The name keeps at least ~a third of the row: with many properties shown they used to take all of it and
           the name shrank to nothing (QA 16 Oct 2026); the properties are cut at the row's end instead. */}
-      <span className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[min(35%,16rem)]">
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[min(35%,11.5rem)]">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
         {/* Two lines before "…", on a phone and on a desktop (UI tour run 16, R16-WD-7, R16-WM-11). */}
         <span className={cn("line-clamp-2 text-sm", done && "text-muted-foreground line-through")}>{glueDash(task.title ?? "")}</span>
@@ -1871,7 +1871,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
           13 Oct 2026: at 440 px the list showed titles only; the desktop row shows amount, person, dates,
           priority and status). From sm up they sit right-aligned on the same line, as before. */}
       {/* sm and up: every column at its full width; a narrow list scrolls sideways (listRowMinWidth). */}
-      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-start sm:pl-0 sm:[&>*]:shrink-0" />
+      <PropLine slots narrowDate={narrowDate} task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-start sm:pl-0 sm:[&>*]:shrink-0" />
       <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground sm:block" />
     </button>
   );
@@ -1904,13 +1904,22 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
   const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  // Per group (owner, option 2, 25 Oct 2026), a column empty on every task of that group collapses (takes no width) and a date
+  // column holding one plain day per task narrows, so the others fit at 1440 without scrolling sideways.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the deps only reset the cache
+  const fitCache = useMemo(() => new WeakMap<NexusTask[], ReturnType<typeof listFilledKeys>>(), [keys, defs, ctx]);
+  const fitOf = (tasks: NexusTask[]) => {
+    let f = fitCache.get(tasks);
+    if (!f) { f = listFilledKeys(keys, defs, tasks, ctx); fitCache.set(tasks, f); }
+    return f;
+  };
   useTouchDrag();
   // A list narrower than its columns scrolls sideways (listRowMinWidth); the cut edge fades so it reads as "more".
   const listScroll = useRef<HTMLDivElement>(null);
-  const listFade = useEdgeFade(listScroll, [keys.join(), groups.length], true);
-  const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null) => (
+  const listFade = useEdgeFade(listScroll, [keys.join(), groups], true);
+  const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null, fit = fitOf(tasks)) => (
     <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => (
-      <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
+      <ListRow task={task} keys={fit.keys} narrowDate={fit.narrowDate} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
         dragGroup={mover.enabled && gKey !== null && canDragTask(task, project.id) ? gKey : null} dragRow={subKey} onDragTask={mover.startDrag} onDragEnd={mover.endDrag} />
     )} />
   );

@@ -162,7 +162,9 @@ function TextProp({ label, value }: { label: string; value: string }) {
 }
 
 /** The properties a card shows, in the view's order. */
-export function PropLine({ task, keys, defs, ctx, className, slots }: { task: NexusTask; keys: string[]; defs: PropDef[]; ctx: ViewCtx; className?: string;
+export function PropLine({ task, keys, defs, ctx, className, slots, narrowDate }: { task: NexusTask; keys: string[]; defs: PropDef[]; ctx: ViewCtx; className?: string;
+  /** List rows: the group's dates are one plain day each, so the date column only needs room for one chip. */
+  narrowDate?: boolean;
   /** List rows (sm and up): the assignee keeps a fixed-width slot, empty or not, so the status pill before it
    *  sits at the same x on every row (UI tour run 11, WD-15: rows with an avatar pushed it left). */
   slots?: boolean }) {
@@ -194,7 +196,7 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
             : <PropValue task={task} def={d} ctx={ctx} />;
           // Phone: the dates first and the people right after them, so a wrapped line never leaves an avatar alone
           // on a third line (UI tour run 20, R20-WM-12).
-          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden sm:[&>*]:max-w-full", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d))}>{content}</span>;
+          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden sm:[&>*]:max-w-full", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d, narrowDate))}>{content}</span>;
         })}
       </div>
     );
@@ -215,9 +217,9 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
 }
 
 /** listSlotWidth in rem, for the row's minimum width (listRowMinWidth). Keep the two in step. */
-function listSlotRem(d: PropDef): number {
+function listSlotRem(d: PropDef, narrowDate = false): number {
   if (d.key === "assignee") return 3.75;
-  if (d.kind === "date") return 12.5;
+  if (d.kind === "date") return narrowDate ? 4.25 : 12.5;
   if (d.kind === "number") return 6.5;
   if (d.key === "priority") return 4.75;
   if (d.key === "status" || d.key === "section" || d.kind === "person") return 7.5;
@@ -230,19 +232,50 @@ function listSlotRem(d: PropDef): number {
  * cutting the last columns (status, priority, people) at the row's end (owner, 25 Oct 2026: clipped text blocks
  * the release). Mirrors PropLine's slots: one column for all the dates.
  */
-export function listRowMinWidth(keys: string[], defs: PropDef[]): string {
+export function listRowMinWidth(keys: string[], defs: PropDef[], narrowDate = false): string {
   const items = keys.map((k) => propDef(defs, k)).filter(Boolean) as PropDef[];
   const firstDate = items.find((d) => d.kind === "date")?.key ?? null;
   const slots = items.filter((d) => d.kind !== "date" || d.key === firstDate);
   if (!slots.length) return "0px";
-  const props = slots.reduce((sum, d) => sum + listSlotRem(d), 0) + (slots.length - 1) * 0.375;
-  // padding 1 + checkbox 1 + name 16 + chevron 1 + three 0.625 gaps + 0.5 to spare
-  return `${(props + 1 + 1 + 16 + 1 + 3 * 0.625 + 0.5).toFixed(3)}rem`;
+  const props = slots.reduce((sum, d) => sum + listSlotRem(d, narrowDate), 0) + (slots.length - 1) * 0.375;
+  // padding 1 + checkbox 1 + name 11.5 + chevron 1 + three 0.625 gaps + 0.5 to spare
+  return `${(props + 1 + 1 + 11.5 + 1 + 3 * 0.625 + 0.5).toFixed(3)}rem`;
+}
+
+/**
+ * The List view's columns that hold a value on at least one task of the group. A column empty on
+ * every task takes no width, so the rest fit without scrolling sideways. Status always stays (it always draws a
+ * pill). The dates are one column: kept when any date property has a value.
+ */
+export function listFilledKeys(keys: string[], defs: PropDef[], tasks: NexusTask[], ctx: ViewCtx): { keys: string[]; narrowDate: boolean } {
+  const filled = (d: PropDef, task: NexusTask): boolean => {
+    const vals = taskValues(task, d.key);
+    switch (d.key) {
+      case "status": return true;
+      case "priority": return !!vals[0] && vals[0] !== "NONE";
+      case "assignee": return (task.assignees ?? []).some((a) => a.user);
+      case "section": return ctx.sections.some((x) => x.id === vals[0]);
+      case "subtasks": return (task.subtasks ?? []).length > 0;
+      case "comments": return (task._count?.comments ?? 0) > 0;
+    }
+    return vals.length > 0;
+  };
+  const items = keys.map((k) => propDef(defs, k)).filter(Boolean) as PropDef[];
+  const keep = new Set(items.filter((d) => tasks.some((task) => filled(d, task))).map((d) => d.key));
+  const datesHeld = items.filter((d) => d.kind === "date" && keep.has(d.key));
+  // One date property in use, every value a real day of this year: the column holds a single "16 Sep" chip, not
+  // the "26 May · Request by 24 May" pair it is sized for. Another year adds "2025" and needs the wide column.
+  const year = new Date().getFullYear();
+  const narrowDate = datesHeld.length === 1 && datesHeld[0].key !== "start"
+    && tasks.every((task) => taskValues(task, datesHeld[0].key).every((v) => new Date(v).getFullYear() === year));
+  if (datesHeld.length) items.filter((d) => d.kind === "date").forEach((d) => keep.add(d.key));
+  return { keys: keys.filter((k) => keep.has(k)), narrowDate };
 }
 
 /** A List row's column width for a property (sm and up), wide enough for its usual value. */
-function listSlotWidth(d: PropDef): string {
+function listSlotWidth(d: PropDef, narrowDate = false): string {
   if (d.key === "assignee") return "sm:w-[3.75rem] sm:justify-start";
+  if (d.kind === "date" && narrowDate) return "sm:w-[4.25rem] sm:justify-end";
   // Room for the due date and one more date with its field name ("26 May · Request by 24 May", run 19 WD-4).
   if (d.kind === "date") return "sm:w-[12.5rem] sm:justify-end";
   if (d.kind === "number") return "sm:w-[6.5rem] sm:justify-end";
