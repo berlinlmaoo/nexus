@@ -167,7 +167,7 @@ struct XpLogEntry: Decodable, Identifiable, Sendable {
             return reason.hasSuffix(":bounty") ? T("Peer report · reward") : T("Peer report · penalty")
         case ("admin", "adjust"):
             let note = p.count > 2 ? p[2] : ""
-            return note.isEmpty ? T("Adjusted by a board member") : "\(T("Adjusted by a board member")) · \(note)"
+            return note.isEmpty ? T("Adjusted by a board member") : "\(T("Adjusted by a board member")) · \(xpAdminNote(note))"
         case ("quest", _):                 return T("Quest claimed")
         default:                           return reason
         }

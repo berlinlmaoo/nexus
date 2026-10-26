@@ -8,6 +8,7 @@ import { AlertTriangle, TrendingDown, X } from "lucide-react";
 import { fmtDate, fmtTime, nexusApi, type NexusXpPenalty } from "@/lib/nexus-api";
 import { t as tr, tn } from "@/lib/lang";
 import { formatSigned } from "@/lib/number-format";
+import { adminAdjustNote } from "@/lib/xp-reason";
 
 /**
  * Global "your XP got cut" alert. On app open (and after check-in, via ["my-penalties"] invalidation),
@@ -35,7 +36,7 @@ function penaltyLabel(p: NexusXpPenalty): string {
     case "alpha": return tr("Absent — no notice");
     case "admin": {
       const note = p.reason.startsWith("admin:adjust:") ? p.reason.slice("admin:adjust:".length) : "";
-      return note ? tr("XP cut by admin · {note}", { note }) : tr("XP cut by admin");
+      return note ? tr("XP cut by admin · {note}", { note: adminAdjustNote(note) }) : tr("XP cut by admin");
     }
     // Unknown negative reasons: never show a raw machine string to staff.
     // (New penalty types should be added to kindOf() on the backend + a case here.)
@@ -83,9 +84,9 @@ export function XpPenaltyModal() {
             role="dialog" aria-modal="true"
             initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 14 }}
             transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop"
+            className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-border bg-gradient-to-br from-rose-100 via-card to-rose-50 px-5 py-4">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-gradient-to-br from-rose-100 via-card to-rose-50 px-5 py-4">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400"><TrendingDown className="h-5 w-5" /></div>
                 <div>
@@ -97,12 +98,13 @@ export function XpPenaltyModal() {
               <button onClick={dismiss} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
-            <div className="space-y-2 p-5">
+            {/* Full reasons, never clipped (owner, 26 Oct 2026): a long list scrolls inside the dialog instead. */}
+            <div className="min-h-0 space-y-2 overflow-y-auto overscroll-contain p-5">
               {fresh.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-3 py-2.5">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                <div key={p.id} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/20 px-3 py-2.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
                   <div className="min-w-0 flex-1">
-                    <div title={penaltyLabel(p)} className="line-clamp-2 break-words text-sm font-semibold leading-snug">{penaltyLabel(p)}</div>
+                    <div className="whitespace-normal break-words text-sm font-semibold leading-snug">{penaltyLabel(p)}</div>
                     <div className="text-[11px] text-muted-foreground">{fmtDate(p.createdAt)} {fmtTime(p.createdAt)}</div>
                   </div>
                   <div className="shrink-0 text-sm font-black tabular-nums text-rose-600 dark:text-rose-400">{formatSigned(p.amount)} XP</div>

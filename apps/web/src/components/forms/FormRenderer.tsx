@@ -171,8 +171,8 @@ export function FormRenderer({ form, formKey, me, mode = "live", signInUrl }: {
   me?: Me;
   mode?: "live" | "preview";
   /**
-   * The form needs an account and nobody is signed in (owner, 25 Oct 2026): the questions show read-only and
-   * the button is "Sign in to send", which goes here and comes back to the form.
+   * The form needs an account and nobody is signed in (owner, 26 Oct 2026): no questions, only the title,
+   * description and "Sign in to fill in this form" with a button that goes here and comes back to the form.
    */
   signInUrl?: string;
 }) {
@@ -303,6 +303,22 @@ export function FormRenderer({ form, formKey, me, mode = "live", signInUrl }: {
           </div>
         )}
 
+        {locked ? (
+          // Sign-in required and nobody signed in (owner, 26 Oct 2026): no questions at all, just the way in. The
+          // public endpoint does not send them to a signed-out browser either.
+          <div className="mt-8 rounded-2xl border border-border bg-muted/30 p-5 pb-6">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><LogIn className="h-5 w-5" /></div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold leading-snug">{t("Sign in to fill in this form")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t("This form needs a NEXUS account. After you sign in you come back here to fill it in.")}</p>
+              </div>
+            </div>
+            <a href={signInUrl} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] @lg:w-auto">
+              <LogIn className="h-4 w-4" /> {t("Sign in")}
+            </a>
+          </div>
+        ) : (
         <form className="mt-8 space-y-8 pb-6" noValidate onSubmit={(e) => { e.preventDefault(); send(); }}>
           {visible.map((field) => (
             <div key={field.id} className={cn(showMissing && (missing.includes(field) || invalid.includes(field)) && "rounded-lg ring-2 ring-destructive/40 ring-offset-8 ring-offset-background")}>
@@ -311,14 +327,6 @@ export function FormRenderer({ form, formKey, me, mode = "live", signInUrl }: {
             </div>
           ))}
           {visible.length === 0 && <p className="text-sm text-muted-foreground">{t("This form has no questions yet.")}</p>}
-          {locked ? (
-            <div className="pt-2">
-              <a href={signInUrl} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] @lg:w-auto">
-                <LogIn className="h-4 w-4" /> {t("Sign in to send")}
-              </a>
-              <p className="mt-3 text-xs text-muted-foreground">{t("This form needs a NEXUS account. After you sign in you come back here to fill it in.")}</p>
-            </div>
-          ) : (
           <div className="pt-2">
             <button type="submit" disabled={submit.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50 @lg:w-auto">
               {submit.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {s?.submitLabel || t("Send")}
@@ -326,8 +334,8 @@ export function FormRenderer({ form, formKey, me, mode = "live", signInUrl }: {
             {showMissing && missing.length > 0 && <p className="mt-3 text-xs text-muted-foreground">{t("Fill in the required fields first")} <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missing.map((f) => fieldTitle(f) || t("Question")).join(", ")}</span></p>}
             {submit.isError && <p className="mt-3 text-xs font-semibold text-destructive">{(submit.error as Error)?.message || t("Couldn't send the form. Try again.")}</p>}
           </div>
-          )}
         </form>
+        )}
         <p className="pb-10 pt-6 text-xs text-muted-foreground">{t("Powered by NEXUS Phaëthon")}</p>
       </FormHead>
     </div>

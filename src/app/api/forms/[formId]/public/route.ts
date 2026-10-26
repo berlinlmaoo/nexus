@@ -59,6 +59,14 @@ export async function GET(
       if (!member) return NextResponse.json({ error: "This form is not publicly accessible" }, { status: 403 })
     }
 
+    // Public but sign-in required (owner, 26 Oct 2026): a signed-out request gets the title and description only,
+    // never the questions. The web shows "Sign in to fill in this form"; the apps always send a session.
+    let signInRequired = false
+    if (form.isPublic && form.requireAuth) {
+      const session = await auth().catch(() => null)
+      signInRequired = !session?.user?.id
+    }
+
     const accessStatus = getFormAccessStatus(form.accessSchedule)
     // Response cap: shaped like a schedule refusal (`accessSchedule` present) so the web and the released
     // apps show it as "not open" with this message instead of "private or gone".
@@ -109,6 +117,21 @@ export async function GET(
           return f
         })
       : form.fields
+
+    if (signInRequired) {
+      return NextResponse.json({
+        id: form.id,
+        name: form.name,
+        description: form.description,
+        branding: form.branding,
+        isPublic: form.isPublic,
+        requireAuth: form.requireAuth,
+        fields: [],
+        settings: publicFormSettings(form.settings),
+        taskLists: [],
+        signInRequired: true,
+      })
+    }
 
     return NextResponse.json({
       ...form,
