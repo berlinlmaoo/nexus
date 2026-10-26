@@ -14,7 +14,7 @@ import {
   allPipelinesApi, allPipelinesKey, pipelineApi, pipelineKey, servicesOf,
   type AllPipelinesResponse, type PipelineBoardRef, type PipelineDeal, type PipelineDealPatch, type PipelineListBases, type PipelineResponse,
 } from "@/lib/pipeline-api";
-import { useWeb017Launch } from "@/lib/meetings";
+import { usePipelineV8 } from "@/lib/meetings";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
@@ -71,7 +71,7 @@ export function PipelineView({
   const navigate = useNavigate();
   const all = mode === "all";
   // Year filter and the v8 Excel columns wait for the web 0.1.7 launch switch (lib/web-launch.ts).
-  const v8 = useWeb017Launch();
+  const v8 = usePipelineV8();
   const key = all ? allPipelinesKey : pipelineKey(projectId);
   const q = useQuery<PipelineResponse | AllPipelinesResponse>({
     queryKey: key,

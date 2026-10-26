@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { getLang } from "@/lib/lang";
-import { meetingNotesOn, web017On } from "@/lib/web-launch";
+import { meetingNotesOn, pipelineV8On, web017On } from "@/lib/web-launch";
 
 export type MeetingStatus = "UPLOADING" | "QUEUED" | "TRANSCRIBING" | "SUMMARIZING" | "READY" | "APPLYING" | "APPLIED" | "FAILED";
 export type MeetingLanguage = "auto" | "id" | "en";
@@ -246,6 +246,12 @@ export function useMeetingNotesEnabled(): boolean {
 export function useWeb017Launch(): boolean {
   const cfg = useWebAppConfig();
   return web017On(cfg.data);
+}
+
+/** Pipeline v8 on the web (lib/web-launch.ts pipelineV8On): false until the config has said true. */
+export function usePipelineV8(): boolean {
+  const cfg = useWebAppConfig();
+  return pipelineV8On(cfg.data);
 }
 
 // ---------------------------------------------------------------- GIDEON tier availability

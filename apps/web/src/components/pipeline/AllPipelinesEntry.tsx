@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useWeb017Launch } from "@/lib/meetings";
+import { usePipelineV8 } from "@/lib/meetings";
 import { usePresentingMode } from "./presentation";
 
 /**
@@ -29,7 +29,7 @@ const WIDE_ROLES = new Set(["ONE_ABOVE_ALL", "BOD"]);
  * null for everyone while the web's 0.1.7 launch switch is off (lib/web-launch.ts): no row, no switcher.
  */
 export function usePipelineBoards(workspaceId?: string): PipelineBoardRef[] | null {
-  const launched = useWeb017Launch();
+  const launched = usePipelineV8();
   const wsm = useQuery({
     queryKey: ["nexus", "workspace-members", workspaceId || "any"],
     queryFn: () => nexusApi.workspaceMembers(workspaceId || undefined),

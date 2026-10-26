@@ -71,6 +71,9 @@ export type AppConfig = {
      *  (prod until 0.1.7 is out); turned on in the AppSetting row (runbook L.41), no deploy. The web hides them until
      *  it has read this as true. */
     web017Launch: boolean
+    /** Pipeline v8 on the web ahead of the rest of 0.1.7 (owner, 26 Oct 2026): the Pipeline part of web017Launch
+     *  only. Either flag on shows it. Default off; turned on in the AppSetting row, no deploy. */
+    webPipelineV8: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -98,7 +101,7 @@ const GIDEON_TOOL_FLAG_DEFAULTS = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, web017Launch: false, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, web017Launch: false, webPipelineV8: false, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {
