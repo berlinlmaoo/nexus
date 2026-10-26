@@ -73,7 +73,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
                     <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", pos ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400")}><ScrollText className="h-4 w-4" /></span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{info.label}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{info.sub ? `${info.sub} · ` : ""}{fmtDate(r.createdAt)} {fmtTime(r.createdAt)}</div>
+                      <div className="break-words text-[11px] text-muted-foreground">{info.sub ? `${info.sub} · ` : ""}{fmtDate(r.createdAt)} {fmtTime(r.createdAt)}</div>
                     </div>
                     <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{formatSigned(r.amount)} XP</div>
                   </div>

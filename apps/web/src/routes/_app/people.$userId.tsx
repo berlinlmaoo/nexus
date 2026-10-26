@@ -364,7 +364,7 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
     <div className={cn("flex items-center gap-3", compact ? "rounded-xl bg-muted/30 px-3 py-2" : "px-4 py-2.5 md:px-5")}>
       {!compact && <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", removed ? "bg-muted text-muted-foreground" : pos ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400")}><ScrollText className="h-4 w-4" /></span>}
       <div className="min-w-0 flex-1">
-        <div className={cn("truncate text-sm font-semibold", removed && "text-muted-foreground line-through")}>{xpEntryLabel(e)}</div>
+        <div className={cn("break-words text-sm font-semibold", removed && "text-muted-foreground line-through")}>{xpEntryLabel(e)}</div>
         <div className="truncate text-[11px] text-muted-foreground">
           {e.dateKey ? `${tr("for {date}", { date: dayLabel(e.dateKey) })} · ` : ""}{fmtDate(e.createdAt)} {fmtTime(e.createdAt)}
         </div>

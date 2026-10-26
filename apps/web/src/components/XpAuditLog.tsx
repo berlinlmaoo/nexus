@@ -130,7 +130,7 @@ export function XpAuditLog() {
                     <Avatar userId={r.userId} name={r.userName} avatar={r.userAvatar} size={32} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{r.userName ?? "—"}</div>
-                      <div className="truncate text-xs text-muted-foreground">
+                      <div className="break-words text-xs text-muted-foreground">
                         {info.label}
                         {info.sub ? ` · ${info.sub}` : ""} · {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
                       </div>
