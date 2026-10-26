@@ -233,11 +233,11 @@ function FeedPage() {
       </div>
 
       {/* Threads layout (owner, 24 + 26 Oct 2026: "copy the look of Threads"; measured spec in
-          nexus-qa/visual-qa-24oct/dec25/oct26/threads-meta-spec.md): one 640px column. The column is a card
+          nexus-qa/visual-qa-24oct/dec25/oct26/threads-meta-spec.md): one 640px column (672 minus the 16px side gutters). The column is a card
           whose top corners are rounded and which runs on to the bottom of the screen — it never ends as a
           floating box (wide screens); on a phone it is edge to edge and fills the screen the same way. An open
           post's bar ("← Thread") sits above the card, like the original. */}
-      <div className="mx-auto flex w-full max-w-[640px] flex-col md:px-4" style={{ "--threads-head": `${headH}px`, minHeight: `calc(100dvh - ${headH}px)` } as CSSProperties}>
+      <div className="mx-auto flex w-full max-w-[672px] flex-col md:px-4" style={{ "--threads-head": `${headH}px`, minHeight: `calc(100dvh - ${headH}px)` } as CSSProperties}>
         {focusId ? (
           <div className="sticky z-20 border-b border-border bg-card md:border-b-0 md:bg-background" style={{ top: headH }}>
             <DetailBar onBack={closeFocus} replies={focus.data?.commentCount} />
