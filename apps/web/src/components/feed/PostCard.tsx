@@ -24,7 +24,7 @@ export type FeedPostUI = FeedPost & { _pending?: boolean; _failed?: boolean; _te
  * the post, like the original.
  */
 
-export const postX = "px-4 md:px-6";
+export const postX = "px-3 md:px-6";
 
 /** Copy the link a notification would open. */
 export function copyPostLink(id: string, okText: string) {

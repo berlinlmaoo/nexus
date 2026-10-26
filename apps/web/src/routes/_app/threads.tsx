@@ -232,15 +232,22 @@ function FeedPage() {
         <PageHeader title={t("Threads")} subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")} />
       </div>
 
-      {/* Threads layout (owner, 24 Oct 2026: "copy the look of Threads"): one 640px column, a card with
-          28px corners on wider screens and edge to edge on a phone; tabs as two equal halves on top. */}
-      <div className="mx-auto w-full max-w-[640px] pb-28 md:px-4 md:pb-12 md:pt-6">
-        <div className="overflow-clip bg-card md:rounded-[28px] md:border md:border-border">
+      {/* Threads layout (owner, 24 + 26 Oct 2026: "copy the look of Threads"; measured spec in
+          nexus-qa/visual-qa-24oct/dec25/oct26/threads-meta-spec.md): one 640px column. The column is a card
+          whose top corners are rounded and which runs on to the bottom of the screen — it never ends as a
+          floating box (wide screens); on a phone it is edge to edge and fills the screen the same way. An open
+          post's bar ("← Thread") sits above the card, like the original. */}
+      <div className="mx-auto flex w-full max-w-[640px] flex-col md:px-4" style={{ "--threads-head": `${headH}px`, minHeight: `calc(100dvh - ${headH}px)` } as CSSProperties}>
+        {focusId ? (
+          <div className="sticky z-20 border-b border-border bg-card md:border-b-0 md:bg-background" style={{ top: headH }}>
+            <DetailBar onBack={closeFocus} replies={focus.data?.commentCount} />
+          </div>
+        ) : (
+          <div aria-hidden className="hidden h-6 md:block" />
+        )}
+        <div className="flex-1 overflow-clip bg-card pb-28 md:rounded-t-[28px] md:border md:border-b-0 md:border-border md:pb-12">
           {focusId ? (
             <>
-              <div className="sticky z-20 bg-card" style={{ top: headH }}>
-                <DetailBar onBack={closeFocus} replies={focus.data?.commentCount} />
-              </div>
               {focus.isLoading && <PostSkeleton />}
               {focus.isError && (
                 <div className="px-6 py-10 text-center text-[15px] text-muted-foreground">
@@ -269,7 +276,7 @@ function FeedPage() {
               {tab === "all" && me && <Composer me={meUser} members={members} onPost={onPost} />}
 
               {/* new-posts pill */}
-              <div className="pointer-events-none sticky top-[calc(var(--threads-head,0px)+3.5rem)] z-10 flex h-0 justify-center" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
+              <div className="pointer-events-none sticky top-[calc(var(--threads-head,0px)+3.5rem)] z-10 flex h-0 justify-center">
                 <AnimatePresence>
                   {newPosts.length > 0 && (
                     <motion.button
@@ -285,8 +292,8 @@ function FeedPage() {
                 </AnimatePresence>
               </div>
 
-              {/* list — hairline-separated; the last post draws none (the card edge is right under it). */}
-              <div className="[&>article:last-of-type]:border-b-0">
+              {/* list — a hairline under every post (the card runs on below the last one). */}
+              <div>
                 {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
 
                 {failed && <LoadError compact error={feed.error} what={t("the posts")} onRetry={() => void feed.refetch()} />}
@@ -314,7 +321,7 @@ function FeedPage() {
 
 function PostSkeleton() {
   return (
-    <div className="border-b border-border px-4 py-3 md:px-6">
+    <div className="border-b border-border px-3 py-3 md:px-6">
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
         <div className="flex-1 space-y-2">

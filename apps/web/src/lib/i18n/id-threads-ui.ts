@@ -4,6 +4,8 @@
  */
 export const ID_THREADS_UI: Record<string, string> = {
   "Thread": "Utas",
+  // Next to the time on a reply written by the post's own author (26 Oct 2026).
+  "Author": "Penulis",
   "Reply to {name}…": "Balas {name}…",
   "No replies yet": "Belum ada balasan",
   "Be the first to reply. Tag someone with @ to bring them in.": "Jadilah yang pertama membalas. Tag seseorang pakai @ untuk mengajaknya.",

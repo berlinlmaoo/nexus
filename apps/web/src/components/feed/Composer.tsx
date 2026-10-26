@@ -87,7 +87,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
   const r = 10, C = 2 * Math.PI * r, pct = Math.min(len / TEXT_MAX, 1);
 
   return (
-    <div className="border-b border-border px-4 py-4 md:px-6">
+    <div className="border-b border-border px-3 py-4 md:px-6">
       <div className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-start gap-x-3">
         {me ? <Avatar userId={me.id} name={me.name} avatar={me.avatar} size={36} /> : <div />}
         <div className="relative min-w-0">

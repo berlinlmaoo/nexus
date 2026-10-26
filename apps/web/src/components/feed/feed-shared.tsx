@@ -82,7 +82,7 @@ export function ImageGrid({ images, onOpen, bleed }: { images: FeedImage[]; onOp
   }
 
   return (
-    <div className={cn("mt-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", bleed && "-mr-4 pr-4 md:-mr-6 md:pr-6")}>
+    <div className={cn("mt-2 flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", bleed && "-mr-3 pr-3 md:-mr-6 md:pr-6")}>
       {images.map((im, i) => (
         <button type="button" key={im.id} aria-label={tr("Open photo {n} of {total}", { n: i + 1, total: images.length })} onClick={() => onOpen(i)}
           className="h-[220px] shrink-0 snap-start overflow-hidden rounded-lg border border-border/70 bg-muted md:h-[250px]" style={{ aspectRatio: ratioOf(im) }}>
