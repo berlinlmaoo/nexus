@@ -10,17 +10,20 @@ import { ActionRow, EditBox, PostHeader, PostMenu, postX, type FeedPostUI } from
 import { PostButton, useAutoGrow } from "./Composer";
 import { useLang } from "@/lib/lang";
 
-/** The bar over an open post: back arrow, "Thread", and how many replies. */
+/**
+ * The bar over an open post: back arrow, "Thread", and how many replies. It sits above the column card on
+ * wide screens (as on Threads, 26 Oct 2026) and is the top bar of the screen on a phone.
+ */
 export function DetailBar({ onBack, replies }: { onBack: () => void; replies?: number }) {
   const { t, tn } = useLang();
   return (
-    <div className="flex h-14 items-center gap-2 border-b border-border px-2 md:px-3">
-      <button type="button" onClick={onBack} aria-label={t("Back")} className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-muted active:scale-90">
-        <ArrowLeft className="h-5 w-5" />
+    <div className="flex h-14 items-center gap-2 px-1.5 md:-ml-2 md:h-16 md:px-0">
+      <button type="button" onClick={onBack} aria-label={t("Back")} className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-muted active:scale-90">
+        <ArrowLeft className="h-[22px] w-[22px]" />
       </button>
       <div className="min-w-0 leading-tight">
-        <div className="text-[16px] font-bold">{t("Thread")}</div>
-        {replies !== undefined && <div className="text-[12px] text-muted-foreground">{tn(replies, "{n} reply", "{n} replies")}</div>}
+        <div className="text-[17px] font-bold md:text-[20px]">{t("Thread")}</div>
+        {replies !== undefined && <div className="mt-0.5 text-[13px] text-muted-foreground">{tn(replies, "{n} reply", "{n} replies")}</div>}
       </div>
     </div>
   );
@@ -112,9 +115,9 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
           <div className="text-[13px] text-muted-foreground">{t("Be the first to reply. Tag someone with @ to bring them in.")}</div>
         </div>
       ) : (
-        <div className="[&>div:last-child]:border-b-0">
+        <div>
           {comments.map((c, i) => (
-            <Reply key={c.id} c={c} names={memberNames} chained={comments[i + 1]?.author.id === c.author.id} />
+            <Reply key={c.id} c={c} names={memberNames} chained={comments[i + 1]?.author.id === c.author.id} byAuthor={c.author.id === post.author.id} />
           ))}
         </div>
       )}
@@ -128,7 +131,8 @@ export function PostDetail({ post, me, members, onLike, onDelete, onEdit, onComm
  * One reply. A run of replies by the same person is joined by the thread line under the avatar (and no
  * hairline between them), the way Threads draws an author's chain.
  */
-function Reply({ c, chained, names }: { c: FeedComment; chained: boolean; names: string[] }) {
+function Reply({ c, chained, names, byAuthor }: { c: FeedComment; chained: boolean; names: string[]; byAuthor: boolean }) {
+  const { t } = useLang();
   return (
     <div className={cn("pt-3", chained ? "pb-0" : "border-b border-border pb-3", postX)}>
       <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3">
@@ -140,6 +144,7 @@ function Reply({ c, chained, names }: { c: FeedComment; chained: boolean; names:
           <div className="flex min-w-0 items-baseline gap-x-2">
             <span className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-[21px]">{c.author.name}</span>
             <span className="shrink-0 whitespace-nowrap text-[15px] leading-[21px] text-muted-foreground" title={new Date(c.createdAt).toLocaleString()}>{timeAgo(c.createdAt)}</span>
+            {byAuthor && <span className="shrink-0 whitespace-nowrap text-[15px] leading-[21px] text-muted-foreground">· {t("Author")}</span>}
           </div>
           <div className="mt-0.5 text-[15px] leading-[21px]"><RenderText text={c.text} names={names} /></div>
         </div>
