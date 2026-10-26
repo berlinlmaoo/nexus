@@ -25,7 +25,7 @@ import { DealDocuments } from "./DealDocuments";
 import { BudgetSection, CashbackSection, ContactsSection, useDealItems } from "./DealLists";
 import { Field, Section } from "./drawer-parts";
 import { useMoneyFmt } from "./presentation";
-import { useWeb017Launch } from "@/lib/meetings";
+import { usePipelineV8 } from "@/lib/meetings";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
@@ -79,7 +79,7 @@ export function DealDrawer({
 }) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<"details" | "history">("details");
-  const allPipelinesOn = useWeb017Launch();
+  const allPipelinesOn = usePipelineV8();
   const [confirming, setConfirming] = useState(false);
   return (
     <Sheet open={!!deal} onOpenChange={(open) => { if (!open) { onClose(); setTab("details"); } }}>
@@ -292,7 +292,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
   // Cashback, contacts and budget (Control Tower v8): one row each on the server.
   const items = useDealItems(projectId, deal);
   // Pipeline v8 sections and fields wait for the web's 0.1.7 launch switch (lib/web-launch.ts).
-  const v8 = useWeb017Launch();
+  const v8 = usePipelineV8();
   // Contract → closing: the same sections whether folded (open / lost deal) or not.
   const later = (
     <>
@@ -560,7 +560,7 @@ function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boo
   const costs: PipelineCostItem[] = deal.costs ?? [];
   // Budget category per line (v8), offered once the deal has at least one category. "" = none.
   // Off (web 0.1.7 launch switch): no picker; a category set from the apps stays on the line untouched.
-  const v8 = useWeb017Launch();
+  const v8 = usePipelineV8();
   const budgets = deal.budgets ?? [];
   const budgetName = (id: string) => (id ? budgets.find((b) => b.id === id)?.name || (budgets.some((b) => b.id === id) ? t("Untitled category") : t("Deleted category")) : t("No budget category"));
   const m = marginOf({ netValue: deal.netValue, costs });

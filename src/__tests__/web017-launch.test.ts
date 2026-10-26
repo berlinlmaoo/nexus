@@ -10,7 +10,7 @@ const store = vi.hoisted(() => ({ value: null as unknown }))
 vi.mock('@/lib/app-setting', () => ({ getAppSetting: vi.fn(async () => store.value) }))
 
 import {
-  LEGACY_LINK_TYPES, WEB017_FLAG, announcementOriginFor, linkTypesFor, meetingNotesOn, web017On,
+  LEGACY_LINK_TYPES, WEB017_FLAG, announcementOriginFor, linkTypesFor, meetingNotesOn, pipelineV8On, web017On,
 } from '../../apps/web/src/lib/web-launch'
 import { APP_CONFIG_DEFAULTS, getAppConfig } from '@/lib/app-config'
 import { LEGACY_MASTER_COLUMN_COUNT, MASTER_COLUMNS, masterColumnsFor, parseColumnsParam } from '@/lib/pipeline-export'
@@ -34,6 +34,24 @@ describe('web017On (fail closed)', () => {
   it('reads the same key the server sends', () => {
     expect(WEB017_FLAG).toBe('web017Launch')
     expect(WEB017_FLAG in APP_CONFIG_DEFAULTS.flags).toBe(true)
+  })
+})
+
+describe('pipelineV8On (Pipeline ahead of the rest, 26 Oct 2026)', () => {
+  it('is on with its own flag or the whole launch switch, off otherwise', () => {
+    expect(pipelineV8On({ flags: { webPipelineV8: true } })).toBe(true)
+    expect(pipelineV8On({ flags: { web017Launch: true } })).toBe(true)
+    expect(pipelineV8On({ flags: { webPipelineV8: false, web017Launch: false } })).toBe(false)
+    expect(pipelineV8On({ flags: { webPipelineV8: 'true' } })).toBe(false)
+    expect(pipelineV8On(undefined)).toBe(false)
+  })
+  it('does not turn the rest of 0.1.7 on', () => {
+    const cfg = { flags: { webPipelineV8: true, meetingNotesEnabled: true } }
+    expect(web017On(cfg)).toBe(false)
+    expect(meetingNotesOn(cfg)).toBe(false)
+  })
+  it('defaults off on the server', () => {
+    expect(APP_CONFIG_DEFAULTS.flags.webPipelineV8).toBe(false)
   })
 })
 

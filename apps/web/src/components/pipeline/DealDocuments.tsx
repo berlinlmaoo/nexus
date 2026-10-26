@@ -11,7 +11,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { isAbort } from "@/lib/nexus-api";
 import { humanSize } from "@/lib/vault-media";
 import { LINK_TYPES, summarize } from "@/lib/pipeline";
-import { useWeb017Launch } from "@/lib/meetings";
+import { usePipelineV8 } from "@/lib/meetings";
 import { linkTypesFor } from "@/lib/web-launch";
 import {
   dealKey, pipelineApi, pipelineKey, type PipelineDeal, type PipelineDealPatch, type PipelineLink, type PipelineResponse,
@@ -62,7 +62,7 @@ export function DealDocuments({
   const qc = useQueryClient();
   const [type, setType] = useState<string>("SPK");
   // The v8 types (Deck, Quotation, Report) wait for the web 0.1.7 launch switch; saved documents keep their type.
-  const linkTypes = linkTypesFor(useWeb017Launch(), LINK_TYPES);
+  const linkTypes = linkTypesFor(usePipelineV8(), LINK_TYPES);
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);

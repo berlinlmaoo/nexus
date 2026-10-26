@@ -25,6 +25,14 @@ export function web017On(config: ConfigLike): boolean {
   return config?.flags?.[WEB017_FLAG] === true;
 }
 
+/**
+ * Pipeline v8 only (owner, 26 Oct 2026: Pipeline goes live on the web before the rest of 0.1.7):
+ * flags.webPipelineV8 OR the whole launch switch.
+ */
+export function pipelineV8On(config: ConfigLike): boolean {
+  return web017On(config) || config?.flags?.webPipelineV8 === true;
+}
+
 /** Pipeline document & link types before v8 (lib/pipeline.ts LINK_TYPES keeps the stored keys). */
 export const LEGACY_LINK_TYPES = ["SPK", "Kontrak", "MOU", "Invoice", "Lainnya"] as const;
 

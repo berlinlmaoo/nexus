@@ -2,7 +2,7 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Layers } from "lucide-react";
 import { useLang } from "@/lib/lang";
 import { useWebAppConfig } from "@/lib/meetings";
-import { web017On } from "@/lib/web-launch";
+import { pipelineV8On } from "@/lib/web-launch";
 import { PageHeader } from "@/components/PageHeader";
 import { PipelineView } from "@/components/pipeline/PipelineView";
 import { PipelineTitleSwitcher } from "@/components/pipeline/AllPipelinesEntry";
@@ -21,7 +21,7 @@ function AllPipelinesPage() {
   // Projects while it is off (also when the config can't be read).
   const cfg = useWebAppConfig();
   if (cfg.isPending) return <div data-page-canvas="card" className="min-h-dvh bg-card" aria-busy="true" />;
-  if (!web017On(cfg.data)) return <Navigate to="/projects" replace />;
+  if (!pipelineV8On(cfg.data)) return <Navigate to="/projects" replace />;
   return (
     <div data-page-canvas="card" className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
       <PageHeader
