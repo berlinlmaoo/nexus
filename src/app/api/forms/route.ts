@@ -79,13 +79,14 @@ export async function POST(request: NextRequest) {
     const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const slug = await generateUniqueFormSlug(prisma, name)
     const normalizedAccessSchedule = (normalizeFormAccessSchedule(accessSchedule) ?? undefined) as InputJsonValue | undefined
 
-    const form = await prisma.form.create({
+    // The slug is checked, then inserted: two forms with the same name created at the same moment (a double-click,
+    // two people) both got the same slug and the second hit the unique index as a 500. Pick again and retry.
+    const create = async () => prisma.form.create({
       data: {
         name,
-        slug,
+        slug: await generateUniqueFormSlug(prisma, name),
         description,
         fields,
         accessSchedule: normalizedAccessSchedule,
@@ -99,6 +100,12 @@ export async function POST(request: NextRequest) {
       },
       include: { _count: { select: { submissions: true } } },
     })
+    const form = await (async () => {
+      for (let attempt = 1; ; attempt++) {
+        try { return await create() }
+        catch (e) { if (attempt >= 5 || !isUniqueViolation(e)) throw e }
+      }
+    })()
 
     logAudit({ action: "create", entityType: "form", entityId: form.id, entityName: name, userId: session.user.id, request })
 
@@ -108,4 +115,10 @@ export async function POST(request: NextRequest) {
     console.error("Error creating form:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+/** A unique index refused the row (Prisma P2002, or the raw 23505 through the driver adapter). */
+function isUniqueViolation(e: unknown): boolean {
+  const o = e as { code?: string; originalCode?: string } | null
+  return o?.code === "P2002" || o?.code === "23505" || o?.originalCode === "23505"
 }
