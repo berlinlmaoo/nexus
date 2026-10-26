@@ -5,6 +5,7 @@
 //
 // Called at render time by components that use useLang(), so `t` follows the current language.
 import { localeOf, t, getLang } from "@/lib/lang";
+import { adminAdjustNote } from "@/lib/xp-reason";
 
 // Dates -------------------------------------------------------------------------------------------------
 
@@ -50,7 +51,7 @@ export function xpEntryLabel(e: { kind?: string | null; label: string; detail?: 
     case "waiver": return t("Penalty cleared for the day");
     case "peer_bounty": return t("Integrity report · reward");
     case "peer_penalty": return t("Integrity report · penalty");
-    case "admin_adjust": return withDetail("Adjusted by the board");
+    case "admin_adjust": return e.detail ? `${t("Adjusted by the board")} · ${adminAdjustNote(e.detail)}` : t("Adjusted by the board");
     case "quest_penalty": return t("Quest penalty");
     case "quest": return t("Quest done");
     case "bonus": return e.label.startsWith("No-absence bonus") ? withDetail("No-absence bonus") : withDetail("Bonus");

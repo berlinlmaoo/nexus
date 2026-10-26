@@ -177,7 +177,7 @@ struct RecordXpEntry: Decodable, Identifiable, Sendable {
         case "alpha":          return T("Absent without notice (TK)")
         case "peer_penalty":   return T("Peer report · penalty")
         case "peer_bounty":    return T("Peer report · reward")
-        case "admin_adjust":   return note.isEmpty ? T("Adjusted by a board member") : "\(T("Adjusted by a board member")) · \(note)"
+        case "admin_adjust":   return note.isEmpty ? T("Adjusted by a board member") : "\(T("Adjusted by a board member")) · \(xpAdminNote(note))"
         case "quest":          return T("Quest completed")
         case "quest_penalty":  return T("Penalty quest")
         case "bonus":          return note.isEmpty ? T("Bonus") : "\(T("Bonus")) · \(note)"
@@ -201,4 +201,19 @@ struct XpRefundResponse: Decodable, Sendable {
     let ok: Bool?
     let refund: Refund?
     let totalXp: Int?
+}
+
+/// The note of a BoD XP adjustment in the app language. The server stamps the actor into the stored reason
+/// in Indonesian ("<note> · oleh <Name>", or just "oleh <Name>"), so English showed "oleh"; the word is
+/// swapped for the language's "by".
+func xpAdminNote(_ note: String) -> String {
+    let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let r = n.range(of: " · oleh ", options: .backwards) {
+        let name = String(n[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+        return "\(n[..<r.lowerBound]) · \(String(format: T("by %@"), name))"
+    }
+    if n.hasPrefix("oleh ") {
+        return String(format: T("by %@"), String(n.dropFirst(5)).trimmingCharacters(in: .whitespaces))
+    }
+    return n
 }
