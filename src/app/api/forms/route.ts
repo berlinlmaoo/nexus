@@ -82,7 +82,8 @@ export async function POST(request: NextRequest) {
     const normalizedAccessSchedule = (normalizeFormAccessSchedule(accessSchedule) ?? undefined) as InputJsonValue | undefined
 
     // The slug is checked, then inserted: two forms with the same name created at the same moment (a double-click,
-    // two people) both got the same slug and the second hit the unique index as a 500. Pick again and retry.
+    // two people) both got the same slug and the second hit the unique index as a 500. Pick again and retry
+    // (a short random pause in between, so racers do not keep picking the same next suffix).
     const create = async () => prisma.form.create({
       data: {
         name,
@@ -103,7 +104,10 @@ export async function POST(request: NextRequest) {
     const form = await (async () => {
       for (let attempt = 1; ; attempt++) {
         try { return await create() }
-        catch (e) { if (attempt >= 5 || !isUniqueViolation(e)) throw e }
+        catch (e) {
+          if (attempt >= 8 || !isUniqueViolation(e)) throw e
+          await new Promise((r) => setTimeout(r, Math.random() * 40 * attempt)) // spread the racers out
+        }
       }
     })()
 
