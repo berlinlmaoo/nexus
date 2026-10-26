@@ -13,4 +13,5 @@ export const ID_DEC25: Record<string, string> = {
   "Sign-in": "Wajib masuk",
   "One or more files, up to {n} MB each": "Satu file atau lebih, maksimal {n} MB per file",
   "This form needs a NEXUS account. After you sign in you come back here to fill it in.": "Form ini butuh akun NEXUS. Setelah masuk, kamu kembali ke sini untuk mengisinya.",
+  "Sign in to fill in this form": "Masuk untuk mengisi form ini",
 };

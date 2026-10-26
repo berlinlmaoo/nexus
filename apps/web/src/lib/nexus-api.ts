@@ -1542,6 +1542,8 @@ export type NexusForm = {
   fields: NexusFormField[];
   isPublic?: boolean;
   requireAuth?: boolean;
+  /** GET /api/forms/:id/public, signed out, on a form that needs an account: `fields` is empty (26 Oct 2026). */
+  signInRequired?: boolean;
   slug?: string | null;
   projectId?: string;
   _count?: { submissions?: number };

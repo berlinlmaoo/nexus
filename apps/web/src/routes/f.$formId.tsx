@@ -28,8 +28,9 @@ function PublicForm() {
   const f = form.data;
 
   // Who may send (owner, 25 Oct 2026): a public form without sign-in (isPublic, requireAuth false) takes anyone,
-  // no account; any other form needs one. Signed out on such a form, the questions show read-only and the button
-  // is "Sign in to send", which comes back here after signing in.
+  // no account; any other form needs one. Signed out on such a form (owner, 26 Oct 2026) the questions are not
+  // shown (the server does not send them either): only the title, description and "Sign in to fill in this form",
+  // whose button comes back here after signing in.
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const loggedIn = !!me.data?.user;
   const needsLogin = !me.isLoading && !loggedIn;
@@ -67,7 +68,7 @@ function PublicForm() {
           form={{ name: f.name, description: f.description, fields: (f.fields ?? []) as RichField[], branding: f.branding, settings: f.settings }}
           formKey={formId}
           me={me.data?.user}
-          signInUrl={needsLogin && !openToAll ? loginUrl : undefined}
+          signInUrl={(needsLogin && !openToAll) || f.signInRequired ? loginUrl : undefined}
         />
       )}
     </div>
