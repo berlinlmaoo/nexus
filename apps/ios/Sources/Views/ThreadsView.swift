@@ -182,8 +182,8 @@ struct ThreadOpen: Hashable, Identifiable {
 // MARK: - shared look (nexus-qa/threads-ref/SPEC.md)
 
 enum ThreadsStyle {
-    /// Post side padding: 16 on a phone, 24 in the iPad / Mac column.
-    static func rowX(_ wide: Bool) -> CGFloat { wide ? 24 : 16 }
+    /// Post side padding: 12 on a phone, 24 in the iPad / Mac column (web postX "px-3 md:px-6", 26 Oct 2026).
+    static func rowX(_ wide: Bool) -> CGFloat { wide ? 24 : 12 }
     /// The liked heart (web rose-500 / rose-400).
     static let rose = Color(light: 0xf43f5e, dark: 0xfb7185)
     /// The column is never wider than this (Threads' 640).
@@ -216,23 +216,43 @@ enum ThreadsStyle {
     }
 }
 
-/// The feed's one column: on an iPad or Mac a card at most 640 wide, centred, with 28 pt corners; on a
-/// phone edge to edge with no card (Threads' own phone layout).
+/// The feed's one column (web threads.tsx, 26 Oct 2026). On an iPad or Mac a card at most 640 wide, centred,
+/// 24 pt under the top, whose top corners are rounded and which runs on to the bottom of the screen: it never
+/// ends as a floating box, and has no bottom edge. On a phone edge to edge in the card colour, filling the
+/// screen the same way (Threads' own phone layout).
 struct ThreadsColumn: ViewModifier {
     let wide: Bool
+    /// The scroll view's visible height, so a short feed still runs to the bottom. 0 until measured.
+    var viewport: CGFloat = 0
+
+    private static let topGap: CGFloat = 24
+    private static let radius: CGFloat = 28
 
     func body(content: Content) -> some View {
         if wide {
             content
+                .padding(.bottom, 48)
+                .frame(maxWidth: .infinity, minHeight: max(0, viewport - Self.topGap), alignment: .top)
                 .background(NX.card)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: Self.radius, topTrailingRadius: Self.radius,
+                                                  style: .continuous))
+                // The border on the top and the sides only: the outline is drawn taller than the card and its
+                // bottom edge is clipped away with it (web md:border-b-0).
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                        .strokeBorder(NX.border)
+                        .padding(.bottom, -(Self.radius + 2))
+                )
+                .clipped()
                 .frame(maxWidth: ThreadsStyle.columnWidth)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 24)
+                .padding(.top, Self.topGap)
         } else {
-            content.background(NX.background)
+            content
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, minHeight: viewport, alignment: .top)
+                .background(NX.card)
         }
     }
 }
@@ -350,12 +370,14 @@ struct ThreadsActionRow: View {
     }
 }
 
-/// Name · time · edited and the ⋯ menu. The name wraps to two lines, then ends in "…"; the time never
-/// wraps. The menu's 44 pt target hangs over the 21 pt line so the row never grows.
+/// Name · time · edited (or · Author) and the ⋯ menu. The name wraps to two lines, then ends in "…"; the time
+/// never wraps. The menu's 44 pt target hangs over the 21 pt line so the row never grows.
 struct ThreadsNameRow<Trailing: View>: View {
     let name: String
     let time: String?
     var edited = false
+    /// "Author" on a reply written by the post's own author: "name · time · Author" (web, 26 Oct 2026).
+    var tag: String? = nil
     @ViewBuilder var menu: () -> Trailing
 
     var body: some View {
@@ -367,6 +389,9 @@ struct ThreadsNameRow<Trailing: View>: View {
             }
             if edited {
                 Text("· " + T("edited")).font(NXFont.text(15)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
+            }
+            if let tag {
+                Text("· " + tag).font(NXFont.text(15)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
             }
             Spacer(minLength: 0)
             menu()
@@ -607,6 +632,8 @@ struct ThreadsView: View {
     @State private var incoming: [FeedPost] = []
     @State private var toast: String?
     @State private var tab: FeedTab = .all
+    /// The scroll view's visible height: the column runs on to the bottom of the screen (ThreadsColumn).
+    @State private var viewport: CGFloat = 0
     enum FeedTab: Hashable { case all, mentions }
 
     struct PendingPost {
@@ -625,7 +652,8 @@ struct ThreadsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            NX.background.ignoresSafeArea()
+            // A phone is the card colour edge to edge (the column fills the screen, web 26 Oct 2026).
+            (wide ? NX.background : NX.card).ignoresSafeArea()
             content
             if !incoming.isEmpty { newPostsPill }
         }
@@ -681,8 +709,9 @@ struct ThreadsView: View {
                         ThreadsTabs(selection: $tab, wide: wide)
                     }
                 }
-                .modifier(ThreadsColumn(wide: wide))
+                .modifier(ThreadsColumn(wide: wide, viewport: viewport))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await load() }
             .onChange(of: posts.first?.id) { _, _ in
@@ -711,11 +740,10 @@ struct ThreadsView: View {
                         .padding(.vertical, 24)
                 }
             } else {
-                ForEach(Array(posts.enumerated()), id: \.element.id) { i, p in
+                // A hairline under every post, the last one too: the column runs on below it (web, 26 Oct 2026).
+                ForEach(posts) { p in
                     postRow(p)
-                        .overlay(alignment: .bottom) {
-                            if i < posts.count - 1 { Rectangle().fill(NX.border).frame(height: 0.5) }
-                        }
+                        .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 0.5) }
                 }
             }
         }
@@ -1097,6 +1125,7 @@ struct ThreadsView: View {
 /// 1 pt foreground line; the other is muted over a hairline. Pinned under the header while scrolling.
 private struct ThreadsTabs: View {
     @Binding var selection: ThreadsView.FeedTab
+    /// Kept for the caller; the tabs sit on the card colour on every width now (the phone fills with it too).
     let wide: Bool
 
     var body: some View {
@@ -1104,7 +1133,7 @@ private struct ThreadsTabs: View {
             tab(.all, T("All"))
             tab(.mentions, T("Mentions"))
         }
-        .background(wide ? NX.card : NX.background)
+        .background(NX.card)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(T("Threads"))
     }
@@ -1180,6 +1209,7 @@ struct ThreadPostView: View {
     @State private var editing = false
     @State private var toast: String?
     @State private var myAvatar: String?
+    @State private var viewport: CGFloat = 0
 
     private var wide: Bool { hSize == .regular }
     private var rowX: CGFloat { ThreadsStyle.rowX(wide) }
@@ -1201,20 +1231,24 @@ struct ThreadPostView: View {
                     ThreadsSkeletonRow(wide: wide)
                 }
             }
-            .modifier(ThreadsColumn(wide: wide))
+            .modifier(ThreadsColumn(wide: wide, viewport: viewport))
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
         .scrollDismissesKeyboard(.interactively)
-        .background(NX.background.ignoresSafeArea())
+        .background((wide ? NX.background : NX.card).ignoresSafeArea())
         .overlay(alignment: .bottom) { if let toast { ThreadsToast(text: toast) } }
         .navigationTitle(T("Thread"))
         .navigationBarTitleDisplayMode(.inline)
+        // "← Thread" once: the back button is the arrow alone. With the feed's title on it the bar read
+        // "< Threads  Thread" (ID: "Utas" twice), as the web did until e2c20077 (owner, 27 Oct 2026).
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text(T("Thread")).font(NXFont.text(16, .bold)).foregroundStyle(NX.foreground)
+                VStack(spacing: 1) {
+                    Text(T("Thread")).font(NXFont.text(17, .bold)).foregroundStyle(NX.foreground)
                     if let post {
                         Text(ThreadsStyle.repliesLabel(post.comments))
-                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).contentTransition(.numericText())
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).contentTransition(.numericText())
                     }
                 }
             }
@@ -1342,21 +1376,25 @@ struct ThreadPostView: View {
                 .padding(.vertical, 32)
         } else {
             let names = members.map(\.displayName) + [post?.authorName].compactMap { $0 }
+            let authorId = post?.author?.id
             ForEach(Array(comments.enumerated()), id: \.element.id) { i, c in
                 let chained = i + 1 < comments.count && comments[i + 1].author?.id != nil
                     && comments[i + 1].author?.id == c.author?.id
-                replyRow(c, chained: chained, last: i == comments.count - 1, names: names)
+                let byAuthor = authorId != nil && c.author?.id == authorId
+                replyRow(c, chained: chained, byAuthor: byAuthor, names: names)
             }
         }
     }
 
     /// One reply. A run by the same person is joined by a 2 pt line under the avatar, with no hairline
-    /// between them, the way Threads draws an author's chain.
-    private func replyRow(_ c: FeedComment, chained: Bool, last: Bool, names: [String]) -> some View {
+    /// between them, the way Threads draws an author's chain; every other reply has a hairline under it, the
+    /// last one too (web, 26 Oct 2026). `byAuthor`: written by the post's author, "name · time · Author".
+    private func replyRow(_ c: FeedComment, chained: Bool, byAuthor: Bool, names: [String]) -> some View {
         HStack(alignment: .top, spacing: 12) {
             AvatarView(url: c.author?.avatar, initial: c.initial, size: 36, userId: c.author?.id, name: c.author?.name)
             VStack(alignment: .leading, spacing: 2) {
-                ThreadsNameRow(name: c.authorName, time: ThreadsStyle.timeAgo(c.createdAt)) { EmptyView() }
+                ThreadsNameRow(name: c.authorName, time: ThreadsStyle.timeAgo(c.createdAt),
+                               tag: byAuthor ? T("Author") : nil) { EmptyView() }
                 mentionText(c.text ?? "", names: names)
                     .font(NXFont.text(15)).foregroundStyle(NX.foreground).lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1378,7 +1416,7 @@ struct ThreadPostView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if !chained && !last { Rectangle().fill(NX.border).frame(height: 0.5) }
+            if !chained { Rectangle().fill(NX.border).frame(height: 0.5) }
         }
     }
 

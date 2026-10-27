@@ -18,6 +18,8 @@ extension AppLanguage {
         "%d new posts": "%d post baru",
         "%d characters left": "Sisa %d karakter",
         "Couldn't edit the post.": "Post gagal diubah.",
+        // Next to the time on a reply written by the post's own author (web id-threads-ui.ts, 26 Oct 2026).
+        "Author": "Penulis",
         // Ticket board card, a correction still waiting for the board (web id-dec25-b.ts, owner 25 Oct 2026).
         "Correction pending": "Koreksi menunggu",
     ]
