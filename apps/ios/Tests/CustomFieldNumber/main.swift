@@ -380,5 +380,28 @@ check(CFN.filterFormats("persen", lang: .id).map(\.code).joined(separator: ","),
 check(CFN.filterFormats("idr", lang: .en).first?.code ?? "", "IDR", "web filter idr")
 checkD(CFN.filterFormats("zzzz", lang: .en).isEmpty, "web filter none")
 
+// Owner bug 27 Oct 2026: what the app sends goes as a JSON number, which the server keeps as it is
+// ("1,234" → 1.234 was read again by the server as 1 234 when it went as the text "1.234").
+func wire(_ v: String, _ st: Style) -> String {
+    let w = CFN.wireValue(v, style: st)
+    if let n = w as? NSDecimalNumber { return "n:" + n.stringValue }
+    return "s:" + String(describing: w)
+}
+let rpStyle = Style(numberFormat: "IDR")
+for v in ["10500000", "10.500.000", "10,500,000", "Rp 10.500.000"] { check(wire(v, rpStyle), "n:10500000", "wire idr \(v)") }
+check(wire("-Rp 1.501", rpStyle), "n:-1501", "wire idr negative")
+check(wire("\u{2212}Rp 1.501", rpStyle), "n:-1501", "wire idr shown minus")
+check(wire("", rpStyle), "s:", "wire idr empty")
+check(wire("1,234", .plain), "n:1.234", "wire plain decimal comma")
+check(wire("1.234", .plain), "n:1234", "wire plain id grouping")
+check(wire("2,5", .plain), "n:2.5", "wire plain 2,5")
+check(wire("-3,75", .plain), "n:-3.75", "wire plain negative")
+check(wire("42%", Style(numberFormat: "percent")), "n:0.42", "wire percent")
+check(wire("n/a", .plain), "s:n/a", "wire text")
+check(wire("  ", .plain), "s:", "wire blank")
+if let data = try? JSONSerialization.data(withJSONObject: ["value": CFN.wireValue("1,234", style: .plain)]), let js = String(data: data, encoding: .utf8) {
+    check(js, "{\"value\":1.234}", "wire json")
+} else { check("no json", "json", "wire json") }
+
 print("passes", passes, "fails", fails)
 if fails > 0 { exit(1) }

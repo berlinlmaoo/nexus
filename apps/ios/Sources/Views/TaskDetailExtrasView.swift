@@ -161,8 +161,8 @@ struct TaskCustomFieldsCard: View {
         do {
             switch v {
             case .text(let s):
-                // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
-                let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
+                // A number goes as a JSON number, stored as it is ("369.000" Rupiah → 369000, "1,234" → 1.234).
+                let out: Any = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.wireValue(s, style: f.options?.numberStyle ?? .plain) : s as Any
                 try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: out)
             case .multi(let a): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a)
             case .place(let l, let m): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m])
@@ -186,7 +186,7 @@ struct TaskCustomFieldsCard: View {
                 guard case .some(let v) = snapshot[f.id] else { continue }
                 switch v {
                 case .text(let s):
-                    let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
+                    let out: Any = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.wireValue(s, style: f.options?.numberStyle ?? .plain) : s as Any
                     try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: out)
                 case .multi(let a): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: a)
                 case .place(let l, let m): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: ["label": l, "mapUrl": m])

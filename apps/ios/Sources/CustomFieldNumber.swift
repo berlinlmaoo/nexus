@@ -455,6 +455,17 @@ extension CustomFieldNumber {
         return normalize(trimmed, idr: style.isIDR, keep: style.isIDR ? (style.decimals ?? 0) : 0)
     }
 
+    /// What the app SENDS for a NUMBER field (owner bug 27 Oct 2026): "" for an empty box, a JSON number for a
+    /// number, and the typed text when it is no number. The server keeps a JSON number as it is, while the
+    /// text "1.234" (one and 234 thousandths, as normalize gives it for "1,234") would be read again with the
+    /// Indonesian rules as 1 234. Older servers read the number exactly as they read the text before.
+    static func wireValue(_ typed: String, style: Style) -> Any {
+        let out = normalize(typed, style: style)
+        guard !out.isEmpty else { return "" }
+        guard isMachineNumber(out), let d = Decimal(string: out, locale: posix) else { return out }
+        return NSDecimalNumber(decimal: d)
+    }
+
     private static func isMachineNumber(_ s: String) -> Bool {
         s.range(of: "^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$", options: .regularExpression) != nil
     }

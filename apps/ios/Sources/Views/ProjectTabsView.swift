@@ -1859,9 +1859,9 @@ struct CreateTaskSheet: View {
                 guard let v = cfValues[f.id] else { continue }
                 switch v {
                 case .text(let s):
-                    // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
-                    let v = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
-                    if !v.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: v) }
+                    // A number goes as a JSON number, stored as it is ("369.000" Rupiah → 369000, "1,234" → 1.234).
+                    let v: Any = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.wireValue(s, style: f.options?.numberStyle ?? .plain) : s as Any
+                    if (v as? String)?.isEmpty != true { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: v) }
                 case .multi(let a):
                     if !a.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a) }
                 case .place(let l, let m):
