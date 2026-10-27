@@ -18,5 +18,7 @@ extension AppLanguage {
         "%d new posts": "%d post baru",
         "%d characters left": "Sisa %d karakter",
         "Couldn't edit the post.": "Post gagal diubah.",
+        // Ticket board card, a correction still waiting for the board (web id-dec25-b.ts, owner 25 Oct 2026).
+        "Correction pending": "Koreksi menunggu",
     ]
 }

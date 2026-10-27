@@ -733,8 +733,14 @@ private struct TicketBoardLane: View {
                     Text(ticketCategoryName(item.category ?? "OTHER"))
                     Spacer()
                     if item.hasGideonReply { Image(systemName: "sparkles").foregroundStyle(NX.violetText).accessibilityLabel(T("GIDEON replied")) }
-                    if item.showsDecisionMarker { Image(systemName: "clock.badge.exclamationmark").accessibilityLabel(T("Awaiting decision")) }
                 }.font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                // Spelled out, not just an icon: a ticket in Done can still carry a correction the board has to decide
+                // on (web TicketBoard "Correction pending" chip; visual QA 24 Oct, owner 25 Oct 2026).
+                if item.showsDecisionMarker {
+                    NexusChip(text: T("Correction pending"), tone: .accent, systemImage: "calendar.badge.clock")
+                        .fixedSize()
+                        .accessibilityLabel(T("Correction awaiting decision"))
+                }
                 if let reporter = item.reporter?.name { Text(reporter).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 HStack {
                     Label(AppNumber.int(max(0, (item.messageCount ?? 1) - 1)), systemImage: "bubble.right")
