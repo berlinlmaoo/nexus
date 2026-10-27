@@ -1329,6 +1329,9 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{record.checkOutReflection}</p>
           </div>
         )}
+        {/* The correction form is BoD's / One Above All's (PATCH /api/attendance/records answers anyone else 403):
+            a Staff Management viewer, a manager or the person on their own day saw a form that could only fail. */}
+        {canOverride && (<>
         <div className="mt-4 border-t border-border pt-4">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Manual correction")}</p>
         </div>
@@ -1343,6 +1346,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           {save.isError && <p className="text-sm text-destructive">{save.error instanceof Error && save.error.message ? save.error.message : tr("Couldn’t save the correction. Check your access and that check-out comes after check-in.")}</p>}
           <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {tr("Save correction")}</button>
         </div>
+        </>)}
         {canOverride && record.user?.id && (
           <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} current={overrideDayStateOf(record)} />
         )}
