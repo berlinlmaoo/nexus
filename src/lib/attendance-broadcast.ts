@@ -49,7 +49,11 @@ export async function attendanceViewerIds(personId: string): Promise<string[]> {
   if (!mine.length) return []
   const workspaceIds = [...new Set(mine.map((m) => m.workspaceId))]
   const managers = await prisma.workspaceMember.findMany({
-    where: { workspaceId: { in: workspaceIds }, role: { in: [...VIEWER_ROLES] } },
+    // BoD / OAA, and Staff Management (STAFF + attendanceViewAll: sees everyone, read only — 27 Oct 2026).
+    where: {
+      workspaceId: { in: workspaceIds },
+      OR: [{ role: { in: [...VIEWER_ROLES] } }, { role: "STAFF", attendanceViewAll: true }],
+    },
     select: { userId: true, workspaceId: true },
   })
   // viewer → the workspaces through which they see this person

@@ -221,4 +221,10 @@ export const ID_COPY: Record<string, string> = {
   "See where you stand on the Leaderboard.": "Lihat posisimu di Papan Peringkat.",
   "You're all set": "Semua siap",
   "Your profile is done and you know your way around NEXUS.": "Profilmu sudah lengkap dan kamu sudah kenal NEXUS.",
+  // Staff Management (27 Oct 2026)
+  "View only": "Hanya lihat",
+  "Staff Management: you can see everyone's attendance but not change it.": "Staff Management: kamu bisa melihat absensi semua orang, tapi tidak bisa mengubahnya.",
+  "Everyone's leave, sick and permit requests, view only. Submit your own here.": "Pengajuan cuti, sakit, dan izin semua orang, hanya untuk dilihat. Ajukan milikmu di sini.",
+  "Staff who can see everyone's attendance history, read only": "Staff yang bisa melihat riwayat absensi semua orang, tanpa bisa mengubah",
+  "Sees the attendance board, log, records, requests and reflections of everyone in the workspace. Can't correct, approve or change anything.": "Melihat papan absensi, log, rekap, pengajuan, dan refleksi semua orang di workspace. Tidak bisa mengoreksi, menyetujui, atau mengubah apa pun.",
 };

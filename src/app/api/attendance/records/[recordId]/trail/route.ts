@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!record) return NextResponse.json({ error: "Attendance record not found." }, { status: 404 })
 
     if (record.userId !== session.user.id) {
-      const scope = await reportableUserIds(session.user.id)
+      const scope = await reportableUserIds(session.user.id, { attendance: true })
       if (scope.workspaceId !== record.workspaceId || !scope.userIds.includes(record.userId)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }

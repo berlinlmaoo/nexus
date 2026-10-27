@@ -29,18 +29,20 @@ const MONTH_RE = /^\d{4}-\d{2}$/
 //   POST   { userId, date, reason? } -> grant an APPROVED day-off (no quota cap)
 //   DELETE ?id=                     -> remove a day-off request
 
-async function gate(req: NextRequest) {
+async function gate(req: NextRequest, opts: { read?: boolean } = {}) {
   const session = await auth()
   if (!session?.user?.id) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   const ctx = await getAttendanceWorkspaceContext(session.user.id)
   if (!ctx.workspace) return { error: NextResponse.json({ error: "No workspace membership found" }, { status: 404 }) }
+  // GET may also be Staff Management (read only, owner 27 Oct 2026); POST / DELETE stay BoD / OAA.
+  if (opts.read === true && ctx.canViewAllAttendance) return { session, workspaceId: ctx.workspace.id }
   if (!ctx.canManageAttendance) return { error: NextResponse.json({ error: "Hanya direksi ke atas yang bisa atur day-off." }, { status: 403 }) }
   return { session, workspaceId: ctx.workspace.id }
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const g = await gate(req)
+    const g = await gate(req, { read: true })
     if (g.error) return g.error
     const { workspaceId } = g
 

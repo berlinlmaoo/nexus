@@ -119,6 +119,8 @@ export type ReportScope = {
    * those who left before it began.
    */
   formerLeftAt: Map<string, Date>
+  /** Staff Management: sees `userIds` (mode ALL) but may change nothing. Only with `{ attendance: true }`. */
+  readOnly: boolean
 }
 
 /**
@@ -126,11 +128,28 @@ export type ReportScope = {
  * outside `userIds` is a 403, and client-supplied member lists are never trusted — they can only be
  * narrowed against this set.
  */
-export async function reportableUserIds(viewerId: string): Promise<ReportScope> {
+export async function reportableUserIds(viewerId: string, opts: { attendance?: boolean } = {}): Promise<ReportScope> {
   const context = await getAttendanceWorkspaceContext(viewerId)
   const workspaceId = context.workspace?.id ?? null
-  const base = { viewerId, workspaceId, directReportIds: [] as string[], exemptUserIds: [] as string[], formerLeftAt: new Map<string, Date>() }
+  const base = { viewerId, workspaceId, directReportIds: [] as string[], exemptUserIds: [] as string[], formerLeftAt: new Map<string, Date>(), readOnly: false }
   if (!workspaceId) return { ...base, mode: "SELF", userIds: [viewerId] }
+
+  // Staff Management (owner, 27 Oct 2026): for ATTENDANCE screens only (member record, location trail) a
+  // read-only viewer gets BoD's "ALL" with `readOnly` set — never for Reports per crew, which stays Staff.
+  if (opts.attendance && context.attendanceReadOnlyViewer) {
+    const [members, formers] = await Promise.all([
+      prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, role: true } }),
+      formerMembersOf(workspaceId),
+    ])
+    return {
+      ...base,
+      mode: "ALL",
+      readOnly: true,
+      userIds: [...new Set([viewerId, ...members.map((m) => m.userId), ...formers.map((f) => f.userId)])],
+      exemptUserIds: [...members, ...formers].filter((m) => isExemptRole(m.role)).map((m) => m.userId),
+      formerLeftAt: new Map(formers.map((f) => [f.userId, f.leftAt])),
+    }
+  }
 
   // People who left keep their past: BoD sees every former member, a manager those whose approver they
   // were when they left (FormerMember.approverId). Approval itself never reads this — it is history only.

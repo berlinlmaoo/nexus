@@ -35,7 +35,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
   // The full record (/people/:id) is for the person themself, the BoD, and a manager (whose view the
   // server narrows to their direct reports) — not for every colleague who can read this public log.
   const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1, staleTime: 60_000 });
-  const canOpenRecord = today.data?.viewerId === user.id || Boolean(today.data?.canManageAttendance || today.data?.canReviewAttendanceRequests);
+  const canOpenRecord = today.data?.viewerId === user.id || Boolean(today.data?.canManageAttendance || today.data?.canReviewAttendanceRequests || today.data?.canViewAttendanceBoard);
 
   return (
     <MorphPanel layoutId={layoutId} onClose={onClose}>

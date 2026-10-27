@@ -5,16 +5,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // history / Reports-per-crew rule (getAttendanceWorkspaceContext + reportableUserIds): BoD/OAA of the person's
 // workspace and their approver — each only when that workspace is the viewer's primary one — and nobody else.
 
-type Row = { userId: string; workspaceId: string; role: string; approverId: string | null; joinedAt: Date; deactivated?: boolean }
+type Row = { userId: string; workspaceId: string; role: string; approverId: string | null; joinedAt: Date; deactivated?: boolean; attendanceViewAll?: boolean }
 const m = vi.hoisted(() => ({ rows: [] as Row[] }))
 
 vi.mock("@/lib/prisma", () => {
-  type Where = { userId?: string | { in: string[] }; workspaceId?: { in: string[] }; role?: { in: string[] }; user?: { deactivatedAt: null } }
-  const match = (r: Row, w: Where) => {
+  type Where = { userId?: string | { in: string[] }; workspaceId?: { in: string[] }; role?: string | { in: string[] }; attendanceViewAll?: boolean; user?: { deactivatedAt: null }; OR?: Where[] }
+  const match = (r: Row, w: Where): boolean => {
     if (typeof w.userId === "string" && r.userId !== w.userId) return false
     if (w.userId && typeof w.userId === "object" && !w.userId.in.includes(r.userId)) return false
     if (w.workspaceId && !w.workspaceId.in.includes(r.workspaceId)) return false
-    if (w.role && !w.role.in.includes(r.role)) return false
+    if (typeof w.role === "string" && r.role !== w.role) return false
+    if (w.role && typeof w.role === "object" && !w.role.in.includes(r.role)) return false
+    if (w.attendanceViewAll !== undefined && (r.attendanceViewAll ?? false) !== w.attendanceViewAll) return false
+    if (w.OR && !w.OR.some((o) => match(r, o))) return false
     if (w.user && r.deactivated) return false
     return true
   }
@@ -74,6 +77,15 @@ describe("attendanceViewerIds", () => {
   })
   it("a BoD's own attendance is seen by the other BoD/OAA, not by themselves through the role", async () => {
     expect((await attendanceViewerIds("bod")).sort()).toEqual(["oaa"])
+  })
+  it("Staff Management (STAFF + attendanceViewAll) hears everyone of their primary workspace; a plain Staff never", async () => {
+    m.rows.push({ userId: "sm", workspaceId: ORG, role: "STAFF", approverId: "mgr", joinedAt: d(3), attendanceViewAll: true })
+    expect((await attendanceViewerIds("staff")).sort()).toEqual(["bod", "mgr", "oaa", "sm"])
+    expect((await attendanceViewerIds("mgr")).sort()).toEqual(["bod", "oaa", "sm"])
+    expect(await attendanceViewerIds("staff")).not.toContain("peer")
+    // the flag means nothing on another role (the API never sets it there)
+    m.rows.push({ userId: "mgr3", workspaceId: ORG, role: "MANAGER", approverId: null, joinedAt: d(3), attendanceViewAll: true })
+    expect(await attendanceViewerIds("peer")).not.toContain("mgr3")
   })
   it("someone in no workspace has no viewers", async () => {
     expect(await attendanceViewerIds("nobody")).toEqual([])

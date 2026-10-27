@@ -452,6 +452,14 @@ model WorkspaceMember {
   // roles. Opt-in per person; default off = normal geofenced attendance.
   noGeofenceMode Boolean @default(false)
 
+  /// "Staff Management" (owner, 27 Oct 2026): a STAFF member of the management team who may SEE everyone's
+  /// attendance in the workspace (board, log, member records, request history, reflections, location trails)
+  /// but change nothing. The role stays STAFF, so released apps, GIDEON tiers/credits, the approval chart,
+  /// reports and quests still see a plain Staff. Only ever true on a STAFF row (PATCH /api/workspaces/members
+  /// clears it when the role changes). Read it through getAttendanceWorkspaceContext().canViewAllAttendance.
+  /// prisma/sql/2026-10-27-staff-management.sql
+  attendanceViewAll Boolean @default(false)
+
   /// Atasan langsung untuk approval absensi — tepi di Bagan Approval (Control Room).
   ///
   /// Hanya bermakna untuk STAFF, dan hanya boleh menunjuk MANAGER: request staff masuk ke orang

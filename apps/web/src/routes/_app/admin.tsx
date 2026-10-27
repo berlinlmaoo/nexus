@@ -25,7 +25,7 @@ import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { LoadError, isForbidden } from "@/components/LoadError";
 import { friendlyError } from "@/lib/task-undo";
 import { failureText, toastFailure } from "@/lib/failure";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam, type NexusOffboardResult, type OffboardReason } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, STAFF_MANAGEMENT, STAFF_MANAGEMENT_LABEL, STAFF_MANAGEMENT_TONE, accessLevelOf, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam, type NexusOffboardResult, type OffboardReason } from "@/lib/nexus-api";
 // Crew Hub tidak punya halaman lagi. Pengaturan TIM-nya sendiri — nama, divisi, jam shift,
 // tautan project, hapus — dibuka dari chip tim di baris ORANGNYA, memakai kartu yang sama
 // persis seperti dulu. Tidak ada tim yang jadi tak terjangkau: ke-21 tim punya minimal satu
@@ -100,7 +100,7 @@ function Admin() {
   const wsId = wsm.data?.workspaceId;
   const viewerRole = wsm.data?.role;
   const viewerAssignable = assignableRoles(viewerRole);
-  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null, joinedAt: m.joinedAt ?? null, hidden: m.personalHidden === true }] as const));
+  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, level: accessLevelOf(m), shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null, joinedAt: m.joinedAt ?? null, hidden: m.personalHidden === true }] as const));
   const orgCount = (role: string) => wsMembers.filter((m) => m.role === role).length;
   // Per-person shift (jam masuk/keluar) bisa diatur BoD ke atas, di sini di Members.
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -120,7 +120,11 @@ function Admin() {
   // 403 back, which reads as a broken page rather than a permission they do not have.
   const canAnnounce = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
   const updateOrg = useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: string }) => nexusApi.updateWorkspaceMember({ memberId, role: role as OrgRole, workspaceId: wsId }),
+    // "Staff Management" is role STAFF + attendanceViewAll (owner, 27 Oct 2026); picking Staff turns the view off.
+    mutationFn: ({ memberId, role }: { memberId: string; role: string }) => nexusApi.updateWorkspaceMember(
+      role === STAFF_MANAGEMENT ? { memberId, role: "STAFF", attendanceViewAll: true, workspaceId: wsId }
+        : role === "STAFF" ? { memberId, role: "STAFF", attendanceViewAll: false, workspaceId: wsId }
+        : { memberId, role: role as OrgRole, workspaceId: wsId }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
       qc.invalidateQueries({ queryKey: ["nexus", "approval-chart"] });
@@ -687,7 +691,7 @@ type UserRowProps = {
   onTeamAdd: (teamId: string) => void; onTeamOpen: (teamId: string) => void; onTeamCreated: (teamId: string) => void; onTeamExit: (team: { id: string; name: string }, losing: string[]) => void;
   gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean;
   user: NexusAdminUser;
-  orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null; joinedAt?: string | null; hidden?: boolean };
+  orgInfo?: { memberId: string; role: string; level?: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null; joinedAt?: string | null; hidden?: boolean };
   assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean;
   canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void;
   shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void;
@@ -791,7 +795,7 @@ function UserRow(props: UserRowProps) {
               (owner, 18 Oct 2026). sm+ keeps one row. */}
           <div className="flex flex-col items-end justify-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             {orgInfo ? (
-              <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
+              <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", orgInfo.level === STAFF_MANAGEMENT ? STAFF_MANAGEMENT_TONE : ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{orgInfo.level === STAFF_MANAGEMENT ? STAFF_MANAGEMENT_LABEL : ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             ) : deactivated ? (
               leftAt
                 ? <LeftTag leftAt={leftAt} className="px-2 text-[11px] font-bold" />
@@ -896,7 +900,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-bold tracking-tight">{user.name || t("Unnamed")}</h2>
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
+              <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", orgInfo.level === STAFF_MANAGEMENT ? STAFF_MANAGEMENT_TONE : ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{orgInfo.level === STAFF_MANAGEMENT ? STAFF_MANAGEMENT_LABEL : ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             </div>
             <div className="truncate text-sm text-muted-foreground">{user.email}</div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -916,7 +920,17 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
               {canDelete && <AccountCard user={user} memberId={orgInfo.memberId} Card={Card} />}
               <Card title={t("Role")}>
                 {canEdit ? (
-                  <SelectPicker variant="field" value={orgInfo.role} disabled={pending} onChange={onOrgRole} ariaLabel={t("Role")} options={[...assignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="w-full bg-card px-3 py-2 font-semibold" />
+                  <>
+                    {/* Staff Management sits right after Staff: a Staff who also sees everyone's attendance, read only. */}
+                    <SelectPicker variant="field" value={orgInfo.level ?? orgInfo.role} disabled={pending} onChange={onOrgRole} ariaLabel={t("Role")}
+                      options={[...assignable].reverse().flatMap<{ value: string; label: string; hint?: string }>((r) => r === "STAFF"
+                        ? [{ value: r, label: ORG_ROLE_LABEL[r] }, { value: STAFF_MANAGEMENT, label: STAFF_MANAGEMENT_LABEL, hint: t("Staff who can see everyone's attendance history, read only") }]
+                        : [{ value: r, label: ORG_ROLE_LABEL[r] }])}
+                      className="w-full bg-card px-3 py-2 font-semibold" />
+                    {orgInfo.level === STAFF_MANAGEMENT && (
+                      <p className="mt-2 text-xs leading-snug text-muted-foreground">{t("Sees the attendance board, log, records, requests and reflections of everyone in the workspace. Can't correct, approve or change anything.")}</p>
+                    )}
+                  </>
                 ) : (
                   // A Manager can't change anyone's role (server: BoD and up manage members), so "at or above
                   // yours" was false for every Staff they opened (QA 13 Oct 2026).

@@ -41,6 +41,8 @@ export function asMemberAsOf(f: FormerMember): MemberAsOf {
     flexiTimeEnabled: row.flexiTimeEnabled === true,
     restDays: f.restDays ?? [],
     noGeofenceMode: row.noGeofenceMode === true,
+    // Access is not carried past leaving: a former member reads as a plain member.
+    attendanceViewAll: false,
     approverId: f.approverId,
     userId: f.userId,
     workspaceId: f.workspaceId,
