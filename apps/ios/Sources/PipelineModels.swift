@@ -1104,20 +1104,38 @@ enum PipelineFormat {
         return f.string(from: NSNumber(value: v)) ?? String(Int(v))
     }
 
-    /// Compact, for narrow cards, tiles and columns: "Rp 963 jt" / "Rp 1,3 M" / "Rp 250 rb" (Indonesian) or
-    /// "Rp 963 M" / "Rp 1.3 B" / "Rp 250 K" (English), a space before the unit (owner decision, 25 Oct 2026).
-    /// Everywhere with room the full amount stays: `idrFull`, "Rp 6.000.000".
+    /// Halves round up, as the web's Intl.NumberFormat: 1,25 M reads "Rp 1,3 M" (NumberFormatter's default
+    /// rounds a half to even, "Rp 1,2 M").
+    private static let compactID0: NumberFormatter = {
+        let f = formatter(digits: 0, id: true)
+        f.roundingMode = .halfUp
+        return f
+    }()
+    private static let compactID1: NumberFormatter = {
+        let f = formatter(digits: 1, id: true)
+        f.roundingMode = .halfUp
+        return f
+    }()
+
+    /// Compact, for narrow cards, tiles and columns: "Rp 1,3 M" (miliar), "Rp 963 jt" (juta), "Rp 450 rb"
+    /// (ribu), a space before the unit. Indonesian units and a decimal comma in EVERY interface language, as the
+    /// web's fmtIdr (pipeline-ui.tsx): the amount is Rupiah, and "Rp 1.3B" / "Rp 963M" read like dollars (owner
+    /// decision, 25 Oct 2026). Everywhere with room the full amount stays: `idrFull`, "Rp 6.000.000".
     static func idr(_ n: Double?) -> String {
         guard let n, n.isFinite else { return "–" }
+        let sign = n < 0 ? "\u{2212}" : ""
         let abs = Swift.abs(n)
-        let suffix = isID ? ("M", "jt", "rb") : ("B", "M", "K")
-        var v = abs
-        var s = ""
-        if abs >= 1e9 { v = abs / 1e9; s = suffix.0 }
-        else if abs >= 1e6 { v = abs / 1e6; s = suffix.1 }
-        else if abs >= 1e3 { v = abs / 1e3; s = suffix.2 }
-        let digits = (!s.isEmpty && v < 10) ? 1 : 0
-        return "\(n < 0 ? "\u{2212}" : "")Rp \(number(v, digits: digits))\(s.isEmpty ? "" : " " + s)"
+        let units: [(size: Double, name: String)] = [(1e9, "M"), (1e6, "jt"), (1e3, "rb")]
+        guard let i = units.firstIndex(where: { abs >= $0.size }) else {
+            return sign + "Rp " + (compactID0.string(from: NSNumber(value: abs)) ?? String(Int(abs.rounded())))
+        }
+        let v = abs / units[i].size
+        let f = v < 10 ? compactID1 : compactID0
+        let shown = f.string(from: NSNumber(value: v)) ?? String(Int(v.rounded()))
+        // Rounding can carry into the next unit: 999.600.000 reads "Rp 1 M", not "Rp 1.000 jt" (web, same rule).
+        let rounded = Double(shown.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")) ?? v
+        if i > 0 && rounded >= 1000 { return sign + "Rp 1 " + units[i - 1].name }
+        return sign + "Rp " + shown + " " + units[i].name
     }
 
     /// Full: Rp 950.000.000.
