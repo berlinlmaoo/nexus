@@ -54,6 +54,7 @@ export function SelectPicker({
   renderValue,
   id,
   wrapLabels = false,
+  hintLayout,
 }: {
   value: string | null | undefined;
   onChange: (value: string) => void;
@@ -78,6 +79,13 @@ export function SelectPicker({
   id?: string;
   /** Option labels wrap to two lines instead of one cut-off line (long project names that differ only at the end). */
   wrapLabels?: boolean;
+  /**
+   * Where option hints go: "inline" = right of the label (short hints like "Read only"), "below" = a
+   * muted second line under the label. Default: "below" for the whole list once any hint is longer than
+   * a few words — an inline hint never shrinks, so a long one squeezed the label to nothing (27 Oct 2026,
+   * the project access menu showed only "Edit, manage members…" with no "Full access").
+   */
+  hintLayout?: "inline" | "below";
 }) {
   const { t } = useLang();
   const listId = useId();
@@ -95,6 +103,7 @@ export function SelectPicker({
   const shown = useMemo(() => (query ? all.filter((o) => o.label.toLowerCase().includes(query) || (o.hint ?? "").toLowerCase().includes(query)) : all), [all, query]);
   const current = all.find((o) => o.value === (value ?? "")) ?? null;
   const isEmpty = !current || (current.value === "" && clearLabel != null);
+  const hintsBelow = (hintLayout ?? (options.some((o) => (o.hint?.length ?? 0) > 24) ? "below" : "inline")) === "below";
 
   // Opening puts the cursor on the chosen option (or the first one).
   useEffect(() => {
@@ -251,11 +260,17 @@ export function SelectPicker({
                     <span className="truncate text-muted-foreground">{o.label}</span>
                   ) : o.color ? (
                     <OptionChip label={o.label} color={o.color} />
+                  ) : hintsBelow ? (
+                    // Title on top, the hint as a wrapping second line: both always readable in full.
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="flex min-w-0 items-center gap-2">{o.icon}<span className="break-words">{o.label}</span></span>
+                      {o.hint && <span className="break-words text-xs leading-snug text-muted-foreground">{o.hint}</span>}
+                    </span>
                   ) : (
                     <span className="flex min-w-0 items-center gap-2">{o.icon}<span className={wrapLabels ? "line-clamp-2 break-words" : "truncate"} title={wrapLabels ? o.label : undefined}>{o.label}</span></span>
                   )}
-                  {o.hint && <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">{o.hint}</span>}
-                  <Check className={cn("h-3.5 w-3.5 shrink-0", !o.hint && "ml-auto", selected ? "opacity-100" : "opacity-0")} aria-hidden />
+                  {o.hint && !hintsBelow && <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">{o.hint}</span>}
+                  <Check className={cn("h-3.5 w-3.5 shrink-0", (!o.hint || hintsBelow) && "ml-auto", selected ? "opacity-100" : "opacity-0")} aria-hidden />
                 </div>
               </div>
             );

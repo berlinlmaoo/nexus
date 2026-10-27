@@ -1725,6 +1725,11 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   const [picking, setPicking] = useState(false);
   const { t } = useLang();
   const isMobile = useIsMobile();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Desktop: the 320px panel hangs left from the avatars; when the header wraps (about 1000px with the
+  // sidebar open) the avatars sit near the content's left edge and the panel slid under the sidebar,
+  // cutting off names (27 Oct 2026). Then it opens to the right of them instead.
+  const [hangRight, setHangRight] = useState(false);
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const myRole = wsm.data?.role ?? "";
@@ -1752,7 +1757,11 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog" className="inline-flex items-center justify-center rounded-full transition hover:opacity-80 pointer-coarse:min-h-11 pointer-coarse:min-w-11" title={t("Project members")} aria-label={t("Project members")}>
+      <button type="button" ref={triggerRef} onClick={() => {
+        const el = triggerRef.current;
+        if (el && !open) setHangRight(el.getBoundingClientRect().right - 320 < (el.closest("main")?.getBoundingClientRect().left ?? 0) + 16);
+        setOpen((v) => !v);
+      }} aria-expanded={open} aria-haspopup="dialog" className="inline-flex items-center justify-center rounded-full transition hover:opacity-80 pointer-coarse:min-h-11 pointer-coarse:min-w-11" title={t("Project members")} aria-label={t("Project members")}>
         {ids.length > 0 ? <AvatarStack ids={ids} size={isMobile ? 24 : 26} max={isMobile ? 2 : 4} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
       </button>
       {open && portalOnPhone(isMobile, (
@@ -1761,7 +1770,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
           {/* Phone: out of the pinned header (whose stacking put the view tabs over the list) and held inside the
               screen with a 16px gutter; anchored under the avatars, the 288px panel ran off the left edge and cut
               the avatars and "Add people to project" (visual QA 24 Oct). */}
-          <div role="dialog" aria-label={t("Project members")} className={cn("z-50 rounded-xl border border-border bg-card p-2 shadow-pop", isMobile ? "fixed inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)]" : "absolute right-0 top-full mt-2 w-80")}>
+          <div role="dialog" aria-label={t("Project members")} className={cn("z-50 rounded-xl border border-border bg-card p-2 shadow-pop", isMobile ? "fixed inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)]" : cn("absolute top-full mt-2 w-80", hangRight ? "left-0" : "right-0"))}>
             <div className={labelCls}>{t("Project members · {n}", { n: members.length })}</div>
             <div className="max-h-72 space-y-0.5 overflow-y-auto">
               {members.map((m) => {
