@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const ctx = await getAttendanceWorkspaceContext(session.user.id)
     if (!ctx.workspace) return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
-    if (!ctx.canManageAttendance) {
+    // Reading only: BoD / OAA, and Staff Management (read-only viewer, owner 27 Oct 2026).
+    if (!ctx.canViewAllAttendance) {
       return NextResponse.json({ error: "Hanya direksi ke atas yang bisa lihat potongan orang lain." }, { status: 403 })
     }
     const workspaceId = ctx.workspace.id

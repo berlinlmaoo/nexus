@@ -437,14 +437,15 @@ export async function GET(request: NextRequest) {
     const formers = scope === "me" ? [] : await formerMembersOf(context.workspace.id)
     const formersInRange = formers.filter((f) => f.leftAt >= range.start)
     const leftAtByUser = new Map(formers.map((f) => [f.userId, f.leftAt]))
-    const formerReportIds = context.canManageAttendance
+    // Staff Management (canViewAllAttendance, read only) sees the board BoD sees: the whole workspace.
+    const formerReportIds = context.canViewAllAttendance
       ? []
       : formersInRange.filter((f) => f.approverId === session.user.id).map((f) => f.userId)
 
     // BoD/OAA melihat seluruh workspace; seorang MANAGER hanya orang-orang di bawahnya di Bagan
     // Approval. (Dulu: anggota tim yang dia pimpin — lead tim sudah tidak ada.)
-    const isTeamManager = !context.canManageAttendance && (context.directReportIds.length > 0 || formerReportIds.length > 0)
-    if (scope === "workspace" && !context.canManageAttendance && !isTeamManager) {
+    const isTeamManager = !context.canViewAllAttendance && (context.directReportIds.length > 0 || formerReportIds.length > 0)
+    if (scope === "workspace" && !context.canViewAllAttendance && !isTeamManager) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

@@ -1049,6 +1049,13 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     directReportIds = reports.map((r) => r.userId)
   }
   const canReviewAttendanceRequests = canManageAttendance || directReportIds.length > 0
+  // "Staff Management" (owner, 27 Oct 2026): a STAFF member with WorkspaceMember.attendanceViewAll SEES the
+  // whole workspace's attendance (board, log, member records, request history, reflections, trails) and
+  // changes nothing. Every write keeps checking canManageAttendance / the approval scope above, which this
+  // never widens — that is the whole of "read only". BoD / One Above All see everything anyway.
+  const attendanceReadOnlyViewer =
+    !canManageAttendance && workspaceRole === "STAFF" && workspaceMember?.attendanceViewAll === true
+  const canViewAllAttendance = canManageAttendance || attendanceReadOnlyViewer
   // Approvals (owner, 30 Sep 2026): whose requests and offsite check-outs this person sees and
   // decides. null = everyone (One Above All). A BoD: everyone in their own tree of the
   // chart, never another BoD's. Anyone else: the people directly under them.
@@ -1069,6 +1076,10 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     directReportIds,
     canReviewAttendanceRequests,
     approvalScopeUserIds,
+    /** Sees every member's attendance in the workspace (BoD / OAA, or Staff Management read-only). */
+    canViewAllAttendance,
+    /** Staff Management: sees everyone, may change nothing beyond their own attendance. */
+    attendanceReadOnlyViewer,
   }
 }
 

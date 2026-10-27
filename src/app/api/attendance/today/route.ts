@@ -259,6 +259,11 @@ export async function GET() {
       noGeofence,
       canManageAttendance: context.canManageAttendance,
       canReviewAttendanceRequests: context.canReviewAttendanceRequests,
+      // Staff Management (owner, 27 Oct 2026). canManage/canReview above are unchanged for this person, so
+      // released apps keep showing them the plain Staff screen (no approve or edit buttons that would 403).
+      // Newer clients show the whole-workspace board / log / records read only when this is true.
+      canViewAttendanceBoard: context.canViewAllAttendance || context.canReviewAttendanceRequests,
+      attendanceReadOnly: context.attendanceReadOnlyViewer,
       annualLeave,
       // The viewer's own id, so the approvals list can hide Approve/Reject on their OWN request
       // instead of offering a button the server will refuse with SELF_REVIEW.

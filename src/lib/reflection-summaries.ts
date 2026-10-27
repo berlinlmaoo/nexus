@@ -42,11 +42,14 @@ export function previousMonthKey(now = new Date()): string {
  * Who may read whose reflections: yourself, your direct reports (Bagan Approval), and everyone
  * if you manage attendance (BoD / One Above All). Same rule as the history board.
  */
-export async function reflectionAccess(viewerId: string, targetUserId: string | null | undefined) {
+export async function reflectionAccess(viewerId: string, targetUserId: string | null | undefined, opts: { read?: boolean } = {}) {
   const ctx = await getAttendanceWorkspaceContext(viewerId)
   if (!ctx.workspace) return { ok: false as const, status: 404, error: "No workspace membership found" }
   const userId = targetUserId || viewerId
+  // Staff Management (canViewAllAttendance) may READ anyone's reflections; asking GIDEON to summarise
+  // someone else's month (a write) stays with BoD / OAA and the person's approver.
   const allowed = userId === viewerId || ctx.canManageAttendance || ctx.directReportIds.includes(userId)
+    || (opts.read === true && ctx.canViewAllAttendance)
   if (!allowed) return { ok: false as const, status: 403, error: "Forbidden" }
   return { ok: true as const, userId, workspaceId: ctx.workspace.id }
 }

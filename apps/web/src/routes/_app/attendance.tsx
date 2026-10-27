@@ -259,7 +259,12 @@ function Attendance() {
   const canManage = Boolean(today.data?.canManageAttendance);
   // A team-lead MANAGER can review (team-scoped) but not fully manage → still gets the crew board,
   // scoped to their team by the backend. Workspace-wide admin actions stay gated on canManage.
-  const canSeeBoard = canManage || canReview;
+  // Staff Management (owner, 27 Oct 2026): the whole workspace's board, log, records and requests, read only.
+  // The server answers every write of theirs 403; nothing below that edits is drawn for them.
+  const readOnlyViewer = Boolean(today.data?.attendanceReadOnly);
+  const canSeeBoard = canManage || canReview || Boolean(today.data?.canViewAttendanceBoard);
+  // Day-off / XP figures per person: BoD, and Staff Management (to read; deductions stay BoD's to remove).
+  const canSeeQuota = canManage || readOnlyViewer;
   // Privacy: managers (BoD/OAA/admin) see the whole crew board; everyone else only their OWN attendance.
   const boardScope = canSeeBoard ? "workspace" : "me";
   const history = useQuery({ queryKey: ["attendance-history", boardScope, monthKey], queryFn: () => nexusApi.attendanceHistory(`scope=${boardScope}&month=${monthKey}`), retry: 1 });
@@ -267,7 +272,7 @@ function Attendance() {
   const dayOffSummary = useQuery({
     queryKey: ["attendance-dayoff-summary", monthKey],
     queryFn: () => nexusApi.attendanceDayOffSummary(monthKey),
-    enabled: canManage, retry: 1, staleTime: 30_000,
+    enabled: canSeeQuota, retry: 1, staleTime: 30_000,
   });
   const dayOffOf = (userId: string) => dayOffSummary.data?.members.find((m) => m.userId === userId) ?? null;
   // Whose deduction log is open (opened by tapping a name/avatar in the table).
@@ -621,7 +626,8 @@ function Attendance() {
         <div data-snap-row className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
+              <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}
+                {readOnlyViewer && <span title={tr("Staff Management: you can see everyone's attendance but not change it.")} className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground ring-1 ring-border">{tr("View only")}</span>}</h2>
               {/* The colour sentence only where the legend beside it is hidden (a phone); one key, not two (UI tour run 20,
                   R20-WD-9). */}
               <p className="text-sm text-muted-foreground">{viewMode === "grid" ? <span className="sm:hidden">{tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave.")}</span> : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location.") : tr("Your check-in/out history, with selfie and location."))}
@@ -764,7 +770,7 @@ function Attendance() {
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
                       <div className="flex min-w-0 flex-col gap-1.5">
-                        {canManage ? (
+                        {canSeeQuota ? (
                           <button
                             onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
                             title={tr("See {name}'s XP and day-off deductions", { name: u.name ?? tr("this person") })}
@@ -775,7 +781,7 @@ function Attendance() {
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
                               <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
-                              <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
+                              <PhoneMemberSummary d={canSeeQuota ? dayOffOf(u.id) : null} />
                             </div>
                           </button>
                         ) : (
@@ -785,7 +791,7 @@ function Attendance() {
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
                               <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
-                              <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
+                              <PhoneMemberSummary d={canSeeQuota ? dayOffOf(u.id) : null} />
                             </div>
                           </div>
                         )}
@@ -798,7 +804,7 @@ function Attendance() {
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
                           className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground tap-area">{tr("Record")}</Link>
-                        {canManage && (() => {
+                        {canSeeQuota && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
                           // Amber once they're down to their last one, rose when it's gone — a
@@ -949,8 +955,8 @@ function Attendance() {
           )}
         </div>
 
-        <ReflectionsSection canPickPeople={canSeeBoard} members={allMembers} />
-        <RequestsSection canReview={canReview} canManage={canManage} viewerId={today.data?.viewerId ?? null} />
+        <ReflectionsSection canPickPeople={canSeeBoard} canSummarizeOthers={!readOnlyViewer} members={allMembers} />
+        <RequestsSection canReview={canReview} canManage={canManage} readOnlyViewer={readOnlyViewer} viewerId={today.data?.viewerId ?? null} />
         {canManage && <OfficesSection />}
       </div>
       <AnimatePresence>
@@ -961,6 +967,7 @@ function Attendance() {
             userId={deductionsFor.id}
             name={deductionsFor.name}
             monthKey={monthKey}
+            readOnly={!canManage}
             onClose={() => setDeductionsFor(null)}
           />
         )}
@@ -996,7 +1003,7 @@ function Attendance() {
  * re-derives the penalty and it comes straight back. It clears the whole DAY, so every entry sharing
  * that date clears together; the UI says so instead of pretending otherwise.
  */
-function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string; name: string | null; monthKey: string; onClose: () => void }) {
+function DeductionLogModal({ userId, name, monthKey, readOnly = false, onClose }: { userId: string; name: string | null; monthKey: string; readOnly?: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["attendance-deductions", userId, monthKey],
@@ -1030,7 +1037,7 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
       <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600 dark:text-rose-400")}>
         {e.unit === "XP" ? `${formatCount(e.amount)} XP` : tr("{n} day off", { n: e.amount })}
       </span>
-      {!e.cleared && (
+      {!e.cleared && !readOnly && (
         <button aria-label={tr("Remove this day's deduction")}
           disabled={clear.isPending}
           onClick={() => {
@@ -1455,7 +1462,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
 // Reflections: the daily check-out notes, with GIDEON's read of each day and of the month so far.
 // Everyone sees their own; a manager picks one of their reports, BoD anyone on the board.
 // ---------------------------------------------------------------------------------------------
-function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean; members: Array<{ id: string; name?: string | null; email?: string | null }> }) {
+function ReflectionsSection({ canPickPeople, canSummarizeOthers = true, members }: { canPickPeople: boolean; canSummarizeOthers?: boolean; members: Array<{ id: string; name?: string | null; email?: string | null }> }) {
   const { locale, tn } = useLang();
   const [month, setMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [userId, setUserId] = useState<string | undefined>(undefined);
@@ -1510,11 +1517,14 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
             <div className="rounded-2xl border border-ring/20 bg-primary/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" /> {tr("GIDEON's month summary")}</div>
+                {/* Staff Management reads someone else's reflections but does not ask GIDEON to write their summary. */}
+                {(canSummarizeOthers || !userId) && (
                 <button type="button" onClick={() => summarize.mutate()} disabled={summarize.isPending}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-60">
                   {summarize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                   {summarize.isPending ? tr("GIDEON is reading…") : monthly ? (upToDate ? tr("Summary is up to date") : tr("Update the summary")) : tn(days.length, "Summarize {n} day so far", "Summarize {n} days so far")}
                 </button>
+                )}
               </div>
               {monthly ? (
                 <>
@@ -1582,7 +1592,7 @@ function foldText(value?: string | null) {
   return (value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolean; canManage: boolean; viewerId: string | null }) {
+function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerId }: { canReview: boolean; canManage: boolean; readOnlyViewer?: boolean; viewerId: string | null }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   // null means "the user has not picked a chip" — the default then follows `canReview` once the
@@ -1620,7 +1630,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   // Submissions list came back empty — they could file a request and then never see it again, on
   // the one screen built to show it to them. iOS has always picked the scope by permission
   // (AttendanceRequestsView.swift); the web never did.
-  const requestsScope = canReview ? "scope=workspace" : "scope=me";
+  // Staff Management reads the whole workspace's requests too (the server allows scope=workspace for them, read only).
+  const requestsScope = canReview || readOnlyViewer ? "scope=workspace" : "scope=me";
   const requestsQuery = useQuery({ queryKey: ["attendance-requests", requestsScope], queryFn: () => nexusApi.attendanceRequests(requestsScope), retry: 1 });
   const rows = Array.isArray(requestsQuery.data) ? requestsQuery.data : requestsQuery.data?.requests ?? [];
   const pending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
@@ -1796,7 +1807,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             <button disabled={review.isPending} onClick={() => { setRejectingId(r.id); setRejectNote(""); }} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">{tr("Reject")}</button>
           </div>
         )}
-        {(!canReview || isMine) && isPending && rejectingId !== r.id && (
+        {(isMine || (!canReview && !readOnlyViewer)) && isPending && rejectingId !== r.id && (
           <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">{tr("Cancel")}</button>
         )}
 
@@ -1904,7 +1915,9 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               ? tr("One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision.")
               : canReview
                 ? tr("Review pending requests (leave, sick, permit, day off) and submit your own.")
-                : tr("Submit leave, sick or permit requests.")}
+                : readOnlyViewer
+                  ? tr("Everyone's leave, sick and permit requests, view only. Submit your own here.")
+                  : tr("Submit leave, sick or permit requests.")}
           </p>
         </div>
         <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> {tr("New request")}</button>

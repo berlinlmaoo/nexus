@@ -365,7 +365,10 @@ export async function GET(request: NextRequest) {
     }
 
     const scope = parsed.data.scope ?? "me"
-    if ((scope === "workspace" || scope === "approvals") && !context.canReviewAttendanceRequests) {
+    // Staff Management (read only, owner 27 Oct 2026) may READ the workspace's request history
+    // (scope=workspace) but has no approvals queue: that list is work only a reviewer can act on.
+    const readOnlyWorkspace = scope === "workspace" && !context.canReviewAttendanceRequests && context.attendanceReadOnlyViewer
+    if ((scope === "workspace" || scope === "approvals") && !context.canReviewAttendanceRequests && !readOnlyWorkspace) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -376,7 +379,7 @@ export async function GET(request: NextRequest) {
     // Bagan Approval (owner, 30 Sep 2026): a manager sees the people directly under them, a BoD
     // everyone in their own tree, One Above All everyone (approvalScopeUserIds null).
     let teamScopeUserIds: string[] | null = null
-    if ((scope === "workspace" || scope === "approvals") && context.approvalScopeUserIds !== null) {
+    if ((scope === "workspace" || scope === "approvals") && context.approvalScopeUserIds !== null && !readOnlyWorkspace) {
       teamScopeUserIds = context.approvalScopeUserIds
     }
 

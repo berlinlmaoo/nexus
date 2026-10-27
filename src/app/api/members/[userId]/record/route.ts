@@ -49,13 +49,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const period = parseRecordPeriod(parsed.data.period)
     if (!period.ok) return NextResponse.json({ error: period.error, code: period.code }, { status: 400 })
 
-    const scope = await reportableUserIds(viewerId)
+    const scope = await reportableUserIds(viewerId, { attendance: true })
     if (!scope.workspaceId) return NextResponse.json({ error: "No workspace membership found", code: "NO_WORKSPACE" }, { status: 404 })
     if (!scope.userIds.includes(targetId)) {
       return NextResponse.json({ error: "Kamu tidak bisa melihat rekap orang ini.", code: "FORBIDDEN" }, { status: 403 })
     }
     const workspaceId = scope.workspaceId
-    const canManage = scope.mode === "ALL"
+    // Staff Management sees everyone (mode ALL) but read only: no Change status, no removing deductions.
+    const canManage = scope.mode === "ALL" && !scope.readOnly
     const isSelf = targetId === viewerId
 
     if (parsed.data.only === "xp") {

@@ -459,6 +459,10 @@ export type NexusAttendanceToday = {
   activeOfficeCount?: number;
   canManageAttendance?: boolean;
   canReviewAttendanceRequests?: boolean;
+  /** Sees the whole-workspace board / log / records (BoD, a reviewer, or Staff Management). */
+  canViewAttendanceBoard?: boolean;
+  /** Staff Management: sees everyone's attendance, changes nothing. */
+  attendanceReadOnly?: boolean;
   /** The signed-in user's own id, for hiding self-review controls. */
   viewerId?: string;
   /** Cuti tahunan: eligibility + how many days are left this calendar year. */
@@ -835,6 +839,15 @@ export const ORG_ROLE_TONE: Record<string, string> = {
   MANAGER: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
   STAFF: "bg-muted text-muted-foreground",
 };
+// "Staff Management" (owner, 27 Oct 2026) is not a role of its own: role STAFF + attendanceViewAll. The role
+// picker offers it as a fifth access level; this is the picker value and its label.
+export const STAFF_MANAGEMENT = "STAFF_MANAGEMENT";
+export const STAFF_MANAGEMENT_LABEL = "Staff Management";
+export const STAFF_MANAGEMENT_TONE = "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300";
+/** The access level a member shows: their role, or Staff Management for a Staff with attendanceViewAll. */
+export function accessLevelOf(m: { role: string; attendanceViewAll?: boolean | null }): string {
+  return m.role === "STAFF" && m.attendanceViewAll ? STAFF_MANAGEMENT : m.role;
+}
 export const ORG_HIERARCHY: Record<string, number> = { ONE_ABOVE_ALL: 4, BOD: 3, MANAGER: 2, STAFF: 1 };
 export const ORG_ROLES: OrgRole[] = ["ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF"];
 // Roles a viewer of `viewerRole` is allowed to assign (strictly below them; One Above All can assign any).
@@ -858,6 +871,8 @@ export type NexusWorkspaceMember = {
   avatar: string | null;
   phoneNumber?: string | null;
   role: string;
+  /** "Staff Management": a Staff member who sees everyone's attendance, read only. */
+  attendanceViewAll?: boolean;
   attendanceRole: string;
   attendanceShiftStartTime?: string | null;
   attendanceShiftEndTime?: string | null;
@@ -2821,7 +2836,7 @@ export const nexusApi = {
     // emailSent: false = member added but the notification email didn't go out (tell the admin).
     // accountCreated: true = no account existed; the invitee sets a password via /forgot-password.
     apiFetch<{ member: NexusWorkspaceMember; absorbed?: string[]; kept?: string[]; emailSent?: boolean; accountCreated?: boolean }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
-  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null; restDays?: number[] }) =>
+  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; attendanceViewAll?: boolean; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null; restDays?: number[] }) =>
     apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
   approvalChart: () => apiFetch<ApprovalChart>("/api/admin/approval-chart"),

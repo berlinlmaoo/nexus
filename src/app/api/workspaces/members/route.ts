@@ -118,6 +118,8 @@ export async function GET(req: NextRequest) {
          *  tidak semua orang di NEXUS punya email kantor. */
         googleWorkspaceEmail: string | null
         role: string
+        /** "Staff Management": a STAFF member who sees everyone's attendance, read only (27 Oct 2026). */
+        attendanceViewAll: boolean
         attendanceRole: string
         attendanceShiftStartTime: string | null
         attendanceShiftEndTime: string | null
@@ -158,6 +160,8 @@ export async function GET(req: NextRequest) {
         // yang memang dipakai orang untuk saling menyurati, bukan data pribadi.
         googleWorkspaceEmail: m.user.googleWorkspaceEmail,
         role: m.role,
+        // An access level like the role itself, so shown to everyone who sees the role.
+        attendanceViewAll: m.role === "STAFF" && m.attendanceViewAll === true,
         joinedAt: m.joinedAt,
         ...(personal.canSee(m.user.id)
           ? {
@@ -382,7 +386,7 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode, approverId, restDays } = await req.json()
+    const { memberId, role, attendanceRole, attendanceViewAll, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode, approverId, restDays } = await req.json()
 
     // Per-person shift times: "HH:mm", or null/"" to clear (inherit team/office shift).
     const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -457,6 +461,9 @@ export async function PATCH(req: NextRequest) {
     if (attendanceRole !== undefined && !['NONE', 'SUPERVISOR'].includes(attendanceRole)) {
       return NextResponse.json({ error: 'Invalid attendance role' }, { status: 400 })
     }
+    if (attendanceViewAll !== undefined && typeof attendanceViewAll !== 'boolean') {
+      return NextResponse.json({ error: 'attendanceViewAll must be boolean' }, { status: 400 })
+    }
     if (flexiTimeEnabled !== undefined && typeof flexiTimeEnabled !== 'boolean') {
       return NextResponse.json({ error: 'flexiTimeEnabled must be boolean' }, { status: 400 })
     }
@@ -494,6 +501,23 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: 'Kamu tidak bisa mengubah role member yang setara/di atas kamu.' }, { status: 403 })
       }
     }
+
+    // "Staff Management" (owner, 27 Oct 2026): STAFF + read-only view of everyone's attendance. Same gate as a
+    // role change (BoD+ above, and never on someone at/above your own tier), and only on a STAFF row: the role
+    // this request leaves them with. Moving someone off STAFF drops it, so a later demotion never revives it.
+    const finalRole = (role ?? targetMember.role) as string
+    let viewAllNext: boolean | undefined = undefined
+    if (attendanceViewAll !== undefined) {
+      const targetTier = callerTier(targetMember.role)
+      if (tier !== 4 && targetTier >= tier) {
+        return NextResponse.json({ error: 'Kamu tidak bisa mengubah akses member yang setara/di atas kamu.' }, { status: 403 })
+      }
+      if (attendanceViewAll === true && finalRole !== 'STAFF') {
+        return NextResponse.json({ error: 'Staff Management hanya untuk role Staff.', code: 'STAFF_ONLY' }, { status: 400 })
+      }
+      viewAllNext = attendanceViewAll
+    }
+    if (role !== undefined && finalRole !== 'STAFF' && targetMember.attendanceViewAll) viewAllNext = false
 
     // Bagan Approval — rantai bebas. Tepi boleh dari siapa pun ke siapa pun di workspace yang
     // sama, apa pun perannya (owner: A → B → C). Dua hal yang dijaga di sini: bukan
@@ -580,6 +604,7 @@ export async function PATCH(req: NextRequest) {
         data: {
           ...(role !== undefined ? { role } : {}),
           ...(attendanceRole !== undefined ? { attendanceRole } : {}),
+          ...(viewAllNext !== undefined ? { attendanceViewAll: viewAllNext } : {}),
           ...(shiftStart !== undefined ? { attendanceShiftStartTime: shiftStart } : {}),
           ...(shiftEnd !== undefined ? { attendanceShiftEndTime: shiftEnd } : {}),
           ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
@@ -606,6 +631,7 @@ export async function PATCH(req: NextRequest) {
       {
         role: targetMember.role,
         attendanceRole: targetMember.attendanceRole,
+        attendanceViewAll: targetMember.attendanceViewAll,
         attendanceShiftStartTime: targetMember.attendanceShiftStartTime,
         attendanceShiftEndTime: targetMember.attendanceShiftEndTime,
         attendanceShiftByDay: targetMember.attendanceShiftByDay,
@@ -617,6 +643,7 @@ export async function PATCH(req: NextRequest) {
       {
         role,
         attendanceRole,
+        attendanceViewAll: viewAllNext,
         attendanceShiftStartTime: shiftStart,
         attendanceShiftEndTime: shiftEnd,
         attendanceShiftByDay: byDay === "skip" ? undefined : byDay === "clear" ? null : byDay,
@@ -627,7 +654,7 @@ export async function PATCH(req: NextRequest) {
       },
     )
     if (phoneNumber !== undefined) memberChanges.phoneNumber = { redacted: true }
-    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, entityName: updated.user.name, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd, ...(approverId !== undefined ? { approverId } : {}), ...(orphaned.length ? { orphanedReports: orphaned.map((o) => o.id) } : {}), targetUserId: targetMember.userId, changes: memberChanges } })
+    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, entityName: updated.user.name, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, ...(viewAllNext !== undefined ? { attendanceViewAll: viewAllNext } : {}), attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd, ...(approverId !== undefined ? { approverId } : {}), ...(orphaned.length ? { orphanedReports: orphaned.map((o) => o.id) } : {}), targetUserId: targetMember.userId, changes: memberChanges } })
 
     return NextResponse.json({
       member: {
@@ -638,6 +665,7 @@ export async function PATCH(req: NextRequest) {
         avatar: updated.user.avatar,
         phoneNumber: updated.user.phoneNumber,
         role: updated.role,
+        attendanceViewAll: updated.role === "STAFF" && updated.attendanceViewAll,
         attendanceRole: updated.attendanceRole,
         attendanceShiftStartTime: updated.attendanceShiftStartTime,
         attendanceShiftEndTime: updated.attendanceShiftEndTime,
