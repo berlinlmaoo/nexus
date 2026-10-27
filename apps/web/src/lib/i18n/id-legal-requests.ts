@@ -13,7 +13,7 @@ export const ID_LEGAL_REQUESTS: Record<string, string> = {
   "Ask Legal for the current link.": "Minta link yang berlaku ke Legal.",
   "This link isn't accepting requests right now": "Link ini sedang tidak menerima permintaan",
   "Ask Legal when it opens again, or for another link.": "Tanyakan ke Legal kapan dibuka lagi, atau minta link lain.",
-  "Sign in to NEXUS before you send this request, so you can follow it in My Submissions.": "Masuk ke NEXUS dulu sebelum mengirim permintaan ini, supaya kamu bisa memantaunya di Pengajuan Saya.",
+  "Sign in to send a request": "Masuk untuk mengirim permintaan",
   "{name} is larger than 50 MB": "{name} lebih dari 50 MB",
   "At most {n} files": "Maksimal {n} file",
   "Request sent": "Permintaan terkirim",

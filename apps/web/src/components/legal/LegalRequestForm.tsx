@@ -62,12 +62,11 @@ export function LegalRequestPage({ linkId, fallback }: { linkId: string; fallbac
           <Notice icon={Clock} title={t("This link isn't accepting requests right now")} message={t("Ask Legal when it opens again, or for another link.")} />
         )}
         {info.data && info.data.link.accepting && !info.data.signedIn && (
-          <div className="mt-8 rounded-xl border border-border bg-muted/30 p-6">
-            <p className="text-sm text-muted-foreground">{t("Sign in to NEXUS before you send this request, so you can follow it in My Submissions.")}</p>
-            <a href={loginUrl} className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99]">
-              <LogIn className="h-4 w-4" /> {t("Sign in to send")}
-            </a>
-          </div>
+          // Signed out (owner, 27 Oct 2026, like a form that needs an account since 26 Oct): only the title, the
+          // description and the way in, which comes back here. No form; the server sends no document types either.
+          <a href={loginUrl} className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] sm:w-auto">
+            <LogIn className="h-4 w-4" aria-hidden /> {t("Sign in to send a request")}
+          </a>
         )}
         {info.data && info.data.link.accepting && info.data.signedIn && <RequestForm linkId={linkId} info={info.data} />}
       </div>
