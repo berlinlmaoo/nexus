@@ -222,6 +222,10 @@ export const updateTaskSchema = z.object({
   // which can run longer; an older app sending that text back unchanged must not be refused.
   description: z.string().max(100000).nullable().optional(),
   status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]).optional(),
+  // A status PICKED from a list (web status menu, table cell, board/list drag; 27 Oct 2026): "TODO" on a Done
+  // task then means To Do. Without it, Done → TODO is the Done tick being undone and the task goes back to the
+  // status it had before Done (lib/status-sections.ts undoneTarget) — what every released app sends. Additive.
+  exactStatus: z.boolean().optional(),
   priority: z.enum(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]).optional(),
   dueDate: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),

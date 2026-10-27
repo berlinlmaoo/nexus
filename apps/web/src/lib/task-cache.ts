@@ -16,6 +16,17 @@ export type TaskPatch = Partial<NexusTask>;
 
 type Snapshot = Array<[QueryKey, unknown]>;
 
+/**
+ * Where the server puts a Done task whose Done tick is undone (owner, 27 Oct 2026, option B; the rule is
+ * lib/status-sections.ts undoneTarget): the status and section it had right before Done, when known, else To Do
+ * where it is. For the optimistic step only; the refetch after the write shows what the server did.
+ */
+export function undonePlacement(task: Pick<NexusTask, "statusBeforeDone" | "taskListIdBeforeDone">): { status: string; listId: string | null } {
+  const before = task.statusBeforeDone;
+  if (!before || before === "DONE" || before === "CANCELLED") return { status: "TODO", listId: null };
+  return { status: before, listId: task.taskListIdBeforeDone ?? null };
+}
+
 function patchTaskObj(t: NexusTask, patch: TaskPatch): NexusTask {
   return { ...t, ...patch };
 }

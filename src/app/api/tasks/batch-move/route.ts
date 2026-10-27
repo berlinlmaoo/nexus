@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
     const validation = validateBody(batchMoveSchema, await request.json())
     if (!validation.success) return validation.error
     const { taskIds, ...fields } = validation.data
-    const body: Record<string, string> = {}
+    // A move is a pick (27 Oct 2026): "To Do" here means To Do, never "back to the status before Done".
+    const body: Record<string, string | boolean> = { exactStatus: true }
     for (const [k, v] of Object.entries(fields)) if (v !== undefined) body[k] = v
 
     const moved: string[] = []

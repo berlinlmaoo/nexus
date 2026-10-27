@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { sectionForStatus } from "@/lib/status-sections"
+import { sectionForStatus, undoneTarget } from "@/lib/status-sections"
 import { logAudit } from "@/lib/audit"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
@@ -54,6 +54,7 @@ export async function applyTaskUpdate({
     title,
     description,
     status: requestedStatus,
+    exactStatus,
     priority,
     dueDate,
     startDate,
@@ -128,9 +129,28 @@ export async function applyTaskUpdate({
   //  - status changed without a move, out of such a section → it moves to the first section of that
   //    status, so the board keeps showing where it stands. No such section → it stays where it is.
   // Plain sections (taskStatus null, every project before templates) behave exactly as before.
+  // Un-done (owner, 27 Oct 2026, option B): Done → To Do without a section and without `exactStatus` is the
+  // Done tick being undone (web checkbox, every released app, which all send status TODO): the task goes back to
+  // the status and section it had right before Done (kept by the trigger "Task_status_before_done"). Unknown →
+  // To Do, as before. Through a linked project only the status comes back (sections are the own project's).
+  let undoneSection: string | null | undefined
+  if (requestedStatus === "TODO" && existing.status === "DONE" && taskListId === undefined && !exactStatus) {
+    const sections = isLinkedProjectContext
+      ? []
+      : (await prisma.taskList.findMany({ where: { projectId: primaryProjectId }, select: { id: true, taskStatus: true, position: true } }))
+          .map((s) => ({ ...s, taskStatus: s.taskStatus ? String(s.taskStatus) : null }))
+    const back = undoneTarget(existing, sections, isLinkedProjectContext ? null : existing.taskListId)
+    if (back) {
+      status = back.status
+      undoneSection = back.sectionId
+    }
+  }
+
   let statusSection: { id: string } | null = null
   if (!isLinkedProjectContext) {
-    if (requestedStatus === undefined && taskListId !== undefined && taskListId !== existing.taskListId) {
+    if (undoneSection !== undefined) {
+      statusSection = undoneSection ? { id: undoneSection } : null
+    } else if (requestedStatus === undefined && taskListId !== undefined && taskListId !== existing.taskListId) {
       const target = await prisma.taskList.findFirst({
         where: { id: taskListId, projectId: primaryProjectId },
         select: { taskStatus: true },
