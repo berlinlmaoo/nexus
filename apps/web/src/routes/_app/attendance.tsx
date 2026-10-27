@@ -452,7 +452,10 @@ function Attendance() {
       box.removeEventListener("wheel", touched);
       box.removeEventListener("keydown", touched);
     };
-    const ro = new ResizeObserver(() => land());
+    // The edge fades follow the table too, touched or not: filtering the crew (the search box) shrinks the table
+    // without a scroll event, so a board the person had already moved kept the bottom fade of the full list and it
+    // covered the last row's pills (owner, 27 Oct 2026: one row left after a search, its chips cut in half).
+    const ro = new ResizeObserver(() => { land(); setBoardEdge(); });
     ro.observe(table);
     ro.observe(box);
     return () => {
