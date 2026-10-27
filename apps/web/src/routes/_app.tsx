@@ -163,7 +163,7 @@ function AppLayout() {
         <XpPenaltyModal />
         {/* Z Vault uploads: here, above every route, so they keep going wherever the person goes. */}
         <VaultUploadPanel />
-        {/* "(3) NEXUS Phaëthon" in the browser tab while chats are unread. */}
+        {/* "(3) Calendar · NEXUS" in the browser tab while chats are unread. */}
         <ChatUnreadTitle />
       </SidebarProvider>
     </RealtimeProvider>

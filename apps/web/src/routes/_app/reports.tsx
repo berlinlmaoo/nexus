@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_app/reports")({
     tab: s.tab === "team" ? "team" : undefined,
   }),
   component: ReportsRoute,
-  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Reports" }] }),
+  head: () => ({ meta: [{ title: "Reports · NEXUS" }] }),
 });
 
 function ReportsRoute() {

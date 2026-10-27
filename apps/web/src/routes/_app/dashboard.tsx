@@ -61,7 +61,7 @@ export const Route = createFileRoute("/_app/dashboard")({
     quest: typeof s.quest === "string" && s.quest ? s.quest : undefined,
   }),
   component: Dashboard,
-  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Dashboard" }] }),
+  head: () => ({ meta: [{ title: "Dashboard · NEXUS" }] }),
 });
 
 // Short day ("5 Oct" / "5 Okt") in the interface language; with a time when the value carries one.

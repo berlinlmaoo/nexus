@@ -74,6 +74,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { choiceColor, optionColor } from "@/lib/project-views";
 import { usesStatusOptions } from "@/lib/status-options";
 import { useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { displayName } from "@/lib/system-users";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
@@ -372,6 +373,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
   useRealtimeRoom(projectId ? `project:${projectId}` : null);
   const ai = useAutofillMarks(projectId);
   // While the task is open, GIDEON's context chip is this task (Notion AI's page chip).
+  usePageTitle(task.data?.title);
   useEffect(() => (task.data ? pushGideonPage({ kind: "task", id: taskId, title: task.data.title, projectId: projectId ?? null, projectName: task.data.taskList?.project?.name ?? null }) : undefined), [taskId, task.data?.title, projectId, task.data?.taskList?.project?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const customFields = useQuery({ queryKey: ["task-cf", taskId], queryFn: () => nexusApi.taskCustomFields(projectId!, taskId), enabled: !!projectId });
   // Project's sections (board columns = TaskLists) so the top dropdown follows the actual project.

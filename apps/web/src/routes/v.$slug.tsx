@@ -13,6 +13,7 @@ import { VaultLightbox } from "@/components/vault/VaultLightbox";
 import { CHECKERBOARD, VaultTilePicture } from "@/components/vault/VaultTilePicture";
 import { cn } from "@/lib/utils";
 import { setLang, useDocumentLang, useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { ApiError, nexusApi, type VaultItem, type VaultPublicFile, type VaultPublicItem } from "@/lib/nexus-api";
 import { fillsTile, humanSize, isPdf, mediaKind } from "@/lib/vault-media";
 import { PdfPreview } from "@/components/PdfFirstPage";
@@ -88,11 +89,7 @@ export function VaultSharePage() {
   };
 
   const name = data ? (isFolder ? data.folder?.name ?? data.file.name : data.file.name) : null;
-  useEffect(() => {
-    const before = document.title;
-    document.title = q.isError ? `${t("Link unavailable")} · Z Vault` : name ? `${name} · Z Vault` : "Z Vault";
-    return () => { document.title = before; };
-  }, [name, q.isError, t]);
+  usePageTitle(q.isError ? `${t("Link unavailable")} · Z Vault` : name ? `${name} · Z Vault` : "Z Vault", { full: true });
 
   if (q.isLoading) {
     return (

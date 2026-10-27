@@ -1,0 +1,42 @@
+/**
+ * English → Indonesian for the browser tab titles (src/lib/page-title.ts, 27 Oct 2026). Every key carries the
+ * "page\u0004" context, so these never collide with the same English in another table. The same words as the
+ * navigation and the page headings.
+ */
+export const ID_PAGE_TITLES: Record<string, string> = {
+  "page\u0004Dashboard": "Dasbor",
+  "page\u0004Messages": "Pesan",
+  "page\u0004GIDEON": "GIDEON",
+  "page\u0004Notifications": "Notifikasi",
+  "page\u0004My Tasks": "Task Saya",
+  "page\u0004My Submissions": "Pengajuan Saya",
+  "page\u0004Calendar": "Kalender",
+  "page\u0004Master Calendar": "Master Calendar",
+  "page\u0004Attendance": "Absensi",
+  "page\u0004Projects": "Project",
+  "page\u0004Task": "Task",
+  "page\u0004Folder": "Folder",
+  "page\u0004Pages": "Halaman",
+  "page\u0004Forms": "Formulir",
+  "page\u0004Form": "Formulir",
+  "page\u0004Legal": "Legal",
+  "page\u0004Legal request": "Permintaan legal",
+  "page\u0004Leaderboard": "Papan Peringkat",
+  "page\u0004Z Vault": "Z Vault",
+  "page\u0004Threads": "Utas",
+  "page\u0004Room Booking": "Booking Ruangan",
+  "page\u0004Tickets": "Tiket",
+  "page\u0004Settings": "Pengaturan",
+  "page\u0004Control Room": "Ruang Kendali",
+  "page\u0004Pipelines": "Pipeline",
+  "page\u0004Meeting notes": "Catatan meeting",
+  "page\u0004Team": "Tim",
+  "page\u0004Reports": "Laporan",
+  "page\u0004Reminders": "Pengingat",
+  "page\u0004Sign in": "Masuk",
+  "page\u0004Request access": "Minta akses",
+  "page\u0004Reset password": "Reset password",
+  "page\u0004Authorize access": "Izinkan akses",
+  "page\u0004Get NEXUS for Android": "Pasang NEXUS untuk Android",
+  "page\u0004Room display": "Layar ruangan",
+};
