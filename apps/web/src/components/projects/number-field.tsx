@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -11,11 +11,13 @@ import {
   filterNumberFormats,
   formatNumberWith,
   normalizeNumberFieldValue,
+  numberEditText,
   numberFill,
   numberFormatLabel,
   numberOptions,
   numberOptionsToStore,
   storedNumber,
+  typedNumberFieldValue,
   type BarColor,
   type NumberOptions,
   type NumberShowAs,
@@ -92,59 +94,103 @@ export function NumberFieldValue({ raw, fieldOptions, align, className, title }:
   return <NumberValue n={n} options={numberOptions(fieldOptions)} align={align} className={className} title={title} />;
 }
 
-/** The value as typed back into the box: "1500000" → "1500000", 2.5 → "2,5" (the Indonesian decimal comma). */
-function editText(raw: string, o: NumberOptions): string {
-  const s = raw.trim();
-  if (!s) return "";
-  const n = storedNumber(s, o);
-  if (n === null) return s;
-  const plain = Number.isInteger(n) ? String(n) : String(n).replace(".", ",");
-  return o.numberFormat === "percent" ? `${String(Number((n * 100).toPrecision(15))).replace(".", ",")}%` : plain;
+/** The value a write sends, compared as stored: a number and its text ("12" / 12) are the same write. */
+function sameValue(a: number | string, b: number | string): boolean {
+  return String(a) === String(b);
 }
 
 /**
  * A NUMBER field you can edit in place: reads in its format (Bar / Ring too) and becomes a box on click.
- * Rupiah without decimals keeps the "Rp" box that groups while you type. Hands back what to store.
+ * Rupiah without decimals keeps the "Rp" box that groups while you type. Hands back what to store: a JS number
+ * (the server keeps a JSON number as it is), "" to clear, or the typed text when it is no number.
+ *
+ * Owner bug 27 Oct 2026 ("Harga" in a form-made task went back to the old amount after Enter): the row showed the
+ * OLD amount until the save's refetch came back, a click in that window opened the box with the old amount, and
+ * leaving that box wrote the old amount back over the new one. Now
+ *   - the amount just saved shows at once and stays until the server's value arrives (or the save fails);
+ *   - only what was typed is written: opening and leaving the box without a change writes nothing;
+ *   - Enter and Tab save straight away, Escape cancels, and a box that goes away mid-edit still saves.
+ * `onSet` may return a promise: a rejected save puts the stored value back (the caller says why).
  */
 export function NumberFieldInput({ raw, fieldOptions, onSet, ariaLabel, inline, align = "start", placeholder }: {
   raw: string;
   fieldOptions: unknown;
-  onSet: (stored: string) => void;
+  onSet: (stored: number | string) => void | Promise<unknown>;
   ariaLabel?: string;
   /** Table cell: no box until focused. */
   inline?: boolean;
   align?: "start" | "end";
   placeholder?: string;
 }) {
+  const { lang } = useLang();
   const o = useMemo(() => numberOptions(fieldOptions), [fieldOptions]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  // The value just written, shown until the stored value changes (the refetch) or the save fails.
+  const [pending, setPending] = useState<string | null>(null);
   const ref = useRef<HTMLInputElement>(null);
+  const opened = useRef<number | string>("");
+  const live = useRef({ editing: false, draft: "", closed: true });
   const wholeRupiah = o.numberFormat === "IDR" && !o.decimals;
+  const stored = raw.trim();
+  const shownRaw = pending ?? stored;
+  useEffect(() => { setPending(null); }, [stored]);
   useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+  const read = (text: string): number | string => typedNumberFieldValue(text, fieldOptions, wholeRupiah ? "id" : lang);
+  const save = (text: string) => {
+    const next = read(text);
+    // Only a change the person typed: a box opened on a stale amount and left as it was writes nothing.
+    if (sameValue(next, opened.current)) return;
+    const shown = typeof next === "number" ? String(next) : next;
+    setPending(shown);
+    const drop = () => setPending((p) => (p === shown ? null : p));
+    let r: void | Promise<unknown>;
+    try { r = onSet(next); } catch { drop(); return; }
+    // Saved but stored the same as before (nothing for the refetch to change): let the stored value show again.
+    if (r && typeof (r as Promise<unknown>).then === "function") (r as Promise<unknown>).then(() => { setTimeout(drop, 5000); }, drop);
+  };
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const finish = (commit: boolean) => {
+    if (live.current.closed) return;
+    live.current.closed = true;
+    setEditing(false);
+    if (commit) save(live.current.draft);
+  };
+  live.current.editing = editing;
+  live.current.draft = draft;
+  // The box goes away while open (the panel closes, the row re-renders under a new key): what was typed is kept.
+  useEffect(() => () => { if (live.current.editing && !live.current.closed) { live.current.closed = true; saveRef.current(live.current.draft); } }, []);
   const box = inline
     ? "w-full min-w-0 rounded-md border border-primary bg-background px-1.5 py-1 text-sm outline-none"
     : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring";
-  const finish = (text: string) => {
-    setEditing(false);
-    const next = normalizeNumberFieldValue(text, fieldOptions);
-    if (next !== raw.trim()) onSet(next);
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
   };
   if (editing) {
     if (wholeRupiah) {
       return (
-        <RupiahInput value={draft} onChange={setDraft} onBlur={() => finish(draft)} ariaLabel={ariaLabel} className={cn(box, align === "end" && "text-right")} inputRef={ref}
-          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditing(false); }} />
+        <RupiahInput value={draft} onChange={setDraft} onBlur={() => finish(true)} ariaLabel={ariaLabel} className={cn(box, align === "end" && "text-right")} inputRef={ref}
+          allowNegative onKeyDown={onKeyDown} />
       );
     }
     return (
-      <input ref={ref} value={draft} inputMode="decimal" aria-label={ariaLabel} autoComplete="off" onChange={(e) => setDraft(e.target.value)} onBlur={() => finish(draft)}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditing(false); }}
+      <input ref={ref} value={draft} inputMode="decimal" aria-label={ariaLabel} autoComplete="off" onChange={(e) => setDraft(e.target.value)} onBlur={() => finish(true)}
+        onKeyDown={onKeyDown}
         className={cn(box, "tabular-nums", align === "end" && "text-right")} />
     );
   }
-  const start = () => { setDraft(wholeRupiah ? normalizeNumberFieldValue(raw, fieldOptions) : editText(raw, o)); setEditing(true); };
-  const shown = raw.trim() ? <NumberFieldValue raw={raw} fieldOptions={fieldOptions} align={align} /> : <span className="text-muted-foreground/70">{placeholder ?? ""}</span>;
+  const start = () => {
+    if (editing) return;
+    const text = wholeRupiah ? normalizeNumberFieldValue(shownRaw, fieldOptions) : numberEditText(shownRaw, fieldOptions, lang);
+    opened.current = read(text);
+    live.current = { editing: true, draft: text, closed: false };
+    setDraft(text);
+    setEditing(true);
+  };
+  const shown = shownRaw ? <NumberFieldValue raw={shownRaw} fieldOptions={fieldOptions} align={align} /> : <span className="text-muted-foreground/70">{placeholder ?? ""}</span>;
   return (
     <button type="button" onClick={start} onFocus={start} aria-label={ariaLabel}
       className={cn("block w-full min-w-0 text-left text-sm", inline ? "min-h-7 rounded-md px-1.5 py-1 hover:bg-muted" : "min-h-[34px] rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-ring/40")}>

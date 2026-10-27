@@ -143,8 +143,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
-  const setCf = async (fieldId: string, taskId: string, value: unknown, prev?: unknown) => {
-    try { await nexusApi.saveCustomFieldValue(fieldId, taskId, value, prev); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
+  // `strict`: the failure is also handed back, so an editor showing the value it just saved puts the old one back.
+  const setCf = async (fieldId: string, taskId: string, value: unknown, prev?: unknown, strict = false) => {
+    try { await nexusApi.saveCustomFieldValue(fieldId, taskId, value, prev); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch (e) { toast.error(t("Couldn't save the change")); if (strict) throw e; }
   };
   // ✨ on AI Autofill columns and on the values GIDEON wrote (a person's edit makes a value theirs again).
   const ai = useAutofillMarks(projectId);
@@ -465,7 +466,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   projectId: string;
   patchTask: (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => void;
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
-  setCf: (fieldId: string, taskId: string, value: unknown, prev?: unknown) => void;
+  setCf: (fieldId: string, taskId: string, value: unknown, prev?: unknown, strict?: boolean) => Promise<void>;
 }) {
   const { t, locale } = useLang();
   // Cells read as text until hovered (Notion): no select chevrons, no "mm/dd/yyyy" in empty dates.
@@ -484,7 +485,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
     if ((def.type ?? "").toUpperCase() === "CREATED") return <CreatedCell raw={raw} task={task} members={members} />;
     // key by the persisted raw value so the editor re-seeds its internal state after a save+refetch
     // (CustomFieldInput only reads field.value on mount). No focus loss: values only change on blur/select.
-    return <CustomFieldInput key={raw} field={{ ...def, value: value as NexusCustomField["value"] }} projectId={projectId} hideLabel onSet={(v) => setCf(def.id, task.id, v)} />;
+    return <CustomFieldInput key={raw} field={{ ...def, value: value as NexusCustomField["value"] }} projectId={projectId} hideLabel onSet={(v) => setCf(def.id, task.id, v, undefined, true)} />;
   }
 
   if (colKey === "status") {
