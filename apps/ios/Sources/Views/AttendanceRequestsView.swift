@@ -330,6 +330,9 @@ struct AttendanceRequestsCard: View {
     /// from `canReviewOffsite`: a manager who may decide their reports' check-outs is not exempt
     /// from filing rules, and offering them the exemptions only led to a refusal at submit.
     let canGrant: Bool
+    /// Staff Management (27 Oct 2026): everyone's requests, read only — listed with names, no Approve,
+    /// Reject or Cancel on anybody else's. The server answers scope=workspace for them and nothing more.
+    var canViewAll: Bool = false
     @Environment(AuthStore.self) private var auth
     @State private var requests: [AttendanceRequest] = []
     @State private var offsite: [OffsiteCheckout] = []
@@ -430,13 +433,14 @@ struct AttendanceRequestsCard: View {
     private var subtitle: String {
         // Web's copy (attendance.tsx "Requests and approvals"), UI tour run 7.
         if canReviewOffsite { return T("One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision.") }
+        if !canReview && canViewAll { return T("Everyone's leave, sick and permit requests, view only. Submit your own here.") }
         return canReview ? T("Review pending requests (leave, sick, permit, day off) and submit your own.") : T("Submit leave, sick or permit requests.")
     }
 
     /// `.task(id:)` takes one value, and this card now waits on two permissions that land at
     /// different moments — the offsite fetch has to start when `canReviewOffsite` flips, not only
     /// when `canReview` does.
-    private var permissionKey: String { "\(canReview)-\(canReviewOffsite)" }
+    private var permissionKey: String { "\(canReview)-\(canReviewOffsite)-\(canViewAll)" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -725,7 +729,7 @@ struct AttendanceRequestsCard: View {
             HStack(spacing: 6) {
                 Image(systemName: "calendar").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
                 Text(reqDateRange(r)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                if canReview, let n = r.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                if canReview || canViewAll, let n = r.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             if let reason = r.reason, !reason.isEmpty {
                 reasonText(reason, id: r.id, collapsedLines: 3)
@@ -749,7 +753,7 @@ struct AttendanceRequestsCard: View {
                         // Straight to the reason sheet: the decision and the reason go up in the
                         // same PATCH, so there is nothing to undo if the sheet is cancelled.
                         actionBtn(T("Reject"), .danger) { rejecting = r }
-                    } else {
+                    } else if !canViewAll || r.isOwn(viewerId: auth.session?.userId) {
                         actionBtn(T("Cancel it"), .neutral) { await review(r, "cancel") }
                     }
                 }.padding(.top, 2)
@@ -872,7 +876,7 @@ struct AttendanceRequestsCard: View {
     }
 
     private func load() async {
-        let scope = canReview ? "workspace" : "me"
+        let scope = canReview || canViewAll ? "workspace" : "me"
         do {
             let all = try await APIClient.shared.attendanceRequests(scope: scope)
             // Auto-deductions are the nightly cron's penalties, not something anyone filed, so they

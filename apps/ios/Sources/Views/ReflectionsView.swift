@@ -26,6 +26,9 @@ struct ReflectionsResponse: Decodable, Sendable {
 /// day and of the month so far. Your own by default; a manager or BoD picks a person.
 struct ReflectionsView: View {
     var canPickPeople: Bool = false
+    /// False for Staff Management (27 Oct 2026): they read anyone's reflections but do not ask GIDEON to
+    /// write someone else's summary (the server refuses it).
+    var canSummarizeOthers: Bool = true
     @Environment(\.dismiss) private var dismiss
     @State private var monthOffset = 0
     @State private var person: (id: String, name: String)? = nil
@@ -133,6 +136,7 @@ struct ReflectionsView: View {
                 Text("\(T("Not written yet. GIDEON summarizes whatever has been collected so far:")) \(days.count) \(days.count == 1 ? T("day") : T("days")).")
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
             }
+            if canSummarizeOthers || person == nil {
             Button { Task { await summarize() } } label: {
                 HStack(spacing: 6) {
                     if summarizing { ProgressView().tint(.white) } else { Image(systemName: "sparkles") }
@@ -140,6 +144,7 @@ struct ReflectionsView: View {
                 }
             }
             .buttonStyle(NexusPrimaryButton()).disabled(summarizing)
+            }
             if let summarizeError { Text(summarizeError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
         }
         .padding(14)

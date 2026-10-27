@@ -6,6 +6,11 @@ struct AttendanceToday: Decodable, Sendable {
     let activeOfficeCount: Int?
     let canManageAttendance: Bool?
     let canReviewAttendanceRequests: Bool?
+    /// Staff Management (27 Oct 2026): sees the whole workspace's board, log, records and requests and
+    /// changes nothing. canManage/canReview stay false for them; these say what they may READ. Optional:
+    /// an older server leaves them out and this person keeps the plain Staff screen.
+    var canViewAttendanceBoard: Bool? = nil
+    var attendanceReadOnly: Bool? = nil
     var dayOffNextPeriod: DayOffNextPeriod? = nil
     struct DayOffNextPeriod: Decodable, Sendable { let period: String; let quota: Int; let used: Int; let remaining: Int }
     let dayOffUsedThisMonth: Int?

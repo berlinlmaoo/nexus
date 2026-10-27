@@ -143,6 +143,7 @@ struct AttendanceView: View {
     }
     private var pageSubtitle: String {
         let canSeeBoard = (today?.canManageAttendance ?? false) || (today?.canReviewAttendanceRequests ?? false)
+            || (today?.canViewAttendanceBoard ?? false)
         return canSeeBoard
             ? T("Who's in, on leave or working from home, and everyone's attendance history.")
             : T("Check in, ask for leave or a permission, and see your attendance history.")
@@ -203,12 +204,14 @@ struct AttendanceView: View {
                         // Granting a request for somebody else stays BoD-only (`canGrant`).
                         AttendanceRequestsCard(canReview: canReview,
                                                canReviewOffsite: canReview,
-                                               canGrant: today?.canManageAttendance ?? false)
+                                               canGrant: today?.canManageAttendance ?? false,
+                                               canViewAll: today?.attendanceReadOnly ?? false)
                         // `ready`: the board's scope comes with /attendance/today. Asked before that, a
                         // manager's board was fetched as `scope=me` and could land over the whole crew
                         // (UI tour run 14, N-04 / P-I4 / P-M4).
                         StreakBoardCard(canManage: today?.canManageAttendance ?? false,
                                         canReview: today?.canReviewAttendanceRequests ?? false,
+                                        canView: today?.attendanceReadOnly ?? false,
                                         ready: today != nil || !loading)
                             .id(Self.crewBoardAnchor)
                         // The employment start date is set per person in Control Room › Users now (owner, 16 Oct
@@ -1039,7 +1042,9 @@ struct AttendanceView: View {
         .buttonStyle(.plain)
         .nexusCard()
         .sheet(isPresented: $showReflections) {
-            ReflectionsView(canPickPeople: (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false))
+            ReflectionsView(canPickPeople: (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false)
+                                || (today?.canViewAttendanceBoard ?? false),
+                            canSummarizeOthers: !(today?.attendanceReadOnly ?? false))
         }
     }
 
@@ -1697,12 +1702,15 @@ struct StreakBoardCard: View {
     /// 21 Sep 2026, to the manager too). Without this the card asked for `scope=me` and a manager
     /// never saw their people's month on the phone.
     var canReview: Bool = false
+    /// Staff Management (27 Oct 2026): the whole workspace's board, read only. Cells open the record
+    /// without Delete or Change status (those stay `canManage`), and the server refuses any write anyway.
+    var canView: Bool = false
     /// Whether the permissions above are known yet (the screen's /attendance/today has answered or
     /// failed). Until then the board does not load: a `scope=me` fetch made on the default `false`
     /// permissions used to finish — or fall back to its cached copy — after the crew board, and a
     /// BoD's board shrank to their own row (UI tour run 14, N-04 / P-I4 / P-M4).
     var ready: Bool = true
-    private var wide: Bool { canManage || canReview }
+    private var wide: Bool { canManage || canReview || canView }
     @Environment(AuthStore.self) private var auth
     // Month export — the same workbook the web's "Export" hands out, one sheet per month, everybody.
     @State private var exporting = false
@@ -1966,7 +1974,7 @@ struct StreakBoardCard: View {
                     // whole company's had shrunk to one row (UI tour run 13, F-15).
                     // The BoD's board names its scope too, so a board of one is never a puzzle (run 14, N-04).
                     if wide {
-                        Text(canManage ? T("Everyone in the workspace") : T("You and your direct reports"))
+                        Text(canManage ? T("Everyone in the workspace") : canView ? T("Everyone in the workspace · view only") : T("You and your direct reports"))
                             .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                 }

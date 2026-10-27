@@ -107,10 +107,12 @@ final class OfflineSync: ObservableObject {
                 // different cache entries from the personal ones. Fetching only "me" left exactly
                 // the people the crew board exists for looking at an empty grid offline.
                 let seen = try? await api.attendanceToday()
-                if seen?.canManageAttendance == true {
+                // Staff Management (attendanceReadOnly) reads the same workspace board and requests.
+                let viewsAll = seen?.attendanceReadOnly == true
+                if seen?.canManageAttendance == true || viewsAll {
                     _ = try? await api.attendanceHistory(scope: "workspace", month: month)
                 }
-                if seen?.canReviewAttendanceRequests == true {
+                if seen?.canReviewAttendanceRequests == true || viewsAll {
                     _ = try? await api.attendanceRequests(scope: "workspace")
                 }
             }),
