@@ -362,7 +362,9 @@ struct TaskDetailView: View {
         } else {
             Menu {
                 ForEach(statuses, id: \.self) { s in
-                    Button(statusLabel(s)) { Task { await update(t, ["status": s]) } }
+                    // A status picked from the list stays exactly that: "To do" on a Done task means To do, not
+                    // "back to the status before Done", which only the tick does (server 526c992f, owner 27 Oct 2026).
+                    Button(statusLabel(s)) { Task { await update(t, ["status": s, "exactStatus": true]) } }
                 }
             } label: { controlChip(statusLabel(t.status), system: "circle.dashed", tone: t.isDone ? .success : .info) }
         }

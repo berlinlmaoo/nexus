@@ -1543,10 +1543,12 @@ struct ProjectDetailView: View {
         )
     }
 
-    /// The Table's status menu on a project without status options: the task's own status.
+    /// The Table's status menu on a project without status options: the task's own status. A pick, so it stays
+    /// exactly that (`exactStatus`): "To do" on a Done task is To do, not the status it had before Done (web
+    /// ProjectTableView, owner 27 Oct 2026). Older servers ignore the key.
     private func setTaskStatus(_ id: String, _ status: String) {
         Task {
-            do { _ = try await APIClient.shared.updateTask(id, ["status": status]) }
+            do { _ = try await APIClient.shared.updateTask(id, ["status": status, "exactStatus": true]) }
             catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the change.") }
             await reloadQuietly()
         }
