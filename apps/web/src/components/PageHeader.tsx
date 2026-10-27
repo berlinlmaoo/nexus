@@ -184,7 +184,10 @@ export function PageHeader({
         data-page-header-row={compact ? "" : undefined}
         className={cn(
           // A title too long for its two lines beside the actions: the actions wrap under it (useFitTitle).
-          compact && "group/ph data-[title-wrap]:flex-wrap md:data-[title-wrap]:flex-wrap data-[title-wrap]:gap-y-2",
+          // @container/phrow: the project page's actions drop their labels when the row itself is narrow (768px with
+          // the sidebar open ran "Pengaturan project" past the right edge, 27 Oct 2026), the same icon-only buttons
+          // a phone shows.
+          compact && "group/ph @container/phrow data-[title-wrap]:flex-wrap md:data-[title-wrap]:flex-wrap data-[title-wrap]:gap-y-2",
           gutter ? "nx-gx" : "px-4 md:px-8", "md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3", hero && "md:pt-10 md:pb-2 md:items-center",
           // The top padding comes after pinnedBar's safe-area padding, which otherwise replaced it and left the
           // icon buttons touching the top edge (UI tour run 13, W-M6).
