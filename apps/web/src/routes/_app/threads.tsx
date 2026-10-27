@@ -227,8 +227,10 @@ function FeedPage() {
 
   return (
     <div>
-      {/* The app's standard header (title + one line on what this is), like every page. */}
-      <div ref={headRef} className="sticky top-0 z-30 md:z-40">
+      {/* The app's standard header (title + one line on what this is), like every page. An open post shows only
+          its "← Thread" bar, as on Threads (owner, 27 Oct 2026): with the page header over it the page said
+          "Threads" and "Thread" (ID: "Utas" twice). Hidden, the header measures 0 and the bar sticks to the top. */}
+      <div ref={headRef} className={cn("sticky top-0 z-30 md:z-40", focusId && "hidden")}>
         <PageHeader title={t("Threads")} subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")} />
       </div>
 
@@ -239,7 +241,7 @@ function FeedPage() {
           post's bar ("← Thread") sits above the card, like the original. */}
       <div className="mx-auto flex w-full max-w-[672px] flex-col md:px-4" style={{ "--threads-head": `${headH}px`, minHeight: `calc(100dvh - ${headH}px)` } as CSSProperties}>
         {focusId ? (
-          <div className="sticky z-20 border-b border-border bg-card md:border-b-0 md:bg-background" style={{ top: headH }}>
+          <div className="sticky z-20 border-b border-border bg-card pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-background md:pt-4" style={{ top: headH }}>
             <DetailBar onBack={closeFocus} replies={focus.data?.commentCount} />
           </div>
         ) : (
