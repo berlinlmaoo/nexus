@@ -13,6 +13,7 @@ import { ID_PROJECTS } from "@/lib/i18n/id-projects";
 import { ID_TEMPLATES } from "@/lib/i18n/id-templates";
 import { ID_VAULT } from "@/lib/i18n/id-vault";
 import { ID_NAV } from "@/lib/i18n/id-nav";
+import { ID_PAGE_TITLES } from "@/lib/i18n/id-page-titles";
 import { ID_PIPELINE } from "@/lib/i18n/id-pipeline";
 import { ID_AUTOMATIONS } from "@/lib/i18n/id-automations";
 import { ID_FOLDERS } from "@/lib/i18n/id-folders";
@@ -135,6 +136,8 @@ Object.assign(ID, ID_QA_DEC_B);
 Object.assign(ID, ID_DEC25);
 // Visual QA follow-ups (25 Oct 2026).
 Object.assign(ID, ID_DEC25_B);
+// Browser tab titles (27 Oct 2026).
+Object.assign(ID, ID_PAGE_TITLES);
 
 function read(): Lang {
   try {

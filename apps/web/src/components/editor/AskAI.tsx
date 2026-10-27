@@ -12,6 +12,7 @@ import { GideonMarkdown } from "@/components/gideon/GideonMarkdown";
 import { markdownToDoc, streamGideonWrite, useGideonName, type GideonActionItem, type GideonWriteAction } from "@/lib/gideon-ai";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { currentPageName } from "@/lib/page-title";
 import { cn } from "@/lib/utils";
 import { ctxOf } from "./editor-context";
 
@@ -221,7 +222,7 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
         tone: def?.tone,
         language: def?.language,
         prompt: custom || undefined,
-        docTitle: document.title.replace(/ · .*$/, "").slice(0, 200),
+        docTitle: (currentPageName() ?? "").slice(0, 200),
         ...(ctx?.blockLinkBase?.startsWith("/docs/") ? { docId: ctx.blockLinkBase.split("/")[2] } : {}),
         ...(ctx?.blockLinkBase?.startsWith("/tasks/") ? { taskId: ctx.blockLinkBase.split("/")[2] } : {}),
       },

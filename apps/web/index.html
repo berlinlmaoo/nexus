@@ -3,8 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="NEXUS Phaëthon — work management" />
-    <title>NEXUS Phaëthon</title>
+    <!--
+      The <title> and the link-preview tags. People get these as they are and the app sets the tab title per page
+      (src/lib/page-title.ts). A link-preview crawler gets this file through nginx SSI (maintenance/phaethon.conf,
+      /__og_page): the block below is then left out and the include puts that link's own tags in its place (a
+      form's title and description, ...). If the app does not answer, the include falls back to the block.
+    -->
+    <!--# block name="og_generic" -->
+    <title>NEXUS</title>
+    <meta name="description" content="NEXUS by Z Networks: tasks, projects, attendance and chat in one place." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NEXUS" />
+    <meta property="og:title" content="NEXUS" />
+    <meta property="og:description" content="NEXUS by Z Networks: tasks, projects, attendance and chat in one place." />
+    <meta name="twitter:card" content="summary" />
+    <!--# endblock -->
+    <!--# include virtual="/api/og/head?p=$og_path" stub="og_generic" -->
     <script>
       (function () {
         try {

@@ -21,6 +21,7 @@ import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/at
 import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { cn } from "@/lib/utils";
 import { attendanceReasonText, attendanceReviewNoteText, periodEndText, periodRangeText, xpEntryLabel } from "@/lib/server-text";
 import { PresenceChip } from "@/lib/presence";
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/_app/people/$userId")({
   validateSearch: (s: Record<string, unknown>): RecordSearch => ({
     period: typeof s.period === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(s.period) ? s.period : undefined,
   }),
-  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Record" }] }),
+  head: () => ({ meta: [{ title: "Record · NEXUS" }] }),
 });
 
 const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day off", RED_DATE: "Public holiday" };
@@ -89,6 +90,7 @@ function MemberRecordPage() {
 
   const code = errorCode(record.error);
   const title = data?.person.name ?? tr("Record");
+  usePageTitle(data?.person.name);
   return (
     <div>
       <PageHeader

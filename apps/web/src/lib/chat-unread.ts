@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError, nexusApi, type NexusConversation } from "@/lib/nexus-api";
+import { setTitleUnread } from "@/lib/page-title";
 
 /**
  * Chat unread counts for the nav badges (sidebar, phone More sheet) and the browser tab title.
@@ -81,15 +82,11 @@ export function usePageVisible(): boolean {
   return visible;
 }
 
-const TITLE_COUNT = /^\(\d+\+?\)\s+/;
-
-/** "(3) NEXUS Phaëthon" while chats are unread; the plain title again at zero. */
+/** "(3) Calendar · NEXUS" while chats are unread; the plain title again at zero (lib/page-title.ts writes it). */
 export function useUnreadTitle(count: number) {
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const base = document.title.replace(TITLE_COUNT, "");
-    document.title = count > 0 ? `(${count > 99 ? "99+" : count}) ${base}` : base;
-    return () => { document.title = document.title.replace(TITLE_COUNT, ""); };
+    setTitleUnread(count);
+    return () => setTitleUnread(0);
   }, [count]);
 }
 

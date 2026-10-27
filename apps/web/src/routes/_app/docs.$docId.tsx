@@ -8,6 +8,7 @@ import { ArrowLeft, Check, CloudOff, Copy, Link2, Loader2, Lock, MoreHorizontal,
 import { toast } from "sonner";
 import { ApiError, apiFetch, fmtDate, nexusApi, textToTiptap } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import { useRealtimeRoom } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ function DocPage() {
   const projectId = d?.project?.id ?? d?.projectId ?? null;
   useRealtimeRoom(projectId ? `project:${projectId}` : null);
   // GIDEON opened on this page carries it as context (Notion AI's page chip).
+  usePageTitle(d ? docTitle(d.title) : null);
   useEffect(() => (d ? pushGideonPage({ kind: "doc", id: d.id, title: docTitle(d.title), projectId, projectName: d.project?.name ?? null }) : undefined), [d?.id, d?.title, projectId, d?.project?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [title, setTitle] = useState("");

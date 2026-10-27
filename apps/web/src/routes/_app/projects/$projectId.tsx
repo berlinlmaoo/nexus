@@ -81,6 +81,7 @@ import {
   type ViewLayout,
 } from "@/lib/project-views";
 import { t as tt, useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { cn, glueDash } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -346,6 +347,7 @@ function ProjectDetail() {
   const projectMissing = (project.error as { status?: number } | null)?.status === 404;
   const projectOffline = projectFailed && isTransientError(project.error);
   // GIDEON opened here carries this project as context (Notion AI's page chip).
+  usePageTitle(data?.name);
   useEffect(() => (data ? pushGideonPage({ kind: "project", id: data.id, title: data.name, projectId: data.id, projectName: data.name }) : undefined), [data?.id, data?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = Route.useSearch();
   const { t: tr, tn } = useLang();

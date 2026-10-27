@@ -19,6 +19,7 @@ import { EmptyAction } from "@/components/EmptyState";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { cn } from "@/lib/utils";
 import {
   applyMeeting, clock, deleteMeeting, durationText, etaText, MeetingApiError, meetingKey, patchMeeting, retryMeeting, speakerIndex, speakerLabelsOf, useMeeting,
@@ -70,6 +71,7 @@ export function MeetingPage({ id }: { id: string }) {
   const qc = useQueryClient();
   const q = useMeeting(id);
   const m = q.data;
+  usePageTitle(m?.title);
   const [draft, setDraft] = useState<Draft | null>(null);
   const dirty = useRef(false);
   const version = useRef<number>(0);

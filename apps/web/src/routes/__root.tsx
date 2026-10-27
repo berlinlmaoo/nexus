@@ -9,6 +9,7 @@ import {
 import { resolveLegacyLocation } from "@/lib/legacy-link";
 import { Toaster } from "@/components/ui/sonner";
 import { useLang } from "@/lib/lang";
+import { DocumentTitle } from "@/lib/page-title";
 
 function NotFoundComponent() {
   const { t } = useLang();
@@ -93,10 +94,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "NEXUS Phaëthon" },
+      { title: "NEXUS" },
       { name: "description", content: "PATS Group workspace: tasks, projects, attendance and chat." },
       { name: "author", content: "PATS Group" },
-      { property: "og:title", content: "NEXUS Phaëthon" },
+      { property: "og:title", content: "NEXUS" },
       { property: "og:description", content: "PATS Group workspace: tasks, projects, attendance and chat." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -117,6 +118,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <DocumentTitle />
       <Outlet />
       <Toaster richColors position="top-center" />
     </QueryClientProvider>

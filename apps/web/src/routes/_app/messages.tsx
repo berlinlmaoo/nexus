@@ -19,6 +19,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtime } from "@/lib/realtime";
 import { useTypingRooms } from "@/lib/chat-typing";
 import { t, useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { PresenceLine, usePresence } from "@/lib/presence";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/LoadError";
@@ -191,6 +192,7 @@ function Messages() {
   }, [linkMissing, linkProbe.isSuccess, linkProbe.isError, linkProbe.error, search.c, qc, navigate]);
   const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? null;
   const activeKey = active?.id ?? null;
+  usePageTitle(active ? convoTitle(active, meId) : null);
   // The other person's presence status shows under a DM's name (19 Oct 2026).
   const dmPeerStatus = usePresence(active?.type === "DM" ? dmPeer(active, meId)?.id : null);
   const activeKeyRef = useRef<string | null>(null);

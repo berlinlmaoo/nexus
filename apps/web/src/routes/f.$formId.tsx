@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, LogIn } from "lucide-react";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useDocumentLang, useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import type { RichField } from "@/components/forms/form-model";
 import { LegalRequestPage } from "@/components/legal/LegalRequestForm";
@@ -26,6 +27,7 @@ function PublicForm() {
 
   const form = useQuery({ queryKey: ["public-form", formId], queryFn: () => nexusApi.publicForm(formId), retry: false });
   const f = form.data;
+  usePageTitle(f?.name);
 
   // Who may send (owner, 25 Oct 2026): a public form without sign-in (isPublic, requireAuth false) takes anyone,
   // no account; any other form needs one. Signed out on such a form (owner, 26 Oct 2026) the questions are not

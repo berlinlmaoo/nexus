@@ -7,13 +7,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { usePageTitle } from "@/lib/page-title";
 import { PersonReportSkeleton, PersonReportView, ReportError } from "@/components/reports/PersonReportView";
 import { PeriodSelect } from "@/components/reports/PeriodSelect";
 import { errorMessage, reportErrorCode, reportRetry, type ReportsSearch } from "@/components/reports/report-format";
 
 export const Route = createFileRoute("/_app/reports/$userId")({
   component: PersonReportPage,
-  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Report" }] }),
+  head: () => ({ meta: [{ title: "Report · NEXUS" }] }),
 });
 
 function PersonReportPage() {
@@ -30,6 +31,7 @@ function PersonReportPage() {
     staleTime: 60_000,
   });
 
+  usePageTitle(report.data?.person.name);
   const code = reportErrorCode(report.error);
   const blocked = code === "REPORT_OUT_OF_SCOPE" || code === "REPORT_SELF_ONLY";
   // Only a viewer with a Team tab goes "back to team": Staff have none, and an out-of-scope report sent them
