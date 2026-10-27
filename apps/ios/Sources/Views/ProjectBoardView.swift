@@ -676,8 +676,9 @@ struct ProjectDetailView: View {
                     headerRow(wraps: true, nameBelow: true) { headerActions(labelled: false) }
                 }
             } else {
-                // The name beside the buttons while it fits there on two lines at its smallest size, else on its own
-                // line under them: an iPhone SE left it ~40 pt, "[TE…" and "ZZ / …" (QA final #2, 24 Oct 2026, I-15).
+                // The name beside the buttons while it fits there on two lines at its smallest size, else the buttons
+                // move under it: an iPhone SE left it ~40 pt, "[TE…" and "ZZ / …" (QA final #2, 24 Oct 2026, I-15; the
+                // web's order since 25 Oct 2026, the name first).
                 ViewThatFits(in: .horizontal) {
                     headerRow(wraps: true) { phoneHeaderActions }
                     headerRow(wraps: true, nameBelow: true) { phoneHeaderActions }
@@ -694,18 +695,22 @@ struct ProjectDetailView: View {
     }
 
     /// The header's row: back, mark, name, then `actions`. `wraps`: the row's ideal width counts the name wrapped
-    /// onto two lines at its smallest size, not on one line (WordWrapText.idealWraps). `nameBelow`: back, mark and
-    /// `actions` on the first line, the name on its own full-width line under them.
+    /// onto two lines at its smallest size, not on one line (WordWrapText.idealWraps). `nameBelow`: a name too long
+    /// for its two lines beside the actions, even at its smallest size: back, mark and the name get the header's
+    /// whole width, and the actions take their own row under it, at the right (web PageHeader data-title-wrap,
+    /// owner 25 Oct 2026: "SMIRNOFF + GORDON + CAPT MORGAN…" was cut beside the buttons).
     @ViewBuilder
     private func headerRow<Actions: View>(wraps: Bool, nameBelow: Bool = false, @ViewBuilder actions: () -> Actions) -> some View {
         if nameBelow {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     headerLeading
+                    headerTitle(wraps: false)
+                }
+                HStack(spacing: 10) {
                     Spacer(minLength: 0)
                     actions().fixedSize()
                 }
-                headerTitle(wraps: false)
             }
         } else {
             HStack(spacing: 10) {
