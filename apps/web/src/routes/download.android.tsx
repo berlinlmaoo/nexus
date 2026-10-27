@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Download, Loader2, LogIn, ShieldCheck, Smartphone } from "lucide-react";
+import { AlertTriangle, Download, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -9,9 +10,9 @@ import { formatCount } from "@/lib/number-format";
 // The Android app is sideloaded (no Play Store yet), and only signed-in people may download it (owner
 // decision 24 Sep 2026). This page is what the app opens for "Update", what the update reminder links
 // to, and the URL in the install guide. It lives outside `_app` so a phone gets a plain page, not the
-// dashboard shell. Signed out it still shows the release and the steps, like a form that needs an
-// account (owner, 25 Oct 2026); the button is "Sign in to download", to /login and back here. The APK
-// itself stays session-only (the release answer has no downloadUrl then).
+// dashboard shell. Signed out the page is not shown at all (owner, 27 Oct 2026; it showed the release
+// and the steps since 25 Oct): the visitor goes straight to /login, which comes back here. The APK itself
+// stays session-only (401), and the update reminder links keep pointing here.
 //
 // Server side: GET /api/app/android/release (facts) and GET /api/app/android/apk (the file, Range-able,
 // exempt from the 426 gate so a locked build can still update).
@@ -53,7 +54,13 @@ function AndroidDownloadPage() {
     refetchOnWindowFocus: false,
   });
 
-  if (q.isLoading) {
+  // Signed out: straight to sign-in, which comes back here. The release answer says who is asking.
+  const signedOut = q.data?.signedIn === false;
+  useEffect(() => {
+    if (signedOut) window.location.replace(SIGN_IN_URL);
+  }, [signedOut]);
+
+  if (q.isLoading || signedOut) {
     return (
       <Shell>
         <div className="flex justify-center py-10">
@@ -103,24 +110,13 @@ function Release({ info }: { info: Extract<AndroidReleaseInfo, { available: true
           : t("Build {code}", { code: info.versionCode })}
       </p>
 
-      {info.downloadUrl ? (
+      {info.downloadUrl && (
         <Button asChild size="lg" className="mt-5 w-full h-12 text-base">
           {/* A plain link, not fetch(): the browser's own download manager handles progress and resume. */}
           <a href={info.downloadUrl} download={info.fileName}>
             <Download className="h-5 w-5 mr-2" /> {t("Download")}
           </a>
         </Button>
-      ) : (
-        <>
-          <Button asChild size="lg" className="mt-5 w-full h-12 text-base">
-            <a href={SIGN_IN_URL}>
-              <LogIn className="h-5 w-5 mr-2" /> {t("Sign in to download")}
-            </a>
-          </Button>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t("Only NEXUS accounts can download the app. After you sign in you come back here.")}
-          </p>
-        </>
       )}
 
       {notes.length > 0 && (
