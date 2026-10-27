@@ -13,6 +13,7 @@
 // drag projects and folders into folders, onto "No folder", or between rows to reorder.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link, useRouterState } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 import { ChevronRight, FolderPlus, MoreHorizontal, Pin, Plus, Rocket, Inbox } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -106,7 +107,11 @@ export function SidebarProjectTree() {
 
   const projects = projectsQuery.data ?? [];
   const folders = useMemo(() => [...(foldersQuery.data ?? [])].sort(byPos), [foldersQuery.data]);
-  const { actions, dialogs } = useProjectTreeActions({ folders, canManage, workspaceId: roleQuery.data?.workspaceId });
+  const { actions, dialogs: treeDialogs } = useProjectTreeActions({ folders, canManage, workspaceId: roleQuery.data?.workspaceId });
+  // The folder form is a fixed overlay. Left inside the desktop sidebar it is caught in the sidebar's own
+  // stacking context (z-10), so the page's sticky header (z-40) drew on top of its scrim. It goes to <body>
+  // there. Inside the phone sheet it stays put: outside that modal sheet it could not be clicked.
+  const dialogs = isMobile || typeof document === "undefined" ? treeDialogs : createPortal(treeDialogs, document.body);
 
   const childFolders = useMemo(() => {
     const m = new Map<string, NexusProjectFolder[]>();
