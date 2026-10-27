@@ -489,7 +489,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
 
   if (colKey === "status") {
     return (
-      <SelectPicker value={task.status ?? "TODO"} onChange={(v) => patchTask(task.id, { status: v })} ariaLabel={t("Status")} className="w-full" options={TASK_STATUSES.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))} />
+      <SelectPicker value={task.status ?? "TODO"} onChange={(v) => patchTask(task.id, { status: v, exactStatus: true })} ariaLabel={t("Status")} className="w-full" options={TASK_STATUSES.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))} />
     );
   }
   if (colKey === "priority") {

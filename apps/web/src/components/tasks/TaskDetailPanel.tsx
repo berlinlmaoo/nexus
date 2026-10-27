@@ -78,7 +78,7 @@ import { displayName } from "@/lib/system-users";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
-import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { patchTaskInCaches, settleTaskWrite, undonePlacement } from "@/lib/task-cache";
 import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { LoadError, retryTransient } from "@/components/LoadError";
 import { EmptyAction } from "@/components/EmptyState";
@@ -429,9 +429,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
     mutationFn: (payload: Parameters<typeof nexusApi.updateTask>[1]) => nexusApi.updateTask(taskId, payload),
     // Optimistic: status, priority, title, dates and tags show at once, here and on the board behind.
     onMutate: (payload) => {
-      const { title, status, priority, dueDate, tags } = payload as Partial<NexusTask>;
+      const { title, priority, dueDate, tags } = payload as Partial<NexusTask>;
+      let status = (payload as Partial<NexusTask>).status;
+      // The Done tick undone: back to the status and section it had before Done (27 Oct 2026), not always To Do.
+      const cur = qc.getQueryData<NexusTask>(["task", taskId]);
+      const back = status === "TODO" && !payload.exactStatus && cur?.status === "DONE" ? undonePlacement(cur) : null;
+      if (back) status = back.status;
       const patch = Object.fromEntries(Object.entries({ title, status, priority, dueDate, tags, startDate: (payload as { startDate?: string | null }).startDate }).filter(([, v]) => v !== undefined));
-      return { rollback: Object.keys(patch).length ? patchTaskInCaches(qc, taskId, patch) : null };
+      return { rollback: Object.keys(patch).length ? patchTaskInCaches(qc, taskId, patch, back?.listId ? { moveToListId: back.listId } : {}) : null };
     },
     onSuccess: invalidateAll,
     // Surfaces the "wajib lampiran sebelum Done" gate (and any other reject) instead of failing silently.
@@ -784,7 +789,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               <PropRow icon={Loader} label={tr("Status")}>
                 <div className="flex min-w-0 items-center gap-1">
                   {/* Done is a tick on the Status row (it was the big "Mark done" button). */}
-                  <button type="button" onClick={() => update.mutate({ status: (done ? "TODO" : "DONE") as never })} aria-pressed={done} aria-label={done ? tr("Move back to To-do") : tr("Mark done")} title={done ? tr("Move back to To-do") : tr("Mark done")} className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors pointer-coarse:h-11 pointer-coarse:w-11", done ? "text-success" : "text-muted-foreground/60 hover:bg-success/10 hover:text-success")}>
+                  <button type="button" onClick={() => update.mutate({ status: (done ? "TODO" : "DONE") as never })} aria-pressed={done} aria-label={done ? tr("Mark as not done") : tr("Mark done")} title={done ? tr("Mark as not done") : tr("Mark done")} className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors pointer-coarse:h-11 pointer-coarse:w-11", done ? "text-success" : "text-muted-foreground/60 hover:bg-success/10 hover:text-success")}>
                     {done ? <CheckCircle2 className="h-[18px] w-[18px]" /> : <Circle className="h-[18px] w-[18px]" />}
                   </button>
                   {/* Section = the project's board column (TaskList). Falls back to global status if the
@@ -816,7 +821,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                     <SelectPicker
                       ariaLabel={tr("Status")}
                       value={t.status ?? "TODO"}
-                      onChange={(v) => update.mutate({ status: v as never })}
+                      onChange={(v) => update.mutate({ status: v as never, exactStatus: true })}
                       options={STATUS_OPTIONS.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))}
                       className="max-w-full"
                     />

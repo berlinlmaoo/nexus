@@ -35,7 +35,7 @@ export async function moveToGroup(task: NexusTask, by: string, from: string, to:
   if (from === to) return;
   const none = to === EMPTY_GROUP;
   if (by === "section") return nexusApi.updateTask(task.id, { taskListId: to, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1]);
-  if (by === "status") return nexusApi.updateTask(task.id, { status: to });
+  if (by === "status") return nexusApi.updateTask(task.id, { status: to, exactStatus: true });
   if (by === "priority") return nexusApi.updateTask(task.id, { priority: to });
   if (by === "assignee") {
     if (from !== EMPTY_GROUP) await nexusApi.removeAssignee(task.id, from);

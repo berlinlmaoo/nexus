@@ -1120,6 +1120,10 @@ export type NexusTask = {
   /** When the task last became DONE and by whom (set by a DB trigger; null = unknown or not done). */
   completedAt?: string | null;
   completedById?: string | null;
+  /** The status and section it had right before it last became DONE (DB trigger, 27 Oct 2026): unticking Done
+   *  puts it back there (server rule: lib/status-sections.ts undoneTarget). Null = unknown → To Do. */
+  statusBeforeDone?: string | null;
+  taskListIdBeforeDone?: string | null;
   tags?: string[] | null;
   taskListId?: string | null;
   parentId?: string | null;
@@ -2515,7 +2519,7 @@ export const nexusApi = {
   /** Many tasks to one column in one request (multi-drag): the same edit as updateTask, per task. */
   batchMoveTasks: (payload: { taskIds: string[]; taskListId?: string; status?: string; priority?: string; projectContextId?: string }) =>
     apiFetch<{ moved: string[]; failed: Array<{ id: string; error: string }> }>("/api/tasks/batch-move", { method: "POST", body: JSON.stringify(payload) }),
-  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string; /** Relative to what is stored (race audit M13). */ addTags?: string[]; removeTags?: string[] }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string; /** A status picked from a list: "TODO" on a Done task means To Do, not "back to before Done" (27 Oct 2026). */ exactStatus?: boolean; /** Relative to what is stored (race audit M13). */ addTags?: string[]; removeTags?: string[] }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   goals: () => apiFetch<{ goals: NexusGoal[] }>("/api/goals"),
   createGoal: (payload: { title: string; description?: string | null; workspaceId: string; dueDate?: string | null; parentId?: string | null }) => apiFetch<{ goal: NexusGoal }>("/api/goals", { method: "POST", body: JSON.stringify(payload) }),
   goal: (goalId: string) => apiFetch<{ goal: NexusGoalDetail }>(`/api/goals/${goalId}`),

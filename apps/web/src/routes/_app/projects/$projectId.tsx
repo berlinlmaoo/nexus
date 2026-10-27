@@ -33,7 +33,7 @@ import { useProjectViews } from "@/components/projects/views/use-project-views";
 import { FilterButton, FilterChips, GroupButton, SortButton, ToolbarButton, sortSummary, usePropLabel } from "@/components/projects/views/view-controls";
 import { AddViewButton, LAYOUT_ICON, ViewSettingsPanel } from "@/components/projects/views/view-settings";
 import { Incremental } from "@/components/projects/views/incremental";
-import { beginTaskWrite, holdProject, insertDraftTask, patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { beginTaskWrite, holdProject, insertDraftTask, patchTaskInCaches, settleTaskWrite, undonePlacement } from "@/lib/task-cache";
 import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { FilterHint, FilterHintProvider, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { plainPreview } from "@/lib/plain-preview";
@@ -1674,7 +1674,9 @@ function useDoneToggle(task: NexusTask, projectId: string | undefined) {
     mutationFn: (next: string) => nexusApi.updateTask(task.id, { status: next }),
     onMutate: async (next) => {
       await holdProject(qc, projectId);
-      const rollback = patchTaskInCaches(qc, task.id, { status: next });
+      // Un-done goes back to the status and section it had before Done (27 Oct 2026), not always To Do.
+      const back = next === "TODO" && task.status === "DONE" ? undonePlacement(task) : null;
+      const rollback = back ? patchTaskInCaches(qc, task.id, { status: back.status }, { moveToListId: back.listId }) : patchTaskInCaches(qc, task.id, { status: next });
       return { rollback, prev: { status: task.status || "TODO", listId: task.taskListId ?? task.taskList?.id ?? null } };
     },
     onSuccess: (_r, next, c) => {
@@ -1685,7 +1687,7 @@ function useDoneToggle(task: NexusTask, projectId: string | undefined) {
         await holdProject(qc, projectId);
         patchTaskInCaches(qc, task.id, { status: prev.status }, { moveToListId: prev.listId });
         if (prev.listId && projectId) await nexusApi.batchMoveTasks({ taskIds: [task.id], taskListId: prev.listId, projectContextId: projectId, status: prev.status });
-        else await nexusApi.updateTask(task.id, { status: prev.status });
+        else await nexusApi.updateTask(task.id, { status: prev.status, exactStatus: true });
         settleTaskWrite(qc, projectId, task.id);
       }, { duration: 6000 });
     },

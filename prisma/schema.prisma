@@ -770,6 +770,12 @@ model Task {
   completedAt   DateTime?
   completedById String?
   completedBy   User?     @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  /// The status and section the task had right before it last became DONE (owner, 27 Oct 2026, option B: unticking
+  /// Done puts it back there, not always To Do). Written only by the Postgres trigger "Task_status_before_done"
+  /// (prisma/sql/2026-10-27-task-status-before-done.sql) on every write path; read by lib/task-update.ts. Null =
+  /// unknown (done before that file, or created as Done). No relation: a section deleted since is just not found.
+  statusBeforeDone     TaskStatus?
+  taskListIdBeforeDone String?
 
   parentId    String?
   parent      Task?    @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
