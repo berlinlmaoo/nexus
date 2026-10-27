@@ -29,15 +29,18 @@ vi.mock('@/lib/prisma', () => {
     project: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      count: vi.fn(),
     },
     workspaceMember: {
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     projectMember: {
       findMany: vi.fn(),
     },
     taskList: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     task: {
       findMany: vi.fn(),
@@ -77,6 +80,9 @@ import { POST } from '@/app/api/gideon/tools/route'
 const mockAuth = vi.mocked(authenticateGideonService)
 const mockProjectFindMany = vi.mocked(prisma.project.findMany)
 const mockProjectFindUnique = vi.mocked(prisma.project.findUnique)
+const mockProjectCount = vi.mocked(prisma.project.count)
+const mockWorkspaceMemberCount = vi.mocked(prisma.workspaceMember.count)
+const mockTaskListFindMany = vi.mocked(prisma.taskList.findMany)
 const mockWorkspaceMemberFindMany = vi.mocked(prisma.workspaceMember.findMany)
 const mockProjectMemberFindMany = vi.mocked(prisma.projectMember.findMany)
 const mockTaskFindMany = vi.mocked(prisma.task.findMany)
@@ -128,20 +134,22 @@ describe('POST /api/gideon/tools', () => {
     expect(await json(response)).toEqual({ ok: false, error: 'Unauthorized' })
   })
 
-  it('lists projects with compact task counts and members', async () => {
+  // GIDEON's read tools answer compact, paged rows since 18 Oct 2026 (lib/gideon-compact.ts): no member roster,
+  // emails or avatars, and a page wrapper with the total.
+  it('lists projects as compact rows with task counts, members and the scope', async () => {
     mockProjectFindMany.mockResolvedValue([
       {
         id: 'project-1',
         name: 'Project One',
-        description: 'Main project',
         status: 'ACTIVE',
-        color: '#7B2FBE',
-        icon: 'folder',
-        workspace: { id: 'workspace-1', name: 'PATS', slug: 'pats' },
-        members: [{ role: 'LEAD', user: { id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null } }],
-        taskLists: [{ id: 'list-1', name: 'Backlog', position: 0, _count: { tasks: 3 } }],
+        type: 'TASK',
+        _count: { members: 1 },
+        taskLists: [{ id: 'list-1', _count: { tasks: 3 } }],
       },
     ] as never)
+    mockProjectCount.mockResolvedValue(1 as never)
+    mockTaskGroupBy.mockResolvedValueOnce([{ taskListId: 'list-1', _count: { _all: 2 } }] as never)
+    mockWorkspaceMemberCount.mockResolvedValue(0 as never)
 
     const response = await POST(toolRequest({ action: 'list_projects', input: { status: 'ACTIVE' } }))
     const body = await json(response)
@@ -150,20 +158,12 @@ describe('POST /api/gideon/tools', () => {
     expect(mockProjectFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }))
     expect(body).toEqual({
       ok: true,
-      data: [
-        {
-          id: 'project-1',
-          name: 'Project One',
-          description: 'Main project',
-          status: 'ACTIVE',
-          color: '#7B2FBE',
-          icon: 'folder',
-          workspace: { id: 'workspace-1', name: 'PATS', slug: 'pats' },
-          members: [{ role: 'LEAD', user: { id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null } }],
-          taskLists: [{ id: 'list-1', name: 'Backlog', position: 0, taskCount: 3 }],
-          taskCount: 3,
-        },
-      ],
+      data: {
+        scope: 'Exactly the projects this person is a member of.',
+        total: 1,
+        shown: 1,
+        items: [{ id: 'project-1', name: 'Project One', status: 'ACTIVE', tasks: 3, open: 2, members: 1 }],
+      },
     })
   })
 
@@ -176,13 +176,12 @@ describe('POST /api/gideon/tools', () => {
         status: 'TODO',
         priority: 'HIGH',
         dueDate: null,
-        tags: ['ops'],
-        project: { id: 'project-1', name: 'Ops', status: 'ACTIVE' },
-        taskList: { id: 'list-1', name: 'Backlog' },
-        assignees: [{ user: { id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null } }],
-        creator: { id: 'actor-1', name: 'GIDEON', email: 'gideon@patsgroup.id' },
+        taskList: { name: 'Backlog', projectId: 'project-1', project: { id: 'project-1', name: 'Ops' } },
+        assignees: [{ user: { name: 'Berlin' } }],
+        customFieldValues: [],
       },
     ] as never)
+    mockTaskCount.mockResolvedValue(1 as never)
 
     const response = await POST(toolRequest({ action: 'search_tasks', input: { query: 'supplier', limit: 500 } }))
     const body = await json(response)
@@ -190,23 +189,35 @@ describe('POST /api/gideon/tools', () => {
     expect(response.status).toBe(200)
     expect(mockTaskFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }))
     expect(body.ok).toBe(true)
-    expect(body.data).toEqual([
-      expect.objectContaining({ id: 'task-1', title: 'Follow up supplier', assignees: [{ id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null }] }),
-    ])
+    expect(body.data).toEqual({
+      total: 1,
+      shown: 1,
+      items: [
+        expect.objectContaining({ id: 'task-1', title: 'Follow up supplier', status: 'Backlog', progress: 'To do', priority: 'High', assignees: ['Berlin'], project: 'Ops', projectId: 'project-1' }),
+      ],
+    })
   })
 
-  it('returns a project summary with grouped status and priority counts', async () => {
+  it('returns a project summary with grouped status, priority and column counts', async () => {
     mockProjectFindUnique.mockResolvedValue({
       id: 'project-1',
       name: 'Ops',
       status: 'ACTIVE',
-      workspace: { id: 'workspace-1', name: 'PATS', slug: 'pats' },
-      members: [{ role: 'LEAD', user: { id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null } }],
+      type: 'TASK',
+      workspace: { name: 'PATS' },
+      members: [{ role: 'LEAD', user: { id: 'user-1', name: 'Berlin' } }],
+      _count: { members: 1 },
     } as never)
-    mockTaskCount.mockResolvedValueOnce(10 as never).mockResolvedValueOnce(4 as never)
+    // Promise.all order in getProjectSummary: total, done, by status, open by priority, columns, by column,
+    // open by column, overdue open, the open rows.
+    mockTaskCount.mockResolvedValueOnce(10 as never).mockResolvedValueOnce(4 as never).mockResolvedValueOnce(1 as never)
     mockTaskGroupBy
       .mockResolvedValueOnce([{ status: 'TODO', _count: { _all: 6 } }, { status: 'DONE', _count: { _all: 4 } }] as never)
-      .mockResolvedValueOnce([{ priority: 'HIGH', _count: { _all: 3 } }, { priority: 'LOW', _count: { _all: 7 } }] as never)
+      .mockResolvedValueOnce([{ priority: 'HIGH', _count: { _all: 3 } }, { priority: 'LOW', _count: { _all: 3 } }] as never)
+      .mockResolvedValueOnce([{ taskListId: 'list-1', _count: { _all: 10 } }] as never)
+      .mockResolvedValueOnce([{ taskListId: 'list-1', _count: { _all: 6 } }] as never)
+    mockTaskListFindMany.mockResolvedValue([{ id: 'list-1', name: 'Backlog' }] as never)
+    mockTaskFindMany.mockResolvedValue([] as never)
 
     const response = await POST(toolRequest({ action: 'get_project_summary', input: { projectId: 'project-1' } }))
     const body = await json(response)
@@ -215,12 +226,17 @@ describe('POST /api/gideon/tools', () => {
     expect(body).toEqual({
       ok: true,
       data: expect.objectContaining({
-        project: expect.objectContaining({ id: 'project-1', name: 'Ops' }),
+        project: { id: 'project-1', name: 'Ops', status: 'ACTIVE', workspace: 'PATS' },
         totalTasks: 10,
         completedTasks: 4,
+        openTasks: 6,
+        overdueOpenTasks: 1,
         progressPercent: 40,
         byStatus: { TODO: 6, DONE: 4 },
-        byPriority: { HIGH: 3, LOW: 7 },
+        openByPriority: { HIGH: 3, LOW: 3 },
+        byColumn: [{ column: 'Backlog', total: 10, open: 6 }],
+        members: [{ id: 'user-1', name: 'Berlin', role: 'LEAD' }],
+        topOpenTasks: [],
       }),
     })
   })
