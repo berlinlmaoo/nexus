@@ -11,7 +11,7 @@ import { useEditorCtx } from "@/components/editor/useEditorCtx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { nexusApi, type CreateTaskPayload, type NexusCustomField, type NexusProject } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
-import { numberFieldFormat } from "@/lib/custom-field-number";
+import { numberFieldFormat, typedNumberFieldValue } from "@/lib/custom-field-number";
 import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 import { defaultOption, usesStatusOptions } from "@/lib/status-options";
@@ -42,7 +42,7 @@ const draftKey = (projectId: string) => `nexus:task-draft:${projectId}`;
  * the next Add task picks it up; nothing is created until "Create task".
  */
 export function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { project: NexusProject; selectedListId: string; initialDueDate?: string; onClose: () => void }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const qc = useQueryClient();
   const sections = useMemo(() => [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [project.taskLists]);
   const statusOptions = usesStatusOptions(sections);
@@ -89,7 +89,12 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
       if (hasText(doc.current)) await nexusApi.saveTaskBody(task.id, doc.current).catch(() => toast.error(t("The task was created, but its description couldn't be saved.")));
       for (const [fid, v] of Object.entries(cf)) {
         const empty = Array.isArray(v) ? v.length === 0 : !String(v ?? "").trim();
-        if (!empty) await nexusApi.setCustomFieldValue(fid, task.id, Array.isArray(v) ? JSON.stringify(v) : v).catch(() => undefined);
+        if (empty) continue;
+        // A number is read in the UI language here (English "1.5" / "1,500", Indonesian "1,5" / "1.500") and goes as
+        // a JSON number, which the server stores as it is (owner bug 27 Oct 2026).
+        const def = fields.find((f) => f.id === fid);
+        const out = (def?.type ?? "").toUpperCase() === "NUMBER" && !Array.isArray(v) ? typedNumberFieldValue(v, def?.options, lang) : v;
+        await nexusApi.setCustomFieldValue(fid, task.id, Array.isArray(out) ? JSON.stringify(out) : out).catch(() => undefined);
       }
       created.current = true;
       qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });

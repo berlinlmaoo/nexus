@@ -135,6 +135,71 @@ check("display helpers", () => {
   assert.equal(m.formatIdr(""), "")
 })
 
+// Owner bug 27 Oct 2026: "Harga" (Rupiah) edited in a form-made task went back to the old amount. The editors now
+// read what was typed in the UI language and send a JSON number, which the server keeps as it is.
+const typed = (v, opts, lang) => m.typedNumberFieldValue(v, opts, lang)
+check("typed in a Rupiah box, both languages", () => {
+  for (const lang of ["id", "en"]) {
+    for (const v of ["10500000", "10.500.000", "10,500,000", "Rp 10.500.000", "Rp10.500.000", "IDR 10.500.000", " 10.500.000 "]) assert.equal(typed(v, IDR, lang), 10500000, `${lang} ${v}`)
+    assert.equal(typed("-10.500.000", IDR, lang), -10500000)
+    assert.equal(typed("−Rp 1.501", IDR, lang), -1501) // the amount as this app shows it, pasted back
+    assert.equal(typed("", IDR, lang), "")
+    assert.equal(typed("   ", IDR, lang), "")
+  }
+  assert.equal(typed("1.500.000,50", IDR, "id"), 1500001) // whole rupiah: cents round
+  assert.equal(typed("1,500,000.50", IDR, "en"), 1500001)
+})
+
+check("typed in a plain number box: the decimal mark follows the UI language", () => {
+  assert.equal(typed("2,5", null, "id"), 2.5)
+  assert.equal(typed("2.5", null, "en"), 2.5)
+  assert.equal(typed("1.234", null, "id"), 1234) // Indonesian: the dot groups
+  assert.equal(typed("1.234", null, "en"), 1.234) // English: the dot is the decimal mark
+  assert.equal(typed("1,234", null, "en"), 1234)
+  assert.equal(typed("1,234", null, "id"), 1.234)
+  assert.equal(typed("1.234.567,89", null, "id"), 1234567.89)
+  assert.equal(typed("1,234,567.89", null, "en"), 1234567.89)
+  assert.equal(typed("10500000", null, "en"), 10500000)
+  assert.equal(typed("-3,75", null, "id"), -3.75)
+  assert.equal(typed("-3.75", null, "en"), -3.75)
+  assert.equal(typed("42,5%", { numberFormat: "percent" }, "id"), 0.425)
+  assert.equal(typed("42.5%", { numberFormat: "percent" }, "en"), 0.425)
+  assert.equal(typed("$1,234.50", { numberFormat: "USD" }, "en"), 1234.5)
+  assert.equal(typed("", null, "en"), "")
+  assert.equal(typed("n/a", null, "en"), "n/a")
+})
+
+check("a JSON number is stored as it is (no Indonesian re-reading)", () => {
+  assert.equal(plain(1.234), "1.234")
+  assert.equal(plain(1.5), "1.5")
+  assert.equal(plain(-0.25), "-0.25")
+  assert.equal(plain(0.1 + 0.2), "0.3")
+  assert.equal(plain(10500000), "10500000")
+  assert.equal(plain(-0), "0")
+  assert.equal(m.normalizeNumberFieldValue(1234.567, { numberFormat: "IDR", decimals: 3 }), "1234.567")
+  assert.equal(m.normalizeNumberFieldValue(1234.5678, { numberFormat: "IDR", decimals: 2 }), "1234.57")
+  // whole Rupiah keeps its old reading of a JSON number (released apps): 243.351 was a grouping mistake
+  assert.equal(idr(243.351), "243351")
+  // what an editor sends round-trips through the server unchanged
+  for (const [v, lang] of [["1.234", "en"], ["1,234", "id"], ["2,5", "id"], ["-3.75", "en"]]) {
+    const sent = typed(v, null, lang)
+    assert.equal(Number(plain(sent)), sent, `${lang} ${v}`)
+  }
+  for (const v of ["10.500.000", "-10.500.000", "10,500,000"]) assert.equal(idr(typed(v, IDR, "en")), String(typed(v, IDR, "en")))
+})
+
+check("the box opens with the stored value in the UI language", () => {
+  assert.equal(m.numberEditText("2.5", null, "id"), "2,5")
+  assert.equal(m.numberEditText("2.5", null, "en"), "2.5")
+  assert.equal(m.numberEditText("1500000", null, "id"), "1500000")
+  assert.equal(m.numberEditText("0.42", { numberFormat: "percent" }, "id"), "42%")
+  assert.equal(m.numberEditText("0.425", { numberFormat: "percent" }, "en"), "42.5%")
+  assert.equal(m.numberEditText("", null, "en"), "")
+  assert.equal(m.numberEditText("n/a", null, "en"), "n/a")
+  // opening and leaving the box changes nothing: what it opens with reads back as the stored number
+  for (const lang of ["id", "en"]) for (const v of ["2.5", "1234.56", "-7", "1500000", "1.234"]) assert.equal(typed(m.numberEditText(v, null, lang), null, lang), Number(v), `${lang} ${v}`)
+})
+
 const [a, b] = await Promise.all([readFile(tsPath, "utf8"), readFile(webPath, "utf8").catch(() => null)])
 if (b === null) console.log("skip web copy check (apps/web not present)")
 else check("web copy matches", () => assert.equal(b, a, "apps/web/src/lib/custom-field-number.ts differs from src/lib/custom-field-number.ts"))

@@ -2,7 +2,7 @@ import { useRealtimeRoom } from "@/lib/realtime";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { activityText } from "@/lib/server-text";
 import { DateField } from "@/components/DateField";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { animate as fmAnimate, motion, useMotionValue, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -532,6 +532,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
   const setCfMut = useMutation({
     mutationFn: ({ id, value, prev }: { id: string; value: unknown; prev?: unknown }) => nexusApi.saveCustomFieldValue(id, taskId, value, prev),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-cf", taskId] }); if (projectId) qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); },
+    // A refused save said nothing and the row quietly showed the old value again (owner bug 27 Oct 2026).
+    onError: (e: unknown) => { toast.error(tr("Couldn't save the change"), { description: friendlyError(e) }); qc.invalidateQueries({ queryKey: ["task-cf", taskId] }); },
   });
   const [cfAdding, setCfAdding] = useState(false);
   const createCf = useMutation({
@@ -884,7 +886,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               {projectId && (customFields.data?.fields ?? []).map((f) => (
                 <PropRow key={f.id} icon={fieldIcon(f.type)} label={f.name}
                   aside={ai.aiFields.has(f.id) ? <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : tr("AI Autofill")}><Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}</span> : null}>
-                  <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value, prev: f.value })} bare />
+                  <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutateAsync({ id: f.id, value, prev: f.value })} bare />
                 </PropRow>
               ))}
               {/* also in projects (multi-project links) */}
@@ -1245,13 +1247,17 @@ function fmtCreatedDateTime(ts: string, locale: string): string {
  *  decision 21, R20-WD-7: blank as Notion, the dashes were noise down whole columns). */
 const EMPTY_CELL = "";
 
-export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft, bare }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean;
+export function CustomFieldInput({ field, projectId, onSet: setValue, hideLabel, creatorLeft, bare }: { field: NexusCustomField; projectId?: string;
+  /** Saves the value; a returned promise that rejects tells the editor the save failed (the caller shows why). */
+  onSet: (value: unknown) => void | Promise<unknown>; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean;
   /** A property row of the task page: no label (the row has it), the value reads as text until hovered or
    *  clicked, "Empty" when there is none; unlike a table cell it keeps the full editors (a place's map link). */
   bare?: boolean }) {
   const { t: tr, locale } = useLang();
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
+  // Fire and forget for the editors that keep no state of their own (the caller reports a failed save).
+  const onSet = (value: unknown) => { const r = setValue(value); if (r && typeof r.then === "function") r.then(undefined, () => undefined); };
   // In a table cell (hideLabel) or a property row (bare) the editor reads as plain text until hovered, like a Notion property.
   const ghost = hideLabel || bare;
   const empty = hideLabel ? EMPTY_CELL : bare ? tr("Not set") : undefined;
@@ -1277,6 +1283,11 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     setLocalState(shownVal);
     if (type === "PLACE") setPlaceState({ label: placeInit.label ?? "", mapUrl: placeInit.mapUrl ?? "" });
   }, [shownVal, placeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Enter saves a one-line box (its blur writes), as in the number box. */
+  const blurOnEnter = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+  };
   /** On blur: write what was typed (once), else nothing. */
   const commit = (value: unknown, changed: boolean) => { if (!dirty.current) return; dirty.current = false; if (changed) onSet(value); };
 
@@ -1314,15 +1325,15 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     // place's name, with its map link as an icon. The link itself is edited in the task.
     body = (
       <div className="flex min-w-0 items-center gap-1">
-        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} placeholder={EMPTY_CELL} className={cls} />
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} onKeyDown={blurOnEnter} aria-label={field.name} placeholder={EMPTY_CELL} className={cls} />
         {place.mapUrl.trim() && <a href={place.mapUrl} target="_blank" rel="noopener noreferrer" aria-label={tr("Open map")} title={tr("Open map")} className="shrink-0 text-muted-foreground hover:text-primary"><MapPin className="h-3.5 w-3.5" /></a>}
       </div>
     );
   } else if (type === "PLACE") {
     body = (
       <div className={cn(bare ? "w-full space-y-0.5" : "space-y-1.5")}>
-        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} placeholder={tr("Location / place name")} className={cls} />
-        <input value={place.mapUrl} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, mapUrl: v })); }} onBlur={() => commit(place, true)} aria-label={tr("Google Maps link")} placeholder={tr("Google Maps link")} className={cls} />
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} onKeyDown={blurOnEnter} aria-label={field.name} placeholder={tr("Location / place name")} className={cls} />
+        <input value={place.mapUrl} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, mapUrl: v })); }} onBlur={() => commit(place, true)} onKeyDown={blurOnEnter} aria-label={tr("Google Maps link")} placeholder={tr("Google Maps link")} className={cls} />
       </div>
     );
   } else if (type === "CREATED") {
@@ -1347,14 +1358,14 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     // One line in a table cell: the address, then an icon that opens it (WD-11).
     body = (
       <div className="flex min-w-0 items-center gap-1">
-        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} placeholder={bare ? "https://…" : EMPTY_CELL} className={cls} />
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} onKeyDown={blurOnEnter} aria-label={field.name} placeholder={bare ? "https://…" : EMPTY_CELL} className={cls} />
         {strVal.trim() && <a href={strVal} target="_blank" rel="noopener noreferrer" aria-label={tr("Open link")} title={tr("Open link")} className="shrink-0 text-muted-foreground hover:text-primary"><Link2 className="h-3.5 w-3.5" /></a>}
       </div>
     );
   } else if (type === "URL") {
     body = (
       <div className="space-y-1">
-        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} placeholder="https://…" className={cls} />
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} onKeyDown={blurOnEnter} placeholder="https://…" className={cls} />
         {strVal.trim() && (
           <a href={strVal} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
             <Link2 className="h-3 w-3" /> {tr("Open link")}
@@ -1367,7 +1378,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   } else if (type === "NUMBER") {
     // The field's own format (Rupiah, Percent, a currency… and Bar / Ring), Indonesian grouping; a click edits.
     // Rupiah keeps its "Rp" box that groups while typing. In a table cell numbers sit right-aligned (Notion).
-    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={ghost} align={hideLabel ? "end" : "start"} placeholder={empty ?? tr("Not set")} />;
+    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={setValue} ariaLabel={field.name} inline={ghost} align={hideLabel ? "end" : "start"} placeholder={empty ?? tr("Not set")} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
     body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : bare ? "rounded-lg" : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-ring/40"} placeholder={empty ?? tr("Not set")} />;
@@ -1378,6 +1389,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={() => commit(local, local !== shownVal)}
+        onKeyDown={blurOnEnter}
         aria-label={ghost ? field.name : undefined}
         placeholder={empty}
         className={cls}

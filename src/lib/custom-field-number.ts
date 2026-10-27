@@ -323,7 +323,9 @@ const MULTIPLIERS: Array<[RegExp, number]> = [
 ]
 
 function stripCurrency(raw: string): { s: string; neg: boolean } {
-  let s = raw.replace(/[\s  ]+/g, "")
+  // The minus sign this file prints ("−Rp 1.501", U+2212) and an en dash read as "-", so a shown amount
+  // copied back into a box keeps its sign.
+  let s = raw.replace(/[\s  ]+/g, "").replace(/[\u2212\u2013]/g, "-")
   let neg = false
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1) }
   if (s.startsWith("-")) { neg = !neg; s = s.slice(1) }
@@ -434,6 +436,13 @@ export function normalizeNumberFieldValue(value: unknown, options: unknown): str
   let raw: string
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return ""
+    // A JSON number is already a machine number: 1.234 is one and 234 thousandths, never 1234. Editors
+    // that read the UI language (English "1.5", Indonesian "1,5") send numbers, so nothing is re-read
+    // here with the Indonesian typing rules (owner bug 27 Oct 2026). Whole Rupiah keeps its old reading below.
+    if (!idr || keep > 0) {
+      const r = idr ? Number(value.toFixed(keep)) : Number(value.toPrecision(15))
+      if (Math.abs(r) < 1e15) return String(Object.is(r, -0) ? 0 : r)
+    }
     // A JSON number never carries grouping, but 243.351 sent as a number for a Rupiah field is the
     // same mistake as the text "243.351" — read it the same way. (369.000 as a JSON number already
     // arrives as 369; nothing can recover the zeros.)
@@ -475,6 +484,38 @@ export function normalizeNumberFieldValue(value: unknown, options: unknown): str
   }
   if (idr) return raw.replace(/\D+/g, "")
   return raw.trim()
+}
+
+export type NumberLang = "en" | "id"
+
+/**
+ * What a person typed into a NUMBER field's box → what an editor sends, read in the UI language: Indonesian
+ * "1.500,5" (a dot groups thousands, the comma is the decimal mark) or English "1,500.5" (the other way
+ * round). Both read "Rp 10.500.000", "10,500,000" and "10500000" as ten and a half million, and "−Rp 1.501"
+ * keeps its sign. Returns "" for an empty box, a JS number for a number — the server stores a JSON number as
+ * it is, so English "1.234" stays 1.234 instead of being read again as Indonesian grouping (owner bug
+ * 27 Oct 2026) — and the typed text when it is no number at all.
+ */
+export function typedNumberFieldValue(text: unknown, options: unknown, lang: NumberLang): number | string {
+  const s = String(text ?? "").trim()
+  if (!s) return ""
+  const swapped = lang === "en" ? s.replace(/[.,]/g, (c) => (c === "." ? "," : ".")) : s
+  const n = normalizeNumberFieldValue(swapped, options)
+  if (!n) return ""
+  return MACHINE_NUMBER.test(n) ? Number(n) : n
+}
+
+/** A stored value as typed back into a plain number box: 2.5 → "2,5" (Indonesian) / "2.5" (English); 0.42 → "42%" in Percent. */
+export function numberEditText(raw: unknown, options: unknown, lang: NumberLang): string {
+  const s = typeof raw === "number" ? String(raw) : String(raw ?? "").trim()
+  if (!s) return ""
+  const n = storedNumber(s, options)
+  if (n === null) return s
+  const o = numberOptions(options)
+  const v = o.numberFormat === "percent" ? Number((n * 100).toPrecision(15)) : n
+  const text = String(v)
+  const local = lang === "id" ? text.replace(".", ",") : text
+  return o.numberFormat === "percent" ? `${local}%` : local
 }
 
 /** "369000" → "369.000" (id-ID grouping, no currency sign) — for inputs while typing. */
