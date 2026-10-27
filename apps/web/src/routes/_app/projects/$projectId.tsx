@@ -124,6 +124,9 @@ import {
 import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { CAPS, weekdayNames } from "@/components/calendar/bits";
 
+/** The header's text buttons go icon-only when the header row is narrow (768px with the sidebar open, 27 Oct 2026). */
+const NARROW_ICON = "@max-xl/phrow:w-8 @max-xl/phrow:min-w-8 @max-xl/phrow:px-0 pointer-coarse:@max-xl/phrow:w-11 pointer-coarse:@max-xl/phrow:min-w-11";
+
 // Heavy tabs and dialogs load when first used, not with every project (perf pass, 12 Oct 2026). The task popup
 // and the composer are fetched in the background once the board is up (preloadProjectExtras), so opening a
 // card never waits for code.
@@ -800,10 +803,10 @@ function ProjectDetail() {
             {data && <ProjectMembersAvatars project={data} />}
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
-            {data && <Button size="sm" variant="ghost" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
-            {data && meetingsOn && data.viewerAccessLevel !== "VIEW" && data.viewerAccessLevel !== "COMMENT" && <Button size="sm" variant="ghost" aria-label={`${tr("Meeting notes")} (${tr("Beta")})`} className="max-md:hidden" onPointerEnter={() => void import("@/components/meetings/NewMeetingDialog")} onClick={() => setMeetingOpen(true)}><MeetingMic className="h-3.5 w-3.5" />{tr("Meeting notes")}<BetaBadge /></Button>}
+            {data && <Button size="sm" variant="ghost" aria-label={tr("Ask GIDEON")} className={cn("max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11", NARROW_ICON)} onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden @max-xl/phrow:hidden">{tr("Ask GIDEON")}</span></Button>}
+            {data && meetingsOn && data.viewerAccessLevel !== "VIEW" && data.viewerAccessLevel !== "COMMENT" && <Button size="sm" variant="ghost" aria-label={`${tr("Meeting notes")} (${tr("Beta")})`} className={cn("max-md:hidden", NARROW_ICON)} onPointerEnter={() => void import("@/components/meetings/NewMeetingDialog")} onClick={() => setMeetingOpen(true)}><MeetingMic className="h-3.5 w-3.5" /><span className="contents @max-xl/phrow:hidden">{tr("Meeting notes")}<BetaBadge /></span></Button>}
             {data && <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
-              <Button size="sm" variant="ghost" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
+              <Button size="sm" variant="ghost" aria-label={tr("Project settings")} className={cn("max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11", NARROW_ICON)} onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden @max-xl/phrow:hidden">{tr("Project settings")}</span></Button>
             </motion.div>}
           </>
         }
