@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma"
 import type { User } from "@/generated/prisma/client"
 import { attendancePeriodKey, getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { isAutoDeduction } from "@/lib/attendance-absence"
-import { canUserReviewRequest, resolveAttendanceApprovers } from "@/lib/attendance-approvers"
+import { canUserReviewRequest, isForbiddenSelfReview, resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
 import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey } from "@/lib/day-off-usage"
 import { isBackdated } from "@/lib/permit-rules"
@@ -165,7 +165,8 @@ async function findDecidable(actor: User, input: Input) {
     if (real.length > 1) throw new Error(`${p.name} has ${real.length} pending requests: ${real.map((r) => `${TYPE_LABEL[r.type]} ${dayKey(r.startDate)}`).join("; ")}. Ask which one (or pass the date).`)
     req = real[0]
   }
-  if (req.userId === actor.id) throw new Error("Nobody approves or rejects their own request. Tell the person to ask their approver.")
+  // Four-eyes, except One Above All, who decides their own (owner, 29 Oct 2026).
+  if (isForbiddenSelfReview(actor.id, req.userId, ctx)) throw new Error("Nobody approves or rejects their own request. Tell the person to ask their approver.")
   // Before the status: "already approved" about someone else's request is itself a fact about them.
   const verdict = await canUserReviewRequest(actor.id, req.userId, ctx.workspace.id, ctx)
   if (!verdict.ok) throw new Error(NOT_THEIR_APPROVER)
