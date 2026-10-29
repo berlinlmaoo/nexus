@@ -333,6 +333,9 @@ struct AttendanceRequestsCard: View {
     /// Staff Management (27 Oct 2026): everyone's requests, read only — listed with names, no Approve,
     /// Reject or Cancel on anybody else's. The server answers scope=workspace for them and nothing more.
     var canViewAll: Bool = false
+    /// One Above All (owner, 29 Oct 2026): Approve/Reject stay on their OWN rows too — the server lets
+    /// them decide their own. Everyone else keeps four-eyes.
+    var canReviewOwn: Bool = false
     @Environment(AuthStore.self) private var auth
     @State private var requests: [AttendanceRequest] = []
     @State private var offsite: [OffsiteCheckout] = []
@@ -462,7 +465,7 @@ struct AttendanceRequestsCard: View {
             // .sheet modifiers on one view is the oldest way to end up with one that never opens.
             .sheet(item: $focusEntry) { entry in
                 RequestFocusSheet(entry: entry, canReview: canReview, canReviewOffsite: canReviewOffsite,
-                                  viewerId: auth.session?.userId) { await load() }
+                                  viewerId: auth.session?.userId, canReviewOwn: canReviewOwn) { await load() }
             }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -748,7 +751,7 @@ struct AttendanceRequestsCard: View {
                     // four-eyes rule doing its job, reached through a button that should never
                     // have been offered. What their own request actually needs is the same
                     // action everybody else gets for theirs.
-                    else if canReview && !r.isOwn(viewerId: auth.session?.userId) {
+                    else if canReview && (canReviewOwn || !r.isOwn(viewerId: auth.session?.userId)) {
                         actionBtn(T("Approve"), .success) { await review(r, "approve") }
                         // Straight to the reason sheet: the decision and the reason go up in the
                         // same PATCH, so there is nothing to undo if the sheet is cancelled.
@@ -805,7 +808,8 @@ struct AttendanceRequestsCard: View {
     /// "this person may have the day off", and a reviewer must not confuse the two.
     private func offsiteRow(_ o: OffsiteCheckout) -> some View {
         // Anti self-approve, same rule as the web: the buttons only appear on somebody else's row.
-        let mine = o.user?.id != nil && o.user?.id == auth.session?.userId
+        // One Above All decides their own (owner, 29 Oct 2026), so for them nothing is "mine" here.
+        let mine = !canReviewOwn && o.user?.id != nil && o.user?.id == auth.session?.userId
         let working = busy == o.id
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -925,6 +929,8 @@ private struct RequestFocusSheet: View {
     let canReview: Bool
     let canReviewOffsite: Bool
     let viewerId: String?
+    /// One Above All: decides their own request too (owner, 29 Oct 2026).
+    var canReviewOwn: Bool = false
     /// Runs after a decision has been recorded, so the list behind the sheet is refreshed.
     let onDone: () async -> Void
     @Environment(\.dismiss) private var dismiss
@@ -995,7 +1001,7 @@ private struct RequestFocusSheet: View {
         if pending {
             if busy {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity)
-            } else if canReview && !mine {
+            } else if canReview && (!mine || canReviewOwn) {
                 if rejecting {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(T("Why is it rejected?")).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
@@ -1023,7 +1029,8 @@ private struct RequestFocusSheet: View {
     // MARK: offsite
 
     @ViewBuilder private func offsiteBody(_ o: OffsiteCheckout) -> some View {
-        let mine = o.user?.id != nil && o.user?.id == viewerId
+        // One Above All decides their own (owner, 29 Oct 2026), so for them nothing is "mine" here.
+        let mine = !canReviewOwn && o.user?.id != nil && o.user?.id == viewerId
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(T("Offsite check-out"), systemImage: "location.fill").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)

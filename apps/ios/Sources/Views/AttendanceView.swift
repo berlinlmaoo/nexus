@@ -205,7 +205,8 @@ struct AttendanceView: View {
                         AttendanceRequestsCard(canReview: canReview,
                                                canReviewOffsite: canReview,
                                                canGrant: today?.canManageAttendance ?? false,
-                                               canViewAll: today?.attendanceReadOnly ?? false)
+                                               canViewAll: today?.attendanceReadOnly ?? false,
+                                               canReviewOwn: today?.canReviewOwnRequests ?? false)
                         // `ready`: the board's scope comes with /attendance/today. Asked before that, a
                         // manager's board was fetched as `scope=me` and could land over the whole crew
                         // (UI tour run 14, N-04 / P-I4 / P-M4).

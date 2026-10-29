@@ -11,6 +11,9 @@ struct AttendanceToday: Decodable, Sendable {
     /// an older server leaves them out and this person keeps the plain Staff screen.
     var canViewAttendanceBoard: Bool? = nil
     var attendanceReadOnly: Bool? = nil
+    /// One Above All (owner, 29 Oct 2026): may approve/reject their OWN requests and offsite check-outs.
+    /// Optional: an older server leaves it out, and four-eyes hides the buttons on their own rows as before.
+    var canReviewOwnRequests: Bool? = nil
     var dayOffNextPeriod: DayOffNextPeriod? = nil
     struct DayOffNextPeriod: Decodable, Sendable { let period: String; let quota: Int; let used: Int; let remaining: Int }
     let dayOffUsedThisMonth: Int?
