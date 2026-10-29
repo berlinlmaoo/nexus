@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import type { User } from "@/generated/prisma/client"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { isAutoDeduction } from "@/lib/attendance-absence"
-import { canUserReviewRequest } from "@/lib/attendance-approvers"
+import { canReviewOwnAttendance, canUserReviewRequest } from "@/lib/attendance-approvers"
 import { isBodPlus } from "@/lib/complaints"
 import { legalActor } from "@/lib/legal/access"
 import { chatUnreadForUser } from "@/lib/chat-unread"
@@ -100,10 +100,12 @@ async function approvals(actor: User, limit: number) {
   const ctx = await getAttendanceWorkspaceContext(actor.id)
   if (ctx.workspace && ctx.canReviewAttendanceRequests) {
     const scope = ctx.approvalScopeUserIds
+    // Their own items are left out (four-eyes), except for One Above All, who decides their own (owner, 29 Oct 2026).
+    const notMine = canReviewOwnAttendance(ctx) ? {} : { not: actor.id }
     const where = {
       workspaceId: ctx.workspace.id,
       status: "PENDING" as const,
-      userId: scope === null ? { not: actor.id } : { in: scope.filter((id) => id !== actor.id) },
+      userId: scope === null ? notMine : { in: scope.filter((id) => id !== actor.id) },
     }
     const pending = await prisma.attendanceRequest.findMany({
       where,
@@ -132,7 +134,7 @@ async function approvals(actor: User, limit: number) {
       how: "Approve or reject with nexus_decide_attendance_request (a card the person confirms).",
     }
     const offsite = await prisma.attendanceRecord.findMany({
-      where: { workspaceId: ctx.workspace.id, checkOutOffsite: true, checkOutApproval: "PENDING", ...(scope === null ? { userId: { not: actor.id } } : { userId: { in: scope.filter((id) => id !== actor.id) } }) },
+      where: { workspaceId: ctx.workspace.id, checkOutOffsite: true, checkOutApproval: "PENDING", ...(scope === null ? { userId: notMine } : { userId: { in: scope.filter((id) => id !== actor.id) } }) },
       orderBy: { checkOutAt: "asc" },
       take: limit,
       select: { id: true, checkOutAt: true, user: { select: { name: true } } },

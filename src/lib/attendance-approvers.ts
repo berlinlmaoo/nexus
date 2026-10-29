@@ -50,6 +50,21 @@ export async function resolveAttendanceApprovers(requesterUserId: string, worksp
   return { userIds: await bodGroup(workspaceId, requesterUserId), mode: "BOD_GROUP" }
 }
 
+/**
+ * Owner, 29 Oct 2026: One Above All may approve/reject their OWN attendance requests and offsite
+ * check-outs. Nobody sits above them, so there was no one to ask but a BoD below them. Everyone else
+ * (BoD, managers, staff) keeps four-eyes. Read from the context of the workspace the item belongs to:
+ * every caller 404s an item from another workspace before it gets here.
+ */
+export function canReviewOwnAttendance(ctx: { workspaceRole?: string | null }): boolean {
+  return ctx.workspaceRole === "ONE_ABOVE_ALL"
+}
+
+/** True when `viewerId` deciding an item of `requesterUserId` breaks four-eyes: it is their own, and they are not One Above All. */
+export function isForbiddenSelfReview(viewerId: string, requesterUserId: string, ctx: { workspaceRole?: string | null }): boolean {
+  return viewerId === requesterUserId && !canReviewOwnAttendance(ctx)
+}
+
 export type ReviewVerdict =
   | { ok: true; source: "DIRECT_MANAGER" | "ADMIN" }
   | { ok: false }
@@ -61,16 +76,18 @@ export type ReviewVerdict =
  * manager. Itu override yang disengaja: manager cuti tidak boleh jadi jalan buntu. Sumbernya
  * dicatat `ADMIN` supaya di riwayat kelihatan itu override, bukan jalur biasa.
  *
- * Four-eyes (tidak boleh mereview request sendiri) TIDAK dicek di sini — pemanggilnya sudah
- * melakukannya lebih dulu dengan pesan yang lebih spesifik, dan letaknya harus sesudah cabang
- * `cancel` (menarik request sendiri itu sah).
+ * Four-eyes (tidak boleh mereview request sendiri) dicek pemanggilnya lebih dulu dengan pesan yang
+ * lebih spesifik, dan letaknya harus sesudah cabang `cancel` (menarik request sendiri itu sah). Di
+ * sini diulang sebagai jaring pengaman. Pengecualiannya One Above All (owner, 29 Oct 2026): request
+ * miliknya sendiri boleh ia putuskan; sumbernya tercatat `ADMIN`.
  */
 export async function canUserReviewRequest(
   viewerId: string,
   requesterUserId: string,
   workspaceId: string,
-  ctx: { canManageAttendance: boolean; approvalScopeUserIds?: string[] | null },
+  ctx: { canManageAttendance: boolean; approvalScopeUserIds?: string[] | null; workspaceRole?: string | null },
 ): Promise<ReviewVerdict> {
+  if (isForbiddenSelfReview(viewerId, requesterUserId, ctx)) return { ok: false }
   const r = await resolveAttendanceApprovers(requesterUserId, workspaceId)
   const direct = r.mode === "DIRECT_MANAGER" && r.userIds.includes(viewerId)
   // Owner, 30 Sep 2026: One Above All decides anything; a BoD anything in their own tree (their

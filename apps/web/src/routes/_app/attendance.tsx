@@ -262,6 +262,7 @@ function Attendance() {
   // Staff Management (owner, 27 Oct 2026): the whole workspace's board, log, records and requests, read only.
   // The server answers every write of theirs 403; nothing below that edits is drawn for them.
   const readOnlyViewer = Boolean(today.data?.attendanceReadOnly);
+  const canReviewOwn = Boolean(today.data?.canReviewOwnRequests);
   const canSeeBoard = canManage || canReview || Boolean(today.data?.canViewAttendanceBoard);
   // Day-off / XP figures per person: BoD, and Staff Management (to read; deductions stay BoD's to remove).
   const canSeeQuota = canManage || readOnlyViewer;
@@ -956,7 +957,7 @@ function Attendance() {
         </div>
 
         <ReflectionsSection canPickPeople={canSeeBoard} canSummarizeOthers={!readOnlyViewer} members={allMembers} />
-        <RequestsSection canReview={canReview} canManage={canManage} readOnlyViewer={readOnlyViewer} viewerId={today.data?.viewerId ?? null} />
+        <RequestsSection canReview={canReview} canManage={canManage} readOnlyViewer={readOnlyViewer} viewerId={today.data?.viewerId ?? null} canReviewOwn={canReviewOwn} />
         {canManage && <OfficesSection />}
       </div>
       <AnimatePresence>
@@ -1596,7 +1597,7 @@ function foldText(value?: string | null) {
   return (value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerId }: { canReview: boolean; canManage: boolean; readOnlyViewer?: boolean; viewerId: string | null }) {
+function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerId, canReviewOwn = false }: { canReview: boolean; canManage: boolean; readOnlyViewer?: boolean; viewerId: string | null; canReviewOwn?: boolean }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   // null means "the user has not picked a chip" — the default then follows `canReview` once the
@@ -1733,8 +1734,10 @@ function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerI
   const renderOffsite = (it: (typeof offsiteItems)[number]) => {
     const isPending = it.approval === "PENDING";
     // Offsite checkouts have had a four-eyes guard server-side all along; hide the buttons to match
-    // so a BoD never clicks Approve on their own and gets a 403 back.
+    // so a BoD never clicks Approve on their own and gets a 403 back. One Above All is the exception
+    // (owner, 29 Oct 2026): they decide their own.
     const isMine = Boolean(viewerId && it.user?.id === viewerId);
+    const mayDecide = !isMine || canReviewOwn;
     const mapUrl = it.lat != null && it.lng != null ? `https://www.google.com/maps?q=${it.lat},${it.lng}` : null;
     return (
       <div key={`offsite-${it.id}`} id={`focus-offsite-${it.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`offsite-${it.id}`)}>
@@ -1756,7 +1759,7 @@ function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerI
             {!isPending && it.approverName ? ` · ${tr("by {name}", { name: it.approverName })}` : ""}
           </div>
         </div>
-        {canManage && isPending && !isMine && (
+        {canManage && isPending && mayDecide && (
           <div className="flex items-center gap-1.5">
             <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">{tr("Approve")}</button>
             <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">{tr("Reject")}</button>
@@ -1769,8 +1772,10 @@ function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerI
   const renderRequest = (r: (typeof rows)[number]) => {
     const isPending = (r.status || "").toUpperCase() === "PENDING";
     // Your own request offers Cancel, never Approve/Reject — the server refuses self-review, so
-    // showing the buttons would only produce a 403 nobody can act on.
+    // showing the buttons would only produce a 403 nobody can act on. One Above All gets both: they
+    // decide their own (owner, 29 Oct 2026).
     const isMine = Boolean(viewerId && r.user?.id === viewerId);
+    const mayDecide = !isMine || canReviewOwn;
     const typeKey = (r.type || "").toUpperCase();
     // New requests are one day each; older ones may still span several, so the range is kept for them.
     const sameDay = dayKey(r.startDate) === dayKey(r.endDate) || !r.endDate;
@@ -1805,7 +1810,7 @@ function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerI
             <div className="mt-1.5"><SupportingDocument url={r.supportingDocumentUrl} name={r.supportingDocumentName} type={r.type} /></div>
           )}
         </div>
-        {canReview && isPending && rejectingId !== r.id && (
+        {canReview && isPending && mayDecide && rejectingId !== r.id && (
           <div className="flex items-center gap-1.5">
             <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">{tr("Approve")}</button>
             <button disabled={review.isPending} onClick={() => { setRejectingId(r.id); setRejectNote(""); }} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">{tr("Reject")}</button>
@@ -1817,7 +1822,7 @@ function RequestsSection({ canReview, canManage, readOnlyViewer = false, viewerI
 
         {/* The reason box. Rejecting used to be one click and the requester learned nothing; now the
             reviewer types WHY, and that text is what lands in their notification and on this row. */}
-        {canReview && isPending && rejectingId === r.id && (
+        {canReview && isPending && mayDecide && rejectingId === r.id && (
           <div className="w-full space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
             <div className="text-[11px] font-bold uppercase tracking-wider text-destructive">{tr("Reason for rejection — {name} will see this", { name: r.user?.name ?? tr("the requester") })}</div>
             <textarea

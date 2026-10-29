@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { attendancePeriodKey, attendancePeriodRange, endOfAttendanceMonth, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, getMemberNoGeofence, resolveEffectiveAttendanceShift, serializeAttendanceRequest, startOfAttendanceMonth, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
+import { canReviewOwnAttendance } from "@/lib/attendance-approvers"
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
 import { dayOffBalances, dayOffUsageKey, effectiveDayOffQuota } from "@/lib/day-off-usage"
 
@@ -268,6 +269,9 @@ export async function GET() {
       // The viewer's own id, so the approvals list can hide Approve/Reject on their OWN request
       // instead of offering a button the server will refuse with SELF_REVIEW.
       viewerId: session.user.id,
+      // One Above All decides their own requests too (owner, 29 Oct 2026): for them the buttons stay on
+      // their own rows. Absent on older servers, which clients read as false.
+      canReviewOwnRequests: canReviewOwnAttendance(context),
     })
   } catch (error) {
     console.error("Error fetching today's attendance:", error)

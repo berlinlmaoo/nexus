@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, formatAttendanceDateKey } from "@/lib/attendance"
-import { canUserReviewRequest } from "@/lib/attendance-approvers"
+import { canUserReviewRequest, isForbiddenSelfReview } from "@/lib/attendance-approvers"
 import { awardXpOnce } from "@/lib/gamification"
 import { startFloor } from "@/lib/attendance-absence"
 import { notifyOffsiteCheckoutReviewed } from "@/lib/attendance-review-notify"
@@ -49,8 +49,8 @@ async function handlePATCH(request: NextRequest, { params }: { params: Promise<{
   if (record.checkOutApproval !== "PENDING") {
     return NextResponse.json({ error: "Checkout ini sudah diproses." }, { status: 409 })
   }
-  // Four-eyes: a BoD can't approve/reject their own offsite checkout.
-  if (record.userId === session.user.id) {
+  // Four-eyes: a BoD can't approve/reject their own offsite checkout. One Above All can (owner, 29 Oct 2026).
+  if (isForbiddenSelfReview(session.user.id, record.userId, context)) {
     return NextResponse.json({ error: "Kamu nggak bisa approve checkout kamu sendiri." }, { status: 403 })
   }
   const verdict = await canUserReviewRequest(session.user.id, record.userId, context.workspace.id, context)
@@ -77,7 +77,7 @@ async function handlePATCH(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
-    await logAudit({ action: "update", entityType: "attendance_record", entityId: record.id, entityName: "offsite checkout " + nextStatus.toLowerCase(), userId: session.user.id, request, metadata: { offsiteApproval: nextStatus, targetUserId: record.userId } })
+    await logAudit({ action: "update", entityType: "attendance_record", entityId: record.id, entityName: "offsite checkout " + nextStatus.toLowerCase(), userId: session.user.id, request, metadata: { offsiteApproval: nextStatus, targetUserId: record.userId, ...(record.userId === session.user.id ? { selfReview: true } : {}) } })
   } catch {
     /* best-effort */
   }

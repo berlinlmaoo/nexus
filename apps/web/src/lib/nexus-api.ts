@@ -465,6 +465,8 @@ export type NexusAttendanceToday = {
   attendanceReadOnly?: boolean;
   /** The signed-in user's own id, for hiding self-review controls. */
   viewerId?: string;
+  /** One Above All: may approve/reject their OWN requests and offsite check-outs (owner, 29 Oct 2026). */
+  canReviewOwnRequests?: boolean;
   /** Cuti tahunan: eligibility + how many days are left this calendar year. */
   annualLeave?: {
     eligible: boolean;

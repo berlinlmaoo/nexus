@@ -9,7 +9,7 @@ import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
 import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 import { notifyAttendanceRequestReviewed } from "@/lib/attendance-review-notify"
-import { canUserReviewRequest } from "@/lib/attendance-approvers"
+import { canUserReviewRequest, isForbiddenSelfReview } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 import { touchPresenceSoon } from "@/lib/presence"
 
@@ -141,7 +141,8 @@ async function handlePATCH(
     // of it, so the "requester is in a team I lead" check matched the manager themselves. That is how
     // 47 self-approvals happened. The offsite-checkout route already had this guard; this one didn't.
     // Placed after the `cancel` branch on purpose — withdrawing your OWN request is legitimate.
-    if (attendanceRequest.userId === session.user.id) {
+    // One exception (owner, 29 Oct 2026): One Above All decides their own; nobody sits above them.
+    if (isForbiddenSelfReview(session.user.id, attendanceRequest.userId, context)) {
       return NextResponse.json(
         { error: "Kamu nggak bisa approve/reject permintaan absen kamu sendiri. Minta approver lain ya.", code: "SELF_REVIEW" },
         { status: 403 }
@@ -154,6 +155,9 @@ async function handlePATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     const approvalSource = verdict.source
+    // Only One Above All gets this far with their own request. Recorded as such, so the trail never
+    // reads it as an ordinary approval by somebody else.
+    const selfReview = attendanceRequest.userId === session.user.id
 
     const nextStatus = validation.data.action === "approve" ? "APPROVED" : "REJECTED"
 
@@ -209,6 +213,7 @@ async function handlePATCH(
         endDate: updated.endDate.toISOString(),
         targetUserId: updated.userId,
         approvalSource,
+        ...(selfReview ? { selfReview: true } : {}),
         // How much XP the approval actually handed back, so "why did my score jump" is answerable
         // from the audit trail and not only from the ledger.
         xpRefunded,
