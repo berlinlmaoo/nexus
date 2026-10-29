@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
+import { isAuthError, nexusApi, type AndroidReleaseInfo } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { formatCount } from "@/lib/number-format";
 
@@ -11,8 +11,9 @@ import { formatCount } from "@/lib/number-format";
 // decision 24 Sep 2026). This page is what the app opens for "Update", what the update reminder links
 // to, and the URL in the install guide. It lives outside `_app` so a phone gets a plain page, not the
 // dashboard shell. Signed out the page is not shown at all (owner, 27 Oct 2026; it showed the release
-// and the steps since 25 Oct): the visitor goes straight to /login, which comes back here. The APK itself
-// stays session-only (401), and the update reminder links keep pointing here.
+// and the steps since 25 Oct): the visitor goes straight to /login, which comes back here. Since 29 Oct
+// the release facts are session-only too (401 for every client), and that 401 is what sends the visitor
+// to sign in. The APK itself stays session-only (401), and the update reminder links keep pointing here.
 //
 // Server side: GET /api/app/android/release (facts) and GET /api/app/android/apk (the file, Range-able,
 // exempt from the 426 gate so a locked build can still update).
@@ -50,12 +51,13 @@ function AndroidDownloadPage() {
   const q = useQuery({
     queryKey: ["android-release"],
     queryFn: nexusApi.androidRelease,
-    retry: (count) => count < 2,
+    // A 401 is an answer (signed out), not a blip: no retry before going to sign in.
+    retry: (count, error) => !isAuthError(error) && count < 2,
     refetchOnWindowFocus: false,
   });
 
-  // Signed out: straight to sign-in, which comes back here. The release answer says who is asking.
-  const signedOut = q.data?.signedIn === false;
+  // Signed out (the release answers 401): straight to sign-in, which comes back here.
+  const signedOut = isAuthError(q.error);
   useEffect(() => {
     if (signedOut) window.location.replace(SIGN_IN_URL);
   }, [signedOut]);

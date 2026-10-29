@@ -2040,7 +2040,7 @@ export type AndroidReleaseInfo =
       releasedAt: string | null;
       notes: string | null;
       fileName: string;
-      /** null when signed out: the APK is session-only, the page shows "Sign in to download". */
+      /** Always set since 29 Oct 2026 (signed out the route answers 401); null only from an older server. */
       downloadUrl: string | null;
       signedIn?: boolean;
       minSupported: string;

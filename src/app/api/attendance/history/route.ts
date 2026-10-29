@@ -15,6 +15,7 @@ import { attendanceOwedFor } from "@/lib/attendance-score"
 import { leftKeyOf } from "@/lib/former-members"
 import { attendanceStartKey, owesAttendanceOn, withLeftNote } from "@/lib/former-member-days"
 import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
+import { offboardedUserIdsAmong, withoutOffboarded } from "@/lib/attendance-board"
 // Letters, colours, summary rows and labels are shared with the live Google Sheet
 // (src/lib/attendance-sheet.ts) so the two can never disagree about a day.
 import {
@@ -1011,6 +1012,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // The board (owner, 29 Oct 2026): offboarded people are hidden from it entirely, in every range. The
+    // exports above and a per-person history (userId) still include them (lib/attendance-board.ts).
+    const board = scope === "workspace" && !parsed.data.userId
+      ? withoutOffboarded(
+          { rows, roster: rosterMembers },
+          await offboardedUserIdsAmong(prisma, [...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)]),
+        )
+      : { rows, roster: rosterMembers }
+
     if (parsed.data.compact === "1") {
       // The dots a watch face or a widget draws: who, which day, what colour, and the two times.
       // `tone` is decided here so every client colours the same day the same way: P present,
@@ -1028,7 +1038,7 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.json({
         scope,
-        records: rows.map((r) => {
+        records: board.rows.map((r) => {
           const leftKey = leftKeyOf(leftAtByUser.get(r.user.id))
           return {
             userId: r.user.id, name: r.user.name, date: r.attendanceDate.slice(0, 10), tone: toneOf(r),
@@ -1043,7 +1053,7 @@ export async function GET(request: NextRequest) {
     // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
     // (days worked / period days minus quota) the same way — 4 for most people, 9 for some, plus any
     // extra day off granted for the requested period.
-    const scoreUserIds = [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])]
+    const scoreUserIds = [...new Set([...board.rows.map((r) => r.user.id), ...board.roster.map((m) => m.user.id)])]
     const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, scoreUserIds, quotaPeriodKey)
     // What each Score is out of — the person record's rule (lib/attendance-score.ts): someone who joined
     // mid-period owes the days from their start and a prorated allowance. Additive `owed` on the user.
@@ -1055,8 +1065,8 @@ export async function GET(request: NextRequest) {
     const owedField = (userId: string) => { const o = owedByUser.get(userId); return o ? { owed: o } : {} }
     return NextResponse.json({
       scope,
-      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(r.user.id), ...owedField(r.user.id) } })),
-      roster: rosterMembers
+      records: board.rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(r.user.id), ...owedField(r.user.id) } })),
+      roster: board.roster
         .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(m.user.id), ...owedField(m.user.id) }))
         .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     })
