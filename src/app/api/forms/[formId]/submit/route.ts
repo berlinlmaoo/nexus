@@ -121,6 +121,27 @@ function normalizeText(value: unknown) {
   return String(value).trim()
 }
 
+/**
+ * The task title from every shown question sent to "Task title", in form order (owner, 10 Nov 2026: "Design Flyer
+ * Halloween At The South" = Butuh Apa? + Design Apa? + Acara apa?). A choice with several picks reads "A + B". When a
+ * part starts with the word the title so far ends with ("3D" then "3D Flyer"), that word is not repeated.
+ */
+function composeTaskTitle(parts: unknown[]) {
+  let title = ""
+  for (const raw of parts) {
+    let part = Array.isArray(raw) ? raw.map((x) => String(x).trim()).filter(Boolean).join(" + ") : normalizeText(raw)
+    part = part.replace(/\s+/g, " ").trim()
+    if (!part) continue
+    if (!title) { title = part; continue }
+    const last = title.split(" ").pop()!.toLowerCase()
+    const words = part.split(" ")
+    if (words.length > 1 && words[0].toLowerCase() === last) part = words.slice(1).join(" ")
+    else if (part.toLowerCase() === last) continue
+    title = `${title} ${part}`
+  }
+  return title
+}
+
 function normalizeValueList(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => normalizeText(item)).filter(Boolean)
   return [normalizeText(value)]
@@ -504,7 +525,7 @@ export async function POST(
       }
     }
 
-    const mappedTitleField = visibleFields.find((field) => field.mapping?.target === "task_title")
+    const mappedTitleFields = visibleFields.filter((field) => field.mapping?.target === "task_title")
     const mappedDueDateField = visibleFields.find((field) => field.mapping?.target === "task_due_date")
     const mappedStatusField = visibleFields.find((field) => field.mapping?.target === "task_status")
     const mappedPriorityField = visibleFields.find((field) => field.mapping?.target === "task_priority")
@@ -561,7 +582,7 @@ export async function POST(
     // No question fills the task title (a form built from scratch), or an optional one was left empty:
     // name the task after the form and the sender instead of refusing the response (it used to 400).
     const submitterName = submitter?.name || submitter?.email || guestName || (anonymous ? GUEST_NAME.en : "Someone")
-    const title = (normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "") || `${form.name} · ${submitterName}`).slice(0, MAX_TITLE_LENGTH)
+    const title = (composeTaskTitle(mappedTitleFields.map((field) => getFieldValue(data, field))) || `${form.name} · ${submitterName}`).slice(0, MAX_TITLE_LENGTH)
 
     const descriptionFromField = buildTaskDescriptionFromFields(visibleFields, data)
     const summary = buildSubmissionSummary(visibleFields, data)

@@ -202,4 +202,5 @@ export const ID_FORMS: Record<string, string> = {
   "Change link": "Ganti link",
   "Link updated": "Link diperbarui",
   "Couldn't update the link": "Gagal memperbarui link",
+  "Several questions can go to the task title: their answers are joined in question order, e.g. “Design Flyer Halloween at The South”.": "Beberapa pertanyaan bisa masuk ke judul task: jawabannya digabung sesuai urutan pertanyaan, mis. “Design Flyer Halloween at The South”.",
 };
