@@ -724,6 +724,7 @@ function QuestionPanel({ projectId, field, index, total, others, customFields, t
               ) : <p className="mt-2 font-semibold text-amber-600 dark:text-amber-400">{t("This project has no sections yet. Add a section on the board first, then this mapping will work.")}</p>}
             </div>
           )}
+          {mapping.target === "task_title" && <p className="text-[11px] text-muted-foreground">{t("Several questions can go to the task title: their answers are joined in question order, e.g. “Design Flyer Halloween at The South”.")}</p>}
           <p className="text-[11px] text-muted-foreground">{t("Every response becomes a task in this project. Answers that go nowhere are listed in the task's description.")}</p>
         </div>
       </PanelSection>
