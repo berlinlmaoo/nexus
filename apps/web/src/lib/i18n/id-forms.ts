@@ -191,4 +191,9 @@ export const ID_FORMS: Record<string, string> = {
   "Create field “{field}” in this project": "Buat field “{field}” di project ini",
   "“{field}” added to the project": "“{field}” ditambahkan ke project",
   "Couldn't create the field": "Gagal membuat field",
+  "Add files": "Tambah file",
+  "{n} of {max} files": "{n} dari {max} file",
+  "Up to {max} files, 50 MB each": "Maksimal {max} file, masing-masing 50 MB",
+  "Up to {max} files, {n} MB each": "Maksimal {max} file, masing-masing {n} MB",
+  "Up to {n} files per question": "Maksimal {n} file per pertanyaan",
 };
