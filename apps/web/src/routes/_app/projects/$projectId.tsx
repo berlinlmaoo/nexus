@@ -39,6 +39,9 @@ import { FilterHint, FilterHintProvider, useFilteredOut } from "@/components/pro
 import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, listFilledKeys, listRowMinWidth, PropLine } from "@/components/projects/views/view-layouts";
+import { FitText } from "@/components/FitText";
+/** A board column name on one line: a plain nowrap block (not a -webkit-box clamp) that FitText shrinks, then ellipsizes. */
+const ONE_LINE = { display: "block", whiteSpace: "nowrap", textOverflow: "ellipsis", WebkitLineClamp: "unset" } as const;
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
@@ -1355,13 +1358,13 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
               onDragEnd={() => setDragLaneId(null)}
               title={section ? t("Drag to reorder columns") : undefined}
-              // A name that wraps keeps a tag shape (8 px corners, dot on the first line) instead of a stretched
-              // pill with the dot floating between two lines (owner, 10 Nov 2026: "jelek bgt pil biru nya").
-              className={cn("inline-flex min-w-0 items-start gap-1.5 rounded-lg px-2 py-[3px] font-display text-sm font-semibold leading-5", section && "cursor-grab active:cursor-grabbing")}
+              // One line (owner, 10 Nov 2026: "di kecilin biar 1 baris aja"): a long name shrinks a little to fit
+              // (FitText, down to 75%), only then ends in an ellipsis; the full name is the text's tooltip.
+              className={cn("inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-display text-sm font-semibold", section && "cursor-grab active:cursor-grabbing")}
               style={{ backgroundColor: tone.bg, color: tone.text }}
             >
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
-              <span className="min-w-0 break-words [text-wrap:balance]">{laneLabel(g)}</span>
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+              <FitText text={laneLabel(g)} lines={1} className="min-w-0" style={ONE_LINE} />
             </span>
             <span className="shrink-0 pl-1 text-sm tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
             <div className="ml-auto flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
