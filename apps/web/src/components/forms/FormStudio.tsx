@@ -992,9 +992,33 @@ function QrCode({ text, size = 200 }: { text: string; size?: number }) {
   );
 }
 
-function ShareTab({ url, saved, access, onGoSettings }: { url: string | null; saved: boolean; access: FormAccess; onGoSettings: () => void }) {
+/** The link a title would get (lib/form-slugs.ts, slugifyFormName). */
+function slugOfTitle(name: string) {
+  return name.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "form";
+}
+
+function ShareTab({ url, saved, access, onGoSettings, formId, title, slug, onSlug }: { url: string | null; saved: boolean; access: FormAccess; onGoSettings: () => void; formId: string | null; title: string; slug: string | null; onSlug: (slug: string) => void }) {
   const { t } = useLang();
   const [copied, setCopied] = useState(false);
+  const [confirmSlug, setConfirmSlug] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const wanted = slugOfTitle(title);
+  // A link that no longer reads like the title (a copy, a renamed form). "-2" on a taken name still matches.
+  const stale = !!formId && !!slug && slug !== wanted && !(slug.startsWith(`${wanted}-`) && /^\d+$/.test(slug.slice(wanted.length + 1)));
+  const renameSlug = async () => {
+    if (!formId) return;
+    setRenaming(true);
+    try {
+      const f = await nexusApi.renameFormSlug(formId);
+      if (f.slug) onSlug(f.slug);
+      setConfirmSlug(false);
+      toast.success(t("Link updated"));
+    } catch (e) {
+      toast.error(t("Couldn't update the link"), { description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setRenaming(false);
+    }
+  };
   if (!saved || !url) {
     return <div className="mx-auto max-w-md px-6 py-20 text-center text-sm text-muted-foreground"><Link2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />{t("Give the form a title or edit a question first. The link appears once it's saved.")}</div>;
   }
@@ -1009,6 +1033,26 @@ function ShareTab({ url, saved, access, onGoSettings }: { url: string | null; sa
             <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-sm font-semibold transition-colors hover:bg-muted"><ExternalLink className="h-4 w-4" /> {t("Open")}</a>
           </div>
         </div>
+        {stale && (
+          <div className="mt-3 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            {!confirmSlug ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1">{t("This link doesn't match the form's title.")}</span>
+                <button type="button" onClick={() => setConfirmSlug(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-background px-2.5 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
+                  <Link2 className="h-3.5 w-3.5" /> {t("Use /f/{slug}", { slug: wanted })}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 font-medium text-amber-700 dark:text-amber-400">{t("The old link stops working. People who saved it will need the new one.")}</span>
+                <button type="button" onClick={() => setConfirmSlug(false)} className="inline-flex h-8 items-center rounded-md px-2.5 font-semibold text-foreground transition hover:bg-muted">{t("Cancel")}</button>
+                <button type="button" disabled={renaming} onClick={renameSlug} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60">
+                  {renaming && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Change link")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
           {access === "open" ? <Globe className="h-3.5 w-3.5" /> : access === "signin" ? <Link2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
           {access === "open" ? t("Anyone with the link can fill it in, no sign-in needed.") : access === "signin" ? t("Anyone in NEXUS with the link can fill it in.") : t("Only project members can open this link.")}
@@ -1808,7 +1852,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
       ) : (
         <div className="@container min-h-0 flex-1 overflow-y-auto bg-muted/20">
           {tab === "settings" && <SettingsTab draft={draft} change={change} projectName={projectName} members={members} responseCount={responseCount} />}
-          {tab === "share" && <ShareTab url={url} saved={!!meta.id} access={accessOf(draft)} onGoSettings={() => setTab("settings")} />}
+          {tab === "share" && <ShareTab url={url} saved={!!meta.id} access={accessOf(draft)} onGoSettings={() => setTab("settings")} formId={meta.id} title={draft.name} slug={meta.slug} onSlug={(slug) => setMeta((m) => ({ ...m, slug }))} />}
           {tab === "responses" && <ResponsesTab formId={meta.id} projectId={projectId} onTaskOpen={setTaskOpen} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
         </div>
       )}

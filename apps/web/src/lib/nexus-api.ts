@@ -3175,6 +3175,7 @@ export const nexusApi = {
   /** The builder's catch-up read: the form without its submissions (server since 19 Oct 2026). */
   formLite: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}?lite=1`),
   /** Live co-editing: apply these ops (only what this person changed) to the form as it is now. */
+  renameFormSlug: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify({ renameSlug: true }) }),
   formOps: (formId: string, ops: NexusFormOp[], baseVersion?: number) => apiFetch<NexusFormOpsResult>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify({ ops, ...(baseVersion !== undefined ? { baseVersion } : {}) }) }),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null; /** The form's updatedAt this edit started from: 409 FORM_CHANGED when someone saved since (race audit H7). */ baseUpdatedAt?: string }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
