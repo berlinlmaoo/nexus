@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Copy, Download, ExternalLink, Eye, GitBranch, Globe, GripVertical, ImagePlus,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Redo2, Undo2, CircleAlert, Copy, Download, ExternalLink, Eye, GitBranch, Globe, GripVertical, ImagePlus,
   Inbox, Laptop, Link2, Loader2, Lock, MoreHorizontal, Paperclip, Plus, Route as RouteIcon, Search, Settings2, Smartphone, SmilePlus, Trash2, User, Users, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -1260,11 +1260,52 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     return () => window.removeEventListener("beforeunload", onBefore);
   }, []);
 
-  const change = useCallback((fn: (d: FormDraft) => FormDraft) => {
+  // Undo / redo of this person's own edits in this session (owner, 10 Nov 2026: "bikinin opsi undo dong").
+  // Each step is the whole draft before a change; edits less than 800 ms apart (typing) are one step. An undo
+  // is saved like any edit (ops against the server copy), so it also reaches the people co-editing.
+  const undoStack = useRef<FormDraft[]>([]);
+  const redoStack = useRef<FormDraft[]>([]);
+  const lastEditAt = useRef(0);
+  const [, setHistoryTick] = useState(0);
+  const change = useCallback((fn: (d: FormDraft) => FormDraft, opts?: { history?: boolean }) => {
+    if (opts?.history !== false) {
+      const now = Date.now();
+      if (now - lastEditAt.current > 800 || undoStack.current.length === 0) {
+        undoStack.current.push(draftRef.current);
+        if (undoStack.current.length > 100) undoStack.current.shift();
+      }
+      lastEditAt.current = now;
+      redoStack.current = [];
+      setHistoryTick((n) => n + 1);
+    }
     setDraft((d) => fn(d));
     dirty.current = true;
     setRev((r) => r + 1);
   }, []);
+  const stepHistory = useCallback((dir: "undo" | "redo") => {
+    const from = dir === "undo" ? undoStack.current : redoStack.current;
+    const to = dir === "undo" ? redoStack.current : undoStack.current;
+    const target = from.pop();
+    if (!target) return;
+    to.push(draftRef.current);
+    lastEditAt.current = 0;
+    setDraft(target);
+    dirty.current = true;
+    setRev((r) => r + 1);
+    setHistoryTick((n) => n + 1);
+  }, []);
+  // ⌘Z / ⌘⇧Z (Ctrl on Windows) outside text boxes; inside one the browser's own text undo runs.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== "z" && e.key.toLowerCase() !== "y") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && el.matches("input, textarea, select, [contenteditable='true']")) return;
+      e.preventDefault();
+      stepHistory(e.key.toLowerCase() === "y" || e.shiftKey ? "redo" : "undo");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stepHistory]);
   const closeRef = useRef<() => void>(() => {});
   const close = async () => {
     if (dirty.current || inflight.current) await flush();
@@ -1301,7 +1342,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
       return live.length && live.join("\u0000") !== mine.join("\u0000") ? live : null;
     };
     if (!draft.fields.some((f) => drift(f))) return;
-    change((d) => ({ ...d, fields: d.fields.map((f) => { const live = drift(f); return live ? { ...f, options: live } : f; }) }));
+    change((d) => ({ ...d, fields: d.fields.map((f) => { const live = drift(f); return live ? { ...f, options: live } : f; }) }), { history: false });
   }, [customFieldsQ.data, customFields, draft.fields, change]);
   // Renaming an option carries over to the logic that reads it (other questions' "Show only when" and this
   // question's routing rules), so "Yes" → "Yes please" keeps working. Cleared-then-retyped counts as a
@@ -1464,6 +1505,18 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   ];
 
   const saveLabel = save === "saving" ? t("Saving…") : save === "pending" ? t("Unsaved changes") : save === "error" ? t("Couldn't save") : save === "saved" ? t("Saved") : meta.id ? t("Saved") : t("Draft");
+  const canUndo = undoStack.current.length > 0;
+  const canRedo = redoStack.current.length > 0;
+  const historyButtons = meta.id || canUndo ? (
+    <span className="inline-flex items-center">
+      <button type="button" onClick={() => stepHistory("undo")} disabled={!canUndo} title={`${t("Undo")} (⌘Z)`} aria-label={t("Undo")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35">
+        <Undo2 className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => stepHistory("redo")} disabled={!canRedo} title={`${t("Redo")} (⌘⇧Z)`} aria-label={t("Redo")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35">
+        <Redo2 className="h-4 w-4" />
+      </button>
+    </span>
+  ) : null;
   const saveIndicator = (
     <span role="status" aria-live="polite" className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-xs", save === "error" ? "text-destructive" : "text-muted-foreground")}>
       {save === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : save === "error" ? <CircleAlert className="h-3.5 w-3.5" /> : save === "pending" ? <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> : <Check className="h-3.5 w-3.5" />}
@@ -1589,6 +1642,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
             {peerStack}
             {readOnly ? <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"><Eye className="h-3.5 w-3.5" />{t("View only")}</span> : <>
+            {historyButtons}
             {saveIndicator}
             <button type="button" onClick={() => setPreview((p) => (p ? null : "desktop"))} aria-pressed={!!preview}
               className={cn("ml-1 inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors", preview ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
