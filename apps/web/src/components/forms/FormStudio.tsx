@@ -25,7 +25,7 @@ import {
   cleanFields, condIncomplete, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, logicParents, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
   OPERATORS, optionsOf, QUESTION_KINDS, ROUTING_ACTIONS, staleOption, withKind, type FormDraft, type FRule, type QuestionKind, type RichField,
   categoryFieldForSectionQuestion, optionsAreSections, projectCategoryField, selectChoices,
-  withMappedRupiah,
+  withMappedRupiah, syncedSelectField, fieldTypeForQuestion,
 } from "./form-model";
 import { diffOps, rebaseDraft } from "./form-coedit";
 
@@ -306,6 +306,35 @@ function Chip({ icon, children, tone = "muted" }: { icon?: ReactNode; children: 
   return <span className={cn("inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", tone === "accent" ? "bg-accent text-accent-foreground" : tone === "warn" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground")}>{icon}<span className="truncate">{children}</span></span>;
 }
 
+/** A warning chip that is also a button: it opens the fix right there on the canvas, no trip to the side panel. */
+function FixChip({ icon, label, children }: { icon: ReactNode; label: ReactNode; children: (close: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex max-w-full items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-left text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
+        >
+          {icon}<span className="truncate">{label}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-1.5" onClick={(e) => e.stopPropagation()}>
+        {children(() => setOpen(false))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function FixOption({ onClick, children, tone }: { onClick: () => void; children: ReactNode; tone?: "danger" }) {
+  return (
+    <button type="button" onClick={onClick} className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted", tone === "danger" && "text-destructive")}>
+      {children}
+    </button>
+  );
+}
+
 function QuestionCard({ field, index, total, selected, others, customFields, taskLists, onSelect, onChange, onDuplicate, onDelete, onOpenPanel, dragProps, slashFor, setSlashFor, editors }: {
   field: RichField; index: number; total: number; selected: boolean; others: RichField[]; customFields: CustomFieldLite[]; taskLists: { id: string; name: string }[];
   /** Other people on this question right now (live co-editing): a coloured outline and their name. */
@@ -345,6 +374,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
   const condStale = !!parent && staleOption(parent, field.showIf?.operator, field.showIf?.value);
   const staleRules = (field.routingRules ?? []).filter((r) => staleOption(field, r.operator, r.value)).length;
   const syncedSections = mapping?.target === "task_list" && hasOptions(field) && !sectionCategory;
+  const syncedField = syncedSelectField(field, customFields);
 
   return (
     <div
@@ -425,6 +455,8 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
         {hasOptions(field) ? (
           syncedSections
             ? <div className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground">{t("Options follow the project's sections: {list}", { list: taskLists.map((s) => s.name).join(", ") || "—" })}</div>
+            : syncedField
+            ? <div className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground">{t("Options follow the project field “{field}”: {list}", { field: syncedField.name, list: selectChoices(syncedField).join(", ") || "—" })}</div>
             : <OptionsEditor field={field} onChange={(opts) => onChange({ options: opts })} />
         ) : field.type === "checkbox" ? (
           <div className="flex items-center gap-2.5 text-[15px] text-muted-foreground"><span className="h-4 w-4 rounded border border-muted-foreground/40" aria-hidden /> {fieldTitle(field) || t("Checkbox")}</div>
@@ -438,12 +470,47 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
           {mappingLabel && <Chip tone="accent" icon={<ArrowRight className="h-3 w-3 shrink-0" />}>{mappingLabel}</Chip>}
           {parent && (condUnfinished
             ? <Chip tone="warn" icon={<GitBranch className="h-3 w-3 shrink-0" />}>{t("Logic not set yet: pick a value. Until then it always shows.")}</Chip>
-            : <Chip tone={condStale ? "warn" : "muted"} icon={condStale ? <CircleAlert className="h-3 w-3 shrink-0" /> : <GitBranch className="h-3 w-3 shrink-0" />}>
-                {condStale
-                  ? t("“{value}” is no longer an option of “{q}”, so this question never shows", { value: field.showIf?.value ?? "", q: fieldTitle(parent) || t("Question") })
-                  : t("Shown when “{q}” {op} {value}", { q: fieldTitle(parent) || t("Question"), op: opLabel, value: needsValue(field.showIf?.operator ?? "") ? `“${field.showIf?.value ?? ""}”` : "" }).trim()}
-              </Chip>)}
-          {rules > 0 && <Chip tone={staleRules ? "warn" : "muted"} icon={staleRules ? <CircleAlert className="h-3 w-3 shrink-0" /> : <RouteIcon className="h-3 w-3 shrink-0" />}>{staleRules ? t("A routing rule reads an option that no longer exists") : rules === 1 ? t("1 routing rule") : t("{n} routing rules", { n: rules })}</Chip>}
+            : condStale
+              ? <FixChip icon={<CircleAlert className="h-3 w-3 shrink-0" />} label={t("“{value}” is no longer an option of “{q}”, so this question never shows", { value: field.showIf?.value ?? "", q: fieldTitle(parent) || t("Question") })}>
+                  {(close) => (
+                    <>
+                      <p className="px-2 pb-1 pt-0.5 text-[11px] text-muted-foreground">{t("Show this question when “{q}” is:", { q: fieldTitle(parent) || t("Question") })}</p>
+                      <div className="max-h-56 overflow-y-auto">
+                        {optionsOf(parent).filter((o) => o.trim()).map((o) => (
+                          <FixOption key={o} onClick={() => { onChange((f) => ({ ...f, showIf: f.showIf ? { ...f.showIf, operator: f.showIf.operator === "not_equals" ? "not_equals" : "equals", value: o } : f.showIf })); close(); }}>
+                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> <span className="truncate">{o}</span>
+                          </FixOption>
+                        ))}
+                      </div>
+                      <div className="my-1 h-px bg-border" />
+                      <FixOption onClick={() => { onChange({ showIf: null }); close(); }}>
+                        <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> {t("Always show this question")}
+                      </FixOption>
+                    </>
+                  )}
+                </FixChip>
+              : <Chip tone="muted" icon={<GitBranch className="h-3 w-3 shrink-0" />}>
+                  {t("Shown when “{q}” {op} {value}", { q: fieldTitle(parent) || t("Question"), op: opLabel, value: needsValue(field.showIf?.operator ?? "") ? `“${field.showIf?.value ?? ""}”` : "" }).trim()}
+                </Chip>)}
+          {rules > 0 && (staleRules
+            ? <FixChip icon={<CircleAlert className="h-3 w-3 shrink-0" />} label={t("A routing rule reads an option that no longer exists")}>
+                {(close) => (
+                  <>
+                    <p className="px-2 pb-1 pt-0.5 text-[11px] text-muted-foreground">{t("These rules never run:")}</p>
+                    <ul className="px-2 pb-1 text-sm">
+                      {(field.routingRules ?? []).filter((r) => staleOption(field, r.operator, r.value)).map((r, i) => <li key={r.id ?? i} className="truncate">“{r.value}”</li>)}
+                    </ul>
+                    <div className="my-1 h-px bg-border" />
+                    <FixOption tone="danger" onClick={() => { onChange((f) => ({ ...f, routingRules: (f.routingRules ?? []).filter((r) => !staleOption(f, r.operator, r.value)) })); close(); }}>
+                      <Trash2 className="h-3.5 w-3.5 shrink-0" /> {staleRules === 1 ? t("Remove this rule") : t("Remove these {n} rules", { n: staleRules })}
+                    </FixOption>
+                    <FixOption onClick={() => { close(); onSelect(); onOpenPanel(); }}>
+                      <RouteIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> {t("Pick a value again in Routing")}
+                    </FixOption>
+                  </>
+                )}
+              </FixChip>
+            : <Chip tone="muted" icon={<RouteIcon className="h-3 w-3 shrink-0" />}>{rules === 1 ? t("1 routing rule") : t("{n} routing rules", { n: rules })}</Chip>)}
           {field.autofill && <Chip icon={<User className="h-3 w-3 shrink-0" />}>{field.autofill === "email" ? t("Auto-filled: email") : t("Auto-filled: name")}</Chip>}
         </div>
       )}
@@ -454,8 +521,8 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
 
 /* ------------------------------------------------------------------ side panel: the selected question */
 
-function QuestionPanel({ field, index, total, others, customFields, taskLists, members, onChange, onMove, onDuplicate, onDelete }: {
-  field: RichField; index: number; total: number; others: RichField[]; customFields: CustomFieldLite[]; taskLists: { id: string; name: string }[]; members: MemberLite[];
+function QuestionPanel({ projectId, field, index, total, others, customFields, taskLists, members, onChange, onMove, onDuplicate, onDelete }: {
+  projectId: string; field: RichField; index: number; total: number; others: RichField[]; customFields: CustomFieldLite[]; taskLists: { id: string; name: string }[]; members: MemberLite[];
   onChange: (patch: Partial<RichField> | ((f: RichField) => RichField)) => void; onMove: (dir: -1 | 1) => void; onDuplicate: () => void; onDelete: () => void;
 }) {
   const { t, tn } = useLang();
@@ -479,6 +546,44 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
   const titleOf = (f: RichField) => fieldTitle(f) || t("Untitled question");
   const sectionCategory = categoryFieldForSectionQuestion(field, customFields, taskLists);
   const projectCategory = projectCategoryField(customFields);
+  // The question's answers that the mapped select field doesn't know yet become options of that field.
+  const qc = useQueryClient();
+  const [addingOptions, setAddingOptions] = useState(false);
+  const [creatingField, setCreatingField] = useState(false);
+  const newFieldType = fieldTypeForQuestion(field);
+  const newFieldName = (fieldTitle(field) || "").replace(/[?？:]+\s*$/, "").trim();
+  // Make the project field this question fills, right from the form (owner, 10 Nov 2026: no going back and
+  // forth to the project settings). A choice question's options become the field's options and then follow it.
+  const createFieldForQuestion = async () => {
+    if (!newFieldType || !newFieldName || !projectId) return;
+    setCreatingField(true);
+    try {
+      const { field: created } = await nexusApi.createCustomField(projectId, { name: newFieldName, type: newFieldType.type, options: (newFieldType.options ?? null) as never });
+      await qc.invalidateQueries({ queryKey: ["nexus", "custom-fields"] });
+      onChange((f) => ({ ...f, mapping: { target: "custom_field", customFieldId: created.id }, ...(hasOptions(f) ? { syncOptions: true } : {}) }));
+      toast.success(t("“{field}” added to the project", { field: newFieldName }));
+    } catch (e) {
+      toast.error(t("Couldn't create the field"), { description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setCreatingField(false);
+    }
+  };
+  const createFieldButton = newFieldType && newFieldName && !customFields.some((c) => c.name.trim().toLowerCase() === newFieldName.toLowerCase()) ? (
+    <button type="button" disabled={creatingField} onClick={createFieldForQuestion} className="inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 text-[11px] font-semibold text-foreground ring-1 ring-border transition hover:bg-muted disabled:opacity-60">
+      {creatingField ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {t("Create field “{field}” in this project", { field: newFieldName })}
+    </button>
+  ) : null;
+  const addToField = async (fieldId: string, values: string[]) => {
+    setAddingOptions(true);
+    try {
+      await nexusApi.updateCustomField(fieldId, { addOptions: values });
+      await qc.invalidateQueries({ queryKey: ["nexus", "custom-fields"] });
+    } catch (e) {
+      toast.error(t("Couldn't add the options"), { description: e instanceof ApiError || e instanceof Error ? e.message : undefined });
+    } finally {
+      setAddingOptions(false);
+    }
+  };
 
   return (
     <div className="pb-6">
@@ -534,6 +639,13 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
       <PanelSection title={t("Answer goes to")}>
         <div className="space-y-1.5 px-2">
           <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Answer goes to")} value={mapping.target ?? "none"} onChange={(v) => onChange({ mapping: v === "custom_field" ? { target: v, customFieldId: mapping.customFieldId } : { target: v } })} options={MAPPING_TARGETS.map((m) => ({ value: m.value, label: t(m.label) }))} />
+          {(mapping.target ?? "none") === "none" && createFieldButton && (
+            <div className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              <p>{t("Want this answer as a column on the board? Make a project field from this question.")}</p>
+              <div className="mt-2">{createFieldButton}</div>
+            </div>
+          )}
+          {mapping.target === "custom_field" && !mapping.customFieldId && createFieldButton && <div>{createFieldButton}</div>}
           {mapping.target === "custom_field" && (
             <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Field")} value={mapping.customFieldId ?? ""} onChange={(v) => onChange((f) => {
               // A choice question pointed at a select field whose options are still the section (status)
@@ -553,12 +665,31 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
             const known = new Set(choices.map((o) => o.toLowerCase()));
             const extra = ownOpts.filter((o) => !known.has(o.trim().toLowerCase()));
             const same = extra.length === 0 && choices.every((o) => have.has(o.toLowerCase()));
+            if (field.syncOptions) {
+              return (
+                <div className="rounded-lg bg-muted/40 p-2 text-[11px] leading-relaxed text-muted-foreground">
+                  <Toggle label={t("Options follow “{field}”", { field: target.name })} hint={t("Change the options in the project and this form follows")} checked onChange={() => onChange((f) => { const n = { ...f }; delete n.syncOptions; return n; })} />
+                </div>
+              );
+            }
             return (
               <div className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
                 <p>{t("Options of “{field}”: {list}", { field: target.name, list: choices.join(", ") })}</p>
+                {extra.length === 0 && <div className="-mx-2 mt-1"><Toggle label={t("Options follow “{field}”", { field: target.name })} hint={t("Change the options in the project and this form follows")} checked={false} onChange={() => onChange({ syncOptions: true, options: choices })} /></div>}
                 {extra.length > 0 && <p className="mt-1 font-medium text-amber-700 dark:text-amber-400">{t("Not an option of “{field}”: {list}. These answers are saved as typed.", { field: target.name, list: extra.join(", ") })}</p>}
+                {extra.length > 0 && (
+                  <button type="button" disabled={addingOptions} onClick={() => addToField(target.id, extra)} className="mr-1.5 mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted disabled:opacity-60">
+                    {addingOptions ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {tn(extra.length, "Add {n} answer to “{field}”", "Add {n} answers to “{field}”", { field: target.name })}
+                  </button>
+                )}
+                {extra.length > 0 && createFieldButton && (
+                  <div className="mt-2">
+                    <p className="mb-1.5">{t("Or keep these options and give them their own field:")}</p>
+                    {createFieldButton}
+                  </div>
+                )}
                 {!same && field.type !== "multi_select" && (
-                  <button type="button" onClick={() => onChange({ options: choices })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
+                  <button type="button" onClick={() => onChange({ options: choices, syncOptions: true })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
                     <Copy className="h-3 w-3" /> {tn(choices.length, "Use this {n} option", "Use these {n} options")}
                   </button>
                 )}
@@ -1160,6 +1291,18 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
 
   /* ---------- question operations ---------- */
   const fields = draft.fields;
+  useEffect(() => {
+    if (!customFieldsQ.data) return;
+    const drift = (f: RichField) => {
+      const cf = syncedSelectField(f, customFields);
+      if (!cf) return null;
+      const live = selectChoices(cf);
+      const mine = optionsOf(f).map((o) => o.trim()).filter(Boolean);
+      return live.length && live.join("\u0000") !== mine.join("\u0000") ? live : null;
+    };
+    if (!draft.fields.some((f) => drift(f))) return;
+    change((d) => ({ ...d, fields: d.fields.map((f) => { const live = drift(f); return live ? { ...f, options: live } : f; }) }));
+  }, [customFieldsQ.data, customFields, draft.fields, change]);
   // Renaming an option carries over to the logic that reads it (other questions' "Show only when" and this
   // question's routing rules), so "Yes" → "Yes please" keeps working. Cleared-then-retyped counts as a
   // rename too: the last text of each option row is remembered while the row is empty.
@@ -1399,6 +1542,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
 
   const panel = sel ? (
     <QuestionPanel
+      projectId={projectId}
       key={sel.id}
       field={sel}
       index={selIndex}

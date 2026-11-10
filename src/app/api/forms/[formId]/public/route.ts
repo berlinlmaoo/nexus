@@ -105,6 +105,12 @@ export async function GET(
             if (!categoryField) return { ...f, options: liveSectionNames }
             return questionOptions(f.options).length ? f : { ...f, options: selectFieldChoices(categoryField.options) }
           }
+          // Options that follow their select field (builder "Options follow …", 10 Nov 2026): the field's live list.
+          if (f?.syncOptions === true && mapping?.target === "custom_field" && mapping.customFieldId && isChoiceQuestion(f.type)) {
+            const cf = form.project.customFields.find((c) => c.id === mapping.customFieldId)
+            const live = cf && (cf.type === "SELECT" || cf.type === "MULTI_SELECT") ? selectFieldChoices(cf.options) : []
+            if (live.length) return { ...f, options: live }
+          }
           if (
             f?.type === "number" &&
             !f.numberFormat &&

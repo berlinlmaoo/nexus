@@ -19,6 +19,9 @@ export type RichField = NexusFormField & {
   attachmentEnabled?: boolean;
   autofill?: "name" | "email";
   numberFormat?: "currency-idr";
+  /** A choice question whose options follow the select field it fills (owner, 10 Nov 2026): the server serves the
+   *  field's live options (forms/[formId]/public) and the builder keeps the stored copy equal for the apps. */
+  syncOptions?: boolean;
 };
 
 /** A question kind in the type menu. `rupiah` is a number question with the Rupiah format. */
@@ -270,4 +273,25 @@ export function optionsAreSections(field: RichField, taskLists: { name: string }
   const opts = optionsOf(field).map((o) => o.trim()).filter(Boolean);
   const sections = new Set(taskLists.map((s) => lc(s.name)));
   return opts.length > 0 && opts.every((o) => sections.has(lc(o)));
+}
+
+/** The select field a choice question fills, when its options are set to follow that field. */
+export function syncedSelectField<C extends { id: string; type?: string }>(f: RichField, customFields: C[]): C | null {
+  if (!f.syncOptions || !hasOptions(f) || f.mapping?.target !== "custom_field" || !f.mapping.customFieldId) return null;
+  const cf = customFields.find((c) => c.id === f.mapping?.customFieldId);
+  const type = (cf?.type ?? "").toUpperCase();
+  return cf && (type === "SELECT" || type === "MULTI_SELECT") ? cf : null;
+}
+
+/** The project field type a new field made from this question gets ("Create a project field"). File questions have none. */
+export function fieldTypeForQuestion(f: RichField): { type: string; options?: Record<string, unknown> } | null {
+  const k = kindOf(f);
+  if (k === "file") return null;
+  if (k === "dropdown") return { type: "SELECT", options: { options: optionsOf(f).map((o) => o.trim()).filter(Boolean) } };
+  if (k === "multi_select") return { type: "MULTI_SELECT", options: { options: optionsOf(f).map((o) => o.trim()).filter(Boolean) } };
+  if (k === "rupiah") return { type: "NUMBER", options: { format: "currency-idr", numberFormat: "currency-idr" } };
+  if (k === "number") return { type: "NUMBER" };
+  if (k === "date") return { type: "DATE" };
+  if (k === "url") return { type: "URL" };
+  return { type: "TEXT" };
 }
