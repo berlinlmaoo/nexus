@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Loader2, Lock, LogIn, Paperclip, RotateCcw } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Lock, LogIn, Paperclip, RotateCcw, X } from "lucide-react";
+import { toast } from "sonner";
 import type { NexusFormBranding } from "@/lib/nexus-api";
 import { DateField } from "@/components/DateField";
 import { RupiahInput } from "@/components/RupiahInput";
@@ -31,6 +32,9 @@ type Me = { name?: string | null; email?: string | null; avatar?: string | null 
 const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-foreground/40 disabled:cursor-default disabled:opacity-100";
 
 /** One question's input. `disabled` = the builder canvas (looks real, takes no input). */
+/** Files one file question takes (owner, 10 Nov 2026). Sign-in-free forms are still held to 5 by the server. */
+export const MAX_FORM_FILES = 20;
+
 export function QuestionControl({ field, value, onChange, disabled, attachment, onAttachment, maxFileMb = 50 }: {
   field: RichField;
   value: unknown;
@@ -80,13 +84,53 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
   } else if (field.type === "checkbox") {
     control = null; // drawn by QuestionBlock next to the title
   } else if (field.type === "file") {
+    // Picking again ADDS to the files already chosen, up to MAX_FORM_FILES per question; each one can be taken
+    // out again (owner, 10 Nov 2026: "mau bisa upload lebih dri 2 dong, maks 20" — a second pick used to
+    // replace the first).
+    const chosen: File[] = Array.isArray(value) ? (value as unknown[]).filter((f): f is File => f instanceof File) : value instanceof File ? [value] : [];
+    const full = chosen.length >= MAX_FORM_FILES;
+    const add = (list: FileList | null) => {
+      const seen = new Set(chosen.map((f) => `${f.name}:${f.size}:${f.lastModified}`));
+      const next = [...chosen];
+      for (const f of Array.from(list ?? [])) {
+        const k = `${f.name}:${f.size}:${f.lastModified}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        next.push(f);
+      }
+      if (next.length > MAX_FORM_FILES) toast.error(t("Up to {n} files per question", { n: MAX_FORM_FILES }));
+      onChange(next.slice(0, MAX_FORM_FILES));
+    };
     control = (
-      <label className={cn("flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground", !disabled && "cursor-pointer transition-colors hover:border-foreground/40")}>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground"><Paperclip className="h-3.5 w-3.5" /> {t("Upload")}</span>
-        {/* The hint wraps (a phone cut it to "One or more files, up t…", UI tour run 7); a file name stays on one line. */}
-        <span className={cn("min-w-0", (Array.isArray(value) && value.length) || value instanceof File ? "truncate" : "leading-snug")}>{Array.isArray(value) && value.length ? tn(value.length, "{n} file selected", "{n} files selected") : value instanceof File ? value.name : (maxFileMb === 50 ? t("One or more files, up to 50 MB each") : t("One or more files, up to {n} MB each", { n: maxFileMb }))}</span>
-        <input type="file" multiple disabled={disabled} required={field.required} className="hidden" onChange={(e) => onChange(Array.from(e.target.files ?? []))} />
-      </label>
+      <div className="space-y-2">
+        <label className={cn("flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground", !disabled && !full && "cursor-pointer transition-colors hover:border-foreground/40", full && "opacity-60")}>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground"><Paperclip className="h-3.5 w-3.5" /> {chosen.length ? t("Add files") : t("Upload")}</span>
+          {/* The hint wraps (a phone cut it to "One or more files, up t…", UI tour run 7). */}
+          <span className="min-w-0 leading-snug">
+            {chosen.length
+              ? t("{n} of {max} files", { n: chosen.length, max: MAX_FORM_FILES })
+              : maxFileMb === 50 ? t("Up to {max} files, 50 MB each", { max: MAX_FORM_FILES }) : t("Up to {max} files, {n} MB each", { max: MAX_FORM_FILES, n: maxFileMb })}
+          </span>
+          {/* Required only while nothing is chosen: the input itself is emptied after every pick. */}
+          <input type="file" multiple disabled={disabled || full} required={field.required && chosen.length === 0} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+        </label>
+        {chosen.length > 0 && (
+          <ul className="space-y-1">
+            {chosen.map((f, i) => (
+              <li key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-sm">
+                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{f.size >= 1024 * 1024 ? `${(f.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(f.size / 1024))} KB`}</span>
+                {!disabled && (
+                  <button type="button" onClick={() => onChange(chosen.filter((_, j) => j !== i))} aria-label={t("Remove {name}", { name: f.name })} className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     );
   } else if (field.type === "number" && field.numberFormat === "currency-idr") {
     control = disabled
