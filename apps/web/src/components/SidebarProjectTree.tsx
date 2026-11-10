@@ -36,6 +36,9 @@ import { cn } from "@/lib/utils";
 import { FitText } from "@/components/FitText";
 
 const EXPANDED_KEY = "nexus:sidebar:expanded-folders";
+// Tree names: a plain block capped at two lines, not FitText's -webkit-box clamp. In the owner's Chrome the clamped
+// box counted as one line inside the flex row, so a two-line name spilled over its highlight (10 Nov 2026).
+const TWO_LINES = { display: "block", WebkitLineClamp: "unset", maxHeight: "2lh" } as const;
 const ROOT = "__root__";
 
 const byPos = (a: { position?: number | null; name?: string | null }, b: { position?: number | null; name?: string | null }) =>
@@ -290,7 +293,7 @@ export function SidebarProjectTree() {
             <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7 text-[13px] data-[active=true]:font-normal">
               <Link to="/projects/$projectId" params={{ projectId: p.id }} draggable={false} title={p.name}>
                 <ProjectGlyph project={p} />
-                <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-snug" />
+                <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-snug" style={TWO_LINES} />
               </Link>
             </SidebarMenuButton>
           </ContextMenuTrigger>
@@ -353,7 +356,7 @@ export function SidebarProjectTree() {
             >
               <ChevronRight aria-hidden className={cn("h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50 transition-transform duration-150", open && "rotate-90")} />
               <FolderGlyph folder={f} open={open} className={cn(!f.color && "text-sidebar-foreground/60")} />
-              <FitText text={f.name} title={null} className="min-w-0 flex-1 leading-snug" />
+              <FitText text={f.name} title={null} className="min-w-0 flex-1 leading-snug" style={TWO_LINES} />
               {containsActive && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
               {!open && count > 0 && (
                 <span className="shrink-0 pr-1 text-[11px] font-normal tabular-nums text-sidebar-foreground/40 group-hover/folder:hidden group-focus-within/folder:hidden [@media(hover:none)]:hidden">{count}</span>
