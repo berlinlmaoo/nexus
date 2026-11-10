@@ -74,6 +74,19 @@ export async function PATCH(
     // whole-form path below, unchanged.
     if (body && typeof body === "object" && "ops" in body) return applyOps(request, formId, session.user.id, session.user.name ?? null, body)
 
+    // "Update the link to match the title" (owner, 10 Nov 2026): a form keeps the link it was first saved with,
+    // so a copy renamed later still read ".../z-creative-frameworkz-request-2". The old link stops working.
+    if (body && typeof body === "object" && body.renameSlug === true) {
+      const current = await prisma.form.findUnique({ where: { id: formId }, select: { id: true, name: true, slug: true, projectId: true } })
+      if (!current) return NextResponse.json({ error: "Form not found" }, { status: 404 })
+      const access = await checkProjectAccess(session.user.id, current.projectId, ["MEMBER"])
+      if (!access.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      const slug = await generateUniqueFormSlug(prisma, current.name, current.id)
+      const renamed = slug === current.slug ? await prisma.form.findUniqueOrThrow({ where: { id: formId } }) : await prisma.form.update({ where: { id: formId }, data: { slug } })
+      if (slug !== current.slug) logAudit({ action: "update", entityType: "form", entityId: formId, entityName: current.name, userId: session.user.id, request, metadata: { changes: ["slug"], from: current.slug, to: slug } })
+      return NextResponse.json(renamed)
+    }
+
     const { name, description, fields, isPublic, requireAuth, accessSchedule, branding, settings, baseUpdatedAt } = body
 
     const existing = await prisma.form.findUnique({

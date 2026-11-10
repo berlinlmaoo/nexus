@@ -196,4 +196,10 @@ export const ID_FORMS: Record<string, string> = {
   "Up to {max} files, 50 MB each": "Maksimal {max} file, masing-masing 50 MB",
   "Up to {max} files, {n} MB each": "Maksimal {max} file, masing-masing {n} MB",
   "Up to {n} files per question": "Maksimal {n} file per pertanyaan",
+  "This link doesn't match the form's title.": "Link ini tidak sesuai dengan judul form.",
+  "Use /f/{slug}": "Pakai /f/{slug}",
+  "The old link stops working. People who saved it will need the new one.": "Link lama tidak berfungsi lagi. Yang sudah menyimpannya perlu link baru.",
+  "Change link": "Ganti link",
+  "Link updated": "Link diperbarui",
+  "Couldn't update the link": "Gagal memperbarui link",
 };
