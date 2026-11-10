@@ -287,10 +287,10 @@ export function SidebarProjectTree() {
                 "PATS: INDONESIA TAKEOVER" was cut at 175 px). One-line rows keep their 32 px. */}
             {/* The open project keeps the regular weight (its tint marks it): medium made a long name wider than the
                 same name unselected, so it shrank to 75% and was cut (old UI note, 25 Oct 2026). */}
-            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-1.5 pr-7 data-[active=true]:font-normal">
+            <SidebarMenuButton asChild isActive={active} tooltip={p.name} className="h-auto min-h-8 py-[7px] pr-7 data-[active=true]:font-normal">
               <Link to="/projects/$projectId" params={{ projectId: p.id }} draggable={false} title={p.name}>
                 <ProjectGlyph project={p} />
-                <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-tight" />
+                <FitText text={p.name} title={null} className="min-w-0 flex-1 leading-snug" />
               </Link>
             </SidebarMenuButton>
           </ContextMenuTrigger>
@@ -345,7 +345,7 @@ export function SidebarProjectTree() {
               {...(!pinCopy ? dragProps({ kind: "folder", id: f.id, from: f.parentFolderId ?? null }) : {})}
               {...dropInto(f.id, openKey)}
               className={cn(
-                "group/folder relative flex min-h-8 cursor-pointer py-1 select-none items-center gap-1.5 rounded-md pl-1 pr-1 text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring transition-colors",
+                "group/folder relative flex min-h-8 cursor-pointer py-1.5 select-none items-center gap-1.5 rounded-md pl-1 pr-1 text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring transition-colors",
                 "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2",
                 activeFolderId === f.id && "bg-sidebar-accent text-sidebar-accent-foreground",
                 isTarget && "bg-primary/10 text-primary ring-1 ring-inset ring-primary/60",
@@ -353,7 +353,7 @@ export function SidebarProjectTree() {
             >
               <ChevronRight aria-hidden className={cn("h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50 transition-transform duration-150", open && "rotate-90")} />
               <FolderGlyph folder={f} open={open} className={cn(!f.color && "text-sidebar-foreground/60")} />
-              <FitText text={f.name} title={null} className="min-w-0 flex-1 leading-tight" />
+              <FitText text={f.name} title={null} className="min-w-0 flex-1 leading-snug" />
               {containsActive && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
               {!open && count > 0 && (
                 <span className="shrink-0 pr-1 text-[11px] font-normal tabular-nums text-sidebar-foreground/40 group-hover/folder:hidden group-focus-within/folder:hidden [@media(hover:none)]:hidden">{count}</span>
@@ -381,7 +381,7 @@ export function SidebarProjectTree() {
         </ContextMenu>
         {open && (
           // One guide line per level, drawn under the chevron of the folder it belongs to.
-          <ul role="group" className="ml-[10px] mt-0.5 flex min-w-0 flex-col gap-0.5 border-l border-sidebar-border pl-1.5">
+          <ul role="group" className="mb-1.5 ml-[10px] mt-1 flex min-w-0 flex-col gap-1 border-l border-sidebar-border pl-1.5">
             {subs.map((sf) => (
               <Fragment key={sf.id}>
                 {!pinCopy && <ReorderSlot active={drag?.kind === "folder" && drag.id !== sf.id} onDrop={() => reorder("folder", f.id, sf.id)} />}
@@ -443,7 +443,7 @@ export function SidebarProjectTree() {
         <NewMenu canManage={canManage} onNewProject={() => actions.newProjectIn(null)} onNewFolder={() => actions.newFolder(null)} />
       </div>
       <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
+        <SidebarMenu className="gap-1">
           {(pinnedFolders.length > 0 || pinnedProjects.length > 0) && (
             <>
               <TreeLabel icon={<Pin aria-hidden className="h-3 w-3" />}>{t("Pinned")}</TreeLabel>
@@ -471,7 +471,7 @@ export function SidebarProjectTree() {
                 {drag && canDropInto(drag, null, folders) ? t("No folder — drop here to take it out") : t("No folder")}
               </TreeLabel>
               <li className="list-none" {...dropInto(null)}>
-                <ul className={cn("flex min-w-0 flex-col gap-0.5 rounded-md", dropTarget === ROOT && "bg-primary/5")}>
+                <ul className={cn("flex min-w-0 flex-col gap-1 rounded-md", dropTarget === ROOT && "bg-primary/5")}>
                   {unfiled.map((p) => (
                     <Fragment key={p.id}>
                       <ReorderSlot active={drag?.kind === "project" && drag.id !== p.id} onDrop={() => reorder("project", null, p.id)} />
