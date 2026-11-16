@@ -3130,13 +3130,13 @@ export const nexusApi = {
   deletePasskey: (id: string) => apiFetch<{ ok?: boolean }>(`/api/auth/passkey/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- MCP / API tokens (connect Claude to NEXUS, task-scoped) ---
-  mcpTokens: () => apiFetch<{ tokens: NexusApiToken[] }>("/api/mcp/tokens"),
-  createMcpToken: (payload: { name?: string; expiresInDays?: number }) => apiFetch<NexusApiTokenCreated>("/api/mcp/tokens", { method: "POST", body: JSON.stringify(payload) }),
+  mcpTokens: () => apiFetch<{ tokens: NexusApiToken[]; /** Connected apps (OAuth); revoke with revokeMcpToken. */ apps?: NexusApiToken[] }>("/api/mcp/tokens"),
+  createMcpToken: (payload: { name?: string; expiresInDays?: number; /** Default tasks only; a write scope brings its read scope. */ scopes?: string[] }) => apiFetch<NexusApiTokenCreated>("/api/mcp/tokens", { method: "POST", body: JSON.stringify(payload) }),
   revokeMcpToken: (id: string) => apiFetch<{ revoked?: boolean }>(`/api/mcp/tokens?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- MCP OAuth consent (backs the /oauth/authorize SPA page) ---
-  oauthAuthorizeInfo: (params: { client_id: string; redirect_uri: string }) =>
-    apiFetch<{ clientName: string; redirectHost?: string; user: { name: string | null; email: string | null }; scopes: string[] }>(`/api/mcp/oauth/authorize/info?client_id=${encodeURIComponent(params.client_id)}&redirect_uri=${encodeURIComponent(params.redirect_uri)}`),
+  oauthAuthorizeInfo: (params: { client_id: string; redirect_uri: string; scope?: string }) =>
+    apiFetch<{ clientName: string; redirectHost?: string; user: { name: string | null; email: string | null }; scopes: string[] }>(`/api/mcp/oauth/authorize/info?client_id=${encodeURIComponent(params.client_id)}&redirect_uri=${encodeURIComponent(params.redirect_uri)}${params.scope ? `&scope=${encodeURIComponent(params.scope)}` : ""}`),
   oauthAuthorizeDecision: (body: Record<string, unknown>) =>
     apiFetch<{ redirectTo: string }>("/api/mcp/oauth/authorize/decision", { method: "POST", body: JSON.stringify(body) }),
 
