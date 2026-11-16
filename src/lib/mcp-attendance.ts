@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import {
   ATTENDANCE_TIMEZONE,
+  attendancePeriodKey,
+  attendancePeriodRange,
   deriveAttendanceStatus,
   getAttendanceDate,
   getAttendanceWorkspaceContext,
@@ -18,6 +20,8 @@ import { applyAttendanceOverride, resolveOverridePresentTimes, type OverrideBody
 import { applyAttendanceRecordCorrection, planAttendanceRecordCorrection } from "@/lib/attendance-record-correction"
 import { emitAttendanceChanged } from "@/lib/socket-emitter"
 import { hashToken, type McpCaller } from "@/lib/mcp-token-auth"
+import { publicUrl } from "@/lib/public-url"
+import { readDeductionLog } from "@/lib/attendance-deduction-log"
 
 /**
  * Attendance over MCP (owner, 17 Nov 2026: a connected assistant acting as its owner).
@@ -25,15 +29,19 @@ import { hashToken, type McpCaller } from "@/lib/mcp-token-auth"
  * READ  (scope attendance:read): the people the caller may approve in the Bagan Approval
  *        (lib/attendance-approvers.ts canUserReviewRequest — the one resolver), plus the caller themself.
  *        A Staff member sees only themself. "Staff Management" read-only viewers are NOT widened here.
- * WRITE (scope attendance:write): a correction of one person-day, in two server-enforced steps:
- *   1. preview → validates everything the write would, computes the exact before/after with the same functions the
- *      write uses, and stores the change server-side behind a single-use confirmation token (10 minutes, bound to
- *      the caller, their connection and this exact change). Nothing is written.
- *   2. apply   → only with that token. The stored change (never the caller's arguments) runs through the web's own
- *      code: POST /api/attendance/override (lib/attendance-override.ts) for a missing day marked present, PATCH
- *      /api/attendance/records/[id] (lib/attendance-record-correction.ts) for a time fix. XP refunds, day-off
- *      quota, waivers, outage rules, cancelled single-day requests, notifications, realtime and the audit row are
- *      exactly what the web does — the audit row is the person's, with `via: "<client> (MCP)"`.
+ * WRITE (scope attendance:write): a correction of one person-day, approved by a human on the NEXUS web:
+ *   1. preview (MCP) → validates everything the write would, computes the exact before/after with the same functions
+ *      the write uses, and stores the change server-side. Nothing is written. It returns an approval link
+ *      (/approve/mcp/<secret>: unguessable, 10 minutes, single use) and a requestId.
+ *   2. decision (WEB, owner 17 Nov 2026) → the assistant sends the link to the person; the page needs a normal NEXUS
+ *      web session (cookie, never a bearer/MCP token) of the SAME person who owns the connection. Approve runs the
+ *      stored change (never anything sent with the decision) through the web's own code: POST /api/attendance/override
+ *      (lib/attendance-override.ts) for a missing day marked present, PATCH /api/attendance/records/[id]
+ *      (lib/attendance-record-correction.ts) for a time fix — every check made again at that moment. XP refunds,
+ *      day-off quota, waivers, outage rules, cancelled single-day requests, notifications, realtime and the audit row
+ *      are exactly what the web does; the audit row is the person's, with `via: "<connection name> (MCP)"`.
+ *      No MCP tool can approve: the assistant can only read the outcome (get_attendance_correction_status). Codes by
+ *      push / email / WhatsApp would not do: the assistant can read the person's WhatsApp and email.
  * On top of the web's rules (deliberately stricter for an AI): the target must be in the caller's approval chain
  * (the web lets any BoD correct anyone), a reason is required, the times must fall on that day, a day with proof
  * of a fake location (or ruled invalid for it) is refused, and "mark present" only fills a day with no record.
@@ -45,7 +53,6 @@ export const CONFIRMATION_TTL_MS = 10 * 60 * 1000
 export const MAX_RANGE_DAYS = 62
 const REASON_MIN = 10
 const REASON_MAX = 500
-const TOKEN_PREFIX = "nxk_"
 
 export class McpAttendanceError extends Error {
   constructor(public code: string, message: string) {
@@ -251,6 +258,7 @@ export type CorrectionInput = { userId: string; date: string; kind: CorrectionKi
 type StoredChange =
   | { kind: "MARK_PRESENT"; userId: string; workspaceId: string; date: string; body: OverrideBody; coveringIds: string[] }
   | { kind: "FIX_TIMES"; userId: string; workspaceId: string; date: string; recordId: string; body: Record<string, unknown>; expect: { checkInAt: string | null; checkOutAt: string | null } }
+  | { kind: "WAIVE_PENALTIES"; userId: string; workspaceId: string; dates: string[]; reason: string; expect: Record<string, string[]> }
 
 /**
  * Fake GPS (owner, 28 Sep 2026: only proof of a fake location makes a day TK): a correction never launders such a
@@ -338,6 +346,8 @@ export async function previewAttendanceCorrection(caller: McpCaller, input: Corr
   let stored: StoredChange
   let after: Record<string, unknown>
   const notes: string[] = []
+  // Facts the approval page shows in its own language (the notes are the same in English for the assistant).
+  const flags = { checkOutDefaulted: false, multiDayRequestTypes: [] as string[] }
   if (input.kind === "MARK_PRESENT") {
     if (record) fail("HAS_RECORD", "This day already has an attendance record. Use kind FIX_TIMES to change its check-in/check-out.")
     if (!checkInAt) fail("NEEDS_CHECK_IN", "Give the check-in time (HH:mm, WIB) the person actually arrived.")
@@ -352,6 +362,8 @@ export async function previewAttendanceCorrection(caller: McpCaller, input: Corr
     if (timeError) fail("BAD_TIME", timeError)
     const singleDay = covering.filter((r) => r.startDate.getTime() === r.endDate.getTime())
     const multiDay = covering.filter((r) => r.startDate.getTime() !== r.endDate.getTime() && !isAutoDeduction(r))
+    flags.checkOutDefaulted = checkOutAt === undefined
+    flags.multiDayRequestTypes = multiDay.map((r) => r.type)
     if (checkOutAt === undefined) notes.push("No check-out time was given, so the check-out is the end of the person's shift (as the web board does).")
     if (multiDay.length) notes.push(`A multi-day ${multiDay.map((r) => r.type).join("/")} request covers this day and is NOT changed; the day keeps reading as that request until it is edited on the web.`)
     after = {
@@ -399,30 +411,9 @@ export async function previewAttendanceCorrection(caller: McpCaller, input: Corr
     return fail("BAD_KIND", "kind must be MARK_PRESENT or FIX_TIMES.")
   }
 
-  const token = TOKEN_PREFIX + crypto.randomBytes(24).toString("hex")
-  const expiresAt = new Date(Date.now() + CONFIRMATION_TTL_MS)
   const summary = `${input.kind === "MARK_PRESENT" ? "Mark present" : "Fix times"} · ${person?.name ?? input.userId} · ${dateKey}`
-  const preview = { summary, before, after, reason, notes }
-  await prisma.mcpConfirmation.create({
-    data: {
-      tokenHash: hashToken(token),
-      userId: caller.userId,
-      apiTokenId: caller.tokenId,
-      action: `attendance:${input.kind}`,
-      targetUserId: input.userId,
-      payload: stored as unknown as Prisma.InputJsonValue,
-      preview: preview as unknown as Prisma.InputJsonValue,
-      expiresAt,
-    },
-  })
-  // Best-effort housekeeping: confirmations are worthless a few minutes after they expire.
-  prisma.mcpConfirmation.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }).catch(() => {})
-  return {
-    ...preview,
-    confirmationToken: token,
-    expiresAt: expiresAt.toISOString(),
-    nextStep: "Nothing has changed yet. Show this before/after to the person and ask them to confirm. Only after they say yes, call apply_attendance_correction with this confirmationToken. It works once, for this exact change, within 10 minutes.",
-  }
+  const preview = { summary, kind: input.kind, before, after, reason, notes, flags }
+  return createApprovalRequest(caller, input.userId, input.kind, stored, preview)
 }
 
 function sameMinute(a: Date | null, b: Date | null) {
@@ -430,44 +421,315 @@ function sameMinute(a: Date | null, b: Date | null) {
   return Math.floor(a.getTime() / 60000) === Math.floor(b.getTime() / 60000)
 }
 
+// ─── Deductions: read the ledger, and ask for a batch waiver ──────────────────────────────────────────
+
+const PERIOD_RE = /^\d{4}-\d{2}$/
+
+/** Uncleared deduction entries per date, read from the same log the crew board shows. */
+async function openEntriesByDate(workspaceId: string, userId: string, dateKeys: string[]) {
+  const byPeriod = new Map<string, string[]>()
+  for (const d of dateKeys) {
+    const k = attendancePeriodKey(d)
+    byPeriod.set(k, [...(byPeriod.get(k) ?? []), d])
+  }
+  const out = new Map<string, Array<{ id: string; kind: string; label: string; amount: number; unit: "XP" | "DAY_OFF" }>>()
+  const periods = new Map<string, NonNullable<Awaited<ReturnType<typeof readDeductionLog>>>>()
+  for (const [period, days] of byPeriod) {
+    const log = await readDeductionLog(workspaceId, userId, period)
+    if (!log) return fail("NOT_A_MEMBER", "That person is not a member of your workspace.")
+    periods.set(period, log)
+    for (const d of days) out.set(d, log.entries.filter((e) => e.dateKey === d && !e.cleared).map((e) => ({ id: e.id, kind: e.kind, label: e.label, amount: e.amount, unit: e.unit })))
+  }
+  return { byDate: out, periods }
+}
+
 /**
- * Burn a confirmation token for this caller: one UPDATE that matches only an unused, unexpired token of this person
- * AND this connection, so two concurrent applies cannot both win and nobody else can use it. On a miss, says why.
+ * Why a person lost XP / day off in a period: the crew board's deduction log (lib/attendance-deduction-log.ts — the XP
+ * ledger and the auto day-off rows, waivers included), with the minutes late of each day from the attendance record,
+ * the period's day-off allowance and balance, and the day offs the person asked for.
  */
-export async function claimConfirmation(token: string, caller: McpCaller, now = new Date()) {
-  const raw = (token ?? "").trim()
-  if (!raw.startsWith(TOKEN_PREFIX) || raw.length > 200) fail("TOKEN_INVALID", "That is not a confirmation token. Call preview_attendance_correction first.")
-  const tokenHash = hashToken(raw)
-  const claimed = await prisma.mcpConfirmation.updateMany({
-    where: { tokenHash, userId: caller.userId, apiTokenId: caller.tokenId, usedAt: null, expiresAt: { gt: now } },
-    data: { usedAt: now },
-  })
-  const row = await prisma.mcpConfirmation.findUnique({ where: { tokenHash } })
-  if (claimed.count === 1 && row) return row
-  if (!row) return fail("TOKEN_INVALID", "Unknown confirmation token. Call preview_attendance_correction first.")
-  if (row.userId !== caller.userId || row.apiTokenId !== caller.tokenId) return fail("TOKEN_NOT_YOURS", "This confirmation token was issued to another person or connection.")
-  if (row.usedAt) return fail("TOKEN_USED", "This confirmation token was already used. Preview again for a new change.")
-  return fail("TOKEN_EXPIRED", "This confirmation token expired (10 minutes). Preview again.")
+export async function getAttendanceDeductions(caller: McpCaller, args: { userId: string; period?: string }) {
+  const { workspaceId, people } = await attendanceAudience(caller.userId)
+  if (!workspaceId) return fail("NO_WORKSPACE", "You are not in a workspace.")
+  const person = people.find((p) => p.id === args.userId)
+  if (!person) return fail("OUTSIDE_APPROVAL_CHAIN", "That person is outside your approval chain (Bagan Approval).")
+  const period = (args.period ?? "").trim() || attendancePeriodKey()
+  if (!PERIOD_RE.test(period)) return fail("BAD_PERIOD", "period must be YYYY-MM (attendance period, 28th → 27th).")
+  const log = await readDeductionLog(workspaceId, args.userId, period)
+  if (!log) return fail("NOT_A_MEMBER", "That person is not a member of your workspace.")
+  const { start, end } = attendancePeriodRange(period)
+  const [records, dayOffs] = await Promise.all([
+    prisma.attendanceRecord.findMany({
+      where: { workspaceId, userId: args.userId, attendanceDate: { gte: start, lte: end } },
+      select: { attendanceDate: true, checkInAt: true, checkOutAt: true, lateMinutes: true, checkInStatus: true },
+    }),
+    prisma.attendanceRequest.findMany({
+      where: { workspaceId, userId: args.userId, type: "DAY_OFF", startDate: { lte: end }, endDate: { gte: start } },
+      select: { startDate: true, endDate: true, status: true, reason: true, reviewedById: true, approvalSource: true },
+      orderBy: { startDate: "asc" },
+    }),
+  ])
+  const rec = new Map(records.map((r) => [r.attendanceDate.toISOString().slice(0, 10), r]))
+  const byDate = new Map<string, { date: string; xp: number; dayOff: number; cleared: boolean; items: string[] }>()
+  for (const e of log.entries) {
+    const d = byDate.get(e.dateKey) ?? { date: e.dateKey, xp: 0, dayOff: 0, cleared: e.cleared, items: [] }
+    if (e.unit === "XP") d.xp += e.amount
+    else d.dayOff += 1
+    d.items.push(e.kind)
+    byDate.set(e.dateKey, d)
+  }
+  return {
+    person: person.name,
+    period,
+    periodRange: { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) },
+    dayOff: log.dayOff,
+    totalXpLost: log.totalXpLost,
+    deductionsByDate: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => {
+      const r = rec.get(d.date)
+      return {
+        ...d,
+        dayOffDeducted: d.dayOff,
+        ...(r ? { checkIn: wallClock(r.checkInAt), checkOut: wallClock(r.checkOutAt), checkInStatus: r.checkInStatus, lateMinutes: r.lateMinutes } : { record: "none (absent)" }),
+      }
+    }),
+    entries: log.entries,
+    dayOffRequests: dayOffs.map((r) => ({
+      from: r.startDate.toISOString().slice(0, 10), to: r.endDate.toISOString().slice(0, 10), status: r.status,
+      automaticDeduction: isAutoDeduction(r), reason: r.reason,
+    })),
+    note: "XP entries with unit XP are XP points (negative = deducted). DAY_OFF entries are day-off allowance cut automatically (late > 120 minutes or absent without notice). cleared = already removed by a BoD.",
+  }
 }
 
-function mcpRequest(caller: McpCaller, headers?: Record<string, string | string[] | undefined>): NextRequest {
-  const h = new Headers({ "user-agent": `NEXUS MCP · ${caller.clientLabel}`, "content-type": "application/json" })
-  const fwd = headers?.["x-forwarded-for"] ?? headers?.["x-real-ip"]
-  if (typeof fwd === "string" && fwd) h.set("x-forwarded-for", fwd)
-  return new NextRequest("http://127.0.0.1/api/mcp", { method: "POST", headers: h })
-}
-
-export async function applyAttendanceCorrection(caller: McpCaller, token: string, requestHeaders?: Record<string, string | string[] | undefined>) {
-  const row = await claimConfirmation(token, caller)
-  const change = row.payload as unknown as StoredChange
-  // Rights are read again now: a role or the chart may have changed since the preview.
+/**
+ * Ask to remove the deductions of some days: the crew board's "remove deduction" (POST /api/attendance/override
+ * { action: "CLEAR_PENALTY" }) for each date — it refunds that day's XP penalties, restores an auto-deducted day off and
+ * writes the waiver that stops the nightly cron re-applying them. It clears the whole DAY, as on the web. One approval
+ * link for the whole batch; nothing is written until the person approves on the web.
+ */
+export async function previewPenaltyWaiver(caller: McpCaller, input: { userId: string; dates: string[]; reason: string }) {
   const ctx = await getAttendanceWorkspaceContext(caller.userId)
-  const workspaceId = await assertMayCorrect(caller.userId, change.userId, ctx)
-  if (workspaceId !== change.workspaceId) fail("CHANGED", "Your workspace changed since the preview. Preview again.")
-  const date = parseDateOnlyToUtc(change.date)
-  const auditMetadata = { via: `${caller.clientLabel} (MCP)`, mcpClient: caller.clientLabel, mcpConfirmationId: row.id, mcpPreview: row.preview }
-  const actor = await prisma.user.findUnique({ where: { id: caller.userId }, select: { name: true } })
-  const request = mcpRequest(caller, requestHeaders)
+  const workspaceId = await assertMayCorrect(caller.userId, input.userId, ctx)
+  const reason = (input.reason ?? "").trim()
+  if (reason.length < REASON_MIN || reason.length > REASON_MAX) fail("REASON", `Give a reason of ${REASON_MIN}–${REASON_MAX} characters; it is stored in the audit.`)
+  const dates = [...new Set((input.dates ?? []).map((d) => parseDateKey(d, "date")))].sort()
+  if (dates.length === 0 || dates.length > 31) fail("BAD_DATES", "Give 1–31 dates (YYYY-MM-DD).")
+  const today = getAttendanceDate().getTime()
+  if (dates.some((d) => parseDateOnlyToUtc(d).getTime() > today)) fail("FUTURE_DATE", "A date is in the future.")
+  for (const d of dates) await locationGuard(input.userId, parseDateOnlyToUtc(d), null)
+  const { byDate, periods } = await openEntriesByDate(workspaceId, input.userId, dates)
+  const empty = dates.filter((d) => (byDate.get(d) ?? []).length === 0)
+  if (empty.length) fail("NOTHING_TO_WAIVE", `No deduction left to remove on ${empty.join(", ")} (none, or already removed). Leave those dates out.`)
+  const person = await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } })
+
+  const items = dates.map((d) => ({ date: d, entries: byDate.get(d)! }))
+  const xpBack = items.reduce((s, i) => s + i.entries.filter((e) => e.unit === "XP").reduce((x, e) => x - e.amount, 0), 0)
+  const daysBack = items.reduce((s, i) => s + i.entries.filter((e) => e.unit === "DAY_OFF").length, 0)
+  const balances = [...periods.entries()].map(([period, log]) => {
+    const restored = items.filter((i) => attendancePeriodKey(i.date) === period).reduce((s, i) => s + i.entries.filter((e) => e.unit === "DAY_OFF").length, 0)
+    const usedAfter = Math.max(0, (log.dayOff.usedTotal ?? log.dayOff.used) - restored)
+    return { period, quota: log.dayOff.quota, remainingBefore: log.dayOff.remaining, remainingAfter: Math.max(0, log.dayOff.quota - usedAfter) }
+  })
+  const stored: StoredChange = {
+    kind: "WAIVE_PENALTIES", userId: input.userId, workspaceId, dates, reason,
+    expect: Object.fromEntries(items.map((i) => [i.date, i.entries.map((e) => e.id).sort()])),
+  }
+  const summary = `Remove deductions · ${person?.name ?? input.userId} · ${dates.length} day${dates.length === 1 ? "" : "s"}`
+  const preview = {
+    summary, kind: "WAIVE_PENALTIES", reason,
+    before: { person: person?.name ?? null, items, balances },
+    after: { xpRefunded: xpBack, dayOffsRestored: daysBack, balances },
+    notes: ["Each date is cleared as a whole day (every deduction of that date), exactly like the remove button in the deduction log. The person gets a notification per date."],
+    flags: null,
+  }
+  return createApprovalRequest(caller, input.userId, "WAIVE_PENALTIES", stored, preview)
+}
+
+/** Store a change behind a fresh approval link (10 minutes, single use) and answer the assistant. */
+async function createApprovalRequest(caller: McpCaller, targetUserId: string, kind: string, stored: StoredChange, preview: Record<string, unknown>) {
+  const approveSecret = crypto.randomBytes(32).toString("base64url")
+  const approveUrl = publicUrl(`approve/mcp/${approveSecret}`)
+  if (!approveUrl) fail("NO_PUBLIC_URL", "This server has no public address (NEXUS_PUBLIC_URL), so it cannot make an approval link.")
+  const expiresAt = new Date(Date.now() + CONFIRMATION_TTL_MS)
+  const row = await prisma.mcpConfirmation.create({
+    data: {
+      tokenHash: hashToken(approveSecret),
+      userId: caller.userId,
+      apiTokenId: caller.tokenId,
+      clientLabel: caller.clientLabel,
+      action: `attendance:${kind}`,
+      targetUserId,
+      payload: stored as unknown as Prisma.InputJsonValue,
+      preview: preview as unknown as Prisma.InputJsonValue,
+      expiresAt,
+    },
+    select: { id: true },
+  })
+  // Best-effort housekeeping: requests are worthless a day after they expire.
+  prisma.mcpConfirmation.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }).catch(() => {})
+  return {
+    ...preview,
+    requestId: row.id,
+    approveUrl,
+    expiresAt: expiresAt.toISOString(),
+    nextStep: "Nothing has changed yet. Send approveUrl to the person: they open it, signed in to NEXUS on the web, check everything and tap Approve or Reject there. Nothing you can call applies it. Then call get_attendance_correction_status with requestId to see the outcome. The link works once, within 10 minutes.",
+  }
+}
+
+// ─── Status (MCP) and the decision (NEXUS web approval page) ───────────────────────────────────────────
+
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "FAILED"
+
+type Row = NonNullable<Awaited<ReturnType<typeof prisma.mcpConfirmation.findUnique>>>
+
+/** What a request is now: a pending one past its 10 minutes reads EXPIRED (APPROVING = a decision in flight). */
+export function effectiveStatus(row: Pick<Row, "status" | "expiresAt">, now = new Date()): ApprovalStatus | "APPROVING" {
+  if (row.status === "PENDING" && row.expiresAt.getTime() <= now.getTime()) return "EXPIRED"
+  return row.status as ApprovalStatus | "APPROVING"
+}
+
+/** MCP: the outcome of one of this connection's requests (another person's or connection's reads as not found). */
+export async function getCorrectionStatus(caller: McpCaller, requestId: string) {
+  const row = await prisma.mcpConfirmation.findUnique({ where: { id: String(requestId ?? "") } }).catch(() => null)
+  if (!row || row.userId !== caller.userId || row.apiTokenId !== caller.tokenId) return fail("NOT_FOUND", "No such correction request for this connection.")
+  const status = effectiveStatus(row)
+  return {
+    requestId: row.id,
+    status: status === "APPROVING" ? "PENDING" : status,
+    summary: (row.preview as { summary?: string } | null)?.summary ?? null,
+    expiresAt: row.expiresAt.toISOString(),
+    decidedAt: row.decidedAt?.toISOString() ?? null,
+    ...(row.error ? { error: row.error } : {}),
+  }
+}
+
+/**
+ * The CSRF token of the approval page: an HMAC of the request and the signed-in person, under the session secret.
+ * GET hands it to the page; POST must send it back (header) — a cross-site form can neither read nor forge it.
+ */
+export function approvalCsrf(requestId: string, userId: string): string {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || ""
+  if (!secret) throw new Error("AUTH_SECRET missing")
+  return crypto.createHmac("sha256", secret).update(`mcp-approval:${requestId}:${userId}`).digest("base64url")
+}
+
+function sameCsrf(a: string, b: string): boolean {
+  const x = Buffer.from(a), y = Buffer.from(b)
+  return x.length === y.length && crypto.timingSafeEqual(x, y)
+}
+
+/** The request behind an approval link, for the signed-in person who owns the connection — anyone else is refused. */
+async function rowForSession(secret: string, sessionUserId: string): Promise<Row> {
+  const raw = String(secret ?? "").trim()
+  if (!raw || raw.length > 200) return fail("NOT_FOUND", "This approval link is not valid.")
+  const row = await prisma.mcpConfirmation.findUnique({ where: { tokenHash: hashToken(raw) } })
+  if (!row) return fail("NOT_FOUND", "This approval link is not valid.")
+  if (row.userId !== sessionUserId) return fail("WRONG_USER", "This approval belongs to another NEXUS account.")
+  return row
+}
+
+/** GET /api/mcp/approvals/[id]: what the page shows. */
+export async function approvalView(secret: string, sessionUserId: string) {
+  const row = await rowForSession(secret, sessionUserId)
+  const preview = (row.preview ?? {}) as Record<string, unknown>
+  const status = effectiveStatus(row)
+  return {
+    requestId: row.id,
+    app: row.clientLabel || "MCP",
+    status,
+    expiresAt: row.expiresAt.toISOString(),
+    decidedAt: row.decidedAt?.toISOString() ?? null,
+    error: row.error,
+    kind: preview.kind ?? row.action.replace(/^attendance:/, ""),
+    reason: preview.reason ?? null,
+    before: preview.before ?? null,
+    after: preview.after ?? null,
+    flags: preview.flags ?? null,
+    csrf: approvalCsrf(row.id, sessionUserId),
+  }
+}
+
+/**
+ * POST /api/mcp/approvals/[id] { decision }: the person, signed in on the web, decides. Claimed by one conditional
+ * UPDATE (PENDING and not expired → APPROVING / REJECTED), so a double tap or two tabs decide once. Approve then runs
+ * the stored change through the web's own code with every check made again now.
+ */
+export async function decideApproval(opts: {
+  secret: string
+  session: { id: string; name?: string | null }
+  decision: "APPROVE" | "REJECT"
+  csrf: string
+  request: NextRequest
+}) {
+  const row = await rowForSession(opts.secret, opts.session.id)
+  if (!opts.csrf || !sameCsrf(opts.csrf, approvalCsrf(row.id, opts.session.id))) fail("CSRF", "This page is out of date. Reload it and try again.")
+  const now = new Date()
+  const claim = await prisma.mcpConfirmation.updateMany({
+    where: { id: row.id, status: "PENDING", expiresAt: { gt: now } },
+    data: opts.decision === "APPROVE"
+      ? { status: "APPROVING", decidedAt: now, decidedById: opts.session.id }
+      : { status: "REJECTED", decidedAt: now, decidedById: opts.session.id },
+  })
+  if (claim.count !== 1) {
+    const current = effectiveStatus((await prisma.mcpConfirmation.findUnique({ where: { id: row.id } })) ?? row, now)
+    return fail(current === "EXPIRED" ? "EXPIRED" : "ALREADY_DECIDED", current === "EXPIRED" ? "This request expired. Ask for a new one." : `This request was already decided (${current === "APPROVING" ? "PENDING" : current}).`)
+  }
+  if (opts.decision === "REJECT") return { status: "REJECTED" as const }
+  try {
+    const result = await executeStoredChange(row, opts.session, opts.request)
+    await prisma.mcpConfirmation.update({ where: { id: row.id }, data: { status: "APPROVED", usedAt: new Date(), resultStatus: 200 } })
+    return { status: "APPROVED" as const, result }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed"
+    await prisma.mcpConfirmation.update({ where: { id: row.id }, data: { status: "FAILED", usedAt: new Date(), error: message.slice(0, 500) } })
+    if (e instanceof McpAttendanceError) throw e
+    return fail("FAILED", message)
+  }
+}
+
+/** The stored change, run as the connection's owner through the web's own code, after every check is made again. */
+async function executeStoredChange(row: Row, approver: { id: string; name?: string | null }, request: NextRequest) {
+  const change = row.payload as unknown as StoredChange
+  const ownerId = row.userId
+  // The connection must still exist: disconnecting the app withdraws what it asked for.
+  const connection = await prisma.apiToken.findUnique({ where: { id: row.apiTokenId }, select: { id: true } })
+  if (!connection) fail("DISCONNECTED", "The app that asked for this was disconnected, so the request is withdrawn.")
+  // Rights are read again now: a role or the chart may have changed since the preview.
+  const ctx = await getAttendanceWorkspaceContext(ownerId)
+  const workspaceId = await assertMayCorrect(ownerId, change.userId, ctx)
+  if (workspaceId !== change.workspaceId) fail("CHANGED", "Your workspace changed since the request. Ask for a new one.")
+  const date = parseDateOnlyToUtc(change.kind === "WAIVE_PENALTIES" ? change.dates[0] : change.date)
+  const label = row.clientLabel || "MCP"
+  const auditMetadata = {
+    via: `${label} (MCP)`, mcpClient: label, mcpConfirmationId: row.id, mcpPreview: row.preview,
+    approvedById: approver.id, approvedByName: approver.name ?? null, approvedOn: "NEXUS web approval page",
+  }
+  const actor = await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true } })
+
+  if (change.kind === "WAIVE_PENALTIES") {
+    // Everything checked BEFORE the first write: the same open deductions per date as when the person was asked.
+    for (const d of change.dates) await locationGuard(change.userId, parseDateOnlyToUtc(d), null)
+    const { byDate } = await openEntriesByDate(workspaceId, change.userId, change.dates)
+    for (const d of change.dates) {
+      if ((byDate.get(d) ?? []).map((e) => e.id).sort().join() !== (change.expect[d] ?? []).join()) {
+        fail("CHANGED", `The deductions of ${d} changed after the request (removed, or new ones). Nothing was changed; ask for a new one.`)
+      }
+    }
+    const done: Array<{ date: string; refunded: unknown }> = []
+    for (const d of change.dates) {
+      const res = await applyAttendanceOverride({
+        request, session: { user: { id: ownerId, name: actor?.name ?? null } },
+        body: { userId: change.userId, date: d, action: "CLEAR_PENALTY", note: change.reason }, evidence: null, auditMetadata,
+      })
+      const out = (await res.json().catch(() => null)) as Record<string, unknown> | null
+      if (res.status < 200 || res.status >= 300) {
+        fail("REFUSED", `NEXUS refused ${d}: ${typeof out?.error === "string" ? out.error : `HTTP ${res.status}`}. Done before it: ${done.map((x) => x.date).join(", ") || "none"}.`)
+      }
+      done.push({ date: d, refunded: out?.refunded ?? null })
+    }
+    emitAttendanceChanged([ownerId], "override", null)
+    return { cleared: done }
+  }
 
   let res: Response
   if (change.kind === "MARK_PRESENT") {
@@ -475,27 +737,26 @@ export async function applyAttendanceCorrection(caller: McpCaller, token: string
       where: { userId_workspaceId_attendanceDate: { userId: change.userId, workspaceId, attendanceDate: date } },
       select: RECORD_SELECT_FOR_GUARD,
     })
-    if (record) fail("CHANGED", "A record appeared on this day after the preview (for example the person checked in). Preview again.")
+    if (record) fail("CHANGED", "A record appeared on this day after the request (for example the person checked in). Nothing was changed; ask for a new one.")
     await locationGuard(change.userId, date, null)
     const coveringNow = (await coveringRequests(change.userId, workspaceId, date)).map((r) => r.id)
-    if ([...coveringNow].sort().join() !== [...change.coveringIds].sort().join()) fail("CHANGED", "The requests covering this day changed after the preview. Preview again.")
-    res = await applyAttendanceOverride({ request, session: { user: { id: caller.userId, name: actor?.name ?? null } }, body: change.body, evidence: null, auditMetadata })
+    if ([...coveringNow].sort().join() !== [...change.coveringIds].sort().join()) fail("CHANGED", "The requests covering this day changed after the request. Nothing was changed; ask for a new one.")
+    res = await applyAttendanceOverride({ request, session: { user: { id: ownerId, name: actor?.name ?? null } }, body: change.body, evidence: null, auditMetadata })
   } else {
     const record = await prisma.attendanceRecord.findUnique({ where: { id: change.recordId }, select: RECORD_SELECT_FOR_GUARD })
-    if (!record) fail("CHANGED", "The record was removed after the preview.")
+    if (!record) fail("CHANGED", "The record was removed after the request. Nothing was changed.")
     await locationGuard(change.userId, date, record)
     res = await applyAttendanceRecordCorrection({
-      request, session: { user: { id: caller.userId } }, recordId: change.recordId, body: change.body, auditMetadata, allowSilent: false,
+      request, session: { user: { id: ownerId } }, recordId: change.recordId, body: change.body, auditMetadata, allowSilent: false,
       expect: { checkInAt: change.expect.checkInAt ? new Date(change.expect.checkInAt) : null, checkOutAt: change.expect.checkOutAt ? new Date(change.expect.checkOutAt) : null },
     })
   }
   const result = (await res.json().catch(() => null)) as Record<string, unknown> | null
   if (res.status >= 200 && res.status < 300) {
-    // What pingActorAfter does for the web routes: the caller's own open screens refetch.
-    emitAttendanceChanged([caller.userId], change.kind === "MARK_PRESENT" ? "override" : "correction", change.kind === "MARK_PRESENT" ? null : change.recordId)
-    await prisma.mcpConfirmation.update({ where: { id: row.id }, data: { resultStatus: res.status } }).catch(() => {})
-    return { applied: true, summary: (row.preview as { summary?: string } | null)?.summary ?? null, result }
+    // What pingActorAfter does for the web routes: the person's own open screens refetch.
+    emitAttendanceChanged([ownerId], change.kind === "MARK_PRESENT" ? "override" : "correction", change.kind === "MARK_PRESENT" ? null : change.recordId)
+    return result
   }
-  await prisma.mcpConfirmation.update({ where: { id: row.id }, data: { resultStatus: res.status } }).catch(() => {})
-  return fail("REFUSED", typeof result?.error === "string" ? `NEXUS refused: ${result.error}` : `NEXUS refused (HTTP ${res.status}).`)
+  const code = typeof result?.code === "string" ? result.code : "REFUSED"
+  return fail(code === "RECORD_CHANGED" ? "CHANGED" : "REFUSED", typeof result?.error === "string" ? result.error : `NEXUS refused (HTTP ${res.status}).`)
 }

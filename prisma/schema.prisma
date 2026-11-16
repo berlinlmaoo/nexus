@@ -217,10 +217,9 @@ model OAuthClient {
 }
 
 // A previewed MCP attendance correction waiting for the person's confirmation (17 Nov 2026, lib/mcp-attendance.ts).
-// preview_attendance_correction stores the exact change here behind a random token (only its SHA-256 is kept);
-// apply_attendance_correction runs the stored change, once, within 10 minutes, for the same person AND connection
-// (ApiToken). Claimed by a single conditional UPDATE (usedAt IS NULL AND expiresAt > now), so a token can never be
-// applied twice. No FK (like GideonRun): rows are short-lived and purged a day after they expire.
+// preview_attendance_correction stores the exact change here behind the approval link's secret (only its SHA-256 is
+// kept); the owner approves it once, within 10 minutes, on the NEXUS web (/approve/mcp/<secret>). Claimed by a single
+// conditional UPDATE (status PENDING AND expiresAt > now), so it can never be applied twice. No FK (like GideonRun): rows are short-lived and purged a day after they expire.
 model McpConfirmation {
   id           String    @id @default(uuid(7))
   tokenHash    String    @unique
@@ -236,6 +235,14 @@ model McpConfirmation {
   expiresAt    DateTime
   usedAt       DateTime?
   resultStatus Int?
+  /// PENDING → APPROVING → APPROVED | FAILED, or REJECTED (decided on the web approval page).
+  status       String    @default("PENDING")
+  /// The connection's name when it asked ("via <name> (MCP)" on the audit row).
+  clientLabel  String    @default("")
+  decidedAt    DateTime?
+  decidedById  String?
+  /// Why applying failed (status FAILED).
+  error        String?
   createdAt    DateTime  @default(now())
 
   @@index([userId, createdAt])

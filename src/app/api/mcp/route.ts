@@ -16,7 +16,9 @@ import { verifyMcpToken, mcpUserId, mcpCaller, type McpCaller } from "@/lib/mcp-
 import { MCP_ISSUER } from "@/lib/mcp-oauth"
 import {
   McpAttendanceError,
-  applyAttendanceCorrection,
+  getCorrectionStatus,
+  getAttendanceDeductions,
+  previewPenaltyWaiver,
   listAttendanceDays,
   listAttendancePeople,
   listAttendanceRequests,
@@ -290,7 +292,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "preview_attendance_correction",
-      "Step 1 of 2 for correcting one person's attendance day. CHANGES NOTHING. kind MARK_PRESENT = the day has no record (forgot to check in) → present with the given times; kind FIX_TIMES = change the check-in and/or check-out of an existing record (e.g. forgot to check out). Times as HH:mm (WIB) on that date. Returns the exact before/after and a one-time confirmationToken. Show the before/after to the person and get their explicit yes before calling apply_attendance_correction.",
+      "Ask for a correction of one person's attendance day. CHANGES NOTHING. kind MARK_PRESENT = the day has no record (forgot to check in) → present with the given times; kind FIX_TIMES = change the check-in and/or check-out of an existing record (e.g. forgot to check out). Times as HH:mm (WIB) on that date. Returns the exact before/after, a requestId and an approveUrl. Send the approveUrl to the person: only they can approve it, signed in to NEXUS on the web. Then use get_attendance_correction_status.",
       {
         userId: z.string().describe("The person (from list_attendance_people)"),
         date: z.string().describe("YYYY-MM-DD"),
@@ -303,11 +305,31 @@ const handler = createMcpHandler(
     )
 
     server.tool(
-      "apply_attendance_correction",
-      "Step 2 of 2: applies exactly the change a preview_attendance_correction showed, and nothing else. Needs that preview's confirmationToken (single use, 10 minutes, only for the same connection). Only call it after the person explicitly confirmed the preview.",
-      { confirmationToken: z.string() },
-      async (args: { confirmationToken: string }, extra: ToolExtra) =>
-        attendanceTool(extra, "attendance:write", (c) => applyAttendanceCorrection(c, args.confirmationToken, extra.requestInfo?.headers)),
+      "get_attendance_deductions",
+      "Why someone lost XP or day off: every attendance deduction of one attendance period (28th → 27th) — per date the XP deducted, the day off cut automatically, the minutes late and check-in/out times — plus the day-off allowance, how much is used and what remains, and the day offs they asked for. Read from NEXUS's own deduction log.",
+      {
+        userId: z.string().describe("The person (from list_attendance_people)"),
+        period: z.string().optional().describe("YYYY-MM attendance period (the 28th of the month before → the 27th). Default: the current one."),
+      },
+      async (args: { userId: string; period?: string }, extra: ToolExtra) => attendanceTool(extra, "attendance:read", (c) => getAttendanceDeductions(c, args)),
+    )
+
+    server.tool(
+      "preview_attendance_waiver",
+      "Ask to remove the attendance deductions (XP and auto-cut day off) of one person on some dates, as one batch. CHANGES NOTHING. Each date is cleared as a whole day, like the remove button in the NEXUS deduction log. Returns every item, the XP and day off that would come back and the balance after, plus a requestId and an approveUrl: send the approveUrl to the person; only they can approve it, signed in to NEXUS on the web. Then use get_attendance_correction_status.",
+      {
+        userId: z.string(),
+        dates: z.array(z.string()).min(1).max(31).describe("YYYY-MM-DD dates that have deductions (from get_attendance_deductions)"),
+        reason: z.string().describe("Why (10–500 characters). Stored in the audit."),
+      },
+      async (args: { userId: string; dates: string[]; reason: string }, extra: ToolExtra) => attendanceTool(extra, "attendance:write", (c) => previewPenaltyWaiver(c, args)),
+    )
+
+    server.tool(
+      "get_attendance_correction_status",
+      "The outcome of a correction you asked for: PENDING (waiting for the person on the approval page), APPROVED (applied), REJECTED, EXPIRED (not decided within 10 minutes) or FAILED (approved but NEXUS refused it when applying, with the reason).",
+      { requestId: z.string() },
+      async (args: { requestId: string }, extra: ToolExtra) => attendanceTool(extra, "attendance:read", (c) => getCorrectionStatus(c, args.requestId)),
     )
   },
   { serverInfo: { name: "nexus", version: "1.0.0" } },
