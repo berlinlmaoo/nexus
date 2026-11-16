@@ -123,7 +123,7 @@ export async function planAttendanceRecordCorrection(
  * BoD correction of one attendance record's times (PATCH /api/attendance/records/[recordId]; moved here verbatim
  * 17 Nov 2026 so the MCP attendance correction runs exactly this code — lib/mcp-attendance.ts).
  * `allowSilent: false` (MCP): a change made through a connected app is always stamped and audited, even for an
- * account in ATTENDANCE_SILENT_CORRECTION_ADMINS. `auditMetadata`: extra keys on the audit row ("via Silk (MCP)").
+ * account in ATTENDANCE_SILENT_CORRECTION_ADMINS. `auditMetadata`: extra keys on the audit row ("via <client> (MCP)").
  */
 export async function applyAttendanceRecordCorrection({
   request,

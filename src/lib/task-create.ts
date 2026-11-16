@@ -16,7 +16,7 @@ import type { TaskUpdateSession } from "@/lib/task-update"
  * assignment notifications, audit, automations and the `task-created` realtime event. Moved here verbatim from the
  * POST route (17 Nov 2026) so the MCP server creates tasks through exactly the same rules instead of its own copy.
  * The caller authenticates and rate-limits; errors thrown here are the caller's to turn into a 500.
- * `auditMetadata`: extra keys on the audit row (the MCP server names the connection: "via Silk (MCP)").
+ * `auditMetadata`: extra keys on the audit row (the MCP server names the connection: "via <client> (MCP)").
  */
 export async function applyTaskCreate({
   request,

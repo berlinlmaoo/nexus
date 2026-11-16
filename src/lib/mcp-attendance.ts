@@ -20,7 +20,7 @@ import { emitAttendanceChanged } from "@/lib/socket-emitter"
 import { hashToken, type McpCaller } from "@/lib/mcp-token-auth"
 
 /**
- * Attendance over MCP (owner, 17 Nov 2026 — Berlin's assistant Silk acts as Berlin).
+ * Attendance over MCP (owner, 17 Nov 2026: a connected assistant acting as its owner).
  *
  * READ  (scope attendance:read): the people the caller may approve in the Bagan Approval
  *        (lib/attendance-approvers.ts canUserReviewRequest — the one resolver), plus the caller themself.

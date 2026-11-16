@@ -96,7 +96,7 @@ export async function applyAttendanceOverride({
   session: { user: { id: string; name?: string | null } }
   body: OverrideBody | null
   evidence: File | null
-  /** Extra keys on the audit row (the MCP server names the connection: "via Silk (MCP)"). */
+  /** Extra keys on the audit row (the MCP server names the connection: "via <client> (MCP)"). */
   auditMetadata?: Record<string, unknown>
 }): Promise<NextResponse> {
   try {

@@ -47,7 +47,7 @@ export async function applyTaskUpdate({
   session: TaskUpdateSession
   taskId: string
   body: unknown
-  /** Extra keys on the audit row (the MCP server names the connection: "via Silk (MCP)"). */
+  /** Extra keys on the audit row (the MCP server names the connection: "via <client> (MCP)"). */
   auditMetadata?: Record<string, unknown>
 }): Promise<NextResponse> {
   const validation = validateBody(updateTaskSchema, body)
