@@ -47,6 +47,7 @@ import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppMeetingsIndexRouteImport } from './routes/_app/meetings.index'
 import { Route as SsoAgentsStateRouteImport } from './routes/sso.agents.$state'
+import { Route as ApproveMcpIdRouteImport } from './routes/approve.mcp.$id'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppReportsUserIdRouteImport } from './routes/_app/reports.$userId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
@@ -245,6 +246,11 @@ const SsoAgentsStateRoute = SsoAgentsStateRouteImport.update({
   path: '/sso/agents/$state',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApproveMcpIdRoute = ApproveMcpIdRouteImport.update({
+  id: '/approve/mcp/$id',
+  path: '/approve/mcp/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppTasksTaskIdRoute = AppTasksTaskIdRouteImport.update({
   id: '/tasks/$taskId',
   path: '/tasks/$taskId',
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/approve/mcp/$id': typeof ApproveMcpIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/meetings/': typeof AppMeetingsIndexRoute
   '/projects/': typeof AppProjectsIndexRoute
@@ -377,6 +384,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/approve/mcp/$id': typeof ApproveMcpIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/meetings': typeof AppMeetingsIndexRoute
   '/projects': typeof AppProjectsIndexRoute
@@ -426,6 +434,7 @@ export interface FileRoutesById {
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/reports/$userId': typeof AppReportsUserIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/approve/mcp/$id': typeof ApproveMcpIdRoute
   '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/_app/meetings/': typeof AppMeetingsIndexRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
+    | '/approve/mcp/$id'
     | '/sso/agents/$state'
     | '/meetings/'
     | '/projects/'
@@ -522,6 +532,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
+    | '/approve/mcp/$id'
     | '/sso/agents/$state'
     | '/meetings'
     | '/projects'
@@ -570,6 +581,7 @@ export interface FileRouteTypes {
     | '/_app/projects/$projectId'
     | '/_app/reports/$userId'
     | '/_app/tasks/$taskId'
+    | '/approve/mcp/$id'
     | '/sso/agents/$state'
     | '/_app/meetings/'
     | '/_app/projects/'
@@ -587,6 +599,7 @@ export interface RootRouteChildren {
   RoomDisplayRoomRoute: typeof RoomDisplayRoomRoute
   SSlugRoute: typeof SSlugRoute
   VSlugRoute: typeof VSlugRoute
+  ApproveMcpIdRoute: typeof ApproveMcpIdRoute
   SsoAgentsStateRoute: typeof SsoAgentsStateRoute
 }
 
@@ -858,6 +871,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SsoAgentsStateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/approve/mcp/$id': {
+      id: '/approve/mcp/$id'
+      path: '/approve/mcp/$id'
+      fullPath: '/approve/mcp/$id'
+      preLoaderRoute: typeof ApproveMcpIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/tasks/$taskId': {
       id: '/_app/tasks/$taskId'
       path: '/tasks/$taskId'
@@ -1034,6 +1054,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomDisplayRoomRoute: RoomDisplayRoomRoute,
   SSlugRoute: SSlugRoute,
   VSlugRoute: VSlugRoute,
+  ApproveMcpIdRoute: ApproveMcpIdRoute,
   SsoAgentsStateRoute: SsoAgentsStateRoute,
 }
 export const routeTree = rootRouteImport

@@ -1736,6 +1736,25 @@ export type NexusApiToken = {
 // POST response includes the plaintext token exactly once.
 export type NexusApiTokenCreated = NexusApiToken & { token: string };
 
+/** GET /api/mcp/approvals/:id — a change an MCP assistant asked for, waiting for its owner on the web (17 Nov 2026). */
+export type NexusMcpApproval = {
+  requestId: string;
+  app: string;
+  status: "PENDING" | "APPROVING" | "APPROVED" | "REJECTED" | "EXPIRED" | "FAILED";
+  expiresAt: string;
+  decidedAt: string | null;
+  error: string | null;
+  kind: "MARK_PRESENT" | "FIX_TIMES" | "WAIVE_PENALTIES" | string;
+  reason: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  before: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  after: any;
+  flags: { checkOutDefaulted?: boolean; multiDayRequestTypes?: string[] } | null;
+  csrf: string;
+  viewer?: { name: string | null; email: string | null };
+};
+
 export type NexusAdminUser = {
   id: string;
   name?: string | null;
@@ -3137,6 +3156,10 @@ export const nexusApi = {
   // --- MCP OAuth consent (backs the /oauth/authorize SPA page) ---
   oauthAuthorizeInfo: (params: { client_id: string; redirect_uri: string; scope?: string }) =>
     apiFetch<{ clientName: string; redirectHost?: string; user: { name: string | null; email: string | null }; scopes: string[] }>(`/api/mcp/oauth/authorize/info?client_id=${encodeURIComponent(params.client_id)}&redirect_uri=${encodeURIComponent(params.redirect_uri)}${params.scope ? `&scope=${encodeURIComponent(params.scope)}` : ""}`),
+  // --- MCP approval page (/approve/mcp/$id): the cookie session only, never a token ---
+  mcpApproval: (id: string) => apiFetch<NexusMcpApproval>(`/api/mcp/approvals/${encodeURIComponent(id)}`),
+  decideMcpApproval: (id: string, decision: "APPROVE" | "REJECT", csrf: string) =>
+    apiFetch<{ status: "APPROVED" | "REJECTED" }>(`/api/mcp/approvals/${encodeURIComponent(id)}`, { method: "POST", headers: { "X-Nexus-Csrf": csrf }, body: JSON.stringify({ decision }) }),
   oauthAuthorizeDecision: (body: Record<string, unknown>) =>
     apiFetch<{ redirectTo: string }>("/api/mcp/oauth/authorize/decision", { method: "POST", body: JSON.stringify(body) }),
 
