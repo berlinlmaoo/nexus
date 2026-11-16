@@ -41,11 +41,14 @@ export async function applyTaskUpdate({
   session,
   taskId,
   body,
+  auditMetadata,
 }: {
   request: NextRequest
   session: TaskUpdateSession
   taskId: string
   body: unknown
+  /** Extra keys on the audit row (the MCP server names the connection: "via Silk (MCP)"). */
+  auditMetadata?: Record<string, unknown>
 }): Promise<NextResponse> {
   const validation = validateBody(updateTaskSchema, body)
   if (!validation.success) return validation.error
@@ -493,6 +496,7 @@ export async function applyTaskUpdate({
         },
       ),
       ...(liveFlush?.flushed && liveFlush.replaced ? { replacedLiveText: liveFlush.replaced } : {}),
+      ...(auditMetadata ?? {}),
     },
   })
 
