@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkRateLimitByKey, rateLimitResponse } from "@/lib/rate-limit"
-import { isRegisteredRedirectUri, grantedScopes } from "@/lib/mcp-oauth"
+import { matchesRegisteredRedirectUriFromQuery, grantedScopes } from "@/lib/mcp-oauth"
 
 // Backing data for the SPA consent page (/oauth/authorize). Same-origin, cookie-authenticated.
 // Returns 401 when not logged in (the page then shows an inline login), 400 for a bad client/redirect.
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
   const client = await prisma.oAuthClient.findUnique({ where: { id: clientId }, select: { clientName: true, redirectUris: true } })
   if (!client) return NextResponse.json({ error: "invalid_client", error_description: "Unknown client." }, { status: 400 })
-  if (!isRegisteredRedirectUri(redirectUri, client.redirectUris)) {
+  if (!matchesRegisteredRedirectUriFromQuery(redirectUri, client.redirectUris)) {
     return NextResponse.json({ error: "invalid_redirect_uri", error_description: "redirect_uri not registered for this client." }, { status: 400 })
   }
 

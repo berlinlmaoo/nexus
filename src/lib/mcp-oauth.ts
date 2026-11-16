@@ -93,6 +93,20 @@ export function isRegisteredRedirectUri(redirectUri: string, registered: string[
 }
 
 /**
+ * The same check for a redirect_uri read from a GET query (the consent page's …/authorize/info). Next.js rewrites the
+ * first loopback host in a request URL to "localhost" before the route sees it (next/dist/server/web/next-url.js,
+ * REGEX_LOCALHOST_HOSTNAME), and in a URL like ?redirect_uri=http%3A%2F%2F127.0.0.1%3A8765%2Fcallback that first
+ * host is the one inside the query: a client registered with a 127.0.0.1 callback (Hermes, mcp-remote) arrived as
+ * "http://localhost:8765/callback" and was refused. So a registered URI also matches in that rewritten form. Only
+ * the read-only consent info uses this; the decision and the token exchange read the body and compare exactly.
+ */
+export function matchesRegisteredRedirectUriFromQuery(redirectUri: string, registered: string[]): boolean {
+  if (isRegisteredRedirectUri(redirectUri, registered)) return true
+  const asNextSeesIt = (u: string) => u.replace(/^(https?:\/\/)(127(?:\.\d{1,3}){3}|\[::1\])(?=[:/]|$)/i, "$1localhost")
+  return registered.some((r) => asNextSeesIt(r) === redirectUri)
+}
+
+/**
  * Validate a redirect URI is a sane absolute https URL (or a localhost http URL, which OAuth allows
  * for native/desktop clients). Used at registration time to reject junk before we ever store it.
  */
