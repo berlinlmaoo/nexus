@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { checkRateLimitByKey, rateLimitResponse, trustedClientIp } from "@/lib/rate-limit"
-import { isValidRedirectUri, MCP_SCOPES } from "@/lib/mcp-oauth"
+import { isValidRedirectUri, grantedScopes } from "@/lib/mcp-oauth"
 
 // OAuth 2.0 Dynamic Client Registration (RFC 7591). Open registration (no auth) is expected for MCP —
 // a registered client can't obtain any token without a NEXUS user logging in AND consenting, so this
@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
   const clientName = typeof body.client_name === "string" && body.client_name.trim() ? body.client_name.trim().slice(0, 120) : "MCP Client"
   // We only support public clients (PKCE), so the auth method is always "none" regardless of request.
   const grantTypes = ["authorization_code", "refresh_token"]
+  // What the client says it wants (informational: the consent decides what a connection actually gets).
+  const scopes = grantedScopes(typeof body.scope === "string" ? body.scope : null)
   const responseTypes = ["code"]
 
   const client = await prisma.oAuthClient.create({
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       grantTypes,
       responseTypes,
       tokenEndpointAuthMethod: "none",
-      scopes: MCP_SCOPES,
+      scopes,
     },
     select: { id: true, clientName: true, redirectUris: true, grantTypes: true, responseTypes: true, tokenEndpointAuthMethod: true, createdAt: true },
   })
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
       grant_types: client.grantTypes,
       response_types: client.responseTypes,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
-      scope: MCP_SCOPES.join(" "),
+      scope: scopes.join(" "),
     },
     { status: 201, headers: CORS }
   )

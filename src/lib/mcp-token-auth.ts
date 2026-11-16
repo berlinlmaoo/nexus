@@ -28,7 +28,7 @@ export async function verifyMcpToken(_req: Request, bearerToken?: string): Promi
 
   const apiToken = await prisma.apiToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    select: { id: true, userId: true, scopes: true, expiresAt: true, user: { select: { deactivatedAt: true } } },
+    select: { id: true, name: true, userId: true, scopes: true, expiresAt: true, user: { select: { deactivatedAt: true } }, client: { select: { clientName: true } } },
   })
   if (!apiToken) return undefined
   if (apiToken.expiresAt && apiToken.expiresAt.getTime() < Date.now()) return undefined
@@ -43,8 +43,19 @@ export async function verifyMcpToken(_req: Request, bearerToken?: string): Promi
     token,
     clientId: "nexus-mcp",
     scopes: apiToken.scopes ?? [],
-    extra: { userId: apiToken.userId, tokenId: apiToken.id },
+    // clientLabel: who is acting for the person, for the audit trail ("via Silk"): the OAuth client's registered
+    // name, or the label the person gave their personal token.
+    extra: { userId: apiToken.userId, tokenId: apiToken.id, clientLabel: (apiToken.client?.clientName ?? apiToken.name ?? "MCP").slice(0, 80) },
   }
+}
+
+export type McpCaller = { userId: string; tokenId: string; clientLabel: string; scopes: string[] }
+
+/** The authenticated caller of an MCP tool: the person, the token (connection) and its label. */
+export function mcpCaller(extra: { authInfo?: AuthInfo }): McpCaller {
+  const e = (extra.authInfo?.extra ?? {}) as { userId?: string; tokenId?: string; clientLabel?: string }
+  if (!e.userId || !e.tokenId) throw new Error("Unauthorized")
+  return { userId: e.userId, tokenId: e.tokenId, clientLabel: e.clientLabel || "MCP", scopes: extra.authInfo?.scopes ?? [] }
 }
 
 /** Pull the authenticated userId out of an MCP tool handler's `extra` (set by withMcpAuth). */

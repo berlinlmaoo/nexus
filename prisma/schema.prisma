@@ -216,6 +216,32 @@ model OAuthClient {
   tokens    ApiToken[]
 }
 
+// A previewed MCP attendance correction waiting for the person's confirmation (17 Nov 2026, lib/mcp-attendance.ts).
+// preview_attendance_correction stores the exact change here behind a random token (only its SHA-256 is kept);
+// apply_attendance_correction runs the stored change, once, within 10 minutes, for the same person AND connection
+// (ApiToken). Claimed by a single conditional UPDATE (usedAt IS NULL AND expiresAt > now), so a token can never be
+// applied twice. No FK (like GideonRun): rows are short-lived and purged a day after they expire.
+model McpConfirmation {
+  id           String    @id @default(uuid(7))
+  tokenHash    String    @unique
+  userId       String
+  apiTokenId   String
+  /// "attendance:MARK_PRESENT" | "attendance:FIX_TIMES"
+  action       String
+  targetUserId String
+  /// The change apply runs (never taken from the apply call).
+  payload      Json
+  /// What the preview showed (before / after / reason), copied onto the audit row on apply.
+  preview      Json
+  expiresAt    DateTime
+  usedAt       DateTime?
+  resultStatus Int?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
 // Short-lived OAuth 2.1 authorization code (auth-code + PKCE flow). Single-use, ~5 min TTL.
 // Only the SHA-256 hash of the code is stored.
 model OAuthAuthCode {

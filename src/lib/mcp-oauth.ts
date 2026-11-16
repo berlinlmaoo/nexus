@@ -1,16 +1,43 @@
 import crypto from "crypto"
 import { hashToken } from "@/lib/mcp-token-auth"
 
-// Canonical public origin Claude connects to. Everything OAuth (issuer, endpoints, resource) is
+// Canonical public origin MCP clients connect to. Everything OAuth (issuer, endpoints, resource) is
 // anchored here so discovery metadata is stable regardless of which internal host serves the request.
-export const MCP_ISSUER = (process.env.MCP_OAUTH_ISSUER || "https://nexus.patsgroup.id").replace(/\/+$/, "")
+// MCP_OAUTH_ISSUER when set (dev sets its tailnet URL), else the server's public URL (NEXUS_PUBLIC_URL, set on
+// prod and the VPS), else the production domain. Until 17 Nov 2026 the fallback was the retired
+// nexus.patsgroup.id, which nginx 302s: MCP clients do not follow a redirected POST, so every connector broke.
+export function resolveMcpIssuer(env: Record<string, string | undefined> = process.env): string {
+  const raw = env.MCP_OAUTH_ISSUER?.trim() || env.NEXUS_PUBLIC_URL?.trim() || "https://nexus.znetworks.id"
+  return raw.replace(/\/+$/, "")
+}
+export const MCP_ISSUER = resolveMcpIssuer()
 export const MCP_RESOURCE = `${MCP_ISSUER}/api/mcp`
 
 export const OAUTH_AUTHORIZE_URL = `${MCP_ISSUER}/oauth/authorize` // SPA consent page
 export const OAUTH_TOKEN_URL = `${MCP_ISSUER}/api/mcp/oauth/token`
 export const OAUTH_REGISTER_URL = `${MCP_ISSUER}/api/mcp/oauth/register`
 
+/** What a connection gets when it asks for nothing in particular: tasks, as before. */
 export const MCP_SCOPES = ["tasks:read", "tasks:write"]
+/**
+ * Attendance (owner, 17 Nov 2026 — Berlin's assistant Silk). Never granted by default: only a client that asks for
+ * them (OAuth `scope`) and a person who sees them on the consent page, or a personal token minted with them ticked.
+ * They give nothing beyond the person's own attendance rights (lib/mcp-attendance.ts).
+ */
+export const MCP_ATTENDANCE_SCOPES = ["attendance:read", "attendance:write"]
+export const MCP_ALL_SCOPES = [...MCP_SCOPES, ...MCP_ATTENDANCE_SCOPES]
+
+/**
+ * The scopes to grant for a requested OAuth `scope` string (space separated). Unknown names are dropped; nothing
+ * known (or no `scope` at all) = the default task scopes. A write scope brings its read scope along.
+ */
+export function grantedScopes(requested: string | null | undefined): string[] {
+  const asked = new Set((requested ?? "").split(/\s+/).map((x) => x.trim()).filter((x) => MCP_ALL_SCOPES.includes(x)))
+  if (asked.size === 0) return [...MCP_SCOPES]
+  if (asked.has("tasks:write")) asked.add("tasks:read")
+  if (asked.has("attendance:write")) asked.add("attendance:read")
+  return MCP_ALL_SCOPES.filter((x) => asked.has(x))
+}
 
 // Lifetimes.
 export const AUTH_CODE_TTL_MS = 5 * 60 * 1000 // 5 minutes

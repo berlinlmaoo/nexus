@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkRateLimitByKey, rateLimitResponse } from "@/lib/rate-limit"
-import { generateAuthCode, isRegisteredRedirectUri, buildRedirect, AUTH_CODE_TTL_MS, MCP_SCOPES, MCP_RESOURCE } from "@/lib/mcp-oauth"
+import { generateAuthCode, isRegisteredRedirectUri, buildRedirect, AUTH_CODE_TTL_MS, grantedScopes, MCP_RESOURCE } from "@/lib/mcp-oauth"
 
 // The consent decision. Same-origin, cookie-authenticated. On approve, mints a single-use PKCE auth
 // code and returns the redirect back to the client; on deny, returns an access_denied redirect.
@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
   const state = str("state")
   const resource = str("resource") || null
   const approve = body.approve === true
+  // The scopes shown on the consent page (GET …/info with the same `scope`): attendance only when asked for.
+  const scopes = grantedScopes(str("scope") || null)
 
   if (!clientId || !redirectUri) return NextResponse.json({ error: "invalid_request", error_description: "client_id and redirect_uri are required." }, { status: 400 })
   if (clientId.length > 64 || redirectUri.length > 2048) return NextResponse.json({ error: "invalid_request", error_description: "Parameter too long." }, { status: 400 })
@@ -64,14 +66,14 @@ export async function POST(request: NextRequest) {
       redirectUri,
       codeChallenge,
       codeChallengeMethod: "S256",
-      scopes: MCP_SCOPES,
+      scopes,
       resource,
       expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),
     },
   })
 
   try {
-    await logAudit({ action: "create", entityType: "oauth_authorization", entityId: client.id, entityName: client.clientName, userId: session.user.id, request, metadata: { via: "mcp-oauth", scopes: MCP_SCOPES } })
+    await logAudit({ action: "create", entityType: "oauth_authorization", entityId: client.id, entityName: client.clientName, userId: session.user.id, request, metadata: { via: "mcp-oauth", scopes } })
   } catch {
     /* best-effort */
   }
