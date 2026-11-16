@@ -66,7 +66,7 @@ function McpApprovalPage() {
     <div className="min-h-[100dvh] w-full bg-background text-foreground" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
       <div className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-6 sm:py-10">
         <div className="flex items-center gap-3">
-          <img src={nexusLogo} alt="NEXUS" className="h-9 w-9 object-contain" />
+          <img src={nexusLogo} alt="NEXUS" className="h-9 w-9 object-contain dark:invert" />
           <div className="min-w-0">
             <div className="text-sm font-bold">NEXUS</div>
             <div className="text-xs text-muted-foreground">{t("Approval request")}</div>
@@ -135,7 +135,9 @@ function McpApprovalPage() {
             )}
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-              {t("Signed in as {name}. Nothing changes until you approve.", { name: data.viewer?.name ?? data.viewer?.email ?? "—" })}
+              {pending
+                ? t("Signed in as {name}. Nothing changes until you approve.", { name: data.viewer?.name ?? data.viewer?.email ?? "—" })
+                : t("Signed in as {name}.", { name: data.viewer?.name ?? data.viewer?.email ?? "—" })}
             </p>
           </>
         )}

@@ -46,4 +46,5 @@ export const ID_MCP_SILK: Record<string, string> = {
   "This request expired. Nothing was changed. Ask for a new one.": "Permintaan ini kedaluwarsa. Tidak ada yang berubah. Minta yang baru.",
   "This request isn't yours": "Permintaan ini bukan milikmu",
   "Checked out": "Sudah check-out",
+  "Signed in as {name}.": "Masuk sebagai {name}.",
 }
