@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // the person AND the connection). Also the OAuth scope grant and issuer fallback (lib/mcp-oauth.ts).
 
 type Member = { userId: string; workspaceId: string; role: string; approverId: string | null; name: string }
-type Confirmation = { id: string; tokenHash: string; userId: string; apiTokenId: string; usedAt: Date | null; expiresAt: Date; payload: unknown; preview: unknown }
+type Confirmation = { id: string; tokenHash: string; userId: string; apiTokenId: string; usedAt: Date | null; expiresAt: Date; payload: unknown; preview: unknown; status: string; clientLabel: string; action: string; decidedAt: Date | null; decidedById: string | null; error: string | null }
 
 const m = vi.hoisted(() => ({ members: [] as Member[], confirmations: [] as Confirmation[], ctx: new Map<string, unknown>() }))
 
@@ -22,13 +22,21 @@ vi.mock("@/lib/prisma", () => {
     },
     mcpConfirmation: {
       // One conditional UPDATE, as Postgres runs it: the match and the write happen together.
-      updateMany: async ({ where, data }: { where: { tokenHash: string; userId: string; apiTokenId: string; usedAt: null; expiresAt: { gt: Date } }; data: { usedAt: Date } }) => {
-        const rows = m.confirmations.filter((c) => c.tokenHash === where.tokenHash && c.userId === where.userId && c.apiTokenId === where.apiTokenId && c.usedAt === null && c.expiresAt > where.expiresAt.gt)
-        for (const r of rows) r.usedAt = data.usedAt
+      updateMany: async ({ where, data }: { where: { id: string; status: string; expiresAt: { gt: Date } }; data: Partial<Confirmation> }) => {
+        const rows = m.confirmations.filter((c) => c.id === where.id && c.status === where.status && c.expiresAt > where.expiresAt.gt)
+        for (const r of rows) Object.assign(r, data)
         return { count: rows.length }
       },
-      findUnique: async ({ where }: { where: { tokenHash: string } }) => m.confirmations.find((c) => c.tokenHash === where.tokenHash) ?? null,
+      update: async ({ where, data }: { where: { id: string }; data: Partial<Confirmation> }) => {
+        const r = m.confirmations.find((c) => c.id === where.id)!
+        Object.assign(r, data)
+        return r
+      },
+      findUnique: async ({ where }: { where: { tokenHash?: string; id?: string } }) =>
+        m.confirmations.find((c) => (where.tokenHash ? c.tokenHash === where.tokenHash : c.id === where.id)) ?? null,
     },
+    // The connection: absent here, so an approval that gets through the claim stops at "disconnected" (FAILED).
+    apiToken: { findUnique: async () => null },
   }
   return { default: db, prisma: db }
 })
@@ -43,7 +51,7 @@ vi.mock("@/lib/attendance-record-correction", () => ({ applyAttendanceRecordCorr
 vi.mock("@/lib/attendance-days", () => ({ classifyAttendanceDays: vi.fn() }))
 vi.mock("@/lib/socket-emitter", () => ({ emitAttendanceChanged: vi.fn() }))
 
-import { assertMayCorrect, attendanceAudience, claimConfirmation, McpAttendanceError } from "@/lib/mcp-attendance"
+import { approvalCsrf, approvalView, assertMayCorrect, attendanceAudience, decideApproval, effectiveStatus, getCorrectionStatus, McpAttendanceError } from "@/lib/mcp-attendance"
 import { hashToken } from "@/lib/mcp-token-auth"
 import { grantedScopes, matchesRegisteredRedirectUriFromQuery, resolveMcpIssuer } from "@/lib/mcp-oauth"
 
@@ -124,40 +132,61 @@ describe("who a connection may see (attendanceAudience)", () => {
   })
 })
 
-describe("confirmation token (claimConfirmation)", () => {
-  const berlin = { userId: "oaa", tokenId: "tok-silk", clientLabel: "Silk", scopes: ["attendance:write"] }
-  const seed = (token: string, over: Partial<Confirmation> = {}) => {
-    const row: Confirmation = { id: `c-${m.confirmations.length}`, tokenHash: hashToken(token), userId: "oaa", apiTokenId: "tok-silk", usedAt: null, expiresAt: new Date(Date.now() + 600_000), payload: {}, preview: {}, ...over }
+describe("web approval (approvalView / decideApproval / getCorrectionStatus)", () => {
+  process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret"
+  const owner = { id: "oaa", name: "Owner" }
+  const req = {} as never
+  const seed = (secret: string, over: Partial<Confirmation> = {}) => {
+    const row: Confirmation = {
+      id: `c-${m.confirmations.length}`, tokenHash: hashToken(secret), userId: "oaa", apiTokenId: "tok-silk", usedAt: null,
+      expiresAt: new Date(Date.now() + 600_000), payload: { kind: "FIX_TIMES" }, preview: { summary: "Fix times · Staff · 2026-11-10" },
+      status: "PENDING", clientLabel: "Silk - AI Agent Berlin", action: "attendance:FIX_TIMES", decidedAt: null, decidedById: null, error: null, ...over,
+    }
     m.confirmations.push(row)
     return row
   }
+  const decide = (secret: string, decision: "APPROVE" | "REJECT", who = owner, csrf?: string) =>
+    code(decideApproval({ secret, session: who, decision, csrf: csrf ?? approvalCsrf(m.confirmations.find((c) => c.tokenHash === hashToken(secret))?.id ?? "x", who.id), request: req }))
 
-  it("works once", async () => {
-    seed("nxk_one")
-    expect(await code(claimConfirmation("nxk_one", berlin))).toBe("OK")
-    expect(await code(claimConfirmation("nxk_one", berlin))).toBe("TOKEN_USED")
+  it("the page shows the request to its owner only; another BoD (or anyone else) is refused", async () => {
+    seed("s-view")
+    expect((await approvalView("s-view", "oaa")).app).toBe("Silk - AI Agent Berlin")
+    expect(await code(approvalView("s-view", "bod"))).toBe("WRONG_USER")
+    expect(await code(approvalView("not-a-link", "oaa"))).toBe("NOT_FOUND")
   })
-  it("two applies at the same moment: exactly one wins", async () => {
-    seed("nxk_race")
-    const results = await Promise.all([code(claimConfirmation("nxk_race", berlin)), code(claimConfirmation("nxk_race", berlin))])
-    expect(results.sort()).toEqual(["OK", "TOKEN_USED"])
+  it("another person's session cannot decide, even with a token of its own", async () => {
+    seed("s-other")
+    expect(await decide("s-other", "APPROVE", { id: "bod", name: "Bod" })).toBe("WRONG_USER")
+    expect(m.confirmations[0].status).toBe("PENDING")
   })
-  it("expires after its 10 minutes", async () => {
-    seed("nxk_old", { expiresAt: new Date(Date.now() - 1000) })
-    expect(await code(claimConfirmation("nxk_old", berlin))).toBe("TOKEN_EXPIRED")
+  it("a decision without the page's CSRF token is refused", async () => {
+    seed("s-csrf")
+    expect(await decide("s-csrf", "APPROVE", owner, "forged")).toBe("CSRF")
+    expect(m.confirmations[0].status).toBe("PENDING")
   })
-  it("is bound to the person: someone else's connection cannot use it, and it stays usable for its owner", async () => {
-    seed("nxk_bound")
-    expect(await code(claimConfirmation("nxk_bound", { ...berlin, userId: "bod" }))).toBe("TOKEN_NOT_YOURS")
-    expect(await code(claimConfirmation("nxk_bound", berlin))).toBe("OK")
+  it("reject, then any further decision is refused", async () => {
+    seed("s-rej")
+    expect(await decide("s-rej", "REJECT")).toBe("OK")
+    expect(await decide("s-rej", "APPROVE")).toBe("ALREADY_DECIDED")
+    expect(m.confirmations[0].status).toBe("REJECTED")
   })
-  it("is bound to the connection: the same person through another token cannot use it", async () => {
-    seed("nxk_conn")
-    expect(await code(claimConfirmation("nxk_conn", { ...berlin, tokenId: "tok-other" }))).toBe("TOKEN_NOT_YOURS")
+  it("expired after 10 minutes", async () => {
+    seed("s-old", { expiresAt: new Date(Date.now() - 1000) })
+    expect(await decide("s-old", "APPROVE")).toBe("EXPIRED")
+    expect(effectiveStatus(m.confirmations[0])).toBe("EXPIRED")
   })
-  it("refuses anything that is not a token it issued", async () => {
-    expect(await code(claimConfirmation("nxk_never", berlin))).toBe("TOKEN_INVALID")
-    expect(await code(claimConfirmation("hello", berlin))).toBe("TOKEN_INVALID")
+  it("double click: two approvals at once, exactly one is claimed (it runs; here it stops at the missing connection)", async () => {
+    seed("s-race")
+    const r = (await Promise.all([decide("s-race", "APPROVE"), decide("s-race", "APPROVE")])).sort()
+    expect(r).toEqual(["ALREADY_DECIDED", "DISCONNECTED"])
+    expect(m.confirmations[0].status).toBe("FAILED")
+  })
+  it("the assistant reads the outcome of its own requests only", async () => {
+    const row = seed("s-status")
+    const silk = { userId: "oaa", tokenId: "tok-silk", clientLabel: "Silk - AI Agent Berlin", scopes: ["attendance:read"] }
+    expect((await getCorrectionStatus(silk, row.id)).status).toBe("PENDING")
+    expect(await code(getCorrectionStatus({ ...silk, tokenId: "tok-other" }, row.id))).toBe("NOT_FOUND")
+    expect(await code(getCorrectionStatus({ ...silk, userId: "bod" }, row.id))).toBe("NOT_FOUND")
   })
 })
 
