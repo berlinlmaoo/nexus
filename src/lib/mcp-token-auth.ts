@@ -43,7 +43,7 @@ export async function verifyMcpToken(_req: Request, bearerToken?: string): Promi
     token,
     clientId: "nexus-mcp",
     scopes: apiToken.scopes ?? [],
-    // clientLabel: who is acting for the person, for the audit trail ("via Silk"): the OAuth client's registered
+    // clientLabel: who is acting for the person, for the audit trail ("via <client>"): the OAuth client's registered
     // name, or the label the person gave their personal token.
     extra: { userId: apiToken.userId, tokenId: apiToken.id, clientLabel: (apiToken.client?.clientName ?? apiToken.name ?? "MCP").slice(0, 80) },
   }

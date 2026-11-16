@@ -35,7 +35,7 @@ const forbidden = (msg = "Forbidden: kamu gak punya akses ke project ini.") => (
 const hasScope = (extra: { authInfo?: AuthInfo }, scope: string) => (extra.authInfo?.scopes ?? []).includes(scope)
 type ToolExtra = { authInfo?: AuthInfo; requestInfo?: { headers?: Record<string, string | string[] | undefined> } }
 
-/** A request object for the shared web code: the audit row's user agent names the connection ("NEXUS MCP · Silk"). */
+/** A request object for the shared web code: the audit row's user agent names the connection ("NEXUS MCP · <client>"). */
 function webRequest(caller: McpCaller, extra: ToolExtra): NextRequest {
   const h = new Headers({ "user-agent": `NEXUS MCP · ${caller.clientLabel}`, "content-type": "application/json" })
   const fwd = extra.requestInfo?.headers?.["x-forwarded-for"]

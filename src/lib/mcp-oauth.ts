@@ -20,7 +20,7 @@ export const OAUTH_REGISTER_URL = `${MCP_ISSUER}/api/mcp/oauth/register`
 /** What a connection gets when it asks for nothing in particular: tasks, as before. */
 export const MCP_SCOPES = ["tasks:read", "tasks:write"]
 /**
- * Attendance (owner, 17 Nov 2026 — Berlin's assistant Silk). Never granted by default: only a client that asks for
+ * Attendance (owner, 17 Nov 2026). Never granted by default: only a client that asks for
  * them (OAuth `scope`) and a person who sees them on the consent page, or a personal token minted with them ticked.
  * They give nothing beyond the person's own attendance rights (lib/mcp-attendance.ts).
  */
