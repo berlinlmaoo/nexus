@@ -45,7 +45,7 @@ vi.mock("@/lib/socket-emitter", () => ({ emitAttendanceChanged: vi.fn() }))
 
 import { assertMayCorrect, attendanceAudience, claimConfirmation, McpAttendanceError } from "@/lib/mcp-attendance"
 import { hashToken } from "@/lib/mcp-token-auth"
-import { grantedScopes, resolveMcpIssuer } from "@/lib/mcp-oauth"
+import { grantedScopes, matchesRegisteredRedirectUriFromQuery, resolveMcpIssuer } from "@/lib/mcp-oauth"
 
 const WS = "ws-1"
 const ws = { id: WS, name: "Z", slug: "z" }
@@ -169,6 +169,14 @@ describe("OAuth scopes and issuer (lib/mcp-oauth.ts)", () => {
   it("attendance only when asked for; a write scope brings its read scope", () => {
     expect(grantedScopes("tasks:write attendance:write")).toEqual(["tasks:read", "tasks:write", "attendance:read", "attendance:write"])
     expect(grantedScopes("attendance:read")).toEqual(["attendance:read"])
+  })
+  it("a 127.0.0.1 callback still matches after Next.js rewrote it to localhost in the query; nothing else is loosened", () => {
+    const reg = ["http://127.0.0.1:8765/callback"]
+    expect(matchesRegisteredRedirectUriFromQuery("http://127.0.0.1:8765/callback", reg)).toBe(true)
+    expect(matchesRegisteredRedirectUriFromQuery("http://localhost:8765/callback", reg)).toBe(true)
+    expect(matchesRegisteredRedirectUriFromQuery("http://localhost:9999/callback", reg)).toBe(false)
+    expect(matchesRegisteredRedirectUriFromQuery("https://evil.example/callback", reg)).toBe(false)
+    expect(matchesRegisteredRedirectUriFromQuery("http://localhost/callback", ["https://claude.ai/api/mcp/auth_callback"])).toBe(false)
   })
   it("issuer: MCP_OAUTH_ISSUER, else NEXUS_PUBLIC_URL, else the production domain (never the retired patsgroup)", () => {
     expect(resolveMcpIssuer({ MCP_OAUTH_ISSUER: "https://dev.example:8443/", NEXUS_PUBLIC_URL: "https://x" })).toBe("https://dev.example:8443")
