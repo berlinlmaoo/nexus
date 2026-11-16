@@ -1,0 +1,403 @@
+import { noteAttendanceChanged } from "@/lib/attendance-broadcast"
+import { NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
+import {
+  getAttendanceWorkspaceContext,
+  getPrimaryAttendanceTeam,
+  parseDateOnlyToUtc,
+  resolveEffectiveAttendanceShift,
+  resolveShiftWindowAt,
+  formatAttendanceDateKey,
+  getAttendanceDate,
+} from "@/lib/attendance"
+import { cancelAttendancePenaltiesForDate, isAutoDeduction, lockAttendanceRequests } from "@/lib/attendance-absence"
+import { notifyAttendanceOverride } from "@/lib/attendance-review-notify"
+import { touchPresenceSoon } from "@/lib/presence"
+import {
+  OVERRIDE_EVIDENCE_MAX_BYTES,
+  OVERRIDE_EVIDENCE_SIZE_MESSAGE,
+  OVERRIDE_EVIDENCE_TYPE_MESSAGE,
+  evidenceLang,
+  isSupportedEvidenceFile,
+  overrideEvidenceKind,
+  resolveOverrideDayState,
+  type OverrideDayState,
+  type OverrideEvidenceKind,
+} from "@/lib/attendance-override-evidence"
+import path from "path"
+import { mkdir, unlink, writeFile } from "fs/promises"
+
+export type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
+
+// Evidence files live with the attendance requests' supporting documents (same folder, same /api/files URL,
+// same photo-or-PDF and 10 MB limits): a Sick/Permit override stores its file ON the request it creates.
+const EVIDENCE_DIR = path.join(process.cwd(), "public", "uploads", "attendance", "requests")
+const EVIDENCE_URL_PREFIX = "/api/files/attendance/requests/"
+
+export type OverrideBody = { userId?: string; date?: string; action?: string; note?: string; checkInAt?: string; checkOutAt?: string | null }
+
+/**
+ * The times a PRESENT override writes (the board's "Hadir" / the correction drawer), computed and NOT written:
+ * the first active office, the person's effective shift that day, and the check-in/out — the given ones, or the
+ * on-time shift window when omitted (`checkOutAt` key present: a time, or null for "check-in only"). Shared by the
+ * override below and the MCP preview (lib/mcp-attendance.ts), so what the preview shows is what the override writes.
+ */
+export async function resolveOverridePresentTimes(
+  workspaceId: string,
+  targetUserId: string,
+  date: Date,
+  body: Pick<OverrideBody, "checkInAt" | "checkOutAt">,
+): Promise<
+  | { ok: false; status: number; error: string }
+  | { ok: true; office: NonNullable<Awaited<ReturnType<typeof prisma.officeLocation.findFirst>>>; shift: Awaited<ReturnType<typeof resolveEffectiveAttendanceShift>>; checkInAt: Date; checkOutAt: Date | null }
+> {
+  // Mark the day as hadir ON-TIME. The record's times are aligned to the member's shift so the
+  // nightly cron (which recomputes lateness from checkInAt) can never re-apply a late penalty.
+  const office = await prisma.officeLocation.findFirst({ where: { workspaceId, isActive: true } })
+  if (!office) return { ok: false, status: 400, error: "Workspace belum punya office aktif." }
+  const shift = await resolveEffectiveAttendanceShift({ userId: targetUserId, workspaceId, office, date })
+  const { shiftStartAt, shiftEndAt } = resolveShiftWindowAt(date, office, shift)
+
+  // Optional custom times: an admin filling a MISSING record from the correction drawer (e.g. staff
+  // who couldn't check in during an outage) passes the exact times. Omitted → the on-time shift window
+  // (the board's "Hadir" button). Always marked ON_TIME + correctedAt so the nightly cron never
+  // re-applies a penalty for an admin-filled day.
+  const customIn = typeof body.checkInAt === "string" && body.checkInAt.trim() ? new Date(body.checkInAt) : null
+  if (customIn && Number.isNaN(customIn.getTime())) return { ok: false, status: 400, error: "Jam check-in tidak valid." }
+  const checkInAt = customIn ?? shiftStartAt
+  // checkOutAt key present → honor it (a time, or null for "check-in only"); absent → default shift end.
+  const hasOutKey = Object.prototype.hasOwnProperty.call(body, "checkOutAt")
+  let checkOutAt: Date | null = shiftEndAt
+  if (hasOutKey) {
+    checkOutAt = body.checkOutAt && String(body.checkOutAt).trim() ? new Date(body.checkOutAt as string) : null
+    if (checkOutAt && Number.isNaN(checkOutAt.getTime())) return { ok: false, status: 400, error: "Jam check-out tidak valid." }
+  }
+  if (checkOutAt && checkOutAt.getTime() < checkInAt.getTime()) return { ok: false, status: 400, error: "Check-out tidak boleh sebelum check-in." }
+  return { ok: true, office, shift, checkInAt, checkOutAt }
+}
+
+export const OVERRIDE_ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "PERMIT", "CLEAR_PENALTY"])
+
+// BoD status override from the crew streak board (POST /api/attendance/override; moved here verbatim 17 Nov 2026
+// so the MCP attendance correction runs exactly this code — lib/mcp-attendance.ts): rewrite one member-day to Hadir (on-time) /
+// Cuti / Sakit / Izin / Day off — with evidence where lib/attendance-override-evidence.ts asks for it — refunding every attendance XP penalty + restoring an auto-cut day-off
+// for that day — or just CLEAR_PENALTY (remove the punishment, change nothing else).
+// All actions are idempotent and audit-logged.
+export async function applyAttendanceOverride({
+  request: req,
+  session,
+  body,
+  evidence,
+  auditMetadata,
+}: {
+  request: NextRequest
+  /** The person making the change (web: their session; MCP: the token's owner). */
+  session: { user: { id: string; name?: string | null } }
+  body: OverrideBody | null
+  evidence: File | null
+  /** Extra keys on the audit row (the MCP server names the connection: "via Silk (MCP)"). */
+  auditMetadata?: Record<string, unknown>
+}): Promise<NextResponse> {
+  try {
+    const context = await getAttendanceWorkspaceContext(session.user.id)
+    if (!context.workspace?.id || !context.canManageAttendance) {
+      return NextResponse.json({ error: "Forbidden — khusus direksi." }, { status: 403 })
+    }
+    const workspaceId = context.workspace.id
+
+    const targetUserId = (body?.userId ?? "").trim()
+    const action = (body?.action ?? "").toUpperCase() as OverrideAction
+    if (!targetUserId || !body?.date || !OVERRIDE_ACTIONS.has(action)) {
+      return NextResponse.json({ error: "userId, date (YYYY-MM-DD), dan action (PRESENT|LEAVE|SICK|DAY_OFF|PERMIT|CLEAR_PENALTY) wajib diisi." }, { status: 400 })
+    }
+
+    const date = parseDateOnlyToUtc(body.date)
+    if (isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Format tanggal tidak valid (YYYY-MM-DD)." }, { status: 400 })
+    }
+    if (date.getTime() > getAttendanceDate().getTime()) {
+      return NextResponse.json({ error: "Tidak bisa mengubah status tanggal di masa depan." }, { status: 400 })
+    }
+    const dateKey = formatAttendanceDateKey(date)
+
+    const membership = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
+      select: { userId: true },
+    })
+    if (!membership) {
+      // Someone offboarded (lib/former-members.ts) can still have the days up to their last working day
+      // put right — those are the days in their final recap. Nothing after it.
+      const former = await prisma.formerMember.findUnique({
+        where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
+        select: { leftAt: true },
+      })
+      if (!former) {
+        return NextResponse.json({ error: "User bukan anggota workspace ini." }, { status: 404 })
+      }
+      if (date.getTime() > former.leftAt.getTime()) {
+        return NextResponse.json({ error: "Orang ini sudah keluar sebelum tanggal itu." }, { status: 400 })
+      }
+    }
+
+    // ── Evidence (owner, 20 Oct 2026) ────────────────────────────────────────────────────────────
+    // → Sick asks for a sick note; → Permit asks for a supporting file; → Present asks for one when the day
+    // was Permit, TK or had nothing recorded. OPTIONAL (owner, 12:50): a change without it is saved and
+    // flagged "no evidence attached" (evidenceMissing) on the request/record and in the audit, for OAA.
+    // Every client, old apps included, so there is nothing to gate on X-Nexus-Client. A file that is
+    // attached is checked (photo or PDF, ≤ 10 MB) BEFORE anything is written, so a refusal changes nothing.
+    const lang = evidenceLang(req.headers.get("accept-language"))
+    let fromState: OverrideDayState | null = null
+    let evidenceKind: OverrideEvidenceKind | null = null
+    if (action === "PRESENT" || action === "SICK" || action === "PERMIT") {
+      const [dayRecord, dayRequests] = await Promise.all([
+        prisma.attendanceRecord.findUnique({
+          where: { userId_workspaceId_attendanceDate: { userId: targetUserId, workspaceId, attendanceDate: date } },
+          select: { checkInAt: true },
+        }),
+        prisma.attendanceRequest.findMany({
+          where: { userId: targetUserId, workspaceId, status: "APPROVED", startDate: { lte: date }, endDate: { gte: date } },
+          select: { type: true, reason: true, reviewedById: true, approvalSource: true },
+        }),
+      ])
+      fromState = resolveOverrideDayState({
+        hasCheckIn: Boolean(dayRecord?.checkInAt),
+        approvedTypes: dayRequests.filter((r) => !isAutoDeduction(r)).map((r) => r.type),
+        pastWorkday: date.getTime() < getAttendanceDate().getTime(),
+      })
+      evidenceKind = overrideEvidenceKind(action, fromState)
+    }
+    if (evidence) {
+      if (!isSupportedEvidenceFile(evidence.name, evidence.type)) {
+        return NextResponse.json({ error: OVERRIDE_EVIDENCE_TYPE_MESSAGE[lang], code: "DOCUMENT_TYPE", messages: OVERRIDE_EVIDENCE_TYPE_MESSAGE }, { status: 400 })
+      }
+      if (evidence.size > OVERRIDE_EVIDENCE_MAX_BYTES) {
+        return NextResponse.json({ error: OVERRIDE_EVIDENCE_SIZE_MESSAGE[lang], code: "DOCUMENT_TOO_LARGE", messages: OVERRIDE_EVIDENCE_SIZE_MESSAGE }, { status: 400 })
+      }
+    }
+    const evidenceMissing = Boolean(evidenceKind && !evidence)
+    // Stored only where the rule asks for it (an extra file on a Leave / Day off is not kept).
+    let evidenceUrl: string | null = null
+    let evidenceName: string | null = null
+    if (evidence && evidenceKind) {
+      await mkdir(EVIDENCE_DIR, { recursive: true })
+      const ext = path.extname(evidence.name).replace(/[^.a-z0-9]/gi, "").slice(0, 8)
+      const safeName = `override-${targetUserId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
+      await writeFile(path.join(EVIDENCE_DIR, safeName), Buffer.from(await evidence.arrayBuffer()))
+      evidenceUrl = EVIDENCE_URL_PREFIX + safeName
+      evidenceName = evidence.name.slice(0, 200) || safeName
+    }
+    const dropEvidenceFile = async () => {
+      if (evidenceUrl) await unlink(path.join(EVIDENCE_DIR, path.basename(evidenceUrl))).catch(() => {})
+    }
+    const evidenceMeta = { from: fromState, evidenceAsked: evidenceKind, evidenceUrl, evidenceName, evidenceMissing }
+    const evidenceOut = { from: fromState, evidenceAsked: evidenceKind, evidence: evidenceUrl ? { url: evidenceUrl, name: evidenceName } : null, evidenceMissing }
+
+    // Every action wipes the day's penalties: refunds late/no-checkout/alpha XP and removes the
+    // cron's auto-deducted day-off (quota restored).
+    // CLEAR_PENALTY: without a waiver the refund would NOT stick: the nightly cron re-derives penalties
+    // for every day in its window and would re-cut the XP/day-off. The waiver makes the pardon permanent
+    // (crons + check-in all skip penalty work for a waived member-day) without touching the status. It is
+    // written in the refund's own transaction (race audit H2): written after it, the per-minute accrual
+    // could re-penalise the day in between.
+    const refunded = await cancelAttendancePenaltiesForDate(targetUserId, workspaceId, date, dateKey, action === "CLEAR_PENALTY" ? { waive: "always" } : undefined)
+
+    if (action === "CLEAR_PENALTY") {
+      await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, auditMetadata, { refunded })
+      notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
+        .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))
+      touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
+      return NextResponse.json({ ok: true, action, date: dateKey, refunded })
+    }
+
+    if (action === "PRESENT") {
+      // Mark the day as hadir ON-TIME. The record's times are aligned to the member's shift so the
+      // nightly cron (which recomputes lateness from checkInAt) can never re-apply a late penalty.
+      const times = await resolveOverridePresentTimes(workspaceId, targetUserId, date, body)
+      if (!times.ok) { await dropEvidenceFile(); return NextResponse.json({ error: times.error }, { status: times.status }) }
+      const { shift, office, checkInAt, checkOutAt } = times
+
+      const correction = {
+        checkInAt,
+        checkOutAt,
+        checkInStatus: "ON_TIME" as const,
+        checkOutStatus: (checkOutAt ? "ON_TIME" : null) as "ON_TIME" | null,
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
+        workedMinutes: checkOutAt ? Math.max(0, Math.round((checkOutAt.getTime() - checkInAt.getTime()) / 60000)) : 0,
+        status: (checkOutAt ? "COMPLETED" : "CHECKED_IN") as "COMPLETED" | "CHECKED_IN",
+        checkOutApproval: null,
+        effectiveShiftSource: shift.source,
+        effectiveTeamId: shift.teamId,
+        effectiveTeamName: shift.teamName,
+        effectiveShiftStartTime: shift.shiftStartTime,
+        effectiveShiftEndTime: shift.shiftEndTime,
+        correctedAt: new Date(),
+        correctedById: session.user.id,
+        correctionReason: (body.note ?? "").trim() || "Diisi manual oleh direksi (staff gagal absen — sistem error).",
+        // A new piece of evidence replaces the old one; a change that needed none leaves what is there.
+        ...(evidenceUrl ? { correctionEvidenceUrl: evidenceUrl, correctionEvidenceName: evidenceName, correctionEvidenceMissing: false } : {}),
+        ...(evidenceMissing ? { correctionEvidenceMissing: true } : {}),
+      }
+
+      await prisma.attendanceRecord.upsert({
+        where: { userId_workspaceId_attendanceDate: { userId: targetUserId, workspaceId, attendanceDate: date } },
+        update: correction,
+        create: {
+          userId: targetUserId,
+          workspaceId,
+          attendanceDate: date,
+          officeLocationId: office.id,
+          ...correction,
+        },
+      })
+
+      // The day is now PRESENT — a leftover covering request would hide it in the report. Cancel any
+      // PENDING/APPROVED request covering ONLY this single day (multi-day requests are left alone and
+      // reported back so the BoD can handle them deliberately).
+      const covering = await prisma.attendanceRequest.findMany({
+        where: { userId: targetUserId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
+        select: { id: true, type: true, startDate: true, endDate: true, reason: true, reviewedById: true, approvalSource: true },
+      })
+      const singleDay = covering.filter((r) => r.startDate.getTime() === r.endDate.getTime())
+      const multiDay = covering.length - singleDay.length
+      if (singleDay.length > 0) {
+        await prisma.attendanceRequest.updateMany({
+          where: { id: { in: singleDay.map((r) => r.id) } },
+          data: { status: "REJECTED", reviewNote: "Dibatalkan: hari ini diubah jadi Hadir oleh direksi.", reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+        })
+      }
+
+      await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, auditMetadata, { refunded, canceledRequests: singleDay.length, ...evidenceMeta })
+      notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "PRESENT", note: (body?.note ?? "").trim() || null })
+        .catch((e) => console.error("notifyAttendanceOverride (present) failed", e))
+      touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
+      return NextResponse.json({ ok: true, action, date: dateKey, refunded, canceledRequests: singleDay.length, multiDayRequestsLeft: multiDay, ...evidenceOut })
+    }
+
+    // LEAVE / SICK / DAY_OFF → an APPROVED covering request for that single day. The crons treat a
+    // reviewer-stamped request as a real covering → skip + keep penalties refunded.
+    //
+    // Read-decide-write under the person's request lock (race audit H3): a double click, or a status
+    // change racing a request being filed, used to read "nothing covers this day" twice and create two.
+    const primary = await getPrimaryAttendanceTeam(targetUserId, workspaceId)
+    const outcome = await prisma.$transaction(async (tx) => {
+      await lockAttendanceRequests(tx, targetUserId)
+      const covering = await tx.attendanceRequest.findMany({
+        where: { userId: targetUserId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
+        select: { id: true, type: true, status: true, startDate: true, endDate: true, reason: true, reviewedById: true, approvalSource: true, supportingDocumentUrl: true },
+      })
+      const real = covering.filter((r) => !isAutoDeduction(r))
+      // A different-type request covering this day: cancel it if single-day (we're replacing the status);
+      // refuse on multi-day so a week's leave isn't silently mangled from a one-day board click. Checked
+      // FIRST so a refusal makes no changes.
+      const conflicting = real.filter((r) => r.type !== action || r.status !== "APPROVED")
+      const multiDayConflict = conflicting.find((r) => r.startDate.getTime() !== r.endDate.getTime())
+      if (multiDayConflict) return { kind: "multiDay" as const, type: multiDayConflict.type }
+
+      // Close any OPEN (no check-out) attendance record for this day. A leave/day-off must not leave a
+      // dangling "pending check-out" — the staff can't check out (the day is now covered by the request)
+      // AND the open record blocks their next day's check-in. Runs even when the day is ALREADY this status
+      // (the common case: BoD changed the status mid-shift, and we're now cleaning up the stuck record).
+      // Not for PERMIT (owner, 28 Sep 2026): a permit is a working day elsewhere, so a check-in already made
+      // that day is part of it and stays.
+      const closed = action === "PERMIT"
+        ? { count: 0 }
+        : await tx.attendanceRecord.deleteMany({
+            where: { userId: targetUserId, workspaceId, attendanceDate: date, checkOutAt: null },
+          })
+
+      const sameTypeApproved = real.find((r) => r.type === action && r.status === "APPROVED")
+      if (sameTypeApproved) {
+        // Already this status: the evidence still belongs on it when the request has none yet.
+        if (evidenceUrl && !sameTypeApproved.supportingDocumentUrl) {
+          await tx.attendanceRequest.update({ where: { id: sameTypeApproved.id }, data: { supportingDocumentUrl: evidenceUrl, supportingDocumentName: evidenceName, evidenceMissing: false } })
+          return { kind: "already" as const, closed, evidenceAttached: true }
+        }
+        return { kind: "already" as const, closed, evidenceAttached: false }
+      }
+
+      if (conflicting.length > 0) {
+        await tx.attendanceRequest.updateMany({
+          where: { id: { in: conflicting.map((r) => r.id) } },
+          data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh direksi dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+        })
+      }
+
+      // NOTE: a DAY_OFF created here intentionally BYPASSES the monthly quota cap — same policy as a
+      // BoD grant (isGrant) in the requests route. The BoD is explicitly rewriting the day's status.
+      await tx.attendanceRequest.create({
+        data: {
+          userId: targetUserId,
+          workspaceId,
+          teamId: primary?.teamId ?? null,
+          type: action,
+          status: "APPROVED",
+          startDate: date,
+          endDate: date,
+          reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh direksi dari papan absensi.`,
+          reviewNote: "Diubah oleh direksi dari papan absensi.",
+          approvalSource: "ADMIN",
+          reviewedAt: new Date(),
+          reviewedById: session.user.id,
+          supportingDocumentUrl: evidenceUrl,
+          supportingDocumentName: evidenceName,
+          evidenceMissing,
+        },
+      })
+      return { kind: "created" as const, closed, conflicting }
+    })
+
+    if (outcome.kind === "multiDay") {
+      await dropEvidenceFile()
+      return NextResponse.json(
+        { error: `Tanggal ini bagian dari request ${outcome.type} multi-hari — atur request itu dulu di bagian Requests.` },
+        { status: 409 },
+      )
+    }
+    const { closed } = outcome
+    if (outcome.kind === "already") {
+      if (!outcome.evidenceAttached) await dropEvidenceFile()
+      const kept = outcome.evidenceAttached
+      await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, auditMetadata, { refunded, alreadyCovered: true, closedAttendance: closed.count, ...evidenceMeta, evidenceUrl: kept ? evidenceUrl : null, evidenceName: kept ? evidenceName : null, evidenceMissing: false })
+      touchPresenceSoon(targetUserId)
+      noteAttendanceChanged(targetUserId, "override", null, dateKey)
+      return NextResponse.json({ ok: true, action, date: dateKey, refunded, alreadyCovered: true, closedAttendance: closed.count, ...evidenceOut, evidence: kept ? evidenceOut.evidence : null, evidenceMissing: false })
+    }
+    const { conflicting } = outcome
+
+    await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, auditMetadata, { refunded, replacedRequests: conflicting.length, closedAttendance: closed.count, ...evidenceMeta })
+    notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })
+      .catch((e) => console.error("notifyAttendanceOverride (status) failed", e))
+    touchPresenceSoon(targetUserId)
+    noteAttendanceChanged(targetUserId, "override", null, dateKey)
+    return NextResponse.json({ ok: true, action, date: dateKey, refunded, replacedRequests: conflicting.length, closedAttendance: closed.count, ...evidenceOut })
+  } catch (error) {
+    console.error("attendance override error:", error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
+  }
+}
+
+async function logOverride(
+  req: NextRequest,
+  adminUserId: string,
+  workspaceId: string,
+  targetUserId: string,
+  dateKey: string,
+  action: string,
+  auditMetadata: Record<string, unknown> | undefined,
+  metadata: Record<string, unknown>,
+) {
+  await logAudit({
+    action: "attendance_status_override",
+    entityType: "attendance_day",
+    entityId: `${targetUserId}:${dateKey}`,
+    entityName: `override:${action}:${dateKey}`,
+    userId: adminUserId,
+    request: req,
+    metadata: { workspaceId, targetUserId, date: dateKey, override: action, ...metadata, ...(auditMetadata ?? {}) },
+  })
+}
+

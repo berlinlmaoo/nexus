@@ -1,6 +1,6 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ShieldCheck, Check, X, Loader2, ListChecks, Eye, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Check, X, Loader2, ListChecks, Eye, AlertTriangle, CalendarCheck } from "lucide-react";
 import nexusLogo from "@/assets/nexus-logo.png";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -47,7 +47,7 @@ function OAuthAuthorizePage() {
   const loadInfo = async () => {
     if (!s.client_id || !s.redirect_uri) return;
     try {
-      const data = await nexusApi.oauthAuthorizeInfo({ client_id: s.client_id, redirect_uri: s.redirect_uri });
+      const data = await nexusApi.oauthAuthorizeInfo({ client_id: s.client_id, redirect_uri: s.redirect_uri, scope: s.scope });
       setInfo(data);
       setPhase("consent");
     } catch (err) {
@@ -103,6 +103,8 @@ function OAuthAuthorizePage() {
         code_challenge_method: s.code_challenge_method || "S256",
         state: s.state,
         resource: s.resource,
+        // The same scope the consent screen listed (GET …/info): attendance only when the app asked for it.
+        scope: s.scope,
         approve,
       });
       // Hard-navigate back to the client (Claude). redirectTo is server-built from the *registered* uri.
@@ -169,10 +171,12 @@ function OAuthAuthorizePage() {
             <div className="rounded-2xl border border-border bg-white/60 dark:bg-card/90 p-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("It will be allowed to:")}</p>
               <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("View the projects and tasks you have access to")}</li>
-                <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("Create and edit tasks (move section, status, assignee and so on)")}</li>
+                {info.scopes.includes("tasks:read") && <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("View the projects and tasks you have access to")}</li>}
+                {info.scopes.includes("tasks:write") && <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("Create and edit tasks (move section, status, assignee and so on)")}</li>}
+                {info.scopes.includes("attendance:read") && <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /> {t("View the attendance of the people you approve")}</li>}
+                {info.scopes.includes("attendance:write") && <li className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /> {t("Correct their attendance, each time only after you confirm the before/after")}</li>}
               </ul>
-              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{t("Claude acts as you, with exactly the same access you have. It can't touch XP, day off, attendance or admin settings.")}</p>
+              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{info.scopes.some((x) => x.startsWith("attendance:")) ? t("The app acts as you, with exactly the same access you have. It can't touch XP, day off quota or admin settings directly.") : t("Claude acts as you, with exactly the same access you have. It can't touch XP, day off, attendance or admin settings.")}</p>
             </div>
 
             {info.redirectHost && (

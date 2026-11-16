@@ -57,14 +57,14 @@ function issueTokens() {
   }
 }
 
-function tokenResponse(accessToken: string, refreshToken: string) {
+function tokenResponse(accessToken: string, refreshToken: string, scopes: string[]) {
   return NextResponse.json(
     {
       access_token: accessToken,
       token_type: "Bearer",
       expires_in: ACCESS_TTL_S,
       refresh_token: refreshToken,
-      scope: MCP_SCOPES.join(" "),
+      scope: scopes.join(" "),
     },
     { status: 200, headers: { ...CORS, "Cache-Control": "no-store", Pragma: "no-cache" } }
   )
@@ -113,11 +113,12 @@ export async function POST(request: NextRequest) {
     if (consumed.count !== 1) return oauthError("invalid_grant", "Code already used")
 
     const t = issueTokens()
+    const scopes = authCode.scopes.length ? authCode.scopes : MCP_SCOPES
     await prisma.apiToken.create({
       data: {
         name: `${client.clientName} (OAuth)`,
         tokenHash: t.access.tokenHash,
-        scopes: authCode.scopes.length ? authCode.scopes : MCP_SCOPES,
+        scopes,
         expiresAt: t.accessExpiresAt,
         refreshTokenHash: t.refresh.tokenHash,
         refreshExpiresAt: t.refreshExpiresAt,
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       },
     })
     reapAuthCodes()
-    return tokenResponse(t.access.token, t.refresh.token)
+    return tokenResponse(t.access.token, t.refresh.token, scopes)
   }
 
   // ---- refresh_token grant (rotating, with reuse detection) ----
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
         lastUsedAt: new Date(),
       },
     })
-    return tokenResponse(t.access.token, t.refresh.token)
+    return tokenResponse(t.access.token, t.refresh.token, existing.scopes.length ? existing.scopes : MCP_SCOPES)
   }
 
   return oauthError("unsupported_grant_type", `grant_type "${grantType}" not supported`)

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkRateLimitByKey, rateLimitResponse } from "@/lib/rate-limit"
-import { isRegisteredRedirectUri, MCP_SCOPES } from "@/lib/mcp-oauth"
+import { isRegisteredRedirectUri, grantedScopes } from "@/lib/mcp-oauth"
 
 // Backing data for the SPA consent page (/oauth/authorize). Same-origin, cookie-authenticated.
 // Returns 401 when not logged in (the page then shows an inline login), 400 for a bad client/redirect.
@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     clientName: client.clientName,
     redirectHost, // shown on consent so a user can spot a phishing client whose code goes to a foreign host
     user: { name: session.user.name ?? null, email: session.user.email ?? null },
-    scopes: MCP_SCOPES,
+    // Exactly what Allow will grant: the client's requested `scope` (the consent page passes it on), else tasks.
+    scopes: grantedScopes(sp.get("scope")),
   })
 }

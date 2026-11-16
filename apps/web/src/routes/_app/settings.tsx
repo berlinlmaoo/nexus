@@ -710,7 +710,7 @@ function NotificationsSection() {
 // Was a static mock with two made-up rules and a dead "+ New rule" button (fixed 12 Oct 2026). Automations
 // belong to a project; this points there.
 // The server this page is on (dev, prod, a LAN shortcut), not a hard-coded prod address (QA B19).
-const MCP_URL = typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "https://nexus.patsgroup.id/api/mcp";
+const MCP_URL = typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "https://nexus.znetworks.id/api/mcp";
 
 function CopyBox({ label, value, mono = true }: { label?: string; value: string; mono?: boolean }) {
   const { t } = useLang();
@@ -826,15 +826,24 @@ function McpTokensSection() {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(90);
+  // Attendance scopes (17 Nov 2026): off unless ticked. Read the people you approve + corrections that need your confirmation.
+  const [attendance, setAttendance] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null); // plaintext token, shown once
   const list = useQuery({ queryKey: ["nexus", "mcp-tokens"], queryFn: nexusApi.mcpTokens, retry: false });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "mcp-tokens"] });
   const create = useMutation({
-    mutationFn: () => nexusApi.createMcpToken({ name: name.trim() || undefined, expiresInDays }),
-    onSuccess: (r) => { setFresh(r.token); setName(""); invalidate(); },
+    mutationFn: () => nexusApi.createMcpToken({ name: name.trim() || undefined, expiresInDays, scopes: attendance ? ["tasks:write", "attendance:write"] : ["tasks:write"] }),
+    onSuccess: (r) => { setFresh(r.token); setName(""); setAttendance(false); invalidate(); },
   });
   const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeMcpToken(id), onSuccess: invalidate, onError: (e) => toastFailure(t("Couldn't revoke the token"), e) });
   const rows = list.data?.tokens ?? [];
+  const apps = list.data?.apps ?? [];
+  const scopeChips = (scopes?: string[]) => (
+    <span className="inline-flex gap-1">
+      {(scopes ?? []).some((x) => x.startsWith("tasks:")) && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{t("Tasks")}</span>}
+      {(scopes ?? []).some((x) => x.startsWith("attendance:")) && <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">{t("Attendance")}</span>}
+    </span>
+  );
   const connectCmd = fresh ? `claude mcp add --transport http nexus ${MCP_URL} --header "Authorization: Bearer ${fresh}"` : "";
 
   return (
@@ -844,7 +853,7 @@ function McpTokensSection() {
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10"><Sparkles className="h-5 w-5 text-primary" /></div>
           <div>
             <h2 className="font-semibold">{t("Connect Claude to NEXUS")}</h2>
-            <p className="text-xs text-muted-foreground">{rich(t("Generate a personal token so Claude (Claude Code or the API) can read and manage **tasks** for you. The token acts as you, with the same access you already have. It **can't** touch XP, day off, attendance or any admin-only setting."))}</p>
+            <p className="text-xs text-muted-foreground">{rich(t("Generate a personal token so Claude or another assistant can read and manage **tasks** for you. The token acts as you, with the same access you already have. **Attendance** stays off unless you tick it when you create the token. It **can't** touch XP, day off quota or any admin-only setting directly."))}</p>
           </div>
         </div>
       </div>
@@ -869,6 +878,13 @@ function McpTokensSection() {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Label (e.g. My laptop)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           <SelectPicker variant="field" value={String(expiresInDays)} onChange={(v) => setExpiresInDays(Number(v))} options={[30, 90, 180, 365].map((d) => ({ value: String(d), label: t("Expires in {n} days", { n: d }) }))} className="px-3 py-2 font-semibold" />
         </div>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3">
+          <input type="checkbox" checked={attendance} onChange={(e) => setAttendance(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-ring" />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">{t("Attendance access")}</span>
+            <span className="block text-xs text-muted-foreground">{t("Read the attendance of the people you approve, and correct a day. Every correction shows a before/after first and only happens after you confirm it.")}</span>
+          </span>
+        </label>
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} {t("Generate token")}
         </button>
@@ -887,6 +903,7 @@ function McpTokensSection() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 truncate text-sm font-medium">
                     {tok.name}
+                    {scopeChips(tok.scopes)}
                     {expired && <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive">{t("Expired")}</span>}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
@@ -899,6 +916,26 @@ function McpTokensSection() {
           })}
         </div>
       </div>
+
+      {apps.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
+          <h2 className="font-semibold">{t("Connected apps")}</h2>
+          <p className="text-xs text-muted-foreground">{t("Apps you allowed through the NEXUS sign-in page. Disconnect one and it loses access right away.")}</p>
+          <div className="space-y-2">
+            {apps.map((app) => (
+              <div key={app.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 truncate text-sm font-medium">{app.name} {scopeChips(app.scopes)}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {t("Connected {date}", { date: fmtDay(app.createdAt, locale) })} · {app.lastUsedAt ? t("last used {date}", { date: fmtDay(app.lastUsedAt, locale) }) : t("never used")}
+                  </div>
+                </div>
+                <button onClick={() => { if (confirm(t("Disconnect “{name}”? It loses access right away.", { name: app.name }))) revoke.mutate(app.id); }} className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">{t("Disconnect")}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
