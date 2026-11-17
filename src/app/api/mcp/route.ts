@@ -14,6 +14,7 @@ import { applyTaskCreate } from "@/lib/task-create"
 import { applyTaskUpdate } from "@/lib/task-update"
 import { verifyMcpToken, mcpUserId, mcpCaller, type McpCaller } from "@/lib/mcp-token-auth"
 import { MCP_ISSUER } from "@/lib/mcp-oauth"
+import { gideonGetCalendar } from "@/lib/gideon-calendar-tools"
 import {
   McpAttendanceError,
   getCorrectionStatus,
@@ -254,6 +255,30 @@ const handler = createMcpHandler(
           auditMetadata: viaMeta(caller),
         })
         return fromWeb(res, (t) => ({ updated: true, task: { id: t.id, title: t.title, status: t.status, priority: t.priority, taskListId: t.taskListId } }))
+      },
+    )
+
+    // ── Calendar (owner, 17 Nov 2026): the Master Calendar as the web shows it to this person, through GIDEON's
+    // own get_calendar (lib/gideon-calendar-tools.ts): same visibility, private projects masked. ──────────
+    server.tool(
+      "get_calendar",
+      "The NEXUS Calendar (/calendar): tasks due on each day with their project, status, priority and the people doing them, plus public holidays. `date` = one day; or `from`/`to` (YYYY-MM-DD, at most 62 days; default this week). `mine: true` = only your own tasks; `division` = one division of the IP & Division Chart (e.g. \"Multimedia\"); `projectId` = one project.",
+      {
+        date: z.string().optional().describe("YYYY-MM-DD"),
+        from: z.string().optional().describe("YYYY-MM-DD"),
+        to: z.string().optional().describe("YYYY-MM-DD"),
+        mine: z.boolean().optional(),
+        division: z.string().optional(),
+        projectId: z.string().optional(),
+      },
+      async (args: Record<string, unknown>, extra: ToolExtra) => {
+        const userId = mcpUserId(extra)
+        if (!hasScope(extra, "tasks:read")) return forbidden("Forbidden: this connection has no tasks:read scope.")
+        try {
+          return ok(await gideonGetCalendar(userId, args))
+        } catch (e) {
+          return { content: [{ type: "text" as const, text: e instanceof Error ? e.message : String(e) }], isError: true }
+        }
       },
     )
 
