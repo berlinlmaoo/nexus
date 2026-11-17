@@ -1,9 +1,10 @@
 import type React from "react";
+import { useWebAppConfig } from "@/lib/meetings";
 import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
-import { AndroidAppCheckInNote, IosAppCheckInCard, browserMayTakeAttendance, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
+import { AndroidAppCheckInNote, IosAppCheckInCard, browserMayTakeAttendance, isIosBrowser, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -2334,6 +2335,10 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   // Only an Android phone's browser takes attendance (owner, 2 Oct 2026); iPhone/iPad and laptops are
   // shown the card up front, and the server's 403 (USE_IOS_APP / USE_PHONE_APP) switches to it too.
   const [iosOnly, setIosOnly] = useState(() => !browserMayTakeAttendance());
+  // iPhone/iPad browsers take attendance again while the server's allowIosBrowserAttendance flag is on (owner, 17 Nov
+  // 2026: the app can't be downloaded); a 403 from the server still switches back to the card.
+  const iosWebAllowed = isIosBrowser() && useWebAppConfig().data?.flags?.allowIosBrowserAttendance === true;
+  useEffect(() => { if (iosWebAllowed) setIosOnly(false); }, [iosWebAllowed]);
 
   // The selfie comes from the face check (SelfieCapture opens LivenessCapture, and falls back to the
   // plain camera / file picker only where the face check cannot run). Opened by the one button.

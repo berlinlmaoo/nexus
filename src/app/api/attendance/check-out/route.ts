@@ -13,7 +13,7 @@ import { isAutoDeduction, hasAttendanceWaiver, startFloor, isOutageDay } from "@
 import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { browserAttendanceRefusal } from "@/lib/attendance-outside"
-import { androidBrowserAttendanceBlocked } from "@/lib/app-config"
+import { androidBrowserAttendanceBlocked, iosBrowserAttendanceAllowed } from "@/lib/app-config"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     // is refused, an Android browser only once the remote-config flag blockAndroidBrowserAttendance is on.
     // Someone checked in from a browser earlier closes the day from the app on their phone.
     {
-      const refusal = await browserAttendanceRefusal(request.headers.get("user-agent"), request.headers.get("x-nexus-client"), androidBrowserAttendanceBlocked)
+      const refusal = await browserAttendanceRefusal(request.headers.get("user-agent"), request.headers.get("x-nexus-client"), androidBrowserAttendanceBlocked, iosBrowserAttendanceAllowed)
       if (refusal) return NextResponse.json(refusal, { status: 403 })
     }
 

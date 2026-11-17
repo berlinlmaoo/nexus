@@ -32,6 +32,10 @@ export type AppConfig = {
     /** Check-in/out refused from an Android phone's BROWSER (owner, 16 Oct 2026). Off until the big-release
      *  Android APK ships; desktop and iPhone/iPad browsers are always refused. The apps may ignore it. */
     blockAndroidBrowserAttendance: boolean
+    /** Check-in/out allowed again from an iPhone/iPad BROWSER (owner, 17 Nov 2026): the App Store app can't be
+     *  downloaded for now, and staff who reset their phone have no app. Off = iPhone/iPad browsers are refused
+     *  (USE_IOS_APP) as since 16 Oct. Laptop/desktop browsers stay refused either way. */
+    allowIosBrowserAttendance: boolean
     /** GIDEON credits phase 2 (owner, 18 Oct 2026). Off = every answer is recorded and shown, nothing is
      *  refused. On = a person out of credits is answered by GIDEON Aphrodite (max 30 a day), then refused;
      *  GIDEON Model 0 stays free. BoD / One Above All are unlimited by default. */
@@ -101,7 +105,7 @@ const GIDEON_TOOL_FLAG_DEFAULTS = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, web017Launch: false, webPipelineV8: false, ...GIDEON_TOOL_FLAG_DEFAULTS },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false, allowIosBrowserAttendance: false, gideonCreditsEnforced: false, meetingNotesEnabled: true, gideonMemory: true, presenceStatus: true, web017Launch: false, webPipelineV8: false, ...GIDEON_TOOL_FLAG_DEFAULTS },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60, meetingAudioRetentionDays: 30, meetingMaxMinutes: 180, meetingMaxMB: 500 },
   texts: {
     en: {
@@ -154,6 +158,11 @@ export async function getAppConfig(platform: "ios" | "android" | "web" | null): 
   let cfg = merge(APP_CONFIG_DEFAULTS, shared)
   if (platform && platforms?.[platform]) cfg = merge(cfg, platforms[platform])
   return { ...cfg, updatedAt: null }
+}
+
+/** flags.allowIosBrowserAttendance as stored (shared block, default off); a settings read error keeps it off. */
+export async function iosBrowserAttendanceAllowed(): Promise<boolean> {
+  return (await getAppConfig(null).catch(() => null))?.flags.allowIosBrowserAttendance === true
 }
 
 /** flags.blockAndroidBrowserAttendance as stored (shared block, default off); a settings read error keeps it off. */

@@ -618,8 +618,10 @@ export async function browserAttendanceRefusal(
   userAgent: string | null | undefined,
   clientHeader: string | null | undefined,
   androidBlocked: () => Promise<boolean>,
+  iosAllowed: () => Promise<boolean> = async () => false,
 ): Promise<{ error: string; code: string } | null> {
-  if (isIosBrowserWithoutApp(userAgent, clientHeader)) return USE_IOS_APP_ERROR
+  // iPhone/iPad browsers again while flags.allowIosBrowserAttendance is on (owner, 17 Nov 2026: the app can't be downloaded)
+  if (isIosBrowserWithoutApp(userAgent, clientHeader) && !(await iosAllowed())) return USE_IOS_APP_ERROR
   if (isDesktopBrowser(userAgent, clientHeader)) return USE_PHONE_APP_ERROR
   // The Mac app (Catalyst) is not for attendance either (owner, 16 Oct 2026): a laptop has no reliable
   // location. Builds from 12 Oct name the device in their user agent ("NEXUS/<build> (Macintosh; …)");

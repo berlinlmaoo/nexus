@@ -15,7 +15,7 @@ import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
 import { attendanceClientOf, browserAttendanceRefusal } from "@/lib/attendance-outside"
-import { androidBrowserAttendanceBlocked } from "@/lib/app-config"
+import { androidBrowserAttendanceBlocked, iosBrowserAttendanceAllowed } from "@/lib/app-config"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { touchPresenceSoon } from "@/lib/presence"
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     // (header or legacy NEXUS/<build> UA) passes — see browserAttendanceRefusal in lib/attendance-outside.ts.
     const userAgent = request.headers.get("user-agent")
     const clientHeader = request.headers.get("x-nexus-client")
-    const refusal = await browserAttendanceRefusal(userAgent, clientHeader, androidBrowserAttendanceBlocked)
+    const refusal = await browserAttendanceRefusal(userAgent, clientHeader, androidBrowserAttendanceBlocked, iosBrowserAttendanceAllowed)
     if (refusal) return NextResponse.json(refusal, { status: 403 })
     const checkInClient = attendanceClientOf(userAgent, clientHeader)
 

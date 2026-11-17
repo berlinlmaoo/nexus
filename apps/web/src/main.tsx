@@ -8,6 +8,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { isAuthError, nexusApi } from "./lib/nexus-api";
 import "./styles.css";
 
+// Opened over http:// (owner, 17 Nov 2026): the sign-in cookie is Secure, so move to https first.
+if (typeof location !== "undefined" && location.protocol === "http:" && /(^|\.)znetworks\.id$/.test(location.hostname)) {
+  location.replace("https:" + location.href.slice(5));
+}
+
+
 installMonthAbbrFix();
 const router = getRouter();
 

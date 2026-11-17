@@ -1,3 +1,4 @@
+import { useWebAppConfig } from "@/lib/meetings";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -10,7 +11,7 @@ import { ApiError, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload,
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { recordPlace } from "@/lib/attendance-place";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
-import { IosAppCheckInCard, browserMayTakeAttendance, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
+import { IosAppCheckInCard, browserMayTakeAttendance, isIosBrowser, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, whereHint, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 
 type TodayData = NexusAttendanceToday | null;
@@ -51,6 +52,10 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
   // Only an Android phone's browser takes attendance (owner, 2 Oct 2026); iPhone/iPad and laptops are
   // shown the card up front, and the server's 403 (USE_IOS_APP / USE_PHONE_APP) switches to it too.
   const [iosOnly, setIosOnly] = useState(() => !browserMayTakeAttendance());
+  // iPhone/iPad browsers take attendance again while the server's allowIosBrowserAttendance flag is on (owner, 17 Nov
+  // 2026: the app can't be downloaded); a 403 from the server still switches back to the card.
+  const iosWebAllowed = isIosBrowser() && useWebAppConfig().data?.flags?.allowIosBrowserAttendance === true;
+  useEffect(() => { if (iosWebAllowed) setIosOnly(false); }, [iosWebAllowed]);
   const [locating, setLocating] = useState(false);
   // Offsite checkout (outside the geofence): captured attempt + the reason prompt.
   const lastOut = useRef<AttendanceActionPayload | null>(null);
