@@ -15,6 +15,9 @@ export async function register() {
   // Realtime events cross between the two slots (lib/realtime-bridge.ts, race audit 16 Oct 2026, M19).
   const { startRealtimeBridge } = await import("@/lib/realtime-bridge")
   startRealtimeBridge()
+  // Print uploads (lib/print/uploads.ts, 18 Nov 2026): every slot sweeps its own temp folder (files at most 1 h old).
+  const { startSweeper } = await import("@/lib/print/uploads")
+  startSweeper()
   // GIDEON schedules (lib/gideon-triggers.ts, 12 Oct 2026): weekly project digests. Idle unless GIDEON is
   // configured (GIDEON_CHAT_URL) and a project has a schedule. Off with NEXUS_GIDEON_TICKER=0.
   if (process.env.NEXUS_GIDEON_TICKER !== "0") {

@@ -9,9 +9,11 @@ import { PrintError, printAccess, serializeJob, submitPrint } from "@/lib/print/
 
 /**
  * POST /api/print — print a Legal document or a Doc page on the office printer (owner, 18 Nov 2026).
- *   body { kind: "legal" | "doc", id, copies 1–5, colorMode: "color" | "mono", version?: number (legal only) }
+ *   body { kind: "legal" | "doc" | "upload", id, copies 1–5, colorMode: "color" | "mono", version?: number (legal only),
+ *          pageRanges?: "1-3,5" (upload only; empty = all pages) }
+ *   kind "upload": id = an upload from POST /api/print/uploads (yours, at most 1 h old); deleted when the job ends.
  *   201 { job }   job.status "printing" (sent; GET /api/print/jobs/{id} follows it to "done") or "failed" (job.error)
- *   400 bad body · 401 · 403 / 404 the item's own access rule · 422 TOO_MANY_PAGES / NOT_PRINTABLE / PAGES_UNKNOWN
+ *   400 bad body / BAD_RANGE / OUT_OF_RANGE · 404 UPLOAD_GONE · 401 · 403 / 404 the item's own access rule · 422 TOO_MANY_PAGES / NOT_PRINTABLE / PAGES_UNKNOWN
  *   429 PRINT_RATE_LIMIT (20 an hour) · 503 PRINT_NOT_CONFIGURED (no PRINT_IPP_URL on this server)
  * Who may print = who may open the item (lib/print/access.ts). Every job is logged (PrintJob + AuditLog "print").
  */
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
     if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
     const { kind, id } = body
-    if (!isPrintKind(kind)) return NextResponse.json({ error: "kind must be \"legal\" or \"doc\"" }, { status: 400 })
+    if (!isPrintKind(kind)) return NextResponse.json({ error: "kind must be \"legal\", \"doc\" or \"upload\"" }, { status: 400 })
     if (typeof id !== "string" || !id || id.length > 64) return NextResponse.json({ error: "id is required" }, { status: 400 })
     const copies = body.copies === undefined ? 1 : Number(body.copies)
     if (!Number.isInteger(copies) || copies < 1 || copies > PRINT_LIMITS.maxCopies) {
@@ -38,13 +40,19 @@ export async function POST(req: NextRequest) {
       if (kind !== "legal" || !Number.isInteger(version) || version < 1) return NextResponse.json({ error: "Not a valid version" }, { status: 400 })
     }
 
+    let pageRanges: string | null = null
+    if (body.pageRanges !== undefined && body.pageRanges !== null && body.pageRanges !== "") {
+      if (kind !== "upload" || typeof body.pageRanges !== "string" || body.pageRanges.length > 200) return NextResponse.json({ error: "Write pages like 1-3,5", code: "BAD_RANGE" }, { status: 400 })
+      pageRanges = body.pageRanges
+    }
+
     const verdict = await printAccess(session.user.id, kind, id)
     if (!verdict.ok) return NextResponse.json({ error: verdict.error, ...(verdict.code ? { code: verdict.code } : {}) }, { status: verdict.status })
 
     const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true } })
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const lang = (req.headers.get("accept-language") ?? "").trim().toLowerCase() === "id" ? "id" : "en"
-    const job = await submitPrint({ user, kind, refId: id, copies, colorMode, version, lang, request: req })
+    const job = await submitPrint({ user, kind, refId: id, copies, colorMode, version, pageRanges, lang, request: req })
     return NextResponse.json({ job: serializeJob(job) }, { status: 201 })
   } catch (error) {
     if (error instanceof PrintError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
