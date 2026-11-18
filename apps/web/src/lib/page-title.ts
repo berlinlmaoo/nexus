@@ -48,6 +48,7 @@ const SECTIONS: [RegExp, string][] = [
   [/^\/(s|v)\//, "page\u0004Z Vault"],
   [/^\/threads$/, "page\u0004Threads"],
   [/^\/room-booking$/, "page\u0004Room Booking"],
+  [/^\/print$/, "page\u0004Print"],
   [/^\/complaints$/, "page\u0004Tickets"],
   [/^\/settings$/, "page\u0004Settings"],
   [/^\/admin$/, "page\u0004Control Room"],

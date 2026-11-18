@@ -25,6 +25,7 @@ export const ID_PAGE_TITLES: Record<string, string> = {
   "page\u0004Z Vault": "Z Vault",
   "page\u0004Threads": "Utas",
   "page\u0004Room Booking": "Booking Ruangan",
+  "page\u0004Print": "Cetak",
   "page\u0004Tickets": "Tiket",
   "page\u0004Settings": "Pengaturan",
   "page\u0004Control Room": "Ruang Kendali",
