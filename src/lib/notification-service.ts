@@ -1570,3 +1570,24 @@ export async function notifyLegalRequestStage(data: {
     dedupeWindowMs: SUBMISSION_STATUS_DEDUPE_MS,
   })
 }
+
+/**
+ * A print to the office printer ended (owner, 18 Nov 2026: "a pop-up when the print is out"): the bell, the web toast
+ * (socket) and a push to the phone, linking to the Print page. Once per job: lib/print/service.ts calls this only
+ * from the update that moved the job to done/failed, and the dedupe key stops a second caller anyway.
+ */
+export async function notifyPrintFinished(data: { userId: string; printJobId: string; title: string; ok: boolean; reason?: string | null }) {
+  const name = data.title.length > 80 ? `${data.title.slice(0, 79)}…` : data.title
+  const texts = data.ok
+    ? bi(["Your print is ready", `${name}: pick it up at the printer.`], ["Print selesai", `${name}: ambil di printer.`])
+    : bi(["Print failed", `${name}${data.reason ? `: ${data.reason}` : ""}`], ["Print gagal", `${name}${data.reason ? `: ${data.reason}` : ""}`])
+  await createInAppNotification({
+    userId: data.userId,
+    type: data.ok ? "print_done" : "print_failed",
+    ...texts,
+    link: `/print?job=${data.printJobId}`,
+    push: !(await isUserDnd(data.userId)),
+    pushThreadId: "print",
+    dedupeKey: `print-finished|${data.printJobId}`,
+  })
+}
