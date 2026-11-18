@@ -210,6 +210,7 @@ struct SettingsView: View {
         if tab == .profile {
             webProfileCard
             if PresenceStore.shared.enabled { SetPresenceRow(onOpen: { showPresence = true }).nexusCard() }
+            PrintLogEntryRow()
             JoinWorkspaceCard()
             // The danger zone last (decision 26 of run 20, Mac R20-M-08): Sign out, then Delete account.
             webLogoutCard
@@ -228,6 +229,7 @@ struct SettingsView: View {
             NavigationLink { GideonMemoryView() } label: {
                 HStack { Label(T("GIDEON Memory"), systemImage: "brain"); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg) }.font(NXFont.text(14)).foregroundStyle(NX.foreground).frame(minHeight: 44)
             }.accessibilityIdentifier("memory.entry").nexusCard()
+            PrintLogEntryRow()
             if PresenceStore.shared.enabled { SetPresenceRow(onOpen: { showPresence = true }).nexusCard() }
             JoinWorkspaceCard()
             // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
