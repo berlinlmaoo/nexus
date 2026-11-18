@@ -25,7 +25,7 @@ function stateText(state: PrinterState, t: (s: string) => string): string {
     case "printing": return t("Printing");
     case "stopped": return t("Stopped");
     case "error": return t("Needs attention");
-    case "disconnected": return t("Not connected");
+    case "disconnected": return t("The printer can't be reached");
     case "unreachable": return t("Can't be reached");
   }
 }
@@ -34,6 +34,24 @@ function jobLine(j: QueueJob, t: (s: string, v?: Record<string, string | number>
   const who = j.mine ? t("You") : j.who ? j.who.name : t("Outside NEXUS");
   const what = j.mine && j.title ? ` · ${j.title}` : "";
   return `${who}${what}`;
+}
+
+/** Who waits, in order: the first three by name (yours marked, with its title), then "+N more". */
+function Waiting({ jobs, className }: { jobs: QueueJob[]; className?: string }) {
+  const { t } = useLang();
+  if (!jobs.length) return <span className={className}>{t("No one waiting")}</span>;
+  const shown = jobs.slice(0, 3);
+  return (
+    <ol className={cn("space-y-0.5", className)}>
+      {shown.map((j) => (
+        <li key={j.position} className="flex min-w-0 items-baseline gap-1.5">
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{j.position}.</span>
+          <span className={cn("min-w-0 truncate", j.mine && "font-semibold text-primary", !j.who && "italic text-muted-foreground")}>{jobLine(j, t)}</span>
+        </li>
+      ))}
+      {jobs.length > 3 && <li className="text-xs text-muted-foreground">{t("print\u0004+{n} more", { n: jobs.length - 3 })}</li>}
+    </ol>
+  );
 }
 
 /** The whole panel (Print page) or a compact one (inside the Print dialog). */
@@ -83,11 +101,14 @@ function Notes({ s }: { s: PrinterStatus }) {
     if (!(s.state === "disconnected" && ["offline", "connecting-to-device", "timed-out"].includes(r.keyword))) lines.push(text);
   }
   if (!s.acceptingJobs) lines.push(t("The printer isn't taking new prints."));
-  if (!lines.length) return null;
+  // What the printer itself reports (CUPS's ipp backend: ink, paper, "Connected to printer"…), in its own words.
+  const said = s.message && s.state !== "disconnected" && !/^connected to printer\.?$/i.test(s.message.trim()) ? s.message.trim() : null;
+  if (!lines.length) return said ? <p className="text-xs text-muted-foreground">{t("Printer says: {text}", { text: said })}</p> : null;
   const warn = s.state === "error" || s.state === "disconnected" || s.state === "stopped";
   return (
     <ul className={cn("space-y-0.5 text-sm", warn ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
       {lines.map((l) => <li key={l} className="flex items-start gap-1.5">{s.state === "disconnected" && l === lines[0] ? <Plug className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}<span>{l}</span></li>)}
+      {said && <li className="text-xs text-muted-foreground">{t("Printer says: {text}", { text: said })}</li>}
     </ul>
   );
 }
@@ -104,26 +125,16 @@ function Full({ s, className, name, tn }: { s: PrinterStatus; className: string;
       </div>
       <Notes s={s} />
       {s.reachable && (
-        <dl className="grid grid-cols-2 gap-3 text-sm">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="min-w-0 rounded-lg bg-muted/50 px-3 py-2">
             <dt className="text-xs text-muted-foreground">{now?.state === "stalled" ? t("Waiting for the printer") : t("Printing now")}</dt>
-            <dd className="truncate font-medium">{now ? jobLine(now, t) : t("No one")}</dd>
+            <dd className={cn("truncate font-medium", now?.mine && "text-primary", now && !now.who && "italic text-muted-foreground")}>{now ? jobLine(now, t) : t("No one")}</dd>
           </div>
-          <div className="rounded-lg bg-muted/50 px-3 py-2">
-            <dt className="text-xs text-muted-foreground">{t("In the queue")}</dt>
-            <dd className="font-medium tabular-nums">{tn(s.waiting, "{n} waiting", "{n} waiting")}</dd>
+          <div className="min-w-0 rounded-lg bg-muted/50 px-3 py-2">
+            <dt className="text-xs text-muted-foreground">{t("In the queue")} · <span className="tabular-nums">{tn(waiting.length, "{n} waiting", "{n} waiting")}</span></dt>
+            <dd className="font-medium"><Waiting jobs={waiting} /></dd>
           </div>
         </dl>
-      )}
-      {waiting.length > 0 && (
-        <ol className="space-y-1 text-sm">
-          {waiting.map((j) => (
-            <li key={j.position} className="flex items-center gap-2">
-              <span className="w-6 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{j.position}.</span>
-              <span className={cn("min-w-0 truncate", j.mine && "font-medium")}>{jobLine(j, t)}</span>
-            </li>
-          ))}
-        </ol>
       )}
       <p className="text-xs text-muted-foreground">{t("Prints sent straight to the printer over WiFi don't show here.")}</p>
     </section>
@@ -140,6 +151,12 @@ function Compact({ s, className }: { s: PrinterStatus; className: string }) {
         {s.reachable && <span className="text-xs text-muted-foreground tabular-nums">{tn(s.waiting, "{n} waiting", "{n} waiting")}</span>}
       </div>
       {now && s.state !== "disconnected" && <div className="truncate text-xs text-muted-foreground">{t("Printing now")}: {jobLine(now, t)}</div>}
+      {s.jobs.filter((j) => j !== now).length > 0 && (
+        <div className="text-xs text-muted-foreground">
+          <span>{t("In the queue")}:</span>
+          <Waiting jobs={s.jobs.filter((j) => j !== now)} className="mt-0.5 text-foreground" />
+        </div>
+      )}
       <Notes s={s} />
     </section>
   );
