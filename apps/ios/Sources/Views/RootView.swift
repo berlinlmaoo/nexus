@@ -232,6 +232,10 @@ struct MoreView: View {
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
                                 }
+                                // Print an uploaded file (owner, 18 Nov 2026): company members, while the server has a printer.
+                                if viewer.isCompanyMember && RemoteConfig.shared.printingEnabled {
+                                    MoreTile(T("Print"), "printer.fill", NX.violetText) { PrintUploadView() }
+                                }
                             }
                         }
                         MoreSection(T("Work")) {
