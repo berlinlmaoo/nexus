@@ -11,7 +11,7 @@ import { PrinterStatusPanel } from "@/components/print/PrinterStatusPanel";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  PRINT_LOG_KEY, disconnectedText, jobErrorText, pageRangeCount, pageSet, printApi, printErrorText, statusLabel, usePrinterStatus, usePrinting,
+  PRINT_LOG_KEY, disconnectedText, printToastId, jobErrorText, pageRangeCount, pageSet, printApi, printErrorText, statusLabel, usePrinterStatus, usePrinting,
   type ColorMode, type PrintJob, type PrintKind,
 } from "@/lib/print-api";
 
@@ -85,12 +85,12 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
     if (!job || told === job.id) return;
     if (job.status === "done") {
       setTold(job.id);
-      toast.success(t("Printed"), { description: `${job.title} · ${tn(job.copies, "{n} copy", "{n} copies")}` });
+      toast.success(t("Your print is ready"), { id: printToastId(job.id), description: t("{title}: pick it up at the printer.", { title: job.title }) });
       void qc.invalidateQueries({ queryKey: PRINT_LOG_KEY });
       onEnded?.(job);
     } else if (job.status === "failed") {
       setTold(job.id);
-      toast.error(t("Print failed"), { description: jobErrorText(job.error) });
+      toast.error(t("Print failed"), { id: printToastId(job.id), description: jobErrorText(job.error) });
       void qc.invalidateQueries({ queryKey: PRINT_LOG_KEY });
       onEnded?.(job);
     }
