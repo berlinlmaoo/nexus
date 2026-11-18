@@ -48,6 +48,8 @@ final class RemoteConfig {
         var texts: [String: [String: String]]?
         var banner: Banner?
         var gideonTiers: [String: GideonTierAvailability]?
+        /// Top-level `printing` (18 Nov 2026): whether this server has an office printer. Absent = off.
+        var printing: PrintingConfig?
     }
 
     private(set) var body = Body()
@@ -78,6 +80,11 @@ final class RemoteConfig {
     var meetingMaxMinutes: Int { max(1, body.values?.meetingMaxMinutes ?? 180) }
     var meetingMaxBytes: Int { max(1, body.values?.meetingMaxMB ?? 500) * 1_048_576 }
     var meetingAudioRetentionDays: Int { max(1, body.values?.meetingAudioRetentionDays ?? 30) }
+    /// Print to the office printer: off unless the server says it has a printer (an older server has no key).
+    var printingEnabled: Bool { body.printing?.enabled ?? false }
+    var printerName: String? { body.printing?.printerName.flatMap { $0.isEmpty ? nil : $0 } }
+    var printingMaxCopies: Int { max(1, body.printing?.maxCopies ?? 5) }
+    var printingMaxPages: Int { max(1, body.printing?.maxPages ?? 50) }
 
     /// The server's sentence for `key` in the app's language, else its English one, else `fallback`
     /// (the app's own copy, already translated by the caller).
