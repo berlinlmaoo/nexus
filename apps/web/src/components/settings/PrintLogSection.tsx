@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { FileText, FileUp, Loader2, Printer, Scale } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { ArrowRight, FileText, FileUp, Loader2, Printer, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/DateField";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -95,6 +96,45 @@ export function PrintLogSection() {
       )}
       {jobs.length > 0 && <p className="text-xs text-muted-foreground">{tn(jobs.length, "{n} print shown", "{n} prints shown")}</p>}
     </div>
+  );
+}
+
+/**
+ * The last 10 prints on the Print page (owner, 18 Nov 2026: "no history here"): the same rows and the same rules as
+ * Settings › Print log (yours; BoD / One Above All everyone's), refreshed while one is still printing and whenever a
+ * print ends (the dialog invalidates PRINT_LOG_KEY). The full log is one link away.
+ */
+export function RecentPrints({ className }: { className?: string }) {
+  const { t, locale } = useLang();
+  const q = useQuery({
+    queryKey: [...PRINT_LOG_KEY, "recent"],
+    queryFn: () => printApi.log({ limit: "10" }),
+    refetchInterval: (query) => (query.state.data?.jobs.some((j) => j.status === "printing" || j.status === "queued") ? 5000 : false),
+  });
+  const when = (iso: string) => new Date(iso).toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
+  const jobs = q.data?.jobs ?? [];
+  return (
+    <section aria-labelledby="recent-prints" className={cn("space-y-2", className)}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="recent-prints" className="text-sm font-semibold">{q.data?.canSeeAll ? t("Recent prints (everyone)") : t("Your recent prints")}</h2>
+        <Link to="/settings" search={{ section: "print-log" }} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          {t("Full print log")} <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+      {q.isPending ? (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-soft"><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</div>
+      ) : q.isError ? (
+        <LoadError compact error={q.error} onRetry={() => void q.refetch()} what={t("the print log")} />
+      ) : jobs.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card shadow-soft">
+          <EmptyState compact icon={Printer} title={t("No prints yet")} message={t("What you print shows up here: what, how many pages, and whether it printed.")} />
+        </div>
+      ) : (
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-soft">
+          {jobs.map((j) => <JobRow key={j.id} job={j} showPerson={!!q.data?.canSeeAll} when={when(j.createdAt)} />)}
+        </ul>
+      )}
+    </section>
   );
 }
 
