@@ -20,6 +20,7 @@ import { ShortcutsHelp, OPEN_SHORTCUTS_EVENT } from "@/components/ShortcutsHelp"
 import { OPEN_SEARCH_EVENT } from "@/lib/search-event";
 import { useModalFocusTrap } from "@/hooks/use-modal-focus-trap";
 import { SnapTail } from "@/components/SnapTail";
+import { PrintFinishedToasts } from "@/components/print/PrintFinishedToasts";
 
 const SearchModal = lazy(() => import("@/components/SearchModal").then((m) => ({ default: m.SearchModal })));
 
@@ -165,6 +166,8 @@ function AppLayout() {
         <VaultUploadPanel />
         {/* "(3) Calendar · NEXUS" in the browser tab while chats are unread. */}
         <ChatUnreadTitle />
+        {/* "Your print is ready" on any page (18 Nov 2026). */}
+        <PrintFinishedToasts />
       </SidebarProvider>
     </RealtimeProvider>
   );

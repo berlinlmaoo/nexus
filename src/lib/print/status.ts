@@ -11,8 +11,8 @@ import { attrOf, attrValues, encodeGetJobs, encodeGetPrinterAttributes, ippPost,
  * Other people's jobs show who, never what (no file names); your own shows its title.
  */
 
-/** disconnected = CUPS is up but cannot reach the printer (USB unplugged, printer off): jobs wait and come out as soon
- *  as it is back. CUPS then often still says "processing" with the message "Waiting for printer to become available". */
+/** disconnected = CUPS is up but cannot reach the printer (off, or out of the office WiFi): jobs wait and come out as
+ *  soon as it is back. CUPS then often still says "processing" with the message "Waiting for printer to become available". */
 export type PrinterState = "idle" | "printing" | "stopped" | "error" | "disconnected" | "unreachable"
 export type PrinterReason = { keyword: string; severity: "error" | "warning" | "report" }
 export type QueueJob = {
@@ -68,7 +68,9 @@ const JOB_LABEL: Record<number, QueueJob["state"]> = {
 }
 
 const DISCONNECTED_REASONS = new Set(["offline", "connecting-to-device", "timed-out"])
-const DISCONNECTED_MESSAGE = /waiting for printer to become available|unable to (open|locate|connect)|printer (is )?(offline|not connected)|no such device|not responding/i
+// Since 18 Nov 2026 CUPS reaches the printer over WiFi (ipp://EPSONE0F00A.local:631/ipp/print): "disconnected" now means
+// the printer is off or out of the office WiFi. These are what CUPS's usb/ipp backends say while they wait for it.
+const DISCONNECTED_MESSAGE = /waiting for printer to become available|unable to (open|locate|connect|resolve)|printer (is )?(offline|not connected|not responding|busy)|no such device|not responding|host is (down|unreachable)|network (host|printer)[^.]*(busy|unreachable|not available)|looking for printer/i
 
 /** CUPS can't reach the printer: a reason that says so, or the message CUPS shows while its backend waits for it. */
 export function isDisconnected(reasons: PrinterReason[], message: string | null): boolean {

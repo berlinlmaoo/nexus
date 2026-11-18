@@ -7,6 +7,7 @@ import { docxToPdf, htmlToPdf, pdfConfigured, PdfError } from "@/lib/legal/pdf"
 import { readLegalFile, PDF_MIME, looksLikePdf } from "@/lib/legal/storage"
 import { ORG_WORKSPACE_ID, isOrgMember } from "@/lib/org"
 import { createLogger } from "@/lib/logger"
+import { notifyPrintFinished } from "@/lib/notification-service"
 import { canPrint, type PrintAccessDeps, type PrintKind, type PrintVerdict } from "@/lib/print/access"
 import { PRINT_LIMITS, printerConfig, type PrinterConfig } from "@/lib/print/config"
 import { docToPrintHtml } from "@/lib/print/doc-html"
@@ -229,11 +230,17 @@ async function fallbackTitle(kind: PrintKind, refId: string): Promise<string> {
 async function finish(id: string, data: { status: "printing" | "done" | "failed"; ippJobId?: number; error?: string | null }): Promise<PrintJobRow> {
   const terminal = data.status === "done" || data.status === "failed"
   // Only a job that is still open moves; a finished one keeps its ending (two pollers at once).
-  await prisma.printJob.updateMany({
+  const moved = await prisma.printJob.updateMany({
     where: { id, status: { in: ["queued", "printing"] } },
     data: { ...data, ...(terminal ? { finishedAt: new Date() } : {}) },
   })
   const row = (await prisma.printJob.findUnique({ where: { id } }))!
+  // The person hears when it is out (or why not) — only from the update that ended it: of two pollers at once,
+  // one moves the row and notifies, the other finds it already finished (and the dedupe key backs that up).
+  if (terminal && moved.count === 1) {
+    await notifyPrintFinished({ userId: row.userId, printJobId: row.id, title: row.title, ok: row.status === "done", reason: row.error })
+      .catch((error) => log.warn("Print notification failed", { jobId: id, error: String(error) }))
+  }
   // An uploaded file is deleted the moment its job ends, done or failed (the log row stays).
   if (terminal && row.kind === "upload") await removePrintUpload(row.refId)
   return row
