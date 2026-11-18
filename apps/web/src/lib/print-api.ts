@@ -160,15 +160,18 @@ export function reasonText(keyword: string): string {
     case "marker-supply-low": case "toner-low": return t("Ink is running low");
     case "door-open": case "cover-open": return t("A printer cover is open");
     case "paused": return t("The printer is paused");
-    case "offline": case "connecting-to-device": case "timed-out": return t("The printer isn't connected to the server");
+    case "offline": case "connecting-to-device": case "timed-out": return t("The printer can't be reached");
     default: return keyword.replace(/-/g, " ");
   }
 }
 
-/** The sentence for a printer that CUPS can't reach (USB unplugged, printer off). */
+/** The sentence for a printer the server can't reach (off, or out of the office WiFi since 18 Nov 2026). */
 export function disconnectedText(): string {
-  return t("The printer isn't connected to the server. Your print comes out as soon as it's connected again.");
+  return t("The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back.");
 }
+
+/** One toast per print job, wherever it is raised from (the dialog or the global listener). */
+export const printToastId = (jobId: string) => `print-job-${jobId}`;
 
 /** Why a print was refused, in the interface language (the server's text is English, its 503 Indonesian). */
 export function printErrorText(e: unknown): string {
