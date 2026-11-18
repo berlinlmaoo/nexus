@@ -128,8 +128,13 @@ export type QueueJob = {
   title?: string;
   nexusJobId?: string;
 };
+export type InkLevel = { name: string; level: number | null; color: string | null };
 export type PrinterStatus = {
   reachable: boolean;
+  /** "printer" = the state came from the printer itself; "cups" = from the print server only. */
+  source?: "printer" | "cups";
+  /** Ink levels, when the printer reports them (the L3250's ink tanks don't). */
+  inks?: InkLevel[];
   state: PrinterState;
   reasons: Array<{ keyword: string; severity: "error" | "warning" | "report" }>;
   message: string | null;
