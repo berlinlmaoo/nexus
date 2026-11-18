@@ -60,10 +60,10 @@ export function PrintLogSection() {
             options={(first?.people ?? []).map((p) => ({ value: p.id, label: p.name }))} />
         )}
         <DateField value={from} onChange={setFrom} placeholder={t("From")} ariaLabel={t("From")} max={to ?? undefined}
-          className="h-8 rounded-md border border-border px-2 text-sm" emptyClassName="text-muted-foreground" />
+          className="h-8 w-36 rounded-md border border-border px-2 text-sm" emptyClassName="text-muted-foreground" />
         <span className="text-muted-foreground" aria-hidden>–</span>
         <DateField value={to} onChange={setTo} placeholder={t("To")} ariaLabel={t("To")} min={from ?? undefined}
-          className="h-8 rounded-md border border-border px-2 text-sm" emptyClassName="text-muted-foreground" />
+          className="h-8 w-36 rounded-md border border-border px-2 text-sm" emptyClassName="text-muted-foreground" />
         {filtered && <Button variant="ghost" size="sm" onClick={() => { setPerson(""); setFrom(null); setTo(null); }}>{t("Clear filters")}</Button>}
       </div>
 
