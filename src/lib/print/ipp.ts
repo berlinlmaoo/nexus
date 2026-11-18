@@ -9,7 +9,7 @@
  * Pure encode/decode (tested by src/__tests__/print-ipp.test.ts); ippPost is the only I/O.
  */
 
-export const IPP_OP = { PRINT_JOB: 0x0002, GET_JOB_ATTRIBUTES: 0x0009, GET_PRINTER_ATTRIBUTES: 0x000b } as const
+export const IPP_OP = { PRINT_JOB: 0x0002, GET_JOB_ATTRIBUTES: 0x0009, GET_JOBS: 0x000a, GET_PRINTER_ATTRIBUTES: 0x000b } as const
 
 /** Delimiter tags (RFC 8010 §3.5.1). */
 export const TAG = {
@@ -187,6 +187,48 @@ export function encodeGetJobAttributes(input: { printerUri: string; userName: st
         ],
       },
     ],
+  })
+}
+
+/** Get-Printer-Attributes: the printer's state for the status panel. */
+export function encodeGetPrinterAttributes(input: { printerUri: string; userName: string; requestId?: number }): Buffer {
+  return encodeMessage({
+    version: [2, 0],
+    code: IPP_OP.GET_PRINTER_ATTRIBUTES,
+    requestId: input.requestId ?? 1,
+    groups: [{
+      tag: TAG.OPERATION,
+      attrs: [
+        ...operationAttrs(input.printerUri, input.userName),
+        { tag: VT.KEYWORD, name: "requested-attributes", values: ["printer-state", "printer-state-reasons", "printer-state-message", "printer-is-accepting-jobs", "queued-job-count"] },
+      ],
+    }],
+  })
+}
+
+/** Get-Jobs (which-jobs=not-completed): what is printing and waiting, oldest first. */
+export function encodeGetJobs(input: { printerUri: string; userName: string; requestId?: number }): Buffer {
+  return encodeMessage({
+    version: [2, 0],
+    code: IPP_OP.GET_JOBS,
+    requestId: input.requestId ?? 1,
+    groups: [{
+      tag: TAG.OPERATION,
+      attrs: [
+        ...operationAttrs(input.printerUri, input.userName),
+        { tag: VT.KEYWORD, name: "which-jobs", values: ["not-completed"] },
+        { tag: VT.KEYWORD, name: "requested-attributes", values: ["job-id", "job-state", "job-state-reasons"] },
+      ],
+    }],
+  })
+}
+
+/** Every job group of a Get-Jobs answer as a flat record (first value of each attribute). */
+export function jobGroups(msg: IppMessage): Array<Record<string, IppValue | IppValue[]>> {
+  return msg.groups.filter((g) => g.tag === TAG.JOB).map((g) => {
+    const out: Record<string, IppValue | IppValue[]> = {}
+    for (const a of g.attrs) out[a.name] = a.values.length > 1 ? a.values : a.values[0]
+    return out
   })
 }
 
