@@ -4666,3 +4666,34 @@ model PresenceManualStatus {
 
   @@index([endsAt])
 }
+
+/// One print to the office printer (owner, 18 Nov 2026): a Legal document or a Doc page sent over IPP to the CUPS
+/// queue in PRINT_IPP_URL (lib/print). Every print is logged, success or failure: the person sees their own,
+/// BoD / One Above All see everyone's (Settings › Print log). userId/workspaceId/refId are plain ids on purpose
+/// (no FK, like GideonRun): the log must outlive the person, the document and the page.
+model PrintJob {
+  id          String    @id @default(uuid(7))
+  userId      String
+  workspaceId String
+  /// legal | doc
+  kind        String
+  /// LegalDocument.id or Doc.id
+  refId       String
+  title       String
+  /// Pages of the PDF that was sent (one copy).
+  pages       Int       @default(0)
+  copies      Int       @default(1)
+  /// color | mono
+  colorMode   String    @default("mono")
+  /// queued | printing | done | failed
+  status      String    @default("queued")
+  /// The CUPS job id once the printer took it.
+  ippJobId    Int?
+  error       String?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([status])
+}

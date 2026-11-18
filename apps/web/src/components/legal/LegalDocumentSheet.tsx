@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, Maximize2, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, Maximize2, Printer, RefreshCw, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,8 @@ import { LEGAL_STATUSES, legalDocsApi, legalVersionsApi, type LegalDocument, typ
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { PdfPreview } from "@/components/PdfFirstPage";
+import { PrintDialog } from "@/components/print/PrintDialog";
+import { usePrinting } from "@/lib/print-api";
 
 /** The statuses a person may pick for a document now (owner, 14 Oct 2026): VOID is one-way, SIGNED is locked
  *  and only voided, and a generated document becomes SIGNED only by uploading its signed copy. */
@@ -92,6 +94,11 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
   // Once signed, the signed copy is the primary file; the generated FINAL stays in the list below.
   const shownVersion = doc ? doc.versions.find((v) => v.version === (doc.signedVersion ?? doc.finalVersion ?? doc.currentVersion)) ?? doc.versions[0] : undefined;
   const locked = doc?.status === "SIGNED";
+  // Print to the office printer (18 Nov 2026): the file shown here (signed copy, else Final, else current) — its PDF,
+  // a Word file the server converts, or an uploaded PDF. A photo of a signed copy does not print.
+  const printing = usePrinting();
+  const [printOpen, setPrintOpen] = useState(false);
+  const printable = !!shownVersion && (shownVersion.hasPdf || shownVersion.hasDocx || (shownVersion.hasFile && shownVersion.mimeType === "application/pdf"));
   useEffect(() => { if ((locked || doc?.status === "VOID") && view === "edit") setView("overview"); }, [locked, doc?.status, view]);
   const changeStatus = (s: LegalStatus) => {
     if (!doc || s === doc.status) return;
@@ -159,6 +166,12 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                 </Select>
               )}
               {shownVersion && <FileButtons doc={doc} v={shownVersion} onMakePdf={() => makePdf.mutate(shownVersion.version)} making={makePdf.isPending} />}
+              {printing.enabled && printable && (
+                <Button variant="outline" size="default" className="gap-1.5" onClick={() => setPrintOpen(true)}><Printer className="h-4 w-4" /> {t("Print")}</Button>
+              )}
+              {printing.enabled && printable && shownVersion && (
+                <PrintDialog open={printOpen} onOpenChange={setPrintOpen} kind="legal" id={doc.id} version={shownVersion.version} title={[doc.number, doc.title].filter(Boolean).join(" - ")} />
+              )}
               {(doc.status === "FINAL" || doc.status === "SENT") && <SignedCopyButton doc={doc} onDone={() => { void q.refetch(); void qc.invalidateQueries({ queryKey: ["legal", "documents"] }); }} />}
               {doc.status === "SIGNED" && (
                 <Button variant="outline" size="default" className="gap-1.5" onClick={() => setAddendumOpen(true)}><FilePlus2 className="h-4 w-4" /> {t("Create addendum")}</Button>

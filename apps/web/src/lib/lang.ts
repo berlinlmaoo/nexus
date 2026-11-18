@@ -48,6 +48,7 @@ import { ID_UISWEEP } from "@/lib/i18n/id-uisweep";
 import { ID_CHAT_FILES } from "@/lib/i18n/id-chat-files";
 import { ID_GIDEON_CREDITS } from "@/lib/i18n/id-gideon-credits";
 import { ID_MCP_SILK } from "@/lib/i18n/id-mcp-silk";
+import { ID_PRINT } from "@/lib/i18n/id-print";
 import { ID_GIDEON_REVIEW } from "@/lib/i18n/id-gideon-review";
 import { ID_TASK_VIEWS } from "@/lib/i18n/id-task-views";
 import { ID_QAFIX_PERM } from "@/lib/i18n/id-qafix-perm";
@@ -139,6 +140,8 @@ Object.assign(ID, ID_DEC25);
 Object.assign(ID, ID_DEC25_B);
 // Browser tab titles (27 Oct 2026).
 Object.assign(ID, ID_PAGE_TITLES);
+// Print to the office printer (18 Nov 2026).
+Object.assign(ID, ID_PRINT);
 
 function read(): Lang {
   try {
