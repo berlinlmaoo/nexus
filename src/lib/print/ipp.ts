@@ -50,7 +50,8 @@ export const VT = {
 /** job-state (RFC 8011 §5.3.7). */
 export const JOB_STATE = { PENDING: 3, PENDING_HELD: 4, PROCESSING: 5, PROCESSING_STOPPED: 6, CANCELED: 7, ABORTED: 8, COMPLETED: 9 } as const
 
-export type IppValue = string | number | boolean
+/** A rangeOfInteger value is [lower, upper]. */
+export type IppValue = string | number | boolean | [number, number]
 export type IppAttr = { tag: number; name: string; values: IppValue[] }
 export type IppGroup = { tag: number; attrs: IppAttr[] }
 export type IppMessage = { version: [number, number]; code: number; requestId: number; groups: IppGroup[]; data?: Buffer }
@@ -73,6 +74,13 @@ function valueBytes(tag: number, value: IppValue): Buffer {
     return b
   }
   if (tag === VT.BOOLEAN) return Buffer.from([value ? 1 : 0])
+  if (tag === VT.RANGE) {
+    const [lo, hi] = Array.isArray(value) ? value : [Number(value), Number(value)]
+    const b = Buffer.alloc(8)
+    b.writeInt32BE(lo, 0)
+    b.writeInt32BE(hi, 4)
+    return b
+  }
   if (OUT_OF_BAND.has(tag)) return Buffer.alloc(0)
   return Buffer.from(String(value), "utf8")
 }
@@ -130,6 +138,8 @@ export type PrintJobInput = {
   copies: number
   colorMode: ColorMode
   pdf: Buffer
+  /** page-ranges (RFC 8011 §5.2.7): ascending, non-overlapping [first, last] pairs, 1-based. Omitted = every page. */
+  pageRanges?: Array<[number, number]>
   requestId?: number
 }
 
@@ -153,6 +163,7 @@ export function encodePrintJob(input: PrintJobInput): Buffer {
         attrs: [
           { tag: VT.INTEGER, name: "copies", values: [input.copies] },
           { tag: VT.KEYWORD, name: "print-color-mode", values: [input.colorMode === "color" ? "color" : "monochrome"] },
+          ...(input.pageRanges?.length ? [{ tag: VT.RANGE, name: "page-ranges", values: input.pageRanges }] : []),
         ],
       },
     ],
@@ -217,6 +228,7 @@ export function decodeMessage(buf: Buffer): IppMessage {
     let value: IppValue
     if (INT_TAGS.has(tag) && valueLen === 4) value = raw.readInt32BE(0)
     else if (tag === VT.BOOLEAN && valueLen === 1) value = raw[0] !== 0
+    else if (tag === VT.RANGE && valueLen === 8) value = [raw.readInt32BE(0), raw.readInt32BE(4)]
     else if (OUT_OF_BAND.has(tag) || tag === VT.BEG_COLLECTION || tag === VT.END_COLLECTION) value = ""
     else if (tag === VT.TEXT_WITH_LANGUAGE || tag === VT.NAME_WITH_LANGUAGE) {
       // language length + language + text length + text

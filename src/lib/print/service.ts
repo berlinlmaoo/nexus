@@ -5,12 +5,14 @@ import { legalActor } from "@/lib/legal/access"
 import { bodyAccess, loadBody } from "@/lib/block-bodies"
 import { docxToPdf, htmlToPdf, pdfConfigured, PdfError } from "@/lib/legal/pdf"
 import { readLegalFile, PDF_MIME, looksLikePdf } from "@/lib/legal/storage"
-import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { ORG_WORKSPACE_ID, isOrgMember } from "@/lib/org"
 import { createLogger } from "@/lib/logger"
 import { canPrint, type PrintAccessDeps, type PrintKind, type PrintVerdict } from "@/lib/print/access"
 import { PRINT_LIMITS, printerConfig, type PrinterConfig } from "@/lib/print/config"
 import { docToPrintHtml } from "@/lib/print/doc-html"
 import { countPdfPages } from "@/lib/print/pdf-pages"
+import { parsePageRanges } from "@/lib/print/page-ranges"
+import { getPrintUpload, removePrintUpload } from "@/lib/print/uploads"
 import {
   JOB_STATE, attrOf, attrValues, encodeGetJobAttributes, encodePrintJob, ippPost, ippStatusText, isIppSuccess, type ColorMode,
 } from "@/lib/print/ipp"
@@ -45,6 +47,8 @@ export const printAccessDeps: PrintAccessDeps = {
     const a = await bodyAccess(userId, "doc", id)
     return { exists: a.exists, read: a.read }
   },
+  isMember: (userId) => isOrgMember(userId),
+  ownsUpload: async (userId, id) => (await getPrintUpload(id, userId)) !== null,
 }
 
 export function printAccess(userId: string, kind: PrintKind, refId: string): Promise<PrintVerdict> {
@@ -98,6 +102,13 @@ async function renderDoc(docId: string, userName: string, lang: "en" | "id"): Pr
   return { pdf, title, workspaceId: project?.workspaceId ?? ORG_WORKSPACE_ID }
 }
 
+/** An uploaded file (Print menu): its converted PDF, only for the person who uploaded it. */
+async function renderUpload(uploadId: string, userId: string): Promise<Rendered> {
+  const up = await getPrintUpload(uploadId, userId)
+  if (!up) throw new PrintError("This upload has expired. Upload the file again.", 404, "UPLOAD_GONE")
+  return { pdf: await up.pdf(), title: up.meta.fileName, workspaceId: ORG_WORKSPACE_ID }
+}
+
 export type PrintRequest = {
   user: { id: string; name: string }
   kind: PrintKind
@@ -106,6 +117,8 @@ export type PrintRequest = {
   colorMode: ColorMode
   /** Legal only: a version other than the primary one. */
   version?: number | null
+  /** Upload only: "1-3,5"; empty = every page. The 50-page cap counts the chosen pages. */
+  pageRanges?: string | null
   lang: "en" | "id"
   request?: Request
 }
@@ -119,7 +132,9 @@ export async function submitPrint(req: PrintRequest): Promise<PrintJobRow> {
   let rendered: Rendered | null = null
   let renderError: string | null = null
   try {
-    rendered = req.kind === "legal" ? await renderLegal(req.refId, req.version ?? null) : await renderDoc(req.refId, req.user.name, req.lang)
+    rendered = req.kind === "legal" ? await renderLegal(req.refId, req.version ?? null)
+      : req.kind === "upload" ? await renderUpload(req.refId, req.user.id)
+        : await renderDoc(req.refId, req.user.name, req.lang)
   } catch (error) {
     if (error instanceof PrintError) throw error
     renderError = error instanceof PdfError ? error.message : `Could not prepare the file: ${(error as Error).message}`
@@ -127,13 +142,23 @@ export async function submitPrint(req: PrintRequest): Promise<PrintJobRow> {
   }
 
   let pages = 0
+  let ranges: Array<[number, number]> | undefined
   if (rendered) {
     const n = countPdfPages(rendered.pdf)
     if (n === null) throw new PrintError("Couldn't read the number of pages of this file", 422, "PAGES_UNKNOWN")
-    if (n > PRINT_LIMITS.maxPages) {
-      throw new PrintError(`This file has ${n} pages. One print can have at most ${PRINT_LIMITS.maxPages} pages.`, 422, "TOO_MANY_PAGES")
+    let chosen = n
+    if (req.kind === "upload" && req.pageRanges?.trim()) {
+      const r = parsePageRanges(req.pageRanges, n)
+      if (!r.ok) throw new PrintError(r.error, 400, r.code)
+      if (!r.all) ranges = r.ranges
+      chosen = r.count
     }
-    pages = n
+    if (chosen > PRINT_LIMITS.maxPages) {
+      throw new PrintError(ranges
+        ? `These pages add up to ${chosen}. One print can have at most ${PRINT_LIMITS.maxPages} pages.`
+        : `This file has ${chosen} pages. One print can have at most ${PRINT_LIMITS.maxPages} pages.`, 422, "TOO_MANY_PAGES")
+    }
+    pages = chosen
   }
 
   // The hourly cap and the row in one transaction under a per-person lock: two taps at once can't both slip under it.
@@ -152,20 +177,23 @@ export async function submitPrint(req: PrintRequest): Promise<PrintJobRow> {
   })
   if (!job) throw new PrintError(`You can print at most ${PRINT_LIMITS.jobsPerHour} times an hour. Try again later.`, 429, "PRINT_RATE_LIMIT")
 
+  // A failed upload job leaves nothing behind (owner, 18 Nov 2026: only the log row stays).
+  if (renderError && req.kind === "upload") await removePrintUpload(req.refId)
   await logAudit({
     action: "print",
-    entityType: req.kind === "legal" ? "legal_document" : "doc",
+    entityType: req.kind === "legal" ? "legal_document" : req.kind === "upload" ? "print_upload" : "doc",
     entityId: req.refId,
     entityName: job.title,
     userId: req.user.id,
-    metadata: { printJobId: job.id, pages, copies: req.copies, colorMode: req.colorMode, printer: printer.name, ...(renderError ? { error: renderError } : {}) },
+    metadata: { printJobId: job.id, pages, ...(ranges ? { pageRanges: ranges.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(",") } : {}), copies: req.copies, colorMode: req.colorMode, printer: printer.name, ...(renderError ? { error: renderError } : {}) },
     request: req.request,
   })
   if (!rendered) return job
-  return send(job, rendered.pdf, printer, req.user.name)
+  return send(job, rendered.pdf, printer, req.user.name, ranges)
 }
 
 async function fallbackTitle(kind: PrintKind, refId: string): Promise<string> {
+  if (kind === "upload") return "Uploaded file"
   if (kind === "legal") {
     const d = await prisma.legalDocument.findUnique({ where: { id: refId }, select: { number: true, title: true } })
     return [d?.number, d?.title].filter(Boolean).join(" - ") || "Legal document"
@@ -180,14 +208,17 @@ async function finish(id: string, data: { status: "printing" | "done" | "failed"
     where: { id, status: { in: ["queued", "printing"] } },
     data: { ...data, ...(terminal ? { finishedAt: new Date() } : {}) },
   })
-  return (await prisma.printJob.findUnique({ where: { id } }))!
+  const row = (await prisma.printJob.findUnique({ where: { id } }))!
+  // An uploaded file is deleted the moment its job ends, done or failed (the log row stays).
+  if (terminal && row.kind === "upload") await removePrintUpload(row.refId)
+  return row
 }
 
-async function send(job: PrintJobRow, pdf: Buffer, printer: PrinterConfig, userName: string): Promise<PrintJobRow> {
+async function send(job: PrintJobRow, pdf: Buffer, printer: PrinterConfig, userName: string, pageRanges?: Array<[number, number]>): Promise<PrintJobRow> {
   try {
     const res = await ippPost(printer.http, encodePrintJob({
       printerUri: printer.printerUri, userName, jobName: `NEXUS - ${job.title}`, copies: job.copies,
-      colorMode: job.colorMode === "color" ? "color" : "mono", pdf,
+      colorMode: job.colorMode === "color" ? "color" : "mono", pdf, pageRanges,
     }), 120_000)
     if (!isIppSuccess(res.code)) {
       const why = String(attrOf(res, "status-message") ?? "") || ippStatusText(res.code)

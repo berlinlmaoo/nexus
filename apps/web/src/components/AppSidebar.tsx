@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
 import { navGroups } from "@/components/nav-groups";
+import { usePrinting } from "@/lib/print-api";
 import { GideonAskButton } from "@/components/gideon/GideonLauncher";
 import nexusLogo from "@/assets/nexus-logo.png";
 import {
@@ -75,6 +76,8 @@ export function AppSidebar() {
   // The same cap as the dashboard bell and the phone tab bar ("47", "99+"): the sidebar said "9+" while the bell
   // beside it said "47" for one count (UI tour run 14, R14-WD-13).
   const badgeText = (n: number) => (n > 99 ? "99+" : String(n));
+  // Print (18 Nov 2026): only while the server has a printer (GET /api/app/config → printing).
+  const printing = usePrinting();
   const visibleGroups = navGroups
     .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
@@ -147,7 +150,7 @@ export function AppSidebar() {
       <SidebarContent ref={navRef} className={cn("[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
         {/* Collapsed to icons, the rail spreads its icons evenly over the full height (owner, 18 Oct 2026): each group
             grows by its number of items, and the items share the group's height. */}
-        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")); return (
+        {visibleGroups.map((g) => { const items = g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking" && item.url !== "/print")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal") && (printing.enabled || item.url !== "/print")); return (
           <SidebarGroup key={g.label} style={{ ["--n" as string]: items.length } as import("react").CSSProperties} className="group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:[flex:var(--n)_1_0px]">
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
             <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-1">

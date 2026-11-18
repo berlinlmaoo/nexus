@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
-  Trophy, ClipboardCheck, Settings, Shield, FileText, AtSign, Ticket, HardDrive, Scale,
+  Trophy, ClipboardCheck, Settings, Shield, FileText, AtSign, Ticket, HardDrive, Scale, Printer,
 } from "lucide-react";
 import { GideonMark } from "@/components/gideon/GideonMark";
 
@@ -38,6 +38,8 @@ export const navGroups = [
       { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
+      // Print any file on the office printer (owner, 18 Nov 2026): company members, when the server has a printer.
+      { title: "Print", url: "/print", icon: Printer },
     ],
   },
   {

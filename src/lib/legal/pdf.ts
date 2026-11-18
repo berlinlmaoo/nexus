@@ -51,3 +51,23 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
   if (!looksLikePdf(pdf)) throw new PdfError("PDF service returned something that is not a PDF")
   return pdf
 }
+
+/**
+ * Any office file → PDF through the sidecar's LibreOffice route (print an uploaded file, 18 Nov 2026): Word, Excel,
+ * PowerPoint. LibreOffice picks the importer from the extension, so `fileName` must keep the real one (".xlsx").
+ */
+export async function officeToPdf(bytes: Buffer, fileName: string, mimeType = "application/octet-stream"): Promise<Buffer> {
+  if (!GOTENBERG_URL) throw new PdfError("PDF conversion is not set up on this server (GOTENBERG_URL)")
+  const form = new FormData()
+  form.append("files", new Blob([new Uint8Array(bytes)], { type: mimeType }), fileName)
+  let res: Response
+  try {
+    res = await fetch(`${GOTENBERG_URL}/forms/libreoffice/convert`, { method: "POST", body: form, signal: AbortSignal.timeout(120_000) })
+  } catch (error) {
+    throw new PdfError(`PDF service unreachable: ${(error as Error).message}`)
+  }
+  if (!res.ok) throw new PdfError(`PDF conversion failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`)
+  const pdf = Buffer.from(await res.arrayBuffer())
+  if (!looksLikePdf(pdf)) throw new PdfError("PDF service returned something that is not a PDF")
+  return pdf
+}

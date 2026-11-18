@@ -8,8 +8,10 @@ import { docToPrintHtml, escapeHtml } from "@/lib/print/doc-html"
 // BoD / One Above All. The deciding functions are the item screens' own (lib/print/service.ts wires them); here
 // they are faked so every branch is visible.
 
-function deps(o: { legal?: string[]; legalDocs?: string[]; docs?: Record<string, string[]> } = {}): PrintAccessDeps {
+function deps(o: { legal?: string[]; legalDocs?: string[]; docs?: Record<string, string[]>; members?: string[]; uploads?: Record<string, string> } = {}): PrintAccessDeps {
   return {
+    isMember: async (u) => (o.members ?? []).includes(u),
+    ownsUpload: async (u, id) => o.uploads?.[id] === u,
     hasLegal: async (u) => (o.legal ?? []).includes(u),
     legalDocExists: async (id) => (o.legalDocs ?? []).includes(id),
     docAccess: async (u, id) => ({ exists: id in (o.docs ?? {}), read: (o.docs?.[id] ?? []).includes(u) }),
@@ -37,6 +39,16 @@ describe("who may print", () => {
     const d = deps({ legal: ["lawyer"], legalDocs: ["L1"], docs: { D1: ["writer"] } })
     expect(await canPrint("lawyer", "doc", "D1", d)).toMatchObject({ ok: false, status: 403 })
     expect(await canPrint("writer", "legal", "L1", d)).toMatchObject({ ok: false, status: 403 })
+  })
+})
+
+describe("who may print an uploaded file", () => {
+  it("any member of the company workspace, only their own upload", async () => {
+    const d = deps({ members: ["staff", "other"], uploads: { U1: "staff" } })
+    expect(await canPrint("staff", "upload", "U1", d)).toEqual({ ok: true })
+    expect(await canPrint("other", "upload", "U1", d)).toMatchObject({ ok: false, status: 404, code: "UPLOAD_GONE" })
+    expect(await canPrint("outsider", "upload", "U1", d)).toMatchObject({ ok: false, status: 403, code: "NOT_A_MEMBER" })
+    expect(await canPrint("staff", "upload", "gone", d)).toMatchObject({ ok: false, status: 404 })
   })
 })
 

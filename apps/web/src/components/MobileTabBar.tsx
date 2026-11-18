@@ -17,6 +17,7 @@ import { SetStatusDialog } from "@/components/SetStatusDialog";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import { navGroups } from "@/components/nav-groups";
+import { usePrinting } from "@/lib/print-api";
 import { thumbUrl } from "@/lib/thumb";
 import { openGlobalSearch } from "@/lib/search-event";
 
@@ -196,6 +197,8 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   // Z Vault and Threads are the company's (Z Networks) only.
   const isCompany = membersInfo?.isCompany === true;
   const canAccessLegal = membersInfo?.canAccessLegal === true;
+  // Print (18 Nov 2026): only while the server has a printer.
+  const printing = usePrinting();
   // The pipeline board has no entry in More (owner, 9 Oct 2026): it opens from Projects like any project.
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
@@ -256,7 +259,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                   {/* Sentence case, as the sidebar (UI tour run 20, R20-WM-2: "HOME", "WORK" in small caps). */}
                   <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t(g.label)}</div>
                   <div className="grid grid-cols-1 gap-0.5">
-                    {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking")) && (canAccessLegal || item.url !== "/legal")).map((item) => {
+                    {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads" && item.url !== "/room-booking" && item.url !== "/print")) && (canAccessLegal || item.url !== "/legal") && (printing.enabled || item.url !== "/print")).map((item) => {
                       const active = isActive(item.url);
                       return (
                         <Link
