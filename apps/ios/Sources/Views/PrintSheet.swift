@@ -5,6 +5,8 @@ import SwiftUI
 // ••• menu open. Copies (1…5), Color / Black & white (black & white by default), then the job's state, asked
 // of the server every 2.5 s for at most 2 minutes. Shown only while RemoteConfig says printing is on.
 // For a file uploaded on the Print screen (kind .upload) it also takes the pages to print ("1-3,5").
+// Above the controls: the printer's live status (PrinterStatusStore, every 5 s) and a preview of the exact PDF
+// that prints (PrintPreviewAndStatus.swift); a page opens larger as a push in this sheet's NavigationStack.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct PrintSheet: View {
@@ -16,6 +18,8 @@ struct PrintSheet: View {
     /// Uploads only: the upload was used up (a job was made, which deletes it when it ends, or the server says
     /// it has expired). The Print screen then forgets it instead of deleting it.
     var onUploadUsed: (() -> Void)? = nil
+    /// The job ended (done or failed): the Print screen refreshes its recent prints.
+    var onJobFinished: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var config = RemoteConfig.shared
@@ -27,15 +31,25 @@ struct PrintSheet: View {
     /// The 2-minute poll ran out while the printer still said printing.
     @State private var stillPrinting = false
     @State private var pageRanges = ""
+    @State private var printer = PrinterStatusStore()
+    @State private var preview = PrintPreviewModel()
+    /// The page opened larger (0-based), pushed in this sheet's stack.
+    @State private var zoomPage: Int?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     LabeledContent(T("Printer"), value: config.printerName ?? "—")
+                    if job == nil { PrinterStatusPanel(status: printer.status, failed: printer.failed, showNote: false) }
                     if !title.isEmpty {
                         LabeledContent(T("Document"), value: title)
                     }
+                }
+                Section(T("Preview")) {
+                    PrintPreviewStrip(model: preview, included: includedPages, mono: colorMode == .mono,
+                                      onRetry: { Task { await preview.load(kind: kind, id: id) } },
+                                      onOpen: { zoomPage = $0 })
                 }
                 Section {
                     Stepper(value: $copies, in: 1...config.printingMaxCopies) {
@@ -72,6 +86,11 @@ struct PrintSheet: View {
             }
             .navigationTitle(T("Print"))
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $zoomPage) { i in
+                if let doc = preview.document {
+                    PrintPageLargeView(document: doc, index: i, mono: colorMode == .mono, included: includedPages)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(job?.isFinished == true ? T("Done") : T("Close")) { dismiss() }
@@ -81,8 +100,10 @@ struct PrintSheet: View {
         }
         // Closing mid-send would leave the person not knowing whether it went out.
         .interactiveDismissDisabled(sending)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .task(id: job?.id) { await poll() }
+        .task { await preview.load(kind: kind, id: id) }
+        .printerStatusPolling(printer)
     }
 
     /// Which pages of an upload: empty = all. Checked here as the server checks it, so a typo is caught before
@@ -121,16 +142,42 @@ struct PrintSheet: View {
         }
     }
 
+    /// The pages an upload's typed range prints (1-based), for dimming the rest; nil = all.
+    private var includedPages: Set<Int>? {
+        guard kind == .upload, let count = pageCount ?? preview.document?.pageCount else { return nil }
+        return PrintPageRanges.pages(pageRanges, pageCount: count)
+    }
+
+    /// This job in the printer's queue, while it is there.
+    private func queued(_ job: PrintJob) -> PrinterQueueJob? { printer.status?.queueJob(for: job.id) }
+
+    /// The printer's cable is out while this job waits: never "Printing…" then (owner, 18 Nov 2026).
+    private func waitsForPrinter(_ job: PrintJob) -> Bool {
+        !job.isFinished && (printer.status?.isDisconnected == true || queued(job)?.state == "stalled")
+    }
+
+    /// "Printing…" made precise by the queue: its place in line, or that it is printing now.
+    private func headline(_ job: PrintJob) -> String {
+        if waitsForPrinter(job) { return printerDisconnectedText() }
+        if !job.isFinished, let q = queued(job) {
+            if q.position > 1 { return String(format: T("Position %d in the queue"), q.position) }
+            if q.state == "printing" { return T("Printing now") }
+        }
+        return job.statusLabel
+    }
+
     @ViewBuilder private func statusSection(_ job: PrintJob) -> some View {
         Section(T("Status")) {
             HStack(spacing: 10) {
                 switch job.status {
                 case "done": Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.success)
                 case "failed": Image(systemName: "xmark.octagon.fill").foregroundStyle(NX.danger)
-                default: ProgressView()
+                default:
+                    if waitsForPrinter(job) { Image(systemName: "cable.connector.slash").foregroundStyle(NX.warning) } else { ProgressView() }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(job.statusLabel).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                    Text(headline(job)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(job.pagesLabel + " · " + (job.isColor ? T("Color") : T("Black & white")))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
@@ -139,9 +186,13 @@ struct PrintSheet: View {
             if job.status == "failed", let error = job.error, !error.isEmpty {
                 Text(error).font(NXFont.text(13)).foregroundStyle(NX.danger)
             }
-            if stillPrinting && !job.isFinished {
+            if stillPrinting && !job.isFinished && !waitsForPrinter(job) {
                 Text(T("Still printing. Check the Print log in Settings later."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+            // The printer as it is now (paper out, who is ahead), under the job.
+            if !job.isFinished, printer.status?.isDisconnected != true {
+                PrinterStatusPanel(status: printer.status, failed: printer.failed, showNote: false)
             }
         }
     }
@@ -154,6 +205,7 @@ struct PrintSheet: View {
             job = try await APIClient.shared.submitPrint(kind: kind, id: id, copies: copies, colorMode: colorMode,
                                                          pageRanges: kind == .upload ? pageRanges : nil)
             if kind == .upload { onUploadUsed?() }
+            if job?.isFinished == true { onJobFinished?() }
         } catch {
             if kind == .upload, (error as? PrintAPIError)?.code == "UPLOAD_GONE" { onUploadUsed?() }
             problem = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong on our side. Try again in a moment.")
@@ -169,7 +221,7 @@ struct PrintSheet: View {
             guard !Task.isCancelled, let current = job else { return }
             if let fresh = try? await APIClient.shared.printJob(id: current.id) {
                 job = fresh
-                if fresh.isFinished { return }
+                if fresh.isFinished { onJobFinished?(); return }
             }
         }
         stillPrinting = true

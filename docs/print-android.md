@@ -320,6 +320,132 @@ Rows with `kind: "upload"` get an upload icon (iOS `arrow.up.doc`) and the label
 - [ ] Unit tests: the page-range checker (same cases as `src/__tests__` for page-ranges), `PrintUpload` decoding,
       the new error-code mapping.
 
+## Preview, live printer status and recent prints (owner, 18 Nov 2026)
+
+iOS reference: `apps/ios/Sources/Views/PrintPreviewAndStatus.swift` (`PrinterStatusStore`, `PrinterStatusPanel`,
+`PrintPreviewModel`, `PrintPreviewStrip`, `PrintPageLargeView`), `Views/PrintSheet.swift`, `Views/PrintUploadView.swift`,
+`PrintModels.swift` (`PrinterStatus`, `PrinterQueueJob`, `PrinterReason`, `PrintPageRanges.pages`), `PrintAPI.swift`
+(`printPreview`, `printerStatus`).
+
+### A. Page preview in the print sheet (every entry point: Legal, page, upload)
+
+`GET /api/print/preview?kind=legal|doc|upload&id=<id>[&version=N]` (Legal: leave out `version`, as for printing)
+→ `200 application/pdf` (no-store): the exact PDF the print sends. No job, no log row, not counted in the
+hourly limit. Errors are JSON `{ error, code }` with the codes of `POST /api/print` (403 / 404 incl.
+`UPLOAD_GONE`, 422 `NOT_PRINTABLE`, 502 `CONVERSION_FAILED`, 503). Legal and uploads answer at once; a page
+is rendered by the server first (a few seconds): use a 120 s timeout.
+
+- Load it when the sheet opens, with the session like every API call. Render with `PdfRenderer` from a temp
+  file. **Lazily**: a horizontal `LazyRow` of thumbnails (≈84×119 dp, page number under each), each page
+  rendered only when it is composed (files can have 50+ pages); cache the bitmaps by index.
+- **Black & white** selected → thumbnails in grayscale (`ColorMatrix().apply { setToSaturation(0f) }`).
+- Uploads: pages outside the typed range ("1-3,5", same parser as the server) at 35 % opacity; while the
+  range is invalid nothing is dimmed.
+- Tap a page → that page larger, swipe for the others (a pager inside the sheet, not a second sheet), title
+  "Page {n} of {m}".
+- States: loading "Loading the preview…", error "Couldn't load the preview" + the mapped error + Try again,
+  0 pages "This file has no pages to show.".
+
+### B. Live printer status (Print screen and print sheet)
+
+`GET /api/print/status` (company members; cached 3 s on the server; 403 `NOT_A_MEMBER`, 503
+`PRINT_NOT_CONFIGURED`):
+
+```json
+{ "reachable": true, "state": "printing",
+  "reasons": [ { "keyword": "marker-supply-low", "severity": "warning" } ],
+  "message": null, "acceptingJobs": true, "waiting": 2,
+  "jobs": [
+    { "position": 1, "state": "printing", "who": { "id": "…", "name": "Rani" }, "mine": false },
+    { "position": 2, "state": "waiting", "who": null, "mine": false },
+    { "position": 3, "state": "waiting", "who": { "id": "…", "name": "Bagas" }, "mine": true,
+      "title": "Rundown.xlsx", "nexusJobId": "0193f…" } ],
+  "checkedAt": "2026-11-18T04:12:00.000Z" }
+```
+
+- `state`: `idle` | `printing` | `stopped` | `error` | `disconnected` | `unreachable`. Job `state`: `printing` |
+  `waiting` | `held` | `stopped` | `stalled`. `who: null` = not sent from NEXUS → "Outside NEXUS". Other people's
+  jobs carry only the name, never a title (`title` / `nexusJobId` only on your own).
+- Poll every 5 s while the screen / sheet is visible and the app is in the foreground (a
+  `LaunchedEffect` + `repeatOnLifecycle(STARTED)`); stop otherwise.
+- Panel: coloured dot + headline (idle green, printing blue, stopped / disconnected amber, error / unreachable
+  red); one line per reason (known keywords below, else the keyword itself; error red, warning amber, report
+  grey); "Printing now: {name}" (your own: "You · {title}"); "{n} waiting" when `waiting > 0`; when
+  `acceptingJobs` is false "The printer isn't taking prints right now."; small caption on the Print screen:
+  "Prints sent straight to the printer over WiFi don't show here." Loading: "Checking the printer…"; error:
+  "Couldn't check the printer" + the reason.
+- **Disconnected (real case: the printer's USB cable is out; CUPS "Waiting for printer to become available")**:
+  headline "Not connected" and the sentence "The printer isn't connected to the server. Your print comes out as
+  soon as it's connected again." In this state NEVER show "Printing…" for a job: in the sheet's job status,
+  while the job is queued/printing and `state == "disconnected"` **or** its queue entry is `stalled`, the
+  headline is that sentence (icon: unplugged cable, amber) instead of Printing…/Queued.
+- Print sheet: the panel under the printer name before sending; after sending, find your job in `jobs` by
+  `nexusJobId == job.id`: position > 1 → "Position {n} in the queue"; position 1 and `printing` → "Printing
+  now"; otherwise the job status as before; the panel stays under the status until the job ends.
+
+| keyword | EN | ID |
+|---|---|---|
+| media-empty, media-needed | Out of paper | Kertas habis |
+| media-jam | Paper jam | Kertas macet |
+| marker-supply-empty | Out of ink | Tinta habis |
+| marker-supply-low | Ink is low | Tinta hampir habis |
+| door-open, cover-open | The printer cover is open | Penutup printer terbuka |
+| paused | The printer is paused | Printer dijeda |
+
+### C. Recent prints on the Print screen
+
+- "Recent prints" with **See all** (→ the Print log screen): `GET /api/print/jobs?userId=<me>&limit=10` (your own,
+  also for BoD/OAA), rows as in the Print log (without the person's name). Refresh when a job from the sheet
+  ends (done/failed), on pull to refresh and when the screen opens. Empty: "No prints yet" + "Your prints show up
+  here: what, how many pages, and whether it printed."
+- Layout: phone stacked (upload card, printer status, recent prints); tablet / wide: two columns, upload left,
+  status + recent right (≈360 dp).
+
+### Strings (EN → ID)
+
+| English | Indonesian |
+|---|---|
+| Preview | Pratinjau |
+| Loading the preview… | Memuat pratinjau… |
+| Couldn't load the preview | Pratinjau tidak bisa dimuat |
+| This file has no pages to show. | File ini tidak punya halaman untuk ditampilkan. |
+| Page {n} of {m} | Halaman {n} dari {m} |
+| Not printed (a11y, dimmed page) | Tidak dicetak |
+| Printer status | Status printer |
+| Checking the printer… | Mengecek printer… |
+| Couldn't check the printer | Status printer tidak bisa dicek |
+| Ready | Siap |
+| Printing | Sedang mencetak |
+| The printer stopped | Printer berhenti |
+| There's a problem | Ada masalah |
+| Not connected | Tidak tersambung |
+| The server can't reach the printer | Printer tidak bisa dihubungi dari server |
+| The printer isn't connected to the server. Your print comes out as soon as it's connected again. | Printer tidak tersambung ke server, print akan keluar begitu tersambung lagi. |
+| The printer isn't taking prints right now. | Printer sedang tidak menerima print. |
+| Printing now: {name} | Sedang mencetak: {name} |
+| You | Kamu |
+| Outside NEXUS | Di luar NEXUS |
+| {n} waiting | {n} menunggu |
+| Position {n} in the queue | Posisi antrean ke-{n} |
+| Printing now | Sedang dicetak |
+| Prints sent straight to the printer over WiFi don't show here. | Print yang dikirim langsung ke printer lewat WiFi tidak terlihat di sini. |
+| Recent prints | Print terakhir |
+| See all | Lihat semua |
+| Your prints show up here: what, how many pages, and whether it printed. | Print kamu muncul di sini: apa yang dicetak, berapa halaman, dan apakah berhasil. |
+
+### Acceptance
+
+- [ ] The sheet shows the preview for Legal, a page (after a few seconds) and an upload; 50+ pages scroll
+      smoothly (pages render only near the screen); Black & white turns the thumbnails gray; an upload's range
+      dims the other pages; tap opens the page larger and swipes; error + Try again works.
+- [ ] Status polls every 5 s only while visible and foreground; known reasons read as sentences; other people's
+      jobs show a name only; `who: null` reads "Outside NEXUS".
+- [ ] With the printer unplugged (`disconnected`, job `stalled`) no screen says "Printing…": the sheet shows "The
+      printer isn't connected to the server…" for the waiting job, the panel says "Not connected" + that sentence.
+- [ ] After sending, "Position {n} in the queue" while others are ahead, "Printing now" when it is first and printing.
+- [ ] Recent prints shows your last 10, refreshes when the job ends, See all opens the Print log; two columns on
+      a tablet.
+
 ## UI tour ids
 
 The iOS/web tour (`apps/ios/scripts/ui-tour-screens.json`) adds `legal-print` (the print sheet over the
