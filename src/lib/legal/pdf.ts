@@ -26,3 +26,28 @@ export async function docxToPdf(docx: Buffer): Promise<Buffer> {
   if (!looksLikePdf(pdf)) throw new PdfError("PDF service returned something that is not a PDF")
   return pdf
 }
+
+/**
+ * HTML → PDF through the same sidecar's Chromium route (print to the office printer, 18 Nov 2026: a Doc page). The
+ * page sets its own A4 size and margins in CSS (@page), so preferCssPageSize is on; it must name no outside
+ * resource (lib/print/doc-html.ts), since Chromium would fetch it from inside the server network.
+ */
+export async function htmlToPdf(html: string): Promise<Buffer> {
+  if (!GOTENBERG_URL) throw new PdfError("PDF conversion is not set up on this server (GOTENBERG_URL)")
+  const form = new FormData()
+  form.append("files", new Blob([html], { type: "text/html" }), "index.html")
+  form.append("paperWidth", "8.27")
+  form.append("paperHeight", "11.7")
+  form.append("preferCssPageSize", "true")
+  form.append("printBackground", "true")
+  let res: Response
+  try {
+    res = await fetch(`${GOTENBERG_URL}/forms/chromium/convert/html`, { method: "POST", body: form, signal: AbortSignal.timeout(90_000) })
+  } catch (error) {
+    throw new PdfError(`PDF service unreachable: ${(error as Error).message}`)
+  }
+  if (!res.ok) throw new PdfError(`PDF conversion failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`)
+  const pdf = Buffer.from(await res.arrayBuffer())
+  if (!looksLikePdf(pdf)) throw new PdfError("PDF service returned something that is not a PDF")
+  return pdf
+}
