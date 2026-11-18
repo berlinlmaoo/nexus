@@ -4,7 +4,7 @@ import { docTitle } from "@/lib/doc-title";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { ArrowLeft, Check, CloudOff, Copy, Link2, Loader2, Lock, MoreHorizontal, MoveHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, CloudOff, Copy, Link2, Loader2, Lock, MoreHorizontal, MoveHorizontal, Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, apiFetch, fmtDate, nexusApi, textToTiptap } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -19,6 +19,8 @@ import { BlockEditor, type RestSaveResult, type SaveStatus } from "@/components/
 import { DocPageHeader } from "@/components/editor/PageHeader";
 import { useEditorCtx } from "@/components/editor/useEditorCtx";
 import type { CollabUser } from "@/lib/collab-provider";
+import { PrintDialog } from "@/components/print/PrintDialog";
+import { usePrinting } from "@/lib/print-api";
 
 export const Route = createFileRoute("/_app/docs/$docId")({
   component: DocPage,
@@ -54,6 +56,9 @@ function DocPage() {
   const [status, setStatus] = useState<SaveStatus>("connecting");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [peers, setPeers] = useState<CollabUser[]>([]);
+  // Print to the office printer (18 Nov 2026): in the page menu when this server has a printer.
+  const printing = usePrinting();
+  const [printOpen, setPrintOpen] = useState(false);
   const editorRef = useRef<Editor | null>(null);
   const titleDirty = useRef(false);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -224,11 +229,13 @@ function DocPage() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => { void navigator.clipboard.writeText(`${window.location.origin}/docs/${docId}`).then(() => toast.success(t("Link copied"))); }}><Link2 className="mr-2 h-4 w-4" />{t("Copy link")}</DropdownMenuItem>
                 <DropdownMenuItem disabled={duplicate.isPending} onSelect={() => duplicate.mutate()}><Copy className="mr-2 h-4 w-4" />{t("Duplicate")}</DropdownMenuItem>
+                {printing.enabled && <DropdownMenuItem onSelect={() => setPrintOpen(true)}><Printer className="mr-2 h-4 w-4" />{t("Print")}</DropdownMenuItem>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => { if (window.confirm(t("Delete this page? You can restore it from Control Room → Audit."))) del.mutate(); }}><Trash2 className="mr-2 h-4 w-4" />{t("Delete")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {d && printing.enabled && <PrintDialog open={printOpen} onOpenChange={setPrintOpen} kind="doc" id={docId} title={title || t("Untitled")} />}
         </div>
       </div>
 
