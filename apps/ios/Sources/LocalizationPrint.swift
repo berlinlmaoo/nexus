@@ -67,7 +67,6 @@ extension AppLanguage {
         "Couldn't load the preview": "Pratinjau tidak bisa dimuat",
         "Ink is low": "Tinta hampir habis",
         "Loading the preview…": "Memuat pratinjau…",
-        "Not connected": "Tidak tersambung",
         "Not printed": "Tidak dicetak",
         "Out of ink": "Tinta habis",
         "Out of paper": "Kertas habis",
@@ -83,7 +82,6 @@ extension AppLanguage {
         "Ready": "Siap",
         "Recent prints": "Print terakhir",
         "The printer cover is open": "Penutup printer terbuka",
-        "The printer isn't connected to the server. Your print comes out as soon as it's connected again.": "Printer tidak tersambung ke server, print akan keluar begitu tersambung lagi.",
         "The printer isn't taking prints right now.": "Printer sedang tidak menerima print.",
         "The printer is paused": "Printer dijeda",
         "The printer stopped": "Printer berhenti",
@@ -91,5 +89,10 @@ extension AppLanguage {
         "There's a problem": "Ada masalah",
         "This file has no pages to show.": "File ini tidak punya halaman untuk ditampilkan.",
         "Your prints show up here: what, how many pages, and whether it printed.": "Print kamu muncul di sini: apa yang dicetak, berapa halaman, dan apakah berhasil.",
+        // Printer over WiFi, queue names (18 Nov 2026).
+        "No one waiting": "Tidak ada yang menunggu",
+        "Printer says: %@": "Kata printer: %@",
+        "The printer can't be reached": "Printer tidak terjangkau",
+        "The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back.": "Printer tidak terjangkau (mati atau di luar WiFi kantor). Print akan keluar begitu printer terjangkau lagi.",
     ]
 }

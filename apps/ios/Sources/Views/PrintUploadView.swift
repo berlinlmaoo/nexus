@@ -100,6 +100,8 @@ struct PrintUploadView: View {
         }
         .printerStatusPolling(printer)
         .task { await loadRecent() }
+        // The "your print is ready / failed" push while this screen is open.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusPrintJobEnded)) { _ in Task { await loadRecent() } }
     }
 
     /// The file being prepared, the chosen file, or the empty state, with any problem under it.

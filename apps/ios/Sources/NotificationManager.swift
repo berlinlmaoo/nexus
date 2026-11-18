@@ -430,6 +430,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 return
             }
             completionHandler([.banner, .sound, .badge])
+            // print_done / print_failed: an open Print screen refreshes its recent prints.
+            if type == "print_done" || type == "print_failed" {
+                NotificationCenter.default.post(name: .nexusPrintJobEnded, object: nil)
+            }
             // Anything but a plain chat message may be a new Inbox row: the tab bar's count follows.
             if type != "MESSAGE" { await InboxBadge.shared.refresh(force: true) }
         }

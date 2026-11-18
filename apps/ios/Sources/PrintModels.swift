@@ -226,6 +226,8 @@ struct PrinterReason: Decodable, Hashable, Sendable {
         case "marker-supply-low": return T("Ink is low")
         case "door-open", "cover-open": return T("The printer cover is open")
         case "paused": return T("The printer is paused")
+        // What CUPS says while it can't reach the printer over the office WiFi (off, or out of range).
+        case "offline", "connecting-to-device", "timed-out": return T("The printer can't be reached")
         default: return keyword
         }
     }
@@ -252,12 +254,16 @@ struct PrinterQueueJob: Decodable, Hashable, Sendable {
         nexusJobId = (try? c.decodeIfPresent(String.self, forKey: .nexusJobId)) ?? nil
     }
 
-    /// Who sent it: "You", their name, or "Outside NEXUS".
+    /// Who sent it: "You · <title>" for your own, their name, or "Outside NEXUS" (not sent from NEXUS).
     var whoLabel: String {
-        if mine { return T("You") }
+        if mine {
+            if let title, !title.isEmpty { return T("You") + " · " + title }
+            return T("You")
+        }
         if let who, !who.name.isEmpty { return who.name }
         return T("Outside NEXUS")
     }
+    var isOutsideNexus: Bool { !mine && who == nil }
 }
 
 /// The office printer right now (cached 3 s on the server).
@@ -282,8 +288,20 @@ struct PrinterStatus: Decodable, Equatable, Sendable {
         jobs = (try? c.decodeIfPresent([PrinterQueueJob].self, forKey: .jobs)) ?? []
     }
 
-    /// The printer's USB cable is out (CUPS: "Waiting for printer to become available"): prints wait on the server.
+    /// Since 18 Nov 2026 CUPS reaches the printer over WiFi: "disconnected" = the printer is off or out of the
+    /// office WiFi. Prints wait on the server and come out once it is back.
     var isDisconnected: Bool { state == "disconnected" }
+
+    /// The printer's own message worth showing: not while disconnected (the panel says that plainly) and not
+    /// the routine "Connected to printer".
+    var printerMessage: String? {
+        guard !isDisconnected, let m = message?.trimmingCharacters(in: .whitespacesAndNewlines), !m.isEmpty,
+              !m.lowercased().hasPrefix("connected to printer") else { return nil }
+        return m
+    }
+
+    /// Everyone not printing yet, in queue order.
+    var waitingJobs: [PrinterQueueJob] { jobs.filter { $0.state != "printing" }.sorted { $0.position < $1.position } }
 
     var headline: String {
         switch state {
@@ -291,7 +309,7 @@ struct PrinterStatus: Decodable, Equatable, Sendable {
         case "printing": return T("Printing")
         case "stopped": return T("The printer stopped")
         case "error": return T("There's a problem")
-        case "disconnected": return T("Not connected")
+        case "disconnected": return T("The printer can't be reached")
         default: return T("The server can't reach the printer")
         }
     }
@@ -307,4 +325,9 @@ struct PrinterStatus: Decodable, Equatable, Sendable {
     var current: PrinterQueueJob? { jobs.first { $0.state == "printing" } }
     /// This person's NEXUS job in the queue.
     func queueJob(for jobId: String) -> PrinterQueueJob? { jobs.first { $0.nexusJobId == jobId } }
+}
+
+extension Notification.Name {
+    /// A print_done / print_failed push arrived while the app was open (NotificationManager.willPresent).
+    static let nexusPrintJobEnded = Notification.Name("nexus.print.jobEnded")
 }

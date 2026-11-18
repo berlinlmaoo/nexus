@@ -151,7 +151,7 @@ struct PrintSheet: View {
     /// This job in the printer's queue, while it is there.
     private func queued(_ job: PrintJob) -> PrinterQueueJob? { printer.status?.queueJob(for: job.id) }
 
-    /// The printer's cable is out while this job waits: never "Printing…" then (owner, 18 Nov 2026).
+    /// The printer is off or out of the office WiFi while this job waits: never "Printing…" then (owner, 18 Nov 2026).
     private func waitsForPrinter(_ job: PrintJob) -> Bool {
         !job.isFinished && (printer.status?.isDisconnected == true || queued(job)?.state == "stalled")
     }
@@ -173,7 +173,7 @@ struct PrintSheet: View {
                 case "done": Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.success)
                 case "failed": Image(systemName: "xmark.octagon.fill").foregroundStyle(NX.danger)
                 default:
-                    if waitsForPrinter(job) { Image(systemName: "cable.connector.slash").foregroundStyle(NX.warning) } else { ProgressView() }
+                    if waitsForPrinter(job) { Image(systemName: "wifi.slash").foregroundStyle(NX.warning) } else { ProgressView() }
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline(job)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
