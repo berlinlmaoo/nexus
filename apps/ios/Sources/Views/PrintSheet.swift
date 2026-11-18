@@ -4,12 +4,18 @@ import SwiftUI
 // Print to the office printer (owner, 18 Nov 2026): the sheet a Legal document's Print button and a page's
 // ••• menu open. Copies (1…5), Color / Black & white (black & white by default), then the job's state, asked
 // of the server every 2.5 s for at most 2 minutes. Shown only while RemoteConfig says printing is on.
+// For a file uploaded on the Print screen (kind .upload) it also takes the pages to print ("1-3,5").
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct PrintSheet: View {
     let kind: PrintKind
     let id: String
     let title: String
+    /// Uploads only: the file's page count, for the pages field and its checks.
+    var pageCount: Int? = nil
+    /// Uploads only: the upload was used up (a job was made, which deletes it when it ends, or the server says
+    /// it has expired). The Print screen then forgets it instead of deleting it.
+    var onUploadUsed: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var config = RemoteConfig.shared
@@ -20,6 +26,7 @@ struct PrintSheet: View {
     @State private var problem: String?
     /// The 2-minute poll ran out while the printer still said printing.
     @State private var stillPrinting = false
+    @State private var pageRanges = ""
 
     var body: some View {
         NavigationStack {
@@ -43,6 +50,8 @@ struct PrintSheet: View {
                 }
                 .disabled(sending || job != nil)
 
+                if kind == .upload { pagesSection }
+
                 if job == nil {
                     Section {
                         Button { Task { await send() } } label: {
@@ -52,7 +61,7 @@ struct PrintSheet: View {
                             }
                             .frame(maxWidth: .infinity)
                         }
-                        .disabled(sending)
+                        .disabled(sending || pagesProblem != nil)
                         .accessibilityIdentifier("print.submit")
                     }
                 }
@@ -74,6 +83,42 @@ struct PrintSheet: View {
         .interactiveDismissDisabled(sending)
         .presentationDetents([.medium, .large])
         .task(id: job?.id) { await poll() }
+    }
+
+    /// Which pages of an upload: empty = all. Checked here as the server checks it, so a typo is caught before
+    /// the upload is sent to the printer.
+    private var pagesSection: some View {
+        Section {
+            LabeledContent(T("Pages")) {
+                TextField("", text: $pageRanges, prompt: Text(T("All pages")))
+                    .multilineTextAlignment(.trailing)
+                    .keyboardType(.numbersAndPunctuation)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .accessibilityLabel(T("Pages"))
+            }
+        } footer: {
+            if let pagesProblem {
+                Text(pagesProblem).foregroundStyle(NX.danger)
+            } else {
+                Text(T("e.g. 1-3,5"))
+            }
+        }
+        .disabled(sending || job != nil)
+    }
+
+    /// Why the typed pages can't be printed (uploads only), or nil.
+    private var pagesProblem: String? {
+        guard kind == .upload, let pageCount, pageCount > 0 else { return nil }
+        let maxPages = config.printingMaxPages
+        switch PrintPageRanges.check(pageRanges, pageCount: pageCount) {
+        case .invalid(let why): return why
+        case .count(let n) where n > maxPages:
+            return String(format: T("These pages add up to %d. One print can have at most %d pages."), n, maxPages)
+        case .all where pageCount > maxPages:
+            return String(format: T("This file has %d pages. One print can have at most %d pages."), pageCount, maxPages)
+        default: return nil
+        }
     }
 
     @ViewBuilder private func statusSection(_ job: PrintJob) -> some View {
@@ -106,8 +151,11 @@ struct PrintSheet: View {
         problem = nil
         defer { sending = false }
         do {
-            job = try await APIClient.shared.submitPrint(kind: kind, id: id, copies: copies, colorMode: colorMode)
+            job = try await APIClient.shared.submitPrint(kind: kind, id: id, copies: copies, colorMode: colorMode,
+                                                         pageRanges: kind == .upload ? pageRanges : nil)
+            if kind == .upload { onUploadUsed?() }
         } catch {
+            if kind == .upload, (error as? PrintAPIError)?.code == "UPLOAD_GONE" { onUploadUsed?() }
             problem = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong on our side. Try again in a moment.")
         }
     }
@@ -133,4 +181,6 @@ struct PrintTarget: Identifiable, Hashable {
     let kind: PrintKind
     let id: String
     let title: String
+    /// Uploads only: the file's page count.
+    var pages: Int? = nil
 }

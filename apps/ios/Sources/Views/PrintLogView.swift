@@ -156,7 +156,7 @@ private struct PrintLogRow: View {
                 .font(.system(size: 16)).foregroundStyle(NX.violetText)
                 .frame(width: 32, height: 32)
                 .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .accessibilityLabel(job.kind == "legal" ? T("Legal document") : T("Page"))
+                .accessibilityLabel(job.kindLabel)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(job.title.isEmpty ? "—" : job.title)
