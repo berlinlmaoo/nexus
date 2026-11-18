@@ -206,6 +206,22 @@ export function encodeGetPrinterAttributes(input: { printerUri: string; userName
   })
 }
 
+/** Get-Printer-Attributes sent to the printer itself (not CUPS): its own state and ink levels. */
+export function encodeGetDeviceAttributes(input: { printerUri: string; requestId?: number }): Buffer {
+  return encodeMessage({
+    version: [2, 0],
+    code: IPP_OP.GET_PRINTER_ATTRIBUTES,
+    requestId: input.requestId ?? 1,
+    groups: [{
+      tag: TAG.OPERATION,
+      attrs: [
+        ...operationAttrs(input.printerUri, "nexus"),
+        { tag: VT.KEYWORD, name: "requested-attributes", values: ["printer-state", "printer-state-reasons", "printer-state-message", "marker-levels", "marker-names", "marker-colors", "marker-types"] },
+      ],
+    }],
+  })
+}
+
 /** Get-Jobs (which-jobs=not-completed): what is printing and waiting, oldest first. */
 export function encodeGetJobs(input: { printerUri: string; userName: string; requestId?: number }): Buffer {
   return encodeMessage({
@@ -374,4 +390,36 @@ export async function ippPost(httpUrl: string, body: Buffer, timeoutMs = 60_000)
   } catch (error) {
     throw new IppTransportError(`Printer sent an unreadable answer: ${(error as Error).message}`)
   }
+}
+
+/**
+ * POST to the printer itself (status only, 18 Nov 2026). The Epson answers plain HTTP with 426 (it wants TLS) and
+ * checks the Host header against its own name, so: https with its self-signed certificate accepted (LAN, read-only
+ * status, never a document), and `hostHeader` = the printer's name ("EPSONE0F00A.local:631"). Plain http is used as
+ * is (the dev relay terminates TLS itself). One kept-alive agent so the TLS handshake isn't paid on every poll.
+ */
+let deviceAgent: import("node:https").Agent | null = null
+export async function ippPostDevice(url: string, body: Buffer, opts: { hostHeader?: string | null; timeoutMs?: number } = {}): Promise<IppMessage> {
+  const u = new URL(url)
+  const secure = u.protocol === "https:"
+  const mod = secure ? await import("node:https") : await import("node:http")
+  if (secure && !deviceAgent) deviceAgent = new (await import("node:https")).Agent({ keepAlive: true, maxSockets: 2, rejectUnauthorized: false })
+  return new Promise<IppMessage>((resolve, reject) => {
+    const req = mod.request({
+      host: u.hostname, port: Number(u.port) || (secure ? 443 : 80), path: u.pathname + u.search, method: "POST",
+      ...(secure ? { agent: deviceAgent!, rejectUnauthorized: false } : {}),
+      headers: { "Content-Type": "application/ipp", "Content-Length": body.length, ...(opts.hostHeader ? { Host: opts.hostHeader } : {}) },
+    }, (res) => {
+      const chunks: Buffer[] = []
+      res.on("data", (c: Buffer) => chunks.push(c))
+      res.on("end", () => {
+        if ((res.statusCode ?? 0) !== 200) return reject(new IppTransportError(`Printer answered HTTP ${res.statusCode}`))
+        try { resolve(decodeMessage(Buffer.concat(chunks))) } catch (e) { reject(new IppTransportError(`Printer sent an unreadable answer: ${(e as Error).message}`)) }
+      })
+      res.on("error", (e) => reject(new IppTransportError(e.message)))
+    })
+    req.setTimeout(opts.timeoutMs ?? 3000, () => req.destroy(new IppTransportError("Printer did not answer in time")))
+    req.on("error", (e) => reject(e instanceof IppTransportError ? e : new IppTransportError(`Printer unreachable: ${e.message}`)))
+    req.end(body)
+  })
 }

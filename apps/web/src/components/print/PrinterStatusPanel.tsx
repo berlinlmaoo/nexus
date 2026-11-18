@@ -136,6 +136,7 @@ function Full({ s, className, name, tn }: { s: PrinterStatus; className: string;
           </div>
         </dl>
       )}
+      {!!s.inks?.length && <Inks inks={s.inks} />}
       <p className="text-xs text-muted-foreground">{t("Prints sent straight to the printer over WiFi don't show here.")}</p>
     </section>
   );
@@ -159,5 +160,23 @@ function Compact({ s, className }: { s: PrinterStatus; className: string }) {
       )}
       <Notes s={s} />
     </section>
+  );
+}
+
+/** One small bar per ink (marker-levels), only when the printer reports them. */
+function Inks({ inks }: { inks: NonNullable<PrinterStatus["inks"]> }) {
+  const { t } = useLang();
+  return (
+    <div className="space-y-1.5" aria-label={t("Ink levels")}>
+      {inks.map((ink) => (
+        <div key={ink.name} className="flex items-center gap-2 text-xs">
+          <span className="w-20 shrink-0 truncate text-muted-foreground">{ink.name}</span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ink.level ?? undefined} aria-label={ink.name}>
+            {ink.level !== null && <div className="h-full rounded-full" style={{ width: `${ink.level}%`, background: ink.color ?? "currentColor" }} />}
+          </div>
+          <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{ink.level !== null ? `${ink.level}%` : "—"}</span>
+        </div>
+      ))}
+    </div>
   );
 }

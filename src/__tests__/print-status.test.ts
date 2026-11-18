@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { parseReasons, summarize } from "@/lib/print/status"
+import { parseInks, parseReasons, summarize } from "@/lib/print/status"
 import { IPP_OP, TAG, VT, attrOf, attrValues, decodeMessage, encodeGetJobs, encodeGetPrinterAttributes, encodeMessage, jobGroups } from "@/lib/print/ipp"
 
 // Printer status panel (owner, 18 Nov 2026): state, reasons, who is printing, how many wait — and nothing about other
@@ -13,7 +13,7 @@ const nexus = new Map([
 
 describe("printer status", () => {
   it("orders the queue (printing first), names NEXUS senders, hides other people's titles", () => {
-    const s = summarize({ reachable: true, printerState: 4, reasons: ["none"], message: null, accepting: true, jobs: [
+    const s = summarize({ device: null, reachable: true, printerState: 4, reasons: ["none"], message: null, accepting: true, jobs: [
       { ippJobId: 43, state: 3 }, { ippJobId: 42, state: 3 }, { ippJobId: 41, state: 5 },
     ] }, nexus, "me")
     expect(s.state).toBe("printing")
@@ -27,9 +27,9 @@ describe("printer status", () => {
   })
 
   it("is idle with an empty queue, stopped when paused, error when out of paper", () => {
-    expect(summarize({ reachable: true, printerState: 3, reasons: ["none"], message: null, accepting: true, jobs: [] }, nexus, "me")).toMatchObject({ state: "idle", waiting: 0, jobs: [] })
-    expect(summarize({ reachable: true, printerState: 5, reasons: ["paused"], message: null, accepting: true, jobs: [] }, nexus, "me").state).toBe("stopped")
-    const paper = summarize({ reachable: true, printerState: 5, reasons: ["media-empty-error", "marker-supply-low-warning"], message: "Out of paper", accepting: true, jobs: [] }, nexus, "me")
+    expect(summarize({ device: null, reachable: true, printerState: 3, reasons: ["none"], message: null, accepting: true, jobs: [] }, nexus, "me")).toMatchObject({ state: "idle", waiting: 0, jobs: [] })
+    expect(summarize({ device: null, reachable: true, printerState: 5, reasons: ["paused"], message: null, accepting: true, jobs: [] }, nexus, "me").state).toBe("stopped")
+    const paper = summarize({ device: null, reachable: true, printerState: 5, reasons: ["media-empty-error", "marker-supply-low-warning"], message: "Out of paper", accepting: true, jobs: [] }, nexus, "me")
     expect(paper.state).toBe("error")
     expect(paper.reasons).toEqual([{ keyword: "media-empty", severity: "error" }, { keyword: "marker-supply-low", severity: "warning" }])
     expect(paper.message).toBe("Out of paper")
@@ -37,17 +37,35 @@ describe("printer status", () => {
 
   it("says disconnected when CUPS waits for the printer (USB unplugged), never 'printing'", () => {
     // What CUPS answered on 18 Nov 2026 with the printer's USB unplugged: still "processing", reasons none.
-    const s = summarize({ reachable: true, printerState: 4, reasons: ["none"], message: "Waiting for printer to become available.", accepting: true, jobs: [
+    const s = summarize({ device: null, reachable: true, printerState: 4, reasons: ["none"], message: "Waiting for printer to become available.", accepting: true, jobs: [
       { ippJobId: 3, state: 5 }, { ippJobId: 43, state: 3 },
     ] }, nexus, "me")
     expect(s.state).toBe("disconnected")
     expect(s.jobs.map((j) => j.state)).toEqual(["stalled", "waiting"])
     expect(s.jobs[0].who).toBeNull()
-    expect(summarize({ reachable: true, printerState: 3, reasons: ["offline-report"], message: null, accepting: true, jobs: [] }, nexus, "me").state).toBe("disconnected")
+    expect(summarize({ device: null, reachable: true, printerState: 3, reasons: ["offline-report"], message: null, accepting: true, jobs: [] }, nexus, "me").state).toBe("disconnected")
+  })
+
+  it("asks the printer itself: CUPS's 'idle' does not count when the printer doesn't answer", () => {
+    const off = summarize({ device: { reachable: false, printerState: null, reasons: [], message: null, inks: [] }, reachable: true, printerState: 3, reasons: ["none"], message: null, accepting: true, jobs: [] }, nexus, "me")
+    expect(off).toMatchObject({ state: "disconnected", source: "printer", inks: [] })
+    const on = summarize({
+      device: { reachable: true, printerState: 3, reasons: ["marker-supply-low-warning"], message: "", inks: [{ name: "Cyan", level: 12, color: "#00FFFF" }] },
+      reachable: true, printerState: 3, reasons: ["none"], message: null, accepting: true, jobs: [],
+    }, nexus, "me")
+    expect(on).toMatchObject({ state: "idle", source: "printer", reasons: [{ keyword: "marker-supply-low", severity: "warning" }], inks: [{ name: "Cyan", level: 12 }] })
+    const paper = summarize({ device: { reachable: true, printerState: 5, reasons: ["media-empty-error"], message: null, inks: [] }, reachable: true, printerState: 3, reasons: ["none"], message: null, accepting: true, jobs: [] }, nexus, "me")
+    expect(paper.state).toBe("error")
+  })
+
+  it("reads ink levels; unknown levels are null", () => {
+    expect(parseInks([80, -1, 5], ["Black", "Cyan"], ["#000000", "#00FFFF#000000", "nope"])).toEqual([
+      { name: "Black", level: 80, color: "#000000" }, { name: "Cyan", level: null, color: "#00FFFF" }, { name: "Ink 3", level: 5, color: null },
+    ])
   })
 
   it("says unreachable when CUPS does not answer", () => {
-    expect(summarize({ reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [] }, nexus, "me")).toMatchObject({ reachable: false, state: "unreachable", jobs: [] })
+    expect(summarize({ device: null, reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [] }, nexus, "me")).toMatchObject({ reachable: false, state: "unreachable", jobs: [] })
   })
 
   it("drops CUPS housekeeping reasons", () => {

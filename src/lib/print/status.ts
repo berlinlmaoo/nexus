@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
-import { printerConfig } from "@/lib/print/config"
-import { attrOf, attrValues, encodeGetJobs, encodeGetPrinterAttributes, ippPost, isIppSuccess, jobGroups, JOB_STATE } from "@/lib/print/ipp"
+import { printerConfig, printerDeviceConfig } from "@/lib/print/config"
+import { attrOf, attrValues, encodeGetDeviceAttributes, encodeGetJobs, encodeGetPrinterAttributes, ippPost, ippPostDevice, isIppSuccess, jobGroups, JOB_STATE } from "@/lib/print/ipp"
 
 /**
  * The office printer right now (owner, 18 Nov 2026: "is it printing, who is printing, how many are waiting"). One
@@ -27,8 +27,15 @@ export type QueueJob = {
   title?: string
   nexusJobId?: string
 }
+/** One ink (marker-*): level 0–100, or null when the printer doesn't know. */
+export type InkLevel = { name: string; level: number | null; color: string | null }
+
 export type PrinterStatus = {
   reachable: boolean
+  /** Where the printer state comes from: the printer itself (PRINT_DEVICE_IPP_URL) or CUPS alone. */
+  source: "printer" | "cups"
+  /** Ink levels when the printer reports them. */
+  inks: InkLevel[]
   state: PrinterState
   reasons: PrinterReason[]
   message: string | null
@@ -39,7 +46,17 @@ export type PrinterStatus = {
   checkedAt: string
 }
 
+/** The printer's own answer (null = not configured). */
+export type DeviceRaw = {
+  reachable: boolean
+  printerState: number | null
+  reasons: string[]
+  message: string | null
+  inks: InkLevel[]
+}
+
 type Raw = {
+  device: DeviceRaw | null
   reachable: boolean
   printerState: number | null
   reasons: string[]
@@ -84,10 +101,14 @@ export function summarize(
   viewerId: string,
   now = new Date(),
 ): PrinterStatus {
+  const source = raw.device ? "printer" as const : "cups" as const
   if (!raw.reachable) {
-    return { reachable: false, state: "unreachable", reasons: [], message: null, acceptingJobs: false, waiting: 0, jobs: [], checkedAt: now.toISOString() }
+    return { reachable: false, source, inks: [], state: "unreachable", reasons: [], message: null, acceptingJobs: false, waiting: 0, jobs: [], checkedAt: now.toISOString() }
   }
-  const reasons = parseReasons(raw.reasons)
+  // Asked directly, the printer's own state and reasons win over CUPS's (which says "idle" for a printer that is off).
+  const dev = raw.device
+  const reasons = parseReasons(dev?.reachable ? dev.reasons : raw.reasons)
+  const message = (dev?.reachable ? dev.message : raw.message) || null
   const active = raw.jobs.filter((j) => JOB_LABEL[j.state]).sort((a, b) => {
     // The one printing first, then the rest in the order CUPS took them.
     const pa = a.state === JOB_STATE.PROCESSING ? 0 : 1
@@ -105,18 +126,21 @@ export function summarize(
       ...(mine ? { title: n!.title, nexusJobId: n!.id } : {}),
     }
   })
-  let state: PrinterState = raw.printerState === 4 ? "printing" : raw.printerState === 5 ? "stopped" : "idle"
+  const printerState = dev?.reachable ? dev.printerState : raw.printerState
+  let state: PrinterState = printerState === 4 ? "printing" : printerState === 5 ? "stopped" : "idle"
   if (state === "idle" && jobs.some((j) => j.state === "printing")) state = "printing"
   if (state === "stopped" && reasons.some((r) => r.severity === "error" && r.keyword !== "paused")) state = "error"
-  if (isDisconnected(reasons, raw.message)) {
+  if ((dev && !dev.reachable) || isDisconnected(parseReasons(raw.reasons), raw.message) || isDisconnected(reasons, message)) {
     state = "disconnected"
     for (const j of jobs) if (j.state === "printing") j.state = "stalled"
   }
   return {
     reachable: true,
+    source,
+    inks: dev?.reachable ? dev.inks : [],
     state,
-    reasons,
-    message: raw.message || null,
+    reasons: state === "disconnected" ? reasons.filter((r) => !DISCONNECTED_REASONS.has(r.keyword)) : reasons,
+    message,
     acceptingJobs: raw.accepting,
     waiting: jobs.filter((j) => j.state !== "printing" && j.state !== "stalled").length,
     jobs,
@@ -126,22 +150,53 @@ export function summarize(
 
 let cache: Raw | null = null
 let inflight: Promise<Raw> | null = null
-const CACHE_MS = 3000
+const CACHE_MS = 5000
+
+/** marker-levels/names/colors → inks. -1/-2/-3 (unknown / some left) read as null. */
+export function parseInks(levels: unknown[], names: unknown[], colors: unknown[]): InkLevel[] {
+  return levels.map((lv, i) => {
+    const n = Number(lv)
+    const color = typeof colors[i] === "string" && /^#[0-9a-f]{6}/i.test(colors[i] as string) ? (colors[i] as string).slice(0, 7) : null
+    return { name: String(names[i] ?? `Ink ${i + 1}`), level: Number.isFinite(n) && n >= 0 && n <= 100 ? n : null, color }
+  })
+}
+
+/** The printer itself, a few seconds' budget: no answer = off or out of the office WiFi. */
+async function readDevice(): Promise<DeviceRaw | null> {
+  const device = printerDeviceConfig()
+  if (!device) return null
+  try {
+    // 3 s: the printer's TLS handshake alone takes ~1 s over WiFi (measured 18 Nov 2026); later polls reuse the socket.
+    const p = await ippPostDevice(device.http, encodeGetDeviceAttributes({ printerUri: device.printerUri }), { hostHeader: device.hostHeader, timeoutMs: 3000 })
+    if (!isIppSuccess(p.code)) return { reachable: false, printerState: null, reasons: [], message: null, inks: [] }
+    return {
+      reachable: true,
+      printerState: Number(attrOf(p, "printer-state")) || null,
+      reasons: attrValues(p, "printer-state-reasons").map(String),
+      message: String(attrOf(p, "printer-state-message") ?? "") || null,
+      inks: parseInks(attrValues(p, "marker-levels"), attrValues(p, "marker-names"), attrValues(p, "marker-colors")),
+    }
+  } catch {
+    return { reachable: false, printerState: null, reasons: [], message: null, inks: [] }
+  }
+}
 
 async function readCups(): Promise<Raw> {
   const printer = printerConfig()
   const at = Date.now()
-  if (!printer) return { reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
+  if (!printer) return { device: null, reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
   try {
-    const [p, j] = await Promise.all([
+    const [p, j, device] = await Promise.all([
       ippPost(printer.http, encodeGetPrinterAttributes({ printerUri: printer.printerUri, userName: "nexus" }), 5000),
       ippPost(printer.http, encodeGetJobs({ printerUri: printer.printerUri, userName: "nexus" }), 5000),
+      readDevice(),
     ])
-    if (!isIppSuccess(p.code)) return { reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
+    if (!isIppSuccess(p.code)) return { device, reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
     const jobs = isIppSuccess(j.code)
       ? jobGroups(j).map((g) => ({ ippJobId: Number(g["job-id"]), state: Number(g["job-state"]) })).filter((x) => Number.isFinite(x.ippJobId))
       : []
     return {
+      device,
       reachable: true,
       printerState: Number(attrOf(p, "printer-state")) || null,
       reasons: attrValues(p, "printer-state-reasons").map(String),
@@ -151,7 +206,7 @@ async function readCups(): Promise<Raw> {
       at,
     }
   } catch {
-    return { reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
+    return { device: null, reachable: false, printerState: null, reasons: [], message: null, accepting: false, jobs: [], at }
   }
 }
 

@@ -32,3 +32,20 @@ export function printingStatus(env: Record<string, string | undefined> = process
   const cfg = printerConfig(env)
   return { enabled: !!cfg, printerName: cfg?.name ?? null, maxCopies: PRINT_LIMITS.maxCopies, maxPages: PRINT_LIMITS.maxPages }
 }
+
+/**
+ * The printer itself, for status only (owner, 18 Nov 2026): CUPS says "idle" whenever it has no job and never asks the
+ * printer, so a printer that is switched off still read "Ready". PRINT_DEVICE_IPP_URL points at the printer's own IPP
+ * endpoint — on the office network a forwarder on VM infra (192.168.223.114:8631 → EPSONE0F00A.local:631, nexus-prod
+ * only), as ipps://192.168.223.114:8631/ipp/print (the Epson wants TLS) + PRINT_DEVICE_HOST. Unset = status from CUPS
+ * alone, as before. Jobs never go there: printing stays on PRINT_IPP_URL (CUPS).
+ */
+export function printerDeviceConfig(env: Record<string, string | undefined> = process.env): { http: string; printerUri: string; hostHeader: string | null } | null {
+  const parsed = parsePrinterUrl(env.PRINT_DEVICE_IPP_URL)
+  if (!parsed) return null
+  // PRINT_DEVICE_HOST: the printer's own name:port ("EPSONE0F00A.local:631"). The Epson refuses a request whose Host
+  // header (and printer-uri) name the forwarder instead of itself.
+  const host = env.PRINT_DEVICE_HOST?.trim() || null
+  const path = new URL(parsed.printerUri.replace(/^ipps?:/, "http:")).pathname
+  return { http: parsed.http, printerUri: host ? `ipps://${host}${path}` : parsed.printerUri, hostHeader: host }
+}
