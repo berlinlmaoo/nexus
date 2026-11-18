@@ -364,7 +364,7 @@ private struct LegalDocumentOverview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if let shown = doc.shownVersion {
-                LegalFileButtons(doc: doc, version: shown, model: model, route: $route)
+                LegalFileButtons(doc: doc, version: shown, model: model, route: $route, showPrint: true)
                 if shown.hasPdf { preview(shown) }
             }
             detailsCard
@@ -564,9 +564,20 @@ struct LegalFileButtons: View {
     let model: LegalDocumentModel
     @Binding var route: LegalFileRoute?
     var compact = false
+    /// The overview's row only (the shown = primary version, which is what the server prints): Print to the
+    /// office printer, when the server has one (RemoteConfig `printing.enabled`).
+    var showPrint = false
 
     @State private var busy: LegalFileFormat?
     @State private var making = false
+    /// The print sheet. On this child view rather than LegalDocumentView, which already presents two sheets.
+    @State private var printTarget: PrintTarget?
+    @State private var config = RemoteConfig.shared
+
+    /// A Word file or a PDF (made, or uploaded) prints; a photo or other upload does not.
+    private var printable: Bool {
+        version.hasPdf || version.hasDocx || (version.hasFile && version.mimeType == "application/pdf")
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -592,7 +603,18 @@ struct LegalFileButtons: View {
                 .disabled(making)
             }
             if version.hasFile { fileButton(.original, T("File"), "paperclip") }
+            if showPrint && config.printingEnabled && printable {
+                Button { printTarget = PrintTarget(kind: .legal, id: doc.id, title: [doc.number, doc.title].filter { !$0.isEmpty }.joined(separator: " - ")) } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "printer")
+                        Text(T("Print"))
+                    }
+                }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: compact))
+                .accessibilityIdentifier("legal.print")
+            }
         }
+        .sheet(item: $printTarget) { t in PrintSheet(kind: t.kind, id: t.id, title: t.title) }
     }
 
     private func fileButton(_ format: LegalFileFormat, _ title: String, _ icon: String) -> some View {
