@@ -47,9 +47,15 @@ function PrintPage() {
   // when its job ends).
   const pending = useRef<string | null>(null);
   pending.current = upload && !sent ? upload.id : null;
-  useEffect(() => () => {
-    const id = pending.current;
-    if (id) void fetch(`/api/print/uploads/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include", keepalive: true, headers: { "X-Nexus-Client": "web/1" } }).catch(() => {});
+  useEffect(() => {
+    const drop = () => {
+      const id = pending.current;
+      pending.current = null;
+      if (id) void fetch(`/api/print/uploads/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include", keepalive: true, headers: { "X-Nexus-Client": "web/1" } }).catch(() => {});
+    };
+    // Leaving the page inside the app, and closing or reloading the tab.
+    window.addEventListener("pagehide", drop);
+    return () => { window.removeEventListener("pagehide", drop); drop(); };
   }, []);
 
   const send = useMutation({
