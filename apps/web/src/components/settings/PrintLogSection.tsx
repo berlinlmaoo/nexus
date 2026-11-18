@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { FileText, Loader2, Printer, Scale } from "lucide-react";
+import { FileText, FileUp, Loader2, Printer, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/DateField";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -78,7 +78,7 @@ export function PrintLogSection() {
           ) : (
             <EmptyState icon={Printer} title={t("No prints yet")}
               message={printing.enabled
-                ? t("Print a Legal document or a page from its menu. Every print shows up here: what, how many pages, and whether it printed.")
+                ? t("Print a file from the Print menu, or a Legal document or a page from its menu. Every print shows up here: what, how many pages, and whether it printed.")
                 : t("The printer isn't set up on this server yet. Once it is, prints show up here.")} />
           )}
         </div>
@@ -100,10 +100,10 @@ export function PrintLogSection() {
 
 function JobRow({ job, showPerson, when }: { job: PrintJob; showPerson: boolean; when: string }) {
   const { t, tn } = useLang();
-  const Icon = job.kind === "legal" ? Scale : FileText;
+  const Icon = job.kind === "legal" ? Scale : job.kind === "upload" ? FileUp : FileText;
   return (
     <li className="flex items-start gap-3 px-4 py-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label={job.kind === "legal" ? t("Legal document") : t("Page")} />
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label={job.kind === "legal" ? t("Legal document") : job.kind === "upload" ? t("Uploaded file") : t("Page")} />
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{job.title}</span>
