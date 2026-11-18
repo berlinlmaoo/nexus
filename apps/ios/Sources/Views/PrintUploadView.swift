@@ -8,10 +8,13 @@ import UniformTypeIdentifiers
 // the person drops here without printing (another file chosen, the screen left) is deleted right away.
 // Reached from More (phone) and the sidebar's Team group (iPad / Mac), `nexus://print`; only while
 // RemoteConfig `printing.enabled`.
+// Beside the upload: the printer's live status (every 5 s while on screen) and the last 10 prints with "See all"
+// (Settings › Print log). iPhone stacks them; iPad / Mac regular width puts them in a right-hand column.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct PrintUploadView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var config = RemoteConfig.shared
     @State private var upload: PrintUpload?
     /// The name of the file being uploaded and converted, while that runs.
@@ -23,6 +26,10 @@ struct PrintUploadView: View {
     @State private var printedOne = false
     /// False once the screen is gone, so an upload that finishes afterwards is deleted, not kept.
     @State private var onScreen = false
+    @State private var printer = PrinterStatusStore()
+    /// The last 10 prints (GET /api/print/jobs?limit=10); nil until loaded.
+    @State private var recent: [PrintJob]?
+    @State private var recentFailed: String?
 
     /// What the server prints: PDF, Word, Excel, PowerPoint, JPG and PNG (HEIC is refused).
     private static let types: [UTType] = {
@@ -50,11 +57,13 @@ struct PrintUploadView: View {
         .navigationTitle(T("Print"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $printTarget) { t in
-            PrintSheet(kind: .upload, id: t.id, title: t.title, pageCount: t.pages) {
-                // A job was made (or the upload expired): the server deletes the file itself.
-                upload = nil
-                printedOne = true
-            }
+            PrintSheet(kind: .upload, id: t.id, title: t.title, pageCount: t.pages,
+                       onUploadUsed: {
+                           // A job was made (or the upload expired): the server deletes the file itself.
+                           upload = nil
+                           printedOne = true
+                       },
+                       onJobFinished: { Task { await loadRecent() } })
         }
         .onAppear { onScreen = true }
         .onDisappear {
@@ -65,32 +74,106 @@ struct PrintUploadView: View {
 
     @ViewBuilder private var content: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let name = preparing {
-                    preparingCard(name)
-                } else if let upload {
-                    fileCard(upload)
-                } else {
-                    EmptyState(icon: "printer", title: T("Print any file on the office printer"),
-                               subtitle: T("PDF, Word, Excel, PowerPoint, JPG or PNG, up to 25 MB. The file is deleted from the server once it's printed."),
-                               actionTitle: printedOne ? T("Print another file") : T("Choose a file"), actionIcon: "doc.badge.plus",
-                               action: { problem = nil; importing = true }, prominent: true)
-                    if let printer = config.printerName {
-                        Text(T("Printer") + ": " + printer)
-                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity)
+            Group {
+                if hSize == .regular {
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 16) { uploadColumn }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 16) { sideColumn }
+                            .frame(width: 360, alignment: .topLeading)
                     }
-                }
-                if let problem {
-                    Text(problem)
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                        .background(NX.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(maxWidth: 1040)
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        uploadColumn
+                        sideColumn
+                    }
+                    .frame(maxWidth: 640)
                 }
             }
             .padding(16)
-            .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
+        }
+        .refreshable {
+            await printer.refresh()
+            await loadRecent()
+        }
+        .printerStatusPolling(printer)
+        .task { await loadRecent() }
+    }
+
+    /// The file being prepared, the chosen file, or the empty state, with any problem under it.
+    @ViewBuilder private var uploadColumn: some View {
+        if let name = preparing {
+            preparingCard(name)
+        } else if let upload {
+            fileCard(upload)
+        } else {
+            EmptyState(icon: "printer", title: T("Print any file on the office printer"),
+                       subtitle: T("PDF, Word, Excel, PowerPoint, JPG or PNG, up to 25 MB. The file is deleted from the server once it's printed."),
+                       actionTitle: printedOne ? T("Print another file") : T("Choose a file"), actionIcon: "doc.badge.plus",
+                       action: { problem = nil; importing = true }, prominent: true)
+            if let name = config.printerName {
+                Text(T("Printer") + ": " + name)
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        if let problem {
+            Text(problem)
+                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                .background(NX.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    /// The printer's status, then the last prints.
+    @ViewBuilder private var sideColumn: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(T("Printer status"))
+            PrinterStatusPanel(status: printer.status, failed: printer.failed).nexusCard()
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel(T("Recent prints"))
+                Spacer()
+                NavigationLink { PrintLogView() } label: {
+                    Text(T("See all")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                }
+                .accessibilityIdentifier("printUpload.seeAll")
+            }
+            recentList.nexusCard()
+        }
+    }
+
+    @ViewBuilder private var recentList: some View {
+        if let recent {
+            if recent.isEmpty {
+                EmptyState(icon: "printer", title: T("No prints yet"),
+                           subtitle: T("Your prints show up here: what, how many pages, and whether it printed."), compact: true)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(recent) { job in
+                        PrintLogRow(job: job, showPerson: false)
+                        if job.id != recent.last?.id { Divider() }
+                    }
+                }
+            }
+        } else if let recentFailed {
+            Text(recentFailed).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+        } else {
+            ProgressView().frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Only the person's own prints, also for BoD / One Above All: this list is "what I printed".
+    private func loadRecent() async {
+        do {
+            recent = try await APIClient.shared.printJobs(userId: auth.session?.userId, from: nil, to: nil, cursor: nil, limit: 10).jobs
+            recentFailed = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            if recent == nil { recentFailed = (error as? LocalizedError)?.errorDescription ?? T("Check your connection and try again.") }
         }
     }
 

@@ -97,6 +97,23 @@ extension APIClient {
         return try printDecode(try await printExchange(makeRequest("/api/print/jobs?" + qs.joined(separator: "&"))), as: PrintJobsPage.self)
     }
 
+    // MARK: Preview and printer status
+
+    /// The exact PDF a print of this item sends (no job, no log). Instant for Legal and uploads; a page is
+    /// rendered by the server first, which takes a few seconds.
+    func printPreview(kind: PrintKind, id: String, version: Int? = nil) async throws -> Data {
+        var path = "/api/print/preview?kind=\(kind.rawValue)&id=\(encValue(id))"
+        if let version, kind == .legal { path += "&version=\(version)" }
+        var req = makeRequest(path)
+        req.timeoutInterval = 120
+        return try await printExchange(req)
+    }
+
+    /// The office printer right now: state, reasons, the queue (company members; cached 3 s on the server).
+    func printerStatus() async throws -> PrinterStatus {
+        try printDecode(try await printExchange(makeRequest("/api/print/status")), as: PrinterStatus.self)
+    }
+
     // MARK: Uploaded files (Print screen)
 
     /// Uploads a file to print (multipart `file`). The server turns it into a PDF and counts its pages, which

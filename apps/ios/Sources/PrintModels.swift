@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Print to the office printer (owner, 18 Nov 2026). Server: src/app/api/print/**, src/lib/print/**.
@@ -185,4 +186,125 @@ struct PrintJobsPage: Decodable {
         people = (try? c.decodeIfPresent([PrintPerson].self, forKey: .people)) ?? []
         printing = (try? c.decodeIfPresent(PrintingConfig.self, forKey: .printing)) ?? nil
     }
+}
+
+extension PrintPageRanges {
+    /// The 1-based pages the typed ranges print, for dimming the others in the preview. nil = every page
+    /// (empty, or not valid yet: nothing is dimmed while the person is still typing).
+    static func pages(_ text: String, pageCount: Int) -> Set<Int>? {
+        guard case .count = check(text, pageCount: pageCount) else { return nil }
+        var out = Set<Int>()
+        for piece in text.filter({ !$0.isWhitespace }).split(separator: ",") {
+            let ends = piece.split(separator: "-").compactMap { Int($0) }
+            guard let lo = ends.first else { continue }
+            let hi = ends.count > 1 ? ends[1] : lo
+            if lo <= hi { out.formUnion(lo...hi) }
+        }
+        return out
+    }
+}
+
+// MARK: - Live printer status (GET /api/print/status)
+
+/// One CUPS reason ("media-empty", severity "error").
+struct PrinterReason: Decodable, Hashable, Sendable {
+    let keyword: String
+    let severity: String
+    private enum K: String, CodingKey { case keyword, severity }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        keyword = (try? c.decodeIfPresent(String.self, forKey: .keyword)) ?? ""
+        severity = (try? c.decodeIfPresent(String.self, forKey: .severity)) ?? "error"
+    }
+
+    /// A sentence for the keywords people meet at the office printer; anything else is shown as the keyword.
+    var label: String {
+        switch keyword {
+        case "media-empty", "media-needed": return T("Out of paper")
+        case "media-jam": return T("Paper jam")
+        case "marker-supply-empty": return T("Out of ink")
+        case "marker-supply-low": return T("Ink is low")
+        case "door-open", "cover-open": return T("The printer cover is open")
+        case "paused": return T("The printer is paused")
+        default: return keyword
+        }
+    }
+}
+
+/// One job in the printer's queue. Other people's jobs carry only the name; `who` nil = not sent from NEXUS.
+struct PrinterQueueJob: Decodable, Hashable, Sendable {
+    struct Who: Decodable, Hashable, Sendable { let id: String; let name: String }
+    let position: Int
+    /// printing | waiting | held | stopped | stalled (stalled = the printer is not connected)
+    let state: String
+    let who: Who?
+    let mine: Bool
+    let title: String?
+    let nexusJobId: String?
+    private enum K: String, CodingKey { case position, state, who, mine, title, nexusJobId }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        position = (try? c.decodeIfPresent(Int.self, forKey: .position)) ?? 0
+        state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? "waiting"
+        who = (try? c.decodeIfPresent(Who.self, forKey: .who)) ?? nil
+        mine = (try? c.decodeIfPresent(Bool.self, forKey: .mine)) ?? false
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? nil
+        nexusJobId = (try? c.decodeIfPresent(String.self, forKey: .nexusJobId)) ?? nil
+    }
+
+    /// Who sent it: "You", their name, or "Outside NEXUS".
+    var whoLabel: String {
+        if mine { return T("You") }
+        if let who, !who.name.isEmpty { return who.name }
+        return T("Outside NEXUS")
+    }
+}
+
+/// The office printer right now (cached 3 s on the server).
+struct PrinterStatus: Decodable, Equatable, Sendable {
+    let reachable: Bool
+    /// idle | printing | stopped | error | disconnected | unreachable
+    let state: String
+    let reasons: [PrinterReason]
+    let message: String?
+    let acceptingJobs: Bool
+    let waiting: Int
+    let jobs: [PrinterQueueJob]
+    private enum K: String, CodingKey { case reachable, state, reasons, message, acceptingJobs, waiting, jobs }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        reachable = (try? c.decodeIfPresent(Bool.self, forKey: .reachable)) ?? false
+        state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? "unreachable"
+        reasons = (try? c.decodeIfPresent([PrinterReason].self, forKey: .reasons)) ?? []
+        message = (try? c.decodeIfPresent(String.self, forKey: .message)) ?? nil
+        acceptingJobs = (try? c.decodeIfPresent(Bool.self, forKey: .acceptingJobs)) ?? true
+        waiting = (try? c.decodeIfPresent(Int.self, forKey: .waiting)) ?? 0
+        jobs = (try? c.decodeIfPresent([PrinterQueueJob].self, forKey: .jobs)) ?? []
+    }
+
+    /// The printer's USB cable is out (CUPS: "Waiting for printer to become available"): prints wait on the server.
+    var isDisconnected: Bool { state == "disconnected" }
+
+    var headline: String {
+        switch state {
+        case "idle": return T("Ready")
+        case "printing": return T("Printing")
+        case "stopped": return T("The printer stopped")
+        case "error": return T("There's a problem")
+        case "disconnected": return T("Not connected")
+        default: return T("The server can't reach the printer")
+        }
+    }
+    var tone: Color {
+        switch state {
+        case "idle": return NX.success
+        case "printing": return NX.blue
+        case "stopped", "disconnected": return NX.warning
+        default: return NX.danger
+        }
+    }
+    /// The job printing now, if any.
+    var current: PrinterQueueJob? { jobs.first { $0.state == "printing" } }
+    /// This person's NEXUS job in the queue.
+    func queueJob(for jobId: String) -> PrinterQueueJob? { jobs.first { $0.nexusJobId == jobId } }
 }
