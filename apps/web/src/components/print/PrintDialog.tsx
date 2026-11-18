@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Loader2, Minus, Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Segmented } from "@/components/PageLayout";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  PRINT_LOG_KEY, jobErrorText, printApi, printErrorText, statusLabel, usePrinting, type ColorMode, type PrintJob, type PrintKind,
+  PRINT_LOG_KEY, jobErrorText, pageRangeCount, printApi, printErrorText, statusLabel, usePrinting, type ColorMode, type PrintJob, type PrintKind,
 } from "@/lib/print-api";
 
 /**
@@ -17,7 +18,7 @@ import {
  * failed (GET /api/print/jobs/{id}); closing it early is fine, a toast reports the end and Settings › Print log
  * keeps every print.
  */
-export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
+export function PrintDialog({ open, onOpenChange, kind, id, title, version, pages, onSent, onEnded }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: PrintKind;
@@ -26,6 +27,12 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
   title: string;
   /** Legal: a version other than the primary one. */
   version?: number;
+  /** An uploaded file (Print menu): its page count; the dialog then offers a page range ("1-3,5"). */
+  pages?: number;
+  /** The printer took the job (or it failed at once): an uploaded file is the server's to delete from here on. */
+  onSent?: (job: PrintJob) => void;
+  /** The job ended (done or failed). */
+  onEnded?: (job: PrintJob) => void;
 }) {
   const { t, tn, lang } = useLang();
   const qc = useQueryClient();
@@ -33,16 +40,21 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
   const [copies, setCopies] = useState(1);
   const [color, setColor] = useState<ColorMode>("mono");
   const [jobId, setJobId] = useState<string | null>(null);
+  const [range, setRange] = useState("");
+  const rangeCheck = pages ? pageRangeCount(range, pages) : null;
+  const rangeError = typeof rangeCheck === "string" ? rangeCheck : null;
+  const chosen = typeof rangeCheck === "number" ? rangeCheck : pages ?? null;
 
   // A fresh dialog each time it opens.
   useEffect(() => {
-    if (open) { setCopies(1); setColor("mono"); setJobId(null); }
+    if (open) { setCopies(1); setColor("mono"); setJobId(null); setRange(""); }
   }, [open]);
 
   const send = useMutation({
-    mutationFn: () => printApi.print({ kind, id, copies, colorMode: color, ...(version ? { version } : {}) }),
+    mutationFn: () => printApi.print({ kind, id, copies, colorMode: color, ...(version ? { version } : {}), ...(pages && range.trim() ? { pageRanges: range.trim() } : {}) }),
     onSuccess: ({ job }) => {
       setJobId(job.id);
+      onSent?.(job);
       qc.setQueryData(["print", "job", job.id], { job });
       void qc.invalidateQueries({ queryKey: PRINT_LOG_KEY });
     },
@@ -70,12 +82,14 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
       setTold(job.id);
       toast.success(t("Printed"), { description: `${job.title} · ${tn(job.copies, "{n} copy", "{n} copies")}` });
       void qc.invalidateQueries({ queryKey: PRINT_LOG_KEY });
+      onEnded?.(job);
     } else if (job.status === "failed") {
       setTold(job.id);
       toast.error(t("Print failed"), { description: jobErrorText(job.error) });
       void qc.invalidateQueries({ queryKey: PRINT_LOG_KEY });
+      onEnded?.(job);
     }
-  }, [job, told, t, tn, qc]);
+  }, [job, told, t, tn, qc, onEnded]);
 
   const busy = send.isPending;
   const sent = !!job;
@@ -119,6 +133,20 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
               <Segmented label={t("Color")} value={color} onChange={setColor}
                 options={[{ key: "color" as const, label: t("Color") }, { key: "mono" as const, label: t("Black & white") }]} />
             </div>
+            {pages ? (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label htmlFor="print-pages" className="text-sm font-medium">{t("Pages")}</label>
+                  <Input id="print-pages" value={range} onChange={(e) => setRange(e.target.value)} disabled={busy} autoComplete="off" spellCheck={false}
+                    placeholder={t("All pages")} aria-invalid={!!rangeError} aria-describedby="print-pages-hint" className="h-9 w-40" />
+                </div>
+                <p id="print-pages-hint" className={cn("text-xs", rangeError || (chosen ?? 0) > printing.maxPages ? "text-destructive" : "text-muted-foreground")}>
+                  {rangeError ?? ((chosen ?? 0) > printing.maxPages
+                    ? t("These pages add up to {n}. One print can have at most 50 pages.", { n: chosen ?? 0 })
+                    : `${tn(chosen ?? pages, "{n} page", "{n} pages")} · ${t("e.g. 1-3,5")}`)}
+                </p>
+              </div>
+            ) : null}
             <p className="text-xs text-muted-foreground">{t("A4, at most {n} pages per print. Every print is recorded in Settings › Print log.", { n: printing.maxPages })}</p>
           </div>
         )}
@@ -129,7 +157,7 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version }: {
           ) : (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>{t("Cancel")}</Button>
-              <Button onClick={() => send.mutate()} disabled={busy} className="gap-1.5">
+              <Button onClick={() => send.mutate()} disabled={busy || !!rangeError || (!!pages && (chosen ?? 0) > printing.maxPages)} className="gap-1.5">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                 {busy ? t("Sending to the printer…") : t("Print")}
               </Button>
