@@ -61,7 +61,7 @@ export class PrintError extends Error {
   }
 }
 
-type Rendered = { pdf: Buffer; title: string; workspaceId: string }
+export type Rendered = { pdf: Buffer; title: string; workspaceId: string }
 
 /** A Legal document's file: the version asked for, else the primary one (signed copy, else Final, else current —
  *  what the document screen shows). Its PDF; a version with only a DOCX is converted now (not stored); an uploaded
@@ -90,16 +90,32 @@ function stamp(lang: "en" | "id"): string {
   return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date())
 }
 
+/**
+ * A Doc page rendered for one person a moment ago, kept 2 minutes in memory (preview, 18 Nov 2026): the preview and
+ * the print that follows get the SAME PDF (same "Printed by … at …" line), and opening the preview twice costs one
+ * Gotenberg call. Keyed by person + page + its last change + language; a changed page renders anew.
+ */
+const DOC_CACHE_MS = 120_000
+const docCache = new Map<string, { at: number; rendered: Rendered }>()
+
 /** A Doc page: its block document (the stored body, as the editor loads it) through doc-html → Gotenberg Chromium. */
-async function renderDoc(docId: string, userName: string, lang: "en" | "id"): Promise<Rendered> {
+async function renderDoc(docId: string, userId: string, userName: string, lang: "en" | "id"): Promise<Rendered> {
   const body = await loadBody("doc", docId)
   if (!body) throw new PrintError("Not found", 404, "NOT_FOUND")
+  const key = `${userId}|${docId}|${body.updatedAt.getTime()}|${lang}`
+  const now = Date.now()
+  for (const [k, v] of docCache) if (now - v.at > DOC_CACHE_MS) docCache.delete(k)
+  const hit = docCache.get(key)
+  if (hit) return hit.rendered
   const project = await prisma.project.findUnique({ where: { id: body.projectId }, select: { name: true, workspaceId: true } })
   if (!pdfConfigured()) throw new PrintError("PDF conversion is not set up on this server", 503, "PDF_NOT_CONFIGURED")
   const title = body.title.trim() || (lang === "id" ? "Tanpa judul" : "Untitled")
   const meta = [project?.name, `${lang === "id" ? "Dicetak oleh" : "Printed by"} ${userName}`, `${stamp(lang)} WIB`].filter(Boolean).join(" · ")
   const pdf = await htmlToPdf(docToPrintHtml({ title, content: body.json, meta, lang }))
-  return { pdf, title, workspaceId: project?.workspaceId ?? ORG_WORKSPACE_ID }
+  const rendered = { pdf, title, workspaceId: project?.workspaceId ?? ORG_WORKSPACE_ID }
+  if (docCache.size > 50) docCache.delete(docCache.keys().next().value!)
+  docCache.set(key, { at: now, rendered })
+  return rendered
 }
 
 /** An uploaded file (Print menu): its converted PDF, only for the person who uploaded it. */
@@ -107,6 +123,17 @@ async function renderUpload(uploadId: string, userId: string): Promise<Rendered>
   const up = await getPrintUpload(uploadId, userId)
   if (!up) throw new PrintError("This upload has expired. Upload the file again.", 404, "UPLOAD_GONE")
   return { pdf: await up.pdf(), title: up.meta.fileName, workspaceId: ORG_WORKSPACE_ID }
+}
+
+/**
+ * The PDF a print of this item sends: one path for the preview (GET /api/print/preview) and the print itself
+ * (submitPrint). Access is the caller's job (printAccess). Throws PrintError for a refusal, PdfError when the
+ * converter fails.
+ */
+export function renderPrintable(kind: PrintKind, refId: string, opts: { userId: string; userName: string; version?: number | null; lang: "en" | "id" }): Promise<Rendered> {
+  if (kind === "legal") return renderLegal(refId, opts.version ?? null)
+  if (kind === "upload") return renderUpload(refId, opts.userId)
+  return renderDoc(refId, opts.userId, opts.userName, opts.lang)
 }
 
 export type PrintRequest = {
@@ -132,9 +159,7 @@ export async function submitPrint(req: PrintRequest): Promise<PrintJobRow> {
   let rendered: Rendered | null = null
   let renderError: string | null = null
   try {
-    rendered = req.kind === "legal" ? await renderLegal(req.refId, req.version ?? null)
-      : req.kind === "upload" ? await renderUpload(req.refId, req.user.id)
-        : await renderDoc(req.refId, req.user.name, req.lang)
+    rendered = await renderPrintable(req.kind, req.refId, { userId: req.user.id, userName: req.user.name, version: req.version, lang: req.lang })
   } catch (error) {
     if (error instanceof PrintError) throw error
     renderError = error instanceof PdfError ? error.message : `Could not prepare the file: ${(error as Error).message}`
