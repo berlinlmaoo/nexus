@@ -116,7 +116,7 @@ export function summarize(
     reasons,
     message: raw.message || null,
     acceptingJobs: raw.accepting,
-    waiting: jobs.filter((j) => j.state !== "printing").length,
+    waiting: jobs.filter((j) => j.state !== "printing" && j.state !== "stalled").length,
     jobs,
     checkedAt: now.toISOString(),
   }

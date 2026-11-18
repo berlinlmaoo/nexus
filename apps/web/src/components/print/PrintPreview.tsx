@@ -109,7 +109,7 @@ export function PrintPreview({ kind, id, version, selected, mono, onPages, class
   return (
     <div className={frame}>
       <div ref={scroller} className="h-full overflow-y-auto overscroll-contain p-3">
-        <ul className="grid grid-cols-3 gap-3" aria-label={t("Pages")}>
+        <ul className="grid grid-cols-3 gap-3" aria-label={t("Page preview")}>
           {Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => (
             <Thumb key={n} doc={doc} n={n} root={scroller} dim={!!selected && !selected.has(n)} mono={mono} onOpen={() => setBig(n)} />
           ))}
