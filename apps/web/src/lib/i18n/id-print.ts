@@ -89,6 +89,7 @@ export const ID_PRINT: Record<string, string> = {
   "Out of paper": "Kertas habis",
   "Outside NEXUS": "Di luar NEXUS",
   "Page {n} of {total}": "Halaman {n} dari {total}",
+  "Page preview": "Pratinjau halaman",
   "Page {n}, show larger": "Halaman {n}, tampilkan lebih besar",
   "Paper jam": "Kertas macet",
   "Position {n} in the queue": "Posisi antrean ke-{n}",
