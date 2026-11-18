@@ -143,6 +143,10 @@ struct DocReaderView: View {
     @State private var editing = false
     @State private var model: BlockEditorModel
     @State private var aiRequest: GideonWriteRequest?
+    /// Print to the office printer (18 Nov 2026), from the ••• menu. Its sheet hangs on the page's scroll
+    /// view, not on this view, which already presents GIDEON's writing sheet.
+    @State private var printTarget: PrintTarget?
+    @State private var config = RemoteConfig.shared
 
     init(docId: String, title: String) {
         self.docId = docId
@@ -208,6 +212,21 @@ struct DocReaderView: View {
                 }
             }
         }
+        // The ••• menu: Print, while the server has a printer and the page is not being edited.
+        ToolbarItem(placement: .topBarTrailing) {
+            if let doc, !editing, config.printingEnabled {
+                Menu {
+                    Button { printTarget = PrintTarget(kind: .doc, id: doc.id, title: DocTitle.display(doc.title)) } label: {
+                        Label(T("Print"), systemImage: "printer")
+                    }
+                    .accessibilityIdentifier("doc.print")
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel(T("More"))
+                .accessibilityIdentifier("doc.more")
+            }
+        }
     }
 
     private func page(_ doc: Doc) -> some View {
@@ -236,6 +255,7 @@ struct DocReaderView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .sheet(item: $printTarget) { t in PrintSheet(kind: t.kind, id: t.id, title: t.title) }
     }
 
     private func aiSheet(_ r: GideonWriteRequest) -> GideonWriteSheet {

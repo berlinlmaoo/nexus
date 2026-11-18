@@ -38,6 +38,7 @@
     { "id": "tickets",          "title": "Tickets",              "web": "/complaints",                      "app": "nexus://tickets" },
     { "id": "legal-archive",    "title": "Legal · Archive",      "web": "/legal",                           "app": "nexus://legal", "pages": 14 },
     { "id": "legal-document",   "title": "Legal · Document",     "web": "/legal?tab=documents&doc={legalDoc}", "app": "nexus://legal", "appOpen": "legalDoc" },
+    { "id": "legal-print",      "title": "Legal · Print",        "web": "/legal?tab=documents&doc={legalDoc}", "app": "nexus://legal", "appOpen": "legalDoc", "webTaps": ["Print|Cetak"], "appActions": [{ "kind": "tap", "label": "legal.print" }], "pages": 1 },
     { "id": "legal-templates",  "title": "Legal · Templates",    "web": "/legal?tab=templates",             "app": "nexus://legal", "appTab": "Templates" },
     { "id": "legal-requests",   "title": "Legal · Requests",     "web": "/legal?tab=requests",              "app": "nexus://legal", "appTab": "Requests" },
     { "id": "legal-request-form", "title": "Legal · Request form", "web": "{legalForm}",                    "app": "{webBase}{legalForm}" },
@@ -45,6 +46,7 @@
     { "id": "legal-hidden",     "title": "Legal · Not invited (qa6)", "web": "/legal",                      "account": "nonmember" },
     { "id": "settings",         "title": "Settings",             "web": "/settings",                        "app": "nexus://settings" },
     { "id": "settings-security", "title": "Settings · Security",  "web": "/settings?section=security",       "app": "nexus://settings", "appTaps": ["Security|Keamanan"] },
+    { "id": "settings-print-log", "title": "Settings · Print log", "web": "/settings?section=print-log",     "app": "nexus://settings", "appTaps": ["Print log|Riwayat print"] },
     { "id": "sidebar-collapsed", "title": "Sidebar · Collapsed",  "web": "/dashboard", "webVariants": ["desktop"], "webTaps": ["Collapse sidebar|Ciutkan sidebar"], "webAfterTaps": ["Expand sidebar|Buka sidebar"] }
   ]
 }
