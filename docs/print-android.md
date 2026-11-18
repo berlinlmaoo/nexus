@@ -195,9 +195,135 @@ Reuse existing keys where they exist (Everyone, From, To, Close, Done, Try again
       code → string mapping (incl. the page count parsed from `TOO_MANY_PAGES`), the period → from/to dates.
 - [ ] No print is queued offline or retried automatically.
 
+## Print screen: print an uploaded file (owner, 18 Nov 2026)
+
+A dedicated **Print** screen (ID **Cetak**) where any signed-in member of the company workspace uploads any file
+and prints it on the office printer. Web: `/print`. iOS: `apps/ios/Sources/Views/PrintUploadView.swift` (the
+screen), `PrintSheet.swift` (pages field for `kind: .upload`), `PrintAPI.swift` (`uploadPrintFile`,
+`deletePrintUpload`), `PrintModels.swift` (`PrintUpload`, `PrintPageRanges`); route `nexus://print`
+(`NXScreen.printing`, More tile on the phone, sidebar Team group on iPad/Mac).
+
+### Entry point
+
+- A **Print** row (printer icon) in the launcher next to Room Booking / Z Vault: an entry in `ui/shell/ShellNav.kt`
+  like `ROOMS(Group.HOME, …, "rooms", companyOnly = true)`, route `"print"` in `ui/shell/SignedInShell.kt`,
+  screen in `feature/print/PrintUploadScreen.kt`.
+- Drawn only for company members **and** while `printingEnabled`. Opened with printing off, the screen shows
+  the empty state "Printer isn't set up on this server".
+
+### Endpoints
+
+`POST /api/print/uploads` — multipart, one field `file` (PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG; max 25 MB;
+HEIC refused). Send the file's real MIME type and name. The server converts it to PDF and counts the pages:
+**5–30 s**, so use a 180 s timeout and show progress.
+
+```json
+201 { "upload": { "id": "0193f…", "fileName": "Rundown.xlsx", "pages": 3, "size": 48211,
+                  "createdAt": "2026-11-18T04:01:10.000Z", "expiresAt": "2026-11-18T05:01:10.000Z" } }
+```
+
+| status | code | show (EN) |
+|---|---|---|
+| 400 | `NO_FILE` / `EMPTY` | Couldn't read that file. |
+| 403 | `NOT_A_MEMBER` | Printing is for members of the company workspace. |
+| 413 | `TOO_LARGE` | The file is larger than 25 MB |
+| 415 | `UNSUPPORTED_TYPE`, message mentions "HEIC" | HEIC photos can't be printed. Save the photo as JPG or PNG first. |
+| 415 | `UNSUPPORTED_TYPE`, message "doesn't match its name" | The file doesn't match its name (it may be damaged or renamed). |
+| 415 | `UNSUPPORTED_TYPE` (other) | This kind of file can't be printed. Use PDF, Word, Excel, PowerPoint, JPG or PNG. |
+| 422 | `PAGES_UNKNOWN` | Couldn't count the pages of this file, so it wasn't printed. |
+| 502 | `CONVERSION_FAILED` | This file couldn't be converted for printing. Try saving it as PDF first. |
+| 503 | `PRINT_NOT_CONFIGURED` / `PDF_NOT_CONFIGURED` | as in the table above |
+
+`DELETE /api/print/uploads/{id}` → `{ "ok": true }`. Call it (fire and forget) when the person chooses another
+file or leaves the screen without printing. The server also deletes an upload after 1 h, and right after its
+print job ends.
+
+`POST /api/print` with an upload:
+
+```json
+{ "kind": "upload", "id": "<upload id>", "copies": 1, "colorMode": "mono", "pageRanges": "1-3,5" }
+```
+
+`pageRanges` only for `upload`; empty or absent = all pages. The job's `pages` = pages actually printed, its
+`kind` is `"upload"` and its `title` the file name. New errors:
+
+| status | code | show (EN) |
+|---|---|---|
+| 400 | `BAD_RANGE` | Write pages like 1-3,5 |
+| 400 | `OUT_OF_RANGE` | This file has {n} pages. (`n` from the server's "This file has N pages") |
+| 404 | `UPLOAD_GONE` | This upload has expired. Upload the file again. (forget the upload: back to the empty state) |
+| 422 | `TOO_MANY_PAGES` | for chosen pages: "These pages add up to {n}. One print can have at most 50 pages." (`n` from "add up to N"); else the existing text |
+
+### Flow
+
+1. **Empty state** (the app's empty-state component): icon printer, title "Print any file on the office
+   printer", body "PDF, Word, Excel, PowerPoint, JPG or PNG, up to 25 MB. The file is deleted from the server
+   once it's printed.", button **Choose a file** (after a print: **Print another file**), and under it
+   "Printer: {printerName}".
+2. **Choose a file**: the system document picker (`ActivityResultContracts.OpenDocument`) limited to the MIME
+   types above. Read the bytes through the content resolver; take the display name from `OpenableColumns`.
+3. **Preparing**: a card with a spinner, "Preparing the file…" and the file name while the upload runs. An
+   error shows in red under it and the empty state comes back.
+4. **File card**: file name, "{n} pages", buttons **Print** (primary) and **Choose another file** (deletes the
+   current upload first, then opens the picker).
+5. **Print** opens the print sheet with an extra **Pages** field (only for uploads): text, placeholder
+   "All pages", helper "e.g. 1-3,5". Check it as the server does (`src/lib/print/page-ranges.ts`): spaces
+   ignored, `^\d+(-\d+)?(,\d+(-\d+)?)*,?$`, each `lo ≥ 1`, `hi ≥ lo`, `hi ≤ pages`, overlaps counted once;
+   more than 50 chosen (or all pages of a file over 50) → the TOO_MANY_PAGES text. While invalid, the helper
+   shows the problem in red and Print is disabled.
+6. Once `POST /api/print` answers 201 (or `UPLOAD_GONE`), the upload is used up: the screen forgets it (no
+   DELETE) and returns to the empty state with **Print another file**; the sheet keeps polling the job as before.
+7. Leaving the screen with an unprinted upload → `DELETE` it. An upload that finishes after the screen was left
+   is deleted as soon as it arrives.
+
+### Print log
+
+Rows with `kind: "upload"` get an upload icon (iOS `arrow.up.doc`) and the label "Uploaded file".
+
+### Strings (EN → ID)
+
+| English | Indonesian |
+|---|---|
+| Print (screen, menu) | Cetak |
+| Choose a file | Pilih file |
+| Choose another file | Pilih file lain |
+| Preparing the file… | Menyiapkan file… |
+| {n} pages | {n} halaman |
+| Pages | Halaman |
+| All pages | Semua halaman |
+| e.g. 1-3,5 | mis. 1-3,5 |
+| Print another file | Print file lain |
+| Print any file on the office printer | Cetak file apa saja di printer kantor |
+| PDF, Word, Excel, PowerPoint, JPG or PNG, up to 25 MB. The file is deleted from the server once it's printed. | PDF, Word, Excel, PowerPoint, JPG, atau PNG, maksimal 25 MB. File dihapus dari server setelah dicetak. |
+| HEIC photos can't be printed. Save the photo as JPG or PNG first. | Foto HEIC tidak bisa dicetak. Simpan dulu sebagai JPG atau PNG. |
+| This upload has expired. Upload the file again. | File ini sudah kedaluwarsa. Unggah ulang filenya. |
+| Write pages like 1-3,5 | Tulis halaman seperti 1-3,5 |
+| This file has {n} pages. | File ini punya {n} halaman. |
+| The file is larger than 25 MB | File lebih dari 25 MB |
+| This kind of file can't be printed. Use PDF, Word, Excel, PowerPoint, JPG or PNG. | Jenis file ini tidak bisa dicetak. Gunakan PDF, Word, Excel, PowerPoint, JPG, atau PNG. |
+| The file doesn't match its name (it may be damaged or renamed). | Isi file tidak cocok dengan namanya (mungkin rusak atau diganti namanya). |
+| This file couldn't be converted for printing. Try saving it as PDF first. | File ini tidak bisa dikonversi untuk dicetak. Coba simpan dulu sebagai PDF. |
+| These pages add up to {n}. One print can have at most 50 pages. | Halaman yang dipilih berjumlah {n}. Satu print maksimal 50 halaman. |
+| Printing is for members of the company workspace. | Print hanya untuk anggota workspace perusahaan. |
+| Uploaded file | File unggahan |
+
+### Acceptance
+
+- [ ] Print row only for company members while `printingEnabled`; `nexus://print`-style deep link / route works.
+- [ ] Picker offers only PDF/Word/Excel/PowerPoint/JPG/PNG; a HEIC or >25 MB file shows its own message.
+- [ ] "Preparing the file…" shows during the 5–30 s conversion; then name + page count.
+- [ ] Choose another file and leaving the screen DELETE the old upload; a late upload after leaving is deleted.
+- [ ] Pages field: empty = all; `1-3,5` sends `pageRanges`; bad text / out of range / over 50 blocks Print with
+      the right message; server `BAD_RANGE` / `OUT_OF_RANGE` / `TOO_MANY_PAGES` texts also map.
+- [ ] After 201 the screen goes back to the empty state with "Print another file"; `UPLOAD_GONE` does too.
+- [ ] Print log shows uploads with the upload icon and the file name.
+- [ ] Unit tests: the page-range checker (same cases as `src/__tests__` for page-ranges), `PrintUpload` decoding,
+      the new error-code mapping.
+
 ## UI tour ids
 
 The iOS/web tour (`apps/ios/scripts/ui-tour-screens.json`) adds `legal-print` (the print sheet over the
 `[TEST]` Legal document; web taps "Print|Cetak", iOS taps the button with identifier `legal.print`) and
 `settings-print-log` (`/settings?section=print-log`; the app taps "Print log|Riwayat print"). Use the same ids
 when the Android tour gets them.
+`print-upload` (web `/print`, app `nexus://print`) is the Print screen's empty state.
