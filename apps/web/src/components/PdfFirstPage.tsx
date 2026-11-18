@@ -11,9 +11,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * pdf.js and its worker load on first use only, so screens without a PDF never download them.
  */
 
-type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+export type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 let pdfjs: Promise<PdfJs> | null = null;
-function loadPdfJs(): Promise<PdfJs> {
+export function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjs) {
     pdfjs = Promise.all([
       import("pdfjs-dist/legacy/build/pdf.mjs"),

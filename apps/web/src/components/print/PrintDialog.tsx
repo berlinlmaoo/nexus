@@ -6,15 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Segmented } from "@/components/PageLayout";
+import { PrintPreview } from "@/components/print/PrintPreview";
+import { PrinterStatusPanel } from "@/components/print/PrinterStatusPanel";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  PRINT_LOG_KEY, jobErrorText, pageRangeCount, printApi, printErrorText, statusLabel, usePrinting, type ColorMode, type PrintJob, type PrintKind,
+  PRINT_LOG_KEY, disconnectedText, jobErrorText, pageRangeCount, pageSet, printApi, printErrorText, statusLabel, usePrinterStatus, usePrinting,
+  type ColorMode, type PrintJob, type PrintKind,
 } from "@/lib/print-api";
 
 /**
- * Print a Legal document or a Doc page on the office printer (owner, 18 Nov 2026). The printer's name, copies
- * (1–5), Color / Black & white, Print. After Print the dialog follows the job until the printer says it is done or
+ * Print a Legal document, a Doc page or an uploaded file on the office printer (owner, 18 Nov 2026). Left: the pages
+ * that will print (the exact PDF, thumbnails); right: the printer's live status, copies (1–5), Color / Black & white,
+ * pages (uploads), Print. After Print the dialog follows the job until the printer says it is done or
  * failed (GET /api/print/jobs/{id}); closing it early is fine, a toast reports the end and Settings › Print log
  * keeps every print.
  */
@@ -44,6 +48,7 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
   const rangeCheck = pages ? pageRangeCount(range, pages) : null;
   const rangeError = typeof rangeCheck === "string" ? rangeCheck : null;
   const chosen = typeof rangeCheck === "number" ? rangeCheck : pages ?? null;
+  const selected = pages ? pageSet(range, pages) : null;
 
   // A fresh dialog each time it opens.
   useEffect(() => {
@@ -68,8 +73,8 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
     refetchInterval: (q) => {
       const j = q.state.data?.job;
       if (!j || j.status === "done" || j.status === "failed") return false;
-      // Two minutes of looking; after that the log has it.
-      return Date.now() - Date.parse(j.createdAt) < 120_000 ? 2500 : false;
+      // Often at first, then calmly while the dialog stays open (a printer that isn't connected keeps a job waiting).
+      return Date.now() - Date.parse(j.createdAt) < 120_000 ? 2500 : 10_000;
     },
   });
   const job = jobQ.data?.job;
@@ -96,7 +101,12 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent lang={lang} className="max-w-md">
+      <DialogContent lang={lang} className={cn("max-h-[94dvh] overflow-y-auto", printing.enabled ? "max-w-md md:max-w-4xl" : "max-w-md")}
+        onEscapeKeyDown={(e) => {
+          // A page shown large closes first; the dialog on the next Esc.
+          const back = document.querySelector<HTMLButtonElement>("[data-print-big-close]");
+          if (back) { e.preventDefault(); back.click(); }
+        }}>
         <DialogHeader>
           <DialogTitle>{t("Print")}</DialogTitle>
           <DialogDescription className="[overflow-wrap:anywhere]">{title}</DialogDescription>
@@ -107,7 +117,12 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{t("The printer isn't set up on this server.")}</span>
           </div>
-        ) : sent ? (
+        ) : (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
+            <PrintPreview kind={kind} id={id} version={version} selected={selected} mono={(job?.colorMode ?? color) === "mono"} className="h-[36dvh] md:h-[62dvh]" />
+            <div className="min-w-0 space-y-4">
+              <PrinterStatusPanel compact />
+        {sent ? (
           <JobStatus job={job} />
         ) : (
           <div className="space-y-4">
@@ -150,6 +165,9 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
             <p className="text-xs text-muted-foreground">{t("A4, at most {n} pages per print. Every print is recorded in Settings › Print log.", { n: printing.maxPages })}</p>
           </div>
         )}
+            </div>
+          </div>
+        )}
 
         <DialogFooter className="gap-2">
           {sent || !printing.enabled ? (
@@ -173,6 +191,13 @@ function JobStatus({ job }: { job: PrintJob }) {
   const { t, tn } = useLang();
   const done = job.status === "done";
   const failed = job.status === "failed";
+  // Live from the printer: where this job is in the queue, and whether the printer is connected at all.
+  const status = usePrinterStatus(!done && !failed).data;
+  const mine = status?.jobs.find((j) => j.nexusJobId === job.id);
+  const waitingForPrinter = !done && !failed && (status?.state === "disconnected" || mine?.state === "stalled");
+  const where = !done && !failed && !waitingForPrinter && mine
+    ? mine.position > 1 ? t("Position {n} in the queue", { n: mine.position }) : mine.state === "printing" ? t("Printing now") : null
+    : null;
   return (
     <div role="status" aria-live="polite" className={cn(
       "flex items-start gap-3 rounded-md border p-3",
@@ -182,7 +207,9 @@ function JobStatus({ job }: { job: PrintJob }) {
         : failed ? <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
           : <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-muted-foreground" />}
       <div className="min-w-0 space-y-0.5 text-sm">
-        <div className="font-medium">{statusLabel(job.status)}</div>
+        <div className="font-medium">{waitingForPrinter ? t("Waiting for the printer") : statusLabel(job.status)}</div>
+        {waitingForPrinter && <div className="text-amber-700 dark:text-amber-400">{disconnectedText()}</div>}
+        {where && <div className="font-medium text-foreground">{where}</div>}
         <div className="text-muted-foreground">
           {tn(job.pages, "{n} page", "{n} pages")} × {job.copies} · {job.colorMode === "color" ? t("Color") : t("Black & white")}
         </div>

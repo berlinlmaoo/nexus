@@ -8,6 +8,8 @@ import { PageBody } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { PrintDialog } from "@/components/print/PrintDialog";
+import { PrinterStatusPanel } from "@/components/print/PrinterStatusPanel";
+import { RecentPrints } from "@/components/settings/PrintLogSection";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { useWebAppConfig } from "@/lib/meetings";
@@ -90,7 +92,9 @@ function PrintPage() {
   return (
     <div>
       <PageHeader title={t("Print")} subtitle={t("Print any file on the office printer")} />
-      <PageBody className="mx-auto max-w-2xl space-y-4">
+      {/* Desktop: the file on the left, the printer and recent prints on the right; a phone stacks them in that order. */}
+      <PageBody className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+        <div className="min-w-0 space-y-4">
         {picker}
         {cfg.isPending ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</div>
@@ -140,7 +144,13 @@ function PrintPage() {
               action={<Button className="gap-1.5" onClick={() => input.current?.click()}><Upload className="h-4 w-4" /> {t("Choose a file")}</Button>} />
           </div>
         )}
-        {printing.enabled && <p className="text-xs text-muted-foreground">{t("Printer: {name}. Every print is recorded in Settings › Print log.", { name: printing.printerName ?? "" })}</p>}
+        </div>
+        {printing.enabled && (
+          <aside className="min-w-0 space-y-6 lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+2rem)]">
+            <PrinterStatusPanel />
+            <RecentPrints />
+          </aside>
+        )}
       </PageBody>
       {upload && printing.enabled && (
         <PrintDialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); }} kind="upload" id={upload.id} title={upload.fileName} pages={upload.pages}
