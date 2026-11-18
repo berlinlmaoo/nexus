@@ -146,7 +146,7 @@ struct PrintLogView: View {
 }
 
 /// One print: what, how many, colour, state and when (and who, for BoD / One Above All).
-private struct PrintLogRow: View {
+struct PrintLogRow: View {
     let job: PrintJob
     let showPerson: Bool
 
