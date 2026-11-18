@@ -47,6 +47,7 @@
     { "id": "settings",         "title": "Settings",             "web": "/settings",                        "app": "nexus://settings" },
     { "id": "settings-security", "title": "Settings · Security",  "web": "/settings?section=security",       "app": "nexus://settings", "appTaps": ["Security|Keamanan"] },
     { "id": "settings-print-log", "title": "Settings · Print log", "web": "/settings?section=print-log",     "app": "nexus://settings", "appTaps": ["Print log|Riwayat print"] },
+    { "id": "print-upload",     "title": "Print · Upload a file", "web": "/print",                        "app": "nexus://print" },
     { "id": "sidebar-collapsed", "title": "Sidebar · Collapsed",  "web": "/dashboard", "webVariants": ["desktop"], "webTaps": ["Collapse sidebar|Ciutkan sidebar"], "webAfterTaps": ["Expand sidebar|Buka sidebar"] }
   ]
 }
