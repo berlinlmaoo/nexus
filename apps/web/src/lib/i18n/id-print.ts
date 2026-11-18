@@ -113,6 +113,7 @@ export const ID_PRINT: Record<string, string> = {
   "The printer can't be reached": "Printer tidak terjangkau",
   "The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back.": "Printer tidak terjangkau (mati atau di luar WiFi kantor). Print akan keluar begitu printer terjangkau lagi.",
   "No one waiting": "Tidak ada yang menunggu",
+  "Ink levels": "Level tinta",
   "print\u0004+{n} more": "+{n} lainnya",
   "Printer says: {text}": "Kata printer: {text}",
   "Your print is ready": "Print selesai",
