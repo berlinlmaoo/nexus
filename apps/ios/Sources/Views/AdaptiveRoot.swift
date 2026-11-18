@@ -30,6 +30,9 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     case leaderboard, reports
     // Knowledge
     case docs, forms, vault
+    // Print an uploaded file on the office printer (owner, 18 Nov 2026), `nexus://print`. Not named `print`:
+    // a case of that name would shadow Swift's print() inside this type.
+    case printing = "print"
     // Pulse Check
     case attendance
     // System
@@ -56,6 +59,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .docs:         return T("Pages")
         case .forms:        return T("Forms")
         case .vault:        return T("Z Vault")
+        case .printing:     return T("Print")
         case .attendance:   return T("Attendance")
         case .tickets:      return T("Tickets")
         case .teams:        return T("Teams")
@@ -83,6 +87,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .docs:         return "book.fill"
         case .forms:        return "doc.text.fill"
         case .vault:        return "externaldrive.fill"
+        case .printing:     return "printer.fill"
         case .attendance:   return "clock.badge.checkmark.fill"
         case .tickets:      return "ticket.fill"
         case .teams:        return "person.3.fill"
@@ -113,6 +118,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .docs:         return "book"
         case .forms:        return "list.bullet.rectangle"
         case .vault:        return "externaldrive"
+        case .printing:     return "printer"
         case .attendance:   return "list.clipboard"
         case .tickets:      return "ticket"
         case .teams:        return "person.3"
@@ -123,7 +129,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
 
     var tint: Color {
         switch self {
-        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon, .meetingNotes: return NX.violetText
+        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon, .meetingNotes, .printing: return NX.violetText
         case .tasks, .attendance, .reports:                                    return NX.success
         case .inbox, .messages, .forms, .tickets, .legal:                      return NX.blue
         case .submissions, .leaderboard:                                       return NX.warning
@@ -192,6 +198,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .docs:         DocsView()
         case .forms:        FormsView()
         case .vault:        VaultView()
+        case .printing:     PrintUploadView()
         case .attendance:   AttendanceView()
         case .tickets:      TicketsView()
         case .teams:        TeamsView()
@@ -222,7 +229,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         // The web sidebar's Work group (AppSidebar.tsx): no Reports or Forms rows (UI tour run 14, P-I36).
         // Both screens stay reachable: Forms from My Submissions ("Open forms"), Reports from its links.
         (T("Work"),   [.projects, .legal, .leaderboard]),
-        (T("Team"),   [.vault, .threads, .roomBooking]),
+        (T("Team"),   [.vault, .threads, .roomBooking, .printing]),
         (T("System"), [.tickets, .settings, .admin]),
     ] }
 }
@@ -457,6 +464,8 @@ struct SidebarRoot: View {
                 (($0 != .vault && $0 != .threads && $0 != .roomBooking) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
                     && ($0 != .meetingNotes || RemoteConfig.shared.meetingNotesEnabled)
                     && ($0 != .legal || viewer.canAccessLegal) && ($0 != .admin || viewer.canAdminister)
+                    // Print: company members, while the server has a printer.
+                    && ($0 != .printing || (viewer.isCompanyMember && RemoteConfig.shared.printingEnabled))
             })
         }
         .filter { !$0.1.isEmpty }

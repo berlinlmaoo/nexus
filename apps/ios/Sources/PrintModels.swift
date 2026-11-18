@@ -17,6 +17,57 @@ struct PrintingConfig: Codable, Equatable, Sendable {
 /// What a print is of: a Legal document (its primary version) or a page.
 enum PrintKind: String, Sendable {
     case legal, doc
+    /// A file uploaded on the Print screen (POST /api/print/uploads); deleted once its job ends.
+    case upload
+}
+
+/// POST /api/print/uploads → `upload`: the server's PDF of the file, with its page count.
+struct PrintUpload: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let fileName: String
+    let pages: Int
+    let size: Int
+    let expiresAt: String?
+    private enum K: String, CodingKey { case id, fileName, pages, size, expiresAt }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? ""
+        fileName = (try? c.decodeIfPresent(String.self, forKey: .fileName)) ?? ""
+        pages = (try? c.decodeIfPresent(Int.self, forKey: .pages)) ?? 0
+        size = (try? c.decodeIfPresent(Int.self, forKey: .size)) ?? 0
+        expiresAt = (try? c.decodeIfPresent(String.self, forKey: .expiresAt)) ?? nil
+    }
+}
+
+struct PrintUploadResponse: Decodable { let upload: PrintUpload }
+
+/// The pages typed for an upload ("1-3,5"), checked as the server does (src/lib/print/page-ranges.ts):
+/// nil = all pages; otherwise how many pages they cover, or the problem to show.
+enum PrintPageRanges {
+    enum Result: Equatable { case all, count(Int), invalid(String) }
+
+    static func check(_ text: String, pageCount: Int) -> Result {
+        let raw = text.filter { !$0.isWhitespace }
+        if raw.isEmpty { return .all }
+        guard raw.count <= 200, raw.range(of: #"^\d+(-\d+)?(,\d+(-\d+)?)*,?$"#, options: .regularExpression) != nil else {
+            return .invalid(T("Write pages like 1-3,5"))
+        }
+        var parts: [(Int, Int)] = []
+        for piece in raw.split(separator: ",") {
+            let ends = piece.split(separator: "-").compactMap { Int($0) }
+            guard let lo = ends.first else { return .invalid(T("Write pages like 1-3,5")) }
+            let hi = ends.count > 1 ? ends[1] : lo
+            if lo < 1 || hi < lo { return .invalid(T("Write pages like 1-3,5")) }
+            if hi > pageCount { return .invalid(String(format: T("This file has %d pages."), pageCount)) }
+            parts.append((lo, hi))
+        }
+        // Overlaps count once, as on the server.
+        var merged: [(Int, Int)] = []
+        for r in parts.sorted(by: { $0.0 < $1.0 }) {
+            if let last = merged.last, r.0 <= last.1 + 1 { merged[merged.count - 1].1 = max(last.1, r.1) } else { merged.append(r) }
+        }
+        return .count(merged.reduce(0) { $0 + $1.1 - $1.0 + 1 })
+    }
 }
 
 /// "color" | "mono". Black & white is the default (cheaper ink).
@@ -99,7 +150,20 @@ struct PrintJob: Decodable, Identifiable, Hashable, Sendable {
         if let pages { return String(format: T("%d pages × %d"), pages, copies) }
         return "× \(copies)"
     }
-    var kindIcon: String { kind == "legal" ? "doc.text.fill" : "doc.richtext" }
+    var kindIcon: String {
+        switch kind {
+        case "legal": return "doc.text.fill"
+        case "upload": return "arrow.up.doc"
+        default: return "doc.richtext"
+        }
+    }
+    var kindLabel: String {
+        switch kind {
+        case "legal": return T("Legal document")
+        case "upload": return T("Uploaded file")
+        default: return T("Page")
+        }
+    }
     var created: Date? { createdAt.flatMap(LegalDocument.parseTimestamp) }
 }
 
