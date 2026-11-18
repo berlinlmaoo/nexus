@@ -478,6 +478,9 @@ enum NotificationTarget: Hashable {
         case "complaints":
             if let id = Self.queryValue("id", in: path) { self = .complaint(id) } else { self = .screen(.tickets) }
         case "settings":                self = .screen(.settings)
+        // print_done / print_failed (18 Nov 2026): `/print?job=<id>` opens the Print screen, whose recent
+        // prints list that job.
+        case "print":                   self = .screen(.printing)
         case "admin":
             if Self.queryValue("tab", in: path) == "gideon", Self.queryValue("gideon", in: path) == "performance" { self = .gideonPerformance }
             else { self = .screen(.admin) }
