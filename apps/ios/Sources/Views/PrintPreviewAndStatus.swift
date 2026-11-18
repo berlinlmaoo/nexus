@@ -7,7 +7,8 @@ import PDFKit
 // have 50+ pages), in grayscale for Black & white, pages outside an upload's typed range dimmed; a tap pushes
 // the page larger inside the print sheet's own NavigationStack (no second sheet).
 // Status: GET /api/print/status every 5 s while on screen and the app is active. "disconnected" (the printer's
-// USB cable is out) is said plainly: prints wait on the server and come out once it is connected again.
+// printer is off or out of the office WiFi) is said plainly: prints wait on the server and come out once it is back.
+// The queue lists who waits, in order (owner, 18 Nov 2026: "you can't see who is waiting").
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Printer status
@@ -56,9 +57,9 @@ private struct PrinterStatusPolling: ViewModifier {
     }
 }
 
-/// The sentence for a printer whose cable is out (and for a job the queue marks "stalled").
+/// The sentence for a printer that is off or out of the office WiFi (and for a job the queue marks "stalled").
 func printerDisconnectedText() -> String {
-    T("The printer isn't connected to the server. Your print comes out as soon as it's connected again.")
+    T("The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back.")
 }
 
 /// State headline with a coloured dot, the reasons people can act on, who is printing, how many wait.
@@ -91,16 +92,12 @@ struct PrinterStatusPanel: View {
                         .font(NXFont.text(13))
                         .foregroundStyle(r.severity == "error" ? NX.danger : r.severity == "warning" ? NX.warning : NX.mutedFg)
                 }
-                if let current = status.current {
-                    Text(String(format: T("Printing now: %@"), current.mine && !(current.title ?? "").isEmpty
-                                ? current.whoLabel + " · " + (current.title ?? "") : current.whoLabel))
-                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(2)
+                if let said = status.printerMessage {
+                    Text(String(format: T("Printer says: %@"), said))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                if status.waiting > 0 {
-                    Text(String(format: T("%d waiting"), status.waiting))
-                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                }
+                PrinterQueueBox(status: status)
             } else if let failed {
                 Label(T("Couldn't check the printer"), systemImage: "exclamationmark.triangle")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
@@ -118,6 +115,46 @@ struct PrinterStatusPanel: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Who is printing now and who waits, in order: the first 3 by name ("2. Rani"), your own as "You · <title>"
+/// highlighted, a job not sent from NEXUS as "Outside NEXUS"; then "+n more". Other people's titles never show.
+struct PrinterQueueBox: View {
+    let status: PrinterStatus
+    private let shown = 3
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let current = status.current {
+                Text(String(format: T("Printing now: %@"), current.whoLabel))
+                    .font(NXFont.text(13, current.mine ? .semibold : .regular))
+                    .foregroundStyle(current.mine ? NX.violetText : NX.foreground)
+                    .italic(current.isOutsideNexus)
+                    .lineLimit(2)
+            }
+            let waiting = status.waitingJobs
+            if waiting.isEmpty {
+                Text(T("No one waiting")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            } else {
+                Text(String(format: T("%d waiting"), max(status.waiting, waiting.count)))
+                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                ForEach(waiting.prefix(shown), id: \.self) { job in
+                    Text("\(job.position). " + job.whoLabel)
+                        .font(NXFont.text(13, job.mine ? .semibold : .regular))
+                        .foregroundStyle(job.mine ? NX.violetText : job.isOutsideNexus ? NX.mutedFg : NX.foreground)
+                        .italic(job.isOutsideNexus)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                if waiting.count > shown {
+                    Text(String(format: T("+%d more"), waiting.count - shown))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

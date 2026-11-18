@@ -157,7 +157,7 @@ export function PrintDialog({ open, onOpenChange, kind, id, title, version, page
                 </div>
                 <p id="print-pages-hint" className={cn("text-xs", rangeError || (chosen ?? 0) > printing.maxPages ? "text-destructive" : "text-muted-foreground")}>
                   {rangeError ?? ((chosen ?? 0) > printing.maxPages
-                    ? t("These pages add up to {n}. One print can have at most 50 pages.", { n: chosen ?? 0 })
+                    ? (range.trim() ? t("These pages add up to {n}. One print can have at most 50 pages.", { n: chosen ?? 0 }) : t("This file has {n} pages. One print can have at most 50 pages.", { n: chosen ?? 0 }))
                     : `${tn(chosen ?? pages, "{n} page", "{n} pages")} · ${t("e.g. 1-3,5")}`)}
                 </p>
               </div>

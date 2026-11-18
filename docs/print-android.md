@@ -370,15 +370,16 @@ is rendered by the server first (a few seconds): use a 120 s timeout.
   `LaunchedEffect` + `repeatOnLifecycle(STARTED)`); stop otherwise.
 - Panel: coloured dot + headline (idle green, printing blue, stopped / disconnected amber, error / unreachable
   red); one line per reason (known keywords below, else the keyword itself; error red, warning amber, report
-  grey); "Printing now: {name}" (your own: "You · {title}"); "{n} waiting" when `waiting > 0`; when
+  grey); the queue box (see "Queue names" below); when
   `acceptingJobs` is false "The printer isn't taking prints right now."; small caption on the Print screen:
   "Prints sent straight to the printer over WiFi don't show here." Loading: "Checking the printer…"; error:
   "Couldn't check the printer" + the reason.
-- **Disconnected (real case: the printer's USB cable is out; CUPS "Waiting for printer to become available")**:
-  headline "Not connected" and the sentence "The printer isn't connected to the server. Your print comes out as
-  soon as it's connected again." In this state NEVER show "Printing…" for a job: in the sheet's job status,
+- **Disconnected** (since 18 Nov 2026 CUPS reaches the printer over WiFi, so this means the printer is **off or
+  out of the office WiFi**; CUPS says e.g. "Waiting for printer to become available"): headline "The printer can't
+  be reached" and the sentence "The printer can't be reached (off or out of the office WiFi). Your print comes out
+  as soon as it's back." In this state NEVER show "Printing…" for a job: in the sheet's job status,
   while the job is queued/printing and `state == "disconnected"` **or** its queue entry is `stalled`, the
-  headline is that sentence (icon: unplugged cable, amber) instead of Printing…/Queued.
+  headline is that sentence (icon: WiFi off, amber) instead of Printing…/Queued.
 - Print sheet: the panel under the printer name before sending; after sending, find your job in `jobs` by
   `nexusJobId == job.id`: position > 1 → "Position {n} in the queue"; position 1 and `printing` → "Printing
   now"; otherwise the job status as before; the panel stays under the status until the job ends.
@@ -418,9 +419,9 @@ is rendered by the server first (a few seconds): use a 120 s timeout.
 | Printing | Sedang mencetak |
 | The printer stopped | Printer berhenti |
 | There's a problem | Ada masalah |
-| Not connected | Tidak tersambung |
+| The printer can't be reached | Printer tidak terjangkau |
 | The server can't reach the printer | Printer tidak bisa dihubungi dari server |
-| The printer isn't connected to the server. Your print comes out as soon as it's connected again. | Printer tidak tersambung ke server, print akan keluar begitu tersambung lagi. |
+| The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back. | Printer tidak terjangkau (mati atau di luar WiFi kantor). Print akan keluar begitu printer terjangkau lagi. |
 | The printer isn't taking prints right now. | Printer sedang tidak menerima print. |
 | Printing now: {name} | Sedang mencetak: {name} |
 | You | Kamu |
@@ -440,11 +441,67 @@ is rendered by the server first (a few seconds): use a 120 s timeout.
       dims the other pages; tap opens the page larger and swipes; error + Try again works.
 - [ ] Status polls every 5 s only while visible and foreground; known reasons read as sentences; other people's
       jobs show a name only; `who: null` reads "Outside NEXUS".
-- [ ] With the printer unplugged (`disconnected`, job `stalled`) no screen says "Printing…": the sheet shows "The
-      printer isn't connected to the server…" for the waiting job, the panel says "Not connected" + that sentence.
+- [ ] With the printer off / out of WiFi (`disconnected`, job `stalled`) no screen says "Printing…": the sheet shows
+      "The printer can't be reached (off or out of the office WiFi)…" for the waiting job, the panel says "The
+      printer can't be reached" + that sentence.
 - [ ] After sending, "Position {n} in the queue" while others are ahead, "Printing now" when it is first and printing.
 - [ ] Recent prints shows your last 10, refreshes when the job ends, See all opens the Print log; two columns on
       a tablet.
+
+## Printer over WiFi, queue names and print notifications (owner, 18 Nov 2026)
+
+iOS reference: `Views/PrintPreviewAndStatus.swift` (`PrinterQueueBox`, `printerDisconnectedText()`),
+`PrintModels.swift` (`PrinterStatus.printerMessage`, `waitingJobs`, `PrinterQueueJob.whoLabel`),
+`DashboardModels.swift` (`NotificationTarget(path:)` case `"print"`), `NotificationManager.swift` (willPresent).
+
+### Wording (replaces the old USB sentence everywhere)
+
+- `state: "disconnected"` = the printer is off or out of the office WiFi. Headline "The printer can't be reached";
+  sentence "The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's
+  back." The reason keywords `offline`, `connecting-to-device`, `timed-out` read "The printer can't be reached".
+- The printer's own `message` from `/api/print/status`, when present, `state != "disconnected"` and it isn't the
+  routine "Connected to printer…": a small caption "Printer says: {text}".
+
+### Queue names (owner: "you can't see who is waiting")
+
+A queue box in the status panel (Print screen and the compact panel in the print sheet):
+- "Printing now: {who}" — own job "You · {title}" (highlighted), others their name, `who: null` "Outside NEXUS"
+  (italic, secondary).
+- Then "{n} waiting" and the waiting jobs in `position` order, one line each: "{position}. {who}" with the same
+  rules (own highlighted as "You · {title}"; other people's titles never shown). The first 3, then "+{n} more".
+- Nobody waiting: "No one waiting".
+
+### Print notifications
+
+When a job ends the server creates a NEXUS notification and a push:
+- `type: "print_done"` — EN "Your print is ready" / "{title}: pick it up at the printer."; ID "Print selesai" /
+  "{title}: ambil di printer."
+- `type: "print_failed"` — EN "Print failed" / "{title}: {reason}"; ID "Print gagal" / "{title}: {reason}".
+- `link: "/print?job=<printJobId>"`, push thread-id `"print"`.
+
+App:
+- Deep link: tapping the push or the Inbox row with link `/print…` opens the Print screen (route `"print"`, the same
+  place `nexus://print` opens). The job id may be ignored or used to highlight that row in Recent prints.
+- Foreground: show it like every other foreground notification (the app's existing banner path; nothing new), and
+  an open Print screen reloads Recent prints when a `print_done` / `print_failed` push arrives.
+
+| English | Indonesian |
+|---|---|
+| The printer can't be reached | Printer tidak terjangkau |
+| The printer can't be reached (off or out of the office WiFi). Your print comes out as soon as it's back. | Printer tidak terjangkau (mati atau di luar WiFi kantor). Print akan keluar begitu printer terjangkau lagi. |
+| Printer says: {text} | Kata printer: {text} |
+| No one waiting | Tidak ada yang menunggu |
+| +{n} more | +{n} lainnya |
+| Outside NEXUS | Di luar NEXUS |
+| You · {title} | Kamu · {title} |
+
+Acceptance:
+- [ ] No string says the printer is unplugged / not connected to the server; disconnected reads as off or out of WiFi.
+- [ ] "Printer says: …" shows the printer's message except while disconnected and except "Connected to printer".
+- [ ] The queue box names who prints and who waits (first 3 + "+n more"), own job highlighted with its title,
+      non-NEXUS jobs as "Outside NEXUS", "No one waiting" when empty; the same in the print sheet.
+- [ ] Tapping a `print_done` / `print_failed` push or Inbox row opens the Print screen; in the foreground the
+      banner shows as for other notifications and Recent prints refreshes.
 
 ## UI tour ids
 
