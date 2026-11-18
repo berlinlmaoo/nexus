@@ -1,5 +1,6 @@
 import { ApiError, apiFetch } from "@/lib/nexus-api";
-import { t } from "@/lib/lang";
+import { getLang, t } from "@/lib/lang";
+import { useQuery } from "@tanstack/react-query";
 import { useWebAppConfig } from "@/lib/meetings";
 
 /**
@@ -55,6 +56,17 @@ export function pageRangeCount(text: string, pages: number): number | string | n
   return seen.size;
 }
 
+/** The pages "1-3,5" prints, as a set; null = every page (empty or not valid yet). */
+export function pageSet(text: string, pages: number): Set<number> | null {
+  if (typeof pageRangeCount(text, pages) !== "number") return null;
+  const out = new Set<number>();
+  for (const piece of text.replace(/\s+/g, "").split(",").filter(Boolean)) {
+    const [a, b] = piece.split("-").map(Number);
+    for (let p = a; p <= (b ?? a); p++) out.add(p);
+  }
+  return out;
+}
+
 export type PrintingConfig = { enabled: boolean; printerName: string | null; maxCopies: number; maxPages: number };
 export type PrintLog = { jobs: PrintJob[]; nextCursor: string | null; canSeeAll: boolean; people: PrintUser[]; printing: PrintingConfig };
 
@@ -78,7 +90,7 @@ export const printApi = {
   },
   discard: (id: string) => apiFetch<{ ok: boolean }>(`/api/print/uploads/${encodeURIComponent(id)}`, { method: "DELETE" }),
   job: (id: string) => apiFetch<{ job: PrintJob }>(`/api/print/jobs/${encodeURIComponent(id)}`),
-  log: (q: { userId?: string; from?: string; to?: string; cursor?: string }) => {
+  log: (q: { userId?: string; from?: string; to?: string; cursor?: string; limit?: string }) => {
     const sp = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) if (v) sp.set(k, v);
     const qs = sp.toString();
@@ -87,6 +99,76 @@ export const printApi = {
 };
 
 export const PRINT_LOG_KEY = ["print", "log"] as const;
+
+/** The exact PDF a print of this item sends (GET /api/print/preview); errors come back as JSON. */
+export function previewUrl(kind: PrintKind, id: string, version?: number): string {
+  const sp = new URLSearchParams({ kind, id });
+  if (version) sp.set("version", String(version));
+  return `/api/print/preview?${sp.toString()}`;
+}
+
+/** The preview PDF's bytes, or an ApiError with the server's code (same codes as printing). */
+export async function fetchPreview(kind: PrintKind, id: string, version?: number): Promise<ArrayBuffer> {
+  const res = await fetch(previewUrl(kind, id, version), { credentials: "include", headers: { "Accept-Language": getLang(), "X-Nexus-Client": "web/1" } });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string; code?: string } | null;
+    throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`, body);
+  }
+  return res.arrayBuffer();
+}
+
+// ---------------------------------------------------------------- printer status (GET /api/print/status)
+
+export type PrinterState = "idle" | "printing" | "stopped" | "error" | "disconnected" | "unreachable";
+export type QueueJob = {
+  position: number;
+  state: "printing" | "waiting" | "held" | "stopped" | "stalled";
+  who: { id: string; name: string } | null;
+  mine: boolean;
+  title?: string;
+  nexusJobId?: string;
+};
+export type PrinterStatus = {
+  reachable: boolean;
+  state: PrinterState;
+  reasons: Array<{ keyword: string; severity: "error" | "warning" | "report" }>;
+  message: string | null;
+  acceptingJobs: boolean;
+  waiting: number;
+  jobs: QueueJob[];
+  checkedAt: string;
+};
+
+/** The office printer right now, every 5 s while the page is in front (the server asks CUPS at most every 3 s). */
+export function usePrinterStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: ["print", "status"],
+    queryFn: () => apiFetch<PrinterStatus>("/api/print/status"),
+    enabled,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    retry: 1,
+  });
+}
+
+/** A printer reason keyword in words. Unknown ones show as they are. */
+export function reasonText(keyword: string): string {
+  switch (keyword) {
+    case "media-empty": case "media-needed": return t("Out of paper");
+    case "media-jam": return t("Paper jam");
+    case "marker-supply-empty": case "toner-empty": return t("Out of ink");
+    case "marker-supply-low": case "toner-low": return t("Ink is running low");
+    case "door-open": case "cover-open": return t("A printer cover is open");
+    case "paused": return t("The printer is paused");
+    case "offline": case "connecting-to-device": case "timed-out": return t("The printer isn't connected to the server");
+    default: return keyword.replace(/-/g, " ");
+  }
+}
+
+/** The sentence for a printer that CUPS can't reach (USB unplugged, printer off). */
+export function disconnectedText(): string {
+  return t("The printer isn't connected to the server. Your print comes out as soon as it's connected again.");
+}
 
 /** Why a print was refused, in the interface language (the server's text is English, its 503 Indonesian). */
 export function printErrorText(e: unknown): string {
