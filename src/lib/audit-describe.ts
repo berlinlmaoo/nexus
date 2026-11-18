@@ -674,6 +674,8 @@ const VERBS: Record<string, string> = {
   share: "shared",
   offboard: "offboarded",
   reinstate: "reinstated",
+  // Print to the office printer (18 Nov 2026, lib/print).
+  print: "printed",
 }
 
 const NOUNS: Record<string, string> = {
@@ -978,7 +980,7 @@ const VERBS_ID: Record<string, string> = {
   export: "mengekspor", import: "mengimpor", invite: "mengundang", approve: "menyetujui", reject: "menolak",
   restore: "memulihkan", archive: "mengarsipkan", upload: "mengunggah", duplicate: "menduplikasi", revoke: "mencabut",
   replace: "mengganti", share: "membagikan", offboard: "meng-offboard", reinstate: "mengaktifkan kembali", view: "melihat",
-  refund: "mengembalikan",
+  refund: "mengembalikan", print: "mencetak",
 }
 
 const NOUNS_ID: Record<string, string> = {
